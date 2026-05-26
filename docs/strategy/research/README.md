@@ -1,0 +1,39 @@
+# Strategy Research
+
+This directory contains research inputs and extracted text used to refine the Memba strategy.
+
+## Source PDFs
+
+Stored in `source-pdfs/`:
+
+- `Memba Market and Competitor Research.pdf`
+- `Personal — Memba: Membership Platform Opportunity for Outdoor Clubs.pdf`
+- `SaaS Market Research for Outdoor Clubs.pdf`
+
+## Extracted text
+
+Stored in `extracted-text/` for easier grep/review:
+
+- `Memba Market and Competitor Research.txt`
+- `Personal — Memba: Membership Platform Opportunity for Outdoor Clubs.txt`
+- `SaaS Market Research for Outdoor Clubs.txt`
+
+## Additional competitor notes
+
+- `zeffy.md` — Zeffy was missed by the imported research briefs and is a significant free fundraising/membership/event competitor.
+
+## Synthesized output
+
+The main synthesis has been incorporated into:
+
+- `../lean-canvas.md`
+
+Key changes from the original canvas:
+
+- Narrowed the target from general clubs to volunteer-run outdoor/activity clubs.
+- Refined the initial ICP to roughly 30–300 member clubs, with 300–1,000 member clubs as a secondary segment.
+- Elevated household/family memberships as a core wedge.
+- Elevated lightweight trip/activity management from “later someday” to “soon after launch.”
+- Recommended active-member pricing rather than contact-based pricing.
+- Added stronger positioning against Wild Apricot, ClubExpress, and DIY stacks.
+- Kept AT Protocol as a non-MVP research spike.
