@@ -1,6 +1,6 @@
 # Value Proposition
 
-This section of the Startup Canvas applies the Value Proposition research methodology to Memba — a SaaS membership platform for volunteer-run outdoor and activity clubs, starting with Kootenay Mountaineering Club (KMC). It synthesizes the Lean Canvas's Problem (§1), UVP (§3), and Unfair Advantage (§4) with the two deep-research briefs in `docs/strategy/research/extracted-text/`.
+This section of the Startup Canvas applies the Value Proposition research methodology to Memba — a SaaS membership platform for volunteer-run outdoor and activity clubs, starting with Kootenay Mountaineering Club (KMC). It synthesizes the Lean Canvas's Problem (§1), UVP (§3), and Unfair Advantage (§4) with the deep-research briefs and the May 2026 competitor gap pass in `docs/strategy/research/extracted-text/`.
 
 ## 1. Segment-anchored framing
 
@@ -18,14 +18,14 @@ Evidence-grounded "before" state, per the Lean Canvas problems and the two resea
 ### Pain 1: Fragmented admin stack and volunteer overload
 Clubs juggle spreadsheets, PayPal/Stripe buttons, Mailchimp, Google Groups, Meetup, Eventbrite, and a WordPress site. Potomac Mountain Club explicitly documents using "a google email group … and Mailchimp"; Wintergreen Sporting Club uses Mailchimp + Google Sheets + volunteer role assignments. Volunteer admins absorb the cost of stitching these together — and the cost is largest at handoff, when a new secretary inherits an opaque system. ("run exclusively by volunteers" — Hoosier Hikers Council.)
 
-### Pain 2: Household/family memberships are universally broken
-The single most-cited unmet need across the research. Wild Apricot's Wishlist thread on family/child memberships has been open since 2018: "Bundle memberships don't really relate to Family memberships. I see this as the biggest hole in your software." A sports club admin reports "I end up having to create a unique account for those families." Memberful, Mighty Networks, and most creator-tier products don't model households at all. The real shape — one bill, multiple individuals, shared address, individual logins, per-person waiver/visibility, children aging into adult memberships — is modeled by no incumbent cleanly.
+### Pain 2: Household/family memberships are usually shallow or awkward
+The single most-cited unmet need across the research, but not wholly unserved. Wild Apricot's Wishlist thread on family/child memberships has been open since 2018: "Bundle memberships don't really relate to Family memberships. I see this as the biggest hole in your software." A sports club admin reports "I end up having to create a unique account for those families." TidyHQ and Amilia have credible family/household support, and membermojo is good enough for many small UK clubs, so the claim cannot be “nobody has families.” The real shape Memba must own is deeper: one payer, multiple individuals, shared address, individual logins, per-person waiver/visibility/emergency contacts, child-to-adult transitions, and clean volunteer-admin workflows.
 
 ### Pain 3: Renewals and payments are manual, error-prone, and easy to get wrong
 "it does not allow group invoicing… I have to go into each account and manually create" (Wild Apricot, Capterra). ClubExpress users report renewals are "difficult to correct if mistakes are made." Failed-payment follow-up, grace periods, lapsed-member reactivation, calendar vs. anniversary cycles, and the basic "who has actually paid?" question consume disproportionate volunteer time.
 
-### Pain 4: Pricing is opaque and feels punitive
-Wild Apricot's contact-cliff pricing ("pricing structure is horrible jumping from a limit of 500 to 2000"), the 20% Payment System Servicing Fee on non-Personify processors (unavoidable outside the US), Meetup's ~2× organizer price hike since June 2024, Eventbrite's 3.7% + $1.79 per ticket + 2.9% processing. A 100-member club at $25/year dues grosses $2,500 — Wild Apricot's annual 100-contact plan consumes ~29% of that before payment fees. Resentment is documented; patience for surprise costs is not.
+### Pain 4: Pricing is either opaque, punitive, or brutally anchored by free/cheap alternatives
+Wild Apricot's contact-cliff pricing ("pricing structure is horrible jumping from a limit of 500 to 2000"), the 20% Payment System Servicing Fee on non-Personify processors (unavoidable outside the US), Meetup's ~2× organizer price hike since June 2024, Eventbrite's 3.7% + $1.79 per ticket + 2.9% processing. A 100-member club at $25/year dues grosses $2,500 — Wild Apricot's annual 100-contact plan consumes ~29% of that before payment fees. But the gap pass adds the opposite pressure: Zeffy and HelloAsso prove “free to the organization” can work at scale, while Spond Club, Givebutter, membermojo, Clubforce, Ticket Tailor, Teamup, and Yapla push expectations downward. Resentment is documented; willingness to pay must be earned with domain fit, not a “fair pricing” claim alone.
 
 ### Pain 5: Support and product decay since PE consolidation
 Wild Apricot Trustpilot: 1.7/5 across 153 reviews. "Since purchased by Personify, the support is HORRIBLE." "When Personify acquired WA in 2017 that turned around. Development ground to a halt." MemberClicks, YourMembership, Wild Apricot all sit under Momentive Software (TA Associates, Jan 2026). The credibility-audience (boards) is now actively suspicious of acquisition-driven platforms.
@@ -96,7 +96,7 @@ Per-segment value-curve axes drawn from coded complaint corpora and switch-inter
 | Renewal automation correctness | 4 | 4 | 3 | 4 | 3 | 1 | 3 |
 | Volunteer-admin simplicity / handoff | **5** | 2 | 1 | 3 | 3 | 3 | 1 |
 | Outdoor-trip workflow (Phase 2) | **4** | 2 | 2 | 0 | 1 | 1 | 1 |
-| Pricing fairness (no cliffs/surcharges) | **5** | 1 | 2 | 2 | 2 | 5 | 4 |
+| Pricing fairness (no cliffs/surcharges) | 4 | 1 | 2 | 2 | 2 | 5 | 4 |
 | Data portability / "leave anytime" | **5** | 2 | 3 | 3 | 2 | 5 | 4 |
 | Sheets/CSV bridge | **5** | 2 | 2 | 1 | 1 | 5 | 1 |
 | Private member directory + content | 4 | 4 | 4 | 3 | 4 | 1 | 3 |
@@ -104,6 +104,8 @@ Per-segment value-curve axes drawn from coded complaint corpora and switch-inter
 | Mobile-first member experience | 4 | 2 | 1 | 3 | 4 | 3 | 2 |
 | Time-to-onboard a volunteer | **5** | 2 | 1 | 3 | 3 | 4 | 1 |
 | Modern community / social features | 1 | 2 | 2 | 2 | **5** | 1 | 2 |
+
+Gap-pass correction: the old value curve understates modern club-native and free alternatives. The highest beachhead threats now are **TidyHQ, Amilia, Heylo, Zeffy, Spond Club, membermojo, SportLoMo, and Clubforce**; the highest broader-market threats include **TidyHQ, Amilia, Givebutter, Donorbox, Zeffy, Yapla, Wild Apricot, Raklet, and Join It**. Therefore pricing fairness is a qualifier. The primary differentiation must be the integrated club model: first-class households, renewal edge cases, waivers, emergency contacts, member-only activity workflows, privacy, and volunteer handoff.
 
 ### ERRC commitments
 
@@ -145,10 +147,10 @@ Per-segment value-curve axes drawn from coded complaint corpora and switch-inter
 
 ### Supporting proof points (ranked by research-evidence strength)
 1. **Real family memberships** — addresses the most-documented competitor failure (Wild Apricot Wishlist open since 2018).
-2. **Predictable pricing, no surcharges** — directly contrasts WA's PSSF and contact cliffs, which generated the loudest grievances.
-3. **Built for the next volunteer** — handoff as a feature, addressing the documented ClubExpress and WA admin-complexity pain.
+2. **Built for the next volunteer** — handoff as a feature, addressing the documented ClubExpress and WA admin-complexity pain and an under-served theme in the gap pass.
+3. **Trips, not just events** (Phase 2 onward) — leader, cap, waitlist, waiver, emergency contact, member-only.
 4. **Renewals that don't break** — admin "fix a renewal" workflow as a category-leading promise.
-5. **Trips, not just events** (Phase 2 onward) — leader, cap, waitlist, waiver, member-only.
+5. **Predictable pricing, no surcharges** — a trust qualifier, not the lead hook, because free/low-cost alternatives now set the visible price anchor.
 6. **Works with your spreadsheet** — Google Sheets sync as a trust bridge.
 7. **Independent, founder-led, migration-friendly** — addresses the PE-consolidation anxiety surfaced repeatedly in reviews.
 

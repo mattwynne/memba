@@ -33,11 +33,13 @@ JTBD-1 is the wedge. JTBD-2 follows quickly (Phase 2). JTBD-3 is a constraint th
 
 **Sharp ICP:**
 
+The May 2026 competitor gap pass tightens this ICP: the best prospects are clubs whose pain is deeper than “we need cheap dues collection.” They should need the integrated household + renewal + waiver + activity + handoff model. If a prospect is already happy with TidyHQ, Amilia, Heylo, Spond Club, membermojo, Clubforce, SportLoMo, Zeffy, or Yapla, Memba needs a specific gap-based reason to compete.
+
 - Volunteer-run outdoor/activity club, **80–300 active members** (tight band; KMC sits at the upper end).
 - Annual dues **$25–$80 per individual; $50–$200 per household**, payable by Stripe-supported card.
 - **≥25% of memberships are household/family** (the wedge bites).
 - Runs **≥10 member-only trips/year with waivers** (Phase-2 hook).
-- Currently on **Wild Apricot, ClubExpress, a custom WordPress site, or Google Sheets + Mailchimp + PayPal** — *not* on Spond, not on a creator platform.
+- Currently on **Wild Apricot, ClubExpress, a custom WordPress site, Zeffy/forms workaround, or Google Sheets + Mailchimp + PayPal** — *not happily served by TidyHQ, Amilia, Heylo, Spond Club, membermojo, Clubforce, SportLoMo, or Yapla*.
 - Has an **identifiable registrar or membership secretary** (named volunteer role) and a board that meets monthly or quarterly.
 - Sits in a jurisdiction with **mandatory liability insurance** for outdoor activities (BC, AB, ON, WA, OR, CO, UT, BC, Scotland, England, NZ, etc.).
 - **Pain trigger present in last 12 months:** registrar resigned/threatened to, Wild Apricot price increase, contact-limit overage, board complaint about renewal chaos, or website migration looming.
@@ -66,7 +68,7 @@ ACC sections, regional ski-touring clubs, mid-sized paddling and cycling clubs a
 ## 5. Segments to EXCLUDE explicitly
 
 - **Sub-50-member informal clubs / Meetup groups.** No willingness to pay; Google Sheets and Meetup are sufficient. Recruiting them inflates churn and support load.
-- **Youth sports leagues / grassroots team sports.** Spond is free, dominant, and structurally different (parents, teams, fixtures). Personal — Memba, §Spond.
+- **Youth sports leagues / grassroots team sports.** Spond Club, Clubforce, and SportLoMo create strong free/low-cost or governed-sport alternatives; the buying pattern is structurally different (parents, teams, fixtures, federation compliance). Personal — Memba, §Spond; Competitor Gap Pass.
 - **National associations / professional associations with paid staff.** They are Wild Apricot's defensible heartland and require RBAC, accreditation, CE credits, etc. **This is the mission-aligned-but-dangerous segment** (cf. methodology pitfall: "media-literacy educator mirage"): structurally appealing, mission-aligned, but procurement cycles will starve the company.
 - **Creator-economy / paid-content communities.** Memberful and Mighty Networks own this; the JTBD is monetization, not volunteer admin.
 - **HOAs, condo boards, religious congregations.** Adjacent in pain but very different in tone, governance, and regulatory regime.
@@ -102,7 +104,7 @@ These are wide because the underlying counts are not in any single dataset. Vali
 | Mid-size regional (300–1,000) | JTBD-1 + JTBD-2 | 7 | $80–$200 | Secondary |
 | Large national/federation | Multi-chapter ops | 6 | $300+ | Future |
 | Adjacent indoor hobby (50–300) | JTBD-1 only | 7 | $30–$60 | Future |
-| Youth sport league | Team logistics | 8 | $0 (Spond) | **Exclude** |
+| Youth sport league | Team logistics | 8 | $0–low (Spond Club / Clubforce / SportLoMo) | **Exclude** |
 | Creator community | Monetization | n/a | n/a | **Exclude** |
 
 ## 9. Assumptions, risks, and segmentation-specific validation
@@ -126,9 +128,10 @@ These are wide because the underlying counts are not in any single dataset. Vali
 1. **Beachhead recruitment test (week 1–4).** Cold-outreach 50 KMC-archetype clubs across BC, WA, OR, ID, CO, UT, AB, ON. Target ≥10 willingness-to-talk responses and ≥3 paid pilot conversions. *Falsification:* <3 conversions → archetype is wrong OR channel is wrong; diagnose which before iterating.
 2. **Household-share probe (during the 15 admin interviews).** For each interviewee, ask: "When did your club last debate how family memberships should work?" *Falsification:* fewer than 8/15 have an active complaint → household wedge is weaker than research suggests.
 3. **Pain-trigger taxonomy (during interviews).** Tag every interview with the trigger that made them respond. *Falsification:* no recurring trigger appears across 4+ interviewees → segment lacks acquisition moment.
-4. **Mid-size segment falsifier (week 8).** Take two warm 500-member-club leads and explicitly *defer them* in writing, citing this document. If you can't, you've already drifted; reset.
-5. **Sport-vertical concentration check (week 12).** Tally first 10 pilot clubs by sport. *Falsification:* if 8+ are one sport, segmentation should narrow to that sport explicitly (lower TAM, higher density). Don't pretend horizontal coverage you don't have.
-6. **Federation-channel accessibility test.** Pitch one regional federation (FMCBC, an ACC section umbrella, a state IMBA chapter) on a Memba briefing. *Falsification:* zero federation interest in 90 days → segment lacks trust intermediaries; need direct-to-club motion only.
+4. **Competitive-displacement probe (during interviews).** Ask every prospect which of TidyHQ, Amilia, Heylo, Spond Club, membermojo, Clubforce, SportLoMo, Zeffy, and Yapla they considered or tried. *Falsification:* prospects cannot name a specific gap Memba would solve beyond price.
+5. **Mid-size segment falsifier (week 8).** Take two warm 500-member-club leads and explicitly *defer them* in writing, citing this document. If you can't, you've already drifted; reset.
+6. **Sport-vertical concentration check (week 12).** Tally first 10 pilot clubs by sport. *Falsification:* if 8+ are one sport, segmentation should narrow to that sport explicitly (lower TAM, higher density). Don't pretend horizontal coverage you don't have.
+7. **Federation-channel accessibility test.** Pitch one regional federation (FMCBC, an ACC section umbrella, a state IMBA chapter) on a Memba briefing. *Falsification:* zero federation interest in 90 days → segment lacks trust intermediaries; need direct-to-club motion only.
 
 ### Pitfalls being actively guarded against
 

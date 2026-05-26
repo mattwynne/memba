@@ -56,19 +56,21 @@ This is a Porter-style activity-system trade-off list, not a feature list. The p
 
 ### S3. Active-member pricing with no Memba payment surcharge — not maximum revenue per club
 
-**Commitment:** We will price by *active* members (not stored contacts) and we will not add a Memba surcharge on top of Stripe processing fees. Lapsed members, prospects, and archived records are free.
+**Commitment:** We will price by *active* members (not stored contacts) and we will not add a Memba surcharge on top of Stripe processing fees. Lapsed members, prospects, and archived records are free. This is a trust covenant and board-approval aid, not the primary wedge.
 
 **Gained:**
 - Directly counters the most-cited Wild Apricot grievance: contact-count pricing cliffs (research refs 28, 42, 52). A 100-member club at $25/yr cannot tolerate paying ~29% of gross dues to its software vendor.
-- Creates a "fair to small clubs" brand position that pairs with the volunteer-run ICP.
+- Avoids the discomfort of mandatory member tip prompts or hidden payment spread while keeping the software bill legible to treasurers.
+- Creates a "fair to small clubs" qualifier that pairs with the volunteer-run ICP, while acknowledging the gap-pass finding that Zeffy, HelloAsso, Spond Club, membermojo, Clubforce, and Yapla already make low/free pricing a market expectation.
 
 **Given up:**
 - Higher ARPU per club, especially from large clubs with long archives.
 - Float/skim revenue from payment surcharges, which competitors like Memberful (4.9%), Mighty (2%), and Eventbrite (3.7% + $1.79/ticket) all rely on.
 
-**Why incumbents can't mirror:**
+**Why competitors can't all mirror:**
 - Wild Apricot's contact-based pricing is its revenue model. Switching to active-member pricing would require re-quoting every existing customer downward — a material revenue hit a PE-owned product cannot absorb.
 - Memberful's transaction-fee model is core to their pricing page; removing it would force a list-price increase that breaks their creator positioning.
+- Free/donor-funded and ultra-low-cost competitors can beat this on sticker price, so Memba must pair the pricing stance with the deeper household, waiver, activity, privacy, and handoff model.
 
 **Reversibility:** **Type B** — reversible but only with public announcement and customer trust damage. Trip-wire: any internal proposal to add a Memba surcharge requires founder + advisory veto.
 

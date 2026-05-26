@@ -9,6 +9,7 @@ Stored in `source-pdfs/`:
 - `Memba Market and Competitor Research.pdf`
 - `Personal — Memba: Membership Platform Opportunity for Outdoor Clubs.pdf`
 - `SaaS Market Research for Outdoor Clubs.pdf`
+- `Competitor Gap Pass for Memba.pdf`
 
 ## Extracted text
 
@@ -17,16 +18,18 @@ Stored in `extracted-text/` for easier grep/review:
 - `Memba Market and Competitor Research.txt`
 - `Personal — Memba: Membership Platform Opportunity for Outdoor Clubs.txt`
 - `SaaS Market Research for Outdoor Clubs.txt`
+- `Competitor Gap Pass for Memba.txt`
 
 ## Additional competitor notes
 
 - `zeffy.md` — Zeffy was missed by the imported research briefs and is a significant free fundraising/membership/event competitor.
+- `round2-competitor-analysis/` — second-pass competitor notes from Claude/Gemini before the full gap-pass PDF.
 
 ## Synthesized output
 
 The main synthesis has been incorporated into:
 
-- `../lean-canvas.md`
+- `../canvas.md`
 
 Key changes from the original canvas:
 
@@ -35,5 +38,6 @@ Key changes from the original canvas:
 - Elevated household/family memberships as a core wedge.
 - Elevated lightweight trip/activity management from “later someday” to “soon after launch.”
 - Recommended active-member pricing rather than contact-based pricing.
-- Added stronger positioning against Wild Apricot, ClubExpress, and DIY stacks.
+- Added stronger positioning against Wild Apricot, ClubExpress, DIY stacks, free/donor-funded products, and Commonwealth club-native competitors.
+- Moved “fair pricing” from primary wedge to qualifier because Zeffy, HelloAsso, Spond Club, Givebutter, membermojo, Clubforce, and Yapla compress price expectations.
 - Kept AT Protocol as a non-MVP research spike.

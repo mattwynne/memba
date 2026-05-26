@@ -1,6 +1,6 @@
 # Lean Canvas: Memba
 
-This Lean Canvas synthesizes the original product idea, the first research round, and the second competitor-gap pass in `docs/strategy/research/round2-competitor-analysis/`.
+This Lean Canvas synthesizes the original product idea, the first research round, the second competitor-gap notes in `docs/strategy/research/round2-competitor-analysis/`, and the May 2026 `Competitor Gap Pass for Memba` report in `docs/strategy/research/extracted-text/`.
 
 ## Core thesis
 
@@ -12,7 +12,7 @@ The initial wedge should remain volunteer-run outdoor/activity clubs because the
 
 Second-round research changes the strategy in three important ways:
 
-1. **Fair pricing is not enough.** Zeffy, Givebutter, Heylo, membermojo, and TidyHQ prove that clubs can find free, cheap, or transparent tools. Memba should still be fair and non-extractive, but “fair pricing” is table stakes, not the moat.
+1. **Fair pricing is not enough.** Zeffy, HelloAsso, Givebutter, Spond Club, Heylo, membermojo, Clubforce, Yapla, and TidyHQ prove that clubs can find free, cheap, or transparent tools. Memba should still be fair and non-extractive, but “fair pricing” is table stakes, not the moat.
 2. **The moat is the integrated domain model.** The strongest combination is households + individual people + membership status + waivers + activities/trips + emergency contacts + privacy + volunteer handoff. Competitors solve pieces, but not the whole volunteer-club operating model.
 3. **Trust and independence matter, but must be made concrete.** “Bootstrapped and won’t sell out” is useful as a reason to believe, especially against PE/VC-backed incumbents, but it is not credible unless backed by data portability, a public pricing pledge, continuity planning, and possibly steward-ownership or B-Corp commitments.
 
@@ -256,10 +256,13 @@ Memba should ship trust as product, not just marketing:
 
 ### Positioning against key alternatives
 
-- **Zeffy / Givebutter:** great free fundraising and forms; weak for full club operations, households, member portals, waivers, and activity workflows.
-- **Heylo:** strong community app with memberships, events, and paid waivers; weaker evidence for true households and secretary-first back-office workflows.
-- **TidyHQ:** strong club-native competitor, especially family memberships; Memba must beat it on waivers, activity depth, UX, and volunteer handoff.
-- **Amilia:** powerful Canadian recreation/facility system; too expensive and complex for the initial volunteer-club beachhead.
+- **TidyHQ:** strongest like-for-like volunteer-club benchmark, especially in Commonwealth markets; Memba must beat it on waivers, outdoor activity depth, UX, and volunteer handoff.
+- **Amilia:** powerful Canadian recreation/facility system with credible family, waivers, waitlists, and permissions; too expensive and complex for the initial volunteer-club beachhead, but a very serious Canada benchmark.
+- **Heylo:** strong community app with memberships, events, waitlists, exports, permissions, and paid waivers; dangerous for hiking/running/cycling groups that think of themselves as event communities before they think of themselves as associations.
+- **Zeffy / Givebutter / Donorbox:** great free or low-cost fundraising, forms, CRM, and payments; weak for full club operations, true households, member portals, privacy, waivers, and activity workflows.
+- **Spond Club / Clubforce / SportLoMo:** strong in grassroots or governed sport, with free/low-cost expectations and parent/guardian patterns; less perfect for informal outdoor associations, but highly relevant if the club behaves like a sport body.
+- **membermojo / Yapla / HelloAsso:** prove that free or very-low-cost membership administration is a real expectation in some regions; HelloAsso is France-only, while membermojo and Yapla are practical price anchors in the UK and Canada respectively.
+- **Communal:** direct-convergence watchlist competitor because it frames itself around community/member organizations, bookings, programs, payments, and active-member pricing.
 - **Wild Apricot / ClubExpress:** broad incumbents; vulnerable on UX, family modeling, support, pricing, and acquisition/consolidation pain.
 - **DIY stack:** cheap and familiar, but fragile, manual, insecure, and hard to hand off.
 
@@ -328,7 +331,7 @@ Early customers are likely to need reassurance and migration help. Founder-led, 
 
 ### Not currently an unfair advantage
 
-- **Fair pricing alone:** weakened by Zeffy, Heylo, TidyHQ, membermojo, and donation-tip-funded tools.
+- **Fair pricing alone:** weakened by Zeffy, HelloAsso, Spond Club, Heylo, TidyHQ, membermojo, Clubforce, Yapla, and donation-tip-funded tools.
 - **Payments/renewals alone:** table stakes.
 - **Events alone:** already well served.
 - **Waivers alone:** Heylo contests this.

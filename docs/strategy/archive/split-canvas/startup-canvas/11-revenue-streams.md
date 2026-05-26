@@ -2,7 +2,7 @@
 
 Memba should be a paid subscription business from the start. The revenue model must match the market's two truths: volunteer-run clubs have small budgets, and the clubs that most need Memba are not buying a generic database. They are buying fewer renewal mistakes, cleaner household records, waiver confidence, board-level predictability, and an easier handoff to the next volunteer.
 
-The beachhead is outdoor clubs, especially 80–300 member organizations with family memberships, trip/activity programs, waivers, and a recent admin pain trigger. The long-term market is broader: volunteer-run membership organizations that need membership operations but cannot tolerate professional-association bloat. Revenue design should therefore avoid both extremes: not a free/donation-funded tool like Zeffy, and not a high-setup, staff-oriented recreation platform like Amilia.
+The beachhead is outdoor clubs, especially 80–300 member organizations with family memberships, trip/activity programs, waivers, and a recent admin pain trigger. The long-term market is broader: volunteer-run membership organizations that need membership operations but cannot tolerate professional-association bloat. Revenue design should therefore avoid both extremes: not a free/donation-funded tool like Zeffy or HelloAsso, not a free/low-cost sports-club default like Spond Club, and not a high-setup, staff-oriented recreation platform like Amilia.
 
 ## Revenue architecture options
 
@@ -26,7 +26,7 @@ Memba should reject this as a primary model. It conflicts with the trust promise
 
 ### Option 4: Freemium
 
-A free tier for small clubs could improve adoption and counter Zeffy, Heylo, Spond, and membermojo. It could also poison the customer base with high-support, low-WTP clubs.
+A free tier for small clubs could improve adoption and counter Zeffy, Heylo, Spond Club, Givebutter, Yapla, and membermojo. It could also poison the customer base with high-support, low-WTP clubs.
 
 Memba should not launch with a broad free tier. Sub-50-member informal groups are explicitly outside the ICP; attracting them would inflate support and churn. If a free product exists, it should be a narrow wedge such as a migration assessment, roster cleanup preview, or waiver-and-Sheets pilot, not full membership operations.
 
@@ -55,7 +55,7 @@ This model supports the positioning: Memba earns money from software that reduce
 
 ## Pricing hypotheses
 
-These are hypotheses, not launch doctrine. They should be tested against actual paid pilots and comparison pages naming Zeffy, Heylo, TidyHQ, Wild Apricot, and Amilia.
+These are hypotheses, not launch doctrine. They should be tested against actual paid pilots and comparison pages naming Zeffy, Heylo, TidyHQ, Wild Apricot, Amilia, Spond Club, membermojo, Clubforce, SportLoMo, and Yapla.
 
 ### Starter: $39–$49/month, or $390–$490/year
 
@@ -79,7 +79,7 @@ The Pro tier should avoid becoming a custom-enterprise trap. If clubs require mu
 
 Free is strategically tempting because Zeffy and Heylo create a harsh anchor. But Memba should not compete on being free.
 
-Zeffy can be free because its donation-tip model works at fundraising scale. That model is less natural for membership renewals, where members may resent being nudged to tip a software vendor while paying club dues. Heylo's free tier is real, but its waiver feature sits on a paid plan and its model includes payment service fees. TidyHQ and membermojo show that clubs will pay modest subscriptions when the product fits.
+Zeffy can be free because its donation-tip model works at fundraising scale. HelloAsso proves a similar voluntary-contribution model can operate at large scale, although it is France-only for the beachhead. That model is less natural for membership renewals, where members may resent being nudged to tip a software vendor while paying club dues. Heylo's free tier is real, but its waiver feature sits on a paid plan and its model includes payment service fees. Spond Club, Clubforce, SportLoMo, membermojo, Yapla, and TidyHQ show that clubs can find free, very cheap, or modest subscriptions when the product fits.
 
 Memba's promise is operational depth, not zero cost: households, waivers, renewals, emergency contacts, activities, privacy, and volunteer handoff in one coherent system. Free would also weaken trust. A board can understand a transparent annual software bill; it may distrust a vendor whose revenue depends on tips, future monetization, data, ads, or payment spread.
 
@@ -138,15 +138,17 @@ The business only works if support and migration time fall as the product mature
 
 - **Zeffy:** Free will beat Memba for simple clubs. Memba must win where family memberships, waivers, member portals, private content, and activity operations matter.
 - **Heylo:** Strong threat because $59/month Pro includes waivers and events. Memba must beat it on true households, secretary-first back office, and outdoor trip depth.
-- **TidyHQ:** The sharpest paid competitor. Its family support and $50–$79/month pricing pressure Memba's Club plan. Memba must prove waiver/activity/handoff superiority, not merely claim it.
-- **Amilia:** Not a beachhead price threat, but useful as contrast: $99/month minimum, setup from $899, 1% invoice service fee, and facility-oriented complexity. Memba should not drift into Amilia's market.
-- **membermojo/TidyHQ low-price anchors:** In UK/Commonwealth contexts, Memba cannot win on price. It must win on outdoor-specific workflows and trust.
+- **TidyHQ:** The sharpest paid club-native competitor. Its family support, volunteer-governance language, integrations, and $50–$79/month pricing pressure Memba's Club plan. Memba must prove waiver/activity/handoff superiority, not merely claim it.
+- **Amilia:** Serious Canadian benchmark: $99/month minimum, setup from $899, 1% invoice service fee, strong households/waivers/waitlists/permissions, and facility-oriented complexity. Memba should not drift into Amilia's market.
+- **Spond Club / Clubforce / SportLoMo:** Strong free/low-cost threats when the club is sports-, parent-, team-, or federation-oriented. Memba should qualify these prospects carefully rather than discounting into that market.
+- **membermojo / Yapla / HelloAsso:** Regional price anchors. membermojo pressures UK tiny-club economics; Yapla pressures Canadian nonprofit pricing; HelloAsso is not a Canadian beachhead replacement but proves the voluntary-contribution model.
+- **Communal:** Watchlist threat because its active-member pricing and community/member-organization framing converge on Memba’s long-term story.
 
 ## Experiments to validate willingness to pay
 
 1. Run paid pilots with 3–5 KMC-archetype clubs. At least one should pay the target retail annual price, not only a token fee.
 2. Test pricing ladders: $39/$79/$149, $49/$99/$199, and a lower TidyHQ-matching ladder. Measure board approval, not just signup intent.
-3. In interviews, show explicit alternatives: Zeffy free, Heylo Pro at $59/month plus payment fees, TidyHQ around $50–$79/month, Amilia at $99/month plus setup and invoice fees.
+3. In interviews, show explicit alternatives: Zeffy free, Heylo Pro at $59/month plus payment fees, TidyHQ around $50–$79/month, Amilia at $99/month plus setup and invoice fees, Spond Club free/low-cost, membermojo very-low-cost UK pricing, and Yapla free-membership-management positioning.
 4. Test annual prepay vs monthly billing. Success is not preference; success is signed annual commitments.
 5. Offer paid migration quotes during pilots. If clubs accept migration fees, switching fear is monetizable; if not, migration must be simpler or bundled.
 6. Measure admin hours saved in KMC and convert that into a board-facing ROI calculator.

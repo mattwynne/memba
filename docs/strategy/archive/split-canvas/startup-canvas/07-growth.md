@@ -17,7 +17,7 @@ Specific early guardrails:
 - No scaling paid acquisition until KMC and at least two non-founder-affiliated pilots have completed real renewals or waiver/activity workflows.
 - No broad free tier for clubs below the beachhead threshold; use trials or design-partner discounts instead.
 - Cap any one referral source, federation, or club network so Memba is not captured by a single geography, sport, or gatekeeper.
-- Treat trust promises as product commitments: export, Google Sheets sync, pricing pledge, continuity plan, and no forced payment surcharge. The vendor-independence research is clear that independence is useful only when backed by mechanisms, and bus-factor fear must be neutralized (`deep-dives/vendor-independence-positioning.md`).
+- Treat trust promises as product commitments: export, Google Sheets sync, pricing pledge, continuity plan, and no forced payment surcharge. The vendor-independence research is clear that independence is useful only when backed by mechanisms, and bus-factor fear must be neutralized (`../lean-canvas.md`, `11-revenue-streams.md`).
 
 ## Beachhead sequence
 
@@ -56,7 +56,7 @@ Outreach should be trigger-based. Best trigger moments:
 - Waiver/liability review.
 - Insurance or federation requirement changes.
 - Wild Apricot/ClubExpress renewal or price increase.
-- Failed attempt to use Zeffy, Heylo, TidyHQ, Meetup, Eventbrite, Mailchimp, Google Groups, or spreadsheets as a complete system.
+- Failed attempt to use Zeffy, Heylo, TidyHQ, Amilia, Spond Club, membermojo, Clubforce, SportLoMo, Yapla, Meetup, Eventbrite, Mailchimp, Google Groups, or spreadsheets as a complete system.
 
 Cold outreach should lead with a narrow offer: “We help outdoor clubs move from spreadsheets/Wild Apricot/Zeffy workarounds to one membership system with households, renewals, waivers, and handoff.” Avoid abstract “club management platform” language.
 
@@ -68,12 +68,15 @@ SEO is not a launch channel, but it can become the compounding channel for switc
 - Zeffy vs Memba for membership clubs.
 - Heylo vs Memba for outdoor clubs.
 - TidyHQ alternative for hiking and mountaineering clubs.
+- Spond Club alternative for outdoor clubs that are not team sports.
+- membermojo alternative for clubs that need waivers and true households.
+- Yapla alternative for Canadian outdoor clubs.
 - Family membership software for clubs.
 - Club waiver software with membership status.
 - How to stop running club renewals in a spreadsheet.
 - How to hand off membership secretary duties.
 
-The competitor research makes this comparison strategy necessary: Zeffy erodes the pricing wedge, TidyHQ contests family memberships, Heylo already offers memberships/events/paid waivers, and Amilia is strong but overbuilt for the beachhead (`round2-competitor-analysis/claude.md`, `deep-dives/zeffy.md`, `deep-dives/heylo.md`). Content should not pretend competitors are weak. It should explain the specific trade: Memba is for clubs that need the combination of households, waivers, activity workflows, portability, and volunteer handoff.
+The competitor research makes this comparison strategy necessary: Zeffy erodes the pricing wedge, TidyHQ contests family memberships, Heylo already offers memberships/events/paid waivers, Spond Club, Clubforce, SportLoMo, membermojo, and Yapla push price expectations down, and Amilia is strong but overbuilt for the beachhead (`round2-competitor-analysis/`, `extracted-text/Competitor Gap Pass for Memba.txt`, and `zeffy.md`). Content should not pretend competitors are weak. It should explain the specific trade: Memba is for clubs that need the combination of households, waivers, activity workflows, portability, and volunteer handoff.
 
 ### 3. Federation and regional networks
 
@@ -90,9 +93,9 @@ Full migration is scary. Memba should offer low-risk wedges that create trust be
 - Household cleanup/import tool.
 - Renewal reminder tool.
 - Member directory/member portal.
-- Wild Apricot/TidyHQ/Zeffy/CSV migration assessment.
+- Wild Apricot/TidyHQ/Zeffy/Heylo/Yapla/membermojo/CSV migration assessment.
 
-The best wedge is the one that preserves the path to full membership operations. Waiver + roster sync is especially promising because Zeffy and TidyHQ are weak on native waivers, while Heylo’s waivers are paid and not tied to true households (`deep-dives/heylo.md`).
+The best wedge is the one that preserves the path to full membership operations. Waiver + roster sync is especially promising because Zeffy and TidyHQ appear weaker on native outdoor-club waiver depth, while Heylo’s waivers are paid and not tied to true households (`extracted-text/Competitor Gap Pass for Memba.txt`).
 
 ## Activation milestones
 

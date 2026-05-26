@@ -6,10 +6,11 @@ Memba is currently conceived as a SaaS membership platform for volunteer-run clu
 
 ## Documents
 
-- [Lean Canvas](lean-canvas.md) — current business model hypothesis.
+- [Canvas](canvas.md) — canonical combined Lean Canvas + Startup Canvas strategy.
 - [Research Plan](research-plan.md) — market, customer, competitor, pricing, and technical research workstreams.
 - [Research Delegation Brief](research-delegation-brief.md) — prompt/brief for delegating deep research.
 - [Research archive](research/README.md) — source PDFs and extracted text from market/competitor research briefs.
+- [Archived split canvas](archive/split-canvas/) — old separate Lean/Startup Canvas files, kept only for history.
 
 ## Current strategic stance
 

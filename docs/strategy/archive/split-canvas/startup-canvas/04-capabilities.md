@@ -2,13 +2,13 @@
 
 This section maps the activities, resources, and partnerships Memba needs to deliver its value proposition: a simpler, fairer, outdoor-club-native membership platform for volunteer-run clubs. It follows the Paweł Huryn Startup Canvas framing of "Capabilities" as the union of Key Activities, Key Resources, and Unfair Advantage, and applies the methodology from the CAPABILITIES research template (RESEARCH-CAPABILITIES-PROMPT.md) — including the build/partner/buy lenses, the irreducible-core test, and the explicit "not-acquiring" list.
 
-The grounding documents are `docs/strategy/lean-canvas.md`, `docs/strategy/research-plan.md`, the extracted competitor research in `docs/strategy/research/extracted-text/Memba Market and Competitor Research.txt`, and the repo-level `AGENTS.md` confirming a Phoenix-first stack.
+The grounding documents are `docs/strategy/lean-canvas.md`, `docs/strategy/research-plan.md`, the extracted competitor research in `docs/strategy/research/extracted-text/` including `Competitor Gap Pass for Memba.txt`, and the repo-level `AGENTS.md` confirming a Phoenix-first stack.
 
 ## 1. The irreducible core
 
 Applying §1b of the template: what does the customer actually buy from Memba, and which capability — if absent or weak — causes the product to fail regardless of how strong the rest is?
 
-The Lean Canvas is explicit: the wedge is "membership operations for volunteer-run outdoor clubs," with household/family handling, fair pricing, and volunteer-admin handoff as the differentiating axes (`lean-canvas.md` §Core thesis, §Unfair Advantage). The competitor research confirms that the gap is not feature breadth — Wild Apricot and ClubExpress already out-feature any plausible MVP — but **a coherent domain model + volunteer-friendly UX + predictable pricing**, executed without the contact-count cliffs, bundle hacks, and fee stacking that drive churn from incumbents.
+The Lean Canvas is explicit: the wedge is "membership operations for volunteer-run outdoor clubs," with household/family handling, activity/waiver workflows, and volunteer-admin handoff as the differentiating axes (`lean-canvas.md` §Core thesis, §Unfair Advantage). The competitor research confirms that the gap is not feature breadth — Wild Apricot and ClubExpress already out-feature any plausible MVP, while TidyHQ, Amilia, Heylo, Spond Club, membermojo, Clubforce, SportLoMo, Zeffy, and Yapla compress the “cheap enough” space — but **a coherent domain model + volunteer-friendly UX + trustable pricing/portability**, executed without the contact-count cliffs, bundle hacks, tip prompts, and fee stacking that drive churn or discomfort.
 
 Memba's irreducible core is therefore a **rare cross**: deep outdoor-club domain modelling (households, dependents, waivers, leader roles, trip lifecycle, lapsed-vs-active state) fused with volunteer-admin UX design (handoff in one evening, no jargon, no Salesforce-shaped onboarding). This is judgment-led at the domain layer and execution-led at the engineering layer; neither alone is sufficient.
 
@@ -35,7 +35,7 @@ Per §1a and §1c, every non-trivial capability needs a position, not a survey. 
 | Hosting / infra | **Buy** (Fly.io or Render; managed Postgres) | Context | Re-evaluate at scale |
 | Observability | **Buy** (AppSignal or Sentry + log drain) | Context | — |
 | Customer support | **Build** founder-led; **partner** (Plain or Help Scout) for tooling | Differentiating early — founder-led trust | Hire dedicated support at ~30 paying clubs |
-| Content / SEO | **Build** founder-led | Differentiating (comparison content) | — |
+| Content / SEO | **Build** founder-led | Differentiating (comparison content against TidyHQ, Amilia, Heylo, Zeffy, Spond Club, membermojo, Yapla, and incumbents) | — |
 | Legal / privacy | **Partner** fractional counsel; UK + Canada coverage | Table stakes; non-deferrable | Add EU counsel only if EU clubs sign |
 | Accessibility / WCAG | **Build** to AA from day one | Table stakes for clubs with grant funding | — |
 | AT Protocol / federation | **Defer** as research spike only | Not a moat today | Revisit only if a federation buyer surfaces |
@@ -70,7 +70,7 @@ The activities Memba must execute well, in priority order:
 - Household/family domain model.
 - Volunteer-admin UX and handoff design.
 - Migration concierge.
-- Active-member pricing model (no contact-count cliff, no Memba surcharge).
+- Active-member pricing model as a trust covenant (not a standalone moat): no contact-count cliff, no Memba surcharge, no mandatory tip prompt.
 - Trip/activity workflow integration (Phase 2).
 - Founder-led, independent, migration-friendly support posture.
 

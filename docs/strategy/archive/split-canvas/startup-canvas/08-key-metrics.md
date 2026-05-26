@@ -107,6 +107,8 @@ Measure warm introductions to other clubs, federation mentions, public case-stud
 - Gross margin after infrastructure, email, support, and migration time.
 - Onboarding hours per club and payback period.
 - Discount dependence.
+- Win/loss by named alternative: Zeffy, TidyHQ, Amilia, Heylo, Spond Club, membermojo, Clubforce, SportLoMo, Yapla, Wild Apricot, DIY.
+- Percentage of deals won for domain-model reasons rather than price.
 - Expansion to higher tiers when waivers/activity workflows launch.
 
 ### Quality metrics
@@ -126,6 +128,7 @@ Measure warm introductions to other clubs, federation mentions, public case-stud
 - **Growth guardrail:** New clubs added is valid only if median onboarding support hours and critical data errors stay below threshold.
 - **Engagement guardrail:** Admin sessions are positive only when task completion time falls and workaround count falls.
 - **Revenue guardrail:** ARR growth is valid only when support-adjusted gross margin remains healthy.
+- **Competitive guardrail:** “Fair pricing” messaging is valid only if win/loss notes show prospects chose Memba for households, waivers, activity workflows, privacy, or handoff — not because they thought no cheap/free alternatives existed.
 - **Household guardrail:** Household renewals count only when individual profiles, member statuses, waivers, and privacy settings are correct.
 - **Activity guardrail:** Activities created count only when participant list, waiver status, membership status, and emergency contact access are complete.
 - **Handoff guardrail:** A club is not “healthy” until a second volunteer can perform core workflows without founder intervention.
