@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+real_mix=""
+
+while IFS= read -r candidate; do
+  if [ "$candidate" != "$repo_root/bin/mix" ]; then
+    real_mix="$candidate"
+    break
+  fi
+done < <(which -a mix)
+
+if [ -z "$real_mix" ]; then
+  echo "Could not find the Elixir mix executable" >&2
+  exit 1
+fi
+
+cd "$repo_root/web"
+exec "$real_mix" "$@"
