@@ -119,11 +119,23 @@ digraph IterationImplementation {
 
     adr_gate [shape=diamond, label="ADR coherent?"]
 
+    snapshot_before_adr_repair [
+        label="Snapshot Before ADR Repair",
+        shape=parallelogram,
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='adr'\nsha=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf '%s\\n' \"$sha\" > \".fabro/tmp/${kind}-repair-before-sha.txt\"\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$sha\""
+    ]
+
     fix_adr_coherence [
         label="Fix ADR Coherence",
         prompt="@prompts/fix_adr_coherence.md",
         timeout="2400s",
         max_visits=2
+    ]
+
+    verify_adr_repair [
+        label="Verify ADR Repair",
+        shape=parallelogram,
+        script="set -eu\nkind='adr'\nbefore=$(cat \".fabro/tmp/${kind}-repair-before-sha.txt\")\nafter=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s): %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif [ \"$before\" = \"$after\" ]; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
     ]
 
     adr_not_ready [
@@ -207,9 +219,11 @@ digraph IterationImplementation {
     plan_not_ready -> exit
     adr_coherence_gate -> adr_gate
     adr_gate -> review_fork [label="Coherent", condition="context.adr_coherent=true"]
-    adr_gate -> fix_adr_coherence [label="ADR rework", condition="context.adr_rework_available=true"]
+    adr_gate -> snapshot_before_adr_repair [label="ADR rework", condition="context.adr_rework_available=true"]
     adr_gate -> adr_not_ready [label="Needs human input"]
-    fix_adr_coherence -> dev_check
+    snapshot_before_adr_repair -> fix_adr_coherence
+    fix_adr_coherence -> verify_adr_repair
+    verify_adr_repair -> dev_check
     adr_not_ready -> exit
 
     review_fork -> claude_review
