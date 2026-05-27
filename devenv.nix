@@ -1,5 +1,10 @@
 { pkgs, ... }:
 
+let
+  fabroWritableDirs = pkgs.runCommand "memba-fabro-dev-writable-dirs" { } ''
+    mkdir -p $out/repos $out/workspace
+  '';
+in
 {
   packages = with pkgs; [
     adrgen
@@ -44,6 +49,27 @@
             paths = [ pkgs.git ];
             pathsToLink = [ "/bin" ];
           })
+          fabroWritableDirs
+        ];
+        perms = [
+          {
+            path = fabroWritableDirs;
+            regex = "/repos";
+            mode = "0777";
+            uid = 1000;
+            gid = 1000;
+            uname = "user";
+            gname = "user";
+          }
+          {
+            path = fabroWritableDirs;
+            regex = "/workspace";
+            mode = "0777";
+            uid = 1000;
+            gid = 1000;
+            uname = "user";
+            gname = "user";
+          }
         ];
       }
     ];

@@ -37,24 +37,54 @@ Fabro expects common tools such as `git` to be available on `PATH` inside the ge
 In this project, we make Git available to Fabro by adding an explicit container layer:
 
 ```nix
-containers."fabro-dev" = {
-  # ...
-  copyToRoot = [];
-  layers = [
-    {
-      copyToRoot = [
-        (pkgs.buildEnv {
-          name = "memba-fabro-dev-root";
-          paths = [ pkgs.git ];
-          pathsToLink = [ "/bin" ];
-        })
-      ];
-    }
-  ];
-};
+let
+  fabroWritableDirs = pkgs.runCommand "memba-fabro-dev-writable-dirs" { } ''
+    mkdir -p $out/repos $out/workspace
+  '';
+in
+{
+  containers."fabro-dev" = {
+    # ...
+    copyToRoot = [];
+    layers = [
+      {
+        copyToRoot = [
+          (pkgs.buildEnv {
+            name = "memba-fabro-dev-root";
+            paths = [ pkgs.git ];
+            pathsToLink = [ "/bin" ];
+          })
+          fabroWritableDirs
+        ];
+        perms = [
+          {
+            path = fabroWritableDirs;
+            regex = "/repos";
+            mode = "0777";
+            uid = 1000;
+            gid = 1000;
+            uname = "user";
+            gname = "user";
+          }
+          {
+            path = fabroWritableDirs;
+            regex = "/workspace";
+            mode = "0777";
+            uid = 1000;
+            gid = 1000;
+            uname = "user";
+            gname = "user";
+          }
+        ];
+      }
+    ];
+  };
+}
 ```
 
 This produces `/bin/git` in the final image, so it is found by the default container `PATH`.
+
+Fabro's Docker sandbox also needs to create `/repos/{owner}/{repo}` and `/workspace/{repo}`. The current Docker sandbox implementation clones into `/repos/{owner}/{repo}` and symlinks `/workspace/{repo}` to that checkout. Custom images whose runtime user is non-root must therefore provide writable `/repos` and `/workspace` directories. Nix store paths are read-only, so set the directory modes with the layer `perms` option rather than relying on `chmod` in the derivation.
 
 A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-dev".copyToRoot` does not work the way it first appears. Devenv treats top-level `copyToRoot` as project/home content and copies it under `/env`; it does not overlay those paths onto `/`. For root-level paths such as `/bin/git`, use `containers.<name>.layers[].copyToRoot`.
 
@@ -63,7 +93,7 @@ A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-d
 After rebuilding/loading the image on Fabro, verify with:
 
 ```sh
-docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version'
+docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && mkdir -p /repos/test /workspace/test'
 ```
 
 Expected shape:
