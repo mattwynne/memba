@@ -33,6 +33,7 @@ This is not yet the live Postmark deliverability iteration. Postmark remains the
 - Record one delivery record per addressed member.
 - Record and project delivery events/statuses including sent, delivered, delayed, bounced, spam complaint, and opened.
 - Model `opened` as a delivery status transition on a delivery, not as a separate receipt aggregate in this iteration.
+- Resolve recipients as all active members of the message's club at send time, including the sending member. Members of other clubs must not receive the message.
 - Provide a member-facing receipt summary projection with simple statuses: sent, delivered, delivery problem, opened.
 - Provide an operator deliverability projection with detailed per-member status and provider-style reason/details.
 - Add and execute shared Cucumber scenarios for member message deliverability and operator email deliverability.
@@ -79,15 +80,25 @@ The shared scenarios live in:
 - `acceptance-tests/features/member_message_deliverability.feature`
 - `acceptance-tests/features/operator_email_deliverability.feature`
 
-They are part of this plan. They cover:
+They are part of this plan and must exist before implementation starts.
 
-- A member sending a club message to all members of their own club.
-- A separate club whose members do not receive messages sent to another club.
-- Member-facing receipt status for a sent message.
-- Member-facing receipt status for a delivered message.
-- Member-facing receipt status for delayed, bounced, and spam-complaint delivery problems.
-- Member-facing receipt status for an opened message.
-- Operator-facing deliverability details for delivered, delayed, bounced, spam complaint, and opened statuses, including provider-style reason text when present.
+### Member message deliverability scenarios
+
+- **A member sends a club message:** Given Kootenay Mountaineering Club and Nelson Paddling Club exist, Alice, Bob, and Carol are KMC members, and Pat is a Nelson Paddling Club member; when Alice sends "Trip planning night" to KMC members; then the message is addressed to Alice, Bob, and Carol, is not addressed to Pat, has a separate delivery record per addressed member, and each delivery is sent through the email provider.
+- **A sent message is waiting for delivery confirmation:** when Alice sends "Trip planning night" to KMC members; then Bob's receipt status is `sent`.
+- **A delivered message is shown as delivered:** given Alice has sent the message; when Bob's email is reported delivered; then Bob's receipt status is `delivered`.
+- **A delayed delivery is shown as a delivery problem:** given Alice has sent the message; when Bob's email is reported delayed because the recipient server is temporarily unavailable; then Bob's receipt status is `delivery problem`.
+- **A bounced delivery is shown as a delivery problem:** given Alice has sent the message; when Bob's email is reported bounced because the mailbox does not exist; then Bob's receipt status is `delivery problem`.
+- **A spam complaint is shown as a delivery problem:** given Alice has sent the message; when Bob's email is reported as a spam complaint; then Bob's receipt status is `delivery problem`.
+- **An opened message is shown as opened:** given Alice has sent the message and Bob's email has been reported delivered; when Bob opens the email; then Bob's receipt status is `opened`.
+
+### Operator email deliverability scenarios
+
+- **A delivered email is visible to operators:** when Bob's email is reported delivered; then Bob's operator deliverability status is `delivered`.
+- **A delayed delivery is visible to operators:** when Bob's email is reported delayed with a reason; then Bob's operator deliverability status is `delayed` and the reason is preserved.
+- **A bounced delivery is visible to operators:** when Bob's email is reported bounced with a reason; then Bob's operator deliverability status is `bounced` and the reason is preserved.
+- **A spam complaint is visible to operators:** when Bob's email is reported as a spam complaint with a reason; then Bob's operator deliverability status is `spam complaint` and the reason is preserved.
+- **An opened email is visible to operators:** given Bob's email has been reported delivered; when Bob opens the email; then Bob's operator deliverability status is `opened`.
 
 The feature files deliberately use domain language such as club, person, member, message, delivery record, receipt status, and operator deliverability status. They avoid UI, route, selector, database, and adapter language.
 
@@ -114,17 +125,20 @@ None known.
      - Event: `PersonCreated{person_id, name, email}`.
      - Invariant: a person stream cannot be created twice.
 
-   - **Membership aggregate** (`membership_id`, with `club_id` and `person_id` fields):
-     - Command: `AddMember{membership_id, club_id, person_id}`.
-     - Event: `MemberAdded{membership_id, club_id, person_id}`.
+   - **Membership aggregate** (`membership_id`, a generated UUID, with `club_id` and `person_id` fields):
+     - Command: `AddMember{membership_id, club_id, person_id, joined_at}`.
+     - Event: `MemberAdded{membership_id, club_id, person_id, joined_at}`.
      - Invariant: a membership stream cannot be created twice.
+     - Application service invariant: do not create a second active membership for the same `club_id` and `person_id`.
+     - Active membership rule: for this iteration, every membership is active from creation and cannot lapse, expire, or be revoked. Full membership lifecycle is out of scope.
      - Cross-aggregate existence checks for club and person are handled by the application service before dispatch, not inside the aggregate.
 
    - **Message aggregate** (`message_id`):
      - Command: `SendMessage{message_id, club_id, sender_person_id, subject, body, sent_at}`.
      - Event: `MessageSent{message_id, club_id, sender_person_id, subject, body, sent_at}`.
      - Invariant: a message stream cannot be created twice.
-     - The application service verifies the sender is a member, resolves current club members from projections, dispatches the message command, then creates one delivery per addressed member.
+     - Recipient resolution rule: recipients are all active members of the message's club at send time, including the sending member. Members of other clubs are excluded.
+     - Delivery fan-out: the application service verifies the sender is an active member, resolves active club members from the memberships projection, dispatches the message command, calls the fake provider for each recipient, then synchronously dispatches one `CreateDelivery` command per recipient after fake provider success. For this iteration the fake provider always succeeds.
 
    - **Delivery aggregate** (`delivery_id`):
      - Command: `CreateDelivery{delivery_id, message_id, recipient_person_id, recipient_email, sent_at}`.
@@ -133,10 +147,20 @@ None known.
      - Event: `DeliveryStatusRecorded{delivery_id, status, reason, occurred_at}`.
      - Valid statuses: `:sent`, `:delivered`, `:delayed`, `:bounced`, `:spam_complaint`, `:opened`.
      - Valid transitions: `sent -> delivered`, `sent -> delayed`, `delayed -> delivered`, `sent -> bounced`, `delayed -> bounced`, `sent -> spam_complaint`, `delivered -> spam_complaint`, `delivered -> opened`.
+     - Terminal states for this iteration: `bounced`, `spam_complaint`, and `opened` reject further status changes.
+     - Duplicate status reports with the same status and reason are idempotent: they do not create a second domain event and leave projections unchanged.
      - Invalid transitions are rejected by the aggregate.
 
 7. Define a fake/stub email-provider port used by the message-sending application service in tests. For this iteration, fake provider success means Memba has handed the delivery to the provider; the resulting delivery state is `sent`.
-8. Build Ecto projections/read models for current clubs, people, memberships, messages, deliveries, member-facing receipt summaries, and operator deliverability details.
+8. Build Ecto projections/read models:
+
+   - `clubs`: fields `id`, `name`, `inserted_at`, `updated_at`; fed by `ClubCreated`; used to look up clubs by name/id in tests and future UI.
+   - `people`: fields `id`, `name`, `email`, `inserted_at`, `updated_at`; fed by `PersonCreated`; club-independent so one person can belong to multiple clubs.
+   - `memberships`: fields `id`, `club_id`, `person_id`, `joined_at`, `active`, `inserted_at`, `updated_at`; fed by `MemberAdded`; `active` is always `true` in this iteration; used to resolve message recipients.
+   - `messages`: fields `id`, `club_id`, `sender_person_id`, `subject`, `body`, `sent_at`, `recipient_count`, `inserted_at`, `updated_at`; fed by `MessageSent` and updated by `DeliveryCreated` counts; used for receipt/operator queries.
+   - `deliveries`: fields `id`, `message_id`, `recipient_person_id`, `recipient_email`, `status`, `status_reason`, `sent_at`, `last_status_at`, `opened_at`, `inserted_at`, `updated_at`; fed by `DeliveryCreated` and `DeliveryStatusRecorded`; used by both receipt and operator projections.
+   - Member-facing receipt query: virtual/read query over `messages` and `deliveries` returning `message_id`, `recipient_person_id`, and simple status mapping: `sent`, `delivered`, `delivery problem`, or `opened`.
+   - Operator deliverability query: virtual/read query over `deliveries` and `people` returning `delivery_id`, `message_id`, `recipient_person_id`, `recipient_name`, `recipient_email`, provider-style `status`, `status_reason`, `sent_at`, and `last_status_at`.
 9. Add the Elixir Cucumber dependency and configure it to execute the shared scenarios against the domain model. If the package proves incompatible during implementation, stop and report the incompatibility rather than silently replacing the acceptance approach.
 10. Add domain-level Cucumber step definitions for the shared member-message and operator-deliverability scenarios using fake/stub ports.
 11. Keep the existing cucumber-js/Playwright setup available for future whole-app execution of the same scenarios, but do not implement the Phoenix UI layer in this iteration.
