@@ -1,0 +1,52 @@
+diff --git a/docs/iterations/001-member-message-deliverability/plan.md b/docs/iterations/001-member-message-deliverability/plan.md
+index 1dfbb04..aa49c6a 100644
+--- a/docs/iterations/001-member-message-deliverability/plan.md
++++ b/docs/iterations/001-member-message-deliverability/plan.md
+@@ -59,27 +59,6 @@ This is not yet the live Postmark deliverability iteration. Postmark remains the
+ - Read receipts.
+ - Open counts, last-opened time, device/client diagnostics, or repeated-open tracking.
+ 
+-## Acceptance Criteria
+-
+-- The shared feature files describe the domain behaviour without UI, route, database, or adapter details:
+-  - `acceptance-tests/features/member_message_deliverability.feature`
+-  - `acceptance-tests/features/operator_email_deliverability.feature`
+-- The same feature files remain suitable for future whole-app execution via cucumber-js/Playwright.
+-- Domain-level Cucumber execution runs those scenarios against the Elixir domain model.
+-- A club can be created in the Membership context.
+-- A person can be created in the Membership context independently of any club.
+-- A person can be made an active member of a club.
+-- Any active member can send a message to the active members of their club.
+-- Sending a message to one club does not address members of another club.
+-- Sending a message creates one recipient delivery per resolved recipient.
+-- The fake delivery provider port is called once per recipient delivery.
+-- Member-facing receipt status mapping follows ADR 0006.
+-- Operator deliverability output distinguishes sent, delivered, delayed, bounced, spam complaint, and opened.
+-- Operator deliverability output preserves reason/detail text when supplied.
+-- Repeated open reports are idempotent and only answer whether the delivery was opened at least once, as decided in ADR 0012.
+-- Unit/integration tests cover commands, aggregate decisions, event application, projections, EventStore setup, and fake provider behaviour where Cucumber does not provide enough diagnostic coverage.
+-- `devenv shell mix precommit` passes.
+-
+ ## Acceptance Scenarios
+ 
+ The shared scenarios live in:
+@@ -156,6 +135,19 @@ After this iteration, Memba will have event-sourced Membership and Messaging dom
+ 
+ This creates the product-shaped foundation for the next iteration: live Postmark sending, provider webhooks, tracking pixels, and a real deliverability demo with test inboxes.
+ 
++## Acceptance Criteria
++
++1. `commanded`, `eventstore`, and `commanded_ecto_projections` dependencies are added and configured; EventStore database is created and migrations run without errors.
++2. Club, Person, and Membership aggregates accept their respective commands and emit the expected events, with caller-generated UUID identities per ADR 0011.
++3. Membership projections are populated and a public Membership query API can return active members of a club. Messaging has no direct dependency on Membership Ecto schemas or projection tables.
++4. The Message aggregate (one aggregate per message, per ADR 0004) accepts `SendMessage` with pre-resolved recipients (resolved by the application service via Membership query API, per ADR 0005) and emits `MessageSent` plus one recipient delivery event per resolved recipient.
++5. The delivery status state machine inside the Message aggregate enforces the statuses and transitions defined in ADRs 0006 and 0012 (sent → delivered/delayed/bounced/spam complaint/opened), rejects invalid transitions, and treats duplicate equivalent status reports as idempotent.
++6. A fake/stub delivery provider port is defined and used in tests; fake provider success represents Memba handing delivery to the provider.
++7. Messaging projections exist for messages, recipient deliveries, member-facing receipts (mapped per ADR 0006), and operator deliverability details.
++8. Shared Cucumber feature files in `acceptance-tests/features/**/*.feature` are executed by `huddlz-hq/cucumber` from the Phoenix test suite with domain-level step definitions using fake/stub ports.
++9. ExUnit tests cover EventStore setup, aggregate rules, projector behaviour, status-transition idempotency, and fake provider interactions where Gherkin is not appropriate.
++10. `devenv shell mix precommit` passes with no errors or warnings.
++
+ ## Validation Plan
+ 
+ - Use the shared Cucumber feature files as the domain model specification for this iteration.
