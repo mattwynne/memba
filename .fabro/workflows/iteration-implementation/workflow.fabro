@@ -84,11 +84,23 @@ digraph IterationImplementation {
         label="Plan conformant?"
     ]
 
+    snapshot_before_plan_repair [
+        label="Snapshot Before Plan Repair",
+        shape=parallelogram,
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='plan'\nsha=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf '%s\\n' \"$sha\" > \".fabro/tmp/${kind}-repair-before-sha.txt\"\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$sha\""
+    ]
+
     fix_plan_conformance [
         label="Fix Plan Conformance",
         prompt="@prompts/fix_plan_conformance.md",
         timeout="2400s",
         max_visits=2
+    ]
+
+    verify_plan_repair [
+        label="Verify Plan Repair",
+        shape=parallelogram,
+        script="set -eu\nkind='plan'\nbefore=$(cat \".fabro/tmp/${kind}-repair-before-sha.txt\")\nafter=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s): %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif [ \"$before\" = \"$after\" ]; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
     ]
 
     plan_not_ready [
@@ -182,9 +194,17 @@ digraph IterationImplementation {
     preflight_failed -> exit
 
     implement -> dev_check
-    dev_check -> adr_coherence_gate [label="Dev check passed", condition="outcome=succeeded"]
+    dev_check -> plan_conformance_gate [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
+    plan_conformance_gate -> plan_gate
+    plan_gate -> adr_coherence_gate [label="Conformant", condition="context.plan_conformant=true"]
+    plan_gate -> snapshot_before_plan_repair [label="Plan rework", condition="context.plan_rework_available=true"]
+    plan_gate -> plan_not_ready [label="Needs human input"]
+    snapshot_before_plan_repair -> fix_plan_conformance
+    fix_plan_conformance -> verify_plan_repair
+    verify_plan_repair -> dev_check
+    plan_not_ready -> exit
     adr_coherence_gate -> adr_gate
     adr_gate -> review_fork [label="Coherent", condition="context.adr_coherent=true"]
     adr_gate -> fix_adr_coherence [label="ADR rework", condition="context.adr_rework_available=true"]

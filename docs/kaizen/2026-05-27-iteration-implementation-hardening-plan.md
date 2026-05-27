@@ -647,13 +647,13 @@ Expected:
 - [x] Create `prompts/fix_plan_conformance.md` with bounded repair rules and required evidence summary.
 - [x] Add `plan_conformance_gate`, `plan_gate`, `fix_plan_conformance`, and `plan_not_ready` nodes to `workflow.fabro`.
 - [x] Add model stylesheet entries and max visit budget for `fix_plan_conformance`.
-- [ ] Wire `dev_check -> plan_conformance_gate -> plan_gate -> adr_coherence_gate`.
-- [ ] Wire plan rework through snapshot/verify repair gates back to `dev_check`.
+- [x] Wire `dev_check -> plan_conformance_gate -> plan_gate -> adr_coherence_gate`.
+- [x] Wire plan rework through snapshot/verify repair gates back to `dev_check`.
 - [ ] Optionally add a Memba-specific static evidence collector before `plan_conformance_gate`.
 
 ### Phase 3: repair evidence gates
 
-- [ ] Add snapshot-before and verify-after script nodes for plan repair.
+- [x] Add snapshot-before and verify-after script nodes for plan repair.
 - [ ] Add snapshot-before and verify-after script nodes for ADR repair.
 - [ ] Add snapshot-before and verify-after script nodes for review repair.
 - [ ] Change `fix_adr_coherence -> dev_check` to `fix_adr_coherence -> verify_adr_repair -> dev_check` with snapshot before the fix.
