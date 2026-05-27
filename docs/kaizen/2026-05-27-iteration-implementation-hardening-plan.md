@@ -691,10 +691,10 @@ All four items completed. The updated `synthesize_review.md` prompt now includes
 
 ### Phase 5: final artifact gate
 
-- [ ] Implement `final_artifact_gate` using the confirmed evidence source from Phase 0.
-- [ ] Wire `review_gate -> final_artifact_gate -> final_summary` for accepted implementations.
-- [ ] Ensure final gate fails if locked feature files changed.
-- [ ] Update `final_summary.md` so it cites final artifact evidence and cannot claim absent changed files.
+- [x] Implement `final_artifact_gate` using the confirmed evidence source from Phase 0.
+- [x] Wire `review_gate -> final_artifact_gate -> final_summary` for accepted implementations.
+- [x] Ensure final gate fails if locked feature files changed.
+- [x] Update `final_summary.md` so it cites final artifact evidence and cannot claim absent changed files.
 
 ### Phase 6: validation
 
