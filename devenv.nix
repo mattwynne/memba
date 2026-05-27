@@ -5,9 +5,11 @@ let
     set -euo pipefail
 
     args=()
+    is_clone=0
     while [ "$#" -gt 0 ]; do
       case "$1" in
         clone)
+          is_clone=1
           args+=("$1")
           shift
 
@@ -36,6 +38,20 @@ let
           ;;
       esac
     done
+
+    if [ "$is_clone" -eq 1 ]; then
+      for arg in "$@"; do
+        case "$arg" in
+          https://*@github.com/*)
+            args+=("https://github.com/''${arg#*@github.com/}")
+            ;;
+          *)
+            args+=("$arg")
+            ;;
+        esac
+      done
+      exec ${pkgs.git}/bin/git "''${args[@]}"
+    fi
 
     exec ${pkgs.git}/bin/git "''${args[@]}" "$@"
   '';

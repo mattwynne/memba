@@ -34,7 +34,11 @@ devenv container run fabro-dev
 
 Fabro expects common tools such as `git` to be available on `PATH` inside the generated container. The default `devenv` container root supplies a `/bin` with shell/coreutils, but packages in the top-level `packages` list are not automatically linked into `/bin`.
 
-In this project, we make Git available to Fabro by adding an explicit container layer. Fabro currently treats any stderr from the pre-shell clone step as a clone failure, while ordinary `git clone` writes `Cloning into ...` to stderr even when it succeeds. So `/bin/git` in the Fabro image is a wrapper that adds `--quiet` to `git clone` calls before delegating to the real Git binary:
+In this project, we make Git available to Fabro by adding an explicit container layer. `/bin/git` in the Fabro image is a wrapper that adds two sandbox-init accommodations before delegating to the real Git binary:
+
+- it adds `--quiet` to `git clone`, because Fabro currently treats any stderr from the pre-shell clone step as a clone failure, while ordinary `git clone` writes `Cloning into ...` to stderr even when it succeeds;
+- it strips embedded credentials from GitHub HTTPS clone URLs, allowing public repository clones to succeed even if Fabro's GitHub App token path is unavailable or misconfigured.
+
 
 ```nix
 let
