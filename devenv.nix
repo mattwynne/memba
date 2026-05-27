@@ -34,7 +34,7 @@
     name = "mattwynne/memba-fabro-dev";
     registry = "docker://ghcr.io/";
     version = "latest";
-    copyToRoot = null;
+    copyToRoot = [];
     workingDir = "/workspace/memba";
   };
 
