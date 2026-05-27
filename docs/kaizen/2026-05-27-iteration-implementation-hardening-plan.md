@@ -702,7 +702,8 @@ All four items completed. The updated `synthesize_review.md` prompt now includes
 - [x] Run `PATH="$PWD/bin:$PATH" dev check` locally. Result: PASS; 5 tests, 0 failures.
 - [x] Exercise Regression 1 with a dry-run, fixture, or documented manual graph check.
   - Validation note (2026-05-27): Manual Fabro graph/prompt check completed. The graph runs `dev_check -> plan_conformance_gate -> plan_gate` before ADR/review acceptance. `plan_conformance_gate.md` treats Commanded/EventStore/projections/Cucumber requirements as binding, rejects plain-module substitutions, and says a green 5-test suite is insufficient. `adr_coherence_gate.md` rejects omitted cited ADR central decisions, and `synthesize_review.md` forbids accepting unresolved explicit plan requirements or repeated `missing-commanded-eventstore` blockers. This scenario should route to bounded rework or human input, not acceptance.
-- [ ] Exercise Regression 2 with a dry-run, fixture, or documented manual graph check.
+- [x] Exercise Regression 2 with a dry-run, fixture, or documented manual graph check.
+  - Validation note (2026-05-27): Manual Fabro graph/script check completed. The workflow routes plan, ADR, and review repairs through `snapshot_before_*_repair -> fix_* -> verify_*_repair -> dev_check`. Each verify gate hashes `git diff --binary` before and after repair and exits non-zero when unchanged. A temp git fixture with an existing implementation diff and no repair changes caused plan, ADR, and review verify scripts to fail as expected, so a repair response that only says “I will fix it” cannot proceed as successful repair.
 - [ ] Exercise Regression 3 with a dry-run, fixture, or documented manual graph check.
 - [ ] Exercise Regression 4 with a dry-run, fixture, or documented manual graph check.
 - [ ] Exercise Regression 5 with a dry-run, fixture, or documented manual graph check.
