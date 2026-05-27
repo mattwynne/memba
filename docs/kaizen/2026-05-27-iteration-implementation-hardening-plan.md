@@ -635,10 +635,10 @@ Expected:
 
 ### Phase 1: sandbox/runtime boundary
 
-- [ ] Expand `preflight_sandbox` in `.fabro/workflows/iteration-implementation/workflow.fabro` with env reporting, stale `/env` checks, writable cache probes, `dev up`, and native-dep smoke test or justified cheaper equivalent.
-- [ ] Update `fix_dev_check.md` with sandbox-boundary blocker rules.
-- [ ] Update `apply_review_fixes.md` with sandbox-boundary blocker rules.
-- [ ] Update `fix_adr_coherence.md` with sandbox-boundary blocker rules.
+- [x] Expand `preflight_sandbox` in `.fabro/workflows/iteration-implementation/workflow.fabro` with env reporting, stale `/env` checks, writable cache probes, `dev up`, and native-dep smoke test or justified cheaper equivalent.
+- [x] Update `fix_dev_check.md` with sandbox-boundary blocker rules.
+- [x] Update `apply_review_fixes.md` with sandbox-boundary blocker rules.
+- [x] Update `fix_adr_coherence.md` with sandbox-boundary blocker rules.
 - [ ] If added later, include the same rule in `fix_plan_conformance.md`.
 
 ### Phase 2: plan conformance gate

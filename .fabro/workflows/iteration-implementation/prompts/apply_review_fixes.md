@@ -9,5 +9,6 @@ Rules:
 - Add or update automated tests only when needed to preserve or clarify existing behaviour while refactoring.
 - Do not skip or weaken existing validation.
 - Do not commit changes.
+- **Sandbox/runtime boundary**: If the requested fix or failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.
 
 When finished, summarize each review issue and how you addressed it.

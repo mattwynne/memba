@@ -10,5 +10,6 @@ Rules:
 - Do not add unrelated cleanup.
 - Re-read relevant project guidance before touching Phoenix, LiveView, HEEx, Ecto, or Elixir test code.
 - Do not commit changes.
+- **Sandbox/runtime boundary**: If the failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.
 
 When finished, summarize the fixes and which dev check failure each fix addresses.

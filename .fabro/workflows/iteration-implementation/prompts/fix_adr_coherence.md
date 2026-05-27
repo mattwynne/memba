@@ -13,6 +13,7 @@ Rules:
 - Do not add unrelated cleanup or new product behaviour.
 - Do not skip or weaken existing validation.
 - Do not commit changes.
+- **Sandbox/runtime boundary**: If the ADR violation or failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.
 
 When finished, summarize:
 
