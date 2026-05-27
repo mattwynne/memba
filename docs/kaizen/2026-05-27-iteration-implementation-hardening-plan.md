@@ -639,12 +639,12 @@ Expected:
 - [x] Update `fix_dev_check.md` with sandbox-boundary blocker rules.
 - [x] Update `apply_review_fixes.md` with sandbox-boundary blocker rules.
 - [x] Update `fix_adr_coherence.md` with sandbox-boundary blocker rules.
-- [ ] If added later, include the same rule in `fix_plan_conformance.md`.
+- [x] If added later, include the same rule in `fix_plan_conformance.md`.
 
 ### Phase 2: plan conformance gate
 
 - [x] Create `prompts/plan_conformance_gate.md` with decision rules, report format, and routing JSON.
-- [ ] Create `prompts/fix_plan_conformance.md` with bounded repair rules and required evidence summary.
+- [x] Create `prompts/fix_plan_conformance.md` with bounded repair rules and required evidence summary.
 - [ ] Add `plan_conformance_gate`, `plan_gate`, `fix_plan_conformance`, and `plan_not_ready` nodes to `workflow.fabro`.
 - [ ] Add model stylesheet entries and max visit budget for `fix_plan_conformance`.
 - [ ] Wire `dev_check -> plan_conformance_gate -> plan_gate -> adr_coherence_gate`.
