@@ -629,7 +629,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-27T03:43:01.614476852Z",
-  "last_event_at": "2026-05-27T03:46:36.196530287Z",
+  "last_event_at": "2026-05-27T03:46:39.051336405Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1864,9 +1864,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 161,
       "checkpoint": {
-        "timestamp": "2026-05-27T03:46:36.220614334Z",
+        "timestamp": "2026-05-27T03:46:39.049757671Z",
         "current_node": "recheck_gate",
         "completed_nodes": [
           "start",
@@ -1882,42 +1882,35 @@
         ],
         "node_retries": {},
         "context_values": {
-          "thread.fork.current_node": "merge",
-          "parallel.fan_in.best_id": "claude_review",
-          "internal.fidelity": "summary:high",
-          "current_node": "recheck_gate",
-          "response.synthesize": "# Plan Validation Synthesis Report\n\n## 1. Provisional Decision: **OBVIOUS FIXES NEEDED**\n\nThe plan is substantively complete and an engineer could begin implementation. The three reviews converge on a small set of structural/editorial improvements that can be made without inventing new decisions. No material product or technical decisions are missing — the ADRs and plan together cover the domain model, architecture, and scope.\n\n## 2. Consensus Findings\n\n- **Acceptance criteria need to be extracted into a dedicated, testable checklist.** All three reviewers note that success criteria are scattered across the Validation Plan, Implementation Steps, and New Capability sections rather than being listed as discrete, objectively verifiable items.\n- **The \"Open Technical Decisions\" section is appropriate.** All reviewers agree that deferring exact package versions and Cucumber folder structure to implementation time is reasonable and not blocking — these are implementation-time discoveries, not design decisions.\n- **Scope is well-bounded.** The plan clearly states what is in (fake provider, domain aggregates, projections, Cucumber domain steps) and what is out (UI, live Postmark, webhooks). All reviewers agree the scope is appropriate for a single iteration.\n- **The plan is well-grounded in ADRs.** Reviewers consistently note that the plan references ADRs for all major design choices (aggregate identity, recipient resolution, delivery status, Cucumber strategy).\n- **Step ordering and dependencies are clear.** The 18 implementation steps form a logical sequence from infrastructure through domain through testing.\n\n## 3. Corrected Findings\n\n| Reviewer Finding | Correction |\n|---|---|\n| **Gemini**: \"No explicit acceptance criteria section\" is blocking | **Downgraded to obvious fix.** The criteria exist throughout the plan; they just need to be collected into a dedicated section. This is editorial reorganization, not missing content. |\n| **Gemini**: Suggests adding explicit version-pinning acceptance criterion | **Rejected.** The plan already says to choose versions during implementation. Adding a criterion that says \"versions are pinned\" is redundant with normal `mix.lock` behavior. |\n| **Codex/GPT**: Suggests the plan should specify the exact Cucumber Elixir package version or tag | **Rejected.** The plan already identifies the package (`huddlz-hq/cucumber` GitHub dep) and explicitly defers version selection to implementation. This is not a design decision. |\n| **Claude**: Notes that the delivery status state machine transitions could be more explicitly enumerated | **Downgraded.** The plan references ADR 0006 and ADR 0012 which define the statuses and transitions. The plan lists the statuses (sent, delivered, delayed, bounced, spam complaint, opened) and the rules (invalid transitions rejected, duplicate equivalent status idempotent). An engineer can implement from this plus the ADRs. |\n| **Codex/GPT**: Suggests adding database setup/migration steps as explicit acceptance criteria | **Combined with the acceptance criteria fix.** A criterion like \"EventStore and Ecto projections databases are configured and migrations run cleanly\" is already implied by step 3 and the precommit requirement, but making it explicit in the acceptance criteria is a reasonable editorial improvement. |\n\n## 4. Blocking Gaps\n\n1. **No dedicated Acceptance Criteria section.** Without a single enumerated list of objectively testable criteria, a reviewer cannot efficiently validate that the iteration is complete. The content exists but is scattered. This blocks validation (not implementation), and the fix is purely editorial extraction from existing plan text.\n\nThis is the only blocking gap. It is addressable by obvious editorial reorganization.\n\n## 5. Codex Repair Brief\n\nApply the following edits to `docs/iterations/001-member-message-deliverability/plan.md`:\n\n**Add an \"Acceptance Criteria\" section** immediately before the \"Validation Plan\" section. Extract and consolidate the following testable criteria from existing plan content. Do not invent new requirements — only reorganize what the plan already states or clearly implies:\n\n```markdown\n## Acceptance Criteria\n\n1. `commanded`, `eventstore`, and `commanded_ecto_projections` dependencies are added and configured; EventStore database is created and migrations run without errors.\n2. Club, Person, and Membership aggregates accept their respective commands and emit the expected events, with caller-generated UUID identities per ADR 0011.\n3. Membership projections are populated and a public Membership query API can return active members of a club. Messaging has no direct dependency on Membership Ecto schemas or projection tables.\n4. The Message aggregate (one aggregate per message, per ADR 0004) accepts `SendMessage` with pre-resolved recipients (resolved by the application service via Membership query API, per ADR 0005) and emits `MessageSent` plus one recipient delivery event per resolved recipient.\n5. The delivery status state machine inside the Message aggregate enforces the statuses and transitions defined in ADRs 0006 and 0012 (sent → delivered/delayed/bounced/spam complaint/opened), rejects invalid transitions, and treats duplicate equivalent status reports as idempotent.\n6. A fake/stub delivery provider port is defined and used in tests; fake provider success represents Memba handing delivery to the provider.\n7. Messaging projections exist for messages, recipient deliveries, member-facing receipts (mapped per ADR 0006), and operator deliverability details.\n8. Shared Cucumber feature files in `acceptance-tests/features/**/*.feature` are executed by `huddlz-hq/cucumber` from the Phoenix test suite with domain-level step definitions using fake/stub ports.\n9. ExUnit tests cover EventStore setup, aggregate rules, projector behaviour, status-transition idempotency, and fake provider interactions where Gherkin is not appropriate.\n10. `devenv shell mix precommit` passes with no errors or warnings.\n```\n\n**No other changes.** Do not modify the Implementation Steps, Open Technical Decisions, Validation Plan, or any other section. The Acceptance Criteria section makes the existing scattered criteria explicit and testable in one place.\n\n## 6. Questions for Matt\n\nNone.\n\n## 7. Validation Checklist (post-Codex edit)\n\n- [ ] The plan contains a dedicated \"Acceptance Criteria\" section with numbered, testable items.\n- [ ] Every criterion is objectively verifiable (pass/fail, not subjective).\n- [ ] No new product, domain, or technical decisions were introduced — only reorganized existing content.\n- [ ] The Implementation Steps, Open Technical Decisions, New Capability, Validation Plan, and Risks sections are unchanged.\n- [ ] The Acceptance Criteria section appears before the Validation Plan section.\n- [ ] The plan still reads coherently end-to-end.\n\n---\n\n```json\n{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":true,\"plan_needs_human\":false}}\n```",
-          "thread.merge.current_node": "synthesize",
-          "internal.retry_count.synthesis_gate": 0,
-          "graph.rankdir": "LR",
-          "thread.codex_update.current_node": "read_updated_plan",
-          "thread.start.current_node": "read_plan",
+          "graph.model_stylesheet": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: claude-opus-4-6; reasoning_effort: high; }\n        ",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.read_updated_plan": 0,
-          "internal.retry_count.opus_recheck": 0,
-          "internal.retry_count.recheck_gate": 0,
-          "command.output": "blob://sha256/695c6b7202c6ff8f45a626247b9a97f68af880e49423e66a969d7721a1190276",
-          "internal.retry_count.merge": 0,
-          "thread.read_plan.current_node": "fork",
-          "parallel.fan_in.best_head_sha": "3a954427481de0664fa37f432e4a513915943d63",
-          "parallel.branch_count": 3,
-          "parallel.fan_in.best_outcome": "succeeded",
-          "graph.default_fidelity": "summary:high",
-          "thread.opus_recheck.current_node": "recheck_gate",
-          "internal.retry_count.start": 0,
-          "response.codex_update": "### Files changed\n\n- `docs/iterations/001-member-message-deliverability/plan.md`\n\n### Summary of edits\n\n- Removed the earlier scattered/legacy `## Acceptance Criteria` section near the top of the plan.\n- Added a new dedicated `## Acceptance Criteria` section **immediately before** `## Validation Plan`.\n- Populated that section with the 10 numbered, objectively testable criteria from the Opus repair brief (wording kept aligned with the brief).\n- Left all other sections intact in content and intent (Implementation Plan, Open Technical Decisions, New Capability, Validation Plan, Risks/Follow-ups, etc.).\n\n### Which Opus instructions were applied\n\nApplied all requested instructions from the Codex Repair Brief:\n\n1. Added a dedicated **Acceptance Criteria** section.\n2. Placed it immediately before **Validation Plan**.\n3. Consolidated criteria into a numbered, testable checklist matching the provided list.\n4. Avoided introducing new product/domain/technical decisions.\n5. Did not edit any app code or unrelated files.\n\n### Instructions skipped (require Matt’s judgment)\n\n- None.\n\n### Anything Opus should pay special attention to in recheck\n\n- Confirm there is now exactly one canonical `## Acceptance Criteria` section in the intended location (before `## Validation Plan`).\n- Confirm criteria are pass/fail testable and map cleanly to existing plan scope/ADRs without adding new scope.",
-          "plan_ready": true,
-          "plan_needs_fix": false,
-          "last_stage": "opus_recheck",
           "internal.work_dir": "/workspace/memba",
+          "internal.run_id": "01KSKREH19MB4ZP4HJ4WAFS9VN",
+          "internal.retry_count.merge": 0,
+          "thread.merge.current_node": "synthesize",
+          "internal.retry_count.recheck_gate": 0,
+          "thread.fork.current_node": "merge",
           "internal.thread_id": "opus_recheck",
-          "thread.synthesize.current_node": "synthesis_gate",
+          "parallel.fan_in.best_head_sha": "3a954427481de0664fa37f432e4a513915943d63",
+          "internal.retry_count.synthesis_gate": 0,
           "thread.synthesis_gate.current_node": "codex_update",
+          "last_stage": "opus_recheck",
+          "command.output": "blob://sha256/695c6b7202c6ff8f45a626247b9a97f68af880e49423e66a969d7721a1190276",
+          "graph.default_fidelity": "summary:high",
           "internal.retry_count.synthesize": 0,
-          "internal.retry_count.codex_update": 0,
-          "plan_needs_human": false,
-          "graph.model_stylesheet": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: claude-opus-4-6; reasoning_effort: high; }\n        ",
+          "graph.rankdir": "LR",
+          "plan_ready": true,
+          "internal.node_visit_count": 1,
+          "internal.fidelity": "summary:high",
+          "current_node": "recheck_gate",
+          "response.codex_update": "### Files changed\n\n- `docs/iterations/001-member-message-deliverability/plan.md`\n\n### Summary of edits\n\n- Removed the earlier scattered/legacy `## Acceptance Criteria` section near the top of the plan.\n- Added a new dedicated `## Acceptance Criteria` section **immediately before** `## Validation Plan`.\n- Populated that section with the 10 numbered, objectively testable criteria from the Opus repair brief (wording kept aligned with the brief).\n- Left all other sections intact in content and intent (Implementation Plan, Open Technical Decisions, New Capability, Validation Plan, Risks/Follow-ups, etc.).\n\n### Which Opus instructions were applied\n\nApplied all requested instructions from the Codex Repair Brief:\n\n1. Added a dedicated **Acceptance Criteria** section.\n2. Placed it immediately before **Validation Plan**.\n3. Consolidated criteria into a numbered, testable checklist matching the provided list.\n4. Avoided introducing new product/domain/technical decisions.\n5. Did not edit any app code or unrelated files.\n\n### Instructions skipped (require Matt’s judgment)\n\n- None.\n\n### Anything Opus should pay special attention to in recheck\n\n- Confirm there is now exactly one canonical `## Acceptance Criteria` section in the intended location (before `## Validation Plan`).\n- Confirm criteria are pass/fail testable and map cleanly to existing plan scope/ADRs without adding new scope.",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.start": 0,
+          "failure_class": "",
           "graph.goal": "Validate that an iteration plan is ready for implementation",
+          "failure_signature": "",
+          "internal.retry_count.opus_recheck": 0,
           "parallel.results": [
             {
               "id": "gemini_review",
@@ -1935,32 +1928,24 @@
               "head_sha": "e95b052fd50ceb6606f8e01dbf1235cbaceb5fd7"
             }
           ],
-          "last_response": "# Plan Recheck Report\n\n## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex Fixed Successfully\n\n- **Added a dedicated \"Acceptance Criteria\" section** with 10 numbered, objectively testable ",
+          "thread.read_plan.current_node": "fork",
+          "parallel.fan_in.best_outcome": "succeeded",
+          "parallel.branch_count": 3,
           "thread.read_updated_plan.current_node": "opus_recheck",
-          "response.opus_recheck": "# Plan Recheck Report\n\n## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex Fixed Successfully\n\n- **Added a dedicated \"Acceptance Criteria\" section** with 10 numbered, objectively testable criteria, placed immediately before the \"Validation Plan\" section — exactly as specified in the repair brief.\n- **Removed the earlier scattered acceptance criteria** that existed near the top of the plan, eliminating duplication.\n- **Preserved all other sections unchanged**: Implementation Steps, Open Technical Decisions, New Capability, Validation Plan, and Risks/Follow-ups are intact.\n- **No new product, domain, or technical decisions were introduced** — the criteria are faithful consolidations of what was already stated or clearly implied in the plan and referenced ADRs.\n\n## 4. Remaining Blocking Gaps\n\nNone. The plan now meets all readiness criteria:\n\n- **Goal is clear**: Event-sourced Membership and Messaging domain skeletons with fake provider, tested via shared Cucumber features and ExUnit.\n- **Scope is bounded**: Explicitly states what's in (domain aggregates, projections, fake provider, domain-level Cucumber steps) and what's out (UI, live Postmark, webhooks).\n- **Acceptance criteria are concrete and testable**: 10 numbered pass/fail items covering dependencies, aggregates, projections, query API boundaries, state machine rules, test infrastructure, and the precommit gate.\n- **Open technical decisions are implementation-time discoveries** (package versions, folder structure), not design decisions that would change the plan's shape.\n- **Implementation steps are sequenced and actionable**: 18 steps from infrastructure setup through domain modeling through testing.\n- **Validation plan is clear**: Cucumber features as spec, ExUnit for lower-level details, precommit as final gate.\n\n## 5. Follow-up Repair Instructions for Codex\n\nNone needed.\n\n## 6. Questions for Matt\n\nNone.\n\n## 7. Final Validation Plan\n\nThe iteration will be considered successful when:\n\n1. All 10 acceptance criteria pass objectively.\n2. Shared Cucumber feature files execute green against Elixir domain step definitions with fake/stub ports.\n3. ExUnit tests pass for aggregate rules, projector behavior, status-transition idempotency, and fake provider interactions.\n4. `devenv shell mix precommit` passes with no errors or warnings.\n5. No live provider demo or UI work is expected — that belongs to the next iteration.\n\n---\n\n```json\n{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}\n```",
-          "internal.run_id": "01KSKREH19MB4ZP4HJ4WAFS9VN",
-          "outcome": "succeeded",
-          "internal.node_visit_count": 1,
+          "thread.synthesize.current_node": "synthesis_gate",
           "internal.retry_count.fork": 0,
-          "failure_signature": "",
-          "failure_class": ""
+          "internal.retry_count.codex_update": 0,
+          "outcome": "succeeded",
+          "response.synthesize": "# Plan Validation Synthesis Report\n\n## 1. Provisional Decision: **OBVIOUS FIXES NEEDED**\n\nThe plan is substantively complete and an engineer could begin implementation. The three reviews converge on a small set of structural/editorial improvements that can be made without inventing new decisions. No material product or technical decisions are missing — the ADRs and plan together cover the domain model, architecture, and scope.\n\n## 2. Consensus Findings\n\n- **Acceptance criteria need to be extracted into a dedicated, testable checklist.** All three reviewers note that success criteria are scattered across the Validation Plan, Implementation Steps, and New Capability sections rather than being listed as discrete, objectively verifiable items.\n- **The \"Open Technical Decisions\" section is appropriate.** All reviewers agree that deferring exact package versions and Cucumber folder structure to implementation time is reasonable and not blocking — these are implementation-time discoveries, not design decisions.\n- **Scope is well-bounded.** The plan clearly states what is in (fake provider, domain aggregates, projections, Cucumber domain steps) and what is out (UI, live Postmark, webhooks). All reviewers agree the scope is appropriate for a single iteration.\n- **The plan is well-grounded in ADRs.** Reviewers consistently note that the plan references ADRs for all major design choices (aggregate identity, recipient resolution, delivery status, Cucumber strategy).\n- **Step ordering and dependencies are clear.** The 18 implementation steps form a logical sequence from infrastructure through domain through testing.\n\n## 3. Corrected Findings\n\n| Reviewer Finding | Correction |\n|---|---|\n| **Gemini**: \"No explicit acceptance criteria section\" is blocking | **Downgraded to obvious fix.** The criteria exist throughout the plan; they just need to be collected into a dedicated section. This is editorial reorganization, not missing content. |\n| **Gemini**: Suggests adding explicit version-pinning acceptance criterion | **Rejected.** The plan already says to choose versions during implementation. Adding a criterion that says \"versions are pinned\" is redundant with normal `mix.lock` behavior. |\n| **Codex/GPT**: Suggests the plan should specify the exact Cucumber Elixir package version or tag | **Rejected.** The plan already identifies the package (`huddlz-hq/cucumber` GitHub dep) and explicitly defers version selection to implementation. This is not a design decision. |\n| **Claude**: Notes that the delivery status state machine transitions could be more explicitly enumerated | **Downgraded.** The plan references ADR 0006 and ADR 0012 which define the statuses and transitions. The plan lists the statuses (sent, delivered, delayed, bounced, spam complaint, opened) and the rules (invalid transitions rejected, duplicate equivalent status idempotent). An engineer can implement from this plus the ADRs. |\n| **Codex/GPT**: Suggests adding database setup/migration steps as explicit acceptance criteria | **Combined with the acceptance criteria fix.** A criterion like \"EventStore and Ecto projections databases are configured and migrations run cleanly\" is already implied by step 3 and the precommit requirement, but making it explicit in the acceptance criteria is a reasonable editorial improvement. |\n\n## 4. Blocking Gaps\n\n1. **No dedicated Acceptance Criteria section.** Without a single enumerated list of objectively testable criteria, a reviewer cannot efficiently validate that the iteration is complete. The content exists but is scattered. This blocks validation (not implementation), and the fix is purely editorial extraction from existing plan text.\n\nThis is the only blocking gap. It is addressable by obvious editorial reorganization.\n\n## 5. Codex Repair Brief\n\nApply the following edits to `docs/iterations/001-member-message-deliverability/plan.md`:\n\n**Add an \"Acceptance Criteria\" section** immediately before the \"Validation Plan\" section. Extract and consolidate the following testable criteria from existing plan content. Do not invent new requirements — only reorganize what the plan already states or clearly implies:\n\n```markdown\n## Acceptance Criteria\n\n1. `commanded`, `eventstore`, and `commanded_ecto_projections` dependencies are added and configured; EventStore database is created and migrations run without errors.\n2. Club, Person, and Membership aggregates accept their respective commands and emit the expected events, with caller-generated UUID identities per ADR 0011.\n3. Membership projections are populated and a public Membership query API can return active members of a club. Messaging has no direct dependency on Membership Ecto schemas or projection tables.\n4. The Message aggregate (one aggregate per message, per ADR 0004) accepts `SendMessage` with pre-resolved recipients (resolved by the application service via Membership query API, per ADR 0005) and emits `MessageSent` plus one recipient delivery event per resolved recipient.\n5. The delivery status state machine inside the Message aggregate enforces the statuses and transitions defined in ADRs 0006 and 0012 (sent → delivered/delayed/bounced/spam complaint/opened), rejects invalid transitions, and treats duplicate equivalent status reports as idempotent.\n6. A fake/stub delivery provider port is defined and used in tests; fake provider success represents Memba handing delivery to the provider.\n7. Messaging projections exist for messages, recipient deliveries, member-facing receipts (mapped per ADR 0006), and operator deliverability details.\n8. Shared Cucumber feature files in `acceptance-tests/features/**/*.feature` are executed by `huddlz-hq/cucumber` from the Phoenix test suite with domain-level step definitions using fake/stub ports.\n9. ExUnit tests cover EventStore setup, aggregate rules, projector behaviour, status-transition idempotency, and fake provider interactions where Gherkin is not appropriate.\n10. `devenv shell mix precommit` passes with no errors or warnings.\n```\n\n**No other changes.** Do not modify the Implementation Steps, Open Technical Decisions, Validation Plan, or any other section. The Acceptance Criteria section makes the existing scattered criteria explicit and testable in one place.\n\n## 6. Questions for Matt\n\nNone.\n\n## 7. Validation Checklist (post-Codex edit)\n\n- [ ] The plan contains a dedicated \"Acceptance Criteria\" section with numbered, testable items.\n- [ ] Every criterion is objectively verifiable (pass/fail, not subjective).\n- [ ] No new product, domain, or technical decisions were introduced — only reorganized existing content.\n- [ ] The Implementation Steps, Open Technical Decisions, New Capability, Validation Plan, and Risks sections are unchanged.\n- [ ] The Acceptance Criteria section appears before the Validation Plan section.\n- [ ] The plan still reads coherently end-to-end.\n\n---\n\n```json\n{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":true,\"plan_needs_human\":false}}\n```",
+          "thread.codex_update.current_node": "read_updated_plan",
+          "parallel.fan_in.best_id": "claude_review",
+          "last_response": "# Plan Recheck Report\n\n## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex Fixed Successfully\n\n- **Added a dedicated \"Acceptance Criteria\" section** with 10 numbered, objectively testable ",
+          "response.opus_recheck": "# Plan Recheck Report\n\n## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex Fixed Successfully\n\n- **Added a dedicated \"Acceptance Criteria\" section** with 10 numbered, objectively testable criteria, placed immediately before the \"Validation Plan\" section — exactly as specified in the repair brief.\n- **Removed the earlier scattered acceptance criteria** that existed near the top of the plan, eliminating duplication.\n- **Preserved all other sections unchanged**: Implementation Steps, Open Technical Decisions, New Capability, Validation Plan, and Risks/Follow-ups are intact.\n- **No new product, domain, or technical decisions were introduced** — the criteria are faithful consolidations of what was already stated or clearly implied in the plan and referenced ADRs.\n\n## 4. Remaining Blocking Gaps\n\nNone. The plan now meets all readiness criteria:\n\n- **Goal is clear**: Event-sourced Membership and Messaging domain skeletons with fake provider, tested via shared Cucumber features and ExUnit.\n- **Scope is bounded**: Explicitly states what's in (domain aggregates, projections, fake provider, domain-level Cucumber steps) and what's out (UI, live Postmark, webhooks).\n- **Acceptance criteria are concrete and testable**: 10 numbered pass/fail items covering dependencies, aggregates, projections, query API boundaries, state machine rules, test infrastructure, and the precommit gate.\n- **Open technical decisions are implementation-time discoveries** (package versions, folder structure), not design decisions that would change the plan's shape.\n- **Implementation steps are sequenced and actionable**: 18 steps from infrastructure setup through domain modeling through testing.\n- **Validation plan is clear**: Cucumber features as spec, ExUnit for lower-level details, precommit as final gate.\n\n## 5. Follow-up Repair Instructions for Codex\n\nNone needed.\n\n## 6. Questions for Matt\n\nNone.\n\n## 7. Final Validation Plan\n\nThe iteration will be considered successful when:\n\n1. All 10 acceptance criteria pass objectively.\n2. Shared Cucumber feature files execute green against Elixir domain step definitions with fake/stub ports.\n3. ExUnit tests pass for aggregate rules, projector behavior, status-transition idempotency, and fake provider interactions.\n4. `devenv shell mix precommit` passes with no errors or warnings.\n5. No live provider demo or UI work is expected — that belongs to the next iteration.\n\n---\n\n```json\n{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}\n```",
+          "thread.opus_recheck.current_node": "recheck_gate",
+          "plan_needs_fix": false,
+          "plan_needs_human": false
         },
         "node_outcomes": {
-          "merge": {
-            "status": "succeeded",
-            "context_updates": {
-              "parallel.fan_in.best_head_sha": "3a954427481de0664fa37f432e4a513915943d63",
-              "parallel.fan_in.best_outcome": "succeeded",
-              "parallel.fan_in.best_id": "claude_review"
-            },
-            "notes": "Selected best candidate: claude_review",
-            "usage": null
-          },
-          "recheck_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: recheck_gate",
-            "usage": null
-          },
           "synthesize": {
             "status": "succeeded",
             "context_updates": {
@@ -1996,21 +1981,10 @@
               "total_usd_micros": 53770
             }
           },
-          "read_updated_plan": {
+          "fork": {
             "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/695c6b7202c6ff8f45a626247b9a97f68af880e49423e66a969d7721a1190276"
-            },
-            "notes": "Script completed: PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found after Codex update: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'UPDATED PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\"",
-            "usage": null
-          },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "start": {
-            "status": "succeeded",
+            "jump_to_node": "merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
           },
           "opus_recheck": {
@@ -2048,6 +2022,16 @@
               "total_usd_micros": 48040
             }
           },
+          "merge": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.fan_in.best_head_sha": "3a954427481de0664fa37f432e4a513915943d63",
+              "parallel.fan_in.best_outcome": "succeeded",
+              "parallel.fan_in.best_id": "claude_review"
+            },
+            "notes": "Selected best candidate: claude_review",
+            "usage": null
+          },
           "read_plan": {
             "status": "succeeded",
             "context_updates": {
@@ -2056,10 +2040,13 @@
             "notes": "Script completed: PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
             "usage": null
           },
-          "fork": {
+          "start": {
             "status": "succeeded",
-            "jump_to_node": "merge",
-            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "recheck_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: recheck_gate",
             "usage": null
           },
           "codex_update": {
@@ -2091,26 +2078,183 @@
               },
               "total_usd_micros": 52955
             }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "read_updated_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/695c6b7202c6ff8f45a626247b9a97f68af880e49423e66a969d7721a1190276"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found after Codex update: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'UPDATED PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\"",
+            "usage": null
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "73b56640f3f3112122c1d7e9200039085f513a42",
         "node_visits": {
-          "recheck_gate": 1,
-          "read_updated_plan": 1,
-          "opus_recheck": 1,
-          "synthesis_gate": 1,
-          "read_plan": 1,
-          "start": 1,
           "merge": 1,
-          "synthesize": 1,
+          "opus_recheck": 1,
+          "read_updated_plan": 1,
           "codex_update": 1,
-          "fork": 1
+          "start": 1,
+          "fork": 1,
+          "read_plan": 1,
+          "synthesis_gate": 1,
+          "synthesize": 1,
+          "recheck_gate": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 1,
+          "additions": 13,
+          "deletions": 21
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-05-27T03:46:39.078026331Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 217440,
+      "inference_time_ms": 0,
+      "tool_time_ms": 0,
+      "active_time_ms": 0
+    },
+    "final_git_commit_sha": "73b56640f3f3112122c1d7e9200039085f513a42",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan",
+        "stage_label": "read_plan",
+        "timing": {
+          "wall_time_ms": 160,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "fork",
+        "stage_label": "fork",
+        "timing": {
+          "wall_time_ms": 99571,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "billing_usd_micros": 73386,
+        "retries": 0
+      },
+      {
+        "stage_id": "merge",
+        "stage_label": "merge",
+        "timing": {
+          "wall_time_ms": 49,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 37303,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "billing_usd_micros": 53770,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 11,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_update",
+        "stage_label": "codex_update",
+        "timing": {
+          "wall_time_ms": 38099,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "billing_usd_micros": 52955,
+        "retries": 0
+      },
+      {
+        "stage_id": "read_updated_plan",
+        "stage_label": "read_updated_plan",
+        "timing": {
+          "wall_time_ms": 170,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "opus_recheck",
+        "stage_label": "opus_recheck",
+        "timing": {
+          "wall_time_ms": 12558,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "billing_usd_micros": 48040,
+        "retries": 0
+      },
+      {
+        "stage_id": "recheck_gate",
+        "stage_label": "recheck_gate",
+        "timing": {
+          "wall_time_ms": 2,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 26054,
+      "output_tokens": 7945,
+      "total_tokens": 64001,
+      "reasoning_tokens": 306,
+      "cache_read_tokens": 29696,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 228151
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -2350,6 +2494,40 @@
       },
       "state": "succeeded"
     },
+    "exit@1": {
+      "first_event_seq": 164,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-05-27T03:46:39.051336405Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-27T03:46:39.051162660Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "codex_update@1": {
       "first_event_seq": 91,
       "prompt": null,
@@ -2468,6 +2646,40 @@
       "handler": "command",
       "timing": {
         "wall_time_ms": 170,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "recheck_gate@1": {
+      "first_event_seq": 156,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: recheck_gate",
+        "failure_reason": null,
+        "timestamp": "2026-05-27T03:46:36.219482524Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-27T03:46:36.218044538Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 2,
         "inference_time_ms": 0,
         "tool_time_ms": 0,
         "active_time_ms": 0
