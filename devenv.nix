@@ -4,6 +4,7 @@
   packages = with pkgs; [
     adrgen
     argc
+    devenv
     nodejs_22
   ];
 
@@ -27,6 +28,14 @@
   services.postgres = {
     enable = true;
     initialDatabases = [{ name = "memba_dev"; }];
+  };
+
+  containers."fabro-dev" = {
+    name = "mattwynne/memba-fabro-dev";
+    registry = "docker://ghcr.io/";
+    version = "latest";
+    copyToRoot = null;
+    workingDir = "/workspace/memba";
   };
 
   enterShell = ''
