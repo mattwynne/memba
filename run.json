@@ -1,0 +1,702 @@
+{
+  "title": "Implement a validated iteration plan and leave the codebase passing dev check",
+  "spec": {
+    "run_id": "01KSM4D042MADF59XJA6GVX1JQ",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Implement a validated iteration plan and leave the codebase passing dev check"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "plan_path": "docs/iterations/001-member-message-deliverability/plan.md"
+        },
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-4-6",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "docker",
+          "provider": "docker",
+          "image": {
+            "ref": "buildpack-deps:noble",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 2,
+            "memory": "4GB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": {
+          "enabled": true,
+          "draft": false,
+          "auto_merge": true,
+          "merge_strategy": "squash"
+        },
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "IterationImplementation",
+      "nodes": {
+        "synthesize_review": {
+          "id": "synthesize_review",
+          "attrs": {
+            "prompt": {
+              "String": "Synthesize the independent implementation reviews for docs/iterations/001-member-message-deliverability/plan.md.\n\nDecide whether the implementation is acceptable now, can be repaired automatically, or needs human input.\n\nUse these standards:\n\n- Accept only if the implementation satisfies the plan, avoids out-of-scope work, and dev check passed.\n- Treat automated tests/dev check as the behavioural feedback loop. Review-stage automatic fixes should be refactoring/maintainability/convention fixes after the suite is green, not new feature work.\n- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, or low-risk test-quality issues that an agent can resolve without changing product behaviour or feature files.\n- Do not request edits to acceptance feature files (`*.feature`). If reviewers believe feature files or acceptance criteria are wrong, route to human input.\n- Require human input for unresolved business decisions, ambiguous acceptance criteria, behavioural gaps, missing acceptance coverage that cannot be fixed safely as a test-only improvement, architectural choices outside the plan, or repeated/large failures.\n\nReturn a concise Markdown synthesis with:\n\n- Decision: ACCEPTED, FIX, or HUMAN_INPUT\n- Blocking issues, grouped by severity\n- Exact repair brief if automatic fixes are appropriate\n- Manual follow-ups, if any\n\nEnd your response with exactly one JSON object that Fabro can use for routing:\n\nIf accepted:\n{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}\n\nIf automatic fixes are appropriate:\n{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true}}\n\nIf human input is required:\n{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":false}}"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Synthesize Review"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "model": {
+              "String": "claude-opus-4-6"
+            }
+          }
+        },
+        "review_gate": {
+          "id": "review_gate",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Implementation accepted?"
+            },
+            "shape": {
+              "String": "diamond"
+            }
+          }
+        },
+        "review_fork": {
+          "id": "review_fork",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "component"
+            },
+            "label": {
+              "String": "Independent Implementation Reviews"
+            },
+            "max_parallel": {
+              "Integer": 3
+            },
+            "join_policy": {
+              "String": "wait_all"
+            }
+          }
+        },
+        "dev_check": {
+          "id": "dev_check",
+          "attrs": {
+            "label": {
+              "String": "Run Dev Check"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 1800,
+                "nanos": 0
+              }
+            },
+            "script": {
+              "String": "PATH=\"$PWD/bin:$PATH\" dev ci"
+            }
+          }
+        },
+        "read_plan": {
+          "id": "read_plan",
+          "attrs": {
+            "label": {
+              "String": "Read Iteration Plan"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\""
+            },
+            "reasoning_effort": {
+              "String": "low"
+            }
+          }
+        },
+        "read_failed": {
+          "id": "read_failed",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fail: Plan Missing"
+            },
+            "script": {
+              "String": "echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "goal_gate": {
+              "Boolean": true
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "label": {
+              "String": "Start"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "final_summary": {
+          "id": "final_summary",
+          "attrs": {
+            "prompt": {
+              "String": "Prepare the final implementation summary for docs/iterations/001-member-message-deliverability/plan.md.\n\nUse the implementation context, review synthesis, and passing dev check output. Do not edit files.\n\nReturn:\n\n- Result: IMPLEMENTED\n- Plan path\n- Summary of delivered capability\n- Key files changed, grouped by area\n- Tests and validation run\n- Any manual demo/checks still recommended\n- Any non-blocking follow-ups"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "label": {
+              "String": "Final Summary"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "label": {
+              "String": "Exit"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "codex_review": {
+          "id": "codex_review",
+          "attrs": {
+            "shape": {
+              "String": "tab"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "prompt": {
+              "String": "You are independently reviewing the implementation of the iteration plan at docs/iterations/001-member-message-deliverability/plan.md.\n\nUse the prior context: the plan text, implementation summary, current working tree state, and the successful dev check output. Be strict, practical, and specific. Do not edit files.\n\nAutomated tests are the behavioural feedback loop in this workflow: implementation and dev check-fix stages must get the full suite green before review starts. Your review should therefore focus primarily on refactoring, maintainability, design simplicity, and adherence to project conventions. Do not ask for feature-file edits. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback.\n\nReview against these questions:\n\n1. Plan fidelity\n   - Does the implementation appear to deliver the stated goal and new capability, given the plan and passing automated checks?\n   - Are all in-scope acceptance criteria represented by implementation and automated tests?\n   - Did it avoid out-of-scope work?\n\n2. Behaviour and automated coverage\n   - Did dev check pass before review?\n   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?\n   - Were acceptance feature files left unchanged as domain acceptance criteria?\n\n3. Technical quality / refactoring\n   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?\n   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?\n   - Is the implementation maintainable, minimal, and well factored?\n\n4. Validation\n   - Are the passing tests sufficient to prove success?\n   - Are there manual checks or deployment concerns still needed?\n\nReturn a Markdown report with:\n\n- Decision: ACCEPT or REJECT\n- Confidence: High, Medium, or Low\n- Blocking issues: numbered list\n- Non-blocking improvements: numbered list\n- Suggested fixes: concrete changes if rejected\n- Validation notes: tests/checks/manual checks relevant to the decision"
+            },
+            "label": {
+              "String": "Codex/GPT Review"
+            },
+            "model": {
+              "String": "gpt-5.3-codex"
+            }
+          }
+        },
+        "apply_review_fixes": {
+          "id": "apply_review_fixes",
+          "attrs": {
+            "prompt": {
+              "String": "Apply the automatic repair brief from the preceding Synthesize Review stage for docs/iterations/001-member-message-deliverability/plan.md.\n\nRules:\n\n- Fix only the concrete blocking issues identified by the reviewers.\n- Treat this as a post-green refactoring/maintainability pass. Do not add new product behaviour here.\n- Stay within the iteration plan and do not introduce new product decisions.\n- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). If a requested fix requires changing one, stop and report that it needs human input.\n- Add or update automated tests only when needed to preserve or clarify existing behaviour while refactoring.\n- Do not skip or weaken existing validation.\n- Do not commit changes.\n\nWhen finished, summarize each review issue and how you addressed it."
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Apply Review Fixes"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.3-codex"
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "claude_review": {
+          "id": "claude_review",
+          "attrs": {
+            "label": {
+              "String": "Claude Review"
+            },
+            "prompt": {
+              "String": "You are independently reviewing the implementation of the iteration plan at docs/iterations/001-member-message-deliverability/plan.md.\n\nUse the prior context: the plan text, implementation summary, current working tree state, and the successful dev check output. Be strict, practical, and specific. Do not edit files.\n\nAutomated tests are the behavioural feedback loop in this workflow: implementation and dev check-fix stages must get the full suite green before review starts. Your review should therefore focus primarily on refactoring, maintainability, design simplicity, and adherence to project conventions. Do not ask for feature-file edits. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback.\n\nReview against these questions:\n\n1. Plan fidelity\n   - Does the implementation appear to deliver the stated goal and new capability, given the plan and passing automated checks?\n   - Are all in-scope acceptance criteria represented by implementation and automated tests?\n   - Did it avoid out-of-scope work?\n\n2. Behaviour and automated coverage\n   - Did dev check pass before review?\n   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?\n   - Were acceptance feature files left unchanged as domain acceptance criteria?\n\n3. Technical quality / refactoring\n   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?\n   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?\n   - Is the implementation maintainable, minimal, and well factored?\n\n4. Validation\n   - Are the passing tests sufficient to prove success?\n   - Are there manual checks or deployment concerns still needed?\n\nReturn a Markdown report with:\n\n- Decision: ACCEPT or REJECT\n- Confidence: High, Medium, or Low\n- Blocking issues: numbered list\n- Non-blocking improvements: numbered list\n- Suggested fixes: concrete changes if rejected\n- Validation notes: tests/checks/manual checks relevant to the decision"
+            },
+            "model": {
+              "String": "claude-sonnet-4-5"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "implement": {
+          "id": "implement",
+          "attrs": {
+            "timeout": {
+              "Duration": {
+                "secs": 3600,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.3-codex"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "prompt": {
+              "String": "You are implementing a validated iteration plan for the Memba Phoenix application.\n\nUse the plan text from the preceding Read Iteration Plan stage. The plan path is docs/iterations/001-member-message-deliverability/plan.md.\n\nFollow these rules:\n\n- Implement the full selected iteration in this run. Do not ask whether to implement the whole plan or only part of it; the plan is the approved scope.\n- Work from the plan top-to-bottom. Deliver the smallest complete version of each in-scope item before moving on. Do not broaden the iteration beyond the plan.\n- Read AGENTS.md and any referenced project guidance before editing relevant files.\n- Use test-driven development for behaviour changes: write the failing automated test first, then implement the code to make it pass. Use unit tests for isolated logic, integration/projection tests for data/state changes, and the planned Cucumber step definitions for the shared acceptance scenarios.\n- Do not mark behaviour as done in your summary unless a relevant automated test exists and passes or you clearly report why it could not be run.\n- Use automated tests as the primary feedback loop while implementing: add or update the automated tests called for by the plan, run relevant targeted tests as you work, and do not present the implementation as complete while known tests/checks are failing.\n- The workflow will run `dev check` immediately after this stage and loop dev check failures back for fixes. Your job is to get the implementation to the point where the full automated suite can go green before human/model review.\n- Never edit acceptance feature files. Treat all `*.feature` files, including files under `acceptance-tests/`, as locked domain acceptance criteria for this implementation run. If a feature file appears wrong, stale, or insufficient, stop and report the issue instead of changing it.\n- Add step definitions only where the plan explicitly requires executable plumbing for the locked shared feature files.\n- Use Req for HTTP requests; do not introduce HTTPoison, Tesla, or :httpc.\n- Follow Phoenix 1.8, HEEx, LiveView, Tailwind, Ecto, and Elixir project rules where relevant.\n- Do not commit changes. Fabro will checkpoint the working tree.\n- If you hit a real blocker, stop and report it clearly instead of guessing. Real blockers include ambiguous requirements, missing secrets, unavailable external services, incompatible package versions, or missing sandbox/toolchain infrastructure.\n- Do not patch repository scripts or application code merely to compensate for a missing sandbox toolchain such as devenv, Elixir, Mix, Node, npm, PostgreSQL, or system packages. Report missing infrastructure as a blocker so the workflow environment can be fixed.\n\nWhen finished, summarize:\n\n1. What changed.\n2. Automated tests added, updated, and run.\n3. Any deviations from the plan.\n4. Any remaining risks or manual checks."
+            },
+            "label": {
+              "String": "Implement Iteration"
+            }
+          }
+        },
+        "review_merge": {
+          "id": "review_merge",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Merge Reviews"
+            },
+            "shape": {
+              "String": "tripleoctagon"
+            }
+          }
+        },
+        "fix_dev_check": {
+          "id": "fix_dev_check",
+          "attrs": {
+            "prompt": {
+              "String": "The preceding Run Dev Check stage failed while implementing docs/iterations/001-member-message-deliverability/plan.md.\n\nThis is the automated-test feedback loop for the implementation. Use the dev check output and current working tree to fix the failures until the full automated suite can pass. Stay within the iteration scope.\n\nRules:\n\n- Prefer the smallest correct fix.\n- Do not skip or weaken tests, checks, Credo rules, formatter rules, or compiler warnings unless the plan explicitly says to change them.\n- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria; if they appear wrong, report the blocker instead of changing them.\n- Do not add unrelated cleanup.\n- Re-read relevant project guidance before touching Phoenix, LiveView, HEEx, Ecto, or Elixir test code.\n- Do not commit changes.\n\nWhen finished, summarize the fixes and which dev check failure each fix addresses."
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.3-codex"
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "label": {
+              "String": "Fix Dev Check Failures"
+            }
+          }
+        },
+        "gemini_review": {
+          "id": "gemini_review",
+          "attrs": {
+            "prompt": {
+              "String": "You are independently reviewing the implementation of the iteration plan at docs/iterations/001-member-message-deliverability/plan.md.\n\nUse the prior context: the plan text, implementation summary, current working tree state, and the successful dev check output. Be strict, practical, and specific. Do not edit files.\n\nAutomated tests are the behavioural feedback loop in this workflow: implementation and dev check-fix stages must get the full suite green before review starts. Your review should therefore focus primarily on refactoring, maintainability, design simplicity, and adherence to project conventions. Do not ask for feature-file edits. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback.\n\nReview against these questions:\n\n1. Plan fidelity\n   - Does the implementation appear to deliver the stated goal and new capability, given the plan and passing automated checks?\n   - Are all in-scope acceptance criteria represented by implementation and automated tests?\n   - Did it avoid out-of-scope work?\n\n2. Behaviour and automated coverage\n   - Did dev check pass before review?\n   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?\n   - Were acceptance feature files left unchanged as domain acceptance criteria?\n\n3. Technical quality / refactoring\n   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?\n   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?\n   - Is the implementation maintainable, minimal, and well factored?\n\n4. Validation\n   - Are the passing tests sufficient to prove success?\n   - Are there manual checks or deployment concerns still needed?\n\nReturn a Markdown report with:\n\n- Decision: ACCEPT or REJECT\n- Confidence: High, Medium, or Low\n- Blocking issues: numbered list\n- Non-blocking improvements: numbered list\n- Suggested fixes: concrete changes if rejected\n- Validation notes: tests/checks/manual checks relevant to the decision"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gemini-3.1-pro-preview"
+            },
+            "provider": {
+              "String": "gemini"
+            },
+            "label": {
+              "String": "Gemini Review"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "not_ready": {
+          "id": "not_ready",
+          "attrs": {
+            "goal_gate": {
+              "Boolean": true
+            },
+            "script": {
+              "String": "echo 'Iteration implementation failed: reviewers found blocking issues that require human input or exceeded the automatic repair budget.' >&2\nexit 1"
+            },
+            "label": {
+              "String": "Fail: Needs Human Review"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_plan",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan",
+          "to": "implement",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "implement",
+          "to": "dev_check",
+          "attrs": {}
+        },
+        {
+          "from": "dev_check",
+          "to": "review_fork",
+          "attrs": {
+            "label": {
+              "String": "Dev check passed"
+            },
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "dev_check",
+          "to": "fix_dev_check",
+          "attrs": {
+            "label": {
+              "String": "Fix failures"
+            }
+          }
+        },
+        {
+          "from": "fix_dev_check",
+          "to": "dev_check",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "claude_review",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "codex_review",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "gemini_review",
+          "attrs": {}
+        },
+        {
+          "from": "claude_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "codex_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "gemini_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "review_merge",
+          "to": "synthesize_review",
+          "attrs": {}
+        },
+        {
+          "from": "synthesize_review",
+          "to": "review_gate",
+          "attrs": {}
+        },
+        {
+          "from": "review_gate",
+          "to": "final_summary",
+          "attrs": {
+            "label": {
+              "String": "Accepted"
+            },
+            "condition": {
+              "String": "context.implementation_accepted=true"
+            }
+          }
+        },
+        {
+          "from": "review_gate",
+          "to": "apply_review_fixes",
+          "attrs": {
+            "label": {
+              "String": "Fix"
+            },
+            "condition": {
+              "String": "context.review_fixes_available=true"
+            }
+          }
+        },
+        {
+          "from": "review_gate",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "Needs human input"
+            }
+          }
+        },
+        {
+          "from": "apply_review_fixes",
+          "to": "dev_check",
+          "attrs": {}
+        },
+        {
+          "from": "final_summary",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "not_ready",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "model_stylesheet": {
+          "String": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #implement { model: gpt-5.3-codex; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.3-codex; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: claude-opus-4-6; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.3-codex; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
+        },
+        "max_node_visits": {
+          "Integer": 24
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "goal": {
+          "String": "Implement a validated iteration plan and leave the codebase passing dev check"
+        },
+        "rankdir": {
+          "String": "LR"
+        }
+      }
+    },
+    "graph_source": "digraph IterationImplementation {\n    graph [\n        goal=\"Implement the iteration plan at {{ inputs.plan_path }} and leave the codebase passing dev check\",\n        default_fidelity=\"summary:high\",\n        max_node_visits=24,\n        model_stylesheet=\"\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #implement { model: gpt-5.3-codex; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.3-codex; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: claude-opus-4-6; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.3-codex; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    read_plan [\n        label=\"Read Iteration Plan\",\n        shape=parallelogram,\n        script=\"PLAN_PATH='{{ inputs.plan_path }}'\\nif [ ! -f \\\"$PLAN_PATH\\\" ]; then\\n  echo \\\"Iteration plan not found: $PLAN_PATH\\\" >&2\\n  exit 1\\nfi\\nprintf 'PLAN_PATH=%s\\\\n\\\\n' \\\"$PLAN_PATH\\\"\\nsed -n '1,320p' \\\"$PLAN_PATH\\\"\"\n    ]\n\n    read_failed [\n        label=\"Fail: Plan Missing\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\\nexit 1\"\n    ]\n\n    implement [\n        label=\"Implement Iteration\",\n        prompt=\"@prompts/implement.md\",\n        timeout=\"3600s\"\n    ]\n\n    dev_check [\n        label=\"Run Dev Check\",\n        shape=parallelogram,\n        script=\"PATH=\\\"$PWD/bin:$PATH\\\" dev ci\",\n        timeout=\"1800s\"\n    ]\n\n    fix_dev_check [\n        label=\"Fix Dev Check Failures\",\n        prompt=\"@prompts/fix_dev_check.md\",\n        timeout=\"2400s\",\n        max_visits=3\n    ]\n\n    review_fork [label=\"Independent Implementation Reviews\", shape=component, join_policy=\"wait_all\", max_parallel=3]\n\n    claude_review [\n        label=\"Claude Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n\n    codex_review [\n        label=\"Codex/GPT Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n\n    gemini_review [\n        label=\"Gemini Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n\n    review_merge [label=\"Merge Reviews\", shape=tripleoctagon]\n\n    synthesize_review [\n        label=\"Synthesize Review\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/synthesize_review.md\"\n    ]\n\n    review_gate [shape=diamond, label=\"Implementation accepted?\"]\n\n    apply_review_fixes [\n        label=\"Apply Review Fixes\",\n        prompt=\"@prompts/apply_review_fixes.md\",\n        timeout=\"2400s\",\n        max_visits=3\n    ]\n\n    not_ready [\n        label=\"Fail: Needs Human Review\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration implementation failed: reviewers found blocking issues that require human input or exceeded the automatic repair budget.' >&2\\nexit 1\"\n    ]\n\n    final_summary [\n        label=\"Final Summary\",\n        shape=tab,\n        prompt=\"@prompts/final_summary.md\"\n    ]\n\n    start -> read_plan\n    read_plan -> implement [condition=\"outcome=succeeded\"]\n    read_plan -> read_failed\n    read_failed -> exit\n\n    implement -> dev_check\n    dev_check -> review_fork [label=\"Dev check passed\", condition=\"outcome=succeeded\"]\n    dev_check -> fix_dev_check [label=\"Fix failures\"]\n    fix_dev_check -> dev_check\n\n    review_fork -> claude_review\n    review_fork -> codex_review\n    review_fork -> gemini_review\n    claude_review -> review_merge\n    codex_review -> review_merge\n    gemini_review -> review_merge\n    review_merge -> synthesize_review\n    synthesize_review -> review_gate\n    review_gate -> final_summary [label=\"Accepted\", condition=\"context.implementation_accepted=true\"]\n    review_gate -> apply_review_fixes [label=\"Fix\", condition=\"context.review_fixes_available=true\"]\n    review_gate -> not_ready [label=\"Needs human input\"]\n    apply_review_fixes -> dev_check\n    final_summary -> exit\n    not_ready -> exit\n}\n",
+    "workflow_slug": "iteration-implementation",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.243.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "b6a2949a9e8cb3a9b6a64f68c5cd74c7ffac0f872004daec2dd47ac712303eac",
+    "definition_blob": "2a2e581dbc8bbaa7b966a342cf9b834a905ad015fc5366b4fbc963a2e71a5386",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "57f74e89a7a4ed3f96502c1d081ba3d935b0d206",
+      "dirty": "clean",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KSM4D042MADF59XJA6GVX1JQ",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-05-27T07:11:51.726283111Z",
+  "last_event_at": "2026-05-27T07:11:54.773479364Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "buildpack-deps:noble",
+    "runtime": {
+      "id": "44b36c0e1e7a125fcacc27ca7b355b0108687aee886d65cbe58b72595f22f77a",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
