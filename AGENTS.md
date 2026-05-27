@@ -6,7 +6,7 @@ Keep this file short. Detailed project rules live in [docs/reference/](docs/refe
 
 ## Required workflow
 
-- Use `devenv shell mix precommit` when you are done with all changes and fix any pending issues.
+- Use `dev check` when you are done with all changes and fix any pending issues.
 - Use the included `:req` (`Req`) library for HTTP requests. Avoid `:httpoison`, `:tesla`, and `:httpc`.
 
 ## Reference map

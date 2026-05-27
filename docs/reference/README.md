@@ -4,7 +4,7 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 
 ## Start here
 
-- [Project guidelines](project-guidelines.md) — project-level defaults: run `devenv shell mix precommit`; use `Req` for HTTP.
+- [Project guidelines](project-guidelines.md) — project-level defaults: run `dev check`; use `Req` for HTTP.
 - [Phoenix 1.8](phoenix-1-8.md) — layouts, flash, icons, inputs, routing aliases, and removed `Phoenix.View` patterns.
 
 ## By task
