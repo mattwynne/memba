@@ -698,7 +698,7 @@ All four items completed. The updated `synthesize_review.md` prompt now includes
 
 ### Phase 6: validation
 
-- [ ] Run `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` and fix errors.
+- [x] Run `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` and fix errors. Result: Validation OK; existing goal-gate retry warnings only.
 - [ ] Run `PATH="$PWD/bin:$PATH" dev check` locally.
 - [ ] Exercise Regression 1 with a dry-run, fixture, or documented manual graph check.
 - [ ] Exercise Regression 2 with a dry-run, fixture, or documented manual graph check.
