@@ -22,7 +22,7 @@ Create a task for each item and complete them in order:
 3. **Propose 2-3 iteration slices** — include trade-offs and recommend the smallest useful slice.
 4. **Present draft plan sections** — get Matt's approval or corrections before writing the final plan.
 5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration. Maintain `docs/iterations/README.md` as an index.
-6. **Commit planning artifacts** — commit the plan, iteration index, supporting planning artifacts, and acceptance feature files before validation so Fabro's remote sandbox can see them. Do not commit unrelated changes.
+6. **Publish planning artifacts** — commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any workflow/skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
 7. **Submit to Fabro** — run the plan-validation workflow against the saved plan.
 8. **Handle Fabro feedback** — if Fabro says NOT READY, summarize blockers and interview/revise/resubmit unless Matt stops.
 
@@ -147,12 +147,13 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Do not implement step definitions, fixtures, app code, migrations, UI, or test adapters during planning.
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
 - Example: `docs/iterations/001-member-import/plan.md`.
-- Commit the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the remote sandbox can see them.
-- Do not commit unrelated changes or implementation work.
+- Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them.
+- Include workflow/skill changes in that commit only when they are needed for planning or validation.
+- Do not commit or push unrelated changes or implementation work.
 
 ## Submitting to Fabro
 
-Submit the saved plan with the project's plan-validation workflow after committing the planning artifacts. The workflow may run in a remote sandbox; committed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
+Submit the saved plan with the project's plan-validation workflow after committing and pushing the planning artifacts. The workflow runs in a clone-based remote sandbox; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
 
 ```bash
 fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
