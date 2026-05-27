@@ -643,7 +643,7 @@ Expected:
 
 ### Phase 2: plan conformance gate
 
-- [ ] Create `prompts/plan_conformance_gate.md` with decision rules, report format, and routing JSON.
+- [x] Create `prompts/plan_conformance_gate.md` with decision rules, report format, and routing JSON.
 - [ ] Create `prompts/fix_plan_conformance.md` with bounded repair rules and required evidence summary.
 - [ ] Add `plan_conformance_gate`, `plan_gate`, `fix_plan_conformance`, and `plan_not_ready` nodes to `workflow.fabro`.
 - [ ] Add model stylesheet entries and max visit budget for `fix_plan_conformance`.
