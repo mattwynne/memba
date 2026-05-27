@@ -20,7 +20,7 @@ Create a task for each item and complete them in order:
 1. **Explore project context** — read relevant project docs, current plans, ADRs, recent commits, and code only as needed to understand the iteration.
 2. **Interview Matt** — ask clarifying questions one at a time about goal, scope, acceptance criteria, business decisions, implementation shape, and validation.
 3. **Propose 2-3 iteration slices** — include trade-offs and recommend the smallest useful slice.
-4. **Present draft plan sections** — get Matt's approval or corrections before writing the final plan.
+4. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
 5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration. Maintain `docs/iterations/README.md` as an index.
 6. **Publish planning artifacts** — commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any workflow/skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
 7. **Submit to Fabro** — run the plan-validation workflow against the saved plan.
@@ -144,6 +144,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Save the plan as `plan.md` inside that folder.
 - Put supporting planning artifacts for the same iteration in the same folder, such as `manual-demo-script.md` or `validation-notes.md`.
 - Draft or update shared Cucumber feature files/scenarios when they clarify the iteration's domain behaviour. Consider using `bdd-discovery` first if the rules/examples are unclear, and `bdd-formulation` when writing or reviewing the Gherkin. Keep scenarios abstract from test infrastructure: no CSS selectors, route names, button-click choreography, database setup, or adapter configuration.
+- When feature files/scenarios are created or changed, show Matt the feature file path and a concise summary of the scenarios, and explicitly ask him to review the language/examples before treating the plan as final.
 - Do not implement step definitions, fixtures, app code, migrations, UI, or test adapters during planning.
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
 - Example: `docs/iterations/001-member-import/plan.md`.
