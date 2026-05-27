@@ -1,7 +1,7 @@
 # Member message deliverability
 
 Date: 2026-05-26
-Status: fabro-ready
+Status: ready
 
 ## Goal
 

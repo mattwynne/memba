@@ -102,7 +102,7 @@ Write the plan as Markdown with these sections:
 # <Iteration title>
 
 Date: YYYY-MM-DD
-Status: draft | fabro-ready | needs-revision
+Status: draft | ready | needs-revision
 
 ## Goal
 
@@ -175,7 +175,7 @@ If Fabro completes with NOT READY:
 
 If Fabro completes with READY:
 
-1. Mark the plan status as `fabro-ready`.
+1. Mark the plan status as `ready`.
 2. Report the plan path and Fabro run/result details.
 3. Stop. Do not implement.
 

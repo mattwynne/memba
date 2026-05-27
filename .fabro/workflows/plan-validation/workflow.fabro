@@ -12,6 +12,7 @@ digraph PlanValidation {
             #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }
             #read_updated_plan { reasoning_effort: low; }
             #opus_recheck { model: claude-opus-4-6; reasoning_effort: high; }
+            #publish_ready { reasoning_effort: low; }
         "
     ]
     rankdir=LR
@@ -82,6 +83,12 @@ digraph PlanValidation {
 
     recheck_gate [shape=diamond, label="Plan ready?"]
 
+    publish_ready [
+        label="Publish Ready Plan",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/publish_ready.sh '{{ inputs.plan_path }}'"
+    ]
+
     not_ready [
         label="Fail: Plan Not Ready",
         shape=parallelogram,
@@ -101,14 +108,15 @@ digraph PlanValidation {
     codex_review -> merge
     merge -> synthesize
     synthesize -> synthesis_gate
-    synthesis_gate -> exit [label="Already ready", condition="plan_ready=true"]
+    synthesis_gate -> publish_ready [label="Already ready", condition="plan_ready=true"]
     synthesis_gate -> codex_update [label="Apply obvious fixes", condition="plan_needs_fix=true"]
     synthesis_gate -> not_ready [label="Needs human input"]
     codex_update -> read_updated_plan
     read_updated_plan -> opus_recheck
     opus_recheck -> recheck_gate
-    recheck_gate -> exit [label="Ready", condition="plan_ready=true"]
+    recheck_gate -> publish_ready [label="Ready", condition="plan_ready=true"]
     recheck_gate -> codex_update [label="Fix again", condition="plan_needs_fix=true && context.internal.node_visit_count < 3"]
     recheck_gate -> not_ready [label="Not ready"]
+    publish_ready -> exit
     not_ready -> exit
 }
