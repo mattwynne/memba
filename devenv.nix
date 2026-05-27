@@ -71,6 +71,16 @@ let
     fi
     export DEVENV_HOME="''${DEVENV_HOME:-/tmp/devenv-home}"
     export XDG_CACHE_HOME="''${XDG_CACHE_HOME:-/tmp/cache}"
+    if [ -z "''${HEX_CACERTS_PATH:-}" ]; then
+      if [ -n "''${SSL_CERT_FILE:-}" ]; then
+        export HEX_CACERTS_PATH="$SSL_CERT_FILE"
+      elif [ -n "''${NIX_SSL_CERT_FILE:-}" ]; then
+        export HEX_CACERTS_PATH="$NIX_SSL_CERT_FILE"
+      fi
+    fi
+    export ELIXIR_ERL_OPTIONS="''${ELIXIR_ERL_OPTIONS:-+fnu}"
+    export LANG="''${LANG:-C.UTF-8}"
+    export LC_ALL="''${LC_ALL:-C.UTF-8}"
     mkdir -p "$HOME" "$DEVENV_HOME" "$XDG_CACHE_HOME"
 
     exec ${pkgs.devenv}/bin/devenv "$@"
@@ -96,6 +106,10 @@ in
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
     SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
     NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    HEX_CACERTS_PATH = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    ELIXIR_ERL_OPTIONS = "+fnu";
+    LANG = "C.UTF-8";
+    LC_ALL = "C.UTF-8";
   };
 
   scripts.mix.exec = ''
@@ -138,6 +152,7 @@ in
               gnugrep
               gnused
               nodejs_22
+              which
               (hiPrio fabroDevenv)
               (hiPrio fabroGit)
             ];
