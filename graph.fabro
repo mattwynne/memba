@@ -1,0 +1,12 @@
+digraph DebugActual {
+  graph [goal="Debug script env/context visibility", default_fidelity="full"]
+  start [shape=Mdiamond]
+  exit [shape=Msquare]
+  write_state [shape=parallelogram, script="set -eu\necho NODE_WRITE_STATE\nprintf 'pwd=%s\\n' \"$PWD\"\nprintf 'env_count=%s\\n' \"$(env | wc -l | tr -d ' ')\"\necho ENV_SELECTED_BEGIN\nenv | sort | grep -E '^(FABRO|GITHUB|CI|HOME|PWD|USER|RUN|WORKFLOW|SANDBOX|PR|BASE|HEAD|BRANCH|GIT)=' || true\necho ENV_SELECTED_END\nprintf 'alpha\\n' > /tmp/fabro-debug-state.txt\nmkdir -p .fabro/tmp\nprintf 'beta\\n' > .fabro/tmp/fabro-debug-state.txt\necho context_marker_from_write_state=visible_in_command_output"]
+  read_state [shape=parallelogram, script="set -eu\necho NODE_READ_STATE\nprintf 'pwd=%s\\n' \"$PWD\"\nprintf 'tmp_state=%s\\n' \"$(cat /tmp/fabro-debug-state.txt 2>/dev/null || echo MISSING)\"\nprintf 'repo_state=%s\\n' \"$(cat .fabro/tmp/fabro-debug-state.txt 2>/dev/null || echo MISSING)\"\necho GIT_STATUS_BEGIN\ngit status --short || true\necho GIT_STATUS_END\necho ENV_SELECTED_BEGIN\nenv | sort | grep -E '^(FABRO|GITHUB|CI|HOME|PWD|USER|RUN|WORKFLOW|SANDBOX|PR|BASE|HEAD|BRANCH|GIT)=' || true\necho ENV_SELECTED_END"]
+  cleanup [shape=parallelogram, script="set -eu\necho NODE_CLEANUP\nrm -f /tmp/fabro-debug-state.txt .fabro/tmp/fabro-debug-state.txt\nrmdir .fabro/tmp 2>/dev/null || true\ngit status --short"]
+  start -> write_state
+  write_state -> read_state
+  read_state -> cleanup
+  cleanup -> exit
+}

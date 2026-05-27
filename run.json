@@ -1,0 +1,260 @@
+{
+  "title": "Debug script env/context visibility",
+  "spec": {
+    "run_id": "01KSNP4AP86QXBFTT4Z2XDC3R9",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Debug script env/context visibility"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {},
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-4-6",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "default",
+          "provider": "docker",
+          "image": {
+            "ref": "buildpack-deps:noble",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 2,
+            "memory": "4GB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": true,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "DebugActual",
+      "nodes": {
+        "cleanup": {
+          "id": "cleanup",
+          "attrs": {
+            "script": {
+              "String": "set -eu\necho NODE_CLEANUP\nrm -f /tmp/fabro-debug-state.txt .fabro/tmp/fabro-debug-state.txt\nrmdir .fabro/tmp 2>/dev/null || true\ngit status --short"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "read_state": {
+          "id": "read_state",
+          "attrs": {
+            "script": {
+              "String": "set -eu\necho NODE_READ_STATE\nprintf 'pwd=%s\\n' \"$PWD\"\nprintf 'tmp_state=%s\\n' \"$(cat /tmp/fabro-debug-state.txt 2>/dev/null || echo MISSING)\"\nprintf 'repo_state=%s\\n' \"$(cat .fabro/tmp/fabro-debug-state.txt 2>/dev/null || echo MISSING)\"\necho GIT_STATUS_BEGIN\ngit status --short || true\necho GIT_STATUS_END\necho ENV_SELECTED_BEGIN\nenv | sort | grep -E '^(FABRO|GITHUB|CI|HOME|PWD|USER|RUN|WORKFLOW|SANDBOX|PR|BASE|HEAD|BRANCH|GIT)=' || true\necho ENV_SELECTED_END"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "write_state": {
+          "id": "write_state",
+          "attrs": {
+            "script": {
+              "String": "set -eu\necho NODE_WRITE_STATE\nprintf 'pwd=%s\\n' \"$PWD\"\nprintf 'env_count=%s\\n' \"$(env | wc -l | tr -d ' ')\"\necho ENV_SELECTED_BEGIN\nenv | sort | grep -E '^(FABRO|GITHUB|CI|HOME|PWD|USER|RUN|WORKFLOW|SANDBOX|PR|BASE|HEAD|BRANCH|GIT)=' || true\necho ENV_SELECTED_END\nprintf 'alpha\\n' > /tmp/fabro-debug-state.txt\nmkdir -p .fabro/tmp\nprintf 'beta\\n' > .fabro/tmp/fabro-debug-state.txt\necho context_marker_from_write_state=visible_in_command_output"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "write_state",
+          "attrs": {}
+        },
+        {
+          "from": "write_state",
+          "to": "read_state",
+          "attrs": {}
+        },
+        {
+          "from": "read_state",
+          "to": "cleanup",
+          "attrs": {}
+        },
+        {
+          "from": "cleanup",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_fidelity": {
+          "String": "full"
+        },
+        "goal": {
+          "String": "Debug script env/context visibility"
+        }
+      }
+    },
+    "graph_source": "digraph DebugActual {\n  graph [goal=\"Debug script env/context visibility\", default_fidelity=\"full\"]\n  start [shape=Mdiamond]\n  exit [shape=Msquare]\n  write_state [shape=parallelogram, script=\"set -eu\\necho NODE_WRITE_STATE\\nprintf 'pwd=%s\\\\n' \\\"$PWD\\\"\\nprintf 'env_count=%s\\\\n' \\\"$(env | wc -l | tr -d ' ')\\\"\\necho ENV_SELECTED_BEGIN\\nenv | sort | grep -E '^(FABRO|GITHUB|CI|HOME|PWD|USER|RUN|WORKFLOW|SANDBOX|PR|BASE|HEAD|BRANCH|GIT)=' || true\\necho ENV_SELECTED_END\\nprintf 'alpha\\\\n' > /tmp/fabro-debug-state.txt\\nmkdir -p .fabro/tmp\\nprintf 'beta\\\\n' > .fabro/tmp/fabro-debug-state.txt\\necho context_marker_from_write_state=visible_in_command_output\"]\n  read_state [shape=parallelogram, script=\"set -eu\\necho NODE_READ_STATE\\nprintf 'pwd=%s\\\\n' \\\"$PWD\\\"\\nprintf 'tmp_state=%s\\\\n' \\\"$(cat /tmp/fabro-debug-state.txt 2>/dev/null || echo MISSING)\\\"\\nprintf 'repo_state=%s\\\\n' \\\"$(cat .fabro/tmp/fabro-debug-state.txt 2>/dev/null || echo MISSING)\\\"\\necho GIT_STATUS_BEGIN\\ngit status --short || true\\necho GIT_STATUS_END\\necho ENV_SELECTED_BEGIN\\nenv | sort | grep -E '^(FABRO|GITHUB|CI|HOME|PWD|USER|RUN|WORKFLOW|SANDBOX|PR|BASE|HEAD|BRANCH|GIT)=' || true\\necho ENV_SELECTED_END\"]\n  cleanup [shape=parallelogram, script=\"set -eu\\necho NODE_CLEANUP\\nrm -f /tmp/fabro-debug-state.txt .fabro/tmp/fabro-debug-state.txt\\nrmdir .fabro/tmp 2>/dev/null || true\\ngit status --short\"]\n  start -> write_state\n  write_state -> read_state\n  read_state -> cleanup\n  cleanup -> exit\n}\n",
+    "workflow_slug": "fabro-debug-actual-3nLj8i",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.245.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "668776ced1c1438b3361b0de43c7346a74c2acbb2f47854cc32aedac9c79edfb",
+    "definition_blob": "3120dacacddc38dc688b6ed2b73b1fcc7132a3e0886d774fb35485b1e369f68c",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "2b4a6e51a1b52891c039c9e1fa2d166f814fb35d",
+      "dirty": "clean",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KSNP4AP86QXBFTT4Z2XDC3R9",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-05-27T21:40:56.242781215Z",
+  "last_event_at": "2026-05-27T21:40:59.321275945Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "buildpack-deps:noble",
+    "runtime": {
+      "id": "4c7633d372065e5c9d8ba0254488b04928b7b3ceb5112611c613f1cb722c56ba",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
