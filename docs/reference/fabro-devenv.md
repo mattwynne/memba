@@ -93,6 +93,15 @@ in
 
 This produces `/bin/git` in the final image, so it is found by the default container `PATH`, and avoids benign clone progress on stderr during Fabro sandbox initialization.
 
+Fabro supplies the run container command itself. The default devenv container entrypoint runs `enterShell` and then exits, which terminates Fabro's run container and kills in-flight `docker exec` commands with exit code 137. Override the image entrypoint and provide a harmless default command:
+
+```nix
+containers."fabro-dev" = {
+  entrypoint = [];
+  startupCommand = [ "/bin/bash" "-lc" "sleep infinity" ];
+};
+```
+
 Fabro's Docker sandbox also needs to create `/repos/{owner}/{repo}` and `/workspace/{repo}`. The current Docker sandbox implementation clones into `/repos/{owner}/{repo}` and symlinks `/workspace/{repo}` to that checkout. Custom images whose runtime user is non-root must therefore provide writable `/repos` and `/workspace` directories. Nix store paths are read-only, so set the directory modes with the layer `perms` option rather than relying on `chmod` in the derivation. Also set the image `workingDir` to `/workspace`, not `/workspace/<repo>`, otherwise the image may contain a pre-existing root-owned `/workspace/<repo>` directory that blocks Fabro from creating the symlink.
 
 Git clone over HTTPS also needs CA certificates before `devenv`'s shell startup has run. Set both `SSL_CERT_FILE` and `NIX_SSL_CERT_FILE` in `env`:

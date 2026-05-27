@@ -97,6 +97,11 @@ in
     name = "mattwynne/memba-fabro-dev";
     registry = "docker://ghcr.io/";
     version = "latest";
+    # Fabro supplies the container command itself. The default devenv entrypoint
+    # runs enterShell and then exits, which terminates Fabro's run container and
+    # kills in-flight docker exec commands such as git clone with exit 137.
+    entrypoint = [];
+    startupCommand = [ "/bin/bash" "-lc" "sleep infinity" ];
     copyToRoot = [];
     layers = [
       {
