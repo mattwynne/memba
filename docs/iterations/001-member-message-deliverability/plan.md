@@ -35,7 +35,7 @@ This is not yet the live Postmark deliverability iteration. Postmark remains the
 - Model `opened` as a delivery status transition on a delivery, not as a separate receipt aggregate in this iteration.
 - Provide a member-facing receipt summary projection with simple statuses: sent, delivered, delivery problem, opened.
 - Provide an operator deliverability projection with detailed per-member status and provider-style reason/details.
-- Add and execute shared Cucumber scenarios for member message deliverability.
+- Add and execute shared Cucumber scenarios for member message deliverability and operator email deliverability.
 - Run those scenarios against the Elixir domain model using `huddlz-hq/cucumber`.
 
 ### Out of scope
@@ -52,9 +52,9 @@ This is not yet the live Postmark deliverability iteration. Postmark remains the
 
 ## Acceptance Criteria
 
-- The shared feature file `acceptance-tests/features/member_message_deliverability.feature` describes the domain behaviour without UI, route, database, or adapter details.
-- The same feature file remains suitable for future whole-app execution via cucumber-js/Playwright.
-- Domain-level Cucumber execution runs the message deliverability scenarios against the Elixir domain model.
+- The shared feature files `acceptance-tests/features/member_message_deliverability.feature` and `acceptance-tests/features/operator_email_deliverability.feature` describe the domain behaviour without UI, route, database, or adapter details.
+- The same feature files remain suitable for future whole-app execution via cucumber-js/Playwright.
+- Domain-level Cucumber execution runs the member message deliverability and operator email deliverability scenarios against the Elixir domain model.
 - A club can be created in the domain model.
 - People can be created in the domain model.
 - People can be made members of a club.
@@ -74,16 +74,22 @@ This is not yet the live Postmark deliverability iteration. Postmark remains the
 
 ## Acceptance Scenarios
 
-The shared scenarios live in `acceptance-tests/features/member_message_deliverability.feature` and are part of this plan. They cover:
+The shared scenarios live in:
 
-- A member sending a club message to all club members.
+- `acceptance-tests/features/member_message_deliverability.feature`
+- `acceptance-tests/features/operator_email_deliverability.feature`
+
+They are part of this plan. They cover:
+
+- A member sending a club message to all members of their own club.
+- A separate club whose members do not receive messages sent to another club.
 - Member-facing receipt status for a sent message.
 - Member-facing receipt status for a delivered message.
 - Member-facing receipt status for delayed, bounced, and spam-complaint delivery problems.
 - Member-facing receipt status for an opened message.
 - Operator-facing deliverability details for delivered, delayed, bounced, spam complaint, and opened statuses, including provider-style reason text when present.
 
-The feature file deliberately uses domain language such as club, person, member, message, delivery record, receipt status, and operator deliverability status. It avoids UI, route, selector, database, and adapter language.
+The feature files deliberately use domain language such as club, person, member, message, delivery record, receipt status, and operator deliverability status. They avoid UI, route, selector, database, and adapter language.
 
 ## Open Business Decisions
 
@@ -132,7 +138,7 @@ None known.
 7. Define a fake/stub email-provider port used by the message-sending application service in tests. For this iteration, fake provider success means Memba has handed the delivery to the provider; the resulting delivery state is `sent`.
 8. Build Ecto projections/read models for current clubs, people, memberships, messages, deliveries, member-facing receipt summaries, and operator deliverability details.
 9. Add the Elixir Cucumber dependency and configure it to execute the shared scenarios against the domain model. If the package proves incompatible during implementation, stop and report the incompatibility rather than silently replacing the acceptance approach.
-10. Add domain-level Cucumber step definitions for the shared scenarios using fake/stub ports.
+10. Add domain-level Cucumber step definitions for the shared member-message and operator-deliverability scenarios using fake/stub ports.
 11. Keep the existing cucumber-js/Playwright setup available for future whole-app execution of the same scenarios, but do not implement the Phoenix UI layer in this iteration.
 12. Add lower-level ExUnit tests where useful for event-store setup, aggregate rules, projector behaviour, and fake provider interactions.
 13. Run `devenv shell mix precommit` and fix any issues.
@@ -140,7 +146,7 @@ None known.
 ## Open Technical Decisions
 
 - Exact package versions for `commanded_eventstore_adapter`, `eventstore`, and `cucumber` should be chosen during implementation by selecting versions compatible with the existing Elixir, Phoenix, and Commanded versions.
-- Exact folder structure for Elixir Cucumber step definitions should be chosen during implementation. The shared feature file path is fixed for this iteration: `acceptance-tests/features/member_message_deliverability.feature`.
+- Exact folder structure for Elixir Cucumber step definitions should be chosen during implementation. The shared feature file paths are fixed for this iteration: `acceptance-tests/features/member_message_deliverability.feature` and `acceptance-tests/features/operator_email_deliverability.feature`.
 
 ## New Capability
 
@@ -150,7 +156,7 @@ This creates the product-shaped foundation for the next iteration: live Postmark
 
 ## Validation Plan
 
-- Use the shared Cucumber feature file as the domain model specification for this iteration.
+- Use the shared Cucumber feature files as the domain model specification for this iteration.
 - Run the shared scenarios against the Elixir domain model with `huddlz-hq/cucumber` and fake/stub ports.
 - Keep scenarios abstract from infrastructure so they can later run through cucumber-js/Playwright against the whole Phoenix app.
 - Add ExUnit tests for lower-level technical details that are not appropriate in Gherkin.
