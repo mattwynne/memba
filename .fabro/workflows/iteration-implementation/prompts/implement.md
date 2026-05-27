@@ -5,6 +5,7 @@ Use the plan text from the preceding Read Iteration Plan stage. The plan path is
 Follow these rules:
 
 - Implement the full selected iteration in this run. Do not ask whether to implement the whole plan or only part of it; the plan is the approved scope.
+- Do not stop after announcing an implementation plan. You must actually edit the repository using tools. If the planned scope is too large to complete, implement the highest-value coherent vertical slice from the approved plan and report exactly what remains; do not finish with no domain/test changes.
 - Work from the plan top-to-bottom. Deliver the smallest complete version of each in-scope item before moving on. Do not broaden the iteration beyond the plan.
 - Read AGENTS.md and any referenced project guidance before editing relevant files.
 - Use test-driven development for behaviour changes: write the failing automated test first, then implement the code to make it pass. Use unit tests for isolated logic, integration/projection tests for data/state changes, and the planned Cucumber step definitions for the shared acceptance scenarios.
