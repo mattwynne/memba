@@ -8,6 +8,8 @@ digraph IterationImplementation {
             #read_plan { reasoning_effort: low; }
             #implement { model: gpt-5.3-codex; reasoning_effort: high; }
             #fix_dev_check { model: gpt-5.3-codex; reasoning_effort: high; }
+            #plan_conformance_gate { model: claude-opus-4-6; reasoning_effort: high; }
+            #fix_plan_conformance { model: gpt-5.3-codex; reasoning_effort: high; }
             #adr_coherence_gate { model: claude-opus-4-6; reasoning_effort: high; }
             #fix_adr_coherence { model: gpt-5.3-codex; reasoning_effort: high; }
             #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }
@@ -68,6 +70,32 @@ digraph IterationImplementation {
         prompt="@prompts/fix_dev_check.md",
         timeout="2400s",
         max_visits=3
+    ]
+
+    plan_conformance_gate [
+        label="Plan Conformance Gate",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/plan_conformance_gate.md"
+    ]
+
+    plan_gate [
+        shape=diamond,
+        label="Plan conformant?"
+    ]
+
+    fix_plan_conformance [
+        label="Fix Plan Conformance",
+        prompt="@prompts/fix_plan_conformance.md",
+        timeout="2400s",
+        max_visits=2
+    ]
+
+    plan_not_ready [
+        label="Fail: Needs Human Plan Review",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed: plan conformance gate found violations that require human input or exceeded the automatic plan repair budget.' >&2\nexit 1"
     ]
 
     adr_coherence_gate [
