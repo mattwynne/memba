@@ -80,6 +80,20 @@ Create a temporary/debug workflow or use `--dry-run`/`--preserve-sandbox` to ins
 
 Record the findings as a short note or addendum before implementing Workstreams 3 and 5.
 
+### Discovery results (2026-05-27)
+
+A temporary Fabro debug workflow was validated and run locally. `fabro run --dry-run --preserve-sandbox` works for graph validation, but dry-run skips script execution, so a normal temporary workflow is needed to inspect real script-node behavior.
+
+Findings:
+
+- Script nodes run with a sparse environment. In the debug run, variables such as `FABRO*`, `GITHUB*`, `PR*`, `BASE*`, `HEAD*`, `BRANCH*`, and `GIT*` were not exposed to scripts. Script gates should not rely on Fabro metadata being present as environment variables.
+- Script nodes can share state files across nodes. Both `/tmp` and repository-local `.fabro/tmp` files written by one script node were visible to a later script node in the same run.
+- Fabro persists prior node outputs in run metadata available through `fabro dump`, including checkpoint `node_outcomes`, command output, `diff`, `diff_summary`, `git_commit_sha`, run `base_sha`, `run_branch`, and `final_git_commit_sha`. However, scripts do not receive prior node responses/context values automatically via environment variables, and attempted template interpolation for prior context failed validation.
+- Fabro checkpoints/commits working-tree changes between nodes. A later script node saw a clean `git status --short` after an earlier script wrote a repository-local file that appeared in checkpoint diff metadata. Final artifact gates should therefore prefer Fabro checkpoint/dump metadata or base/head commit comparison over working-tree dirtiness alone.
+- No PR URL/number was present in the local debug run; `pull_request` metadata was `null`.
+
+Conservative implementation guidance: use `.fabro/tmp` for before/after repair snapshots, but implement final artifact evidence using checkpoint/dump metadata or git base/head comparison where possible; do not rely only on `git status --short` at finalization.
+
 ## Workstream 1: stop sandbox/environment bugs leaking into product implementation
 
 ### Problem
@@ -613,11 +627,11 @@ Expected:
 
 - [x] Confirm `docs/kaizen/2026-05-27-iteration-implementation-adr-gate-plan.md` and this plan are in `docs/kaizen/`.
 - [x] Run `git status --short` and note unrelated changes before editing. Result: clean working tree; no unrelated changes detected.
-- [ ] Create a tiny temporary/debug Fabro workflow or use an existing safe workflow to inspect script-node environment/context.
-- [ ] Determine whether script nodes can share sandbox state files across nodes.
-- [ ] Determine whether script nodes can read prior node responses/context values.
-- [ ] Determine whether final nodes see dirty working-tree changes or Fabro checkpoint/PR metadata instead.
-- [ ] Document those discovery results in this plan or a small addendum.
+- [x] Create a tiny temporary/debug Fabro workflow or use an existing safe workflow to inspect script-node environment/context.
+- [x] Determine whether script nodes can share sandbox state files across nodes. Result: yes; `/tmp` and `.fabro/tmp` persisted across script nodes in the same run.
+- [x] Determine whether script nodes can read prior node responses/context values. Result: not directly via environment or prompt-style interpolation; prior outputs are visible through `fabro dump` metadata.
+- [x] Determine whether final nodes see dirty working-tree changes or Fabro checkpoint/PR metadata instead. Result: later nodes may see a clean working tree because Fabro checkpoints changes between nodes; checkpoint/diff metadata is available via dump/inspect.
+- [x] Document those discovery results in this plan or a small addendum.
 
 ### Phase 1: sandbox/runtime boundary
 
