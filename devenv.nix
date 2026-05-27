@@ -110,6 +110,9 @@ in
     ELIXIR_ERL_OPTIONS = "+fnu";
     LANG = "C.UTF-8";
     LC_ALL = "C.UTF-8";
+    HOME = "/tmp/home";
+    MIX_HOME = "/tmp/home/.mix";
+    HEX_HOME = "/tmp/home/.hex";
   };
 
   scripts.mix.exec = ''
@@ -186,6 +189,14 @@ in
   };
 
   enterShell = ''
+    if [ "$HOME" = "/env" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
+      export HOME=/tmp/home
+    fi
+    export MIX_HOME="''${MIX_HOME:-$HOME/.mix}"
+    export HEX_HOME="''${HEX_HOME:-$HOME/.hex}"
+    export HEX_CACERTS_PATH="''${HEX_CACERTS_PATH:-''${SSL_CERT_FILE:-''${NIX_SSL_CERT_FILE:-}}}"
+    export ELIXIR_ERL_OPTIONS="''${ELIXIR_ERL_OPTIONS:-+fnu}"
+    mkdir -p "$HOME" "$MIX_HOME" "$HEX_HOME"
     export PATH="$PWD/bin:$PATH"
 
     mix() {
