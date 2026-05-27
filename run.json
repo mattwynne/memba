@@ -467,7 +467,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-27T03:04:33.127929564Z",
-  "last_event_at": "2026-05-27T03:06:28.336109198Z",
+  "last_event_at": "2026-05-27T03:07:54.050155585Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -756,9 +756,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 80,
       "checkpoint": {
-        "timestamp": "2026-05-27T03:07:50.838506076Z",
+        "timestamp": "2026-05-27T03:07:54.038079537Z",
         "current_node": "synthesize",
         "completed_nodes": [
           "start",
@@ -769,15 +769,160 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.read_plan": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation",
+          "thread.start.current_node": "read_plan",
+          "parallel.branch_count": 3,
+          "internal.fidelity": "summary:high",
+          "thread.fork.current_node": "merge",
+          "parallel.fan_in.best_id": "claude_review",
+          "outcome": "succeeded",
+          "graph.model_stylesheet": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n        ",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.synthesize": 0,
+          "failure_class": "",
+          "graph.rankdir": "LR",
+          "last_stage": "synthesize",
+          "thread.read_plan.current_node": "fork",
+          "thread.merge.current_node": "synthesize",
+          "internal.thread_id": "merge",
+          "command.output": "blob://sha256/849ef38d8349ea3a190ffd92a34b65541e4abfcd26539d6aed77b04fbb82d9d4",
+          "internal.work_dir": "/workspace/memba",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01KSKP7KWKPVMHRGRN72X9N33J",
+          "parallel.fan_in.best_head_sha": "6c1531aba477b95957e7a7edaf15a708462c3ec9",
+          "current_node": "synthesize",
+          "internal.retry_count.start": 0,
+          "plan_ready": false,
+          "response.synthesize": "# Final Readiness Review: Iteration 001 – Member Message Deliverability\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers converged on the same core finding: the plan is well-structured and thorough but contains several material gaps that would force an implementing engineer to make product or technical design decisions that should be made in the plan.\n\n## 3. Consensus Findings\n\n- **Aggregate identity strategy is unspecified.** The plan defines commands routed to aggregates (Club, Person, Messaging) but never specifies how aggregate IDs are generated or what the stream naming convention is. All three reviewers flagged this.\n- **Commanded application module and router configuration are missing.** The plan doesn't specify whether there is one Commanded application or multiple, how the router maps commands to aggregates, or how the event store is configured (e.g., `Commanded.EventStore.Adapters.EventStore` schema/prefix). All three reviewers flagged this.\n- **The Messaging aggregate's responsibility boundary is ambiguous.** It's unclear whether there is one Messaging aggregate per club, per message, or per delivery. The plan defines `SendMessage` and `RecordDeliveryStatus` on \"the Messaging aggregate\" but doesn't define the aggregate's identity or stream. Two of three reviewers flagged this as blocking.\n- **Process manager / event handler for delivery creation is unspecified.** The plan says `MessageSent` triggers `DeliveryCreated` events (one per recipient), but doesn't say what component does this — is it a process manager, an event handler, or part of the aggregate? All three reviewers flagged this.\n- **Projector implementation approach is unspecified.** The plan lists Ecto read-model schemas but doesn't say whether projections use `Commanded.Projections.Ecto` or custom `Commanded.Event.Handler` modules. Two reviewers flagged this.\n- **Cucumber package identity and configuration are underspecified.** The plan references `huddlz-hq/cucumber` but the exact package name, source (hex vs GitHub), and how it integrates with `mix test` are left as open decisions. Two reviewers flagged this; one reviewer correctly noted this is partially acknowledged in the plan's \"Open Technical Decisions\" section but the plan should at least specify the package source.\n\n## 4. Corrected Findings\n\n| Reviewer Finding | Correction |\n|---|---|\n| **Gemini: \"No explicit data types for event/command fields\"** | Downgraded to non-blocking. Elixir/Commanded commands and events are structs with no enforced schema types at the struct level; the Ecto projection schemas will define types. Specifying `String.t()` vs `binary_id` for every field in the plan is unnecessary detail. |\n| **Gemini: \"Missing error handling strategy\"** | Downgraded to non-blocking. The plan specifies aggregate validation rules and valid transitions. Global error handling patterns are project-level concerns, not iteration-plan concerns. |\n| **Claude: \"Feature files should be shown or referenced with scenario names\"** | Partially accepted. The plan references feature file paths and describes scenarios in the goals section. The feature files already exist in the repo. This is non-blocking but listing scenario names in the plan would help. |\n| **Codex: \"No rollback/migration strategy\"** | Rejected as not blocking. This is a greenfield iteration adding new tables and event store setup. Standard Ecto migrations with `mix ecto.rollback` suffice. |\n| **Claude: \"Recipient count update trigger unclear\"** | Accepted and merged into the process manager gap. The `messages.recipient_count` field is updated by `DeliveryCreated` events, but the mechanism that creates those events is the same unspecified process manager. |\n| **Gemini: \"Status mapping for member receipt is ambiguous\"** | Partially accepted. The plan says the receipt maps to `sent`, `delivered`, `delivery problem`, or `opened`, but doesn't specify which domain statuses map to `delivery problem`. This is a minor product decision that should be explicit. Upgraded to blocking since it's a product/business mapping. |\n\n## 5. Blocking Gaps\n\n1. **Aggregate identity and stream strategy.** The plan must specify: (a) how aggregate IDs are generated (UUID v4 at command dispatch time? caller-provided?), (b) the stream naming convention (e.g., `Club-{id}`, `Person-{id}`, `Messaging-{id}`), and (c) what constitutes the Messaging aggregate's identity — is it per-message, per-club, or something else? Without this, the engineer must make a foundational architectural decision.\n\n2. **Commanded application and router configuration.** The plan must specify: (a) whether there is a single `Memba.App` Commanded application or domain-separated applications, (b) how the router dispatches commands to aggregates, and (c) the event store adapter configuration approach (in-memory for test? EventStore for dev?). The plan currently says \"Add the Commanded application\" but doesn't define its structure.\n\n3. **Delivery creation mechanism.** The plan must specify what component reacts to `MessageSent` to produce `DeliveryCreated` events. Options include: (a) a Commanded process manager, (b) a Commanded event handler that dispatches `CreateDelivery` commands back to the Messaging aggregate, or (c) the `SendMessage` command handler itself emitting both `MessageSent` and all `DeliveryCreated` events in one batch. Each has different consistency and testability characteristics. This is a material technical design decision.\n\n4. **Member receipt status mapping.** The plan must specify which domain delivery statuses (`sent`, `delivered`, `delayed`, `bounced`, `spam_complaint`, `opened`) map to which member-facing receipt statuses (`sent`, `delivered`, `delivery problem`, `opened`). Specifically: does `delayed` map to `sent` or `delivery problem`? Does `spam_complaint` map to `delivery problem`? This is a product decision.\n\n5. **Cucumber package source and integration.** The plan must specify whether `huddlz-hq/cucumber` is a Hex package or a GitHub dependency, and how feature files in `acceptance-tests/features/` are discovered and executed within `mix test`. The \"stop and report if incompatible\" instruction is good, but the engineer needs to know where to find the package to begin.\n\n## 6. Non-blocking Improvements\n\n1. **List scenario names from the feature files** in the plan for traceability, even though the files exist in the repo.\n2. **Specify the Ecto repo and database** for the event store vs. read-model projections (same database? separate schemas?).\n3. **Clarify whether `Person` email uniqueness** is enforced at the aggregate level, projection level, or both.\n4. **Add a dependency list** with approximate version constraints for `commanded`, `commanded_eventstore_adapter`, `eventstore`, and the cucumber package.\n5. **Clarify the `deliveries.sent_at` semantics** — is this the time the fake provider accepted the message, or the time the `DeliveryCreated` event was produced?\n6. **Consider whether `opened` should really be terminal.** A message can be opened multiple times. The plan says \"opened rejects further status changes\" which prevents tracking re-opens. This may be intentional for this iteration but should be explicitly noted as a simplification.\n\n## 7. Smallest Viable Iteration\n\nThe current scope is already a reasonable first slice. However, if it proves too large during implementation, the smallest viable sub-slice would be:\n\n**Sub-slice A:** Club creation, person creation, member addition, and message sending (aggregates + events + projections) — without delivery status tracking. This would exercise the full Commanded stack, Ecto projections, and Cucumber integration, and would validate the member-message scenarios (excluding deliverability status).\n\n**Sub-slice B (current plan):** The full plan as written, including delivery status tracking, is the intended smallest useful slice and is appropriate if the blocking gaps are resolved.\n\n## 8. Validation Plan\n\n- All shared Cucumber scenarios in `acceptance-tests/features/member_message_deliverability.feature` and `acceptance-tests/features/operator_email_deliverability.feature` pass against the Elixir domain model.\n- ExUnit tests cover aggregate validation rules, invalid state transitions, duplicate idempotency, projector behavior, and fake provider interactions.\n- `devenv shell mix precommit` passes cleanly.\n- No live provider or UI is required.\n\n## 9. Corrected Iteration Plan Draft (Patch-Style Edits)\n\nThe following edits should be applied to the existing plan at `docs/iterations/001-member-message-deliverability/plan.md`:\n\n---\n\n### Edit 1: Add new section after \"## Implementation Steps\" preamble, before step 1\n\nInsert:\n\n```markdown\n## Technical Design Decisions\n\n### Aggregate Identity and Streams\n\n- All aggregate IDs are UUID v4, generated by the caller (test or application service) at command dispatch time.\n- Stream names follow Commanded defaults: `{AggregateModule}-{uuid}` (e.g., `Memba.Messaging.Aggregates.Club-<uuid>`).\n- The **Club** aggregate is identified by `club_id`. One stream per club.\n- The **Person** aggregate is identified by `person_id`. One stream per person.\n- The **Messaging** aggregate is identified by `message_id`. One stream per message. The `SendMessage` command creates the stream; `RecordDeliveryStatus` targets the same stream via the `message_id` embedded in the `delivery_id` mapping (see Delivery Creation below).\n\n### Commanded Application and Router\n\n- A single Commanded application module: `Memba.Messaging.App`.\n- A single router module: `Memba.Messaging.Router`.\n- The router dispatches `CreateClub` → `Club` aggregate, `CreatePerson` → `Person` aggregate, `AddMember` → `Club` aggregate, `SendMessage` → `Messaging` aggregate, `RecordDeliveryStatus` → `Messaging` aggregate.\n- Event store adapter: `Commanded.EventStore.Adapters.EventStore` for dev and test. The EventStore database is configured in `config/dev.exs` and `config/test.exs`. In-memory adapter is NOT used; the EventStore adapter provides closer parity with production.\n\n### Delivery Creation Mechanism\n\n- The `SendMessage` command handler on the Messaging aggregate emits `MessageSent` followed by one `DeliveryCreated` event per recipient, all in a single batch of events from the `execute/2` callback. This keeps delivery creation synchronous and transactional within the aggregate, avoiding the need for a process manager in this iteration.\n- Each `DeliveryCreated` event contains a generated `delivery_id` (UUID v4), the `message_id`, `recipient_person_id`, and `recipient_email`.\n- The `RecordDeliveryStatus` command includes `delivery_id`. The Messaging aggregate's state tracks deliveries by `delivery_id`, allowing it to validate status transitions.\n- The fake email provider port is called by an event handler (not the aggregate) that reacts to `DeliveryCreated` events. In this iteration the fake always succeeds, but the handler will dispatch a `RecordDeliveryStatus` command with status `:sent` on success. This means the aggregate will receive `DeliveryCreated` (from SendMessage) and then `DeliveryStatusRecorded` (from the event handler's command) as separate transactions, which is the intended design for real provider integration.\n\n**Correction:** Given this design, the `SendMessage` command handler needs to receive the list of recipient person IDs and their emails. This means the application service layer (or the test) must resolve club membership before dispatching `SendMessage`. The command struct is:\n\n```\nSendMessage{message_id, club_id, sender_person_id, subject, body, recipients: [%{person_id, email}]}\n```\n\n### Member Receipt Status Mapping\n\nThe member-facing receipt query maps domain delivery statuses to simplified display statuses:\n\n| Domain Status | Receipt Display Status |\n|---|---|\n| `sent` | `sent` |\n| `delivered` | `delivered` |\n| `delayed` | `sent` |\n| `bounced` | `delivery problem` |\n| `spam_complaint` | `delivery problem` |\n| `opened` | `opened` |\n\n### Cucumber Package\n\n- Package: `huddlz_hq/cucumber` from GitHub (`{:cucumber, github: \"huddlz-hq/cucumber\"}`).\n- Feature files in `acceptance-tests/features/` are referenced by the test configuration. Step definitions live in `test/support/cucumber/` or a similar path chosen during implementation.\n- Cucumber tests run as part of `mix test`. If the package is incompatible with the current Elixir/OTP version or Commanded test setup, stop and report rather than switching approaches.\n```\n\n---\n\n### Edit 2: In step 3 (Commanded, EventStore dependencies), replace the current text with:\n\n```markdown\n3. Add Commanded and EventStore dependencies: `commanded`, `commanded_eventstore_adapter`, `eventstore`, `commanded_ecto_projections`. Configure the `Memba.Messaging.App` Commanded application module and `Memba.Messaging.Router`. Configure the EventStore database in `config/dev.exs` and `config/test.exs`. Run `mix event_store.create` and `mix event_store.init` as part of setup.\n```\n\n---\n\n### Edit 3: In step 6 (Messaging aggregate), update the `SendMessage` command definition:\n\nReplace:\n```\nCommand: `SendMessage{message_id, club_id, sender_person_id, subject, body}`.\n```\nWith:\n```\nCommand: `SendMessage{message_id, club_id, sender_person_id, subject, body, recipients}` where `recipients` is a list of `%{person_id: uuid, email: string}`. The caller (application service or test) resolves membership before dispatch.\n```\n\nAnd add after the `DeliveryCreated` event description:\n```\nThe `SendMessage` handler emits `MessageSent` followed by one `DeliveryCreated` per recipient in a single event batch. No process manager is needed for delivery creation in this iteration.\n```\n\n---\n\n### Edit 4: In the \"Open Technical Decisions\" section, remove the bullet about folder structure for Cucumber step definitions (this is genuinely open and fine) but update the package versions bullet:\n\nReplace:\n```\n- Exact package versions for `commanded_eventstore_adapter`, `eventstore`, and `cucumber` should be chosen during implementation by selecting versions compatible with the existing Elixir, Phoenix, and Commanded versions.\n```\nWith:\n```\n- Exact package versions for `commanded`, `commanded_eventstore_adapter`, `eventstore`, and `commanded_ecto_projections` should be chosen during implementation by selecting versions compatible with the existing Elixir/OTP and Phoenix versions. The cucumber package is `{:cucumber, github: \"huddlz-hq/cucumber\"}` pinned to the latest commit on `main` at implementation time.\n```\n\n---\n\n### Edit 5: In step 6, after the delivery status transition rules, add:\n\n```markdown\n- Note: `opened` is treated as terminal in this iteration (no re-open tracking). This is an intentional simplification.\n```\n\n---\n\nThese edits resolve all five blocking gaps. The plan should be re-reviewed after these edits are applied.\n\n---\n\n{\"context_updates\":{\"plan_ready\":false}}",
+          "last_response": "# Final Readiness Review: Iteration 001 – Member Message Deliverability\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers converged on the same core finding: the plan is well-s",
+          "parallel.fan_in.best_outcome": "succeeded",
+          "internal.retry_count.fork": 0,
+          "parallel.results": [
+            {
+              "id": "gemini_review",
+              "status": "succeeded",
+              "head_sha": "1c8f9110edfd2a096cfb9b3459f7b7760d9cfd7d"
+            },
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "6c1531aba477b95957e7a7edaf15a708462c3ec9"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "4c7d265951f7415619d3fb79e5d88dd5ea2d07ab"
+            }
+          ],
+          "failure_signature": "",
+          "internal.retry_count.merge": 0
+        },
+        "node_outcomes": {
+          "fork": {
+            "status": "succeeded",
+            "jump_to_node": "merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/849ef38d8349ea3a190ffd92a34b65541e4abfcd26539d6aed77b04fbb82d9d4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_ready": false,
+              "response.synthesize": "# Final Readiness Review: Iteration 001 – Member Message Deliverability\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers converged on the same core finding: the plan is well-structured and thorough but contains several material gaps that would force an implementing engineer to make product or technical design decisions that should be made in the plan.\n\n## 3. Consensus Findings\n\n- **Aggregate identity strategy is unspecified.** The plan defines commands routed to aggregates (Club, Person, Messaging) but never specifies how aggregate IDs are generated or what the stream naming convention is. All three reviewers flagged this.\n- **Commanded application module and router configuration are missing.** The plan doesn't specify whether there is one Commanded application or multiple, how the router maps commands to aggregates, or how the event store is configured (e.g., `Commanded.EventStore.Adapters.EventStore` schema/prefix). All three reviewers flagged this.\n- **The Messaging aggregate's responsibility boundary is ambiguous.** It's unclear whether there is one Messaging aggregate per club, per message, or per delivery. The plan defines `SendMessage` and `RecordDeliveryStatus` on \"the Messaging aggregate\" but doesn't define the aggregate's identity or stream. Two of three reviewers flagged this as blocking.\n- **Process manager / event handler for delivery creation is unspecified.** The plan says `MessageSent` triggers `DeliveryCreated` events (one per recipient), but doesn't say what component does this — is it a process manager, an event handler, or part of the aggregate? All three reviewers flagged this.\n- **Projector implementation approach is unspecified.** The plan lists Ecto read-model schemas but doesn't say whether projections use `Commanded.Projections.Ecto` or custom `Commanded.Event.Handler` modules. Two reviewers flagged this.\n- **Cucumber package identity and configuration are underspecified.** The plan references `huddlz-hq/cucumber` but the exact package name, source (hex vs GitHub), and how it integrates with `mix test` are left as open decisions. Two reviewers flagged this; one reviewer correctly noted this is partially acknowledged in the plan's \"Open Technical Decisions\" section but the plan should at least specify the package source.\n\n## 4. Corrected Findings\n\n| Reviewer Finding | Correction |\n|---|---|\n| **Gemini: \"No explicit data types for event/command fields\"** | Downgraded to non-blocking. Elixir/Commanded commands and events are structs with no enforced schema types at the struct level; the Ecto projection schemas will define types. Specifying `String.t()` vs `binary_id` for every field in the plan is unnecessary detail. |\n| **Gemini: \"Missing error handling strategy\"** | Downgraded to non-blocking. The plan specifies aggregate validation rules and valid transitions. Global error handling patterns are project-level concerns, not iteration-plan concerns. |\n| **Claude: \"Feature files should be shown or referenced with scenario names\"** | Partially accepted. The plan references feature file paths and describes scenarios in the goals section. The feature files already exist in the repo. This is non-blocking but listing scenario names in the plan would help. |\n| **Codex: \"No rollback/migration strategy\"** | Rejected as not blocking. This is a greenfield iteration adding new tables and event store setup. Standard Ecto migrations with `mix ecto.rollback` suffice. |\n| **Claude: \"Recipient count update trigger unclear\"** | Accepted and merged into the process manager gap. The `messages.recipient_count` field is updated by `DeliveryCreated` events, but the mechanism that creates those events is the same unspecified process manager. |\n| **Gemini: \"Status mapping for member receipt is ambiguous\"** | Partially accepted. The plan says the receipt maps to `sent`, `delivered`, `delivery problem`, or `opened`, but doesn't specify which domain statuses map to `delivery problem`. This is a minor product decision that should be explicit. Upgraded to blocking since it's a product/business mapping. |\n\n## 5. Blocking Gaps\n\n1. **Aggregate identity and stream strategy.** The plan must specify: (a) how aggregate IDs are generated (UUID v4 at command dispatch time? caller-provided?), (b) the stream naming convention (e.g., `Club-{id}`, `Person-{id}`, `Messaging-{id}`), and (c) what constitutes the Messaging aggregate's identity — is it per-message, per-club, or something else? Without this, the engineer must make a foundational architectural decision.\n\n2. **Commanded application and router configuration.** The plan must specify: (a) whether there is a single `Memba.App` Commanded application or domain-separated applications, (b) how the router dispatches commands to aggregates, and (c) the event store adapter configuration approach (in-memory for test? EventStore for dev?). The plan currently says \"Add the Commanded application\" but doesn't define its structure.\n\n3. **Delivery creation mechanism.** The plan must specify what component reacts to `MessageSent` to produce `DeliveryCreated` events. Options include: (a) a Commanded process manager, (b) a Commanded event handler that dispatches `CreateDelivery` commands back to the Messaging aggregate, or (c) the `SendMessage` command handler itself emitting both `MessageSent` and all `DeliveryCreated` events in one batch. Each has different consistency and testability characteristics. This is a material technical design decision.\n\n4. **Member receipt status mapping.** The plan must specify which domain delivery statuses (`sent`, `delivered`, `delayed`, `bounced`, `spam_complaint`, `opened`) map to which member-facing receipt statuses (`sent`, `delivered`, `delivery problem`, `opened`). Specifically: does `delayed` map to `sent` or `delivery problem`? Does `spam_complaint` map to `delivery problem`? This is a product decision.\n\n5. **Cucumber package source and integration.** The plan must specify whether `huddlz-hq/cucumber` is a Hex package or a GitHub dependency, and how feature files in `acceptance-tests/features/` are discovered and executed within `mix test`. The \"stop and report if incompatible\" instruction is good, but the engineer needs to know where to find the package to begin.\n\n## 6. Non-blocking Improvements\n\n1. **List scenario names from the feature files** in the plan for traceability, even though the files exist in the repo.\n2. **Specify the Ecto repo and database** for the event store vs. read-model projections (same database? separate schemas?).\n3. **Clarify whether `Person` email uniqueness** is enforced at the aggregate level, projection level, or both.\n4. **Add a dependency list** with approximate version constraints for `commanded`, `commanded_eventstore_adapter`, `eventstore`, and the cucumber package.\n5. **Clarify the `deliveries.sent_at` semantics** — is this the time the fake provider accepted the message, or the time the `DeliveryCreated` event was produced?\n6. **Consider whether `opened` should really be terminal.** A message can be opened multiple times. The plan says \"opened rejects further status changes\" which prevents tracking re-opens. This may be intentional for this iteration but should be explicitly noted as a simplification.\n\n## 7. Smallest Viable Iteration\n\nThe current scope is already a reasonable first slice. However, if it proves too large during implementation, the smallest viable sub-slice would be:\n\n**Sub-slice A:** Club creation, person creation, member addition, and message sending (aggregates + events + projections) — without delivery status tracking. This would exercise the full Commanded stack, Ecto projections, and Cucumber integration, and would validate the member-message scenarios (excluding deliverability status).\n\n**Sub-slice B (current plan):** The full plan as written, including delivery status tracking, is the intended smallest useful slice and is appropriate if the blocking gaps are resolved.\n\n## 8. Validation Plan\n\n- All shared Cucumber scenarios in `acceptance-tests/features/member_message_deliverability.feature` and `acceptance-tests/features/operator_email_deliverability.feature` pass against the Elixir domain model.\n- ExUnit tests cover aggregate validation rules, invalid state transitions, duplicate idempotency, projector behavior, and fake provider interactions.\n- `devenv shell mix precommit` passes cleanly.\n- No live provider or UI is required.\n\n## 9. Corrected Iteration Plan Draft (Patch-Style Edits)\n\nThe following edits should be applied to the existing plan at `docs/iterations/001-member-message-deliverability/plan.md`:\n\n---\n\n### Edit 1: Add new section after \"## Implementation Steps\" preamble, before step 1\n\nInsert:\n\n```markdown\n## Technical Design Decisions\n\n### Aggregate Identity and Streams\n\n- All aggregate IDs are UUID v4, generated by the caller (test or application service) at command dispatch time.\n- Stream names follow Commanded defaults: `{AggregateModule}-{uuid}` (e.g., `Memba.Messaging.Aggregates.Club-<uuid>`).\n- The **Club** aggregate is identified by `club_id`. One stream per club.\n- The **Person** aggregate is identified by `person_id`. One stream per person.\n- The **Messaging** aggregate is identified by `message_id`. One stream per message. The `SendMessage` command creates the stream; `RecordDeliveryStatus` targets the same stream via the `message_id` embedded in the `delivery_id` mapping (see Delivery Creation below).\n\n### Commanded Application and Router\n\n- A single Commanded application module: `Memba.Messaging.App`.\n- A single router module: `Memba.Messaging.Router`.\n- The router dispatches `CreateClub` → `Club` aggregate, `CreatePerson` → `Person` aggregate, `AddMember` → `Club` aggregate, `SendMessage` → `Messaging` aggregate, `RecordDeliveryStatus` → `Messaging` aggregate.\n- Event store adapter: `Commanded.EventStore.Adapters.EventStore` for dev and test. The EventStore database is configured in `config/dev.exs` and `config/test.exs`. In-memory adapter is NOT used; the EventStore adapter provides closer parity with production.\n\n### Delivery Creation Mechanism\n\n- The `SendMessage` command handler on the Messaging aggregate emits `MessageSent` followed by one `DeliveryCreated` event per recipient, all in a single batch of events from the `execute/2` callback. This keeps delivery creation synchronous and transactional within the aggregate, avoiding the need for a process manager in this iteration.\n- Each `DeliveryCreated` event contains a generated `delivery_id` (UUID v4), the `message_id`, `recipient_person_id`, and `recipient_email`.\n- The `RecordDeliveryStatus` command includes `delivery_id`. The Messaging aggregate's state tracks deliveries by `delivery_id`, allowing it to validate status transitions.\n- The fake email provider port is called by an event handler (not the aggregate) that reacts to `DeliveryCreated` events. In this iteration the fake always succeeds, but the handler will dispatch a `RecordDeliveryStatus` command with status `:sent` on success. This means the aggregate will receive `DeliveryCreated` (from SendMessage) and then `DeliveryStatusRecorded` (from the event handler's command) as separate transactions, which is the intended design for real provider integration.\n\n**Correction:** Given this design, the `SendMessage` command handler needs to receive the list of recipient person IDs and their emails. This means the application service layer (or the test) must resolve club membership before dispatching `SendMessage`. The command struct is:\n\n```\nSendMessage{message_id, club_id, sender_person_id, subject, body, recipients: [%{person_id, email}]}\n```\n\n### Member Receipt Status Mapping\n\nThe member-facing receipt query maps domain delivery statuses to simplified display statuses:\n\n| Domain Status | Receipt Display Status |\n|---|---|\n| `sent` | `sent` |\n| `delivered` | `delivered` |\n| `delayed` | `sent` |\n| `bounced` | `delivery problem` |\n| `spam_complaint` | `delivery problem` |\n| `opened` | `opened` |\n\n### Cucumber Package\n\n- Package: `huddlz_hq/cucumber` from GitHub (`{:cucumber, github: \"huddlz-hq/cucumber\"}`).\n- Feature files in `acceptance-tests/features/` are referenced by the test configuration. Step definitions live in `test/support/cucumber/` or a similar path chosen during implementation.\n- Cucumber tests run as part of `mix test`. If the package is incompatible with the current Elixir/OTP version or Commanded test setup, stop and report rather than switching approaches.\n```\n\n---\n\n### Edit 2: In step 3 (Commanded, EventStore dependencies), replace the current text with:\n\n```markdown\n3. Add Commanded and EventStore dependencies: `commanded`, `commanded_eventstore_adapter`, `eventstore`, `commanded_ecto_projections`. Configure the `Memba.Messaging.App` Commanded application module and `Memba.Messaging.Router`. Configure the EventStore database in `config/dev.exs` and `config/test.exs`. Run `mix event_store.create` and `mix event_store.init` as part of setup.\n```\n\n---\n\n### Edit 3: In step 6 (Messaging aggregate), update the `SendMessage` command definition:\n\nReplace:\n```\nCommand: `SendMessage{message_id, club_id, sender_person_id, subject, body}`.\n```\nWith:\n```\nCommand: `SendMessage{message_id, club_id, sender_person_id, subject, body, recipients}` where `recipients` is a list of `%{person_id: uuid, email: string}`. The caller (application service or test) resolves membership before dispatch.\n```\n\nAnd add after the `DeliveryCreated` event description:\n```\nThe `SendMessage` handler emits `MessageSent` followed by one `DeliveryCreated` per recipient in a single event batch. No process manager is needed for delivery creation in this iteration.\n```\n\n---\n\n### Edit 4: In the \"Open Technical Decisions\" section, remove the bullet about folder structure for Cucumber step definitions (this is genuinely open and fine) but update the package versions bullet:\n\nReplace:\n```\n- Exact package versions for `commanded_eventstore_adapter`, `eventstore`, and `cucumber` should be chosen during implementation by selecting versions compatible with the existing Elixir, Phoenix, and Commanded versions.\n```\nWith:\n```\n- Exact package versions for `commanded`, `commanded_eventstore_adapter`, `eventstore`, and `commanded_ecto_projections` should be chosen during implementation by selecting versions compatible with the existing Elixir/OTP and Phoenix versions. The cucumber package is `{:cucumber, github: \"huddlz-hq/cucumber\"}` pinned to the latest commit on `main` at implementation time.\n```\n\n---\n\n### Edit 5: In step 6, after the delivery status transition rules, add:\n\n```markdown\n- Note: `opened` is treated as terminal in this iteration (no re-open tracking). This is an intentional simplification.\n```\n\n---\n\nThese edits resolve all five blocking gaps. The plan should be re-reviewed after these edits are applied.\n\n---\n\n{\"context_updates\":{\"plan_ready\":false}}",
+              "last_stage": "synthesize",
+              "last_response": "# Final Readiness Review: Iteration 001 – Member Message Deliverability\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers converged on the same core finding: the plan is well-s"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-opus-4-6"
+                  },
+                  "tokens": {
+                    "input_tokens": 2913,
+                    "output_tokens": 3687,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 106740
+            }
+          },
+          "merge": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.fan_in.best_id": "claude_review",
+              "parallel.fan_in.best_head_sha": "6c1531aba477b95957e7a7edaf15a708462c3ec9",
+              "parallel.fan_in.best_outcome": "succeeded"
+            },
+            "notes": "Selected best candidate: claude_review",
+            "usage": null
+          }
+        },
+        "next_node_id": "not_ready",
+        "git_commit_sha": "63d4358d907234bcb610d84815090ffae31dbf8e",
+        "node_visits": {
+          "start": 1,
+          "synthesize": 1,
+          "fork": 1,
+          "read_plan": 1,
+          "merge": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-27T03:07:54.209730553Z",
+        "current_node": "not_ready",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "fork",
+          "merge",
+          "synthesize",
+          "not_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
           "last_stage": "synthesize",
           "last_response": "# Final Readiness Review: Iteration 001 – Member Message Deliverability\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers converged on the same core finding: the plan is well-s",
           "thread.read_plan.current_node": "fork",
-          "command.output": "blob://sha256/849ef38d8349ea3a190ffd92a34b65541e4abfcd26539d6aed77b04fbb82d9d4",
+          "command.output": "blob://sha256/cd4024635acf02bdfde8a1a5f51d938e432feb111f9ad69a4947d02b9139bd7f",
           "internal.retry_count.fork": 0,
           "graph.default_fidelity": "summary:high",
           "graph.model_stylesheet": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n        ",
-          "failure_signature": "",
-          "failure_class": "",
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus synthesis report and corrected plan draft.",
+          "failure_class": "deterministic",
           "internal.node_visit_count": 1,
           "plan_ready": false,
           "graph.rankdir": "LR",
@@ -805,18 +950,20 @@
           ],
           "internal.retry_count.merge": 0,
           "internal.fidelity": "summary:high",
+          "internal.retry_count.not_ready": 0,
           "parallel.fan_in.best_head_sha": "6c1531aba477b95957e7a7edaf15a708462c3ec9",
           "internal.retry_count.start": 0,
           "parallel.branch_count": 3,
           "graph.goal": "Validate that an iteration plan is ready for implementation",
-          "current_node": "synthesize",
+          "current_node": "not_ready",
           "thread.start.current_node": "read_plan",
           "thread.fork.current_node": "merge",
           "parallel.fan_in.best_id": "claude_review",
           "internal.work_dir": "/workspace/memba",
           "parallel.fan_in.best_outcome": "succeeded",
-          "internal.thread_id": "merge",
-          "outcome": "succeeded"
+          "internal.thread_id": "synthesize",
+          "thread.synthesize.current_node": "not_ready",
+          "outcome": "failed"
         },
         "node_outcomes": {
           "read_plan": {
@@ -876,16 +1023,28 @@
               "total_usd_micros": 106740
             }
           },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/cd4024635acf02bdfde8a1a5f51d938e432feb111f9ad69a4947d02b9139bd7f"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.\n",
+              "category": "deterministic"
+            },
+            "usage": null
+          },
           "start": {
             "status": "succeeded",
             "usage": null
           }
         },
-        "next_node_id": "not_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "read_plan": 1,
           "start": 1,
           "merge": 1,
+          "not_ready": 1,
           "fork": 1,
           "synthesize": 1
         }
@@ -1059,7 +1218,12 @@
       "first_event_seq": 73,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-05-27T03:07:50.836374453Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -1073,6 +1237,44 @@
       "output": null,
       "started_at": "2026-05-27T03:06:28.328874543Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 82508,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 2913,
+        "output_tokens": 3687,
+        "total_tokens": 6600,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 106740
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-opus-4-6"
+      },
+      "state": "succeeded"
+    },
+    "not_ready@1": {
+      "first_event_seq": 83,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.' >&2\nexit 1",
+        "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.' >&2\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-27T03:07:54.043389924Z",
+      "handler": "command",
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
