@@ -1,0 +1,489 @@
+{
+  "title": "Validate that an iteration plan is ready for implementation",
+  "spec": {
+    "run_id": "01KSKKA7FP9GF7JWJXVWJYYXHH",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Validate that an iteration plan is ready for implementation"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "plan_path": "docs/iterations/001-member-message-deliverability/plan.md"
+        },
+        "model": {
+          "provider": "anthropic",
+          "name": "claude-sonnet-4-6",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "default",
+          "provider": "docker",
+          "image": {
+            "ref": "buildpack-deps:noble",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 2,
+            "memory": "4GB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "PlanValidation",
+      "nodes": {
+        "read_plan": {
+          "id": "read_plan",
+          "attrs": {
+            "label": {
+              "String": "Read Iteration Plan"
+            },
+            "script": {
+              "String": "PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\""
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Start"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            }
+          }
+        },
+        "not_ready": {
+          "id": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "Fail: Plan Not Ready"
+            },
+            "script": {
+              "String": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.' >&2\nexit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "merge": {
+          "id": "merge",
+          "attrs": {
+            "label": {
+              "String": "Merge Reviews"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "tripleoctagon"
+            }
+          }
+        },
+        "fork": {
+          "id": "fork",
+          "attrs": {
+            "join_policy": {
+              "String": "wait_all"
+            },
+            "shape": {
+              "String": "component"
+            },
+            "label": {
+              "String": "Independent Model Reviews"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "max_parallel": {
+              "Integer": 3
+            }
+          }
+        },
+        "claude_review": {
+          "id": "claude_review",
+          "attrs": {
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse the plan text from the preceding `Read Iteration Plan` stage. Do not assume any missing details. Be strict, practical, and specific.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n"
+            },
+            "model": {
+              "String": "claude-sonnet-4-5"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "label": {
+              "String": "Claude Review"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "codex_review": {
+          "id": "codex_review",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Codex/GPT Review"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse the plan text from the preceding `Read Iteration Plan` stage. Do not assume any missing details. Be strict, practical, and specific.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n"
+            },
+            "model": {
+              "String": "gpt-5.3-codex"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "read_failed": {
+          "id": "read_failed",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Fail: Plan Missing"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "echo 'Plan validation failed: the plan file could not be read. Fix plan_path or make the plan visible to the sandbox, then retry.' >&2\nexit 1"
+            }
+          }
+        },
+        "gemini_review": {
+          "id": "gemini_review",
+          "attrs": {
+            "model": {
+              "String": "gemini-3.1-pro-preview"
+            },
+            "label": {
+              "String": "Gemini Review"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse the plan text from the preceding `Read Iteration Plan` stage. Do not assume any missing details. Be strict, practical, and specific.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n"
+            },
+            "provider": {
+              "String": "gemini"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "synthesize": {
+          "id": "synthesize",
+          "attrs": {
+            "model": {
+              "String": "claude-opus-4-6"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "label": {
+              "String": "Opus Synthesis & Correction"
+            },
+            "prompt": {
+              "String": "You are Claude Opus acting as the final readiness reviewer and editor for an iteration plan.\n\nUse the plan text and the three independent model reviews in context:\n\n- Gemini review\n- Claude review\n- Codex/GPT review\n\nYour job is to synthesize their findings, correct any mistaken or overreaching findings, and produce a final readiness decision plus an improved plan draft.\n\nReadiness standard:\n\nA plan is READY only if an engineer can begin implementation without first resolving material product/business decisions or material technical design decisions, and if a reviewer can objectively validate success at the end.\n\nA plan is NOT READY if any of these are true:\n\n- The goal is materially ambiguous.\n- The scope is too broad or lacks a smallest useful slice.\n- Acceptance criteria are not concrete/testable enough.\n- Important business decisions remain open.\n- Implementation steps require major technical choices that are not made.\n- The expected new capability or success validation is unclear.\n\nSynthesis instructions:\n\n1. Compare the three reviews.\n2. Identify consensus findings.\n3. Identify disagreements or questionable findings.\n4. Correct the reviewer findings where they are wrong, too vague, duplicated, or not actually blocking.\n5. Produce a concise final decision.\n6. Produce a corrected iteration plan draft that addresses the blocking gaps. If important decisions are still missing, mark them clearly as questions rather than inventing answers.\n\nReturn a Markdown report with:\n\n1. Decision: READY or NOT READY\n2. Confidence: High, Medium, or Low\n3. Consensus findings: 3-6 bullets\n4. Corrected findings: reviewer findings you changed, downgraded, combined, or rejected\n5. Blocking gaps: numbered list, each with why it blocks implementation\n6. Non-blocking improvements: numbered list\n7. Smallest viable iteration: recommended smallest useful slice\n8. Validation plan: how we will know the iteration succeeded\n9. Corrected iteration plan draft: a complete revised version of the plan, or a patch-style list of exact edits if a full rewrite would be inappropriate\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response.\n\nIf READY:\n\n{\"context_updates\":{\"plan_ready\":true}}\n\nIf NOT READY:\n\n{\"context_updates\":{\"plan_ready\":false}}\n"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "label": {
+              "String": "Exit"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_plan",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan",
+          "to": "fork",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "fork",
+          "to": "gemini_review",
+          "attrs": {}
+        },
+        {
+          "from": "fork",
+          "to": "claude_review",
+          "attrs": {}
+        },
+        {
+          "from": "fork",
+          "to": "codex_review",
+          "attrs": {}
+        },
+        {
+          "from": "gemini_review",
+          "to": "merge",
+          "attrs": {}
+        },
+        {
+          "from": "claude_review",
+          "to": "merge",
+          "attrs": {}
+        },
+        {
+          "from": "codex_review",
+          "to": "merge",
+          "attrs": {}
+        },
+        {
+          "from": "merge",
+          "to": "synthesize",
+          "attrs": {}
+        },
+        {
+          "from": "synthesize",
+          "to": "exit",
+          "attrs": {
+            "condition": {
+              "String": "plan_ready=true"
+            },
+            "label": {
+              "String": "Ready"
+            }
+          }
+        },
+        {
+          "from": "synthesize",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "Not ready"
+            }
+          }
+        },
+        {
+          "from": "not_ready",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "model_stylesheet": {
+          "String": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n        "
+        },
+        "goal": {
+          "String": "Validate that an iteration plan is ready for implementation"
+        },
+        "rankdir": {
+          "String": "LR"
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        }
+      }
+    },
+    "graph_source": "digraph PlanValidation {\n    graph [\n        goal=\"Rigorously validate the iteration plan at {{ inputs.plan_path }} and decide whether it is ready for implementation\",\n        default_fidelity=\"summary:high\",\n        model_stylesheet=\"\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    read_plan [\n        label=\"Read Iteration Plan\",\n        shape=parallelogram,\n        script=\"PLAN_PATH='{{ inputs.plan_path }}'\\nif [ ! -f \\\"$PLAN_PATH\\\" ]; then\\n  echo \\\"Plan file not found: $PLAN_PATH\\\" >&2\\n  exit 1\\nfi\\nprintf 'PLAN_PATH=%s\\\\n\\\\n' \\\"$PLAN_PATH\\\"\\nsed -n '1,260p' \\\"$PLAN_PATH\\\"\"\n    ]\n\n    read_failed [\n        label=\"Fail: Plan Missing\",\n        shape=parallelogram,\n        script=\"echo 'Plan validation failed: the plan file could not be read. Fix plan_path or make the plan visible to the sandbox, then retry.' >&2\\nexit 1\"\n    ]\n\n    fork [label=\"Independent Model Reviews\", shape=component, join_policy=\"wait_all\", max_parallel=3]\n\n    gemini_review [\n        label=\"Gemini Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n\n    claude_review [\n        label=\"Claude Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n\n    codex_review [\n        label=\"Codex/GPT Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n\n    merge [label=\"Merge Reviews\", shape=tripleoctagon]\n\n    synthesize [\n        label=\"Opus Synthesis & Correction\",\n        shape=tab,\n        prompt=\"@prompts/synthesize.md\"\n    ]\n\n    not_ready [\n        label=\"Fail: Plan Not Ready\",\n        shape=parallelogram,\n        script=\"echo 'Plan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.' >&2\\nexit 1\"\n    ]\n\n    start -> read_plan\n    read_plan -> fork [condition=\"outcome=succeeded\"]\n    read_plan -> read_failed\n    read_failed -> exit\n    fork -> gemini_review\n    fork -> claude_review\n    fork -> codex_review\n    gemini_review -> merge\n    claude_review -> merge\n    codex_review -> merge\n    merge -> synthesize\n    synthesize -> exit [label=\"Ready\", condition=\"plan_ready=true\"]\n    synthesize -> not_ready [label=\"Not ready\"]\n    not_ready -> exit\n}\n",
+    "workflow_slug": "plan-validation",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.243.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "ee2637f2dd7dcbd2f0c5f4b47b4f29ec01d9e3578287a5edc360d817809e2aa8",
+    "definition_blob": "a927254a6e8ed83bcd8c8f06295e5904bcd37a96e840306a7ba61c616008195d",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "1887482364c4f005d8ae40ea2f18150a069cef6a",
+      "dirty": "dirty",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KSKKA7FP9GF7JWJXVWJYYXHH",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-05-27T02:13:14.980619596Z",
+  "last_event_at": "2026-05-27T02:13:16.579903267Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "buildpack-deps:noble",
+    "runtime": {
+      "id": "78d348f9e38eb2779d15c3d771ac28678901ff8a64f3773b0775271a4d5edabe",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
