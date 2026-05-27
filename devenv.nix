@@ -1,6 +1,45 @@
 { pkgs, ... }:
 
 let
+  fabroGit = pkgs.writeShellScriptBin "git" ''
+    set -euo pipefail
+
+    args=()
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        clone)
+          args+=("$1")
+          shift
+
+          has_quiet=0
+          for arg in "$@"; do
+            case "$arg" in
+              -q|--quiet) has_quiet=1 ;;
+            esac
+          done
+          if [ "$has_quiet" -eq 0 ]; then
+            args+=("--quiet")
+          fi
+          break
+          ;;
+        -c|--config-env)
+          args+=("$1")
+          shift
+          if [ "$#" -gt 0 ]; then
+            args+=("$1")
+            shift
+          fi
+          ;;
+        *)
+          args+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    exec ${pkgs.git}/bin/git "''${args[@]}" "$@"
+  '';
+
   fabroWritableDirs = pkgs.runCommand "memba-fabro-dev-writable-dirs" { } ''
     mkdir -p $out/repos $out/workspace
   '';
@@ -48,7 +87,7 @@ in
         copyToRoot = [
           (pkgs.buildEnv {
             name = "memba-fabro-dev-root";
-            paths = [ pkgs.git ];
+            paths = [ fabroGit ];
             pathsToLink = [ "/bin" ];
           })
           fabroWritableDirs

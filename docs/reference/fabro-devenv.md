@@ -34,10 +34,15 @@ devenv container run fabro-dev
 
 Fabro expects common tools such as `git` to be available on `PATH` inside the generated container. The default `devenv` container root supplies a `/bin` with shell/coreutils, but packages in the top-level `packages` list are not automatically linked into `/bin`.
 
-In this project, we make Git available to Fabro by adding an explicit container layer:
+In this project, we make Git available to Fabro by adding an explicit container layer. Fabro currently treats any stderr from the pre-shell clone step as a clone failure, while ordinary `git clone` writes `Cloning into ...` to stderr even when it succeeds. So `/bin/git` in the Fabro image is a wrapper that adds `--quiet` to `git clone` calls before delegating to the real Git binary:
 
 ```nix
 let
+  fabroGit = pkgs.writeShellScriptBin "git" ''
+    # wrapper elided here; it inserts --quiet for clone
+    exec ${pkgs.git}/bin/git "$@"
+  '';
+
   fabroWritableDirs = pkgs.runCommand "memba-fabro-dev-writable-dirs" { } ''
     mkdir -p $out/repos $out/workspace
   '';
@@ -51,7 +56,7 @@ in
         copyToRoot = [
           (pkgs.buildEnv {
             name = "memba-fabro-dev-root";
-            paths = [ pkgs.git ];
+            paths = [ fabroGit ];
             pathsToLink = [ "/bin" ];
           })
           fabroWritableDirs
@@ -82,7 +87,7 @@ in
 }
 ```
 
-This produces `/bin/git` in the final image, so it is found by the default container `PATH`.
+This produces `/bin/git` in the final image, so it is found by the default container `PATH`, and avoids benign clone progress on stderr during Fabro sandbox initialization.
 
 Fabro's Docker sandbox also needs to create `/repos/{owner}/{repo}` and `/workspace/{repo}`. The current Docker sandbox implementation clones into `/repos/{owner}/{repo}` and symlinks `/workspace/{repo}` to that checkout. Custom images whose runtime user is non-root must therefore provide writable `/repos` and `/workspace` directories. Nix store paths are read-only, so set the directory modes with the layer `perms` option rather than relying on `chmod` in the derivation. Also set the image `workingDir` to `/workspace`, not `/workspace/<repo>`, otherwise the image may contain a pre-existing root-owned `/workspace/<repo>` directory that blocks Fabro from creating the symlink.
 
