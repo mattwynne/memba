@@ -649,7 +649,7 @@ Expected:
 - [x] Add model stylesheet entries and max visit budget for `fix_plan_conformance`.
 - [x] Wire `dev_check -> plan_conformance_gate -> plan_gate -> adr_coherence_gate`.
 - [x] Wire plan rework through snapshot/verify repair gates back to `dev_check`.
-- [ ] Optionally add a Memba-specific static evidence collector before `plan_conformance_gate`.
+- [x] Optionally add a Memba-specific static evidence collector before `plan_conformance_gate`. Deferred: current `plan_conformance_gate.md` already requires inspecting code/config/migrations/tests for explicit plan requirements and specifically covers Commanded/EventStore/projection/Cucumber-style gaps; adding a Memba-specific collector would add coupling for marginal benefit.
 
 ### Phase 3: repair evidence gates
 
