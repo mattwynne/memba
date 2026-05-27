@@ -6,6 +6,13 @@ Automated tests are the behavioural feedback loop in this workflow: implementati
 
 Review against these questions:
 
+0. ADR conformance
+   - Read every ADR cited by the plan and any nearby/current ADRs under `docs/adr/` that govern touched architecture.
+   - Does the implementation obey accepted ADR decisions and consequences as binding constraints?
+   - Does it avoid replacing ADR-mandated infrastructure or architecture with simpler local substitutes, unless the plan explicitly deferred that decision?
+   - Do tests and implementation evidence prove the ADR-relevant behaviour, wiring, or structure?
+   - Reject if the implementation conflicts with accepted ADRs or omits a cited ADR's central decision without an explicit plan deferral or human decision.
+
 1. Plan fidelity
    - Does the implementation appear to deliver the stated goal and new capability, given the plan and passing automated checks?
    - Are all in-scope acceptance criteria represented by implementation and automated tests?
@@ -29,6 +36,8 @@ Return a Markdown report with:
 
 - Decision: ACCEPT or REJECT
 - Confidence: High, Medium, or Low
+- ADR conformance: PASS or FAIL
+- ADR violations: numbered list with ADR number/file and implementation evidence
 - Blocking issues: numbered list
 - Non-blocking improvements: numbered list
 - Suggested fixes: concrete changes if rejected

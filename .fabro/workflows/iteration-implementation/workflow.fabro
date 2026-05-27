@@ -2,12 +2,14 @@ digraph IterationImplementation {
     graph [
         goal="Implement the iteration plan at {{ inputs.plan_path }} and leave the codebase passing dev check",
         default_fidelity="summary:high",
-        max_node_visits=24,
+        max_node_visits=30,
         model_stylesheet="
             * { reasoning_effort: high; }
             #read_plan { reasoning_effort: low; }
             #implement { model: gpt-5.3-codex; reasoning_effort: high; }
             #fix_dev_check { model: gpt-5.3-codex; reasoning_effort: high; }
+            #adr_coherence_gate { model: claude-opus-4-6; reasoning_effort: high; }
+            #fix_adr_coherence { model: gpt-5.3-codex; reasoning_effort: high; }
             #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }
             #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }
             #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }
@@ -66,6 +68,29 @@ digraph IterationImplementation {
         prompt="@prompts/fix_dev_check.md",
         timeout="2400s",
         max_visits=3
+    ]
+
+    adr_coherence_gate [
+        label="ADR Coherence Gate",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/adr_coherence_gate.md"
+    ]
+
+    adr_gate [shape=diamond, label="ADR coherent?"]
+
+    fix_adr_coherence [
+        label="Fix ADR Coherence",
+        prompt="@prompts/fix_adr_coherence.md",
+        timeout="2400s",
+        max_visits=2
+    ]
+
+    adr_not_ready [
+        label="Fail: Needs Human ADR Review",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed: ADR coherence gate found violations that require human input or exceeded the automatic ADR repair budget.' >&2\nexit 1"
     ]
 
     review_fork [label="Independent Implementation Reviews", shape=component, join_policy="wait_all", max_parallel=3]
@@ -129,9 +154,15 @@ digraph IterationImplementation {
     preflight_failed -> exit
 
     implement -> dev_check
-    dev_check -> review_fork [label="Dev check passed", condition="outcome=succeeded"]
+    dev_check -> adr_coherence_gate [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
+    adr_coherence_gate -> adr_gate
+    adr_gate -> review_fork [label="Coherent", condition="context.adr_coherent=true"]
+    adr_gate -> fix_adr_coherence [label="ADR rework", condition="context.adr_rework_available=true"]
+    adr_gate -> adr_not_ready [label="Needs human input"]
+    fix_adr_coherence -> dev_check
+    adr_not_ready -> exit
 
     review_fork -> claude_review
     review_fork -> codex_review

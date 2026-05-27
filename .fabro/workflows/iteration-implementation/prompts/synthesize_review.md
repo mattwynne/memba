@@ -4,15 +4,21 @@ Decide whether the implementation is acceptable now, can be repaired automatical
 
 Use these standards:
 
-- Accept only if the implementation satisfies the plan, avoids out-of-scope work, and dev check passed.
+- Accept only if the implementation satisfies the plan, avoids out-of-scope work, dev check passed, and no unresolved accepted-ADR violations remain.
+- Never accept when unresolved accepted-ADR violations remain.
+- Never downgrade a cited ADR's central decision to optional implementation strategy.
+- If reviewers agree on an ADR violation, route to FIX or HUMAN_INPUT.
+- If ADR rework has already been attempted and the violation remains, route to HUMAN_INPUT.
+- If a plan/ADR conflict exists, route to HUMAN_INPUT.
 - Treat automated tests/dev check as the behavioural feedback loop. Review-stage automatic fixes should be refactoring/maintainability/convention fixes after the suite is green, not new feature work.
-- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, or low-risk test-quality issues that an agent can resolve without changing product behaviour or feature files.
+- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, ADR-coherence, or low-risk test-quality issues that an agent can resolve without changing product behaviour or feature files.
 - Do not request edits to acceptance feature files (`*.feature`). If reviewers believe feature files or acceptance criteria are wrong, route to human input.
 - Require human input for unresolved business decisions, ambiguous acceptance criteria, behavioural gaps, missing acceptance coverage that cannot be fixed safely as a test-only improvement, architectural choices outside the plan, or repeated/large failures.
 
 Return a concise Markdown synthesis with:
 
 - Decision: ACCEPTED, FIX, or HUMAN_INPUT
+- ADR conformance synthesis
 - Blocking issues, grouped by severity
 - Exact repair brief if automatic fixes are appropriate
 - Manual follow-ups, if any

@@ -7,6 +7,10 @@ Return:
 - Result: IMPLEMENTED
 - Plan path
 - Summary of delivered capability
+- ADR conformance summary
+- ADRs considered
+- Evidence for each ADR-relevant implementation decision
+- Any ADR deviations or human follow-ups
 - Key files changed, grouped by area
 - Tests and validation run
 - Any manual demo/checks still recommended

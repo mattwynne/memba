@@ -27,14 +27,23 @@ fi
 
 # @cmd Start development services
 up() {
-  if devenv processes list >/dev/null 2>&1; then
-    devenv processes start postgres >/dev/null 2>&1 || true
-  else
-    DEVENV_TUI=false devenv up -d postgres
+  if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
+    return
   fi
 
+  # Use devenv's process-compose backend directly. A previous run can leave
+  # process-compose thinking postgres is "ready" even though the socket/port in
+  # the current shell is not accepting connections, so reset stale processes
+  # before starting with strict ports.
+  devenv processes down >/dev/null 2>&1 || true
+  DEVENV_TUI=false devenv processes up --strict-ports -d postgres
   devenv processes wait --timeout 120
-  pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null
+
+  if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
+    devenv processes logs -n 100 postgres >&2 || true
+    echo "Postgres did not become ready at PGHOST=$PGHOST PGPORT=$PGPORT" >&2
+    exit 1
+  fi
 }
 
 # @cmd Stop development services

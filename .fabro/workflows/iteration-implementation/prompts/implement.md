@@ -4,8 +4,18 @@ Use the plan text from the preceding Read Iteration Plan stage. The plan path is
 
 Follow these rules:
 
+ADR contract (binding architecture constraints):
+
+- Before editing, read every ADR explicitly referenced by the plan.
+- Also inspect nearby/current ADRs under `docs/adr/` when the plan touches architecture affected by them.
+- Extract the binding decisions and consequences from each relevant accepted ADR.
+- Build a short implementation checklist that maps each relevant ADR to the concrete modules, configuration, migrations, tests, and acceptance plumbing needed for this iteration.
+- Treat accepted ADRs as constraints, not suggestions. Do not replace ADR-mandated architecture with a simpler local substitute.
+- If an ADR-mandated design seems too large, blocked, incompatible with the plan, or incompatible with another accepted ADR, stop and report a blocker rather than silently substituting a different architecture.
+- A smaller vertical slice may reduce breadth, but it may not silently violate or replace ADR-mandated architectural decisions for the slice it claims to deliver.
+
 - Implement the full selected iteration in this run. Do not ask whether to implement the whole plan or only part of it; the plan is the approved scope.
-- Do not stop after announcing an implementation plan. You must actually edit the repository using tools. If the planned scope is too large to complete, implement the highest-value coherent vertical slice from the approved plan and report exactly what remains; do not finish with no domain/test changes.
+- Do not stop after announcing an implementation plan. You must actually edit the repository using tools. If the planned scope is too large to complete, implement the highest-value coherent vertical slice from the approved plan while preserving all ADR-mandated architectural decisions for that slice, and report exactly what remains; do not finish with no domain/test changes.
 - Work from the plan top-to-bottom. Deliver the smallest complete version of each in-scope item before moving on. Do not broaden the iteration beyond the plan.
 - Read AGENTS.md and any referenced project guidance before editing relevant files.
 - Use test-driven development for behaviour changes: write the failing automated test first, then implement the code to make it pass. Use unit tests for isolated logic, integration/projection tests for data/state changes, and the planned Cucumber step definitions for the shared acceptance scenarios.
@@ -26,3 +36,4 @@ When finished, summarize:
 2. Automated tests added, updated, and run.
 3. Any deviations from the plan.
 4. Any remaining risks or manual checks.
+5. ADR conformance table with columns: ADR, Required decision, Implementation evidence, Tests/evidence, Deviations/blockers.
