@@ -108,7 +108,18 @@ in
         copyToRoot = [
           (pkgs.buildEnv {
             name = "memba-fabro-dev-root";
-            paths = [ fabroGit ];
+            paths = with pkgs; [
+              argc
+              bashInteractive
+              coreutils-full
+              devenv
+              elixir
+              findutils
+              gnugrep
+              gnused
+              nodejs_22
+              (hiPrio fabroGit)
+            ];
             pathsToLink = [ "/bin" ];
           })
           fabroWritableDirs
