@@ -28,6 +28,7 @@ digraph PlanValidation {
     read_failed [
         label="Fail: Plan Missing",
         shape=parallelogram,
+        goal_gate=true,
         script="echo 'Plan validation failed: the plan file could not be read. Fix plan_path or make the plan visible to the sandbox, then retry.' >&2\nexit 1"
     ]
 
@@ -56,8 +57,11 @@ digraph PlanValidation {
     synthesize [
         label="Opus Synthesis & Repair Brief",
         shape=tab,
+        output_schema="routing",
         prompt="@prompts/synthesize.md"
     ]
+
+    synthesis_gate [shape=diamond, label="Obvious fixes?"]
 
     codex_update [
         label="Codex Updates Plan",
@@ -81,7 +85,8 @@ digraph PlanValidation {
     not_ready [
         label="Fail: Plan Not Ready",
         shape=parallelogram,
-        script="echo 'Plan validation failed: the plan is not ready for implementation after the validation/fix loop. See the Opus recheck report for remaining gaps.' >&2\nexit 1"
+        goal_gate=true,
+        script="echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1"
     ]
 
     start -> read_plan
@@ -95,7 +100,10 @@ digraph PlanValidation {
     claude_review -> merge
     codex_review -> merge
     merge -> synthesize
-    synthesize -> codex_update
+    synthesize -> synthesis_gate
+    synthesis_gate -> exit [label="Already ready", condition="plan_ready=true"]
+    synthesis_gate -> codex_update [label="Apply obvious fixes", condition="plan_needs_fix=true"]
+    synthesis_gate -> not_ready [label="Needs human input"]
     codex_update -> read_updated_plan
     read_updated_plan -> opus_recheck
     opus_recheck -> recheck_gate
