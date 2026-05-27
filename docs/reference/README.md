@@ -5,6 +5,7 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 ## Start here
 
 - [Project guidelines](project-guidelines.md) — project-level defaults: run `dev check`; use `Req` for HTTP.
+- [Fabro and devenv containers](fabro-devenv.md) — rebuilding Fabro dev images and packaging tools into `devenv container` images.
 - [Phoenix 1.8](phoenix-1-8.md) — layouts, flash, icons, inputs, routing aliases, and removed `Phoenix.View` patterns.
 
 ## By task
@@ -33,3 +34,4 @@ Use this directory as the detailed rulebook for coding agents working on Memba. 
 | LiveView testing selectors and `LazyHTML` | [Phoenix LiveView](liveview.md) |
 | Ecto preloads, changesets, or migrations | [Ecto](ecto.md) |
 | General Elixir gotchas and test-process synchronization | [Elixir, Mix, and tests](elixir-mix-tests.md) |
+| Rebuilding Fabro's devenv image or adding tools to it | [Fabro and devenv containers](fabro-devenv.md) |

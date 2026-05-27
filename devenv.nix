@@ -36,6 +36,17 @@
     registry = "docker://ghcr.io/";
     version = "latest";
     copyToRoot = [];
+    layers = [
+      {
+        copyToRoot = [
+          (pkgs.buildEnv {
+            name = "memba-fabro-dev-root";
+            paths = [ pkgs.git ];
+            pathsToLink = [ "/bin" ];
+          })
+        ];
+      }
+    ];
     workingDir = "/workspace/memba";
   };
 
