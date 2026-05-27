@@ -34,6 +34,20 @@ digraph IterationImplementation {
         script="echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
     ]
 
+    preflight_sandbox [
+        label="Preflight Sandbox Toolchain",
+        shape=parallelogram,
+        script="set -eu\nmissing=0\nrequire() {\n  if ! command -v \"$1\" >/dev/null 2>&1; then\n    echo \"Missing required sandbox tool: $1\" >&2\n    missing=1\n  fi\n}\nrequire devenv\nrequire git\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  missing=1\nfi\nif [ \"$missing\" -ne 0 ]; then\n  echo \"Sandbox toolchain preflight failed before implementation. Fix the Fabro environment/image rather than patching application code.\" >&2\n  exit 1\nfi\ndevenv shell -- command -v argc >/dev/null\ndevenv shell -- command -v elixir >/dev/null\ndevenv shell -- command -v mix >/dev/null\ndevenv shell -- command -v node >/dev/null\ndevenv shell -- command -v npm >/dev/null\nPATH=\"$PWD/bin:$PATH\" dev --help >/dev/null\necho \"Sandbox toolchain preflight passed.\"",
+        timeout="300s"
+    ]
+
+    preflight_failed [
+        label="Fail: Sandbox Preflight",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed before coding: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
+    ]
+
     implement [
         label="Implement Iteration",
         prompt="@prompts/implement.md",
@@ -106,9 +120,13 @@ digraph IterationImplementation {
     ]
 
     start -> read_plan
-    read_plan -> implement [condition="outcome=succeeded"]
+    read_plan -> preflight_sandbox [condition="outcome=succeeded"]
     read_plan -> read_failed
     read_failed -> exit
+
+    preflight_sandbox -> implement [condition="outcome=succeeded"]
+    preflight_sandbox -> preflight_failed
+    preflight_failed -> exit
 
     implement -> dev_check
     dev_check -> review_fork [label="Dev check passed", condition="outcome=succeeded"]
