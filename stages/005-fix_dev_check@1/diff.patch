@@ -1,0 +1,48 @@
+diff --git a/bin/dev b/bin/dev
+index 16b0e2a..e0b8b99 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -3,9 +3,9 @@
+ 
+ set -euo pipefail
+ 
+-if ! command -v argc >/dev/null 2>&1; then
+-  exec devenv shell -- "$0" "$@"
+-fi
++command_exists() {
++  command -v "$1" >/dev/null 2>&1
++}
+ 
+ # @cmd Start development services
+ up() {
+@@ -27,4 +27,30 @@ acceptance() {
+   (cd acceptance-tests && npm test -- "$@")
+ }
+ 
++if ! command_exists argc; then
++  if command_exists devenv; then
++    exec devenv shell -- "$0" "$@"
++  fi
++
++  cmd="${1:-}"
++  shift || true
++
++  case "$cmd" in
++    check) check "$@" ;;
++    web) web "$@" ;;
++    acceptance) acceptance "$@" ;;
++    up)
++      echo "dev up requires devenv to be installed and available in PATH" >&2
++      exit 1
++      ;;
++    *)
++      echo "argc is not installed. Supported fallback commands: check, web, acceptance." >&2
++      echo "For full command support, install argc or run inside devenv." >&2
++      exit 1
++      ;;
++  esac
++
++  exit 0
++fi
++
+ eval "$(argc --argc-eval "$0" "$@")"
