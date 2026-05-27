@@ -663,10 +663,31 @@ Expected:
 
 ### Phase 4: synthesis hardening
 
-- [ ] Update `synthesize_review.md` with explicit-plan-requirement rules.
-- [ ] Add repeated-blocker output section with stable blocker IDs.
-- [ ] Add routing rule: repeated unresolved blocker after repair routes to `HUMAN_INPUT`.
-- [ ] Verify later synthesis prompt context includes previous synthesis/blocker state; if not, add an explicit mechanism.
+- [x] Update `synthesize_review.md` with explicit-plan-requirement rules.
+- [x] Add repeated-blocker output section with stable blocker IDs.
+- [x] Add routing rule: repeated unresolved blocker after repair routes to `HUMAN_INPUT`.
+- [x] Verify later synthesis prompt context includes previous synthesis/blocker state; if not, add an explicit mechanism.
+
+**Phase 4 completion notes (2026-05-27)**:
+
+All four items completed. The updated `synthesize_review.md` prompt now includes:
+
+1. **Explicit plan requirements section**: Rules that prevent downgrading explicit plan requirements ("Implement X", "Add Y", etc.) to optional implementation strategy. Synthesis must route to FIX or HUMAN_INPUT for missing explicit requirements, not accept by reframing.
+
+2. **Repeated-blocker detection and output**: 
+   - Instructions to check prior context for previous synthesis attempts.
+   - "Repeated blockers from prior cycles" section requiring blocker ID, title, previous decision, current evidence, fix status, and routing consequence.
+   - Structured "Blocker registry" output with stable IDs in a parseable format.
+   - Context updates JSON now includes `review_blockers` array and `repeated_blockers` array.
+
+3. **Repeated-blocker routing rule**: Explicit logic that if a blocker with matching ID or substantially similar description remains unresolved after repair attempts, synthesis must route to HUMAN_INPUT, not another FIX loop.
+
+4. **Context verification and explicit mechanism**:
+   - Phase 0 showed prior node outputs are preserved in Fabro run metadata, but not exposed to script-node environment variables.
+   - Prompt explicitly instructs synthesis to extract and compare blocker IDs from prior context.
+   - Structured BLOCKER_REGISTRY output plus `review_blockers` / `repeated_blockers` context updates provide the explicit persistence mechanism for repeated synthesis cycles.
+   - Regression 5 remains the runtime check that repeated blocker persistence works end-to-end.
+
 
 ### Phase 5: final artifact gate
 
