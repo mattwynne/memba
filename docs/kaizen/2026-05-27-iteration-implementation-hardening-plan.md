@@ -655,10 +655,10 @@ Expected:
 
 - [x] Add snapshot-before and verify-after script nodes for plan repair.
 - [x] Add snapshot-before and verify-after script nodes for ADR repair.
-- [ ] Add snapshot-before and verify-after script nodes for review repair.
+- [x] Add snapshot-before and verify-after script nodes for review repair.
 - [x] Change `fix_adr_coherence -> dev_check` to `fix_adr_coherence -> verify_adr_repair -> dev_check` with snapshot before the fix.
-- [ ] Change `apply_review_fixes -> dev_check` to `apply_review_fixes -> verify_review_repair -> dev_check` with snapshot before the fix.
-- [ ] Ensure verify gates reject locked `*.feature` changes.
+- [x] Change `apply_review_fixes -> dev_check` to `apply_review_fixes -> verify_review_repair -> dev_check` with snapshot before the fix.
+- [x] Ensure verify gates reject locked `*.feature` changes.
 - [ ] Update repair prompts to require files changed, issue-to-fix mapping, tests/checks run, and remaining gaps.
 
 ### Phase 4: synthesis hardening
