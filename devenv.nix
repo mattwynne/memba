@@ -56,6 +56,26 @@ let
     exec ${pkgs.git}/bin/git "''${args[@]}" "$@"
   '';
 
+  fabroDevenv = pkgs.writeShellScriptBin "devenv" ''
+    set -euo pipefail
+
+    # Devenv's generated container image bakes DEVENV_* variables pointing at
+    # /env, but Fabro clones the repository into /workspace. Reset those values
+    # so runtime `devenv shell ...` commands evaluate the checked-out repo, and
+    # give devenv a writable home/cache in the otherwise minimal container.
+    unset DEVENV_DOTFILE DEVENV_PROFILE DEVENV_ROOT DEVENV_STATE DEVENV_TASKS DEVENV_TASK_FILE
+    unset PGDATA PGHOST PGPORT
+    export HOME="''${HOME:-/tmp/home}"
+    if [ "$HOME" = /env ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
+      export HOME=/tmp/home
+    fi
+    export DEVENV_HOME="''${DEVENV_HOME:-/tmp/devenv-home}"
+    export XDG_CACHE_HOME="''${XDG_CACHE_HOME:-/tmp/cache}"
+    mkdir -p "$HOME" "$DEVENV_HOME" "$XDG_CACHE_HOME"
+
+    exec ${pkgs.devenv}/bin/devenv "$@"
+  '';
+
   fabroWritableDirs = pkgs.runCommand "memba-fabro-dev-writable-dirs" { } ''
     mkdir -p $out/repos $out/workspace
   '';
@@ -118,6 +138,7 @@ in
               gnugrep
               gnused
               nodejs_22
+              (hiPrio fabroDevenv)
               (hiPrio fabroGit)
             ];
             pathsToLink = [ "/bin" ];
