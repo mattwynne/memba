@@ -5,6 +5,7 @@
     adrgen
     argc
     devenv
+    git
     nodejs_22
   ];
 
