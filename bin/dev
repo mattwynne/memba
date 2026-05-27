@@ -3,26 +3,54 @@
 
 set -euo pipefail
 
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
+  exec env \
+    -u DEVENV_DOTFILE \
+    -u DEVENV_PROFILE \
+    -u DEVENV_ROOT \
+    -u DEVENV_STATE \
+    -u DEVENV_TASKS \
+    -u DEVENV_TASK_FILE \
+    -u PGDATA \
+    -u PGHOST \
+    -u PGPORT \
+    MEMBA_DEVENV_SHELL=1 \
+    devenv shell -- "$0" "$@"
+fi
+
 if ! command -v argc >/dev/null 2>&1; then
-  exec devenv shell -- "$0" "$@"
+  echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
+  exit 1
 fi
 
 # @cmd Start development services
 up() {
-  DEVENV_TUI=false devenv up -d postgres
+  if devenv processes list >/dev/null 2>&1; then
+    devenv processes start postgres >/dev/null 2>&1 || true
+  else
+    DEVENV_TUI=false devenv up -d postgres
+  fi
+
   devenv processes wait --timeout 120
+  pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null
 }
 
 # @cmd Stop development services
 down() {
-  devenv processes down
+  devenv processes down || true
+}
+
+precommit() {
+  (cd "$repo_root/web" && mix precommit)
 }
 
 # @cmd Run the standard local quality gate with required services
 ci() {
   up
   trap down EXIT
-  check
+  precommit
 }
 
 # @cmd Start the Phoenix web app
@@ -32,12 +60,14 @@ web() {
 
 # @cmd Run the standard local quality gate
 check() {
-  (cd web && mix precommit)
+  up
+  trap down EXIT
+  precommit
 }
 
 # @cmd Run the acceptance test suite
 acceptance() {
-  (cd acceptance-tests && npm test -- "$@")
+  (cd "$repo_root/acceptance-tests" && npm test -- "$@")
 }
 
 eval "$(argc --argc-eval "$0" "$@")"
