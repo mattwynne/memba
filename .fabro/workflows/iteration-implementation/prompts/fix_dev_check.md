@@ -11,5 +11,14 @@ Rules:
 - Re-read relevant project guidance before touching Phoenix, LiveView, HEEx, Ecto, or Elixir test code.
 - Do not commit changes.
 - **Sandbox/runtime boundary**: If the failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.
+- **If no changes were needed**: If after reviewing the failures you determine that no code/config/test changes are required, state that explicitly and provide clear justification for why the dev check failures do not require changes.
 
-When finished, summarize the fixes and which dev check failure each fix addresses.
+When finished, summarize:
+
+1. Each dev check failure from the preceding stage.
+2. The concrete code/config/test changes made for each failure (or an explicit statement that no changes were needed with justification).
+3. Files changed (grouped by failure addressed).
+4. Tests run and their results.
+5. Any remaining failures or human questions.
+
+Include a failure-to-fix mapping showing which files/modules address each dev check failure.

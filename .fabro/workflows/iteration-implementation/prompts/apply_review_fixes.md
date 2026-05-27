@@ -10,5 +10,14 @@ Rules:
 - Do not skip or weaken existing validation.
 - Do not commit changes.
 - **Sandbox/runtime boundary**: If the requested fix or failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.
+- **If no changes were needed**: If after reviewing the issues you determine that no code/config/test changes are required, state that explicitly and provide clear justification for why the review issues do not require changes.
 
-When finished, summarize each review issue and how you addressed it.
+When finished, summarize:
+
+1. Each review issue from the gate.
+2. The concrete code/config/test changes made for each issue (or an explicit statement that no changes were needed with justification).
+3. Files changed (grouped by issue addressed).
+4. Tests run and their results.
+5. Any remaining gaps or human questions.
+
+Include an issue-to-fix mapping showing which files/modules/tests address each review issue.

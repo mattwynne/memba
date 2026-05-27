@@ -659,7 +659,7 @@ Expected:
 - [x] Change `fix_adr_coherence -> dev_check` to `fix_adr_coherence -> verify_adr_repair -> dev_check` with snapshot before the fix.
 - [x] Change `apply_review_fixes -> dev_check` to `apply_review_fixes -> verify_review_repair -> dev_check` with snapshot before the fix.
 - [x] Ensure verify gates reject locked `*.feature` changes.
-- [ ] Update repair prompts to require files changed, issue-to-fix mapping, tests/checks run, and remaining gaps.
+- [x] Update repair prompts to require files changed, issue-to-fix mapping, tests/checks run, remaining gaps, and explicit justification if no changes were needed.
 
 ### Phase 4: synthesis hardening
 
