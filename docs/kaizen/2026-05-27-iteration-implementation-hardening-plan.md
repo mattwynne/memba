@@ -611,8 +611,8 @@ Expected:
 
 ### Phase 0: housekeeping and discovery
 
-- [ ] Confirm `docs/kaizen/2026-05-27-iteration-implementation-adr-gate-plan.md` and this plan are in `docs/kaizen/`.
-- [ ] Run `git status --short` and note unrelated changes before editing.
+- [x] Confirm `docs/kaizen/2026-05-27-iteration-implementation-adr-gate-plan.md` and this plan are in `docs/kaizen/`.
+- [x] Run `git status --short` and note unrelated changes before editing. Result: clean working tree; no unrelated changes detected.
 - [ ] Create a tiny temporary/debug Fabro workflow or use an existing safe workflow to inspect script-node environment/context.
 - [ ] Determine whether script nodes can share sandbox state files across nodes.
 - [ ] Determine whether script nodes can read prior node responses/context values.
