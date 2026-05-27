@@ -84,7 +84,16 @@ in
 
 This produces `/bin/git` in the final image, so it is found by the default container `PATH`.
 
-Fabro's Docker sandbox also needs to create `/repos/{owner}/{repo}` and `/workspace/{repo}`. The current Docker sandbox implementation clones into `/repos/{owner}/{repo}` and symlinks `/workspace/{repo}` to that checkout. Custom images whose runtime user is non-root must therefore provide writable `/repos` and `/workspace` directories. Nix store paths are read-only, so set the directory modes with the layer `perms` option rather than relying on `chmod` in the derivation.
+Fabro's Docker sandbox also needs to create `/repos/{owner}/{repo}` and `/workspace/{repo}`. The current Docker sandbox implementation clones into `/repos/{owner}/{repo}` and symlinks `/workspace/{repo}` to that checkout. Custom images whose runtime user is non-root must therefore provide writable `/repos` and `/workspace` directories. Nix store paths are read-only, so set the directory modes with the layer `perms` option rather than relying on `chmod` in the derivation. Also set the image `workingDir` to `/workspace`, not `/workspace/<repo>`, otherwise the image may contain a pre-existing root-owned `/workspace/<repo>` directory that blocks Fabro from creating the symlink.
+
+Git clone over HTTPS also needs CA certificates before `devenv`'s shell startup has run. Set both `SSL_CERT_FILE` and `NIX_SSL_CERT_FILE` in `env`:
+
+```nix
+env = {
+  SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+  NIX_SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+};
+```
 
 A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-dev".copyToRoot` does not work the way it first appears. Devenv treats top-level `copyToRoot` as project/home content and copies it under `/env`; it does not overlay those paths onto `/`. For root-level paths such as `/bin/git`, use `containers.<name>.layers[].copyToRoot`.
 
@@ -93,7 +102,7 @@ A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-d
 After rebuilding/loading the image on Fabro, verify with:
 
 ```sh
-docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && mkdir -p /repos/test /workspace/test'
+docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
 ```
 
 Expected shape:
