@@ -1,0 +1,79 @@
+diff --git a/bin/dev b/bin/dev
+index 35228f0..438ffd0 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -3,19 +3,30 @@
+ 
+ set -euo pipefail
+ 
+-if ! command -v argc >/dev/null 2>&1; then
++have_devenv=0
++if command -v devenv >/dev/null 2>&1; then
++  have_devenv=1
++fi
++
++if ! command -v argc >/dev/null 2>&1 && [ "$have_devenv" -eq 1 ]; then
+   exec devenv shell -- "$0" "$@"
+ fi
+ 
+ # @cmd Start development services
+ up() {
+-  DEVENV_TUI=false devenv up -d postgres
+-  devenv processes wait --timeout 120
++  if [ "$have_devenv" -eq 1 ]; then
++    DEVENV_TUI=false devenv up -d postgres
++    devenv processes wait --timeout 120
++  else
++    echo "devenv not found; skipping service startup" >&2
++  fi
+ }
+ 
+ # @cmd Stop development services
+ down() {
+-  devenv processes down
++  if [ "$have_devenv" -eq 1 ]; then
++    devenv processes down
++  fi
+ }
+ 
+ # @cmd Run the standard local quality gate with required services
+@@ -40,4 +51,38 @@ acceptance() {
+   (cd acceptance-tests && npm test -- "$@")
+ }
+ 
+-eval "$(argc --argc-eval "$0" "$@")"
++if command -v argc >/dev/null 2>&1; then
++  eval "$(argc --argc-eval "$0" "$@")"
++else
++  usage() {
++    cat <<'EOF'
++Usage: dev <command>
++
++Commands:
++  up
++  down
++  ci
++  web
++  check
++  acceptance
++EOF
++  }
++
++  cmd="${1:-}"
++  shift || true
++
++  case "$cmd" in
++    up) up "$@" ;;
++    down) down "$@" ;;
++    ci) ci "$@" ;;
++    web) web "$@" ;;
++    check) check "$@" ;;
++    acceptance) acceptance "$@" ;;
++    -h|--help|help|"") usage ;;
++    *)
++      echo "Unknown command: $cmd" >&2
++      usage >&2
++      exit 1
++      ;;
++  esac
++fi
