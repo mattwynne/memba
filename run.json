@@ -467,7 +467,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-27T02:13:16.882240462Z",
-  "last_event_at": "2026-05-27T02:15:05.783780889Z",
+  "last_event_at": "2026-05-27T02:16:42.953991389Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -756,9 +756,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 81,
       "checkpoint": {
-        "timestamp": "2026-05-27T02:16:39.780878446Z",
+        "timestamp": "2026-05-27T02:16:42.947831990Z",
         "current_node": "synthesize",
         "completed_nodes": [
           "start",
@@ -769,16 +769,163 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.model_stylesheet": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n        ",
+          "parallel.branch_count": 3,
+          "thread.read_plan.current_node": "fork",
+          "graph.default_fidelity": "summary:high",
+          "failure_signature": "",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.fork": 0,
+          "command.output": "blob://sha256/f3e3ed6c952dc439d45b29ccfa31d05b4ac20abb296a8822feb8243b322dcc53",
+          "internal.fidelity": "summary:high",
+          "thread.fork.current_node": "merge",
+          "response.synthesize": "# Final Readiness Review\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers independently identified material gaps. After synthesizing and filtering their findings, several blocking issues remain that would force an implementing engineer to make product or architectural decisions mid-flight.\n\n## 3. Consensus Findings\n\n- **Open `opened` status decision is blocking.** All three reviewers flagged the \"whether `opened` should be a delivery status, a separate receipt event, or both\" question as a real design decision that affects aggregate design, event schemas, and projector logic. An engineer cannot implement the aggregate, events, and projections without knowing this.\n- **Commanded/EventStore dependency strategy is underspecified.** The plan says \"add the persistent event-store dependency\" but does not name a concrete package or confirm availability. `commanded_eventstore_adapter` relies on the `eventstore` package which uses its own PostgreSQL schema; the plan doesn't address whether to use a separate database, shared database with prefixed schemas, or in-memory store for tests. This is a real technical design decision, not a \"pick a version\" detail.\n- **Aggregate and event design is listed but not specified.** The plan lists six command/event families but doesn't define their fields, invariants, or aggregate boundaries. For a first-ever CQRS/ES introduction into the codebase, this is a material design gap — an engineer would have to decide aggregate boundaries (e.g., is `Message` its own aggregate or part of `Club`?), which events carry which data, and what invariants each aggregate enforces.\n- **Cucumber integration path is uncertain.** The plan references `huddlz-hq/cucumber` but doesn't confirm it exists, is compatible with current Elixir/OTP versions, or how it integrates with Mix test infrastructure. Two reviewers flagged this; the third noted it as a risk.\n- **Acceptance criteria are implicit in a not-yet-written feature file.** The plan says \"add the shared feature file\" as an implementation step, meaning the acceptance criteria don't exist yet. A plan should contain or reference concrete, testable acceptance criteria before implementation begins.\n\n## 4. Corrected Findings\n\n| Reviewer Finding | Correction |\n|---|---|\n| **Gemini: folder structure is blocking** | Downgraded to non-blocking. Folder layout is an organizational choice that can be made during implementation without affecting correctness. |\n| **Codex: exact package versions are blocking** | Partially downgraded. Exact *versions* are not blocking, but the *choice of adapter package* and *database topology* (separate DB vs. shared with schema prefix vs. in-memory for test) is blocking. |\n| **Claude: need full event/command schema tables** | Partially agree. Full schema tables would be ideal but a clear written description of aggregate boundaries, key invariants, and event names/core fields is sufficient. We don't need SQL DDL. |\n| **Gemini: missing rollback/failure handling plan** | Rejected as blocking. First iteration with fake provider doesn't need a rollback plan. Nice-to-have for later. |\n| **Codex: need to specify projection storage (Ecto schemas)** | Agree this should be addressed but downgraded from blocking to near-blocking. The projections are read models over events; their Ecto schema design follows naturally from the event design. Once events are defined, projections are straightforward. |\n| **Claude: \"sent\" vs \"queued\" status ambiguity** | Rejected. With a fake provider in this iteration, \"sent\" is unambiguous — the fake acknowledges the send. Real provider status semantics belong to the Postmark iteration. |\n\n## 5. Blocking Gaps\n\n1. **`opened` event modeling decision is unmade.** The plan explicitly lists this as an open technical decision. It affects: the delivery aggregate's state transitions, the event schemas, and both projector implementations (member-facing and operator-facing). The plan author must decide before implementation. *Why it blocks:* An engineer cannot define the aggregate, events, or projections without knowing whether `opened` is a delivery status transition, a separate event on a different aggregate, or both.\n\n2. **Commanded infrastructure design is unspecified.** The plan must state: (a) which adapter package to use (`commanded_eventstore_adapter` + `eventstore`, or `commanded_extreme_adapter`, or Commanded's in-memory adapter for this iteration); (b) whether the event store uses a separate Postgres database or a schema prefix in the existing DB; (c) how the test environment handles event store state (in-memory, sandboxed, truncated). *Why it blocks:* These choices affect `mix.exs`, `config/`, supervision tree, and CI setup. They cannot be deferred to \"during implementation\" for a first-ever ES introduction.\n\n3. **Aggregate boundaries and core invariants are undefined.** The plan must specify at minimum: which aggregates exist (e.g., `Club`, `Person`, `Membership`, `Message`, `Delivery`), which commands target which aggregate, and what invariants each aggregate enforces (e.g., \"a person can only be added as a member to an existing club\" — is that enforced by the aggregate or a process manager?). *Why it blocks:* Aggregate boundary decisions are the most consequential CQRS/ES design choices and are extremely expensive to change after events are persisted.\n\n4. **Acceptance criteria do not exist yet.** The feature file is listed as an implementation step. The plan must contain concrete Gherkin scenarios (or equivalent testable criteria) so that: (a) the engineer knows what to build, and (b) a reviewer can objectively validate success. *Why it blocks:* Without acceptance criteria, neither the engineer nor reviewer can determine when the iteration is complete.\n\n5. **`huddlz-hq/cucumber` viability is unconfirmed.** The plan depends on this library for its primary validation strategy. If it doesn't exist or isn't compatible, the entire validation plan collapses. *Why it blocks:* The plan must confirm the library exists, is usable, or specify a fallback (e.g., ExUnit-based scenario tests).\n\n## 6. Non-blocking Improvements\n\n1. Specify folder structure conventions for feature files, step definitions, and the two-runner setup.\n2. Add a brief data model sketch for projected read models (Ecto schemas for clubs, people, memberships, messages, deliveries).\n3. Clarify whether the fake email provider is a behaviour + module or a Mox-style mock, and where it lives.\n4. Add a note about idempotency expectations for event handlers/projectors.\n5. Consider whether `Membership` needs an aggregate or is just a relationship managed by the `Club` aggregate.\n\n## 7. Smallest Viable Iteration\n\nThe current scope is already a reasonable smallest slice (domain model with fake provider, no UI, no real email). However, it could be further narrowed if needed:\n\n**Minimum viable first slice:** Club creation, person creation, membership, and message sending with a single \"sent\" status. Defer all delivery status tracking (delivered, bounced, delayed, spam, opened) to a follow-up. This would let the team validate the Commanded infrastructure, aggregate design, and Cucumber integration without the complexity of the delivery state machine.\n\nIf the team prefers to keep delivery statuses in scope (which is reasonable since that's the core value), then the current scope is fine — but the blocking gaps above must be resolved first.\n\n## 8. Validation Plan\n\nThe iteration is successful when:\n\n1. `devenv shell mix precommit` passes with zero errors.\n2. All Gherkin scenarios defined in the shared feature file pass when executed via the Elixir-layer Cucumber runner against the domain model with fake provider.\n3. The scenarios cover at minimum: creating a club, adding a member, sending a message, and observing each delivery status (sent, delivered, delayed, bounced, spam complaint, opened) reflected correctly in both the member-facing receipt view and operator deliverability view.\n4. ExUnit tests pass for: event store setup, aggregate invariant enforcement, projector correctness, and fake provider interactions.\n5. No Phoenix UI or real provider integration is required.\n\n## 9. Corrected Iteration Plan Draft\n\nBelow are the specific edits required to make the plan READY. A full rewrite is not appropriate since the plan structure is sound — it needs gap-filling, not restructuring.\n\n### Edit 1: Resolve the `opened` status decision\n\n**Replace** the Open Technical Decisions bullet about `opened` **with** a decision in the main plan body. Suggested resolution (plan author should confirm or override):\n\n> `opened` is modeled as a delivery status transition (not a separate event type). The `Delivery` aggregate tracks status as a state machine: `sent → delivered → opened`, with `bounced`, `delayed`, and `spam_complaint` as terminal/branch states. The member-facing projection maps `delivered` and `opened` to their simple labels; the operator-facing projection shows the full status history with timestamps.\n\n### Edit 2: Specify Commanded infrastructure choices\n\n**Replace** Implementation Plan step 1 and the \"exact package versions\" open decision **with:**\n\n> 1. Add `commanded` (latest stable), `commanded_eventstore_adapter`, and `eventstore` to `mix.exs`. The event store will use a separate PostgreSQL database (`memba_eventstore_dev` / `memba_eventstore_test`) managed by `EventStore.Tasks.Create` / `EventStore.Tasks.Drop`. Test environment will use the `eventstore` test database with `Commanded.EventStore.Adapters.EventStore` configured for serialization with `Commanded.Serialization.JsonSerializer`.\n>\n> 2. Add `config/event_store.exs` (imported by `config/dev.exs` and `config/test.exs`) with connection details. Add `EventStore` and `Commanded.Application` to the supervision tree. Add Mix aliases for `event_store.setup` and `event_store.reset`.\n\n### Edit 3: Define aggregate boundaries, commands, events, and invariants\n\n**Replace** Implementation Plan step 3 **with:**\n\n> 3. Define the following aggregates, commands, events, and invariants:\n>\n> **Club aggregate** (identity: `club_id`)\n> - Command: `CreateClub{club_id, name}` → Event: `ClubCreated{club_id, name}`\n> - Invariant: club_id must not already exist (enforced by aggregate lifecycle)\n>\n> **Person aggregate** (identity: `person_id`)\n> - Command: `CreatePerson{person_id, name, email}` → Event: `PersonCreated{person_id, name, email}`\n> - Invariant: person_id must not already exist\n>\n> **Membership aggregate** (identity: `{club_id, person_id}` composite or dedicated `membership_id`)\n> - Command: `AddMember{membership_id, club_id, person_id}` → Event: `MemberAdded{membership_id, club_id, person_id}`\n> - Invariant: same membership_id must not already exist\n> - Note: cross-aggregate validation (club and person must exist) is handled by the application service / process manager, not the aggregate.\n>\n> **Message aggregate** (identity: `message_id`)\n> - Command: `SendMessage{message_id, club_id, sender_person_id, subject, body}` → Event: `MessageSent{message_id, club_id, sender_person_id, subject, body, sent_at}`\n> - Invariant: message_id must not already exist\n> - The application service resolves club members and dispatches individual `CreateDelivery` commands.\n>\n> **Delivery aggregate** (identity: `delivery_id`)\n> - Command: `CreateDelivery{delivery_id, message_id, recipient_person_id, recipient_email}` → Event: `DeliveryCreated{delivery_id, message_id, recipient_person_id, recipient_email, status: :sent}`\n> - Command: `UpdateDeliveryStatus{delivery_id, status, timestamp}` → Event: `DeliveryStatusChanged{delivery_id, status, timestamp}`\n> - Valid status transitions: `sent → delivered`, `delivered → opened`, `sent → bounced`, `sent → delayed`, `delayed → delivered`, `sent → spam_complaint`\n> - Invariant: status transitions must follow the allowed state machine. Invalid transitions are rejected.\n\n### Edit 4: Add concrete acceptance criteria (Gherkin scenarios)\n\n**Add a new section** after \"Implementation Plan\" titled \"Acceptance Scenarios\" containing the core Gherkin:\n\n> ## Acceptance Scenarios\n>\n> These scenarios will be placed in the shared feature file and executed at the domain layer.\n>\n> ```gherkin\n> Feature: Member message deliverability\n>\n>   Scenario: Club operator sends a message to members\n>     Given a club \"Chess Club\" exists\n>     And a person \"Alice\" with email \"alice@example.com\" is a member of \"Chess Club\"\n>     And a person \"Bob\" with email \"bob@example.com\" is a member of \"Chess Club\"\n>     When \"Alice\" sends a message to \"Chess Club\" with subject \"Meeting tomorrow\"\n>     Then the message should be sent to 2 recipients\n>     And \"Alice\" should see a receipt showing the message was \"Sent\" to each member\n>\n>   Scenario: Message is delivered successfully\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message was delivered\n>     Then \"Alice\" should see a receipt showing \"Delivered\" for \"Bob\"\n>     And the operator deliverability view should show status \"delivered\" with a timestamp\n>\n>   Scenario: Message delivery is delayed\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message was delayed\n>     Then \"Alice\" should see a receipt showing \"Delayed\" for \"Bob\"\n>     And the operator deliverability view should show status \"delayed\" with a timestamp\n>\n>   Scenario: Message bounces\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message bounced\n>     Then \"Alice\" should see a receipt showing \"Bounced\" for \"Bob\"\n>     And the operator deliverability view should show status \"bounced\" with a timestamp\n>\n>   Scenario: Message triggers a spam complaint\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports a spam complaint\n>     Then \"Alice\" should see a receipt showing \"Spam Complaint\" for \"Bob\"\n>     And the operator deliverability view should show status \"spam_complaint\" with a timestamp\n>\n>   Scenario: Message is opened by recipient\n>     Given a message has been delivered to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message was opened\n>     Then \"Alice\" should see a receipt showing \"Opened\" for \"Bob\"\n>     And the operator deliverability view should show status \"opened\" with a timestamp\n>\n>   Scenario: Operator views deliverability summary\n>     Given a message has been sent to 3 members\n>     And 2 messages were delivered and 1 bounced\n>     Then the operator deliverability view should show 2 delivered and 1 bounced\n> ```\n\n### Edit 5: Confirm or replace `huddlz-hq/cucumber`\n\n**Replace** Implementation Plan step 7 **with:**\n\n> 7. Confirm `huddlz-hq/cucumber` is available and compatible with current Elixir/OTP versions. If it is unavailable or incompatible, implement the acceptance scenarios as structured ExUnit tests that mirror the Gherkin scenario names and steps (one test per scenario, with descriptive names matching the scenario titles). Document the decision in an ADR if the Cucumber approach is deferred.\n\n### Edit 6: Clean up Open Technical Decisions\n\n**Replace** the entire Open Technical Decisions section **with:**\n\n> ## Open Technical Decisions\n>\n> - Exact folder structure for shared feature files should be chosen during implementation. The constraint is that scenarios must be reusable by a future cucumber-js/Playwright runner.\n> - Whether `Membership` uses a composite identity (`{club_id, person_id}`) or a dedicated `membership_id` should be decided during implementation. Either approach works; the aggregate boundary and invariants are the same.\n\nThese are genuinely deferrable decisions that don't affect the architecture.\n\n---\n\n{\"context_updates\":{\"plan_ready\":false}}",
+          "plan_ready": false,
+          "parallel.fan_in.best_head_sha": "527f4355ea8837d5e1f8907ada59799fef54dfb1",
+          "internal.run_id": "01KSKKA7FP9GF7JWJXVWJYYXHH",
+          "current_node": "synthesize",
           "internal.retry_count.synthesize": 0,
           "internal.retry_count.merge": 0,
+          "internal.retry_count.start": 0,
+          "last_stage": "synthesize",
+          "outcome": "succeeded",
+          "thread.start.current_node": "read_plan",
+          "internal.node_visit_count": 1,
+          "thread.merge.current_node": "synthesize",
+          "graph.goal": "Validate that an iteration plan is ready for implementation",
+          "last_response": "# Final Readiness Review\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers independently identified material gaps. After synthesizing and filtering their findings, several blocki",
+          "internal.work_dir": "/workspace/memba",
+          "parallel.fan_in.best_id": "claude_review",
+          "parallel.fan_in.best_outcome": "succeeded",
+          "failure_class": "",
+          "parallel.results": [
+            {
+              "id": "gemini_review",
+              "status": "succeeded",
+              "head_sha": "6ad825836a7d2a459368aaa0098677be31d2b9c5"
+            },
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "527f4355ea8837d5e1f8907ada59799fef54dfb1"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "81c40a2782f96c54134ac336dedaa7da75c4dfc6"
+            }
+          ],
+          "graph.rankdir": "LR",
+          "internal.thread_id": "merge"
+        },
+        "node_outcomes": {
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f3e3ed6c952dc439d45b29ccfa31d05b4ac20abb296a8822feb8243b322dcc53"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/001-member-message-deliverability/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "# Final Readiness Review\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers independently identified material gaps. After synthesizing and filtering their findings, several blocking issues remain that would force an implementing engineer to make product or architectural decisions mid-flight.\n\n## 3. Consensus Findings\n\n- **Open `opened` status decision is blocking.** All three reviewers flagged the \"whether `opened` should be a delivery status, a separate receipt event, or both\" question as a real design decision that affects aggregate design, event schemas, and projector logic. An engineer cannot implement the aggregate, events, and projections without knowing this.\n- **Commanded/EventStore dependency strategy is underspecified.** The plan says \"add the persistent event-store dependency\" but does not name a concrete package or confirm availability. `commanded_eventstore_adapter` relies on the `eventstore` package which uses its own PostgreSQL schema; the plan doesn't address whether to use a separate database, shared database with prefixed schemas, or in-memory store for tests. This is a real technical design decision, not a \"pick a version\" detail.\n- **Aggregate and event design is listed but not specified.** The plan lists six command/event families but doesn't define their fields, invariants, or aggregate boundaries. For a first-ever CQRS/ES introduction into the codebase, this is a material design gap — an engineer would have to decide aggregate boundaries (e.g., is `Message` its own aggregate or part of `Club`?), which events carry which data, and what invariants each aggregate enforces.\n- **Cucumber integration path is uncertain.** The plan references `huddlz-hq/cucumber` but doesn't confirm it exists, is compatible with current Elixir/OTP versions, or how it integrates with Mix test infrastructure. Two reviewers flagged this; the third noted it as a risk.\n- **Acceptance criteria are implicit in a not-yet-written feature file.** The plan says \"add the shared feature file\" as an implementation step, meaning the acceptance criteria don't exist yet. A plan should contain or reference concrete, testable acceptance criteria before implementation begins.\n\n## 4. Corrected Findings\n\n| Reviewer Finding | Correction |\n|---|---|\n| **Gemini: folder structure is blocking** | Downgraded to non-blocking. Folder layout is an organizational choice that can be made during implementation without affecting correctness. |\n| **Codex: exact package versions are blocking** | Partially downgraded. Exact *versions* are not blocking, but the *choice of adapter package* and *database topology* (separate DB vs. shared with schema prefix vs. in-memory for test) is blocking. |\n| **Claude: need full event/command schema tables** | Partially agree. Full schema tables would be ideal but a clear written description of aggregate boundaries, key invariants, and event names/core fields is sufficient. We don't need SQL DDL. |\n| **Gemini: missing rollback/failure handling plan** | Rejected as blocking. First iteration with fake provider doesn't need a rollback plan. Nice-to-have for later. |\n| **Codex: need to specify projection storage (Ecto schemas)** | Agree this should be addressed but downgraded from blocking to near-blocking. The projections are read models over events; their Ecto schema design follows naturally from the event design. Once events are defined, projections are straightforward. |\n| **Claude: \"sent\" vs \"queued\" status ambiguity** | Rejected. With a fake provider in this iteration, \"sent\" is unambiguous — the fake acknowledges the send. Real provider status semantics belong to the Postmark iteration. |\n\n## 5. Blocking Gaps\n\n1. **`opened` event modeling decision is unmade.** The plan explicitly lists this as an open technical decision. It affects: the delivery aggregate's state transitions, the event schemas, and both projector implementations (member-facing and operator-facing). The plan author must decide before implementation. *Why it blocks:* An engineer cannot define the aggregate, events, or projections without knowing whether `opened` is a delivery status transition, a separate event on a different aggregate, or both.\n\n2. **Commanded infrastructure design is unspecified.** The plan must state: (a) which adapter package to use (`commanded_eventstore_adapter` + `eventstore`, or `commanded_extreme_adapter`, or Commanded's in-memory adapter for this iteration); (b) whether the event store uses a separate Postgres database or a schema prefix in the existing DB; (c) how the test environment handles event store state (in-memory, sandboxed, truncated). *Why it blocks:* These choices affect `mix.exs`, `config/`, supervision tree, and CI setup. They cannot be deferred to \"during implementation\" for a first-ever ES introduction.\n\n3. **Aggregate boundaries and core invariants are undefined.** The plan must specify at minimum: which aggregates exist (e.g., `Club`, `Person`, `Membership`, `Message`, `Delivery`), which commands target which aggregate, and what invariants each aggregate enforces (e.g., \"a person can only be added as a member to an existing club\" — is that enforced by the aggregate or a process manager?). *Why it blocks:* Aggregate boundary decisions are the most consequential CQRS/ES design choices and are extremely expensive to change after events are persisted.\n\n4. **Acceptance criteria do not exist yet.** The feature file is listed as an implementation step. The plan must contain concrete Gherkin scenarios (or equivalent testable criteria) so that: (a) the engineer knows what to build, and (b) a reviewer can objectively validate success. *Why it blocks:* Without acceptance criteria, neither the engineer nor reviewer can determine when the iteration is complete.\n\n5. **`huddlz-hq/cucumber` viability is unconfirmed.** The plan depends on this library for its primary validation strategy. If it doesn't exist or isn't compatible, the entire validation plan collapses. *Why it blocks:* The plan must confirm the library exists, is usable, or specify a fallback (e.g., ExUnit-based scenario tests).\n\n## 6. Non-blocking Improvements\n\n1. Specify folder structure conventions for feature files, step definitions, and the two-runner setup.\n2. Add a brief data model sketch for projected read models (Ecto schemas for clubs, people, memberships, messages, deliveries).\n3. Clarify whether the fake email provider is a behaviour + module or a Mox-style mock, and where it lives.\n4. Add a note about idempotency expectations for event handlers/projectors.\n5. Consider whether `Membership` needs an aggregate or is just a relationship managed by the `Club` aggregate.\n\n## 7. Smallest Viable Iteration\n\nThe current scope is already a reasonable smallest slice (domain model with fake provider, no UI, no real email). However, it could be further narrowed if needed:\n\n**Minimum viable first slice:** Club creation, person creation, membership, and message sending with a single \"sent\" status. Defer all delivery status tracking (delivered, bounced, delayed, spam, opened) to a follow-up. This would let the team validate the Commanded infrastructure, aggregate design, and Cucumber integration without the complexity of the delivery state machine.\n\nIf the team prefers to keep delivery statuses in scope (which is reasonable since that's the core value), then the current scope is fine — but the blocking gaps above must be resolved first.\n\n## 8. Validation Plan\n\nThe iteration is successful when:\n\n1. `devenv shell mix precommit` passes with zero errors.\n2. All Gherkin scenarios defined in the shared feature file pass when executed via the Elixir-layer Cucumber runner against the domain model with fake provider.\n3. The scenarios cover at minimum: creating a club, adding a member, sending a message, and observing each delivery status (sent, delivered, delayed, bounced, spam complaint, opened) reflected correctly in both the member-facing receipt view and operator deliverability view.\n4. ExUnit tests pass for: event store setup, aggregate invariant enforcement, projector correctness, and fake provider interactions.\n5. No Phoenix UI or real provider integration is required.\n\n## 9. Corrected Iteration Plan Draft\n\nBelow are the specific edits required to make the plan READY. A full rewrite is not appropriate since the plan structure is sound — it needs gap-filling, not restructuring.\n\n### Edit 1: Resolve the `opened` status decision\n\n**Replace** the Open Technical Decisions bullet about `opened` **with** a decision in the main plan body. Suggested resolution (plan author should confirm or override):\n\n> `opened` is modeled as a delivery status transition (not a separate event type). The `Delivery` aggregate tracks status as a state machine: `sent → delivered → opened`, with `bounced`, `delayed`, and `spam_complaint` as terminal/branch states. The member-facing projection maps `delivered` and `opened` to their simple labels; the operator-facing projection shows the full status history with timestamps.\n\n### Edit 2: Specify Commanded infrastructure choices\n\n**Replace** Implementation Plan step 1 and the \"exact package versions\" open decision **with:**\n\n> 1. Add `commanded` (latest stable), `commanded_eventstore_adapter`, and `eventstore` to `mix.exs`. The event store will use a separate PostgreSQL database (`memba_eventstore_dev` / `memba_eventstore_test`) managed by `EventStore.Tasks.Create` / `EventStore.Tasks.Drop`. Test environment will use the `eventstore` test database with `Commanded.EventStore.Adapters.EventStore` configured for serialization with `Commanded.Serialization.JsonSerializer`.\n>\n> 2. Add `config/event_store.exs` (imported by `config/dev.exs` and `config/test.exs`) with connection details. Add `EventStore` and `Commanded.Application` to the supervision tree. Add Mix aliases for `event_store.setup` and `event_store.reset`.\n\n### Edit 3: Define aggregate boundaries, commands, events, and invariants\n\n**Replace** Implementation Plan step 3 **with:**\n\n> 3. Define the following aggregates, commands, events, and invariants:\n>\n> **Club aggregate** (identity: `club_id`)\n> - Command: `CreateClub{club_id, name}` → Event: `ClubCreated{club_id, name}`\n> - Invariant: club_id must not already exist (enforced by aggregate lifecycle)\n>\n> **Person aggregate** (identity: `person_id`)\n> - Command: `CreatePerson{person_id, name, email}` → Event: `PersonCreated{person_id, name, email}`\n> - Invariant: person_id must not already exist\n>\n> **Membership aggregate** (identity: `{club_id, person_id}` composite or dedicated `membership_id`)\n> - Command: `AddMember{membership_id, club_id, person_id}` → Event: `MemberAdded{membership_id, club_id, person_id}`\n> - Invariant: same membership_id must not already exist\n> - Note: cross-aggregate validation (club and person must exist) is handled by the application service / process manager, not the aggregate.\n>\n> **Message aggregate** (identity: `message_id`)\n> - Command: `SendMessage{message_id, club_id, sender_person_id, subject, body}` → Event: `MessageSent{message_id, club_id, sender_person_id, subject, body, sent_at}`\n> - Invariant: message_id must not already exist\n> - The application service resolves club members and dispatches individual `CreateDelivery` commands.\n>\n> **Delivery aggregate** (identity: `delivery_id`)\n> - Command: `CreateDelivery{delivery_id, message_id, recipient_person_id, recipient_email}` → Event: `DeliveryCreated{delivery_id, message_id, recipient_person_id, recipient_email, status: :sent}`\n> - Command: `UpdateDeliveryStatus{delivery_id, status, timestamp}` → Event: `DeliveryStatusChanged{delivery_id, status, timestamp}`\n> - Valid status transitions: `sent → delivered`, `delivered → opened`, `sent → bounced`, `sent → delayed`, `delayed → delivered`, `sent → spam_complaint`\n> - Invariant: status transitions must follow the allowed state machine. Invalid transitions are rejected.\n\n### Edit 4: Add concrete acceptance criteria (Gherkin scenarios)\n\n**Add a new section** after \"Implementation Plan\" titled \"Acceptance Scenarios\" containing the core Gherkin:\n\n> ## Acceptance Scenarios\n>\n> These scenarios will be placed in the shared feature file and executed at the domain layer.\n>\n> ```gherkin\n> Feature: Member message deliverability\n>\n>   Scenario: Club operator sends a message to members\n>     Given a club \"Chess Club\" exists\n>     And a person \"Alice\" with email \"alice@example.com\" is a member of \"Chess Club\"\n>     And a person \"Bob\" with email \"bob@example.com\" is a member of \"Chess Club\"\n>     When \"Alice\" sends a message to \"Chess Club\" with subject \"Meeting tomorrow\"\n>     Then the message should be sent to 2 recipients\n>     And \"Alice\" should see a receipt showing the message was \"Sent\" to each member\n>\n>   Scenario: Message is delivered successfully\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message was delivered\n>     Then \"Alice\" should see a receipt showing \"Delivered\" for \"Bob\"\n>     And the operator deliverability view should show status \"delivered\" with a timestamp\n>\n>   Scenario: Message delivery is delayed\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message was delayed\n>     Then \"Alice\" should see a receipt showing \"Delayed\" for \"Bob\"\n>     And the operator deliverability view should show status \"delayed\" with a timestamp\n>\n>   Scenario: Message bounces\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message bounced\n>     Then \"Alice\" should see a receipt showing \"Bounced\" for \"Bob\"\n>     And the operator deliverability view should show status \"bounced\" with a timestamp\n>\n>   Scenario: Message triggers a spam complaint\n>     Given a message has been sent to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports a spam complaint\n>     Then \"Alice\" should see a receipt showing \"Spam Complaint\" for \"Bob\"\n>     And the operator deliverability view should show status \"spam_complaint\" with a timestamp\n>\n>   Scenario: Message is opened by recipient\n>     Given a message has been delivered to \"Bob\" at \"bob@example.com\"\n>     When the email provider reports the message was opened\n>     Then \"Alice\" should see a receipt showing \"Opened\" for \"Bob\"\n>     And the operator deliverability view should show status \"opened\" with a timestamp\n>\n>   Scenario: Operator views deliverability summary\n>     Given a message has been sent to 3 members\n>     And 2 messages were delivered and 1 bounced\n>     Then the operator deliverability view should show 2 delivered and 1 bounced\n> ```\n\n### Edit 5: Confirm or replace `huddlz-hq/cucumber`\n\n**Replace** Implementation Plan step 7 **with:**\n\n> 7. Confirm `huddlz-hq/cucumber` is available and compatible with current Elixir/OTP versions. If it is unavailable or incompatible, implement the acceptance scenarios as structured ExUnit tests that mirror the Gherkin scenario names and steps (one test per scenario, with descriptive names matching the scenario titles). Document the decision in an ADR if the Cucumber approach is deferred.\n\n### Edit 6: Clean up Open Technical Decisions\n\n**Replace** the entire Open Technical Decisions section **with:**\n\n> ## Open Technical Decisions\n>\n> - Exact folder structure for shared feature files should be chosen during implementation. The constraint is that scenarios must be reusable by a future cucumber-js/Playwright runner.\n> - Whether `Membership` uses a composite identity (`{club_id, person_id}`) or a dedicated `membership_id` should be decided during implementation. Either approach works; the aggregate boundary and invariants are the same.\n\nThese are genuinely deferrable decisions that don't affect the architecture.\n\n---\n\n{\"context_updates\":{\"plan_ready\":false}}",
+              "plan_ready": false,
+              "last_stage": "synthesize",
+              "last_response": "# Final Readiness Review\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers independently identified material gaps. After synthesizing and filtering their findings, several blocki"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-opus-4-6"
+                  },
+                  "tokens": {
+                    "input_tokens": 2352,
+                    "output_tokens": 3909,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 109485
+            }
+          },
+          "fork": {
+            "status": "succeeded",
+            "jump_to_node": "merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "merge": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.fan_in.best_outcome": "succeeded",
+              "parallel.fan_in.best_id": "claude_review",
+              "parallel.fan_in.best_head_sha": "527f4355ea8837d5e1f8907ada59799fef54dfb1"
+            },
+            "notes": "Selected best candidate: claude_review",
+            "usage": null
+          }
+        },
+        "next_node_id": "not_ready",
+        "git_commit_sha": "9ac812008a5714a3a20659031eb82e771d4a5e84",
+        "node_visits": {
+          "fork": 1,
+          "merge": 1,
+          "synthesize": 1,
+          "read_plan": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-27T02:16:43.110490638Z",
+        "current_node": "not_ready",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "fork",
+          "merge",
+          "synthesize",
+          "not_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.synthesize": 0,
+          "internal.retry_count.merge": 0,
+          "internal.retry_count.not_ready": 0,
           "plan_ready": false,
           "parallel.fan_in.best_outcome": "succeeded",
           "graph.model_stylesheet": "\n            * { reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: claude-opus-4-6; reasoning_effort: high; }\n        ",
-          "internal.thread_id": "merge",
+          "internal.thread_id": "synthesize",
           "thread.start.current_node": "read_plan",
           "last_stage": "synthesize",
-          "outcome": "succeeded",
+          "outcome": "failed",
           "thread.fork.current_node": "merge",
+          "thread.synthesize.current_node": "not_ready",
           "parallel.results": [
             {
               "id": "gemini_review",
@@ -806,17 +953,17 @@
           "last_response": "# Final Readiness Review\n\n## 1. Decision: NOT READY\n\n## 2. Confidence: High\n\nAll three reviewers independently identified material gaps. After synthesizing and filtering their findings, several blocki",
           "graph.rankdir": "LR",
           "internal.fidelity": "summary:high",
-          "failure_signature": "",
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus synthesis report and corrected plan draft.",
           "graph.default_fidelity": "summary:high",
           "parallel.fan_in.best_id": "claude_review",
           "thread.merge.current_node": "synthesize",
           "thread.read_plan.current_node": "fork",
           "internal.run_id": "01KSKKA7FP9GF7JWJXVWJYYXHH",
-          "current_node": "synthesize",
+          "current_node": "not_ready",
           "internal.retry_count.start": 0,
-          "failure_class": "",
+          "failure_class": "deterministic",
           "parallel.branch_count": 3,
-          "command.output": "blob://sha256/f3e3ed6c952dc439d45b29ccfa31d05b4ac20abb296a8822feb8243b322dcc53"
+          "command.output": "blob://sha256/cd4024635acf02bdfde8a1a5f51d938e432feb111f9ad69a4947d02b9139bd7f"
         },
         "node_outcomes": {
           "start": {
@@ -872,6 +1019,17 @@
               "total_usd_micros": 109485
             }
           },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/cd4024635acf02bdfde8a1a5f51d938e432feb111f9ad69a4947d02b9139bd7f"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.\n",
+              "category": "deterministic"
+            },
+            "usage": null
+          },
           "read_plan": {
             "status": "succeeded",
             "context_updates": {
@@ -881,12 +1039,13 @@
             "usage": null
           }
         },
-        "next_node_id": "not_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "fork": 1,
           "start": 1,
           "merge": 1,
           "synthesize": 1,
+          "not_ready": 1,
           "read_plan": 1
         }
       },
@@ -917,7 +1076,12 @@
       "first_event_seq": 74,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-05-27T02:16:39.778662277Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -931,6 +1095,44 @@
       "output": null,
       "started_at": "2026-05-27T02:15:05.770555544Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 94008,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 2352,
+        "output_tokens": 3909,
+        "total_tokens": 6261,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 109485
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-opus-4-6"
+      },
+      "state": "succeeded"
+    },
+    "not_ready@1": {
+      "first_event_seq": 84,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.' >&2\nexit 1",
+        "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus synthesis report and corrected plan draft.' >&2\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-27T02:16:42.951393633Z",
+      "handler": "command",
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
