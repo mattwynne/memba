@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Add the dependencies above with compatible versions; lock them in
-- [ ] 002 Configure EventStore (dedicated schema) and `commanded_ecto_projections`
+- [x] 002 Configure EventStore (dedicated schema) and `commanded_ecto_projections`
 - [ ] 003 Add `mix` aliases / test helpers so EventStore + projection tables are
 - [ ] 004 Add `Memba.Membership.App` and `Memba.Membership.Router`.
 - [ ] 005 Add the `Club` aggregate, `CreateClub` command, and `ClubCreated` event,
