@@ -2,11 +2,15 @@ digraph IterationImplementation {
     graph [
         goal="Implement the iteration plan at {{ inputs.plan_path }} and leave the codebase passing dev check",
         default_fidelity="summary:high",
-        max_node_visits=30,
+        max_node_visits=80,
         model_stylesheet="
             * { reasoning_effort: high; }
             #read_plan { reasoning_effort: low; }
-            #implement { model: gpt-5.3-codex; reasoning_effort: high; }
+            #sync_task_list { model: gpt-5.3-codex; reasoning_effort: high; }
+            #implement_task { model: gpt-5.3-codex; reasoning_effort: high; }
+            #validate_task { model: claude-opus-4-6; reasoning_effort: high; }
+            #fix_task { model: gpt-5.3-codex; reasoning_effort: high; }
+            #mark_task_done { model: gpt-5.3-codex; reasoning_effort: high; }
             #fix_dev_check { model: gpt-5.3-codex; reasoning_effort: high; }
             #plan_conformance_gate { model: claude-opus-4-6; reasoning_effort: high; }
             #fix_plan_conformance { model: gpt-5.3-codex; reasoning_effort: high; }
@@ -52,10 +56,78 @@ digraph IterationImplementation {
         script="echo 'Iteration implementation failed before coding: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
     ]
 
-    implement [
-        label="Implement Iteration",
-        prompt="@prompts/implement.md",
-        timeout="3600s"
+    sync_task_list [
+        label="Sync Task List",
+        prompt="@prompts/sync_task_list.md",
+        timeout="1200s"
+    ]
+
+    pick_next_task [
+        label="Pick Next Task",
+        shape=parallelogram,
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nif [ ! -f \"$TODO_PATH\" ]; then\n  echo \"Todo file not found after sync: $TODO_PATH\" >&2\n  exit 1\nfi\nmkdir -p .fabro/tmp\ntask=$(grep -n -m 1 -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" || true)\nif [ -z \"$task\" ]; then\n  echo \"No unchecked tasks remain in $TODO_PATH.\"\n  exit 1\nfi\nprintf '%s\n' \"$task\" > .fabro/tmp/selected-task.txt\nprintf 'PLAN_PATH=%s\nTODO_PATH=%s\nSELECTED_TASK=%s\n' \"$PLAN_PATH\" \"$TODO_PATH\" \"$task\""
+    ]
+
+    all_tasks_done [
+        label="Check All Tasks Done",
+        shape=parallelogram,
+        script="set -eu
+PLAN_PATH='{{ inputs.plan_path }}'
+case \"$PLAN_PATH\" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;
+esac
+TODO_PATH=\"$ITERATION_DIR/todo.md\"
+if [ ! -f \"$TODO_PATH\" ]; then
+  echo \"Todo file not found after sync: $TODO_PATH\" >&2
+  exit 1
+fi
+if grep -q -E '^[[:space:]]*- \[ \] ' \"$TODO_PATH\"; then
+  echo \"Unchecked tasks remain in $TODO_PATH.\"
+  exit 1
+fi
+echo \"All iteration tasks are checked off in $TODO_PATH. Continuing to whole-iteration gates.\""
+    ]
+
+    implement_task [
+        label="Implement Selected Task",
+        prompt="@prompts/implement_task.md",
+        timeout="2400s"
+    ]
+
+    validate_task [
+        label="Validate Selected Task",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/validate_task.md"
+    ]
+
+    task_gate [shape=diamond, label="Task valid?"]
+
+    fix_task [
+        label="Fix Selected Task",
+        prompt="@prompts/fix_task.md",
+        timeout="1800s",
+        max_visits=3
+    ]
+
+    mark_task_done [
+        label="Mark Task Done",
+        prompt="@prompts/mark_task_done.md",
+        timeout="600s"
+    ]
+
+    commit_task [
+        label="Commit Completed Task",
+        shape=parallelogram,
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSELECTED_TASK=$(cat .fabro/tmp/selected-task.txt)\nif git status --short | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  exit 1\nfi\nif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"Todo file is missing or empty: $TODO_PATH\" >&2\n  exit 1\nfi\nif [ -z \"$(git status --short)\" ]; then\n  echo 'No changes to commit for completed task.' >&2\n  exit 1\nfi\ngit add -A\ngit reset -q -- .fabro/tmp 2>/dev/null || true\nif git diff --cached --name-only | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  git reset -q\n  exit 1\nfi\nstat=$(git diff --cached --stat || true)\nfiles=$(git diff --cached --name-only || true)\nsubject=$(printf '%s' \"$SELECTED_TASK\" | sed -E 's/^[0-9]+:[[:space:]]*- \\[ \\] [0-9]*[[:space:]]*//; s/^[0-9]+:[[:space:]]*- \\[x\\] [0-9]*[[:space:]]*//; s/[^A-Za-z0-9._ -]/ /g' | cut -c1-60)\n[ -n \"$subject\" ] || subject='selected task'\nmsg_file=.fabro/tmp/task-commit-message.txt\n{\n  printf 'Implement iteration task: %s\\n\\n' \"$subject\"\n  printf 'Plan: %s\\n' \"$PLAN_PATH\"\n  printf 'Todo: %s\\n' \"$TODO_PATH\"\n  printf 'Selected task: %s\\n\\n' \"$SELECTED_TASK\"\n  printf 'Evidence files changed:\\n%s\\n\\n' \"$files\"\n  printf 'Diff stat:\\n%s\\n' \"$stat\"\n} > \"$msg_file\"\ngit commit -F \"$msg_file\"\nrm -f .fabro/tmp/selected-task.txt .fabro/tmp/task-commit-message.txt\ngit status --short"
+    ]
+
+    task_not_ready [
+        label="Fail: Task Needs Human Input",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed: selected task validation requires human input or exceeded automatic repair budget.' >&2\nexit 1"
     ]
 
     dev_check [
@@ -87,7 +159,7 @@ digraph IterationImplementation {
     snapshot_before_plan_repair [
         label="Snapshot Before Plan Repair",
         shape=parallelogram,
-        script="set -eu\nmkdir -p .fabro/tmp\nkind='plan'\nsha=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf '%s\\n' \"$sha\" > \".fabro/tmp/${kind}-repair-before-sha.txt\"\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$sha\""
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='plan'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\""
     ]
 
     fix_plan_conformance [
@@ -100,7 +172,7 @@ digraph IterationImplementation {
     verify_plan_repair [
         label="Verify Plan Repair",
         shape=parallelogram,
-        script="set -eu\nkind='plan'\nbefore=$(cat \".fabro/tmp/${kind}-repair-before-sha.txt\")\nafter=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s): %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif [ \"$before\" = \"$after\" ]; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+        script="set -eu\nkind='plan'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
     ]
 
     plan_not_ready [
@@ -122,7 +194,7 @@ digraph IterationImplementation {
     snapshot_before_adr_repair [
         label="Snapshot Before ADR Repair",
         shape=parallelogram,
-        script="set -eu\nmkdir -p .fabro/tmp\nkind='adr'\nsha=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf '%s\\n' \"$sha\" > \".fabro/tmp/${kind}-repair-before-sha.txt\"\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$sha\""
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='adr'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\""
     ]
 
     fix_adr_coherence [
@@ -135,7 +207,7 @@ digraph IterationImplementation {
     verify_adr_repair [
         label="Verify ADR Repair",
         shape=parallelogram,
-        script="set -eu\nkind='adr'\nbefore=$(cat \".fabro/tmp/${kind}-repair-before-sha.txt\")\nafter=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s): %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif [ \"$before\" = \"$after\" ]; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+        script="set -eu\nkind='adr'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
     ]
 
     adr_not_ready [
@@ -179,7 +251,7 @@ digraph IterationImplementation {
     snapshot_before_review_repair [
         label="Snapshot Before Review Repair",
         shape=parallelogram,
-        script="set -eu\nmkdir -p .fabro/tmp\nkind='review'\nsha=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf '%s\\n' \"$sha\" > \".fabro/tmp/${kind}-repair-before-sha.txt\"\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$sha\""
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\""
     ]
 
     apply_review_fixes [
@@ -192,7 +264,7 @@ digraph IterationImplementation {
     verify_review_repair [
         label="Verify Review Repair",
         shape=parallelogram,
-        script="set -eu\nkind='review'\nbefore=$(cat \".fabro/tmp/${kind}-repair-before-sha.txt\")\nafter=$(git diff --binary | shasum -a 256 | awk '{print $1}')\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s): %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s): %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif [ \"$before\" = \"$after\" ]; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+        script="set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
     ]
 
     not_ready [
@@ -219,11 +291,25 @@ digraph IterationImplementation {
     read_plan -> read_failed
     read_failed -> exit
 
-    preflight_sandbox -> implement [condition="outcome=succeeded"]
+    preflight_sandbox -> sync_task_list [condition="outcome=succeeded"]
     preflight_sandbox -> preflight_failed
     preflight_failed -> exit
 
-    implement -> dev_check
+    sync_task_list -> all_tasks_done
+    all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=succeeded"]
+    all_tasks_done -> pick_next_task [label="Tasks remain"]
+    pick_next_task -> implement_task [label="Task found", condition="outcome=succeeded"]
+    pick_next_task -> task_not_ready [label="Could not select task"]
+    implement_task -> validate_task
+    validate_task -> task_gate
+    task_gate -> mark_task_done [label="Valid", condition="context.task_valid=true"]
+    task_gate -> fix_task [label="Repair", condition="context.task_repair_available=true"]
+    task_gate -> task_not_ready [label="Needs human input"]
+    fix_task -> validate_task
+    mark_task_done -> commit_task
+    commit_task -> sync_task_list
+    task_not_ready -> exit
+
     dev_check -> plan_conformance_gate [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
