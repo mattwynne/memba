@@ -19,13 +19,15 @@ Process:
 Acceptance rules:
 
 - If the plan explicitly says "Implement X" and X is missing or incomplete, do not pass the gate.
-- If the plan requires specific architecture (e.g., Commanded/EventStore/projections) and the implementation uses different patterns or plain modules, route to plan rework or human input.
+- If the plan requires specific architecture (e.g., Commanded/EventStore/projections) and the implementation uses different patterns or plain modules, do not route to human input merely because the rework is large. Route to PLAN_REWORK with an explicit repair brief unless there is a genuine ambiguity, contradiction, external blocker, or product/architecture decision to make.
+- For this iteration, Matt has already confirmed that the plan stands as written. If the implementation used a plain Ecto CRUD spike instead of Commanded/EventStore, require rework that removes conflicting CRUD code and replaces it with the plan-mandated Commanded/EventStore/projection/Cucumber architecture.
 - If the plan requires specific test types (e.g., Cucumber acceptance tests, integration tests, unit tests) and those tests are missing, insufficient, or do not cover the requirements, route to plan rework or human input.
 - If tests pass but do not actually prove or cover the explicit plan requirements, route to plan rework or human input.
 - A green test suite with only 5 tests cannot satisfy a plan requiring comprehensive EventStore/projection/command/aggregate/feature coverage.
 - Never downgrade explicit plan requirements to optional implementation strategy unless routing to human input with a clear question about scope reduction.
 - If the same plan gap appears to have recurred after plan rework, prefer human input over repeated repair loops.
-- If a requirement is blocked, too large for bounded rework, ambiguous, or needs a product/architecture decision, route to human input.
+- If a requirement is blocked, ambiguous, or needs a product/architecture decision, route to human input.
+- Do not classify plan-required Commanded/EventStore/Cucumber implementation as "too large" for rework after the implementor chose the wrong architecture; route to PLAN_REWORK because the approved plan is the implementation budget.
 
 Report format:
 

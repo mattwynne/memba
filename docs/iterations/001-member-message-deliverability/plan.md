@@ -29,6 +29,8 @@ Key architectural decisions for this iteration are captured in ADRs:
 
 This is not yet the live Postmark deliverability iteration. Postmark remains the likely first live provider because its 100-free-emails/month allowance is enough for validation, but this slice keeps provider integration fake so the domain model and acceptance language can settle first.
 
+Implementation note: a previous automated implementation attempt produced a plain Ecto CRUD spike. That approach is not acceptable for this iteration except as disposable learning. The implementation must use the Commanded/EventStore architecture described in the ADRs and this plan. Do not preserve or extend plain CRUD domain code where it conflicts with the event-sourced design; replace it with Commanded aggregates, commands, events, projections, and query APIs.
+
 ## Scope
 
 ### In scope
@@ -78,6 +80,7 @@ This is not yet the live Postmark deliverability iteration. Postmark remains the
 - Operator deliverability output preserves reason/detail text when supplied.
 - Repeated open reports are idempotent and only answer whether the delivery was opened at least once, as decided in ADR 0012.
 - Unit/integration tests cover commands, aggregate decisions, event application, projections, EventStore setup, and fake provider behaviour where Cucumber does not provide enough diagnostic coverage.
+- The previous plain Ecto CRUD spike for this domain is cleaned up: no CRUD context, schema, migration, fixture, or test code remains where it conflicts with or duplicates the Commanded/EventStore implementation.
 - `devenv shell mix precommit` passes.
 
 ## Acceptance Scenarios

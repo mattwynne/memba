@@ -5,6 +5,7 @@ Use only the gate's repair brief, the plan text, and current repository state. S
 Rules:
 
 - Fix only the explicit plan-conformance gaps identified by the gate.
+- If the gate reports that a prior implementation used a plain Ecto CRUD spike instead of the plan-mandated Commanded/EventStore architecture, remove or replace the conflicting CRUD code rather than extending it.
 - Do not reinterpret explicit requirements as optional or implementation strategy.
 - Do not omit, weaken, or substitute plan-mandated architecture, tests, configurations, or deliverables.
 - Add or update automated tests proving each plan requirement is satisfied.
