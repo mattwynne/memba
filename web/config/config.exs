@@ -9,7 +9,18 @@ import Config
 
 config :memba,
   ecto_repos: [Memba.Repo],
+  event_stores: [Memba.EventStore],
   generators: [timestamp_type: :utc_datetime]
+
+config :memba, Memba.Membership.App,
+  event_store: [
+    adapter: Commanded.EventStore.Adapters.EventStore,
+    event_store: Memba.EventStore
+  ],
+  pubsub: :local,
+  registry: :local
+
+config :commanded_ecto_projections, schema_prefix: nil
 
 # Configure the endpoint
 config :memba, MembaWeb.Endpoint,
