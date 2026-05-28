@@ -6,13 +6,20 @@ Todo path: `<iteration directory>/todo.md`.
 
 ## Purpose
 
-`plan.md` is the approved source of truth. `todo.md` is derived execution state used to drain the implementation one task at a time.
+`plan.md` is the approved source of truth for scope. Once created, `todo.md` is the source of truth for execution state used to drain the implementation one task at a time.
+
+## Resume contract
+
+- Regenerate `todo.md` from `plan.md` only when `todo.md` is absent.
+- If `todo.md` already exists, preserve its check-offs, splits, additions, and ordering across runs.
+- Never overwrite an existing `todo.md` merely because the workflow was rerun.
+- Treat unexpected completed-state inconsistencies as blockers to report, not state to silently repair.
 
 ## Instructions
 
 - Read `AGENTS.md`, the plan at `{{ inputs.plan_path }}`, and any ADRs or project guidance referenced by the plan.
 - Create `todo.md` if it does not exist.
-- If `todo.md` exists, reconcile it with the approved plan without weakening the plan.
+- If `todo.md` exists, reconcile it with the approved plan without weakening the plan or overwriting execution state.
 - Keep the todo file lean:
 
   ```md

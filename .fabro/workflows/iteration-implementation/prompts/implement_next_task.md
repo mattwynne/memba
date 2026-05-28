@@ -7,7 +7,11 @@ Todo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.
 
 - Read the plan and `todo.md` before editing.
 - Pick the first unchecked Markdown task line in `todo.md` (`- [ ] ...`). That task is yours from selection through check-off.
-- Implement exactly that task only. Do not opportunistically implement later tasks unless the selected task cannot be completed without splitting/reordering the todo list first.
+- Treat earlier checked todo lines as durable completed work. Do not redo them.
+- Inspect recent task commits with `git log --oneline --decorate -20` and use their subjects/bodies as context for what previous runs already completed.
+- Inspect `git status --short` before editing. The resume gate should normally guarantee a clean tree; if uncommitted changes are present, stop for human input unless they are clearly the selected task's in-progress work and you can safely continue it to completion without overwriting it.
+- Never silently overwrite, discard, or duplicate uncommitted work for an unchecked task.
+- Implement exactly the selected task only. Do not opportunistically implement later tasks unless the selected task cannot be completed without splitting/reordering the todo list first.
 - When the implementation and focused validation are complete, check off the same task line you implemented by changing that one line from `- [ ]` to `- [x]`.
 - Do not check off any other ordinary todo line.
 - Do not commit. The deterministic commit node will commit after independent validation.

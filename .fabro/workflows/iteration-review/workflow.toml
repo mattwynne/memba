@@ -1,0 +1,45 @@
+_version = 1
+
+[workflow]
+graph = "workflow.fabro"
+
+[run]
+goal = "Review a completed iteration implementation against plan, ADRs, and independent reviewers"
+working_dir = "/workspace"
+
+[run.environment]
+id = "memba-dev"
+
+[environments.memba-dev]
+provider = "docker"
+
+[environments.memba-dev.image]
+ref = "ghcr.io/mattwynne/memba-fabro-dev:latest"
+
+[run.inputs]
+plan_path = "docs/iterations/NNN-topic/plan.md"
+base_ref = ""
+
+[run.clone]
+enabled = false
+
+[[run.prepare.steps]]
+command = ["mkdir", "-p", "/workspace"]
+
+[[run.prepare.steps]]
+command = ["git", "clone", "--branch", "main", "--single-branch", "--depth", "10", "--no-tags", "https://github.com/mattwynne/memba", "/workspace"]
+
+[[run.prepare.steps]]
+command = ["git", "-C", "/workspace", "config", "user.email", "fabro@example.invalid"]
+
+[[run.prepare.steps]]
+command = ["git", "-C", "/workspace", "config", "user.name", "Fabro"]
+
+[[run.prepare.steps]]
+command = ["bash", "/workspace/.fabro/workflows/iteration-review/prepare_mix.sh"]
+
+[run.pull_request]
+enabled = true
+draft = false
+auto_merge = true
+merge_strategy = "squash"

@@ -141,6 +141,30 @@ this is the place to capture the workaround.
   that invalidates earlier task commits, that is out of scope here and
   belongs to a separate plan-change-handling kaizen.
 
+## Implementation notes
+
+- Added a start-of-run resume gate after sandbox preflight and before todo synchronization. It prints HEAD, todo checked/unchecked counts when `todo.md` exists, and the current `git status --short`.
+- The resume gate refuses to continue with uncommitted changes, instructing the operator to commit, stash, or reset/clean before rerunning.
+- `sync_task_list` now documents its resume contract in both workflow script comments and prompt text: existing `todo.md` is execution state and is not regenerated or overwritten.
+- `implement_next_task` now explicitly selects the first unchecked task, inspects recent task commits, and refuses to silently overwrite or duplicate uncommitted work.
+- `.fabro/workflows/README.md` documents the resume strategy: start a new Fabro run with the same `plan_path`; do not rely on LLM thread reuse because durable state is on disk.
+
+## Manual rehearsal
+
+Use this rehearsal before relying on resumability for a long iteration:
+
+1. Start the implementation workflow against `docs/iterations/001-member-message-deliverability/plan.md`.
+2. Force a failure after task 3 by introducing a deterministic `dev ci` failure during task 4, or by stopping the run immediately after the third task commit.
+3. Confirm three task commits exist with subjects beginning `Implement iteration task:` and that `docs/iterations/001-member-message-deliverability/todo.md` has tasks 1-3 checked.
+4. Ensure the worktree is clean. If not, choose deliberately: commit wanted work, stash it, or run `git reset --hard HEAD` and clean untracked files as appropriate.
+5. Rerun:
+
+   ```bash
+   fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/001-member-message-deliverability/plan.md
+   ```
+
+6. Confirm the resume gate reports three checked tasks, the implementor starts at task 4, and no new commits redo tasks 1-3.
+
 ## Risks / follow-ups
 
 - Fabro may treat each run as independent in ways that interact badly with
