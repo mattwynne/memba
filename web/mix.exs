@@ -11,7 +11,10 @@ defmodule Memba.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      test_ignore_filters: [
+        ~r/features\/step_definitions/
+      ]
     ]
   end
 
