@@ -12,6 +12,20 @@ Todo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.
 - Do not check off any other ordinary todo line.
 - Do not commit. The deterministic commit node will commit after independent validation.
 
+
+## Local reference docs
+
+- Prefer local project documentation over network lookups. Do not `curl` upstream docs unless the local docs are missing or clearly insufficient.
+- Start with `docs/tools/README.md` for library documentation signposts. Relevant local docs include:
+  - `docs/tools/commanded/README.md` for Commanded.
+  - `docs/tools/commanded-eventstore-adapter/README.md` for the EventStore adapter.
+  - `docs/tools/eventstore/README.md` for EventStore.
+  - `docs/tools/commanded-ecto-projections/README.md` for projections.
+  - `docs/tools/cucumber/README.md` for Elixir Cucumber.
+  - `docs/tools/ecto/README.md` and `docs/tools/ecto-sql/README.md` for Ecto.
+  - `docs/tools/phoenix/README.md` and related Phoenix docs for web framework work.
+- If you need examples, search the local `web/deps/` source tree and `docs/tools/` before using the network.
+
 ## Binding rules
 
 - `plan.md` remains the source of truth. `todo.md` is derived execution state.
