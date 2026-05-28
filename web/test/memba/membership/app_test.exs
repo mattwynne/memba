@@ -1,10 +1,11 @@
 defmodule Memba.Membership.AppTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Router
 
   test "Membership Commanded app is supervised by the Phoenix application" do
@@ -13,6 +14,11 @@ defmodule Memba.Membership.AppTest do
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {App, pid, :supervisor, [App]} when is_pid(pid) -> true
+             _child -> false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{ClubProjector, _opts}, pid, :worker, [ClubProjector]} when is_pid(pid) -> true
              _child -> false
            end)
   end
