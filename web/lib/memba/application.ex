@@ -10,6 +10,7 @@ defmodule Memba.Application do
     children = [
       MembaWeb.Telemetry,
       Memba.Repo,
+      Memba.Membership.App,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Memba.PubSub},
       # Start a worker by calling: Memba.Worker.start_link(arg)

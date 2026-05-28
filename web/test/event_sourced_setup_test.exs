@@ -36,7 +36,10 @@ defmodule Memba.EventSourcedSetupTest do
 
   test "event-sourced test helper resets EventStore and projection version rows" do
     Memba.EventSourcedCase.reset_event_sourced_storage!()
-    start_supervised!(Memba.EventStore)
+
+    if is_nil(Process.whereis(Memba.EventStore)) do
+      start_supervised!(Memba.EventStore)
+    end
 
     event_data = %EventStore.EventData{
       event_type: "Elixir.EventStore.EventData",
