@@ -4,6 +4,7 @@ defmodule Memba.Membership.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Membership.App
+  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Router
 
   test "Membership Commanded app is supervised by the Phoenix application" do
@@ -18,7 +19,7 @@ defmodule Memba.Membership.AppTest do
 
   test "Membership Commanded app includes the Membership router" do
     assert App.__registered_commands__() == Router.__registered_commands__()
-    assert Router.__registered_commands__() == []
+    assert Router.__registered_commands__() == [CreateClub]
   end
 
   test "Membership Commanded app dispatches through its router" do
