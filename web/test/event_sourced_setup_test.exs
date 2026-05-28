@@ -30,11 +30,12 @@ defmodule Memba.EventSourcedSetupTest do
            ]
   end
 
-  test "projection version table is migrated in the application schema" do
+  test "projection tables are migrated in the application schema" do
     assert [[true]] = query!("SELECT to_regclass('public.projection_versions') IS NOT NULL").rows
+    assert [[true]] = query!("SELECT to_regclass('public.membership_clubs') IS NOT NULL").rows
   end
 
-  test "event-sourced test helper resets EventStore and projection version rows" do
+  test "event-sourced test helper resets EventStore and projection rows" do
     Memba.EventSourcedCase.reset_event_sourced_storage!()
 
     if is_nil(Process.whereis(Memba.EventStore)) do
@@ -54,13 +55,22 @@ defmodule Memba.EventSourcedSetupTest do
     VALUES ('setup-test-projector', 1, now(), now())
     """)
 
+    club_id = Ecto.UUID.generate()
+
+    query!("""
+    INSERT INTO membership_clubs (club_id, name, inserted_at, updated_at)
+    VALUES ('#{club_id}', 'Kootenay Mountaineering Club', now(), now())
+    """)
+
     assert [[1]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
     assert [[1]] = query!("SELECT count(*) FROM projection_versions").rows
+    assert [[1]] = query!("SELECT count(*) FROM membership_clubs").rows
 
     Memba.EventSourcedCase.reset_event_sourced_storage!()
 
     assert [[0]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
     assert [[0]] = query!("SELECT count(*) FROM projection_versions").rows
+    assert [[0]] = query!("SELECT count(*) FROM membership_clubs").rows
     assert [["$all"]] = query!(~S|SELECT stream_uuid FROM "event_store"."streams"|).rows
   end
 

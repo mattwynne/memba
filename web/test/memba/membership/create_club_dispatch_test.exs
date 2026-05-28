@@ -29,7 +29,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                 club_id: ^club_id,
                 name: "Kootenay Mountaineering Club"
               }
-            }} = App.dispatch(command, returning: :execution_result)
+            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
 
     assert %Club{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
              App.aggregate_state(Club, club_id)
@@ -41,7 +41,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
       name: "Kootenay Mountaineering Club"
     }
 
-    assert :ok = App.dispatch(command)
+    assert :ok = App.dispatch(command, consistency: :strong)
     assert {:error, :already_created} = App.dispatch(command)
   end
 end

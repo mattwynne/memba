@@ -10,6 +10,9 @@ defmodule Memba.EventSourcedCase do
   use ExUnit.CaseTemplate
 
   @projection_versions_table :projection_versions
+  @projectors [
+    Memba.Membership.Projectors.Club
+  ]
 
   using do
     quote do
@@ -27,8 +30,10 @@ defmodule Memba.EventSourcedCase do
       raise "Memba.EventSourcedCase resets shared EventStore state and cannot be used with async: true"
     end
 
+    projector_child_ids = stop_event_sourced_projectors!()
     reset_event_sourced_storage!()
     Memba.DataCase.setup_sandbox(tags)
+    start_event_sourced_projectors!(projector_child_ids)
     :ok
   end
 
@@ -42,6 +47,27 @@ defmodule Memba.EventSourcedCase do
     with_connection(fn conn ->
       reset_event_store!(conn)
       reset_projection_tables!(conn)
+    end)
+  end
+
+  defp stop_event_sourced_projectors! do
+    for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
+        module in @projectors do
+      if is_pid(pid) do
+        :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+      end
+
+      child_id
+    end
+  end
+
+  defp start_event_sourced_projectors!(child_ids) do
+    Enum.each(child_ids, fn child_id ->
+      case Supervisor.restart_child(Memba.Supervisor, child_id) do
+        {:ok, _pid} -> :ok
+        {:ok, _pid, _info} -> :ok
+        {:error, :running} -> :ok
+      end
     end)
   end
 

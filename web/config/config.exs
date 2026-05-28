@@ -10,7 +10,7 @@ import Config
 config :memba,
   ecto_repos: [Memba.Repo],
   event_stores: [Memba.EventStore],
-  event_sourced_projection_tables: [:projection_versions],
+  event_sourced_projection_tables: [:projection_versions, :membership_clubs],
   generators: [timestamp_type: :utc_datetime]
 
 config :memba, Memba.Membership.App,
