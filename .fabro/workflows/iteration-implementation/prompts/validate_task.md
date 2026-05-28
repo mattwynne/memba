@@ -1,6 +1,12 @@
 Validate the just-completed iteration task for `{{ inputs.plan_path }}`.
 
-Do not rely on a selected-task temp file. Instead inspect the plan, `todo.md`, relevant ADRs, current repository diff/status, test evidence, and the preceding implementation summary. Identify the completed task by the `todo.md` diff: exactly one ordinary task line should have changed from unchecked (`- [ ]`) to checked (`- [x]`) unless there is a clear plan-preserving split/reorder rationale.
+You have tool access. Use it. Decide from live repository state, not from summarized context alone. Read `.fabro/tmp/pre-validate-snapshot.md`, run `git status --short`, inspect `git diff`, and read changed files as needed.
+
+Important workflow contract: `implement_next_task` does **not** commit. The deterministic `commit_task` node commits **after** this validation. Therefore, at validation time it is correct and expected that HEAD is the **previous** successful task commit while the current task's new/changed files and the `todo.md` check-off are **uncommitted** in the working tree, often as untracked files.
+
+Validate the working tree, not `git log`. A previous task's commit at HEAD is never, by itself, evidence of stale replay, memoization, lost writes, or a filesystem bridge failure. Do not infer infrastructure faults unless live repository evidence proves the expected files or diffs are genuinely absent.
+
+Do not rely on a selected-task temp file. Instead inspect the plan, `todo.md`, relevant ADRs, current repository diff/status, test evidence, and the preceding implementation summary. Identify the completed task by the working-tree `todo.md` diff: exactly one ordinary task line should have changed from unchecked (`- [ ]`) to checked (`- [x]`) unless there is a clear plan-preserving split/reorder rationale.
 
 ## Validate
 
@@ -32,7 +38,7 @@ One of: **VALID**, **RETRY**, or **HUMAN_INPUT**
 - ADR/plan conformance notes.
 
 ### Retry brief
-Only if RETRY: exact reason the attempt was rejected, plus concise guidance for the next clean attempt. The workflow will discard the failed working tree before trying again.
+Only if RETRY: exact reason the attempt was rejected from live working-tree evidence, plus concise guidance for the next clean attempt. The workflow will snapshot the failed working tree before resetting and trying again.
 
 ### Human input
 Only if HUMAN_INPUT: exact blocker/question.

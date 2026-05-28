@@ -80,9 +80,15 @@ digraph IterationImplementation {
         timeout="2400s"
     ]
 
+    pre_validate_snapshot [
+        label="Snapshot Pre-Validation State",
+        shape=parallelogram,
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=.fabro/tmp/pre-validate-snapshot.md\nmkdir -p .fabro/tmp\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: implement_next_task has not committed. HEAD should normally be the previous successful task commit, while the current task work and todo.md check-off are uncommitted in the working tree.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        timeout="120s"
+    ]
+
     validate_task [
         label="Validate Completed Task",
-        shape=tab,
         output_schema="routing",
         prompt="@prompts/validate_task.md"
     ]
@@ -93,7 +99,7 @@ digraph IterationImplementation {
         label="Reset Failed Task Attempt",
         shape=parallelogram,
         max_visits=3,
-        script="set -eu\necho \"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\ngit status --short"
+        script="set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short"
     ]
 
     commit_task [
@@ -152,7 +158,8 @@ digraph IterationImplementation {
     all_tasks_done -> dev_check [label="No unchecked tasks", condition="context.task_list_complete=true"]
     all_tasks_done -> implement_next_task [label="Tasks remain", condition="context.task_list_complete=false && context.task_list_needs_human=false"]
     all_tasks_done -> task_not_ready [label="Task list problem"]
-    implement_next_task -> validate_task
+    implement_next_task -> pre_validate_snapshot
+    pre_validate_snapshot -> validate_task
     validate_task -> task_gate
     task_gate -> commit_task [label="Valid", condition="context.task_valid=true"]
     task_gate -> reset_task_attempt [label="Retry from last good commit", condition="context.task_retry_available=true"]
