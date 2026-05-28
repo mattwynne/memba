@@ -7,9 +7,8 @@ digraph IterationImplementation {
             * { reasoning_effort: high; }
             #read_plan { reasoning_effort: low; }
             #sync_task_list { model: gpt-5.5; reasoning_effort: high; }
-            #implement_task { model: gpt-5.5; reasoning_effort: high; }
+            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }
             #validate_task { model: claude-opus-4-6; reasoning_effort: high; }
-            #mark_task_done { model: gpt-5.5; reasoning_effort: high; }
             #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }
             #plan_conformance_gate { model: claude-opus-4-6; reasoning_effort: high; }
             #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }
@@ -62,12 +61,6 @@ digraph IterationImplementation {
         timeout="120s"
     ]
 
-    pick_next_task [
-        label="Pick Next Task",
-        shape=parallelogram,
-        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nif [ ! -f \"$TODO_PATH\" ]; then\n  echo \"Todo file not found after sync: $TODO_PATH\" >&2\n  exit 1\nfi\nmkdir -p .fabro/tmp\ntask=$(grep -n -m 1 -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" || true)\nif [ -z \"$task\" ]; then\n  echo \"No unchecked tasks remain in $TODO_PATH.\"\n  exit 1\nfi\nprintf '%s\n' \"$task\" > .fabro/tmp/selected-task.txt\nprintf 'PLAN_PATH=%s\nTODO_PATH=%s\nSELECTED_TASK=%s\n' \"$PLAN_PATH\" \"$TODO_PATH\" \"$task\""
-    ]
-
     all_tasks_done [
         label="Check Task List",
         shape=tab,
@@ -75,14 +68,14 @@ digraph IterationImplementation {
         prompt="@prompts/check_task_list.md"
     ]
 
-    implement_task [
-        label="Implement Selected Task",
-        prompt="@prompts/implement_task.md",
+    implement_next_task [
+        label="Implement Next Task",
+        prompt="@prompts/implement_next_task.md",
         timeout="2400s"
     ]
 
     validate_task [
-        label="Validate Selected Task",
+        label="Validate Completed Task",
         shape=tab,
         output_schema="routing",
         prompt="@prompts/validate_task.md"
@@ -94,26 +87,20 @@ digraph IterationImplementation {
         label="Reset Failed Task Attempt",
         shape=parallelogram,
         max_visits=3,
-        script="set -eu\nselected_file=.fabro/tmp/selected-task.txt\nif [ ! -f \"$selected_file\" ]; then\n  echo \"Selected task file missing: $selected_file\" >&2\n  exit 1\nfi\ntmp=$(mktemp)\ncp \"$selected_file\" \"$tmp\"\necho \"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/ -e .fabro/tmp/selected-task.txt\nmkdir -p .fabro/tmp\ncp \"$tmp\" \"$selected_file\"\nrm -f \"$tmp\"\necho \"Retrying selected task from clean checkpoint:\"\ncat \"$selected_file\"\ngit status --short"
-    ]
-
-    mark_task_done [
-        label="Mark Task Done",
-        prompt="@prompts/mark_task_done.md",
-        timeout="600s"
+        script="set -eu\necho \"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\ngit status --short"
     ]
 
     commit_task [
         label="Commit Completed Task",
         shape=parallelogram,
-        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSELECTED_TASK=$(cat .fabro/tmp/selected-task.txt)\nif git status --short | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  exit 1\nfi\nif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"Todo file is missing or empty: $TODO_PATH\" >&2\n  exit 1\nfi\nif [ -z \"$(git status --short)\" ]; then\n  echo 'No changes to commit for completed task.' >&2\n  exit 1\nfi\ngit add -A\ngit reset -q -- .fabro/tmp 2>/dev/null || true\nif git diff --cached --name-only | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  git reset -q\n  exit 1\nfi\nstat=$(git diff --cached --stat || true)\nfiles=$(git diff --cached --name-only || true)\nsubject=$(printf '%s' \"$SELECTED_TASK\" | sed -E 's/^[0-9]+:[[:space:]]*- \\[ \\] [0-9]*[[:space:]]*//; s/^[0-9]+:[[:space:]]*- \\[x\\] [0-9]*[[:space:]]*//; s/[^A-Za-z0-9._ -]/ /g' | cut -c1-60)\n[ -n \"$subject\" ] || subject='selected task'\nmsg_file=.fabro/tmp/task-commit-message.txt\n{\n  printf 'Implement iteration task: %s\\n\\n' \"$subject\"\n  printf 'Plan: %s\\n' \"$PLAN_PATH\"\n  printf 'Todo: %s\\n' \"$TODO_PATH\"\n  printf 'Selected task: %s\\n\\n' \"$SELECTED_TASK\"\n  printf 'Evidence files changed:\\n%s\\n\\n' \"$files\"\n  printf 'Diff stat:\\n%s\\n' \"$stat\"\n} > \"$msg_file\"\ngit commit -F \"$msg_file\"\nrm -f .fabro/tmp/selected-task.txt .fabro/tmp/task-commit-message.txt\ngit status --short"
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"Todo file is missing or empty: $TODO_PATH\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -z \"$status\" ]; then\n  echo 'No changes to commit for completed task.' >&2\n  exit 1\nfi\nif printf '%s\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  exit 1\nfi\ngit add -A\ngit reset -q -- .fabro/tmp 2>/dev/null || true\nfiles=$(git diff --cached --name-only || true)\nif [ -z \"$files\" ]; then\n  echo 'No staged changes remain after excluding Fabro temp files.' >&2\n  exit 1\nfi\nif printf '%s\n' \"$files\" | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  git reset -q\n  exit 1\nfi\nnon_todo_files=$(printf '%s\n' \"$files\" | awk -v todo=\"$TODO_PATH\" '$0 != todo {print}')\nif [ -z \"$non_todo_files\" ]; then\n  echo 'Refusing to commit only todo.md; completed task has no implementation/test/config/doc artifact staged.' >&2\n  git reset -q\n  exit 1\nfi\nchecked_count=$(git diff --cached -U0 -- \"$TODO_PATH\" | grep -E '^\\+[[:space:]]*- \\[x\\] ' | grep -v '^+++' | wc -l | tr -d ' ')\nunchecked_removed_count=$(git diff --cached -U0 -- \"$TODO_PATH\" | grep -E '^-[[:space:]]*- \\[ \\] ' | grep -v '^---' | wc -l | tr -d ' ')\nif [ \"${checked_count:-0}\" -eq 0 ]; then\n  echo 'Refusing to commit without a todo.md check-off for the completed task.' >&2\n  git reset -q\n  exit 1\nfi\nif [ \"${checked_count:-0}\" -gt 1 ] || [ \"${unchecked_removed_count:-0}\" -gt 1 ]; then\n  echo 'Refusing to commit more than one ordinary todo check-off in a single task commit.' >&2\n  git reset -q\n  exit 1\nfi\nstat=$(git diff --cached --stat || true)\nsubject=$(git diff --cached -U0 -- \"$TODO_PATH\" | grep -E '^\\+[[:space:]]*- \\[x\\] ' | grep -v '^+++' | head -1 | sed -E 's/^\\+[[:space:]]*- \\[x\\] [0-9]*[[:space:]]*//; s/[^A-Za-z0-9._ -]/ /g' | cut -c1-60)\n[ -n \"$subject\" ] || subject='completed task'\nmsg_file=.fabro/tmp/task-commit-message.txt\nmkdir -p .fabro/tmp\n{\n  printf 'Implement iteration task: %s\\n\\n' \"$subject\"\n  printf 'Plan: %s\\n' \"$PLAN_PATH\"\n  printf 'Todo: %s\\n\\n' \"$TODO_PATH\"\n  printf 'Evidence files changed:\\n%s\\n\\n' \"$files\"\n  printf 'Diff stat:\\n%s\\n' \"$stat\"\n} > \"$msg_file\"\ngit commit -F \"$msg_file\"\nrm -f .fabro/tmp/task-commit-message.txt\ngit status --short"
     ]
 
     task_not_ready [
         label="Fail: Task Needs Human Input",
         shape=parallelogram,
         goal_gate=true,
-        script="echo 'Iteration implementation failed: selected task validation requires human input or exceeded retry budget.' >&2\nexit 1"
+        script="echo 'Iteration implementation failed: task validation requires human input or exceeded retry budget.' >&2\nexit 1"
     ]
 
     dev_check [
@@ -283,17 +270,14 @@ digraph IterationImplementation {
 
     sync_task_list -> all_tasks_done
     all_tasks_done -> dev_check [label="No unchecked tasks", condition="context.task_list_complete=true"]
-    all_tasks_done -> pick_next_task [label="Tasks remain", condition="context.task_list_complete=false && context.task_list_needs_human=false"]
+    all_tasks_done -> implement_next_task [label="Tasks remain", condition="context.task_list_complete=false && context.task_list_needs_human=false"]
     all_tasks_done -> task_not_ready [label="Task list problem"]
-    pick_next_task -> implement_task [label="Task found", condition="outcome=succeeded"]
-    pick_next_task -> task_not_ready [label="Could not select task"]
-    implement_task -> validate_task
+    implement_next_task -> validate_task
     validate_task -> task_gate
-    task_gate -> mark_task_done [label="Valid", condition="context.task_valid=true"]
+    task_gate -> commit_task [label="Valid", condition="context.task_valid=true"]
     task_gate -> reset_task_attempt [label="Retry from last good commit", condition="context.task_retry_available=true"]
     task_gate -> task_not_ready [label="Needs human input or retry budget exhausted"]
-    reset_task_attempt -> implement_task
-    mark_task_done -> commit_task
+    reset_task_attempt -> implement_next_task
     commit_task -> sync_task_list
     task_not_ready -> exit
 
