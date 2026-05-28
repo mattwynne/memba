@@ -9,7 +9,6 @@ digraph IterationImplementation {
             #sync_task_list { model: gpt-5.5; reasoning_effort: high; }
             #implement_task { model: gpt-5.5; reasoning_effort: high; }
             #validate_task { model: claude-opus-4-6; reasoning_effort: high; }
-            #fix_task { model: gpt-5.5; reasoning_effort: high; }
             #mark_task_done { model: gpt-5.5; reasoning_effort: high; }
             #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }
             #plan_conformance_gate { model: claude-opus-4-6; reasoning_effort: high; }
@@ -91,11 +90,11 @@ digraph IterationImplementation {
 
     task_gate [shape=diamond, label="Task valid?"]
 
-    fix_task [
-        label="Fix Selected Task",
-        prompt="@prompts/fix_task.md",
-        timeout="1800s",
-        max_visits=100
+    reset_task_attempt [
+        label="Reset Failed Task Attempt",
+        shape=parallelogram,
+        max_visits=3,
+        script="set -eu\nselected_file=.fabro/tmp/selected-task.txt\nif [ ! -f \"$selected_file\" ]; then\n  echo \"Selected task file missing: $selected_file\" >&2\n  exit 1\nfi\ntmp=$(mktemp)\ncp \"$selected_file\" \"$tmp\"\necho \"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/ -e .fabro/tmp/selected-task.txt\nmkdir -p .fabro/tmp\ncp \"$tmp\" \"$selected_file\"\nrm -f \"$tmp\"\necho \"Retrying selected task from clean checkpoint:\"\ncat \"$selected_file\"\ngit status --short"
     ]
 
     mark_task_done [
@@ -114,7 +113,7 @@ digraph IterationImplementation {
         label="Fail: Task Needs Human Input",
         shape=parallelogram,
         goal_gate=true,
-        script="echo 'Iteration implementation failed: selected task validation requires human input or exceeded automatic repair budget.' >&2\nexit 1"
+        script="echo 'Iteration implementation failed: selected task validation requires human input or exceeded retry budget.' >&2\nexit 1"
     ]
 
     dev_check [
@@ -291,9 +290,9 @@ digraph IterationImplementation {
     implement_task -> validate_task
     validate_task -> task_gate
     task_gate -> mark_task_done [label="Valid", condition="context.task_valid=true"]
-    task_gate -> fix_task [label="Repair", condition="context.task_repair_available=true"]
-    task_gate -> task_not_ready [label="Needs human input"]
-    fix_task -> validate_task
+    task_gate -> reset_task_attempt [label="Retry from last good commit", condition="context.task_retry_available=true"]
+    task_gate -> task_not_ready [label="Needs human input or retry budget exhausted"]
+    reset_task_attempt -> implement_task
     mark_task_done -> commit_task
     commit_task -> sync_task_list
     task_not_ready -> exit
