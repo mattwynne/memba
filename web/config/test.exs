@@ -24,6 +24,17 @@ config :memba,
          pool_size: System.schedulers_online() * 2
        ] ++ repo_connection_config
 
+config :memba,
+       Memba.EventStore,
+       [
+         serializer: Commanded.Serialization.JsonSerializer,
+         username: System.get_env("PGUSER") || System.get_env("USER"),
+         port: String.to_integer(System.get_env("PGPORT") || "5432"),
+         database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}",
+         schema: "event_store",
+         pool_size: System.schedulers_online() * 2
+       ] ++ repo_connection_config
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :memba, MembaWeb.Endpoint,
