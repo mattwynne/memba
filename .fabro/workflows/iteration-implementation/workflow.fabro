@@ -70,24 +70,10 @@ digraph IterationImplementation {
     ]
 
     all_tasks_done [
-        label="Check All Tasks Done",
-        shape=parallelogram,
-        script="set -eu
-PLAN_PATH='{{ inputs.plan_path }}'
-case \"$PLAN_PATH\" in
-  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
-  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;
-esac
-TODO_PATH=\"$ITERATION_DIR/todo.md\"
-if [ ! -f \"$TODO_PATH\" ]; then
-  echo \"Todo file not found after sync: $TODO_PATH\" >&2
-  exit 1
-fi
-if grep -q -E '^[[:space:]]*- \[ \] ' \"$TODO_PATH\"; then
-  echo \"Unchecked tasks remain in $TODO_PATH.\"
-  exit 1
-fi
-echo \"All iteration tasks are checked off in $TODO_PATH. Continuing to whole-iteration gates.\""
+        label="Check Task List",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/check_task_list.md"
     ]
 
     implement_task [
@@ -297,8 +283,9 @@ echo \"All iteration tasks are checked off in $TODO_PATH. Continuing to whole-it
     preflight_failed -> exit
 
     sync_task_list -> all_tasks_done
-    all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=succeeded"]
-    all_tasks_done -> pick_next_task [label="Tasks remain"]
+    all_tasks_done -> dev_check [label="No unchecked tasks", condition="context.task_list_complete=true"]
+    all_tasks_done -> pick_next_task [label="Tasks remain", condition="context.task_list_complete=false && context.task_list_needs_human=false"]
+    all_tasks_done -> task_not_ready [label="Task list problem"]
     pick_next_task -> implement_task [label="Task found", condition="outcome=succeeded"]
     pick_next_task -> task_not_ready [label="Could not select task"]
     implement_task -> validate_task
