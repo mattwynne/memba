@@ -74,6 +74,51 @@ check() {
   precommit
 }
 
+# @cmd Verify the Fabro sandbox runtime contract
+sandbox_check() {
+  export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
+
+  echo "== sandbox environment =="
+  for name in HOME MIX_HOME HEX_HOME XDG_CACHE_HOME DEVENV_ROOT DEVENV_STATE DEVENV_PROFILE DEVENV_DOTFILE PGHOST PGPORT PGDATA; do
+    eval "value=\${$name-}"
+    printf '%s=%s\n' "$name" "$value"
+  done
+
+  for tool in devenv git pg_isready elixir mix node npm; do
+    if ! command -v "$tool" >/dev/null 2>&1; then
+      echo "Missing required sandbox tool: $tool" >&2
+      exit 1
+    fi
+  done
+
+  for name in HOME MIX_HOME HEX_HOME XDG_CACHE_HOME; do
+    eval "dir=\${$name-}"
+    if [ -z "$dir" ]; then
+      echo "Missing runtime path: $name" >&2
+      exit 1
+    fi
+    case "$dir" in
+      /env|/env/*)
+        echo "Runtime path $name points into stale/non-writable /env: $dir" >&2
+        exit 1
+        ;;
+    esac
+    mkdir -p "$dir"
+    test -w "$dir"
+    probe="$dir/.fabro-write-probe-$$"
+    : > "$probe"
+    rm -f "$probe"
+  done
+
+  up
+  trap down EXIT
+
+  echo "Starting test dependency compile smoke test..."
+  (cd "$repo_root/web" && MIX_ENV=test mix deps.compile --force)
+
+  echo "Sandbox runtime check passed."
+}
+
 # @cmd Run the acceptance test suite
 acceptance() {
   (cd "$repo_root/acceptance-tests" && npm test -- "$@")
