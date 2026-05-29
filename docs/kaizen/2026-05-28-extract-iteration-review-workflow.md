@@ -1,6 +1,19 @@
 # Idea: extract review/repair tail into a separate iteration-review workflow
 
 Date: 2026-05-28
+Status: phase 1 (extraction) shipped; phase 2 (simplification) planned 2026-05-29
+
+> **2026-05-29 update.** Phase 1 — extracting the review tail into its own
+> `iteration-review` workflow — is done. Running it against iterations 001/002
+> exposed a second problem: the extracted pipeline is *itself* both ineffective
+> and over-complex. It runs three overlapping quality gates, triplicates the
+> snapshot→fix→verify repair scaffold, fights Fabro's git mechanics in ~70 lines
+> of defensive bash, auto-merges silently on success while discarding every
+> non-blocking smell finding, and carries iteration-001-specific text baked into
+> supposedly reusable prompts. The "## Resolution plan" section below records the
+> agreed simplification. Moving plan conformance out of review (into the
+> implementation workflow) is tracked separately in
+> `2026-05-29-move-plan-conformance-to-implementation.md`.
 
 ## Context
 
