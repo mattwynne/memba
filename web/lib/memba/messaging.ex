@@ -10,6 +10,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.DeliveryRequest
   alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
+  alias Memba.Messaging.Projections.OperatorDeliverability, as: OperatorDeliverabilityProjection
   alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
   alias Memba.Messaging.Recipient
   alias Memba.Repo
@@ -116,6 +117,55 @@ defmodule Memba.Messaging do
       MemberReceiptProjection
       |> where([receipt], receipt.message_id == ^message_id)
       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
+  Fetch an operator deliverability read model by delivery UUID.
+
+  Returns `nil` when the ID is absent or is not a valid UUID.
+  """
+  def get_operator_deliverability(delivery_id) do
+    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+      Repo.get(OperatorDeliverabilityProjection, delivery_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch an operator deliverability record for a recipient on a message.
+
+  Invalid or missing IDs return `nil`. This view keeps detailed delivery status
+  and reason text for delayed, bounced, and spam complaint reports.
+  """
+  def get_operator_deliverability(message_id, recipient_id) do
+    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
+         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
+      Repo.get_by(OperatorDeliverabilityProjection,
+        message_id: message_id,
+        recipient_id: recipient_id
+      )
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  List operator deliverability records for a projected message.
+
+  Invalid or missing message IDs return an empty list. Results are ordered by
+  recipient name and ID to provide deterministic assertions for acceptance
+  plumbing.
+  """
+  def list_operator_deliverabilities(message_id) do
+    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+      OperatorDeliverabilityProjection
+      |> where([deliverability], deliverability.message_id == ^message_id)
+      |> order_by([deliverability], asc: deliverability.recipient_name, asc: deliverability.recipient_id)
       |> Repo.all()
     else
       :error -> []
