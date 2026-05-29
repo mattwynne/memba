@@ -180,16 +180,47 @@ iteration_review() {
   git -C "$repo_root" fetch origin
 
   local ref="$branch"
-  if ! git -C "$repo_root" rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
-    ref="origin/$branch"
-  fi
-  if ! git -C "$repo_root" rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+  local review_branch="$branch"
+  local remote_branch=""
+
+  if git -C "$repo_root" rev-parse --verify --quiet "refs/remotes/$branch^{commit}" >/dev/null; then
+    remote_branch="${branch#origin/}"
+    review_branch="$remote_branch"
+    ref="$review_branch"
+  elif git -C "$repo_root" rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}" >/dev/null; then
+    remote_branch="$branch"
+    review_branch="$branch"
+    ref="$review_branch"
+  elif git -C "$repo_root" rev-parse --verify --quiet "refs/heads/$branch^{commit}" >/dev/null; then
+    review_branch="$branch"
+    ref="$review_branch"
+  elif git -C "$repo_root" rev-parse --verify --quiet "${branch}^{commit}" >/dev/null; then
+    echo "Resolved $branch as a commit, tag, or detached ref, but iteration-review needs a remote branch Fabro can clone." >&2
+    echo "Create and push a review branch first, then retry: git branch <branch-name> $branch && git push -u origin <branch-name>" >&2
+    exit 1
+  else
     echo "Could not resolve branch/ref: $branch" >&2
     exit 1
   fi
 
+  if [ -n "$remote_branch" ]; then
+    if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$review_branch"; then
+      local branch_worktree
+      branch_worktree=$(git -C "$repo_root" branch --format='%(worktreepath)' --list "$review_branch")
+      if [ -n "$branch_worktree" ]; then
+        echo "Local review branch is already checked out: $review_branch at $branch_worktree" >&2
+        echo "Run iteration-review with that branch name, or remove the existing worktree before reviewing the remote ref." >&2
+        exit 1
+      fi
+      git -C "$repo_root" branch --set-upstream-to="origin/$remote_branch" "$review_branch" >/dev/null 2>&1 || true
+      git -C "$repo_root" branch --force "$review_branch" "origin/$remote_branch"
+    else
+      git -C "$repo_root" branch --track "$review_branch" "origin/$remote_branch"
+    fi
+  fi
+
   local safe_branch
-  safe_branch=$(printf '%s' "$branch" | tr '/:' '--' | tr -cd 'A-Za-z0-9._-')
+  safe_branch=$(printf '%s' "$review_branch" | tr '/:' '--' | tr -cd 'A-Za-z0-9._-')
 
   local worktree_parent="${MEMBA_REVIEW_WORKTREE_ROOT:-$(dirname "$repo_root")}"
   local worktree="$worktree_parent/memba-review-$safe_branch"
@@ -202,7 +233,21 @@ iteration_review() {
 
   git -C "$repo_root" worktree add "$worktree" "$ref"
 
+  local worktree_branch
+  worktree_branch=$(git -C "$worktree" branch --show-current)
+  if [ -z "$worktree_branch" ]; then
+    echo "Review worktree is detached; Fabro would try to clone branch HEAD." >&2
+    echo "Requested ref: $branch" >&2
+    echo "Resolved ref: $ref" >&2
+    echo "HEAD: $(git -C "$worktree" rev-parse HEAD)" >&2
+    git -C "$repo_root" worktree remove "$worktree"
+    exit 1
+  fi
+
   echo "Running iteration review in isolated worktree: $worktree"
+  echo "Review branch: $worktree_branch"
+  echo "Review HEAD: $(git -C "$worktree" rev-parse HEAD)"
+  echo "Review upstream: $(git -C "$worktree" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
   (
     cd "$worktree"
     fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \

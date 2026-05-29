@@ -198,8 +198,21 @@ Evidence collection should treat benign fetch output as normal and should not fa
 - Prefer implementation handoff branches that are review-friendly, for example `pr/<iteration-slug>` or `review/<iteration-slug>`, even when no GitHub PR exists yet.
 - If the canonical implementation artifact is a Fabro run branch, make that an explicitly supported path in the review workflow.
 
+## Resolution applied
+
+Changed `bin/dev iteration-review` so remote refs are materialized as local tracking branches before the review worktree is created. For example, both `fabro/run/<id>` and `origin/fabro/run/<id>` resolve to a local `fabro/run/<id>` branch that tracks `origin/fabro/run/<id>`, so Fabro sees a real branch name instead of detached `HEAD`.
+
+The command now also fails fast if the review worktree is detached and prints branch diagnostics before invoking Fabro:
+
+- worktree path;
+- branch name;
+- HEAD SHA;
+- upstream ref.
+
+Changed `Collect Implementation Evidence` so base-ref fetches are quiet and the changed-file excerpt filter is no longer allowed to fail the stage when no paths match. Empty implementation diffs and no-match excerpt filters now produce explicit diagnostic text instead of a bare `grep`/pipeline failure.
+
+Raw commit SHAs remain intentionally unsupported for direct review because Fabro's managed sandbox clone needs a branch it can fetch from the remote. To review a raw SHA, create and push a review branch first.
+
 ## Current takeaway
 
-Iteration review currently assumes too much about branch shape and shell evidence collection. A valid implementation on a Fabro run branch can pass dev check yet fail before review because the sandbox cloned `HEAD` or because evidence collection exits on a benign/no-match condition.
-
-The review handoff contract needs to support Fabro run branches as first-class implementation refs, or implementation must always publish a review-friendly branch before handoff.
+Iteration review now treats Fabro run branches as first-class review refs when they exist on `origin`. The important contract is that the implementation handoff must name a remote branch that Fabro can clone; `bin/dev iteration-review` will turn that remote branch into a non-detached local review worktree before starting the workflow.
