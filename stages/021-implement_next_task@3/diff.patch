@@ -1,0 +1,222 @@
+diff --git a/docs/iterations/002-membership-model/todo.md b/docs/iterations/002-membership-model/todo.md
+index c91d09f..f99e0a8 100644
+--- a/docs/iterations/002-membership-model/todo.md
++++ b/docs/iterations/002-membership-model/todo.md
+@@ -2,6 +2,6 @@
+ 
+ - [x] 001 Add `Person` aggregate, `CreatePerson` command, `PersonCreated` event,
+ - [x] 002 Add `Membership` aggregate, `AddMember` command, `MemberAdded` event,
+-- [ ] 003 Implement `list_active_members_of_club/1` and supporting queries on the
++- [x] 003 Implement `list_active_members_of_club/1` and supporting queries on the
+ - [ ] 004 Add Cucumber step definitions for all Background lines in both feature
+ - [ ] 005 Run `devenv shell mix precommit` and fix any issues.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index b452fc7..e35a72c 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -3,7 +3,11 @@ defmodule Memba.Membership do
+   Public query API for the Membership bounded context.
+   """
+ 
++  import Ecto.Query
++
++  alias Memba.Membership.ActiveMember
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+   alias Memba.Repo
+ 
+@@ -32,4 +36,53 @@ defmodule Memba.Membership do
+       :error -> nil
+     end
+   end
++
++  @doc """
++  List active members of a projected club by caller-generated club UUID.
++
++  Returns public `Memba.Membership.ActiveMember` structs containing the member
++  identity, name, and email address needed by downstream contexts. Returns an
++  empty list when the ID is absent, invalid, or has no active members.
++  """
++  def list_active_members_of_club(club_id) do
++    with {:ok, club_id} <- Ecto.UUID.cast(club_id) do
++      MembershipProjection
++      |> join(:inner, [membership], person in Person,
++        on: person.person_id == membership.person_id
++      )
++      |> where([membership, _person], membership.club_id == ^club_id)
++      |> where([membership, _person], membership.active? == true)
++      |> order_by([_membership, person],
++        asc: person.name,
++        asc: person.email,
++        asc: person.person_id
++      )
++      |> select([_membership, person], %ActiveMember{
++        id: person.person_id,
++        name: person.name,
++        email: person.email
++      })
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
++  @doc """
++  Return whether a person is an active member of a club.
++
++  Returns `false` when either ID is absent or invalid.
++  """
++  def active_member_of_club?(club_id, person_id) do
++    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
++         {:ok, person_id} <- Ecto.UUID.cast(person_id) do
++      MembershipProjection
++      |> where([membership], membership.club_id == ^club_id)
++      |> where([membership], membership.person_id == ^person_id)
++      |> where([membership], membership.active? == true)
++      |> Repo.exists?()
++    else
++      :error -> false
++    end
++  end
+ end
+diff --git a/web/lib/memba/membership/active_member.ex b/web/lib/memba/membership/active_member.ex
+new file mode 100644
+index 0000000..1580c4a
+--- /dev/null
++++ b/web/lib/memba/membership/active_member.ex
+@@ -0,0 +1,11 @@
++defmodule Memba.Membership.ActiveMember do
++  @moduledoc """
++  Public read model for an active club member.
++
++  This struct is returned from the Membership context boundary so callers do not
++  depend on the context's projection schemas or tables.
++  """
++
++  @enforce_keys [:id, :name, :email]
++  defstruct [:id, :name, :email]
++end
+diff --git a/web/test/memba/membership/active_members_query_test.exs b/web/test/memba/membership/active_members_query_test.exs
+new file mode 100644
+index 0000000..5ce1030
+--- /dev/null
++++ b/web/test/memba/membership/active_members_query_test.exs
+@@ -0,0 +1,103 @@
++defmodule Memba.Membership.ActiveMembersQueryTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership
++  alias Memba.Membership.ActiveMember
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++
++  test "list_active_members_of_club/1 returns active members of the given club only" do
++    kootenay_club_id = Ecto.UUID.generate()
++    other_club_id = Ecto.UUID.generate()
++    alex_id = Ecto.UUID.generate()
++    blair_id = Ecto.UUID.generate()
++    casey_id = Ecto.UUID.generate()
++
++    create_club(kootenay_club_id, "Kootenay Mountaineering Club")
++    create_club(other_club_id, "Other Club")
++
++    create_person(alex_id, "Alex Member", "alex@example.test")
++    create_person(blair_id, "Blair Member", "blair@example.test")
++    create_person(casey_id, "Casey Other", "casey@example.test")
++
++    add_member(kootenay_club_id, alex_id)
++    add_member(kootenay_club_id, blair_id)
++    add_member(other_club_id, casey_id)
++
++    assert [
++             %ActiveMember{id: ^alex_id, name: "Alex Member", email: "alex@example.test"},
++             %ActiveMember{id: ^blair_id, name: "Blair Member", email: "blair@example.test"}
++           ] = Membership.list_active_members_of_club(kootenay_club_id)
++  end
++
++  test "list_active_members_of_club/1 excludes inactive membership projections" do
++    club_id = Ecto.UUID.generate()
++    inactive_person_id = Ecto.UUID.generate()
++
++    Repo.insert!(%PersonProjection{
++      person_id: inactive_person_id,
++      name: "Inactive Member",
++      email: "inactive@example.test"
++    })
++
++    Repo.insert!(%MembershipProjection{
++      membership_id: Ecto.UUID.generate(),
++      club_id: club_id,
++      person_id: inactive_person_id,
++      active?: false
++    })
++
++    assert [] = Membership.list_active_members_of_club(club_id)
++  end
++
++  test "list_active_members_of_club/1 returns an empty list for missing or invalid club IDs" do
++    assert [] = Membership.list_active_members_of_club(Ecto.UUID.generate())
++    assert [] = Membership.list_active_members_of_club(nil)
++    assert [] = Membership.list_active_members_of_club("not-a-uuid")
++  end
++
++  test "active_member_of_club?/2 reports whether a person is an active member of a club" do
++    club_id = Ecto.UUID.generate()
++    other_club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    create_club(club_id, "Kootenay Mountaineering Club")
++    create_club(other_club_id, "Other Club")
++    create_person(person_id, "Alex Member", "alex@example.test")
++    add_member(club_id, person_id)
++
++    assert Membership.active_member_of_club?(club_id, person_id)
++    refute Membership.active_member_of_club?(other_club_id, person_id)
++    refute Membership.active_member_of_club?(club_id, Ecto.UUID.generate())
++    refute Membership.active_member_of_club?(nil, person_id)
++    refute Membership.active_member_of_club?(club_id, "not-a-uuid")
++  end
++
++  defp create_club(club_id, name) do
++    assert :ok = App.dispatch(%CreateClub{club_id: club_id, name: name}, consistency: :strong)
++  end
++
++  defp create_person(person_id, name, email) do
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{person_id: person_id, name: name, email: email},
++               consistency: :strong
++             )
++  end
++
++  defp add_member(club_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AddMember{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++end
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index dcfb79b..a30625e 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -7,7 +7,8 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     source = read_source!("lib/memba/membership.ex")
+ 
+     assert source =~ "def get_club("
+-    refute source =~ ~r/\bdef\s+(list|create|update|delete|change)_[a-zA-Z0-9_]+\b/
++    assert source =~ "def list_active_members_of_club("
++    refute source =~ ~r/\bdef\s+(create|update|delete|change)_[a-zA-Z0-9_]+\b/
+   end
+ 
+   test "club aggregate is not the former Ecto schema and changeset module" do
