@@ -15,6 +15,15 @@ defmodule Memba.CucumberConfigurationTest do
     {"And", "Pat is a member of Nelson Paddling Club", 11}
   ]
 
+  @member_message_scenario_steps [
+    {"When", "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+     16},
+    {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
+    {"And", "the message should not be addressed to Pat", 18},
+    {"And", "each addressed member should have a separate delivery record", 19},
+    {"And", "each delivery should be sent through the email provider", 20}
+  ]
+
   @operator_membership_background_steps [
     {"Given", "Kootenay Mountaineering Club is a club", 6},
     {"And", "Alice and Bob are people", 7},
@@ -32,13 +41,19 @@ defmodule Memba.CucumberConfigurationTest do
     "Alice and Bob are members of Kootenay Mountaineering Club"
   ]
 
-  test "Cucumber discovers shared features and Membership Background steps pass" do
+  @required_member_message_scenario_steps Enum.map(@member_message_scenario_steps, fn {_keyword,
+                                                                                       text,
+                                                                                       _line} ->
+                                            text
+                                          end)
+
+  test "Cucumber discovers shared features and the member message scenario passes" do
     shared_feature_paths = configured_feature_paths()
     assert shared_feature_paths == expected_shared_feature_paths()
 
     assert_shared_features_contain_steps!(
       shared_feature_paths,
-      @required_membership_background_steps
+      @required_membership_background_steps ++ @required_member_message_scenario_steps
     )
 
     %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
@@ -65,6 +80,10 @@ defmodule Memba.CucumberConfigurationTest do
     ])
 
     assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
+
+    member_context
+    |> Map.put(:scenario_name, "A member sends a club message")
+    |> execute_steps(@member_message_scenario_steps, discovery.step_registry)
 
     operator_feature_file =
       feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
@@ -118,9 +137,13 @@ defmodule Memba.CucumberConfigurationTest do
   end
 
   defp execute_steps(feature_file, scenario_name, steps, step_registry) do
-    Enum.reduce(steps, base_cucumber_context(feature_file, scenario_name), fn {keyword, text,
-                                                                               line},
-                                                                              context ->
+    feature_file
+    |> base_cucumber_context(scenario_name)
+    |> execute_steps(steps, step_registry)
+  end
+
+  defp execute_steps(context, steps, step_registry) do
+    Enum.reduce(steps, context, fn {keyword, text, line}, context ->
       step = %Step{keyword: keyword, text: text, line: line}
 
       Runtime.execute_step(context, step, step_registry)
