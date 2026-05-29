@@ -15,20 +15,125 @@ defmodule Memba.CucumberConfigurationTest do
     {"And", "Pat is a member of Nelson Paddling Club", 11}
   ]
 
-  @member_message_scenario_steps [
-    {"When",
-     "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-     16},
-    {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
-    {"And", "the message should not be addressed to Pat", 18},
-    {"And", "each addressed member should have a separate delivery record", 19},
-    {"And", "each delivery should be sent through the email provider", 20}
+  @member_message_scenarios [
+    {"A member sends a club message",
+     [
+       {"When",
+        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        16},
+       {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
+       {"And", "the message should not be addressed to Pat", 18},
+       {"And", "each addressed member should have a separate delivery record", 19},
+       {"And", "each delivery should be sent through the email provider", 20}
+     ]},
+    {"A sent message is waiting for delivery confirmation",
+     [
+       {"When",
+        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        25},
+       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"sent\"", 26}
+     ]},
+    {"A delivered message is shown as delivered",
+     [
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        29},
+       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 30},
+       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivered\"", 31}
+     ]},
+    {"A delayed delivery is shown as a delivery problem",
+     [
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        34},
+       {"When",
+        "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
+        35},
+       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
+        36}
+     ]},
+    {"A bounced delivery is shown as a delivery problem",
+     [
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        39},
+       {"When",
+        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
+        40},
+       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
+        41}
+     ]},
+    {"A spam complaint is shown as a delivery problem",
+     [
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        44},
+       {"When",
+        "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
+        45},
+       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
+        46}
+     ]},
+    {"An opened message is shown as opened",
+     [
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        49},
+       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 50},
+       {"When", "Bob opens the email for \"Trip planning night\"", 51},
+       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"opened\"", 52}
+     ]}
   ]
 
-  @operator_membership_background_steps [
+  @operator_background_steps [
     {"Given", "Kootenay Mountaineering Club is a club", 6},
     {"And", "Alice and Bob are people", 7},
-    {"And", "Alice and Bob are members of Kootenay Mountaineering Club", 8}
+    {"And", "Alice and Bob are members of Kootenay Mountaineering Club", 8},
+    {"And",
+     "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+     9}
+  ]
+
+  @operator_scenarios [
+    {"A delivered email is visible to operators",
+     [
+       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 14},
+       {"Then", "Bob's operator deliverability status should be \"delivered\"", 15}
+     ]},
+    {"A delayed delivery is visible to operators",
+     [
+       {"When",
+        "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
+        18},
+       {"Then", "Bob's operator deliverability status should be \"delayed\"", 19},
+       {"And",
+        "Bob's operator deliverability reason should be \"recipient server is temporarily unavailable\"",
+        20}
+     ]},
+    {"A bounced delivery is visible to operators",
+     [
+       {"When",
+        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
+        23},
+       {"Then", "Bob's operator deliverability status should be \"bounced\"", 24},
+       {"And", "Bob's operator deliverability reason should be \"mailbox does not exist\"", 25}
+     ]},
+    {"A spam complaint is visible to operators",
+     [
+       {"When",
+        "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
+        28},
+       {"Then", "Bob's operator deliverability status should be \"spam complaint\"", 29},
+       {"And",
+        "Bob's operator deliverability reason should be \"recipient marked the message as spam\"",
+        30}
+     ]},
+    {"An opened email is visible to operators",
+     [
+       {"Given", "Bob's email for \"Trip planning night\" has been reported as delivered", 33},
+       {"When", "Bob opens the email for \"Trip planning night\"", 34},
+       {"Then", "Bob's operator deliverability status should be \"opened\"", 35}
+     ]}
   ]
 
   @required_membership_background_steps [
@@ -42,65 +147,109 @@ defmodule Memba.CucumberConfigurationTest do
     "Alice and Bob are members of Kootenay Mountaineering Club"
   ]
 
-  @required_member_message_scenario_steps Enum.map(@member_message_scenario_steps, fn {_keyword,
-                                                                                       text,
-                                                                                       _line} ->
-                                            text
-                                          end)
+  @required_member_message_scenario_steps for {_scenario_name, steps} <- @member_message_scenarios,
+                                             {_keyword, text, _line} <- steps,
+                                             do: text
 
-  test "Cucumber discovers shared features and the member message scenario passes" do
+  @required_operator_scenario_steps for {_scenario_name, steps} <- @operator_scenarios,
+                                        {_keyword, text, _line} <- steps,
+                                        do: text
+
+  @required_messaging_step_patterns [
+    "{word} sends the message {string} to Kootenay Mountaineering Club members",
+    "{word} has sent the message {string} to Kootenay Mountaineering Club members",
+    "{word} email for {string} is reported as delivered",
+    "{word} email for {string} has been reported as delivered",
+    "{word} email for {string} is reported as delayed because {string}",
+    "{word} email for {string} is reported as bounced because {string}",
+    "{word} email for {string} is reported as a spam complaint because {string}",
+    "{word} opens the email for {string}",
+    "{word} receipt status for {string} should be {string}",
+    "{word} operator deliverability status should be {string}",
+    "{word} operator deliverability reason should be {string}",
+    "the message should be addressed to Alice, Bob, and Carol",
+    "the message should not be addressed to {word}",
+    "each addressed member should have a separate delivery record",
+    "each delivery should be sent through the email provider"
+  ]
+
+  test "Cucumber discovers shared features and required step definitions" do
     shared_feature_paths = configured_feature_paths()
     assert shared_feature_paths == expected_shared_feature_paths()
 
     assert_shared_features_contain_steps!(
       shared_feature_paths,
-      @required_membership_background_steps ++ @required_member_message_scenario_steps
+      Enum.uniq(
+        @required_membership_background_steps ++
+          @required_member_message_scenario_steps ++ @required_operator_scenario_steps
+      )
     )
 
-    %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
+    %Discovery.DiscoveryResult{} = discovery = discover_steps()
 
     Enum.each(@required_membership_background_steps, fn step_text ->
       assert Map.has_key?(discovery.step_registry, step_text)
     end)
 
+    Enum.each(@required_messaging_step_patterns, fn step_pattern ->
+      assert Map.has_key?(discovery.step_registry, step_pattern)
+    end)
+  end
+
+  test "all member message deliverability scenarios pass through Cucumber runtime" do
+    %Discovery.DiscoveryResult{} = discovery = discover_steps()
+
     member_message_feature_file =
-      feature_file_named!(shared_feature_paths, "member_message_deliverability.feature")
+      feature_file_named!(configured_feature_paths(), "member_message_deliverability.feature")
 
-    member_context =
-      execute_steps(
-        member_message_feature_file,
-        "member message Background smoke test",
-        @member_message_background_steps,
-        discovery.step_registry
-      )
+    Enum.each(@member_message_scenarios, fn {scenario_name, scenario_steps} ->
+      member_context =
+        execute_steps(
+          member_message_feature_file,
+          "#{scenario_name} Background",
+          @member_message_background_steps,
+          discovery.step_registry
+        )
 
-    assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
-      "Alice",
-      "Bob",
-      "Carol"
-    ])
+      assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
+        "Alice",
+        "Bob",
+        "Carol"
+      ])
 
-    assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
+      assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
 
-    member_context
-    |> Map.put(:scenario_name, "A member sends a club message")
-    |> execute_steps(@member_message_scenario_steps, discovery.step_registry)
+      member_context
+      |> Map.put(:scenario_name, scenario_name)
+      |> execute_steps(scenario_steps, discovery.step_registry)
+    end)
+  end
 
+  test "all operator email deliverability scenarios pass through Cucumber runtime" do
+    %Discovery.DiscoveryResult{} = discovery = discover_steps()
+
+    shared_feature_paths = configured_feature_paths()
     operator_feature_file =
       feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
 
-    operator_context =
-      execute_steps(
-        operator_feature_file,
-        "operator email membership Background smoke test",
-        @operator_membership_background_steps,
-        discovery.step_registry
-      )
+    Enum.each(@operator_scenarios, fn {scenario_name, scenario_steps} ->
+      operator_context =
+        execute_steps(
+          operator_feature_file,
+          "#{scenario_name} Background",
+          @operator_background_steps,
+          discovery.step_registry
+        )
 
-    assert_active_member_names(operator_context, "Kootenay Mountaineering Club", [
-      "Alice",
-      "Bob"
-    ])
+      assert_active_member_names(operator_context, "Kootenay Mountaineering Club", [
+        "Alice",
+        "Bob"
+      ])
+
+      operator_context
+      |> Map.put(:scenario_name, scenario_name)
+      |> execute_steps(scenario_steps, discovery.step_registry)
+    end)
   end
 
   defp configured_feature_paths do
@@ -111,6 +260,20 @@ defmodule Memba.CucumberConfigurationTest do
     |> Enum.map(&Path.expand/1)
     |> Enum.uniq()
     |> Enum.sort()
+  end
+
+  defp discover_steps do
+    cache_key = {__MODULE__, :discovery}
+
+    case :persistent_term.get(cache_key, nil) do
+      nil ->
+        %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
+        :persistent_term.put(cache_key, discovery)
+        discovery
+
+      %Discovery.DiscoveryResult{} = discovery ->
+        discovery
+    end
   end
 
   defp expected_shared_feature_paths do
