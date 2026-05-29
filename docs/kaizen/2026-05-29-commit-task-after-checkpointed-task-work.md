@@ -126,8 +126,21 @@ If explicit task commits are important, configure the workflow/Fabro so agent st
 
 This keeps the current design, but may fight Fabro’s managed-clone/resumability model.
 
+## Investigation result
+
+Confirmed on run `01KSS97DPE1D5MD7CAZA9M506K`: Fabro-managed clone was active, the run branch was pushed, and each `implement_next_task` checkpoint commit already contained the corresponding implementation artifacts plus exactly one `todo.md` check-off. The later `commit_task` node saw a clean working tree and failed, even though validation had correctly corroborated the task in recent checkpoint commits.
+
+## Resolution
+
+Choose Fabro-owned checkpoints/run branch commits as the durable-progress model.
+
+Workflow changes:
+
+- Removed the explicit `commit_task` node from `.fabro/workflows/iteration-implementation/workflow.fabro`.
+- Routed valid tasks directly from `task_gate` back to `sync_task_list`.
+- Updated `validate_task` to treat a clean working tree as acceptable when recent checkpoint commits prove the task check-off and implementation artifacts.
+- Moved the pre-validation snapshot out of the repository to `/tmp/fabro-pre-validate-snapshot.md` and excluded `.fabro/tmp/**` from checkpoint commits.
+
 ## Current takeaway
 
-The iteration implementation workflow now has two overlapping durability mechanisms: Fabro checkpoints and explicit task commits. They are interfering.
-
-We need one coherent contract for task progress. Until then, a valid task can fail at `commit_task` simply because the work was already captured by Fabro before the commit node ran.
+The workflow now has one coherent contract for task progress: Fabro checkpoints after each node are the durable audit trail. Task validation verifies the checkpoint evidence; it no longer asks a separate commit node to recommit already-checkpointed work.
