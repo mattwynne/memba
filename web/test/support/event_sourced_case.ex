@@ -12,6 +12,7 @@ defmodule Memba.EventSourcedCase do
   @projection_versions_table :projection_versions
   @projectors [
     Memba.Membership.Projectors.Club,
+    Memba.Membership.Projectors.Membership,
     Memba.Membership.Projectors.Person
   ]
 
