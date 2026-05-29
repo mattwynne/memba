@@ -6,8 +6,15 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Messaging
+  alias Memba.Messaging.DeliveryProviders.Fake
+  alias Memba.Messaging.DeliveryRequest
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.RecipientDeliveryCreated
+
+  setup do
+    Fake.reset()
+    :ok
+  end
 
   test "resolves active club members via Membership and dispatches SendMessage" do
     kootenay_club_id = Ecto.UUID.generate()
@@ -82,6 +89,58 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Enum.all?(delivery_ids, &(Ecto.UUID.cast(&1) != :error))
     assert Enum.uniq(delivery_ids) == delivery_ids
+
+    assert [
+             %DeliveryRequest{
+               message_id: ^message_id,
+               delivery_id: alice_delivery_id,
+               recipient_id: ^alice_id,
+               recipient_name: "Alice",
+               recipient_address: "alice@example.com",
+               channel: :email,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             },
+             %DeliveryRequest{
+               message_id: ^message_id,
+               delivery_id: bob_delivery_id,
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               recipient_address: "bob@example.com",
+               channel: :email,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             },
+             %DeliveryRequest{
+               message_id: ^message_id,
+               delivery_id: carol_delivery_id,
+               recipient_id: ^carol_id,
+               recipient_name: "Carol",
+               recipient_address: "carol@example.com",
+               channel: :email,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             }
+           ] = Fake.deliveries()
+
+    assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
+  end
+
+  test "does not call the provider when the send command is rejected" do
+    club_id = Ecto.UUID.generate()
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+
+    assert {:error, :invalid_subject} =
+             Messaging.send_club_message(%{
+               message_id: Ecto.UUID.generate(),
+               club_id: club_id,
+               sender_id: alice.person_id,
+               subject: "  ",
+               body: "Bring route ideas."
+             })
+
+    assert Fake.deliveries() == []
   end
 
   defp create_person(attrs) do

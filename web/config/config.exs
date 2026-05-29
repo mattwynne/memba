@@ -34,6 +34,8 @@ config :memba, Memba.Messaging.App,
   pubsub: :local,
   registry: :local
 
+config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake
+
 config :commanded_ecto_projections, schema_prefix: nil
 
 # Configure the endpoint

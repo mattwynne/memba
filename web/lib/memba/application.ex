@@ -12,6 +12,7 @@ defmodule Memba.Application do
       Memba.Repo,
       Memba.Membership.App,
       Memba.Messaging.App,
+      Memba.Messaging.DeliveryProviders.Fake,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.Membership,
       Memba.Membership.Projectors.Person,
