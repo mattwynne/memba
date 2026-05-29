@@ -1,0 +1,247 @@
+diff --git a/docs/iterations/003-messaging-skeleton/todo.md b/docs/iterations/003-messaging-skeleton/todo.md
+index 788b67c..ff91e51 100644
+--- a/docs/iterations/003-messaging-skeleton/todo.md
++++ b/docs/iterations/003-messaging-skeleton/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add `Memba.Messaging.App` and `Memba.Messaging.Router`.
++- [x] 001 Add `Memba.Messaging.App` and `Memba.Messaging.Router`.
+ - [ ] 002 Add the `Message` aggregate, `SendMessage` command, and `MessageSent` +
+ - [ ] 003 Add the application service that resolves recipients via Membership and
+ - [ ] 004 Define the fake delivery provider port and wire it into the message
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 4f7e0af..0c4ab31 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -26,6 +26,14 @@ config :memba, Memba.Membership.App,
+   pubsub: :local,
+   registry: :local
+ 
++config :memba, Memba.Messaging.App,
++  event_store: [
++    adapter: Commanded.EventStore.Adapters.EventStore,
++    event_store: Memba.Messaging.EventStore
++  ],
++  pubsub: :local,
++  registry: :local
++
+ config :commanded_ecto_projections, schema_prefix: nil
+ 
+ # Configure the endpoint
+diff --git a/web/config/dev.exs b/web/config/dev.exs
+index 1a6d9e0..98fc2d8 100644
+--- a/web/config/dev.exs
++++ b/web/config/dev.exs
+@@ -21,16 +21,18 @@ config :memba,
+          pool_size: 10
+        ] ++ repo_connection_config
+ 
+-config :memba,
+-       Memba.EventStore,
+-       [
+-         serializer: Commanded.Serialization.JsonSerializer,
+-         username: System.get_env("PGUSER") || System.get_env("USER"),
+-         port: String.to_integer(System.get_env("PGPORT") || "5432"),
+-         database: "memba_dev",
+-         schema: "event_store",
+-         pool_size: 10
+-       ] ++ repo_connection_config
++event_store_config =
++  [
++    serializer: Commanded.Serialization.JsonSerializer,
++    username: System.get_env("PGUSER") || System.get_env("USER"),
++    port: String.to_integer(System.get_env("PGPORT") || "5432"),
++    database: "memba_dev",
++    schema: "event_store",
++    pool_size: 10
++  ] ++ repo_connection_config
++
++config :memba, Memba.EventStore, event_store_config
++config :memba, Memba.Messaging.EventStore, event_store_config
+ 
+ # For development, we disable any cache and enable
+ # debugging and code reloading.
+diff --git a/web/config/runtime.exs b/web/config/runtime.exs
+index 31a0cbd..eed876d 100644
+--- a/web/config/runtime.exs
++++ b/web/config/runtime.exs
+@@ -40,12 +40,16 @@ if config_env() == :prod do
+     # pool_count: 4,
+     socket_options: maybe_ipv6
+ 
+-  config :memba, Memba.EventStore,
++  event_store_config = [
+     serializer: Commanded.Serialization.JsonSerializer,
+     url: database_url,
+     schema: "event_store",
+     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
+     socket_options: maybe_ipv6
++  ]
++
++  config :memba, Memba.EventStore, event_store_config
++  config :memba, Memba.Messaging.EventStore, event_store_config
+ 
+   # The secret key base is used to sign/encrypt cookies and other secrets.
+   # A default value is used in config/dev.exs and config/test.exs but you
+diff --git a/web/config/test.exs b/web/config/test.exs
+index 28db165..428e798 100644
+--- a/web/config/test.exs
++++ b/web/config/test.exs
+@@ -24,16 +24,18 @@ config :memba,
+          pool_size: System.schedulers_online() * 2
+        ] ++ repo_connection_config
+ 
+-config :memba,
+-       Memba.EventStore,
+-       [
+-         serializer: Commanded.Serialization.JsonSerializer,
+-         username: System.get_env("PGUSER") || System.get_env("USER"),
+-         port: String.to_integer(System.get_env("PGPORT") || "5432"),
+-         database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}",
+-         schema: "event_store",
+-         pool_size: System.schedulers_online() * 2
+-       ] ++ repo_connection_config
++event_store_config =
++  [
++    serializer: Commanded.Serialization.JsonSerializer,
++    username: System.get_env("PGUSER") || System.get_env("USER"),
++    port: String.to_integer(System.get_env("PGPORT") || "5432"),
++    database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}",
++    schema: "event_store",
++    pool_size: System.schedulers_online() * 2
++  ] ++ repo_connection_config
++
++config :memba, Memba.EventStore, event_store_config
++config :memba, Memba.Messaging.EventStore, event_store_config
+ 
+ # We don't run a server during test. If one is required,
+ # you can enable the server option below.
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 232f9da..9f95626 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Application do
+       MembaWeb.Telemetry,
+       Memba.Repo,
+       Memba.Membership.App,
++      Memba.Messaging.App,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.Membership,
+       Memba.Membership.Projectors.Person,
+diff --git a/web/lib/memba/messaging/app.ex b/web/lib/memba/messaging/app.ex
+new file mode 100644
+index 0000000..6496199
+--- /dev/null
++++ b/web/lib/memba/messaging/app.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.App do
++  @moduledoc """
++  Commanded application for the Messaging bounded context.
++  """
++
++  use Commanded.Application, otp_app: :memba
++
++  router(Memba.Messaging.Router)
++end
+diff --git a/web/lib/memba/messaging/event_store.ex b/web/lib/memba/messaging/event_store.ex
+new file mode 100644
+index 0000000..3b8fcec
+--- /dev/null
++++ b/web/lib/memba/messaging/event_store.ex
+@@ -0,0 +1,3 @@
++defmodule Memba.Messaging.EventStore do
++  use EventStore, otp_app: :memba
++end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+new file mode 100644
+index 0000000..1b2b493
+--- /dev/null
++++ b/web/lib/memba/messaging/router.ex
+@@ -0,0 +1,7 @@
++defmodule Memba.Messaging.Router do
++  @moduledoc """
++  Command router for Messaging commands.
++  """
++
++  use Commanded.Commands.Router
++end
+diff --git a/web/test/event_sourced_config_test.exs b/web/test/event_sourced_config_test.exs
+index a60acfe..5fdeee0 100644
+--- a/web/test/event_sourced_config_test.exs
++++ b/web/test/event_sourced_config_test.exs
+@@ -17,7 +17,19 @@ defmodule Memba.EventSourcedConfigTest do
+     assert config[:registry] == :local
+   end
+ 
+-  test "EventStore uses the test database in a dedicated schema" do
++  test "Messaging Commanded app is configured to use the Postgres EventStore adapter" do
++    config = Application.fetch_env!(:memba, Memba.Messaging.App)
++
++    assert config[:event_store] == [
++             adapter: Commanded.EventStore.Adapters.EventStore,
++             event_store: Memba.Messaging.EventStore
++           ]
++
++    assert config[:pubsub] == :local
++    assert config[:registry] == :local
++  end
++
++  test "Membership EventStore uses the test database in a dedicated schema" do
+     config = Memba.EventStore.config()
+ 
+     assert config[:serializer] == Commanded.Serialization.JsonSerializer
+@@ -25,6 +37,14 @@ defmodule Memba.EventSourcedConfigTest do
+     assert config[:schema] == "event_store"
+   end
+ 
++  test "Messaging EventStore uses the test database in the dedicated EventStore schema" do
++    config = Memba.Messaging.EventStore.config()
++
++    assert config[:serializer] == Commanded.Serialization.JsonSerializer
++    assert config[:database] == "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
++    assert config[:schema] == "event_store"
++  end
++
+   test "commanded_ecto_projections stays in the application schema" do
+     assert Application.fetch_env!(:commanded_ecto_projections, :schema_prefix) == nil
+   end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+new file mode 100644
+index 0000000..e6f6043
+--- /dev/null
++++ b/web/test/memba/messaging/app_test.exs
+@@ -0,0 +1,33 @@
++defmodule Memba.Messaging.AppTest do
++  use ExUnit.Case, async: false
++
++  import ExUnit.CaptureLog
++
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Router
++
++  test "Messaging Commanded app is supervised by the Phoenix application" do
++    assert is_pid(Process.whereis(App))
++    assert is_pid(Process.whereis(Memba.EventStore))
++    assert is_pid(Process.whereis(Memba.Messaging.EventStore))
++
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {App, pid, :supervisor, [App]} when is_pid(pid) -> true
++             _child -> false
++           end)
++  end
++
++  test "Messaging Commanded app includes the Messaging router" do
++    assert App.__registered_commands__() == []
++    assert Router.__registered_commands__() == []
++  end
++
++  test "Messaging Commanded app dispatches through its router" do
++    log =
++      capture_log(fn ->
++        assert {:error, :unregistered_command} = App.dispatch(%URI{})
++      end)
++
++    assert log =~ "attempted to dispatch an unregistered command"
++  end
++end
