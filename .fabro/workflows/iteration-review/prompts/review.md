@@ -1,8 +1,8 @@
 You are independently reviewing the implementation of the iteration plan at {{ inputs.plan_path }}.
 
-Use the prior context: the plan text, implementation summary, current working tree state, commit range, and the successful dev check output. Be strict, practical, and specific. Do not edit files.
+Use the prior context: the plan text, collected implementation evidence, current working tree state, commit range, and the successful dev check output. Be strict, practical, and specific. Do not edit files.
 
-This workflow reviews an already-committed implementation. If the working tree is clean, inspect the implementation with `git diff --stat` and `git diff` from the supplied `base_ref` input when present, otherwise from the merge base with `origin/main` or `main`.
+This workflow reviews an already-committed implementation. The workflow has already run a command stage that collected the implementation diff from the supplied `base_ref` input when present, otherwise from the merge base with `origin/main` or `main`. Use that collected evidence. Do not emit shell-command/tool-call JSON; return the Markdown review report only.
 
 Automated tests are the behavioural feedback loop in this workflow: implementation and dev check-fix stages must get the full suite green before review starts. Your review should therefore focus primarily on refactoring, maintainability, design simplicity, and adherence to project conventions. Do not ask for feature-file edits. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback.
 
