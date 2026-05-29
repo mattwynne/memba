@@ -1,0 +1,632 @@
+diff --git a/docs/iterations/003-messaging-skeleton/todo.md b/docs/iterations/003-messaging-skeleton/todo.md
+index ff91e51..9b55650 100644
+--- a/docs/iterations/003-messaging-skeleton/todo.md
++++ b/docs/iterations/003-messaging-skeleton/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add `Memba.Messaging.App` and `Memba.Messaging.Router`.
+-- [ ] 002 Add the `Message` aggregate, `SendMessage` command, and `MessageSent` +
++- [x] 002 Add the `Message` aggregate, `SendMessage` command, and `MessageSent` +
+ - [ ] 003 Add the application service that resolves recipients via Membership and
+ - [ ] 004 Define the fake delivery provider port and wire it into the message
+ - [ ] 005 Add projections and queries for messages and recipient deliveries.
+diff --git a/web/lib/memba/messaging/commands/send_message.ex b/web/lib/memba/messaging/commands/send_message.ex
+new file mode 100644
+index 0000000..56de978
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/send_message.ex
+@@ -0,0 +1,11 @@
++defmodule Memba.Messaging.Commands.SendMessage do
++  @moduledoc """
++  Command to send a message to a club's already-resolved recipients.
++
++  The caller supplies the message aggregate identity as `message_id` and a list
++  of resolved `Memba.Messaging.Recipient` values.
++  """
++
++  @enforce_keys [:message_id, :club_id, :sender_id, :subject, :body, :recipients]
++  defstruct [:message_id, :club_id, :sender_id, :subject, :body, :recipients]
++end
+diff --git a/web/lib/memba/messaging/events/message_sent.ex b/web/lib/memba/messaging/events/message_sent.ex
+new file mode 100644
+index 0000000..1892f56
+--- /dev/null
++++ b/web/lib/memba/messaging/events/message_sent.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.MessageSent do
++  @moduledoc """
++  Event raised when a club message has been accepted for sending.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :club_id, :sender_id, :subject, :body]
++  defstruct [:message_id, :club_id, :sender_id, :subject, :body]
++end
+diff --git a/web/lib/memba/messaging/events/recipient_delivery_created.ex b/web/lib/memba/messaging/events/recipient_delivery_created.ex
+new file mode 100644
+index 0000000..d419cc8
+--- /dev/null
++++ b/web/lib/memba/messaging/events/recipient_delivery_created.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.RecipientDeliveryCreated do
++  @moduledoc """
++  Event raised for one recipient delivery belonging to a sent message.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :delivery_id, :recipient_id, :recipient_name, :recipient_email]
++  defstruct [:message_id, :delivery_id, :recipient_id, :recipient_name, :recipient_email]
++end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+new file mode 100644
+index 0000000..926aad4
+--- /dev/null
++++ b/web/lib/memba/messaging/message.ex
+@@ -0,0 +1,167 @@
++defmodule Memba.Messaging.Message do
++  @moduledoc """
++  Message aggregate for the Messaging bounded context.
++
++  One aggregate represents one club message and owns the per-recipient delivery
++  records created for that message.
++  """
++
++  alias Commanded.Aggregates.Aggregate
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Recipient
++
++  @behaviour Aggregate
++
++  defstruct [
++    :message_id,
++    :club_id,
++    :sender_id,
++    :subject,
++    :body,
++    recipient_delivery_ids: MapSet.new(),
++    recipient_ids: MapSet.new()
++  ]
++
++  @impl Aggregate
++  def execute(%__MODULE__{message_id: nil}, %SendMessage{} = command) do
++    with :ok <- validate_uuid(command.message_id, :invalid_message_id),
++         :ok <- validate_uuid(command.club_id, :invalid_club_id),
++         :ok <- validate_uuid(command.sender_id, :invalid_sender_id),
++         {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
++         {:ok, body} <- normalize_text(command.body, :invalid_body),
++         {:ok, recipients} <- normalize_recipients(command.recipients),
++         :ok <- validate_sender_recipient(command.sender_id, recipients) do
++      [
++        %MessageSent{
++          message_id: command.message_id,
++          club_id: command.club_id,
++          sender_id: command.sender_id,
++          subject: subject,
++          body: body
++        }
++        | Enum.map(recipients, &recipient_delivery_created(command.message_id, &1))
++      ]
++    end
++  end
++
++  def execute(%__MODULE__{}, %SendMessage{}), do: {:error, :already_sent}
++
++  @impl Aggregate
++  def apply(%__MODULE__{} = message, %MessageSent{} = event) do
++    %__MODULE__{
++      message
++      | message_id: event.message_id,
++        club_id: event.club_id,
++        sender_id: event.sender_id,
++        subject: event.subject,
++        body: event.body
++    }
++  end
++
++  def apply(%__MODULE__{} = message, %RecipientDeliveryCreated{} = event) do
++    %__MODULE__{
++      message
++      | recipient_delivery_ids: MapSet.put(message.recipient_delivery_ids, event.delivery_id),
++        recipient_ids: MapSet.put(message.recipient_ids, event.recipient_id)
++    }
++  end
++
++  defp recipient_delivery_created(message_id, %Recipient{} = recipient) do
++    %RecipientDeliveryCreated{
++      message_id: message_id,
++      delivery_id: recipient.delivery_id,
++      recipient_id: recipient.person_id,
++      recipient_name: recipient.name,
++      recipient_email: recipient.email
++    }
++  end
++
++  defp validate_uuid(value, error) do
++    case Ecto.UUID.cast(value) do
++      {:ok, ^value} -> :ok
++      _other -> {:error, error}
++    end
++  end
++
++  defp normalize_text(text, error) when is_binary(text) do
++    case String.trim(text) do
++      "" -> {:error, error}
++      trimmed_text -> {:ok, trimmed_text}
++    end
++  end
++
++  defp normalize_text(_text, error), do: {:error, error}
++
++  defp normalize_recipients(recipients) when is_list(recipients) and recipients != [] do
++    with {:ok, recipients} <- normalize_each_recipient(recipients),
++         :ok <- validate_unique(recipients, & &1.delivery_id, :duplicate_delivery),
++         :ok <- validate_unique(recipients, & &1.person_id, :duplicate_recipient) do
++      {:ok, recipients}
++    end
++  end
++
++  defp normalize_recipients(_recipients), do: {:error, :invalid_recipients}
++
++  defp normalize_each_recipient(recipients) do
++    Enum.reduce_while(recipients, {:ok, []}, fn recipient, {:ok, normalized_recipients} ->
++      case normalize_recipient(recipient) do
++        {:ok, normalized_recipient} -> {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
++        {:error, reason} -> {:halt, {:error, reason}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_recipients} -> {:ok, Enum.reverse(normalized_recipients)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_recipient(%Recipient{} = recipient) do
++    with :ok <- validate_uuid(recipient.delivery_id, :invalid_delivery_id),
++         :ok <- validate_uuid(recipient.person_id, :invalid_recipient_id),
++         {:ok, name} <- normalize_text(recipient.name, :invalid_recipient_name),
++         {:ok, email} <- normalize_email(recipient.email) do
++      {:ok, %Recipient{recipient | name: name, email: email}}
++    end
++  end
++
++  defp normalize_recipient(_recipient), do: {:error, :invalid_recipient}
++
++  defp normalize_email(email) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, :invalid_recipient_email}
++    end
++  end
++
++  defp normalize_email(_email), do: {:error, :invalid_recipient_email}
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _other -> false
++    end
++  end
++
++  defp validate_unique(recipients, field_fun, error) do
++    values = Enum.map(recipients, field_fun)
++
++    if Enum.uniq(values) == values do
++      :ok
++    else
++      {:error, error}
++    end
++  end
++
++  defp validate_sender_recipient(sender_id, recipients) do
++    if Enum.any?(recipients, &(&1.person_id == sender_id)) do
++      :ok
++    else
++      {:error, :sender_not_in_recipients}
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging/recipient.ex b/web/lib/memba/messaging/recipient.ex
+new file mode 100644
+index 0000000..0f49428
+--- /dev/null
++++ b/web/lib/memba/messaging/recipient.ex
+@@ -0,0 +1,12 @@
++defmodule Memba.Messaging.Recipient do
++  @moduledoc """
++  Resolved recipient carried by `SendMessage`.
++
++  Recipients are resolved by the Messaging application service before command
++  dispatch. The delivery identity is caller-supplied so the aggregate does not
++  generate IDs.
++  """
++
++  @enforce_keys [:delivery_id, :person_id, :name, :email]
++  defstruct [:delivery_id, :person_id, :name, :email]
++end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+index 1b2b493..32c3a57 100644
+--- a/web/lib/memba/messaging/router.ex
++++ b/web/lib/memba/messaging/router.ex
+@@ -4,4 +4,11 @@ defmodule Memba.Messaging.Router do
+   """
+ 
+   use Commanded.Commands.Router
++
++  alias Memba.Messaging.Message
++  alias Memba.Messaging.Commands.SendMessage
++
++  identify(Message, by: :message_id)
++
++  dispatch(SendMessage, to: Message)
+ end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index e6f6043..c4cf00b 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Messaging.AppTest do
+   import ExUnit.CaptureLog
+ 
+   alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Router
+ 
+   test "Messaging Commanded app is supervised by the Phoenix application" do
+@@ -18,8 +19,10 @@ defmodule Memba.Messaging.AppTest do
+   end
+ 
+   test "Messaging Commanded app includes the Messaging router" do
+-    assert App.__registered_commands__() == []
+-    assert Router.__registered_commands__() == []
++    expected_commands = MapSet.new([SendMessage])
++
++    assert MapSet.new(App.__registered_commands__()) == expected_commands
++    assert MapSet.new(Router.__registered_commands__()) == expected_commands
+   end
+ 
+   test "Messaging Commanded app dispatches through its router" do
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+new file mode 100644
+index 0000000..ceeacc5
+--- /dev/null
++++ b/web/test/memba/messaging/message_test.exs
+@@ -0,0 +1,207 @@
++defmodule Memba.Messaging.MessageTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Message
++  alias Memba.Messaging.Recipient
++
++  describe "execute/2 SendMessage" do
++    test "emits MessageSent and one RecipientDeliveryCreated per resolved recipient" do
++      message_id = Ecto.UUID.generate()
++      club_id = Ecto.UUID.generate()
++      sender_id = Ecto.UUID.generate()
++      alice_delivery_id = Ecto.UUID.generate()
++      bob_delivery_id = Ecto.UUID.generate()
++      bob_id = Ecto.UUID.generate()
++
++      command = %SendMessage{
++        message_id: message_id,
++        club_id: club_id,
++        sender_id: sender_id,
++        subject: " Trail day ",
++        body: " Meet at 9am. ",
++        recipients: [
++          %Recipient{
++            delivery_id: alice_delivery_id,
++            person_id: sender_id,
++            name: " Alice Sender ",
++            email: " Alice@Example.COM "
++          },
++          %Recipient{
++            delivery_id: bob_delivery_id,
++            person_id: bob_id,
++            name: " Bob Recipient ",
++            email: " Bob@Example.COM "
++          }
++        ]
++      }
++
++      assert [
++               %MessageSent{
++                 message_id: ^message_id,
++                 club_id: ^club_id,
++                 sender_id: ^sender_id,
++                 subject: "Trail day",
++                 body: "Meet at 9am."
++               },
++               %RecipientDeliveryCreated{
++                 message_id: ^message_id,
++                 delivery_id: ^alice_delivery_id,
++                 recipient_id: ^sender_id,
++                 recipient_name: "Alice Sender",
++                 recipient_email: "alice@example.com"
++               },
++               %RecipientDeliveryCreated{
++                 message_id: ^message_id,
++                 delivery_id: ^bob_delivery_id,
++                 recipient_id: ^bob_id,
++                 recipient_name: "Bob Recipient",
++                 recipient_email: "bob@example.com"
++               }
++             ] = Message.execute(%Message{}, command)
++    end
++
++    test "rejects missing or malformed UUIDs" do
++      valid_command = valid_send_message()
++
++      assert {:error, :invalid_message_id} =
++               Message.execute(%Message{}, %SendMessage{valid_command | message_id: nil})
++
++      assert {:error, :invalid_club_id} =
++               Message.execute(%Message{}, %SendMessage{valid_command | club_id: "not-a-uuid"})
++
++      assert {:error, :invalid_sender_id} =
++               Message.execute(%Message{}, %SendMessage{valid_command | sender_id: nil})
++    end
++
++    test "rejects blank subject or body" do
++      valid_command = valid_send_message()
++
++      assert {:error, :invalid_subject} =
++               Message.execute(%Message{}, %SendMessage{valid_command | subject: "  "})
++
++      assert {:error, :invalid_body} =
++               Message.execute(%Message{}, %SendMessage{valid_command | body: "  "})
++    end
++
++    test "rejects invalid recipient lists" do
++      valid_command = valid_send_message()
++
++      assert {:error, :invalid_recipients} =
++               Message.execute(%Message{}, %SendMessage{valid_command | recipients: []})
++
++      assert {:error, :invalid_delivery_id} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | recipients: [%Recipient{hd(valid_command.recipients) | delivery_id: nil}]
++               })
++
++      assert {:error, :invalid_recipient_email} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | recipients: [%Recipient{hd(valid_command.recipients) | email: "invalid"}]
++               })
++    end
++
++    test "rejects duplicate recipients or delivery identities" do
++      valid_command = valid_send_message()
++      [recipient] = valid_command.recipients
++
++      assert {:error, :duplicate_recipient} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | recipients: [recipient, %Recipient{recipient | delivery_id: Ecto.UUID.generate()}]
++               })
++
++      assert {:error, :duplicate_delivery} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | recipients: [recipient, %Recipient{recipient | person_id: Ecto.UUID.generate()}]
++               })
++    end
++
++    test "rejects commands whose resolved recipients omit the sender" do
++      valid_command = valid_send_message()
++      [recipient] = valid_command.recipients
++
++      assert {:error, :sender_not_in_recipients} =
++               Message.execute(%Message{}, %SendMessage{
++                 valid_command
++                 | recipients: [%Recipient{recipient | person_id: Ecto.UUID.generate()}]
++               })
++    end
++
++    test "rejects sending the same message aggregate twice" do
++      message_id = Ecto.UUID.generate()
++
++      message =
++        Message.apply(%Message{}, %MessageSent{
++          message_id: message_id,
++          club_id: Ecto.UUID.generate(),
++          sender_id: Ecto.UUID.generate(),
++          subject: "Trail day",
++          body: "Meet at 9am."
++        })
++
++      assert {:error, :already_sent} =
++               Message.execute(message, %SendMessage{valid_send_message() | message_id: message_id})
++    end
++  end
++
++  test "apply/2 records message identity and recipient delivery state" do
++    message_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    delivery_id = Ecto.UUID.generate()
++
++    message =
++      %Message{}
++      |> Message.apply(%MessageSent{
++        message_id: message_id,
++        club_id: club_id,
++        sender_id: sender_id,
++        subject: "Trail day",
++        body: "Meet at 9am."
++      })
++      |> Message.apply(%RecipientDeliveryCreated{
++        message_id: message_id,
++        delivery_id: delivery_id,
++        recipient_id: sender_id,
++        recipient_name: "Alice Sender",
++        recipient_email: "alice@example.com"
++      })
++
++    assert %Message{
++             message_id: ^message_id,
++             club_id: ^club_id,
++             sender_id: ^sender_id,
++             recipient_delivery_ids: recipient_delivery_ids,
++             recipient_ids: recipient_ids
++           } = message
++
++    assert MapSet.equal?(recipient_delivery_ids, MapSet.new([delivery_id]))
++    assert MapSet.equal?(recipient_ids, MapSet.new([sender_id]))
++  end
++
++  defp valid_send_message do
++    sender_id = Ecto.UUID.generate()
++
++    %SendMessage{
++      message_id: Ecto.UUID.generate(),
++      club_id: Ecto.UUID.generate(),
++      sender_id: sender_id,
++      subject: "Trail day",
++      body: "Meet at 9am.",
++      recipients: [
++        %Recipient{
++          delivery_id: Ecto.UUID.generate(),
++          person_id: sender_id,
++          name: "Alice Sender",
++          email: "alice@example.com"
++        }
++      ]
++    }
++  end
++end
+diff --git a/web/test/memba/messaging/send_message_dispatch_test.exs b/web/test/memba/messaging/send_message_dispatch_test.exs
+new file mode 100644
+index 0000000..e36d83b
+--- /dev/null
++++ b/web/test/memba/messaging/send_message_dispatch_test.exs
+@@ -0,0 +1,121 @@
++defmodule Memba.Messaging.SendMessageDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Message
++  alias Memba.Messaging.Recipient
++
++  test "Messaging app dispatch routes SendMessage to the Message aggregate" do
++    message_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    bob_id = Ecto.UUID.generate()
++    alice_delivery_id = Ecto.UUID.generate()
++    bob_delivery_id = Ecto.UUID.generate()
++
++    command = %SendMessage{
++      message_id: message_id,
++      club_id: club_id,
++      sender_id: sender_id,
++      subject: "Trail day",
++      body: "Meet at 9am.",
++      recipients: [
++        %Recipient{
++          delivery_id: alice_delivery_id,
++          person_id: sender_id,
++          name: "Alice Sender",
++          email: "alice@example.com"
++        },
++        %Recipient{
++          delivery_id: bob_delivery_id,
++          person_id: bob_id,
++          name: "Bob Recipient",
++          email: "bob@example.com"
++        }
++      ]
++    }
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 3,
++              events: [
++                %MessageSent{
++                  message_id: ^message_id,
++                  club_id: ^club_id,
++                  sender_id: ^sender_id,
++                  subject: "Trail day",
++                  body: "Meet at 9am."
++                },
++                %RecipientDeliveryCreated{
++                  message_id: ^message_id,
++                  delivery_id: ^alice_delivery_id,
++                  recipient_id: ^sender_id,
++                  recipient_name: "Alice Sender",
++                  recipient_email: "alice@example.com"
++                },
++                %RecipientDeliveryCreated{
++                  message_id: ^message_id,
++                  delivery_id: ^bob_delivery_id,
++                  recipient_id: ^bob_id,
++                  recipient_name: "Bob Recipient",
++                  recipient_email: "bob@example.com"
++                }
++              ],
++              aggregate_state: %Message{
++                message_id: ^message_id,
++                club_id: ^club_id,
++                sender_id: ^sender_id,
++                recipient_delivery_ids: recipient_delivery_ids,
++                recipient_ids: recipient_ids
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++
++    assert MapSet.equal?(recipient_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
++    assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
++
++    assert %Message{
++             message_id: ^message_id,
++             club_id: ^club_id,
++             sender_id: ^sender_id,
++             recipient_delivery_ids: persisted_delivery_ids,
++             recipient_ids: persisted_recipient_ids
++           } = App.aggregate_state(Message, message_id)
++
++    assert MapSet.equal?(persisted_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
++    assert MapSet.equal?(persisted_recipient_ids, MapSet.new([sender_id, bob_id]))
++  end
++
++  test "Messaging app rejects a duplicate SendMessage for the same aggregate identity" do
++    command = %SendMessage{
++      message_id: Ecto.UUID.generate(),
++      club_id: Ecto.UUID.generate(),
++      sender_id: Ecto.UUID.generate(),
++      subject: "Trail day",
++      body: "Meet at 9am.",
++      recipients: []
++    }
++
++    [recipient_command] = with_sender_recipient(command)
++
++    command = %SendMessage{command | recipients: [recipient_command]}
++
++    assert :ok = App.dispatch(command, consistency: :strong)
++    assert {:error, :already_sent} = App.dispatch(command)
++  end
++
++  defp with_sender_recipient(%SendMessage{} = command) do
++    [
++      %Recipient{
++        delivery_id: Ecto.UUID.generate(),
++        person_id: command.sender_id,
++        name: "Alice Sender",
++        email: "alice@example.com"
++      }
++    ]
++  end
++end
