@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,120p' docs/iterations/004-delivery-status-and-views/todo.md", "yield_time_ms": 1000, "max_output_chars": 4000}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
