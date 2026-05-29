@@ -1,0 +1,93 @@
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 0f88ef6..5a8ee76 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -165,7 +165,10 @@ defmodule Memba.Messaging do
+     with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+       OperatorDeliverabilityProjection
+       |> where([deliverability], deliverability.message_id == ^message_id)
+-      |> order_by([deliverability], asc: deliverability.recipient_name, asc: deliverability.recipient_id)
++      |> order_by([deliverability],
++        asc: deliverability.recipient_name,
++        asc: deliverability.recipient_id
++      )
+       |> Repo.all()
+     else
+       :error -> []
+diff --git a/web/lib/memba/messaging/projectors/operator_deliverability.ex b/web/lib/memba/messaging/projectors/operator_deliverability.ex
+index c5d4965..c291163 100644
+--- a/web/lib/memba/messaging/projectors/operator_deliverability.ex
++++ b/web/lib/memba/messaging/projectors/operator_deliverability.ex
+@@ -20,16 +20,20 @@ defmodule Memba.Messaging.Projectors.OperatorDeliverability do
+   alias Memba.Repo
+ 
+   project(%RecipientDeliveryCreated{} = event, fn multi ->
+-    Ecto.Multi.insert(multi, :messaging_operator_deliverability, %OperatorDeliverabilityProjection{
+-      delivery_id: event.delivery_id,
+-      message_id: event.message_id,
+-      recipient_id: event.recipient_id,
+-      recipient_name: event.recipient_name,
+-      recipient_address: event.recipient_email,
+-      channel: "email",
+-      status: "sent",
+-      reason: nil
+-    })
++    Ecto.Multi.insert(
++      multi,
++      :messaging_operator_deliverability,
++      %OperatorDeliverabilityProjection{
++        delivery_id: event.delivery_id,
++        message_id: event.message_id,
++        recipient_id: event.recipient_id,
++        recipient_name: event.recipient_name,
++        recipient_address: event.recipient_email,
++        channel: "email",
++        status: "sent",
++        reason: nil
++      }
++    )
+   end)
+ 
+   project(%RecipientDeliveryDelivered{} = event, fn multi ->
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index 11d286a..d1d63e3 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -147,9 +147,10 @@ defmodule Memba.CucumberConfigurationTest do
+     "Alice and Bob are members of Kootenay Mountaineering Club"
+   ]
+ 
+-  @required_member_message_scenario_steps for {_scenario_name, steps} <- @member_message_scenarios,
+-                                             {_keyword, text, _line} <- steps,
+-                                             do: text
++  @required_member_message_scenario_steps for {_scenario_name, steps} <-
++                                                @member_message_scenarios,
++                                              {_keyword, text, _line} <- steps,
++                                              do: text
+ 
+   @required_operator_scenario_steps for {_scenario_name, steps} <- @operator_scenarios,
+                                         {_keyword, text, _line} <- steps,
+@@ -229,6 +230,7 @@ defmodule Memba.CucumberConfigurationTest do
+     %Discovery.DiscoveryResult{} = discovery = discover_steps()
+ 
+     shared_feature_paths = configured_feature_paths()
++
+     operator_feature_file =
+       feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
+ 
+diff --git a/web/test/memba/messaging/operator_deliverability_projection_test.exs b/web/test/memba/messaging/operator_deliverability_projection_test.exs
+index f8a4c04..bda303f 100644
+--- a/web/test/memba/messaging/operator_deliverability_projection_test.exs
++++ b/web/test/memba/messaging/operator_deliverability_projection_test.exs
+@@ -172,7 +172,10 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
+     assert is_nil(Messaging.get_operator_deliverability(nil))
+     assert is_nil(Messaging.get_operator_deliverability("not-a-uuid"))
+ 
+-    assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate(), Ecto.UUID.generate()))
++    assert is_nil(
++             Messaging.get_operator_deliverability(Ecto.UUID.generate(), Ecto.UUID.generate())
++           )
++
+     assert is_nil(Messaging.get_operator_deliverability(nil, Ecto.UUID.generate()))
+     assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate(), "not-a-uuid"))
+ 
