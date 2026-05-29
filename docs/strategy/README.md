@@ -16,4 +16,6 @@ Memba is currently conceived as a SaaS membership platform for volunteer-run clu
 
 Build a Phoenix-first MVP for KMC without making AT Protocol a dependency, while preserving a clean domain model that could later publish or federate selected records if that proves valuable.
 
+Useful source material: there is a KMC email thread in Fastmail with product/strategy context at https://app.fastmail.com/mail/Inbox/A0mAFC83maFw.Stoj_6cm3G1k?u=360641ae
+
 The initial MVP should focus on replacing fragile membership, renewal, private website, directory, role, and admin workflows. Trip/activity management and AT Protocol should be treated as later validation tracks unless research proves they are essential to adoption.
