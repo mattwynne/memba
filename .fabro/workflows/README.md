@@ -14,11 +14,25 @@ fabro run .fabro/workflows/iteration-review/workflow.toml -I plan_path=docs/iter
 fabro run .fabro/workflows/iteration-review/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md -I base_ref=<base-ref>
 ```
 
+## Managed clone contract
+
+The iteration workflows rely on Fabro's managed clone. Do not set `[run].working_dir` and do not disable `[run.clone]`: Fabro needs to infer the local repository, clone the current source branch into `/repos/mattwynne/memba`, link it at `/workspace/memba`, and create a pushed `fabro/run/<run-id>` branch for checkpoints.
+
+Prepare steps should reference files through `/workspace/memba/...` or run from the inferred repository checkout. If preflight reports `Git: unknown` or `No clone source present`, repository detection has been broken; remove any explicit `working_dir` override before running implementation work.
+
 Run `iteration-review` on demand when the implementation workflow has exited cleanly and you want review/repair without rerunning the task implementation loop. If `base_ref` is omitted, the review workflow compares the implementation against the merge base with `origin/main` or `main`.
 
 ## Resuming a failed implementation
 
-Resume with a new `fabro run` using the same `plan_path`. The workflow does not require LLM thread reuse; durable state lives in task commits and the iteration `todo.md`.
+Resume from the failed run's pushed Fabro run branch, using a new `fabro run` with the same `plan_path`:
+
+```bash
+git fetch origin fabro/run/<failed-run-id>
+git switch -c resume/<failed-run-id> --track origin/fabro/run/<failed-run-id>
+fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+```
+
+The new Fabro run uses the checked-out branch as its source branch, so it sees durable task commits and the iteration `todo.md` from the failed run while using the latest local workflow definition.
 
 Before rerunning, ensure the worktree is clean. The resume gate prints the current HEAD, todo checked/unchecked counts, and `git status --short`; it fails fast if uncommitted changes remain. Commit, stash, or reset/clean leftovers from the failed attempt before resuming.
 

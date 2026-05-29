@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /workspace
+cd /workspace/memba
 
 devenv shell -- bash -lc '
   set -euo pipefail
