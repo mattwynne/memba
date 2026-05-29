@@ -1,7 +1,7 @@
 # Membership model
 
 Date: 2026-05-28
-Status: ready
+Status: merged
 
 ## Goal
 
