@@ -4,9 +4,11 @@ defmodule Memba.Membership.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Membership.App
+  alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Projectors.Club, as: ClubProjector
+  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Router
 
@@ -25,13 +27,21 @@ defmodule Memba.Membership.AppTest do
            end)
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{MembershipProjector, _opts}, pid, :worker, [MembershipProjector]} when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{PersonProjector, _opts}, pid, :worker, [PersonProjector]} when is_pid(pid) -> true
              _child -> false
            end)
   end
 
   test "Membership Commanded app includes the Membership router" do
-    expected_commands = [CreateClub, CreatePerson]
+    expected_commands = [AddMember, CreateClub, CreatePerson]
 
     assert same_commands?(App.__registered_commands__(), Router.__registered_commands__())
     assert same_commands?(Router.__registered_commands__(), expected_commands)
