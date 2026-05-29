@@ -67,10 +67,28 @@ Do not implement the iteration directly in the local checkout. Do not edit appli
 7. **Monitor and handle results**
    - Follow the run using the Fabro CLI output, web UI URL, or appropriate `fabro events` / `fabro logs` commands.
    - If Fabro pauses for human input, summarize the question and options for Matt.
-   - If Fabro fails, summarize the failed stage, likely cause, and exact retry/resume command if available.
+   - If Fabro fails, classify the failure before reporting it:
+     - **Implementation failure**: the plan/code/tests could not be completed even though the workflow machinery behaved as designed. Summarize the failed stage, likely cause, and exact retry/resume command if available.
+     - **Workflow failure**: the run failed because the Fabro workflow, prompts, routing, sandbox setup, resume/checkpoint contract, metadata handoff, PR creation, or other automation machinery behaved incorrectly or opaquely. Summarize the failed stage, likely cause, and exact retry/resume command if available, then write a kaizen note as described below.
    - If Fabro succeeds, capture the implementation branch/ref, PR URL if available, base ref, and whether auto-merge was enabled/accepted.
 
-8. **Record review handoff metadata**
+8. **Write a kaizen note for workflow failures**
+   - When the completed Fabro run failed for a workflow reason, write an observations note in `docs/kaizen/` for later investigation.
+   - Use a filename in this form: `docs/kaizen/YYYY-MM-DD-short-workflow-problem.md`.
+   - Do this before ending the skill, unless Matt explicitly asks not to create the note.
+   - Keep the note factual and diagnostic, not a speculative fix plan. Include:
+     - Title: `# Problem: <short description>`
+     - Date
+     - Selected iteration and plan path
+     - Fabro run ID and web UI URL, if available
+     - Failed stage/status and the exact failure text
+     - Commands used to inspect the run, such as `fabro events` or `fabro logs`
+     - Observations explaining why this is a workflow/tooling problem rather than an ordinary implementation failure
+     - Any retry/resume command that Fabro printed or that is clearly safe
+   - Do not edit application code while writing the kaizen note.
+   - Ask Matt before committing the kaizen note.
+
+9. **Record review handoff metadata**
    - After a successful implementation run, write `<iteration-folder>/implementation.md` so the `iteration-review` skill can find the implementation without switching the main checkout.
    - Use this format:
      ```markdown
@@ -121,6 +139,8 @@ When the run completes, report:
 
 - Result: succeeded, failed, blocked, or human input needed.
 - Run ID / web UI URL.
+- Failure classification when failed: implementation failure or workflow failure.
+- Kaizen note path and commit status when a workflow failure note was written.
 - Implementation branch/ref.
 - PR URL and auto-merge status if available.
 - Review handoff metadata path (`<iteration-folder>/implementation.md`) and whether it was written/committed.
