@@ -5,7 +5,32 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
+find_free_port() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - <<'PY'
+import socket
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.bind(("127.0.0.1", 0))
+    print(s.getsockname()[1])
+PY
+    return
+  fi
+
+  local port
+  for port in $(seq 15432 16432); do
+    if ! lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      printf '%s\n' "$port"
+      return
+    fi
+  done
+
+  echo "Could not find a free Postgres port" >&2
+  exit 1
+}
+
 if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
+  memba_postgres_port="${MEMBA_POSTGRES_PORT:-$(find_free_port)}"
+
   exec env \
     -u DEVENV_DOTFILE \
     -u DEVENV_PROFILE \
@@ -17,13 +42,22 @@ if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
     -u PGHOST \
     -u PGPORT \
     MEMBA_DEVENV_SHELL=1 \
-    devenv shell -- "$0" "$@"
+    MEMBA_POSTGRES_PORT="$memba_postgres_port" \
+    devenv shell -O services.postgres.port:int "$memba_postgres_port" -- "$0" "$@"
 fi
 
 if ! command -v argc >/dev/null 2>&1; then
   echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
   exit 1
 fi
+
+devenv_with_postgres_port() {
+  if [ -n "${MEMBA_POSTGRES_PORT:-}" ]; then
+    devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" "$@"
+  else
+    devenv "$@"
+  fi
+}
 
 # @cmd Start development services
 up() {
@@ -34,13 +68,13 @@ up() {
   # Use devenv's process-compose backend directly. A previous run can leave
   # process-compose thinking postgres is "ready" even though the socket/port in
   # the current shell is not accepting connections, so reset stale processes
-  # before starting with strict ports.
-  devenv processes down >/dev/null 2>&1 || true
-  DEVENV_TUI=false devenv processes up --strict-ports -d postgres
-  devenv processes wait --timeout 120
+  # before starting on the free port selected for this shell.
+  devenv_with_postgres_port processes down >/dev/null 2>&1 || true
+  DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
+  devenv_with_postgres_port processes wait --timeout 120
 
   if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
-    devenv processes logs -n 100 postgres >&2 || true
+    devenv_with_postgres_port processes logs -n 100 postgres >&2 || true
     echo "Postgres did not become ready at PGHOST=$PGHOST PGPORT=$PGPORT" >&2
     exit 1
   fi
@@ -48,7 +82,7 @@ up() {
 
 # @cmd Stop development services
 down() {
-  devenv processes down || true
+  devenv_with_postgres_port processes down || true
 }
 
 precommit() {
