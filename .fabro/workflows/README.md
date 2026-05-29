@@ -1,18 +1,20 @@
 # Iteration workflows
 
-Fabro iteration work is split into two workflows:
+Fabro iteration work is split into two trunk-based workflows:
 
-1. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, and exits after the final artifact gate and summary pass. It does not run plan-conformance, ADR-coherence, or multi-model review gates.
-2. `iteration-review` reviews an already-completed implementation for the same `plan_path`. It requires a clean working tree, reruns `dev ci`, then runs plan conformance, ADR coherence, independent reviewer synthesis, and bounded repair loops.
+1. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
+2. `iteration-review` reviews the merged implementation diff from `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, and pushes any green polish as a separate `review polish: iteration NNN` commit to `main`.
 
 Typical commands:
 
 ```bash
 fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
-fabro run .fabro/workflows/iteration-review/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
-# Optional, when reviewing a non-main base:
-fabro run .fabro/workflows/iteration-review/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md -I base_ref=<base-ref>
+bin/dev iteration-review main docs/iterations/NNN-topic/plan.md
+# Optional, when the reviewed branch is not a single squashed iteration commit:
+bin/dev iteration-review main docs/iterations/NNN-topic/plan.md <base-sha>
 ```
+
+Neither workflow opens a pull request. Neither `workflow.toml` should contain a `[run.pull_request]` block.
 
 ## Managed clone contract
 
@@ -20,7 +22,11 @@ The iteration workflows rely on Fabro's managed clone and automatic checkpoints.
 
 Prepare steps should reference files through `/workspace/memba/...` or run from the inferred repository checkout. If preflight reports `Git: unknown` or `No clone source present`, repository detection has been broken; remove any explicit `working_dir` override before running implementation work.
 
-Run `iteration-review` on demand when the implementation workflow has exited cleanly and you want review/repair without rerunning the task implementation loop. If `base_ref` is omitted, the review workflow compares the implementation against the merge base with `origin/main` or `main`.
+## Delivery contract
+
+Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses locked `.feature` changes, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
+
+Review is post-merge and non-blocking. It must never push red: changes flow back through `dev ci`, and the publish script only runs after that green check. If there are no review changes, the publish step exits successfully without touching `main`. If there are bounded safe changes, they are squashed into one `review polish: iteration NNN` commit and pushed to `main`. Human-judgement findings belong in `docs/code-health.md`, not in a PR or blocking gate.
 
 ## Resuming a failed implementation
 

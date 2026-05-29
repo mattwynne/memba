@@ -158,17 +158,117 @@ acceptance() {
   (cd "$repo_root/acceptance-tests" && npm test -- "$@")
 }
 
+# @cmd Mark an iteration as merged after its implementation branch has landed on main
+# @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
+# @arg branch Branch/ref that was merged; defaults to Branch: from implementation.md
+# @arg main_ref=origin/main Main ref that should contain the implementation
+iteration_mark_merged() {
+  local plan_path="${1:-}"
+  local branch="${2:-}"
+  local main_ref="${3:-origin/main}"
+
+  if [ -z "$plan_path" ]; then
+    echo "Usage: $0 iteration-mark-merged <plan_path> [branch] [main_ref]" >&2
+    exit 2
+  fi
+
+  case "$plan_path" in
+    */plan.md) ;;
+    *) echo "plan_path must end with /plan.md: $plan_path" >&2; exit 2 ;;
+  esac
+
+  local iteration_dir="${plan_path%/plan.md}"
+  local implementation_path="$iteration_dir/implementation.md"
+  local iteration_slug
+  iteration_slug=$(basename "$iteration_dir")
+  local iteration_number="${iteration_slug%%-*}"
+
+  if [ ! -f "$repo_root/$plan_path" ]; then
+    echo "Plan not found: $plan_path" >&2
+    exit 1
+  fi
+  if [ ! -f "$repo_root/docs/iterations/README.md" ]; then
+    echo "Iteration index not found: docs/iterations/README.md" >&2
+    exit 1
+  fi
+
+  if [ -z "$branch" ] && [ -f "$repo_root/$implementation_path" ]; then
+    branch=$(awk -F': *' '/^Branch:/ {print $2; exit}' "$repo_root/$implementation_path")
+  fi
+  if [ -z "$branch" ]; then
+    echo "No branch supplied and no Branch: entry found in $implementation_path" >&2
+    exit 1
+  fi
+
+  git -C "$repo_root" fetch origin >/dev/null 2>&1 || true
+
+  local branch_commit main_commit
+  if ! branch_commit=$(git -C "$repo_root" rev-parse --verify "$branch^{commit}" 2>/dev/null); then
+    if ! branch_commit=$(git -C "$repo_root" rev-parse --verify "origin/$branch^{commit}" 2>/dev/null); then
+      echo "Could not resolve merged branch/ref: $branch" >&2
+      exit 1
+    fi
+  fi
+  if ! main_commit=$(git -C "$repo_root" rev-parse --verify "$main_ref^{commit}" 2>/dev/null); then
+    echo "Could not resolve main ref: $main_ref" >&2
+    exit 1
+  fi
+  if ! git -C "$repo_root" merge-base --is-ancestor "$branch_commit" "$main_commit"; then
+    echo "Refusing to mark merged: $branch ($branch_commit) is not an ancestor of $main_ref ($main_commit)." >&2
+    exit 1
+  fi
+
+  python3 - "$repo_root" "$plan_path" "$implementation_path" "$iteration_number" <<'PY'
+import pathlib
+import re
+import sys
+
+repo = pathlib.Path(sys.argv[1])
+plan_path = repo / sys.argv[2]
+implementation_path = repo / sys.argv[3]
+iteration_number = sys.argv[4]
+readme_path = repo / "docs/iterations/README.md"
+
+
+def replace_status_line(path):
+    text = path.read_text()
+    if re.search(r"^Status: .*$", text, flags=re.MULTILINE):
+        text = re.sub(r"^Status: .*$", "Status: merged", text, count=1, flags=re.MULTILINE)
+    else:
+        text = text.rstrip() + "\nStatus: merged\n"
+    path.write_text(text)
+
+replace_status_line(plan_path)
+if implementation_path.exists():
+    replace_status_line(implementation_path)
+else:
+    implementation_path.write_text("# Implementation\n\nStatus: merged\n")
+
+readme = readme_path.read_text()
+pattern = re.compile(rf"^(\|\s*{re.escape(iteration_number)}\s*\|\s*[^|]+\|\s*)[^|]+(\|.*)$", re.MULTILINE)
+readme, count = pattern.subn(r"\1merged\2", readme, count=1)
+if count != 1:
+    raise SystemExit(f"Could not find iteration {iteration_number} row in docs/iterations/README.md")
+readme_path.write_text(readme)
+PY
+
+  echo "Marked iteration $iteration_number as merged in:"
+  echo "- docs/iterations/README.md"
+  echo "- $plan_path"
+  echo "- $implementation_path"
+}
+
 # @cmd Review an implementation branch in an isolated worktree
 # @arg branch! Branch/ref to review, e.g. pr/event-sourced-foundation
 # @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
-# @arg base_ref=origin/main Base ref for the implementation diff
+# @arg base_ref_or_base_sha= Base ref or resolved base SHA for the implementation diff; defaults to HEAD~1 of the reviewed branch
 iteration_review() {
   local branch="${1:-}"
   local plan_path="${2:-}"
-  local base_ref="${3:-origin/main}"
+  local base_ref_or_base_sha="${3:-}"
 
   if [ -z "$branch" ] || [ -z "$plan_path" ]; then
-    echo "Usage: $0 iteration-review <branch> <plan_path> [base_ref]" >&2
+    echo "Usage: $0 iteration-review <branch> <plan_path> [base_ref_or_base_sha]" >&2
     exit 2
   fi
 
@@ -244,15 +344,40 @@ iteration_review() {
     exit 1
   fi
 
+  local base_sha
+  if [ -z "$base_ref_or_base_sha" ]; then
+    if ! base_sha=$(git -C "$worktree" rev-parse 'HEAD~1^{commit}' 2>/dev/null); then
+      echo "Could not infer review base SHA from HEAD~1 for review branch $worktree_branch" >&2
+      echo "Pass an explicit base SHA when reviewing a branch that is not a single squashed iteration commit." >&2
+      git -C "$repo_root" worktree remove "$worktree"
+      exit 1
+    fi
+  elif [[ "$base_ref_or_base_sha" =~ ^[0-9a-fA-F]{40}$ ]] && git -C "$worktree" cat-file -e "$base_ref_or_base_sha^{commit}" 2>/dev/null; then
+    base_sha="$base_ref_or_base_sha"
+  else
+    if ! git -C "$worktree" rev-parse --verify --quiet "$base_ref_or_base_sha^{commit}" >/dev/null; then
+      git -C "$worktree" fetch origin >/dev/null 2>&1 || true
+    fi
+    if ! base_sha=$(git -C "$worktree" merge-base HEAD "$base_ref_or_base_sha" 2>/dev/null); then
+      echo "Could not resolve base SHA from $base_ref_or_base_sha for review branch $worktree_branch" >&2
+      echo "Pass an explicit base SHA, or ensure the base ref is visible in the review worktree." >&2
+      git -C "$worktree" log --oneline --decorate --max-count=30 --all >&2 || true
+      git -C "$repo_root" worktree remove "$worktree"
+      exit 1
+    fi
+  fi
+
   echo "Running iteration review in isolated worktree: $worktree"
   echo "Review branch: $worktree_branch"
   echo "Review HEAD: $(git -C "$worktree" rev-parse HEAD)"
   echo "Review upstream: $(git -C "$worktree" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  echo "Review base input: $base_ref_or_base_sha"
+  echo "Review base sha: $base_sha"
   (
     cd "$worktree"
     fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \
       -I "plan_path=$plan_path" \
-      -I "base_ref=$base_ref"
+      -I "base_sha=$base_sha"
   )
 }
 
