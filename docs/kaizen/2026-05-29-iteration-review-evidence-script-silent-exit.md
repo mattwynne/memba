@@ -242,6 +242,54 @@ Then evidence collection can diff exactly:
 git diff --stat "$base_sha".."$implementation_sha"
 ```
 
+## Resolution
+
+Implemented in `.fabro/workflows/iteration-review/workflow.fabro`.
+
+The `Collect Implementation Evidence` script is now diagnostic-first. It prints a debug header before any base-ref or merge-base work:
+
+```text
+=== Implementation Evidence Debug ===
+PWD: ...
+Branch: ...
+HEAD: ...
+Base ref input: ...
+--- available branches ---
+--- available remote branches ---
+--- recent commits ---
+```
+
+The script now guards the previously silent failure points:
+
+- invalid or missing `base_ref` now prints branch and ref diagnostics before exiting;
+- `git merge-base HEAD "$base_ref"` is wrapped in an explicit `if ! ...; then` block;
+- if merge-base calculation fails, the script prints whether the repository is shallow;
+- for shallow repositories, it tries to deepen the fetch and then unshallow before failing;
+- if merge-base still cannot be computed, it prints recent commits, all branches, and all refs;
+- `git diff --stat`, `git diff --name-status`, and `git diff --name-only` are guarded so diff failures report context instead of relying on `set -e`.
+
+This preserves the requirement that evidence collection should fail when it cannot establish a valid implementation diff, but makes the failure actionable.
+
+## Verification
+
+Reproduced the old failure mode in a temporary Git repository with disconnected branch history. The previous script exited with code 1 and produced zero stdout/stderr bytes, matching the observed Fabro run failure.
+
+Ran the updated script against the same disconnected-history setup. It still exited with code 1, as expected, but printed the debug header, available branches, recent commits, shallow-repository status, and refs. This confirms the silent-exit path is closed.
+
+Ran the updated script against normal branch history. Evidence collection succeeded and printed the implementation evidence, diff stat, name-status, and excerpt-filter result.
+
+Ran the project quality gate:
+
+```bash
+bin/dev check
+```
+
+Result:
+
+```text
+30 tests, 0 failures
+```
+
 ## Current takeaway
 
-The previous branch-handling fix solved the sandbox clone problem, but evidence collection still fails before diagnostics. The next fix should make the evidence script impossible to fail silently and robust to shallow or disconnected Fabro run-branch history.
+The previous branch-handling fix solved the sandbox clone problem, and evidence collection now fails with useful diagnostics instead of silently exiting before the header. A future improvement may still be needed if Fabro run branches are intentionally disconnected from `origin/main`; that would require a base-SHA or run-metadata diff strategy rather than relying only on Git ancestry.
