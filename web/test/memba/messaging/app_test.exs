@@ -4,6 +4,7 @@ defmodule Memba.Messaging.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Router
 
   test "Messaging Commanded app is supervised by the Phoenix application" do
@@ -18,8 +19,10 @@ defmodule Memba.Messaging.AppTest do
   end
 
   test "Messaging Commanded app includes the Messaging router" do
-    assert App.__registered_commands__() == []
-    assert Router.__registered_commands__() == []
+    expected_commands = MapSet.new([SendMessage])
+
+    assert MapSet.new(App.__registered_commands__()) == expected_commands
+    assert MapSet.new(Router.__registered_commands__()) == expected_commands
   end
 
   test "Messaging Commanded app dispatches through its router" do
