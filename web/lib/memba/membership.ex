@@ -1,14 +1,46 @@
 defmodule Memba.Membership do
   @moduledoc """
-  Public query API for the Membership bounded context.
+  Public API for the Membership bounded context.
   """
 
   import Ecto.Query
 
+  alias Memba.Membership.App
+  alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Repo
+
+  @default_dispatch_opts [consistency: :strong]
+
+  @doc """
+  Dispatch a Membership domain command through the Membership context boundary.
+
+  Callers supply aggregate UUIDs on the commands. `AddMember` commands must
+  attach an existing person to an existing club, and a second active membership
+  for the same `{club_id, person_id}` pair is rejected before the Membership
+  aggregate command is dispatched.
+  """
+  def dispatch(command, opts \\ @default_dispatch_opts)
+
+  def dispatch(%CreateClub{} = command, opts) do
+    App.dispatch(command, opts)
+  end
+
+  def dispatch(%CreatePerson{} = command, opts) do
+    App.dispatch(command, opts)
+  end
+
+  def dispatch(%AddMember{} = command, opts) do
+    with :ok <- ensure_club_exists(command.club_id),
+         :ok <- ensure_person_exists(command.person_id),
+         :ok <- ensure_no_active_membership(command.club_id, command.person_id) do
+      App.dispatch(command, opts)
+    end
+  end
 
   @doc """
   Fetch a projected club read model by caller-generated UUID.
@@ -79,6 +111,30 @@ defmodule Memba.Membership do
       |> Repo.exists?()
     else
       :error -> false
+    end
+  end
+
+  defp ensure_club_exists(club_id) do
+    if get_club(club_id) do
+      :ok
+    else
+      {:error, :club_not_found}
+    end
+  end
+
+  defp ensure_person_exists(person_id) do
+    if get_person(person_id) do
+      :ok
+    else
+      {:error, :person_not_found}
+    end
+  end
+
+  defp ensure_no_active_membership(club_id, person_id) do
+    if active_member_of_club?(club_id, person_id) do
+      {:error, :already_active_member}
+    else
+      :ok
     end
   end
 end

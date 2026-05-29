@@ -2,16 +2,16 @@ defmodule Memba.Membership.QueryTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Membership
-  alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
 
   describe "list_active_members_of_club/1" do
     test "returns active members of the given club and excludes members of other clubs" do
-      kootenay_club_id = Ecto.UUID.generate()
-      nelson_club_id = Ecto.UUID.generate()
+      kootenay_club_id = create_club("Kootenay Mountaineering Club")
+      nelson_club_id = create_club("Nelson Paddling Club")
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       bob = create_person(name: "Bob", email: "bob@example.com")
@@ -60,8 +60,8 @@ defmodule Memba.Membership.QueryTest do
 
   describe "active_member_of_club?/2" do
     test "returns true only when the person has an active membership in the club" do
-      kootenay_club_id = Ecto.UUID.generate()
-      nelson_club_id = Ecto.UUID.generate()
+      kootenay_club_id = create_club("Kootenay Mountaineering Club")
+      nelson_club_id = create_club("Nelson Paddling Club")
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       pat = create_person(name: "Pat", email: "pat@example.com")
@@ -77,6 +77,18 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  defp create_club(name) do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.dispatch(%CreateClub{
+               club_id: club_id,
+               name: name
+             })
+
+    club_id
+  end
+
   defp create_person(attrs) do
     person = %{
       person_id: Ecto.UUID.generate(),
@@ -85,27 +97,21 @@ defmodule Memba.Membership.QueryTest do
     }
 
     assert :ok =
-             App.dispatch(
-               %CreatePerson{
-                 person_id: person.person_id,
-                 name: person.name,
-                 email: person.email
-               },
-               consistency: :strong
-             )
+             Membership.dispatch(%CreatePerson{
+               person_id: person.person_id,
+               name: person.name,
+               email: person.email
+             })
 
     person
   end
 
   defp add_member(club_id, person_id) do
     assert :ok =
-             App.dispatch(
-               %AddMember{
-                 membership_id: Ecto.UUID.generate(),
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             Membership.dispatch(%AddMember{
+               membership_id: Ecto.UUID.generate(),
+               club_id: club_id,
+               person_id: person_id
+             })
   end
 end

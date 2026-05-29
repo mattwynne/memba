@@ -3,9 +3,10 @@ defmodule Memba.Membership.NoCrudSpikeTest do
 
   @web_root Path.expand("../../..", __DIR__)
 
-  test "public Membership context remains a query boundary instead of CRUD helpers" do
+  test "public Membership context remains a command/query boundary instead of CRUD helpers" do
     source = read_source!("lib/memba/membership.ex")
 
+    assert source =~ "def dispatch("
     assert source =~ "def get_club("
     assert source =~ "def list_active_members_of_club("
 

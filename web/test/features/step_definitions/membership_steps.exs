@@ -4,7 +4,6 @@ defmodule Memba.Cucumber.MembershipSteps do
   import ExUnit.Assertions
 
   alias Memba.Membership
-  alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
@@ -47,10 +46,7 @@ defmodule Memba.Cucumber.MembershipSteps do
     club_id = Ecto.UUID.generate()
 
     assert :ok =
-             App.dispatch(
-               %CreateClub{club_id: club_id, name: club_name},
-               consistency: :strong
-             )
+             Membership.dispatch(%CreateClub{club_id: club_id, name: club_name})
 
     assert %ClubProjection{club_id: ^club_id, name: ^club_name} = Membership.get_club(club_id)
 
@@ -66,10 +62,11 @@ defmodule Memba.Cucumber.MembershipSteps do
     email = email_for(name)
 
     assert :ok =
-             App.dispatch(
-               %CreatePerson{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+             Membership.dispatch(%CreatePerson{
+               person_id: person_id,
+               name: name,
+               email: email
+             })
 
     assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
              Membership.get_person(person_id)
@@ -92,14 +89,11 @@ defmodule Memba.Cucumber.MembershipSteps do
     membership_id = Ecto.UUID.generate()
 
     assert :ok =
-             App.dispatch(
-               %AddMember{
-                 membership_id: membership_id,
-                 club_id: club_id,
-                 person_id: person_id
-               },
-               consistency: :strong
-             )
+             Membership.dispatch(%AddMember{
+               membership_id: membership_id,
+               club_id: club_id,
+               person_id: person_id
+             })
 
     assert Membership.active_member_of_club?(club_id, person_id)
 
