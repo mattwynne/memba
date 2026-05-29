@@ -22,7 +22,10 @@ defmodule Memba.Membership.ClubTest do
 
     test "rejects missing or malformed club UUIDs" do
       assert {:error, :invalid_club_id} =
-               Club.execute(%Club{}, %CreateClub{club_id: nil, name: "Kootenay Mountaineering Club"})
+               Club.execute(%Club{}, %CreateClub{
+                 club_id: nil,
+                 name: "Kootenay Mountaineering Club"
+               })
 
       assert {:error, :invalid_club_id} =
                Club.execute(%Club{}, %CreateClub{

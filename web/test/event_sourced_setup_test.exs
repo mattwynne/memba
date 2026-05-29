@@ -48,7 +48,10 @@ defmodule Memba.EventSourcedSetupTest do
       metadata: %{}
     }
 
-    assert :ok = Memba.EventStore.append_to_stream("reset-test-#{Ecto.UUID.generate()}", 0, [event_data])
+    assert :ok =
+             Memba.EventStore.append_to_stream("reset-test-#{Ecto.UUID.generate()}", 0, [
+               event_data
+             ])
 
     query!("""
     INSERT INTO projection_versions (projection_name, last_seen_event_number, inserted_at, updated_at)
