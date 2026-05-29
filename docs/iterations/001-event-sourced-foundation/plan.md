@@ -1,7 +1,7 @@
 # Event-sourced foundation (walking skeleton)
 
 Date: 2026-05-28
-Status: ready
+Status: merged
 
 ## Goal
 
