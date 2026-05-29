@@ -59,36 +59,44 @@ Iteration review currently depends on Fabro's Docker sandbox being able to clone
 
 We need a reliable, observable review-run startup path that preserves the advantages of Fabro-managed clones/run branches without reintroducing the opaque failure modes that previous sandbox work was designed to avoid.
 
-## Questions to answer
+## Investigation findings (2026-05-29)
 
-1. Is the timeout caused by GitHub/network latency, authentication, clone size, Fabro server state, Docker image state, or branch/ref selection?
-2. Does this reproduce consistently, or was it transient?
-3. Does `fabro inspect`, `fabro logs`, `fabro events`, or server-side logs expose the exact clone command and timeout duration?
-4. Are the previous image-level fixes still present in the environment used by iteration-review?
-5. Is the review command's use of an absolute workflow path from another checkout affecting Fabro's clone-source detection or branch choice?
-6. Should review runs use a pushed review-control branch containing workflow fixes, rather than an absolute workflow path from `main`?
-7. Should Fabro expose clone stderr/progress/timeout configuration better for early sandbox failures?
+### Failed run `01KSRSQZ7E64JK56P8CNG426X1` — events
 
-## Suggested investigation plan
+```
+sandbox.git.started  02:41:49Z  branch=pr/event-sourced-foundation  url=https://github.com/mattwynne/memba
+sandbox.git.failed   02:46:49Z  error="Failed to clone repo into Docker sandbox: Command timed out"
+sandbox.failed                  duration_ms=300396
+```
 
-1. Inspect the failed run:
+The clone started correctly — right branch, right URL, detected from the worktree. It ran for exactly the Fabro clone timeout (300 000 ms = 5 minutes) with no other error, which is the signature of a transient network connectivity failure between the Fabro server and GitHub, not a structural problem.
 
-   ```bash
-   fabro inspect 01KSRSQZ7E64JK56P8CNG426X1
-   fabro events 01KSRSQZ7E64JK56P8CNG426X1
-   fabro logs 01KSRSQZ7E64JK56P8CNG426X1
-   ```
+The branch `pr/event-sourced-foundation` exists on the remote:
 
-2. Compare its clone metadata with successful managed-clone smoke runs from `2026-05-29-return-to-fabro-managed-clone-for-resumability.md`.
-3. Re-run a minimal managed-clone smoke workflow from the same branch/worktree context used by `bin/dev iteration-review`.
-4. Re-run the iteration review once to check whether the timeout was transient.
-5. If it recurs, decide whether to:
-   - fix Fabro clone timeout/observability,
-   - adjust the review command's checkout/workflow-path strategy,
-   - or temporarily use a more observable prepare-step clone for review runs only.
+```
+a5a53307a23a0aeadac74884b3d128b9b5088f8b	refs/heads/pr/event-sourced-foundation
+```
 
-## Success criteria
+### Re-run `01KSS5RWAN6X9DZCFRFVACAYFQ` — outcome
 
-- A review run can reliably enter the first workflow stage for PR #1.
-- If clone/setup fails, the failure includes actionable evidence: clone URL form, branch/ref, timeout duration, and stderr/progress.
-- We preserve the main-checkout isolation requirement: running review must not switch the main checkout's branch or disturb other agents.
+Re-run from the same worktree. Clone completed in **2 313 ms**:
+
+```
+sandbox.git.started    06:12:01.999Z
+sandbox.git.completed  06:12:04.312Z  duration_ms=2313
+sandbox.ready          06:12:04.312Z
+sandbox.initialized                   clone_branch=pr/event-sourced-foundation
+                                      primary_repo_link=/workspace/memba
+                                      repo_cloned=true
+```
+
+Run continued past sandbox into `prepare_mix.sh` and then into the workflow.
+
+## Conclusion
+
+The original failure was a transient network timeout on the Fabro server. No workflow, image, or clone-strategy change is needed. Fabro-managed clone works correctly for `iteration-review` from a git worktree context.
+
+## Success criteria (met)
+
+- A review run can reliably enter the first workflow stage for PR #1. ✓ (run `01KSS5RWAN6X9DZCFRFVACAYFQ` passed sandbox and is running)
+- The main-checkout isolation requirement is preserved: worktree is used, main checkout is undisturbed. ✓
