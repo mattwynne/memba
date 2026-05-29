@@ -1,0 +1,30 @@
+digraph CloneSmoke {
+  graph [goal="Smoke-test Fabro-managed clone and branch metadata"]
+  rankdir=LR
+
+  start [shape=Mdiamond, label="Start"]
+  exit [shape=Msquare, label="Exit"]
+
+  inspect_checkout [
+    label="Inspect Fabro-managed checkout",
+    shape=parallelogram,
+    script="set -eu\necho PWD=$PWD\necho HOME=${HOME:-}\necho '--- git root ---'\ngit rev-parse --show-toplevel\necho '--- branch ---'\ngit branch --show-current || true\necho '--- HEAD ---'\ngit log -1 --format='%h %s'\necho '--- remotes ---'\ngit remote -v\necho '--- status ---'\ngit status --short\necho '--- refs containing HEAD ---'\ngit for-each-ref --format='%(refname:short)' --contains HEAD refs/heads refs/remotes || true"
+  ]
+
+  make_commit [
+    label="Make sandbox-only commit",
+    shape=parallelogram,
+    script="set -eu\nmkdir -p .fabro/tmp\ndate -u +%Y-%m-%dT%H:%M:%SZ > .fabro/tmp/clone-smoke.txt\ngit add .fabro/tmp/clone-smoke.txt\ngit config user.email fabro@example.invalid\ngit config user.name Fabro\ngit commit -m 'Smoke-test Fabro managed clone commit'\ngit log -1 --format='%h %s'\ngit status --short"
+  ]
+
+  inspect_after_commit [
+    label="Inspect after commit",
+    shape=parallelogram,
+    script="set -eu\necho PWD=$PWD\necho '--- branch ---'\ngit branch --show-current || true\necho '--- HEAD ---'\ngit log -1 --format='%h %s'\necho '--- status ---'\ngit status --short\necho '--- refs containing HEAD ---'\ngit for-each-ref --format='%(refname:short)' --contains HEAD refs/heads refs/remotes || true"
+  ]
+
+  start -> inspect_checkout
+  inspect_checkout -> make_commit
+  make_commit -> inspect_after_commit
+  inspect_after_commit -> exit
+}
