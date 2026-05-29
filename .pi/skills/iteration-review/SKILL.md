@@ -79,6 +79,14 @@ Optional but recommended:
    - If Fabro fails, summarize the failed stage, likely cause, and exact retry command.
    - If Fabro succeeds, report the run ID, PR URL if available, and any repairs applied by the review workflow.
 
+7. **After merge, mark the iteration merged**
+   - Once the implementation branch is confirmed merged into `origin/main`, update iteration status metadata with:
+     ```bash
+     bin/dev iteration-mark-merged <plan-path> <branch> origin/main
+     ```
+   - This command refuses to edit docs unless the branch commit is an ancestor of `origin/main`.
+   - Commit the resulting updates to `docs/iterations/README.md`, `<iteration-folder>/plan.md`, and `<iteration-folder>/implementation.md` if they are not already part of the merge.
+
 ## Current project command
 
 For iteration 001 at the time this skill was introduced:
