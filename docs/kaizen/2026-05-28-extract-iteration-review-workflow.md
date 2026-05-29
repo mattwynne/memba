@@ -170,3 +170,118 @@ be moved into the new workflow's directory.
 - We should decide whether `iteration-review` can mutate the working tree at
   all (currently the `fix_*` nodes do). Keeping that behaviour is fine for now;
   later we may want a read-only review mode.
+
+---
+
+## Resolution plan (2026-05-29): simplify the extracted pipeline
+
+The extraction (phase 1) left the review workflow doing too much. This phase
+keeps its **autonomous** behaviour — auto-fix bounded issues, auto-PR, squash
+auto-merge — but cuts the redundancy, fixes the plumbing that caused most of
+the operational kaizen trail, and makes emerging code smells visible instead of
+silently discarded.
+
+### Decisions (agreed with Matt, 2026-05-29)
+
+- **Keep it autonomous.** Most of the time it should clean up the code and merge
+  with no human involvement. Alerts are only for *judgement-worthy* findings a
+  human might need to weigh in on — not a dump of every nitpick.
+- **Keep the three-model reviewer panel** (Claude + Codex/GPT + Gemini) plus
+  synthesis. The cross-model diversity is the point and is worth the cost.
+- **Plan conformance leaves review** and becomes the implementation workflow's
+  job (tracked in `2026-05-29-move-plan-conformance-to-implementation.md`).
+  Review assumes plan conformance, the way it assumes the suite is green.
+- **ADR coherence stays in review** as an independent reviewer concern, not a
+  standalone gate.
+
+### New purpose framing
+
+The pipeline stops being a "did you build the right thing" gate and becomes a
+**code-polish + smell-radar that runs on already-conforming code**. That is the
+job Matt actually wants from it.
+
+### Change 1 — collapse three gates into one review stage
+
+Delete the two standalone gates and their repair scaffolds (≈12 nodes,
+4 prompts):
+
+- `plan_conformance_gate`, `plan_gate`, `snapshot_before_plan_repair`,
+  `fix_plan_conformance`, `verify_plan_repair`, `plan_not_ready`
+- `adr_coherence_gate`, `adr_gate`, `snapshot_before_adr_repair`,
+  `fix_adr_coherence`, `verify_adr_repair`, `adr_not_ready`
+- prompts `plan_conformance_gate.md`, `adr_coherence_gate.md`,
+  `fix_plan_conformance.md`, `fix_adr_coherence.md`
+- the matching model-stylesheet entries
+
+Resulting flow:
+
+```
+read plan → preflight → dev check (+fix loop) → collect evidence
+   → [claude | codex | gemini] review (parallel) → synthesize → route:
+        ACCEPTED      → (silent auto-fix if any) → code-health note (only if judgement findings) → PR + squash-merge
+        FIX           → snapshot → apply fixes → verify → dev check → re-synthesize   (single repair loop, max_visits budget)
+        HUMAN_INPUT   → stop  (ADR violation, behavioural gap, repeated blocker, anything needing human judgement)
+```
+
+ADR conformance becomes a required section in `review.md` (already item 0) and
+`synthesize_review.md`; ADR violations route to `HUMAN_INPUT`. One repair
+scaffold instead of three.
+
+### Change 2 — the code-health alert channel
+
+Add a node after synthesis (`record_code_health`) that appends to a tracked
+`docs/code-health.md` **only when synthesis surfaces judgement-worthy
+non-blocking findings** — never a "no findings" entry, to keep the log
+high-signal. Each entry records date, iteration/plan, file(s), the smell, why it
+might need human judgement, and that it was merged anyway. The note rides the
+squash-merge into `main`, so it is git-visible and accrues a trend Matt reads on
+his own terms. Bounded safe fixes are still applied silently and produce no
+entry.
+
+### Change 3 — deterministic plumbing (closes the evidence/clone kaizens)
+
+The `base_ref` (default `origin/main`) is currently re-resolved *inside* the
+sandbox via merge-base/fetch-deepen archaeology — the root of the
+evidence-collection silent-exit, shallow-clone, and run-branch-ancestry
+kaizens. Replace with a base **SHA** resolved locally where full history exists:
+
+- implementation handoff (`implementation.md`) records `Base sha:` (the commit
+  the run branched from), not just `Base ref:`;
+- `bin/dev iteration-review` resolves that SHA locally and passes `base_sha`;
+- `collect_implementation_evidence` collapses from ~70 lines to a deterministic
+  `git diff base_sha..HEAD`, with a single `--unshallow` fallback and a loud,
+  non-silent failure.
+
+This delivers the base-SHA / run-metadata diff strategy left open in
+`2026-05-29-iteration-review-evidence-script-silent-exit.md` ("Current
+takeaway").
+
+### Change 4 — prompt cleanup
+
+Strip the iteration-001-specific text ("Matt has already confirmed... plain
+Ecto CRUD spike instead of Commanded/EventStore") out of the surviving prompts.
+Give the reviewer/synthesis prompts an explicit ADR section and the code-health
+classification rule: blocking → `HUMAN_INPUT`; bounded-safe → silent fix;
+judgement-worthy non-blocking → code-health note + merge.
+
+### Acceptance criteria
+
+- `iteration-review/workflow.fabro` has no `plan_conformance_*` or
+  `adr_coherence_*` nodes/edges; the four corresponding prompts are deleted; the
+  model-stylesheet has no orphaned entries.
+- Exactly one snapshot→fix→verify repair scaffold remains (the review repair
+  loop).
+- `collect_implementation_evidence` takes `base_sha` and diffs
+  `base_sha..HEAD` with no merge-base archaeology; any failure prints
+  diagnostics (never a silent exit).
+- `bin/dev iteration-review` passes `base_sha`; `implementation.md` records it.
+- A review that finds only judgement-worthy non-blocking smells auto-merges and
+  appends one entry to `docs/code-health.md`; a clean review writes no entry.
+- No surviving prompt references iteration-001 specifics.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml` passes.
+
+### Out of scope
+
+- Moving plan conformance into `iteration-implementation`
+  (`2026-05-29-move-plan-conformance-to-implementation.md`).
+- Any change to the three-model panel composition (explicitly retained).
