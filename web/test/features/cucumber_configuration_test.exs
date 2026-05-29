@@ -147,9 +147,10 @@ defmodule Memba.CucumberConfigurationTest do
     "Alice and Bob are members of Kootenay Mountaineering Club"
   ]
 
-  @required_member_message_scenario_steps for {_scenario_name, steps} <- @member_message_scenarios,
-                                             {_keyword, text, _line} <- steps,
-                                             do: text
+  @required_member_message_scenario_steps for {_scenario_name, steps} <-
+                                                @member_message_scenarios,
+                                              {_keyword, text, _line} <- steps,
+                                              do: text
 
   @required_operator_scenario_steps for {_scenario_name, steps} <- @operator_scenarios,
                                         {_keyword, text, _line} <- steps,
@@ -229,6 +230,7 @@ defmodule Memba.CucumberConfigurationTest do
     %Discovery.DiscoveryResult{} = discovery = discover_steps()
 
     shared_feature_paths = configured_feature_paths()
+
     operator_feature_file =
       feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
 

@@ -20,16 +20,20 @@ defmodule Memba.Messaging.Projectors.OperatorDeliverability do
   alias Memba.Repo
 
   project(%RecipientDeliveryCreated{} = event, fn multi ->
-    Ecto.Multi.insert(multi, :messaging_operator_deliverability, %OperatorDeliverabilityProjection{
-      delivery_id: event.delivery_id,
-      message_id: event.message_id,
-      recipient_id: event.recipient_id,
-      recipient_name: event.recipient_name,
-      recipient_address: event.recipient_email,
-      channel: "email",
-      status: "sent",
-      reason: nil
-    })
+    Ecto.Multi.insert(
+      multi,
+      :messaging_operator_deliverability,
+      %OperatorDeliverabilityProjection{
+        delivery_id: event.delivery_id,
+        message_id: event.message_id,
+        recipient_id: event.recipient_id,
+        recipient_name: event.recipient_name,
+        recipient_address: event.recipient_email,
+        channel: "email",
+        status: "sent",
+        reason: nil
+      }
+    )
   end)
 
   project(%RecipientDeliveryDelivered{} = event, fn multi ->
