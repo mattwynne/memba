@@ -8,7 +8,7 @@ scenarios green than before.
 | # | Date | Status | Title | Plan |
 | --- | --- | --- | --- | --- |
 | 001 | 2026-05-28 | merged | Event-sourced foundation | [plan](001-event-sourced-foundation/plan.md) |
-| 002 | 2026-05-28 | ready | Membership model | [plan](002-membership-model/plan.md) |
+| 002 | 2026-05-28 | ready-for-review | Membership model | [plan](002-membership-model/plan.md) |
 | 003 | 2026-05-28 | ready | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
 | 004 | 2026-05-28 | ready | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
 
