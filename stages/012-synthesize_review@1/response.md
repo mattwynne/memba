@@ -1,0 +1,1 @@
+{"cmd": "ls -R . | head -100 && git status --short"}{"context_updates":{"implementation_accepted":true,"review_fixes_available":false}}
