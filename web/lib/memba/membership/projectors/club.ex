@@ -12,10 +12,10 @@ defmodule Memba.Membership.Projectors.Club do
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
-  project %ClubCreated{} = event, fn multi ->
+  project(%ClubCreated{} = event, fn multi ->
     Ecto.Multi.insert(multi, :membership_club, %ClubProjection{
       club_id: event.club_id,
       name: event.name
     })
-  end
+  end)
 end

@@ -13,12 +13,18 @@ defmodule Memba.CucumberConfigurationTest do
   test "Cucumber discovers shared features and the selected Background step passes" do
     shared_feature_paths = configured_feature_paths()
     assert shared_feature_paths == expected_shared_feature_paths()
-    assert shared_feature_paths_contain_step?(shared_feature_paths, "Given #{@club_background_step}")
+
+    assert shared_feature_paths_contain_step?(
+             shared_feature_paths,
+             "Given #{@club_background_step}"
+           )
 
     %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
     assert Map.has_key?(discovery.step_registry, @club_background_step)
 
-    feature_file = feature_file_containing_step!(shared_feature_paths, "Given #{@club_background_step}")
+    feature_file =
+      feature_file_containing_step!(shared_feature_paths, "Given #{@club_background_step}")
+
     step = %Step{keyword: "Given", text: @club_background_step, line: 6}
 
     context =

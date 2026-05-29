@@ -3,6 +3,44 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 real_mix=""
+started_postgres=0
+
+ensure_postgres() {
+  if [ -z "${PGHOST:-}" ] || [ -z "${PGPORT:-}" ]; then
+    return
+  fi
+
+  if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
+    return
+  fi
+
+  # `devenv shell mix precommit` runs this wrapper without automatically
+  # starting declared services, but the precommit/test aliases need Postgres for
+  # Ecto and EventStore setup.
+  devenv processes down >/dev/null 2>&1 || true
+  DEVENV_TUI=false devenv processes up --strict-ports -d postgres
+  started_postgres=1
+  devenv processes wait --timeout 120
+
+  if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
+    devenv processes logs -n 100 postgres >&2 || true
+    echo "Postgres did not become ready at PGHOST=$PGHOST PGPORT=$PGPORT" >&2
+    exit 1
+  fi
+}
+
+cleanup_started_postgres() {
+  if [ "$started_postgres" = 1 ]; then
+    devenv processes down >/dev/null 2>&1 || true
+  fi
+}
+
+case "${1:-}" in
+  precommit|test|ecto.*|event_store.*)
+    trap cleanup_started_postgres EXIT
+    ensure_postgres
+    ;;
+esac
 
 while IFS= read -r candidate; do
   if [ "$candidate" != "$repo_root/bin/mix" ]; then
@@ -17,4 +55,4 @@ if [ -z "$real_mix" ]; then
 fi
 
 cd "$repo_root/web"
-exec "$real_mix" "$@"
+"$real_mix" "$@"
