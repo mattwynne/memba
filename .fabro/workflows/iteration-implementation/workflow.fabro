@@ -11,6 +11,8 @@ digraph IterationImplementation {
             #implement_next_task { model: gpt-5.5; reasoning_effort: high; }
             #validate_task { model: gpt-5.5; reasoning_effort: high; }
             #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }
+            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }
+            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }
             #final_summary { reasoning_effort: low; }
         "
     ]
@@ -35,7 +37,7 @@ digraph IterationImplementation {
     preflight_sandbox [
         label="Preflight Sandbox Toolchain",
         shape=parallelogram,
-        script="set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check", 
+        script="set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\ngrep -qxF '.fabro/tmp/' .git/info/exclude 2>/dev/null || printf '.fabro/tmp/\\n' >> .git/info/exclude\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check", 
         timeout="600s"
     ]
 
@@ -123,10 +125,68 @@ digraph IterationImplementation {
         max_visits=3
     ]
 
+    collect_implementation_evidence [
+        label="Collect Implementation Evidence",
+        shape=parallelogram,
+        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nbase_ref=''\ngit fetch --quiet origin main:refs/remotes/origin/main || true\nfor ref in origin/main main; do\n  if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n    base_ref=$ref\n    break\n  fi\ndone\nif [ -z \"$base_ref\" ]; then\n  echo 'Could not determine implementation base. Tried origin/main and main.' >&2\n  git branch -a -vv >&2 || true\n  git show-ref >&2 || true\n  exit 1\nfi\nmerge_base_err=\"${TMPDIR:-/tmp}/memba-implementation-merge-base-$$.err\"\nif ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n  echo \"Could not compute merge base between HEAD and $base_ref.\" >&2\n  cat \"$merge_base_err\" >&2 || true\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\n  if ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n    echo \"Still could not compute merge base between HEAD and $base_ref.\" >&2\n    cat \"$merge_base_err\" >&2 || true\n    git log --oneline --decorate --max-count=20 --all >&2 || true\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nfi\necho '=== Plan Conformance Evidence ==='\necho \"Plan path: $PLAN_PATH\"\necho \"Todo path: $TODO_PATH\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base ref: $base_ref\"\necho \"Merge base: $merge_base\"\necho ''\necho '--- todo.md ---'\nif [ -f \"$TODO_PATH\" ]; then\n  sed -n '1,220p' \"$TODO_PATH\"\nelse\n  echo \"Todo file missing: $TODO_PATH\" >&2\n  exit 1\nfi\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$merge_base\"..HEAD; then\n  echo \"Could not compute diff stat from $merge_base to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$merge_base\"..HEAD; then\n  echo \"Could not compute diff name-status from $merge_base to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test/iteration file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$merge_base\"..HEAD); then\n  echo \"Could not compute changed files from $merge_base to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between merge base and HEAD.'\nelse\n  excerpt_files=$(printf '%s\\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+        timeout="120s"
+    ]
+
+    collect_evidence_failed [
+        label="Fail: Evidence Collection",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed before plan conformance: implementation evidence could not be collected.' >&2\nexit 1"
+    ]
+
+    plan_conformance_gate [
+        label="Plan Conformance Gate",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/plan_conformance_gate.md"
+    ]
+    plan_gate [shape=diamond, label="Plan conformant?"]
+    snapshot_before_plan_repair [
+        label="Snapshot Before Plan Repair",
+        shape=parallelogram,
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='plan'\ngit rev-parse HEAD > \".fabro/tmp/${kind}-repair-before-head.txt\"\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured at HEAD %s.\n' \"$kind\" \"$(cat .fabro/tmp/${kind}-repair-before-head.txt)\""
+    ]
+    fix_plan_conformance [
+        label="Fix Plan Conformance",
+        prompt="@prompts/fix_plan_conformance.md",
+        timeout="2400s",
+        max_visits=2
+    ]
+    verify_plan_repair [
+        label="Verify Plan Repair",
+        shape=parallelogram,
+        script="set -eu\nkind='plan'\nbefore_head_file=\".fabro/tmp/${kind}-repair-before-head.txt\"\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\nif [ ! -f \"$before_head_file\" ]; then\n  echo \"Missing repair baseline HEAD file: $before_head_file\" >&2\n  exit 1\nfi\nbefore_head=$(cat \"$before_head_file\")\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\ncommitted_changes=$(git diff --name-only \"$before_head\"..HEAD || true)\nworking_changes=$(git diff --name-only || true)\nprintf 'Repair baseline (%s) captured at HEAD %s and patch %s\n' \"$kind\" \"$before_head\" \"$before\"\nprintf 'Repair after    (%s) captured at HEAD %s and patch %s\n' \"$kind\" \"$(git rev-parse HEAD)\" \"$after\"\nprintf 'Committed files changed after repair:\n%s\n' \"${committed_changes:-<none>}\"\nprintf 'Working-tree files changed after repair:\n%s\n' \"${working_changes:-<none>}\"\nif [ -z \"$committed_changes\" ] && cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no committed or working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif { printf '%s\n' \"$committed_changes\"; printf '%s\n' \"$working_changes\"; } | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+    ]
+    plan_not_ready [
+        label="Fail: Needs Human Plan Review",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed: plan conformance gate found violations that require human input or exceeded the automatic plan repair budget.' >&2\nexit 1"
+    ]
+
     final_artifact_gate [
         label="Final Artifact Gate",
         shape=parallelogram,
         script="set -eu\necho '=== Final Artifact Gate ==='\necho ''\necho 'Checking for implementation artifact evidence...'\necho ''\n\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\n# since Fabro may checkpoint changes between nodes.\n\n# 1. Check working tree status first (may be clean if already checkpointed)\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo \"Working tree changes still present:\"\n  printf '%s\\n' \"$status\"\n  echo ''\nelse\n  echo \"Working tree is clean (changes may have been checkpointed).\"\n  echo ''\nfi\n\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\n# Get the base commit (start of workflow) - try common refs\nbase_ref=''\nchanged_files=''\nfor ref in HEAD@{1} HEAD~1 HEAD~2 HEAD~3 origin/main; do\n  if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n    base_ref=\"$ref\"\n    break\n  fi\ndone\n\nif [ -n \"$base_ref\" ]; then\n  echo \"Comparing HEAD with $base_ref...\"\n  changed_files=$(git diff --name-only \"$base_ref\" HEAD 2>/dev/null || true)\n  if [ -n \"$changed_files\" ]; then\n    echo \"Files changed since workflow start:\"\n    printf '%s\\n' \"$changed_files\"\n    echo ''\n    echo \"Change summary:\"\n    git diff --stat \"$base_ref\" HEAD || true\n    echo ''\n  else\n    echo \"No differences found between $base_ref and HEAD.\"\n    echo ''\n  fi\nelse\n  echo \"Could not determine base reference for comparison.\"\n  echo ''\nfi\n\n# 3. Check for very recent commits (Fabro checkpoints)\nrecent_commits=$(git log --oneline -5 --format='%h %s')\nif [ -n \"$recent_commits\" ]; then\n  echo \"Recent commits (may include Fabro checkpoints):\"\n  printf '%s\\n' \"$recent_commits\"\n  echo ''\nfi\n\n# 4. Gather all evidence\nevidence=''\nif [ -n \"$status\" ]; then\n  evidence=\"working-tree\"\nfi\nif [ -n \"$changed_files\" ]; then\n  evidence=\"${evidence:+$evidence, }base-head-diff\"\nfi\n\n# 5. Check for locked .feature file changes\nif [ -n \"$status\" ] && printf '%s\\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Final working tree includes locked acceptance feature changes.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\nif [ -n \"$changed_files\" ] && printf '%s\\n' \"$changed_files\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Implementation modified locked acceptance feature files.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\n\n# 6. Fail if no evidence of changes\nif [ -z \"$evidence\" ]; then\n  echo 'ERROR: Implementation workflow reached finalization with no artifact evidence.' >&2\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\n  echo 'Refusing to report success without implementation artifacts.' >&2\n  exit 1\nfi\n\necho \"Final artifact evidence confirmed: $evidence\"\necho 'Final artifact gate passed.'"
+    ]
+
+    publish_to_main [
+        label="Publish Implementation to Main",
+        shape=parallelogram,
+        script="bash .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh '{{ inputs.plan_path }}'",
+        timeout="300s"
+    ]
+
+    publish_failed [
+        label="Fail: Publish to Main",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed: could not squash and push the implementation to main. Check push credentials, branch protection, and whether origin/main moved with conflicts.' >&2\nexit 1"
     ]
 
     final_summary [
@@ -161,9 +221,25 @@ digraph IterationImplementation {
     reset_task_attempt -> implement_next_task
     task_not_ready -> exit
 
-    dev_check -> final_artifact_gate [label="Dev check passed", condition="outcome=succeeded"]
+    dev_check -> collect_implementation_evidence [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
-    final_artifact_gate -> final_summary
+    collect_implementation_evidence -> plan_conformance_gate [condition="outcome=succeeded"]
+    collect_implementation_evidence -> collect_evidence_failed
+    collect_evidence_failed -> exit
+
+    plan_conformance_gate -> plan_gate
+    plan_gate -> final_artifact_gate [label="Conformant", condition="context.plan_conformant=true"]
+    plan_gate -> snapshot_before_plan_repair [label="Plan rework", condition="context.plan_rework_available=true"]
+    plan_gate -> plan_not_ready [label="Needs human input"]
+    snapshot_before_plan_repair -> fix_plan_conformance
+    fix_plan_conformance -> verify_plan_repair
+    verify_plan_repair -> dev_check
+    plan_not_ready -> exit
+
+    final_artifact_gate -> publish_to_main
+    publish_to_main -> final_summary [condition="outcome=succeeded"]
+    publish_to_main -> publish_failed
+    publish_failed -> exit
     final_summary -> exit
 }

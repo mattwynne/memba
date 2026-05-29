@@ -1,15 +1,14 @@
 Fix the plan conformance violations identified by the preceding Plan Conformance Gate for {{ inputs.plan_path }}.
 
-Use only the gate's repair brief, the plan text, and current repository state. Stay within the approved iteration scope.
+Use only the gate's repair brief, the plan text, the implementation todo list, and current repository state. Stay within the approved iteration scope.
 
 Rules:
 
 - Fix only the explicit plan-conformance gaps identified by the gate.
-- If the gate reports that a prior implementation used a plain Ecto CRUD spike instead of the plan-mandated Commanded/EventStore architecture, remove or replace the conflicting CRUD code rather than extending it.
 - Do not reinterpret explicit requirements as optional or implementation strategy.
-- Do not omit, weaken, or substitute plan-mandated architecture, tests, configurations, or deliverables.
-- Add or update automated tests proving each plan requirement is satisfied.
-- Add code, configuration, migrations, or modules needed to satisfy each explicit plan requirement.
+- Do not omit, weaken, or substitute plan-mandated architecture, tests, configurations, migrations, commands, or deliverables.
+- Add or update automated tests proving each repaired plan requirement is satisfied.
+- Add code, configuration, migrations, scripts, or modules needed to satisfy each explicit plan requirement.
 - Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria.
 - If a fix requires changing feature files, changing the plan, or making a product/architecture decision, stop and request human input.
 - If the repair brief is too large, ambiguous, conflicting, or requires a decision beyond the plan scope, stop and request human input.
@@ -22,8 +21,8 @@ Rules:
 When finished, summarize:
 
 1. Each plan requirement gap from the gate.
-2. The concrete code/config/test/migration changes made for each requirement (or an explicit statement that no changes were needed with justification).
-3. Files changed (grouped by requirement addressed).
+2. The concrete code/config/test/migration changes made for each requirement, or an explicit statement that no changes were needed with justification.
+3. Files changed, grouped by requirement addressed.
 4. The automated tests added or updated to prove plan conformance.
 5. Tests run and their results.
 6. Any remaining plan gaps or human questions.

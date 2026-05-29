@@ -1,47 +1,26 @@
 Synthesize the independent implementation reviews for {{ inputs.plan_path }}.
 
-Decide whether the implementation is acceptable now, can be repaired automatically, or needs human input.
+This review runs after implementation has already merged to `main`. It is a smell radar and bounded polish loop, not a delivery gate. Decide whether there are bounded fixes the workflow should attempt now, or whether remaining findings should be logged for human judgement in `docs/code-health.md` while the run continues.
 
-## Context and blocker history
+## Context
 
 Use the prior context from this workflow run:
 
 - The iteration plan text and its explicit requirements.
-- Implementation and repair summaries.
+- Implementation evidence collected from `{{ inputs.base_sha }}` to `HEAD`.
+- Successful `dev check` output.
 - Independent review reports (Claude, Codex, Gemini).
-- Plan conformance gate and ADR coherence gate results.
-- Previous synthesis decisions and blocker records, if this is a repeated synthesis after repair.
-- Current working tree state and successful dev check output.
+- Previous synthesis decisions and repair summaries, if this is a repeated synthesis after repair.
 
-**Repeated-blocker detection**: If previous synthesis attempts exist in the prior context, extract any blocker IDs and titles from earlier synthesis outputs. Compare them with the current review evidence to determine whether blockers remain unresolved after repair attempts.
+## Standards
 
-## Acceptance standards
-
-- Accept only if the implementation satisfies the plan, avoids out-of-scope work, dev check passed, and no unresolved accepted-ADR violations remain.
-- Never accept when unresolved accepted-ADR violations remain.
-- Never downgrade a cited ADR's central decision to optional implementation strategy.
-- If reviewers agree on an ADR violation, route to FIX or HUMAN_INPUT.
-- If ADR rework has already been attempted and the violation remains, route to HUMAN_INPUT.
-- If a plan/ADR conflict exists, route to HUMAN_INPUT.
-- Treat automated tests/dev check as the behavioural feedback loop. Review-stage automatic fixes should be refactoring/maintainability/convention fixes after the suite is green, not new feature work.
-- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, ADR-coherence, or low-risk test-quality issues that an agent can resolve without changing product behaviour or feature files.
-- Do not request edits to acceptance feature files (`*.feature`). If reviewers believe feature files or acceptance criteria are wrong, route to human input.
-- Require human input for unresolved business decisions, ambiguous acceptance criteria, behavioural gaps, missing acceptance coverage that cannot be fixed safely as a test-only improvement, architectural choices outside the plan, or repeated/large failures.
-
-## Explicit plan requirements
-
-- If the plan explicitly says "Implement X", "Add Y", "Configure Z", "Use W", or similar binding requirements, treat those as mandatory deliverables, not optional implementation strategy.
-- If reviewers cite missing explicit plan requirements, route to FIX or HUMAN_INPUT. Do not accept by reframing the requirement as optional.
-- If multiple reviewers independently identify the same missing explicit plan requirement, that is a blocking gap.
-- Passing dev check with a green test suite does not satisfy explicit plan requirements if the tests are insufficient, irrelevant, or do not cover/prove the requirement.
-- If the same explicit plan requirement blocker appeared in a previous synthesis and remains unresolved after automatic repair, route to HUMAN_INPUT.
-
-## Repeated-blocker routing
-
-- If a blocker appeared in a previous synthesis attempt (check prior context for synthesis outputs with blocker IDs or titles), and the current reviews still cite the same blocker, do not route to another automatic repair loop.
-- If a blocker with a matching ID or substantially similar title/description remains unresolved after one or more repair attempts, route to HUMAN_INPUT.
-- Example: if synthesis cycle 1 identified blocker `missing-commanded-eventstore` and routed to FIX, and synthesis cycle 2 still finds that Commanded/EventStore are missing, route to HUMAN_INPUT.
-- When detecting repeated blockers, use stable identifiers where possible: ADR numbers, plan requirement text, architectural component names, missing dependency names, or test coverage gaps.
+- Treat automated tests and implementation plan-conformance as already-owned by the implementation workflow.
+- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, documentation, or low-risk test-quality issues that can be resolved without changing product behaviour or feature files.
+- Do not request edits to acceptance feature files (`*.feature`).
+- Do not introduce new product behaviour in review.
+- If a finding requires product, architecture, scope, or acceptance-criteria judgement, do not block. Mark it as a code-health/manual follow-up.
+- If a prior automatic repair attempted the same issue and it still remains, do not request another repair. Mark it as a code-health/manual follow-up.
+- If no bounded automatic fixes are worth attempting, accept the review and let the next step record any judgement-worthy findings in `docs/code-health.md`.
 
 ## Output format
 
@@ -49,67 +28,23 @@ Return a concise Markdown synthesis with these sections:
 
 ### Decision
 
-One of: **ACCEPTED**, **FIX**, or **HUMAN_INPUT**
+One of: **ACCEPTED** or **FIX**.
 
-### ADR conformance synthesis
+### Review synthesis
 
-- Summary of ADR violations across all reviews.
-- Whether ADR coherence gate passed and reviewers agree.
-- Any ADR conflicts requiring human decision.
+Summarize the important findings across reviewers.
 
-### Repeated blockers from prior cycles
+### Bounded automatic fixes
 
-If this is a repeated synthesis after repair:
+If **FIX**, list exact bounded changes to make, with constraints and validation.
 
-- List each blocker from the previous synthesis output (by stable ID if available, or by title/description).
-- For each prior blocker:
-  - **Blocker ID** (stable identifier such as `missing-commanded-eventstore` or `adr-007-violation`)
-  - **Blocker title** (short description)
-  - **Previous decision** (FIX or HUMAN_INPUT)
-  - **Current evidence** (what reviewers say now)
-  - **Fixed?** (yes or no)
-  - **Routing consequence** (if not fixed after repair: HUMAN_INPUT; if fixed: continue evaluation)
+### Code-health findings for human judgement
 
-If no prior synthesis exists, state: "First synthesis—no prior blocker history."
+List findings that should be logged to `docs/code-health.md` because they are not safe bounded review fixes. If none, state "None."
 
-### Blocking issues
+### Fixed or dismissed findings
 
-Grouped by severity. For each new or persisting blocker:
-
-- Stable blocker ID (use a short stable identifier: e.g., `missing-commanded-eventstore`, `adr-007-violation`, `insufficient-acceptance-coverage`)
-- Blocker title
-- Evidence from reviews
-- Severity: critical, high, medium
-- Repair feasibility: automatic, requires human input, repeated after repair
-
-### Exact repair brief (if FIX is appropriate)
-
-Concrete, bounded instructions for automatic fixes. Include:
-
-- Issue list with stable IDs.
-- Required changes (files, modules, tests, conventions).
-- Constraints (no feature files, no new behaviour, refactoring only).
-- Acceptance test for each fix.
-
-### Manual follow-ups (if any)
-
-Actions, questions, or decisions that require human input.
-
-### Blocker registry (structured output)
-
-If blockers exist, list them in a stable format that can be parsed/compared in future synthesis passes:
-
-```
-BLOCKER_REGISTRY_START
-- id: blocker-id-1
-  title: Short blocker title
-  status: open|fixed
-  first_seen: synthesize_review_cycle_1
-  source: claude_review|codex_review|gemini_review|multiple
-BLOCKER_REGISTRY_END
-```
-
-If no blockers exist, state: "No blockers—implementation accepted."
+Note findings that were already fixed during this review run, duplicates, or findings you are dismissing as not supported by evidence.
 
 ## Routing JSON
 
@@ -117,11 +52,9 @@ End your response with exactly one JSON object that Fabro can use for routing. T
 
 Use one of these shapes:
 
-- Accepted, no blockers:
+- Accepted / log-only findings:
   `{"context_updates":{"implementation_accepted":true,"review_fixes_available":false}}`
 - Automatic fixes appropriate:
-  `{"context_updates":{"implementation_accepted":false,"review_fixes_available":true,"review_blockers":[{"id":"blocker-id-1","title":"Short blocker title","source":"review_synthesis","first_seen_stage":"synthesize_review","status":"open"}]}}`
-- Human input required, including repeated blockers when applicable:
-  `{"context_updates":{"implementation_accepted":false,"review_fixes_available":false,"review_blockers":[{"id":"blocker-id-1","title":"Short blocker title","source":"review_synthesis","first_seen_stage":"synthesize_review","status":"open"}],"repeated_blockers":["blocker-id-1"]}}`
+  `{"context_updates":{"implementation_accepted":false,"review_fixes_available":true,"review_blockers":[{"id":"fix-id-1","title":"Short fix title","source":"review_synthesis","first_seen_stage":"synthesize_review","status":"open"}]}}`
 
-If blockers exist and automatic fixes are requested, or if blockers remain unresolved and human input is required, include `review_blockers` in the single final JSON object. When human input is required for repeated blockers, also include `repeated_blockers` with the stable blocker IDs.
+Do not route to human input from this post-merge review. Human-judgement findings belong in the Markdown section above so the next step can record them in `docs/code-health.md`.
