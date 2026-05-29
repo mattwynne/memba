@@ -12,6 +12,7 @@ defmodule Memba.Application do
       Memba.Repo,
       Memba.Membership.App,
       Memba.Membership.Projectors.Club,
+      Memba.Membership.Projectors.Person,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Memba.PubSub},
       # Start a worker by calling: Memba.Worker.start_link(arg)

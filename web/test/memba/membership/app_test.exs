@@ -5,7 +5,9 @@ defmodule Memba.Membership.AppTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Projectors.Club, as: ClubProjector
+  alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Router
 
   test "Membership Commanded app is supervised by the Phoenix application" do
@@ -21,11 +23,21 @@ defmodule Memba.Membership.AppTest do
              {{ClubProjector, _opts}, pid, :worker, [ClubProjector]} when is_pid(pid) -> true
              _child -> false
            end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{PersonProjector, _opts}, pid, :worker, [PersonProjector]} when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
   end
 
   test "Membership Commanded app includes the Membership router" do
-    assert App.__registered_commands__() == Router.__registered_commands__()
-    assert Router.__registered_commands__() == [CreateClub]
+    expected_commands = MapSet.new([CreateClub, CreatePerson])
+
+    assert MapSet.new(App.__registered_commands__()) == expected_commands
+    assert MapSet.new(Router.__registered_commands__()) == expected_commands
   end
 
   test "Membership Commanded app dispatches through its router" do
