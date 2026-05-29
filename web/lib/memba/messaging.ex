@@ -8,7 +8,12 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.DeliveryProvider
   alias Memba.Messaging.DeliveryRequest
+  alias Memba.Messaging.Projections.Message, as: MessageProjection
+  alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
   alias Memba.Messaging.Recipient
+  alias Memba.Repo
+
+  import Ecto.Query
 
   @doc """
   Send a message to the active members of a club.
@@ -23,6 +28,50 @@ defmodule Memba.Messaging do
          {:ok, dispatch_result} <- dispatch_send_message(command, dispatch_opts),
          :ok <- deliver_to_provider(command) do
       dispatch_result
+    end
+  end
+
+  @doc """
+  Fetch a projected message read model by caller-generated UUID.
+
+  Returns `nil` when the ID is absent or is not a valid UUID.
+  """
+  def get_message(message_id) do
+    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+      Repo.get(MessageProjection, message_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch a projected recipient delivery read model by caller-generated UUID.
+
+  Returns `nil` when the ID is absent or is not a valid UUID.
+  """
+  def get_recipient_delivery(delivery_id) do
+    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+      Repo.get(RecipientDeliveryProjection, delivery_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  List recipient delivery records for a projected message.
+
+  Invalid or missing message IDs return an empty list. Results are ordered by
+  recipient name and ID to provide deterministic assertions for acceptance
+  plumbing.
+  """
+  def list_recipient_deliveries(message_id) do
+    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+      RecipientDeliveryProjection
+      |> where([delivery], delivery.message_id == ^message_id)
+      |> order_by([delivery], asc: delivery.recipient_name, asc: delivery.recipient_id)
+      |> Repo.all()
+    else
+      :error -> []
     end
   end
 

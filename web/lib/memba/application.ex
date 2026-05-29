@@ -13,6 +13,8 @@ defmodule Memba.Application do
       Memba.Membership.App,
       Memba.Messaging.App,
       Memba.Messaging.DeliveryProviders.Fake,
+      Memba.Messaging.Projectors.Message,
+      Memba.Messaging.Projectors.RecipientDelivery,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.Membership,
       Memba.Membership.Projectors.Person,
