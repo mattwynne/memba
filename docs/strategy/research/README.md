@@ -23,6 +23,7 @@ Stored in `extracted-text/` for easier grep/review:
 ## Additional competitor notes
 
 - `zeffy.md` — Zeffy was missed by the imported research briefs and is a significant free fundraising/membership/event competitor.
+- `bcmc.md` — BC Mountaineering Club's custom-built member platform; not a SaaS competitor but prior art / evidence of the problem and a source of feature requirements (trips, hut booking).
 - `round2-competitor-analysis/` — second-pass competitor notes from Claude/Gemini before the full gap-pass PDF.
 
 ## Synthesized output
