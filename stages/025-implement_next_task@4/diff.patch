@@ -1,0 +1,325 @@
+diff --git a/docs/iterations/002-membership-model/todo.md b/docs/iterations/002-membership-model/todo.md
+index f99e0a8..9f7bce0 100644
+--- a/docs/iterations/002-membership-model/todo.md
++++ b/docs/iterations/002-membership-model/todo.md
+@@ -3,5 +3,5 @@
+ - [x] 001 Add `Person` aggregate, `CreatePerson` command, `PersonCreated` event,
+ - [x] 002 Add `Membership` aggregate, `AddMember` command, `MemberAdded` event,
+ - [x] 003 Implement `list_active_members_of_club/1` and supporting queries on the
+-- [ ] 004 Add Cucumber step definitions for all Background lines in both feature
++- [x] 004 Add Cucumber step definitions for all Background lines in both feature
+ - [ ] 005 Run `devenv shell mix precommit` and fix any issues.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index 7512c02..a7c1e5b 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -5,42 +5,82 @@ defmodule Memba.CucumberConfigurationTest do
+   alias Cucumber.Runtime
+   alias Gherkin.Step
+   alias Memba.Membership
+-  alias Memba.Membership.Projections.Club, as: ClubProjection
+ 
+-  @club_name "Kootenay Mountaineering Club"
+-  @club_background_step "#{@club_name} is a club"
++  @member_message_background_steps [
++    {"Given", "Kootenay Mountaineering Club is a club", 6},
++    {"And", "Nelson Paddling Club is a club", 7},
++    {"And", "Alice, Bob, and Carol are people", 8},
++    {"And", "Pat is a person", 9},
++    {"And", "Alice, Bob, and Carol are members of Kootenay Mountaineering Club", 10},
++    {"And", "Pat is a member of Nelson Paddling Club", 11}
++  ]
+ 
+-  test "Cucumber discovers shared features and the selected Background step passes" do
++  @operator_membership_background_steps [
++    {"Given", "Kootenay Mountaineering Club is a club", 6},
++    {"And", "Alice and Bob are people", 7},
++    {"And", "Alice and Bob are members of Kootenay Mountaineering Club", 8}
++  ]
++
++  @required_membership_background_steps [
++    "Kootenay Mountaineering Club is a club",
++    "Nelson Paddling Club is a club",
++    "Alice, Bob, and Carol are people",
++    "Pat is a person",
++    "Alice, Bob, and Carol are members of Kootenay Mountaineering Club",
++    "Pat is a member of Nelson Paddling Club",
++    "Alice and Bob are people",
++    "Alice and Bob are members of Kootenay Mountaineering Club"
++  ]
++
++  test "Cucumber discovers shared features and Membership Background steps pass" do
+     shared_feature_paths = configured_feature_paths()
+     assert shared_feature_paths == expected_shared_feature_paths()
+ 
+-    assert shared_feature_paths_contain_step?(
+-             shared_feature_paths,
+-             "Given #{@club_background_step}"
+-           )
++    assert_shared_features_contain_steps!(
++      shared_feature_paths,
++      @required_membership_background_steps
++    )
+ 
+     %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
+-    assert Map.has_key?(discovery.step_registry, @club_background_step)
+ 
+-    feature_file =
+-      feature_file_containing_step!(shared_feature_paths, "Given #{@club_background_step}")
++    Enum.each(@required_membership_background_steps, fn step_text ->
++      assert Map.has_key?(discovery.step_registry, step_text)
++    end)
+ 
+-    step = %Step{keyword: "Given", text: @club_background_step, line: 6}
++    member_message_feature_file =
++      feature_file_named!(shared_feature_paths, "member_message_deliverability.feature")
+ 
+-    context =
+-      Runtime.execute_step(
+-        %{
+-          feature_file: feature_file,
+-          scenario_name: "selected Background step smoke test",
+-          step_history: []
+-        },
+-        step,
++    member_context =
++      execute_steps(
++        member_message_feature_file,
++        "member message Background smoke test",
++        @member_message_background_steps,
+         discovery.step_registry
+       )
+ 
+-    club_id = get_in(context, [:clubs, @club_name])
++    assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
++      "Alice",
++      "Bob",
++      "Carol"
++    ])
++
++    assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
++
++    operator_feature_file =
++      feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
+ 
+-    assert %ClubProjection{club_id: ^club_id, name: @club_name} = Membership.get_club(club_id)
++    operator_context =
++      execute_steps(
++        operator_feature_file,
++        "operator email membership Background smoke test",
++        @operator_membership_background_steps,
++        discovery.step_registry
++      )
++
++    assert_active_member_names(operator_context, "Kootenay Mountaineering Club", [
++      "Alice",
++      "Bob"
++    ])
+   end
+ 
+   defp configured_feature_paths do
+@@ -62,19 +102,47 @@ defmodule Memba.CucumberConfigurationTest do
+     |> Enum.sort()
+   end
+ 
+-  defp shared_feature_paths_contain_step?(paths, gherkin_step_text) do
+-    Enum.any?(paths, fn path ->
+-      path
+-      |> File.read!()
+-      |> String.contains?(gherkin_step_text)
++  defp assert_shared_features_contain_steps!(paths, step_texts) do
++    Enum.each(step_texts, fn step_text ->
++      assert Enum.any?(paths, fn path ->
++               path
++               |> File.read!()
++               |> String.contains?(step_text)
++             end)
++    end)
++  end
++
++  defp feature_file_named!(paths, basename) do
++    Enum.find(paths, &(Path.basename(&1) == basename)) ||
++      flunk("Expected to discover shared feature file: #{basename}")
++  end
++
++  defp execute_steps(feature_file, scenario_name, steps, step_registry) do
++    Enum.reduce(steps, base_cucumber_context(feature_file, scenario_name), fn {keyword, text,
++                                                                               line},
++                                                                              context ->
++      step = %Step{keyword: keyword, text: text, line: line}
++
++      Runtime.execute_step(context, step, step_registry)
+     end)
+   end
+ 
+-  defp feature_file_containing_step!(paths, gherkin_step_text) do
+-    Enum.find(paths, fn path ->
+-      path
+-      |> File.read!()
+-      |> String.contains?(gherkin_step_text)
+-    end) || flunk("Expected to find shared Background step: #{gherkin_step_text}")
++  defp base_cucumber_context(feature_file, scenario_name) do
++    %{
++      feature_file: feature_file,
++      scenario_name: scenario_name,
++      step_history: []
++    }
++  end
++
++  defp assert_active_member_names(context, club_name, expected_names) do
++    club_id = get_in(context, [:clubs, club_name])
++
++    active_member_names =
++      club_id
++      |> Membership.list_active_members_of_club()
++      |> Enum.map(& &1.name)
++
++    assert active_member_names == expected_names
+   end
+ end
+diff --git a/web/test/features/step_definitions/membership_steps.exs b/web/test/features/step_definitions/membership_steps.exs
+index 25ce218..3eca162 100644
+--- a/web/test/features/step_definitions/membership_steps.exs
++++ b/web/test/features/step_definitions/membership_steps.exs
+@@ -5,11 +5,45 @@ defmodule Memba.Cucumber.MembershipSteps do
+ 
+   alias Memba.Membership
+   alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Membership.Projections.Person, as: PersonProjection
+ 
+   step "Kootenay Mountaineering Club is a club", context do
+-    club_name = "Kootenay Mountaineering Club"
++    create_club(context, "Kootenay Mountaineering Club")
++  end
++
++  step "Nelson Paddling Club is a club", context do
++    create_club(context, "Nelson Paddling Club")
++  end
++
++  step "Alice, Bob, and Carol are people", context do
++    create_people(context, ["Alice", "Bob", "Carol"])
++  end
++
++  step "Alice and Bob are people", context do
++    create_people(context, ["Alice", "Bob"])
++  end
++
++  step "Pat is a person", context do
++    create_people(context, ["Pat"])
++  end
++
++  step "Alice, Bob, and Carol are members of Kootenay Mountaineering Club", context do
++    add_members(context, ["Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
++  end
++
++  step "Alice and Bob are members of Kootenay Mountaineering Club", context do
++    add_members(context, ["Alice", "Bob"], "Kootenay Mountaineering Club")
++  end
++
++  step "Pat is a member of Nelson Paddling Club", context do
++    add_members(context, ["Pat"], "Nelson Paddling Club")
++  end
++
++  defp create_club(context, club_name) do
+     club_id = Ecto.UUID.generate()
+ 
+     assert :ok =
+@@ -20,11 +54,90 @@ defmodule Memba.Cucumber.MembershipSteps do
+ 
+     assert %ClubProjection{club_id: ^club_id, name: ^club_name} = Membership.get_club(club_id)
+ 
+-    clubs =
++    update_context_map(context, :clubs, club_name, club_id)
++  end
++
++  defp create_people(context, names) do
++    Enum.reduce(names, context, &create_person(&2, &1))
++  end
++
++  defp create_person(context, name) do
++    person_id = Ecto.UUID.generate()
++    email = email_for(name)
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{person_id: person_id, name: name, email: email},
++               consistency: :strong
++             )
++
++    assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
++             Membership.get_person(person_id)
++
++    update_context_map(context, :people, name, person_id)
++  end
++
++  defp add_members(context, person_names, club_name) do
++    Enum.reduce(person_names, context, fn person_name, context ->
++      add_member(context, person_name, club_name)
++    end)
++  end
++
++  defp add_member(context, person_name, club_name) do
++    club_id = fetch_from_context!(context, :clubs, club_name)
++    person_id = fetch_from_context!(context, :people, person_name)
++
++    refute Membership.active_member_of_club?(club_id, person_id)
++
++    membership_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %AddMember{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert Membership.active_member_of_club?(club_id, person_id)
++
++    assert %{id: ^person_id, name: ^person_name, email: _email} =
++             Enum.find(Membership.list_active_members_of_club(club_id), &(&1.id == person_id))
++
++    update_context_map(context, :memberships, {club_name, person_name}, membership_id)
++  end
++
++  defp fetch_from_context!(context, collection_key, item_key) do
++    context
++    |> Map.get(collection_key, %{})
++    |> Map.fetch(item_key)
++    |> case do
++      {:ok, value} ->
++        value
++
++      :error ->
++        flunk("Expected #{inspect(item_key)} to be present in #{inspect(collection_key)}")
++    end
++  end
++
++  defp update_context_map(context, collection_key, item_key, value) do
++    collection =
+       context
+-      |> Map.get(:clubs, %{})
+-      |> Map.put(club_name, club_id)
++      |> Map.get(collection_key, %{})
++      |> Map.put(item_key, value)
++
++    Map.put(context, collection_key, collection)
++  end
++
++  defp email_for(name) do
++    normalized_name =
++      name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
+ 
+-    Map.put(context, :clubs, clubs)
++    "#{normalized_name}@example.test"
+   end
+ end
