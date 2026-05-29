@@ -14,7 +14,9 @@ config :memba,
     :projection_versions,
     :membership_clubs,
     :membership_memberships,
-    :membership_people
+    :membership_people,
+    :messaging_messages,
+    :messaging_recipient_deliveries
   ],
   generators: [timestamp_type: :utc_datetime]
 
@@ -25,6 +27,16 @@ config :memba, Memba.Membership.App,
   ],
   pubsub: :local,
   registry: :local
+
+config :memba, Memba.Messaging.App,
+  event_store: [
+    adapter: Commanded.EventStore.Adapters.EventStore,
+    event_store: Memba.Messaging.EventStore
+  ],
+  pubsub: :local,
+  registry: :local
+
+config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake
 
 config :commanded_ecto_projections, schema_prefix: nil
 

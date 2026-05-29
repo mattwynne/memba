@@ -1,0 +1,121 @@
+defmodule Memba.Messaging.SendMessageDispatchTest do
+  use Memba.EventSourcedCase, async: false
+
+  alias Commanded.Commands.ExecutionResult
+  alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Events.RecipientDeliveryCreated
+  alias Memba.Messaging.Message
+  alias Memba.Messaging.Recipient
+
+  test "Messaging app dispatch routes SendMessage to the Message aggregate" do
+    message_id = Ecto.UUID.generate()
+    club_id = Ecto.UUID.generate()
+    sender_id = Ecto.UUID.generate()
+    bob_id = Ecto.UUID.generate()
+    alice_delivery_id = Ecto.UUID.generate()
+    bob_delivery_id = Ecto.UUID.generate()
+
+    command = %SendMessage{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: sender_id,
+      subject: "Trail day",
+      body: "Meet at 9am.",
+      recipients: [
+        %Recipient{
+          delivery_id: alice_delivery_id,
+          person_id: sender_id,
+          name: "Alice Sender",
+          email: "alice@example.com"
+        },
+        %Recipient{
+          delivery_id: bob_delivery_id,
+          person_id: bob_id,
+          name: "Bob Recipient",
+          email: "bob@example.com"
+        }
+      ]
+    }
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 3,
+              events: [
+                %MessageSent{
+                  message_id: ^message_id,
+                  club_id: ^club_id,
+                  sender_id: ^sender_id,
+                  subject: "Trail day",
+                  body: "Meet at 9am."
+                },
+                %RecipientDeliveryCreated{
+                  message_id: ^message_id,
+                  delivery_id: ^alice_delivery_id,
+                  recipient_id: ^sender_id,
+                  recipient_name: "Alice Sender",
+                  recipient_email: "alice@example.com"
+                },
+                %RecipientDeliveryCreated{
+                  message_id: ^message_id,
+                  delivery_id: ^bob_delivery_id,
+                  recipient_id: ^bob_id,
+                  recipient_name: "Bob Recipient",
+                  recipient_email: "bob@example.com"
+                }
+              ],
+              aggregate_state: %Message{
+                message_id: ^message_id,
+                club_id: ^club_id,
+                sender_id: ^sender_id,
+                recipient_delivery_ids: recipient_delivery_ids,
+                recipient_ids: recipient_ids
+              }
+            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
+
+    assert MapSet.equal?(recipient_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
+    assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
+
+    assert %Message{
+             message_id: ^message_id,
+             club_id: ^club_id,
+             sender_id: ^sender_id,
+             recipient_delivery_ids: persisted_delivery_ids,
+             recipient_ids: persisted_recipient_ids
+           } = App.aggregate_state(Message, message_id)
+
+    assert MapSet.equal?(persisted_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
+    assert MapSet.equal?(persisted_recipient_ids, MapSet.new([sender_id, bob_id]))
+  end
+
+  test "Messaging app rejects a duplicate SendMessage for the same aggregate identity" do
+    command = %SendMessage{
+      message_id: Ecto.UUID.generate(),
+      club_id: Ecto.UUID.generate(),
+      sender_id: Ecto.UUID.generate(),
+      subject: "Trail day",
+      body: "Meet at 9am.",
+      recipients: []
+    }
+
+    [recipient_command] = with_sender_recipient(command)
+
+    command = %SendMessage{command | recipients: [recipient_command]}
+
+    assert :ok = App.dispatch(command, consistency: :strong)
+    assert {:error, :already_sent} = App.dispatch(command)
+  end
+
+  defp with_sender_recipient(%SendMessage{} = command) do
+    [
+      %Recipient{
+        delivery_id: Ecto.UUID.generate(),
+        person_id: command.sender_id,
+        name: "Alice Sender",
+        email: "alice@example.com"
+      }
+    ]
+  end
+end

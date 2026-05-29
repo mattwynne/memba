@@ -17,8 +17,28 @@ defmodule Memba.EventSourcedConfigTest do
     assert config[:registry] == :local
   end
 
-  test "EventStore uses the test database in a dedicated schema" do
+  test "Messaging Commanded app is configured to use the Postgres EventStore adapter" do
+    config = Application.fetch_env!(:memba, Memba.Messaging.App)
+
+    assert config[:event_store] == [
+             adapter: Commanded.EventStore.Adapters.EventStore,
+             event_store: Memba.Messaging.EventStore
+           ]
+
+    assert config[:pubsub] == :local
+    assert config[:registry] == :local
+  end
+
+  test "Membership EventStore uses the test database in a dedicated schema" do
     config = Memba.EventStore.config()
+
+    assert config[:serializer] == Commanded.Serialization.JsonSerializer
+    assert config[:database] == "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+    assert config[:schema] == "event_store"
+  end
+
+  test "Messaging EventStore uses the test database in the dedicated EventStore schema" do
+    config = Memba.Messaging.EventStore.config()
 
     assert config[:serializer] == Commanded.Serialization.JsonSerializer
     assert config[:database] == "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
