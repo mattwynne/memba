@@ -1,0 +1,207 @@
+diff --git a/docs/iterations/003-messaging-skeleton/todo.md b/docs/iterations/003-messaging-skeleton/todo.md
+index 9b55650..ce2d9f0 100644
+--- a/docs/iterations/003-messaging-skeleton/todo.md
++++ b/docs/iterations/003-messaging-skeleton/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Add `Memba.Messaging.App` and `Memba.Messaging.Router`.
+ - [x] 002 Add the `Message` aggregate, `SendMessage` command, and `MessageSent` +
+-- [ ] 003 Add the application service that resolves recipients via Membership and
++- [x] 003 Add the application service that resolves recipients via Membership and
+ - [ ] 004 Define the fake delivery provider port and wire it into the message
+ - [ ] 005 Add projections and queries for messages and recipient deliveries.
+ - [ ] 006 Add Cucumber step definitions for "A member sends a club message".
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+new file mode 100644
+index 0000000..cdde04f
+--- /dev/null
++++ b/web/lib/memba/messaging.ex
+@@ -0,0 +1,64 @@
++defmodule Memba.Messaging do
++  @moduledoc """
++  Public application service API for the Messaging bounded context.
++  """
++
++  alias Memba.Membership
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Recipient
++
++  @doc """
++  Send a message to the active members of a club.
++
++  The service resolves recipients through Membership's public query API, builds
++  a `SendMessage` command containing those resolved recipients, and dispatches it
++  to the Messaging Commanded application.
++  """
++  def send_club_message(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- send_club_message_command(attrs) do
++      App.dispatch(command, dispatch_opts)
++    end
++  end
++
++  defp send_club_message_command(attrs) do
++    with {:ok, message_id} <- fetch_required(attrs, :message_id),
++         {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, sender_id} <- fetch_required(attrs, :sender_id),
++         {:ok, subject} <- fetch_required(attrs, :subject),
++         {:ok, body} <- fetch_required(attrs, :body) do
++      {:ok,
++       %SendMessage{
++         message_id: message_id,
++         club_id: club_id,
++         sender_id: sender_id,
++         subject: subject,
++         body: body,
++         recipients: resolve_recipients(club_id)
++       }}
++    end
++  end
++
++  defp fetch_required(attrs, key) do
++    case Map.fetch(attrs, key) do
++      {:ok, value} -> {:ok, value}
++      :error -> {:error, {:missing_required_attribute, key}}
++    end
++  end
++
++  defp resolve_recipients(club_id) do
++    club_id
++    |> Membership.list_active_members_of_club()
++    |> Enum.map(&resolved_recipient/1)
++  end
++
++  defp resolved_recipient(%{id: person_id, name: name, email: email}) do
++    %Recipient{
++      delivery_id: Ecto.UUID.generate(),
++      person_id: person_id,
++      name: name,
++      email: email
++    }
++  end
++end
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+new file mode 100644
+index 0000000..81ca349
+--- /dev/null
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -0,0 +1,118 @@
++defmodule Memba.Messaging.SendClubMessageTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Messaging
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++
++  test "resolves active club members via Membership and dispatches SendMessage" do
++    kootenay_club_id = Ecto.UUID.generate()
++    nelson_club_id = Ecto.UUID.generate()
++
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    bob = create_person(name: "Bob", email: "bob@example.com")
++    carol = create_person(name: "Carol", email: "carol@example.com")
++    pat = create_person(name: "Pat", email: "pat@example.com")
++
++    add_member(kootenay_club_id, alice.person_id)
++    add_member(kootenay_club_id, bob.person_id)
++    add_member(kootenay_club_id, carol.person_id)
++    add_member(nelson_club_id, pat.person_id)
++
++    message_id = Ecto.UUID.generate()
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 4,
++              events: [
++                %MessageSent{
++                  message_id: ^message_id,
++                  club_id: ^kootenay_club_id,
++                  sender_id: sender_id,
++                  subject: "Trip planning night",
++                  body: "Bring route ideas."
++                }
++                | delivery_events
++              ]
++            }} =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: kootenay_club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas."
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert sender_id == alice.person_id
++
++    assert [
++             %RecipientDeliveryCreated{
++               message_id: ^message_id,
++               recipient_id: alice_id,
++               recipient_name: "Alice",
++               recipient_email: "alice@example.com"
++             },
++             %RecipientDeliveryCreated{
++               message_id: ^message_id,
++               recipient_id: bob_id,
++               recipient_name: "Bob",
++               recipient_email: "bob@example.com"
++             },
++             %RecipientDeliveryCreated{
++               message_id: ^message_id,
++               recipient_id: carol_id,
++               recipient_name: "Carol",
++               recipient_email: "carol@example.com"
++             }
++           ] = delivery_events
++
++    assert [alice_id, bob_id, carol_id] == [alice.person_id, bob.person_id, carol.person_id]
++    refute pat.person_id in Enum.map(delivery_events, & &1.recipient_id)
++
++    delivery_ids = Enum.map(delivery_events, & &1.delivery_id)
++
++    assert Enum.all?(delivery_ids, &(Ecto.UUID.cast(&1) != :error))
++    assert Enum.uniq(delivery_ids) == delivery_ids
++  end
++
++  defp create_person(attrs) do
++    person = %{
++      person_id: Ecto.UUID.generate(),
++      name: Keyword.fetch!(attrs, :name),
++      email: Keyword.fetch!(attrs, :email)
++    }
++
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreatePerson{
++                 person_id: person.person_id,
++                 name: person.name,
++                 email: person.email
++               },
++               consistency: :strong
++             )
++
++    person
++  end
++
++  defp add_member(club_id, person_id) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %AddMember{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++end
