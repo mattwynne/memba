@@ -11,6 +11,7 @@ defmodule Memba.Application do
       MembaWeb.Telemetry,
       Memba.Repo,
       Memba.Membership.App,
+      Memba.Messaging.App,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.Membership,
       Memba.Membership.Projectors.Person,

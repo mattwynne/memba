@@ -21,16 +21,18 @@ config :memba,
          pool_size: 10
        ] ++ repo_connection_config
 
-config :memba,
-       Memba.EventStore,
-       [
-         serializer: Commanded.Serialization.JsonSerializer,
-         username: System.get_env("PGUSER") || System.get_env("USER"),
-         port: String.to_integer(System.get_env("PGPORT") || "5432"),
-         database: "memba_dev",
-         schema: "event_store",
-         pool_size: 10
-       ] ++ repo_connection_config
+event_store_config =
+  [
+    serializer: Commanded.Serialization.JsonSerializer,
+    username: System.get_env("PGUSER") || System.get_env("USER"),
+    port: String.to_integer(System.get_env("PGPORT") || "5432"),
+    database: "memba_dev",
+    schema: "event_store",
+    pool_size: 10
+  ] ++ repo_connection_config
+
+config :memba, Memba.EventStore, event_store_config
+config :memba, Memba.Messaging.EventStore, event_store_config
 
 # For development, we disable any cache and enable
 # debugging and code reloading.

@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Add `Memba.Messaging.App` and `Memba.Messaging.Router`.
+- [x] 001 Add `Memba.Messaging.App` and `Memba.Messaging.Router`.
 - [ ] 002 Add the `Message` aggregate, `SendMessage` command, and `MessageSent` +
 - [ ] 003 Add the application service that resolves recipients via Membership and
 - [ ] 004 Define the fake delivery provider port and wire it into the message
