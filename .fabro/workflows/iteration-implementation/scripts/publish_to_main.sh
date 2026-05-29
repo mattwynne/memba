@@ -10,7 +10,6 @@ fi
 
 git config user.name "Fabro"
 git config user.email "fabro@users.noreply.github.com"
-grep -qxF '.fabro/tmp/' .git/info/exclude 2>/dev/null || printf '.fabro/tmp/\n' >> .git/info/exclude
 
 git fetch --quiet origin main:refs/remotes/origin/main
 base_sha=$(git merge-base HEAD origin/main)
