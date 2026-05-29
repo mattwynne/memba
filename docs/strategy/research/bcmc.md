@@ -122,6 +122,13 @@ Worth considering:
 - Publications / journal archive as a member benefit.
 - Guest/trial membership tier with restricted access and lower priority.
 
+## Corroborating primary source
+
+See `kmc-thread.md` — a private KMC email thread (2026-05-29) in which a former BCMC
+exec member confirms the BCMC site is **fully custom, built ~2012, and still needs a
+volunteer team to maintain**, and in which KMC members cite the BCMC events page as
+the model they wish they had. Direct, unprompted validation of the points below.
+
 ## Strategic implication
 
 BCMC is a case study, not a competitor to beat. Use it as:
