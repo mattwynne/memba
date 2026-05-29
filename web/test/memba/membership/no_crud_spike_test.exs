@@ -7,7 +7,8 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     source = read_source!("lib/memba/membership.ex")
 
     assert source =~ "def get_club("
-    refute source =~ ~r/\bdef\s+(list|create|update|delete|change)_[a-zA-Z0-9_]+\b/
+    assert source =~ "def list_active_members_of_club("
+    refute source =~ ~r/\bdef\s+(create|update|delete|change)_[a-zA-Z0-9_]+\b/
   end
 
   test "club aggregate is not the former Ecto schema and changeset module" do
