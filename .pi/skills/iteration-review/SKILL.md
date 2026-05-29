@@ -23,6 +23,7 @@ Each implemented iteration should record its implementation target in the iterat
 Branch: pr/example-branch
 Pull request: https://github.com/mattwynne/memba/pull/123
 Base ref: origin/main
+Base sha: <base-commit-sha>
 Status: ready-for-review
 ```
 
@@ -33,6 +34,7 @@ Required fields:
 
 Optional but recommended:
 
+- `Base sha:` — concrete base commit SHA for deterministic review diffs. If absent, `bin/dev iteration-review` resolves it locally from `Base ref:`.
 - `Pull request:` — GitHub PR URL for human traceability.
 - `Status:` — `ready-for-review`, `reviewing`, `reviewed`, or similar.
 
@@ -51,7 +53,7 @@ Optional but recommended:
 3. **Read the plan and implementation metadata**
    - Read the selected `plan.md`.
    - Read `<iteration-folder>/implementation.md`.
-   - Extract `Branch:`, `Base ref:`, and `Pull request:` if present.
+   - Extract `Branch:`, `Base ref:`, `Base sha:`, and `Pull request:` if present.
    - If `implementation.md` is missing or lacks `Branch:`, first try obvious local evidence:
      - a local branch named like `pr/<iteration-slug>`
      - a remote branch named like `origin/pr/<iteration-slug>`
@@ -67,7 +69,7 @@ Optional but recommended:
 5. **Run the review workflow**
    - Run:
      ```bash
-     bin/dev iteration-review <branch> <plan-path> <base-ref>
+     bin/dev iteration-review <branch> <plan-path> <base-ref-or-base-sha>
      ```
    - Capture the Fabro run ID and web UI URL if printed.
    - Do not manually switch branches.
@@ -95,7 +97,7 @@ When starting a review, report:
 - Selected iteration number and title.
 - Plan path.
 - Implementation branch/ref.
-- Base ref.
+- Base ref and base sha, if known.
 - Pull request URL, if known.
 - Exact `bin/dev iteration-review ...` command.
 

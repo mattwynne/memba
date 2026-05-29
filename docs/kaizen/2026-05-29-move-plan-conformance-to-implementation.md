@@ -1,7 +1,7 @@
 # Kaizen: move plan conformance into the implementation workflow
 
 Date: 2026-05-29
-Status: planned
+Status: implemented
 
 ## Context
 
