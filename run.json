@@ -1354,7 +1354,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-29T17:53:26.203629412Z",
-  "last_event_at": "2026-05-29T18:16:04.197242261Z",
+  "last_event_at": "2026-05-29T18:16:07.800624939Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -5941,9 +5941,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 587,
       "checkpoint": {
-        "timestamp": "2026-05-29T18:16:04.367035338Z",
+        "timestamp": "2026-05-29T18:16:07.773309036Z",
         "current_node": "final_artifact_gate",
         "completed_nodes": [
           "start",
@@ -5967,6 +5967,440 @@
           "synthesize_review",
           "review_gate",
           "final_artifact_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.snapshot_before_plan_repair.current_node": "fix_plan_conformance",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.snapshot_before_plan_repair": 0,
+          "internal.retry_count.review_merge": 0,
+          "internal.retry_count.plan_gate": 0,
+          "thread.review_merge.current_node": "synthesize_review",
+          "command.output": "blob://sha256/6a81f3d04dfe55bf106d65d291d426380199eff1d04077921c4cc206f5c53356",
+          "response.adr_coherence_gate": "{\"context_updates\":{\"adr_coherent\":true,\"adr_rework_available\":false}}",
+          "parallel.fan_in.best_outcome": "succeeded",
+          "implementation_accepted": true,
+          "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "thread.synthesize_review.current_node": "review_gate",
+          "thread.start.current_node": "read_plan",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.read_plan": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #adr_coherence_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_adr_coherence { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.adr_coherence_gate.current_node": "adr_gate",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "bade9c9bdbea16af7904b57c51f974cf97180db5"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "8dc62cc9630aef5ab02c43d168d361637831927e"
+            },
+            {
+              "id": "gemini_review",
+              "status": "succeeded",
+              "head_sha": "6b988f7b0d242df94eebecb193882e8050fd008a"
+            }
+          ],
+          "internal.retry_count.review_gate": 0,
+          "thread.plan_gate.current_node": "adr_coherence_gate",
+          "adr_rework_available": false,
+          "thread.fix_plan_conformance.current_node": "verify_plan_repair",
+          "internal.retry_count.adr_coherence_gate": 0,
+          "graph.rankdir": "LR",
+          "thread.review_gate.current_node": "final_artifact_gate",
+          "response.fix_plan_conformance": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a textual repair brief. I repaired the concrete gaps identifiable from the plan text, relevant ADR 0011, and current implementation.\n\n## 1. Plan requirement gaps addressed\n\n| Gap | Requirement source | Fix |\n|---|---|---|\n| `AddMember` could be dispatched without proving the person and club already existed. | Plan: Membership aggregate attaches an existing person to an existing club. | Added a public Membership command boundary that checks projected club/person existence before dispatching `AddMember`. |\n| Duplicate active memberships for the same `{club_id, person_id}` pair were not prevented at the application/query boundary. | ADR 0011, cited by the plan. | Added duplicate-active-membership rejection before dispatching `AddMember`. |\n| Cucumber step definitions used lower-level `Memba.Membership.App.dispatch/2` directly instead of the public Membership API boundary. | Plan implementation step 4: step definitions use public Membership API. | Updated step definitions to use `Memba.Membership.dispatch/2`. |\n| Query tests proved `list_active_members_of_club/1` using direct dispatch against arbitrary club IDs rather than created clubs through the Membership boundary. | Acceptance criteria: person created independently can be added via domain commands; active member query excludes other clubs. | Updated query tests to create clubs, people, and memberships through the public Membership command boundary. |\n\n## 2. Concrete changes made\n\n### Public Membership command boundary\n\nUpdated `web/lib/memba/membership.ex`:\n\n- Added `Memba.Membership.dispatch/2`.\n- Supports:\n  - `%CreateClub{}`\n  - `%CreatePerson{}`\n  - `%AddMember{}`\n- Defaults dispatch to `consistency: :strong`.\n- For `AddMember`, validates:\n  - club exists via `get_club/1`\n  - person exists via `get_person/1`\n  - no existing active membership via `active_member_of_club?/2`\n- Returns:\n  - `{:error, :club_not_found}`\n  - `{:error, :person_not_found}`\n  - `{:error, :already_active_member}`\n\n### Cucumber step definitions\n\nUpdated `web/test/features/step_definitions/membership_steps.exs`:\n\n- Replaced direct `Memba.Membership.App.dispatch/2` usage with `Memba.Membership.dispatch/2`.\n- Kept caller-generated UUIDs in the steps.\n\n### Tests\n\nAdded `web/test/memba/membership/application_service_test.exs`:\n\n- Proves a person can be created independently and added to an existing club.\n- Proves missing club rejection.\n- Proves missing person rejection.\n- Proves duplicate active membership rejection.\n\nUpdated `web/test/memba/membership/query_test.exs`:\n\n- Query API tests now create clubs/people/memberships through `Memba.Membership.dispatch/2`.\n- Still verifies `list_active_members_of_club/1` returns only active members of the requested club.\n\nUpdated `web/test/memba/membership/no_crud_spike_test.exs`:\n\n- Adjusted wording/assertion to allow the public command boundary while still preventing CRUD-style helpers.\n\n## 3. Files changed by requirement\n\n### Existing club/person and duplicate membership enforcement\n\n- `web/lib/memba/membership.ex`\n- `web/test/memba/membership/application_service_test.exs`\n\n### Cucumber Background steps use public Membership API\n\n- `web/test/features/step_definitions/membership_steps.exs`\n\n### Query API proven through domain command boundary\n\n- `web/test/memba/membership/query_test.exs`\n\n### Guard against CRUD spike while allowing command boundary\n\n- `web/test/memba/membership/no_crud_spike_test.exs`\n\n## 4. Automated tests added or updated\n\nAdded:\n\n- `Memba.Membership.ApplicationServiceTest`\n\nUpdated:\n\n- `Memba.Membership.QueryTest`\n- `Memba.Cucumber.MembershipSteps`\n- `Memba.Membership.NoCrudSpikeTest`\n\n## 5. Tests run\n\nAll final validations passed:\n\n- `devenv shell bin/mix format --check-formatted` — passed\n- `devenv shell bin/mix test test/memba/membership/application_service_test.exs test/memba/membership/query_test.exs test/features/cucumber_configuration_test.exs test/memba/membership/no_crud_spike_test.exs` — passed, 13 tests, 0 failures\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed, 57 tests, 0 failures\n- `devenv shell bin/mix precommit` — passed, 57 tests, 0 failures\n\n## 6. Remaining gaps or human questions\n\nNo remaining plan gaps identified from the available gate context, plan text, and repository state. No acceptance feature files were modified.",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.retry_count.plan_conformance_gate": 0,
+          "internal.run_id": "01KSTDV77CTJMJX2M6X78QJX5R",
+          "failure_signature": "",
+          "internal.retry_count.final_artifact_gate": 0,
+          "last_stage": "synthesize_review",
+          "internal.node_visit_count": 1,
+          "adr_coherent": true,
+          "parallel.branch_count": 3,
+          "thread.review_fork.current_node": "review_merge",
+          "graph.max_node_visits": "160",
+          "outcome": "succeeded",
+          "parallel.fan_in.best_id": "claude_review",
+          "current_node": "final_artifact_gate",
+          "internal.fidelity": "summary:high",
+          "graph.goal": "Review a completed iteration implementation against plan, ADRs, and independent reviewers",
+          "internal.retry_count.fix_plan_conformance": 0,
+          "plan_rework_available": false,
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "thread.collect_implementation_evidence.current_node": "plan_conformance_gate",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "failure_class": "",
+          "plan_conformant": true,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.thread_id": "review_gate",
+          "thread.plan_conformance_gate.current_node": "plan_gate",
+          "internal.retry_count.adr_gate": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "response.plan_conformance_gate": "{\"context_updates\":{\"plan_conformant\":true,\"plan_rework_available\":false}}",
+          "internal.retry_count.start": 0,
+          "review_fixes_available": false,
+          "thread.verify_plan_repair.current_node": "dev_check",
+          "thread.adr_gate.current_node": "review_fork",
+          "internal.retry_count.verify_plan_repair": 0,
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "internal.retry_count.review_fork": 0,
+          "parallel.fan_in.best_head_sha": "bade9c9bdbea16af7904b57c51f974cf97180db5",
+          "thread.preflight_sandbox.current_node": "dev_check"
+        },
+        "node_outcomes": {
+          "fix_plan_conformance": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "fix_plan_conformance",
+              "last_response": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a tex",
+              "response.fix_plan_conformance": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a textual repair brief. I repaired the concrete gaps identifiable from the plan text, relevant ADR 0011, and current implementation.\n\n## 1. Plan requirement gaps addressed\n\n| Gap | Requirement source | Fix |\n|---|---|---|\n| `AddMember` could be dispatched without proving the person and club already existed. | Plan: Membership aggregate attaches an existing person to an existing club. | Added a public Membership command boundary that checks projected club/person existence before dispatching `AddMember`. |\n| Duplicate active memberships for the same `{club_id, person_id}` pair were not prevented at the application/query boundary. | ADR 0011, cited by the plan. | Added duplicate-active-membership rejection before dispatching `AddMember`. |\n| Cucumber step definitions used lower-level `Memba.Membership.App.dispatch/2` directly instead of the public Membership API boundary. | Plan implementation step 4: step definitions use public Membership API. | Updated step definitions to use `Memba.Membership.dispatch/2`. |\n| Query tests proved `list_active_members_of_club/1` using direct dispatch against arbitrary club IDs rather than created clubs through the Membership boundary. | Acceptance criteria: person created independently can be added via domain commands; active member query excludes other clubs. | Updated query tests to create clubs, people, and memberships through the public Membership command boundary. |\n\n## 2. Concrete changes made\n\n### Public Membership command boundary\n\nUpdated `web/lib/memba/membership.ex`:\n\n- Added `Memba.Membership.dispatch/2`.\n- Supports:\n  - `%CreateClub{}`\n  - `%CreatePerson{}`\n  - `%AddMember{}`\n- Defaults dispatch to `consistency: :strong`.\n- For `AddMember`, validates:\n  - club exists via `get_club/1`\n  - person exists via `get_person/1`\n  - no existing active membership via `active_member_of_club?/2`\n- Returns:\n  - `{:error, :club_not_found}`\n  - `{:error, :person_not_found}`\n  - `{:error, :already_active_member}`\n\n### Cucumber step definitions\n\nUpdated `web/test/features/step_definitions/membership_steps.exs`:\n\n- Replaced direct `Memba.Membership.App.dispatch/2` usage with `Memba.Membership.dispatch/2`.\n- Kept caller-generated UUIDs in the steps.\n\n### Tests\n\nAdded `web/test/memba/membership/application_service_test.exs`:\n\n- Proves a person can be created independently and added to an existing club.\n- Proves missing club rejection.\n- Proves missing person rejection.\n- Proves duplicate active membership rejection.\n\nUpdated `web/test/memba/membership/query_test.exs`:\n\n- Query API tests now create clubs/people/memberships through `Memba.Membership.dispatch/2`.\n- Still verifies `list_active_members_of_club/1` returns only active members of the requested club.\n\nUpdated `web/test/memba/membership/no_crud_spike_test.exs`:\n\n- Adjusted wording/assertion to allow the public command boundary while still preventing CRUD-style helpers.\n\n## 3. Files changed by requirement\n\n### Existing club/person and duplicate membership enforcement\n\n- `web/lib/memba/membership.ex`\n- `web/test/memba/membership/application_service_test.exs`\n\n### Cucumber Background steps use public Membership API\n\n- `web/test/features/step_definitions/membership_steps.exs`\n\n### Query API proven through domain command boundary\n\n- `web/test/memba/membership/query_test.exs`\n\n### Guard against CRUD spike while allowing command boundary\n\n- `web/test/memba/membership/no_crud_spike_test.exs`\n\n## 4. Automated tests added or updated\n\nAdded:\n\n- `Memba.Membership.ApplicationServiceTest`\n\nUpdated:\n\n- `Memba.Membership.QueryTest`\n- `Memba.Cucumber.MembershipSteps`\n- `Memba.Membership.NoCrudSpikeTest`\n\n## 5. Tests run\n\nAll final validations passed:\n\n- `devenv shell bin/mix format --check-formatted` — passed\n- `devenv shell bin/mix test test/memba/membership/application_service_test.exs test/memba/membership/query_test.exs test/features/cucumber_configuration_test.exs test/memba/membership/no_crud_spike_test.exs` — passed, 13 tests, 0 failures\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed, 57 tests, 0 failures\n- `devenv shell bin/mix precommit` — passed, 57 tests, 0 failures\n\n## 6. Remaining gaps or human questions\n\nNo remaining plan gaps identified from the available gate context, plan text, and repository state. No acceptance feature files were modified."
+            },
+            "notes": "Stage completed: fix_plan_conformance",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 819398,
+                    "output_tokens": 10946,
+                    "reasoning_tokens": 5947,
+                    "cache_read_tokens": 2214912,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5711236
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 461633,
+              "tool_time_ms": 273671,
+              "active_time_ms": 735304
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5b11714273898d455deafe4792b37ade855f155084ad6df62d9b2cf12b3df04c"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 68286,
+              "active_time_ms": 68286
+            }
+          },
+          "plan_conformance_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.plan_conformance_gate": "{\"context_updates\":{\"plan_conformant\":true,\"plan_rework_available\":false}}",
+              "last_response": "{\"context_updates\":{\"plan_conformant\":true,\"plan_rework_available\":false}}",
+              "plan_rework_available": false,
+              "last_stage": "plan_conformance_gate",
+              "plan_conformant": true
+            },
+            "notes": "Stage completed: plan_conformance_gate",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8598,
+                    "output_tokens": 27,
+                    "reasoning_tokens": 2544,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 120120
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 51265,
+              "tool_time_ms": 0,
+              "active_time_ms": 51265
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.fan_in.best_outcome": "succeeded",
+              "parallel.fan_in.best_head_sha": "bade9c9bdbea16af7904b57c51f974cf97180db5",
+              "parallel.fan_in.best_id": "claude_review"
+            },
+            "notes": "Selected best candidate: claude_review",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 0,
+              "active_time_ms": 0
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f4dd538f870be34b60c145ac0f4daa61174b2fd1bccf6c28bdf2985744d3d830"
+            },
+            "notes": "Script completed: set -eu\nbase_ref='origin/main'\nmerge_base_err=\"${TMPDIR:-/tmp}/memba-merge-base-$$.err\"\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base ref input: ${base_ref:-<empty>}\"\necho ''\necho '--- available branches ---'\ngit branch -vv || true\necho ''\necho '--- available remote branches ---'\ngit branch -r -vv || true\necho ''\necho '--- recent commits ---'\ngit log --oneline --decorate --max-count=20 --all || true\necho ''\nif [ -n \"$base_ref\" ]; then\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    case \"$base_ref\" in\n      origin/*)\n        branch=${base_ref#origin/}\n        git fetch --quiet origin \"$branch:refs/remotes/origin/$branch\" || true\n        ;;\n    esac\n  fi\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    echo \"Configured base_ref is not a valid ref: $base_ref\" >&2\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nelse\n  git fetch --quiet origin main:refs/remotes/origin/main || true\n  for ref in origin/main main; do\n    if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n      base_ref=$ref\n      break\n    fi\n  done\n  if [ -z \"$base_ref\" ]; then\n    echo 'Could not determine a base ref. Tried origin/main and main.' >&2\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nfi\nif ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n  echo \"Could not compute merge base between HEAD and $base_ref.\" >&2\n  cat \"$merge_base_err\" >&2 || true\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to fetch deeper history before failing...' >&2\n    case \"$base_ref\" in\n      origin/*)\n        branch=${base_ref#origin/}\n        git fetch --quiet --deepen=100 origin \"$branch:refs/remotes/origin/$branch\" || true\n        ;;\n    esac\n    git fetch --quiet --deepen=100 origin || true\n    if ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n      echo 'Trying to unshallow repository before failing...' >&2\n      git fetch --quiet --unshallow origin || true\n    fi\n  fi\n  if ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n    echo \"Still could not compute merge base between HEAD and $base_ref.\" >&2\n    cat \"$merge_base_err\" >&2 || true\n    git log --oneline --decorate --max-count=20 --all >&2 || true\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base ref: $base_ref\"\necho \"Merge base: $merge_base\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$merge_base\"..HEAD; then\n  echo \"Could not compute diff stat from $merge_base to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$merge_base\"..HEAD; then\n  echo \"Could not compute diff name-status from $merge_base to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$merge_base\"..HEAD); then\n  echo \"Could not compute changed files from $merge_base to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between merge base and HEAD.'\nelse\n  excerpt_files=$(printf '%s\\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 274,
+              "active_time_ms": 274
+            }
+          },
+          "plan_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: plan_gate",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/af8edde218f148430536590ba4fca7de7042d8e15aa1a5bb2b7bf6d2e9b98823"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169339,
+              "active_time_ms": 169339
+            }
+          },
+          "snapshot_before_plan_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3536602b39b5dc9b8c52c1d3b212f1d226494e5db644db44e04723e2f6e8b4b5"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='plan'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e2a142161ff3e25c47cd0b7a051282b925edfd4415ffa624c8ea1f9576df97f8"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/002-membership-model/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 271,
+              "active_time_ms": 271
+            }
+          },
+          "verify_plan_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/24ca8e3748a28e7f549daa3317d79e2c41fb8bbfcdd210d6261bd5ae01dda46f"
+            },
+            "notes": "Script completed: set -eu\nkind='plan'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "adr_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: adr_gate",
+            "usage": null
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "implementation_accepted": true,
+              "review_fixes_available": false,
+              "last_stage": "synthesize_review"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9665,
+                    "output_tokens": 26,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 64585
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 10806,
+              "tool_time_ms": 0,
+              "active_time_ms": 10806
+            }
+          },
+          "adr_coherence_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"adr_coherent\":true,\"adr_rework_available\":false}}",
+              "response.adr_coherence_gate": "{\"context_updates\":{\"adr_coherent\":true,\"adr_rework_available\":false}}",
+              "adr_coherent": true,
+              "last_stage": "adr_coherence_gate",
+              "adr_rework_available": false
+            },
+            "notes": "Stage completed: adr_coherence_gate",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8360,
+                    "output_tokens": 26,
+                    "reasoning_tokens": 1953,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 101170
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 37276,
+              "tool_time_ms": 0,
+              "active_time_ms": 37276
+            }
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6a81f3d04dfe55bf106d65d291d426380199eff1d04077921c4cc206f5c53356"
+            },
+            "notes": "Script completed: set -eu\necho '=== Final Artifact Gate ==='\necho ''\necho 'Checking for implementation artifact evidence...'\necho ''\n\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\n# since Fabro may checkpoint changes between nodes.\n\n# 1. Check working tree status first (may be clean if already checkpointed)\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo \"Working tree changes still present:\"\n  printf '%s\\n' \"$status\"\n  echo ''\nelse\n  echo \"Working tree is clean (changes may have been checkpointed).\"\n  echo ''\nfi\n\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\n# Get the base commit (start of workflow) - try common refs\nbase_ref='origin/main'\nchanged_files=''\nif [ -n \"$base_ref\" ]; then\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    echo \"Configured base_ref is not a valid ref: $base_ref\" >&2\n    exit 1\n  fi\nelse\n  for ref in origin/main main; do\n    if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n      base_ref=$(git merge-base HEAD \"$ref\" 2>/dev/null || true)\n      [ -n \"$base_ref\" ] && break\n    fi\n  done\nfi\n\nif [ -n \"$base_ref\" ]; then\n  echo \"Comparing HEAD with $base_ref...\"\n  changed_files=$(git diff --name-only \"$base_ref\" HEAD 2>/dev/null || true)\n  if [ -n \"$changed_files\" ]; then\n    echo \"Files changed since workflow start:\"\n    printf '%s\\n' \"$changed_files\"\n    echo ''\n    echo \"Change summary:\"\n    git diff --stat \"$base_ref\" HEAD || true\n    echo ''\n  else\n    echo \"No differences found between $base_ref and HEAD.\"\n    echo ''\n  fi\nelse\n  echo \"Could not determine base reference for comparison.\"\n  echo ''\nfi\n\n# 3. Check for very recent commits (Fabro checkpoints)\nrecent_commits=$(git log --oneline -5 --format='%h %s')\nif [ -n \"$recent_commits\" ]; then\n  echo \"Recent commits (may include Fabro checkpoints):\"\n  printf '%s\\n' \"$recent_commits\"\n  echo ''\nfi\n\n# 4. Gather all evidence\nevidence=''\nif [ -n \"$status\" ]; then\n  evidence=\"working-tree\"\nfi\nif [ -n \"$changed_files\" ]; then\n  evidence=\"${evidence:+$evidence, }base-head-diff\"\nfi\n\n# 5. Check for locked .feature file changes\nif [ -n \"$status\" ] && printf '%s\\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Final working tree includes locked acceptance feature changes.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\nif [ -n \"$changed_files\" ] && printf '%s\\n' \"$changed_files\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Implementation modified locked acceptance feature files.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\n\n# 6. Fail if no evidence of changes\nif [ -z \"$evidence\" ]; then\n  echo 'ERROR: Iteration review reached finalization with no artifact evidence.' >&2\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\n  echo 'Refusing to report success without implementation artifacts.' >&2\n  exit 1\nfi\n\necho \"Final artifact evidence confirmed: $evidence\"\necho 'Final artifact gate passed.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          }
+        },
+        "next_node_id": "final_summary",
+        "git_commit_sha": "56c58af79447235d05d00a8d70386eb86a61449c",
+        "node_visits": {
+          "verify_plan_repair": 1,
+          "review_merge": 1,
+          "preflight_sandbox": 1,
+          "adr_gate": 1,
+          "review_fork": 1,
+          "collect_implementation_evidence": 2,
+          "final_artifact_gate": 1,
+          "plan_conformance_gate": 2,
+          "plan_gate": 2,
+          "read_plan": 1,
+          "dev_check": 2,
+          "synthesize_review": 1,
+          "snapshot_before_plan_repair": 1,
+          "fix_plan_conformance": 1,
+          "review_gate": 1,
+          "start": 1,
+          "adr_coherence_gate": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 11,
+          "additions": 208,
+          "deletions": 40
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-29T18:16:35.499829519Z",
+        "current_node": "final_summary",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "plan_conformance_gate",
+          "plan_gate",
+          "snapshot_before_plan_repair",
+          "fix_plan_conformance",
+          "verify_plan_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "plan_conformance_gate",
+          "plan_gate",
+          "adr_coherence_gate",
+          "adr_gate",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "final_artifact_gate",
+          "final_summary"
         ],
         "node_retries": {},
         "context_values": {
@@ -5996,7 +6430,7 @@
               "head_sha": "6b988f7b0d242df94eebecb193882e8050fd008a"
             }
           ],
-          "current_node": "final_artifact_gate",
+          "current_node": "final_summary",
           "plan_conformant": true,
           "graph.default_fidelity": "summary:high",
           "outcome": "succeeded",
@@ -6007,7 +6441,7 @@
           "internal.retry_count.collect_implementation_evidence": 0,
           "thread.preflight_sandbox.current_node": "dev_check",
           "thread.plan_gate.current_node": "adr_coherence_gate",
-          "last_stage": "synthesize_review",
+          "last_stage": "final_summary",
           "parallel.fan_in.best_head_sha": "bade9c9bdbea16af7904b57c51f974cf97180db5",
           "review_fixes_available": false,
           "thread.adr_coherence_gate.current_node": "adr_gate",
@@ -6017,9 +6451,11 @@
           "thread.fix_plan_conformance.current_node": "verify_plan_repair",
           "thread.review_fork.current_node": "review_merge",
           "parallel.fan_in.best_id": "claude_review",
+          "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/002-membership-model/plan.md`\n\n## Plan conformance summary\n\nThe implementation was reviewed against the iteration plan for the membership model and was found conformant.\n\nThe plan required:\n\n- A `Person` aggregate with command, event, projector, and query support.\n- A `Membership` aggregate with command, event, and projector support.\n- `Memba.Membership.list_active_members_of_club/1` returning active club members and excluding members of other clubs.\n- Public Cucumber step definitions for shared Background lines around clubs, people, and memberships.\n- ExUnit coverage for aggregate rules, projector behaviour, and query API behaviour.\n- Successful precommit/dev validation.\n\nThe plan conformance gate reported:\n\n```json\n{\"plan_conformant\":true,\"plan_rework_available\":false}\n```\n\nA plan-conformance repair stage was run earlier in the workflow and reported that it addressed boundary/API and duplicate-membership concerns. After that, the plan conformance gate again reported the implementation as conformant.\n\n## ADR conformance summary\n\nThe ADR coherence gate passed and reported:\n\n```json\n{\"adr_coherent\":true,\"adr_rework_available\":false}\n```\n\nThe reviewed implementation is therefore considered coherent with the relevant architectural decisions, including use of event-sourced command handling/projections and avoiding CRUD-style shortcuts for the membership model.\n\n## Independent review outcome\n\nThe independent review fork completed successfully across three reviewers:\n\n- `claude_review` — succeeded\n- `codex_review` — succeeded\n- `gemini_review` — succeeded\n\nThe review fan-in selected `claude_review` as the best candidate:\n\n```text\nSelected best candidate: claude_review\n```\n\nThe synthesized review outcome accepted the implementation:\n\n```json\n{\"implementation_accepted\":true,\"review_fixes_available\":false}\n```\n\nNo additional review fixes were required after synthesis.\n\n## Repairs applied during review\n\nA plan-conformance repair was applied before the final review acceptance. The repair summary stated that it addressed:\n\n- Public Membership command boundary dispatch.\n- Validation that a club exists before adding a member.\n- Validation that a person exists before adding a member.\n- Duplicate active membership rejection.\n- Cucumber steps using the public Membership API rather than lower-level dispatch.\n- Query tests using the public domain command boundary.\n\nNo post-review-synthesis fixes were required, as `review_fixes_available` was `false`.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed that implementation evidence exists via a base/head diff:\n\n```text\nFinal artifact evidence confirmed: base-head-diff\nFinal artifact gate passed.\n```\n\nIt also reported a change summary of:\n\n```text\n43 files changed, 1308 insertions(+), 621 deletions(-)\n```\n\nThis confirms that the review was performed against concrete implementation artifacts.\n\n## Key files reviewed or repaired\n\nThe following key files are present in the final artifact gate evidence and are relevant to the reviewed membership implementation and repair work:\n\n- `web/lib/memba/membership.ex`\n- `web/lib/memba/membership/commands/add_member.ex`\n- `web/lib/memba/membership/commands/create_person.ex`\n- `web/lib/memba/membership/events/member_added.ex`\n- `web/lib/memba/membership/events/person_created.ex`\n- `web/lib/memba/membership/membership.ex`\n- `web/lib/memba/membership/person.ex`\n- `web/lib/memba/membership/projections/membership.ex`\n- `web/lib/memba/membership/projections/person.ex`\n- `web/lib/memba/membership/projectors/membership.ex`\n- `web/lib/memba/membership/projectors/person.ex`\n- `web/lib/memba/membership/router.ex`\n- `web/priv/repo/migrations/2025112219145014_create_membership_people_projection.exs`\n- `web/priv/repo/migrations/2025112219145010_create_membership_memberships_projection.exs`\n- `web/test/features/cucumber_configuration_test.exs`\n- `web/test/features/step_definitions/membership_steps.exs`\n- `web/test/memba/membership/add_member_dispatch_test.exs`\n- `web/test/memba/membership/app_test.exs`\n- `web/test/memba/membership/application_service_test.exs`\n- `web/test/memba/membership/create_person_dispatch_test.exs`\n- `web/test/memba/membership/membership_projection_test.exs`\n- `web/test/memba/membership/membership_test.exs`\n- `web/test/memba/membership/no_crud_spike_test.exs`\n- `web/test/memba/membership/person_projection_test.exs`\n- `web/test/memba/membership/person_test.exs`\n- `web/test/memba/membership/query_test.exs`\n- `web/test/support/event_sourced_case.ex`\n\nOther files appearing in final artifact evidence include supporting configuration, documentation, workflow, and dev tooling changes:\n\n- `.fabro/workflows/iteration-review/workflow.fabro`\n- `bin/dev`\n- `docs/iterations/002-membership-model/implementation.md`\n- `docs/iterations/002-membership-model/todo.md`\n- `docs/iterations/README.md`\n- `web/config/config.exs`\n- `web/lib/memba/application.ex`\n- `web/test/event_sourced_setup_test.exs`\n\nNo locked `.feature` file changes were reported by the final artifact gate.\n\n## Tests and validation run\n\nValidation evidence from the workflow:\n\n- `dev ci` passed.\n- ExUnit completed successfully:\n\n```text\n57 tests, 0 failures\n```\n\nThe repair stage additionally reported successful runs of:\n\n- `devenv shell bin/mix format --check-formatted`\n- Targeted membership and Cucumber configuration tests\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n- `devenv shell bin/mix precommit`\n\nThe final post-repair `dev ci` run also passed with:\n\n```text\n57 tests, 0 failures\n```\n\n## Manual demo/checks still recommended\n\nNo blocking manual checks are required for acceptance.\n\nRecommended optional checks before broader release:\n\n- Run the shared Cucumber feature suite end-to-end in the normal acceptance-test environment, if that is separate from the ExUnit-backed Cucumber configuration tests.\n- Manually inspect projected `membership_people` and `membership_memberships` rows after command dispatch in a local database to confirm operational observability.\n- Exercise repeated add-member attempts from an application shell to confirm the public API returns the expected duplicate-membership error.\n\n## Non-blocking follow-ups\n\n- Future iterations should extend the minimal membership model for lapsed/revoked membership states, renewals, households/families, and privacy rules, as already noted in the iteration plan.\n- Messaging integration remains out of scope for this iteration and is expected to build on the accepted Membership API in a later iteration.\n- The workflow output noted that `devenv 2.1.0` is out of date relative to `2.1.2`; this is non-blocking but can be handled separately.",
           "internal.node_visit_count": 1,
           "thread.synthesize_review.current_node": "review_gate",
           "thread.review_merge.current_node": "synthesize_review",
+          "internal.retry_count.final_summary": 0,
           "internal.retry_count.review_merge": 0,
           "response.plan_conformance_gate": "{\"context_updates\":{\"plan_conformant\":true,\"plan_rework_available\":false}}",
           "graph.max_node_visits": "160",
@@ -6030,7 +6466,7 @@
           "internal.retry_count.adr_gate": 0,
           "internal.retry_count.verify_plan_repair": 0,
           "parallel.branch_count": 3,
-          "internal.thread_id": "review_gate",
+          "internal.thread_id": "final_artifact_gate",
           "thread.collect_implementation_evidence.current_node": "plan_conformance_gate",
           "thread.adr_gate.current_node": "review_fork",
           "internal.retry_count.read_plan": 0,
@@ -6041,7 +6477,8 @@
           "thread.start.current_node": "read_plan",
           "thread.review_gate.current_node": "final_artifact_gate",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #adr_coherence_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_adr_coherence { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/002-membership-model/plan.md`\n\n## Plan conformance summary\n\nThe implementation was reviewed against the iteration plan for the membership model and",
+          "thread.final_artifact_gate.current_node": "final_summary",
           "internal.fidelity": "summary:high",
           "internal.work_dir": "/workspace/memba",
           "graph.goal": "Review a completed iteration implementation against plan, ADRs, and independent reviewers",
@@ -6299,6 +6736,42 @@
             "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
           },
+          "final_summary": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/002-membership-model/plan.md`\n\n## Plan conformance summary\n\nThe implementation was reviewed against the iteration plan for the membership model and",
+              "last_stage": "final_summary",
+              "response.final_summary": "Result: REVIEW_ACCEPTED\n\nPlan path: `docs/iterations/002-membership-model/plan.md`\n\n## Plan conformance summary\n\nThe implementation was reviewed against the iteration plan for the membership model and was found conformant.\n\nThe plan required:\n\n- A `Person` aggregate with command, event, projector, and query support.\n- A `Membership` aggregate with command, event, and projector support.\n- `Memba.Membership.list_active_members_of_club/1` returning active club members and excluding members of other clubs.\n- Public Cucumber step definitions for shared Background lines around clubs, people, and memberships.\n- ExUnit coverage for aggregate rules, projector behaviour, and query API behaviour.\n- Successful precommit/dev validation.\n\nThe plan conformance gate reported:\n\n```json\n{\"plan_conformant\":true,\"plan_rework_available\":false}\n```\n\nA plan-conformance repair stage was run earlier in the workflow and reported that it addressed boundary/API and duplicate-membership concerns. After that, the plan conformance gate again reported the implementation as conformant.\n\n## ADR conformance summary\n\nThe ADR coherence gate passed and reported:\n\n```json\n{\"adr_coherent\":true,\"adr_rework_available\":false}\n```\n\nThe reviewed implementation is therefore considered coherent with the relevant architectural decisions, including use of event-sourced command handling/projections and avoiding CRUD-style shortcuts for the membership model.\n\n## Independent review outcome\n\nThe independent review fork completed successfully across three reviewers:\n\n- `claude_review` — succeeded\n- `codex_review` — succeeded\n- `gemini_review` — succeeded\n\nThe review fan-in selected `claude_review` as the best candidate:\n\n```text\nSelected best candidate: claude_review\n```\n\nThe synthesized review outcome accepted the implementation:\n\n```json\n{\"implementation_accepted\":true,\"review_fixes_available\":false}\n```\n\nNo additional review fixes were required after synthesis.\n\n## Repairs applied during review\n\nA plan-conformance repair was applied before the final review acceptance. The repair summary stated that it addressed:\n\n- Public Membership command boundary dispatch.\n- Validation that a club exists before adding a member.\n- Validation that a person exists before adding a member.\n- Duplicate active membership rejection.\n- Cucumber steps using the public Membership API rather than lower-level dispatch.\n- Query tests using the public domain command boundary.\n\nNo post-review-synthesis fixes were required, as `review_fixes_available` was `false`.\n\n## Final artifact evidence\n\nThe final artifact gate confirmed that implementation evidence exists via a base/head diff:\n\n```text\nFinal artifact evidence confirmed: base-head-diff\nFinal artifact gate passed.\n```\n\nIt also reported a change summary of:\n\n```text\n43 files changed, 1308 insertions(+), 621 deletions(-)\n```\n\nThis confirms that the review was performed against concrete implementation artifacts.\n\n## Key files reviewed or repaired\n\nThe following key files are present in the final artifact gate evidence and are relevant to the reviewed membership implementation and repair work:\n\n- `web/lib/memba/membership.ex`\n- `web/lib/memba/membership/commands/add_member.ex`\n- `web/lib/memba/membership/commands/create_person.ex`\n- `web/lib/memba/membership/events/member_added.ex`\n- `web/lib/memba/membership/events/person_created.ex`\n- `web/lib/memba/membership/membership.ex`\n- `web/lib/memba/membership/person.ex`\n- `web/lib/memba/membership/projections/membership.ex`\n- `web/lib/memba/membership/projections/person.ex`\n- `web/lib/memba/membership/projectors/membership.ex`\n- `web/lib/memba/membership/projectors/person.ex`\n- `web/lib/memba/membership/router.ex`\n- `web/priv/repo/migrations/2025112219145014_create_membership_people_projection.exs`\n- `web/priv/repo/migrations/2025112219145010_create_membership_memberships_projection.exs`\n- `web/test/features/cucumber_configuration_test.exs`\n- `web/test/features/step_definitions/membership_steps.exs`\n- `web/test/memba/membership/add_member_dispatch_test.exs`\n- `web/test/memba/membership/app_test.exs`\n- `web/test/memba/membership/application_service_test.exs`\n- `web/test/memba/membership/create_person_dispatch_test.exs`\n- `web/test/memba/membership/membership_projection_test.exs`\n- `web/test/memba/membership/membership_test.exs`\n- `web/test/memba/membership/no_crud_spike_test.exs`\n- `web/test/memba/membership/person_projection_test.exs`\n- `web/test/memba/membership/person_test.exs`\n- `web/test/memba/membership/query_test.exs`\n- `web/test/support/event_sourced_case.ex`\n\nOther files appearing in final artifact evidence include supporting configuration, documentation, workflow, and dev tooling changes:\n\n- `.fabro/workflows/iteration-review/workflow.fabro`\n- `bin/dev`\n- `docs/iterations/002-membership-model/implementation.md`\n- `docs/iterations/002-membership-model/todo.md`\n- `docs/iterations/README.md`\n- `web/config/config.exs`\n- `web/lib/memba/application.ex`\n- `web/test/event_sourced_setup_test.exs`\n\nNo locked `.feature` file changes were reported by the final artifact gate.\n\n## Tests and validation run\n\nValidation evidence from the workflow:\n\n- `dev ci` passed.\n- ExUnit completed successfully:\n\n```text\n57 tests, 0 failures\n```\n\nThe repair stage additionally reported successful runs of:\n\n- `devenv shell bin/mix format --check-formatted`\n- Targeted membership and Cucumber configuration tests\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n- `devenv shell bin/mix precommit`\n\nThe final post-repair `dev ci` run also passed with:\n\n```text\n57 tests, 0 failures\n```\n\n## Manual demo/checks still recommended\n\nNo blocking manual checks are required for acceptance.\n\nRecommended optional checks before broader release:\n\n- Run the shared Cucumber feature suite end-to-end in the normal acceptance-test environment, if that is separate from the ExUnit-backed Cucumber configuration tests.\n- Manually inspect projected `membership_people` and `membership_memberships` rows after command dispatch in a local database to confirm operational observability.\n- Exercise repeated add-member attempts from an application shell to confirm the public API returns the expected duplicate-membership error.\n\n## Non-blocking follow-ups\n\n- Future iterations should extend the minimal membership model for lapsed/revoked membership states, renewals, households/families, and privacy rules, as already noted in the iteration plan.\n- Messaging integration remains out of scope for this iteration and is expected to build on the accepted Membership API in a later iteration.\n- The workflow output noted that `devenv 2.1.0` is out of date relative to `2.1.2`; this is non-blocking but can be handled separately."
+            },
+            "notes": "Stage completed: final_summary",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10235,
+                    "output_tokens": 1456,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 94855
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 27637,
+              "tool_time_ms": 0,
+              "active_time_ms": 27637
+            }
+          },
           "adr_coherence_gate": {
             "status": "succeeded",
             "context_updates": {
@@ -6343,7 +6816,7 @@
             "usage": null
           }
         },
-        "next_node_id": "final_summary",
+        "next_node_id": "exit",
         "node_visits": {
           "snapshot_before_plan_repair": 1,
           "preflight_sandbox": 1,
@@ -6361,7 +6834,8 @@
           "read_plan": 1,
           "review_fork": 1,
           "plan_conformance_gate": 2,
-          "dev_check": 2
+          "dev_check": 2,
+          "final_summary": 1
         }
       },
       "diff": {}
@@ -6615,7 +7089,12 @@
       "first_event_seq": 580,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\necho '=== Final Artifact Gate ==='\necho ''\necho 'Checking for implementation artifact evidence...'\necho ''\n\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\n# since Fabro may checkpoint changes between nodes.\n\n# 1. Check working tree status first (may be clean if already checkpointed)\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo \"Working tree changes still present:\"\n  printf '%s\\n' \"$status\"\n  echo ''\nelse\n  echo \"Working tree is clean (changes may have been checkpointed).\"\n  echo ''\nfi\n\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\n# Get the base commit (start of workflow) - try common refs\nbase_ref='origin/main'\nchanged_files=''\nif [ -n \"$base_ref\" ]; then\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    echo \"Configured base_ref is not a valid ref: $base_ref\" >&2\n    exit 1\n  fi\nelse\n  for ref in origin/main main; do\n    if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n      base_ref=$(git merge-base HEAD \"$ref\" 2>/dev/null || true)\n      [ -n \"$base_ref\" ] && break\n    fi\n  done\nfi\n\nif [ -n \"$base_ref\" ]; then\n  echo \"Comparing HEAD with $base_ref...\"\n  changed_files=$(git diff --name-only \"$base_ref\" HEAD 2>/dev/null || true)\n  if [ -n \"$changed_files\" ]; then\n    echo \"Files changed since workflow start:\"\n    printf '%s\\n' \"$changed_files\"\n    echo ''\n    echo \"Change summary:\"\n    git diff --stat \"$base_ref\" HEAD || true\n    echo ''\n  else\n    echo \"No differences found between $base_ref and HEAD.\"\n    echo ''\n  fi\nelse\n  echo \"Could not determine base reference for comparison.\"\n  echo ''\nfi\n\n# 3. Check for very recent commits (Fabro checkpoints)\nrecent_commits=$(git log --oneline -5 --format='%h %s')\nif [ -n \"$recent_commits\" ]; then\n  echo \"Recent commits (may include Fabro checkpoints):\"\n  printf '%s\\n' \"$recent_commits\"\n  echo ''\nfi\n\n# 4. Gather all evidence\nevidence=''\nif [ -n \"$status\" ]; then\n  evidence=\"working-tree\"\nfi\nif [ -n \"$changed_files\" ]; then\n  evidence=\"${evidence:+$evidence, }base-head-diff\"\nfi\n\n# 5. Check for locked .feature file changes\nif [ -n \"$status\" ] && printf '%s\\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Final working tree includes locked acceptance feature changes.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\nif [ -n \"$changed_files\" ] && printf '%s\\n' \"$changed_files\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Implementation modified locked acceptance feature files.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\n\n# 6. Fail if no evidence of changes\nif [ -z \"$evidence\" ]; then\n  echo 'ERROR: Iteration review reached finalization with no artifact evidence.' >&2\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\n  echo 'Refusing to report success without implementation artifacts.' >&2\n  exit 1\nfi\n\necho \"Final artifact evidence confirmed: $evidence\"\necho 'Final artifact gate passed.'",
+        "failure_reason": null,
+        "timestamp": "2026-05-29T18:16:04.364630153Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -6623,11 +7102,27 @@
         "command": "exec 2>&1\nset -eu\necho '=== Final Artifact Gate ==='\necho ''\necho 'Checking for implementation artifact evidence...'\necho ''\n\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\n# since Fabro may checkpoint changes between nodes.\n\n# 1. Check working tree status first (may be clean if already checkpointed)\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo \"Working tree changes still present:\"\n  printf '%s\\n' \"$status\"\n  echo ''\nelse\n  echo \"Working tree is clean (changes may have been checkpointed).\"\n  echo ''\nfi\n\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\n# Get the base commit (start of workflow) - try common refs\nbase_ref='origin/main'\nchanged_files=''\nif [ -n \"$base_ref\" ]; then\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    echo \"Configured base_ref is not a valid ref: $base_ref\" >&2\n    exit 1\n  fi\nelse\n  for ref in origin/main main; do\n    if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n      base_ref=$(git merge-base HEAD \"$ref\" 2>/dev/null || true)\n      [ -n \"$base_ref\" ] && break\n    fi\n  done\nfi\n\nif [ -n \"$base_ref\" ]; then\n  echo \"Comparing HEAD with $base_ref...\"\n  changed_files=$(git diff --name-only \"$base_ref\" HEAD 2>/dev/null || true)\n  if [ -n \"$changed_files\" ]; then\n    echo \"Files changed since workflow start:\"\n    printf '%s\\n' \"$changed_files\"\n    echo ''\n    echo \"Change summary:\"\n    git diff --stat \"$base_ref\" HEAD || true\n    echo ''\n  else\n    echo \"No differences found between $base_ref and HEAD.\"\n    echo ''\n  fi\nelse\n  echo \"Could not determine base reference for comparison.\"\n  echo ''\nfi\n\n# 3. Check for very recent commits (Fabro checkpoints)\nrecent_commits=$(git log --oneline -5 --format='%h %s')\nif [ -n \"$recent_commits\" ]; then\n  echo \"Recent commits (may include Fabro checkpoints):\"\n  printf '%s\\n' \"$recent_commits\"\n  echo ''\nfi\n\n# 4. Gather all evidence\nevidence=''\nif [ -n \"$status\" ]; then\n  evidence=\"working-tree\"\nfi\nif [ -n \"$changed_files\" ]; then\n  evidence=\"${evidence:+$evidence, }base-head-diff\"\nfi\n\n# 5. Check for locked .feature file changes\nif [ -n \"$status\" ] && printf '%s\\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Final working tree includes locked acceptance feature changes.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\nif [ -n \"$changed_files\" ] && printf '%s\\n' \"$changed_files\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Implementation modified locked acceptance feature files.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\n\n# 6. Fail if no evidence of changes\nif [ -z \"$evidence\" ]; then\n  echo 'ERROR: Iteration review reached finalization with no artifact evidence.' >&2\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\n  echo 'Refusing to report success without implementation artifacts.' >&2\n  exit 1\nfi\n\necho \"Final artifact evidence confirmed: $evidence\"\necho 'Final artifact gate passed.'",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/6a81f3d04dfe55bf106d65d291d426380199eff1d04077921c4cc206f5c53356",
+        "exit_code": 0,
+        "duration_ms": 163,
+        "termination": "exited",
+        "output_bytes": 5420,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 5420,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-05-29T18:16:04.193028233Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 171,
+        "inference_time_ms": 0,
+        "tool_time_ms": 163,
+        "active_time_ms": 163
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -6636,7 +7131,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "review_gate@1": {
       "first_event_seq": 572,
@@ -6671,6 +7166,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "final_summary@1": {
+      "first_event_seq": 590,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "low"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-29T18:16:07.793463317Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "adr_gate@1": {
       "first_event_seq": 512,
