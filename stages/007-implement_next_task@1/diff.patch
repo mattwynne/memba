@@ -1,0 +1,547 @@
+diff --git a/docs/iterations/002-membership-model/todo.md b/docs/iterations/002-membership-model/todo.md
+index 799010f..19d10ed 100644
+--- a/docs/iterations/002-membership-model/todo.md
++++ b/docs/iterations/002-membership-model/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Add `Person` aggregate, `CreatePerson` command, `PersonCreated` event,
++- [x] 001 Add `Person` aggregate, `CreatePerson` command, `PersonCreated` event,
+ - [ ] 002 Add `Membership` aggregate, `AddMember` command, `MemberAdded` event,
+ - [ ] 003 Implement `list_active_members_of_club/1` and supporting queries on the
+ - [ ] 004 Add Cucumber step definitions for all Background lines in both feature
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 4979817..d4cec38 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -10,7 +10,7 @@ import Config
+ config :memba,
+   ecto_repos: [Memba.Repo],
+   event_stores: [Memba.EventStore],
+-  event_sourced_projection_tables: [:projection_versions, :membership_clubs],
++  event_sourced_projection_tables: [:projection_versions, :membership_clubs, :membership_people],
+   generators: [timestamp_type: :utc_datetime]
+ 
+ config :memba, Memba.Membership.App,
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index d47c58d..4f22392 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -12,6 +12,7 @@ defmodule Memba.Application do
+       Memba.Repo,
+       Memba.Membership.App,
+       Memba.Membership.Projectors.Club,
++      Memba.Membership.Projectors.Person,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+       {Phoenix.PubSub, name: Memba.PubSub},
+       # Start a worker by calling: Memba.Worker.start_link(arg)
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 94974cd..b452fc7 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -4,6 +4,7 @@ defmodule Memba.Membership do
+   """
+ 
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Person
+   alias Memba.Repo
+ 
+   @doc """
+@@ -18,4 +19,17 @@ defmodule Memba.Membership do
+       :error -> nil
+     end
+   end
++
++  @doc """
++  Fetch a projected person read model by caller-generated UUID.
++
++  Returns `nil` when the ID is absent or is not a valid UUID.
++  """
++  def get_person(person_id) do
++    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
++      Repo.get(Person, person_id)
++    else
++      :error -> nil
++    end
++  end
+ end
+diff --git a/web/lib/memba/membership/commands/create_person.ex b/web/lib/memba/membership/commands/create_person.ex
+new file mode 100644
+index 0000000..ba0c4fe
+--- /dev/null
++++ b/web/lib/memba/membership/commands/create_person.ex
+@@ -0,0 +1,10 @@
++defmodule Memba.Membership.Commands.CreatePerson do
++  @moduledoc """
++  Command to create a person in the Membership context.
++
++  The caller supplies the aggregate identity as `person_id`.
++  """
++
++  @enforce_keys [:person_id, :name, :email]
++  defstruct [:person_id, :name, :email]
++end
+diff --git a/web/lib/memba/membership/events/person_created.ex b/web/lib/memba/membership/events/person_created.ex
+new file mode 100644
+index 0000000..0fd3757
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_created.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonCreated do
++  @moduledoc """
++  Event raised when a person has been created.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :name, :email]
++  defstruct [:person_id, :name, :email]
++end
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+new file mode 100644
+index 0000000..6f50f14
+--- /dev/null
++++ b/web/lib/memba/membership/person.ex
+@@ -0,0 +1,64 @@
++defmodule Memba.Membership.Person do
++  @moduledoc """
++  Person aggregate for the Membership bounded context.
++  """
++
++  alias Commanded.Aggregates.Aggregate
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Events.PersonCreated
++
++  @behaviour Aggregate
++
++  defstruct [:person_id, :name, :email]
++
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %CreatePerson{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         {:ok, name} <- normalize_name(command.name),
++         {:ok, email} <- normalize_email(command.email) do
++      %PersonCreated{person_id: command.person_id, name: name, email: email}
++    end
++  end
++
++  def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
++
++  @impl Aggregate
++  def apply(%__MODULE__{} = person, %PersonCreated{} = event) do
++    %__MODULE__{person | person_id: event.person_id, name: event.name, email: event.email}
++  end
++
++  defp validate_person_id(person_id) do
++    case Ecto.UUID.cast(person_id) do
++      {:ok, ^person_id} -> :ok
++      _other -> {:error, :invalid_person_id}
++    end
++  end
++
++  defp normalize_name(name) when is_binary(name) do
++    case String.trim(name) do
++      "" -> {:error, :invalid_name}
++      trimmed_name -> {:ok, trimmed_name}
++    end
++  end
++
++  defp normalize_name(_name), do: {:error, :invalid_name}
++
++  defp normalize_email(email) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, :invalid_email}
++    end
++  end
++
++  defp normalize_email(_email), do: {:error, :invalid_email}
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _other -> false
++    end
++  end
++end
+diff --git a/web/lib/memba/membership/projections/person.ex b/web/lib/memba/membership/projections/person.ex
+new file mode 100644
+index 0000000..35223e8
+--- /dev/null
++++ b/web/lib/memba/membership/projections/person.ex
+@@ -0,0 +1,15 @@
++defmodule Memba.Membership.Projections.Person do
++  @moduledoc """
++  Read model projection for a person in the Membership bounded context.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:person_id, :binary_id, autogenerate: false}
++  schema "membership_people" do
++    field :name, :string
++    field :email, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projectors/person.ex b/web/lib/memba/membership/projectors/person.ex
+new file mode 100644
+index 0000000..7a59546
+--- /dev/null
++++ b/web/lib/memba/membership/projectors/person.ex
+@@ -0,0 +1,22 @@
++defmodule Memba.Membership.Projectors.Person do
++  @moduledoc """
++  Projects person events into the Membership person read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Membership.App,
++    repo: Memba.Repo,
++    name: "Memba.Membership.Projectors.Person",
++    consistency: :strong
++
++  alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++
++  project(%PersonCreated{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :membership_person, %PersonProjection{
++      person_id: event.person_id,
++      name: event.name,
++      email: event.email
++    })
++  end)
++end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 77dfa00..f207c0a 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -6,9 +6,13 @@ defmodule Memba.Membership.Router do
+   use Commanded.Commands.Router
+ 
+   alias Memba.Membership.Club
++  alias Memba.Membership.Person
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
+ 
+   identify(Club, by: :club_id)
++  identify(Person, by: :person_id)
+ 
+   dispatch(CreateClub, to: Club)
++  dispatch(CreatePerson, to: Person)
+ end
+diff --git a/web/priv/repo/migrations/20260529145014_create_membership_people_projection.exs b/web/priv/repo/migrations/20260529145014_create_membership_people_projection.exs
+new file mode 100644
+index 0000000..46f63db
+--- /dev/null
++++ b/web/priv/repo/migrations/20260529145014_create_membership_people_projection.exs
+@@ -0,0 +1,13 @@
++defmodule Memba.Repo.Migrations.CreateMembershipPeopleProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:membership_people, primary_key: false) do
++      add :person_id, :uuid, primary_key: true
++      add :name, :text, null: false
++      add :email, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++  end
++end
+diff --git a/web/test/event_sourced_setup_test.exs b/web/test/event_sourced_setup_test.exs
+index e175d05..db8de4a 100644
+--- a/web/test/event_sourced_setup_test.exs
++++ b/web/test/event_sourced_setup_test.exs
+@@ -33,6 +33,7 @@ defmodule Memba.EventSourcedSetupTest do
+   test "projection tables are migrated in the application schema" do
+     assert [[true]] = query!("SELECT to_regclass('public.projection_versions') IS NOT NULL").rows
+     assert [[true]] = query!("SELECT to_regclass('public.membership_clubs') IS NOT NULL").rows
++    assert [[true]] = query!("SELECT to_regclass('public.membership_people') IS NOT NULL").rows
+   end
+ 
+   test "event-sourced test helper resets EventStore and projection rows" do
+@@ -65,15 +66,24 @@ defmodule Memba.EventSourcedSetupTest do
+     VALUES ('#{club_id}', 'Kootenay Mountaineering Club', now(), now())
+     """)
+ 
++    person_id = Ecto.UUID.generate()
++
++    query!("""
++    INSERT INTO membership_people (person_id, name, email, inserted_at, updated_at)
++    VALUES ('#{person_id}', 'Alice', 'alice@example.com', now(), now())
++    """)
++
+     assert [[1]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
+     assert [[1]] = query!("SELECT count(*) FROM projection_versions").rows
+     assert [[1]] = query!("SELECT count(*) FROM membership_clubs").rows
++    assert [[1]] = query!("SELECT count(*) FROM membership_people").rows
+ 
+     Memba.EventSourcedCase.reset_event_sourced_storage!()
+ 
+     assert [[0]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
+     assert [[0]] = query!("SELECT count(*) FROM projection_versions").rows
+     assert [[0]] = query!("SELECT count(*) FROM membership_clubs").rows
++    assert [[0]] = query!("SELECT count(*) FROM membership_people").rows
+     assert [["$all"]] = query!(~S|SELECT stream_uuid FROM "event_store"."streams"|).rows
+   end
+ 
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 135bb9c..c74f22d 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -5,7 +5,9 @@ defmodule Memba.Membership.AppTest do
+ 
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
++  alias Memba.Membership.Projectors.Person, as: PersonProjector
+   alias Memba.Membership.Router
+ 
+   test "Membership Commanded app is supervised by the Phoenix application" do
+@@ -21,11 +23,21 @@ defmodule Memba.Membership.AppTest do
+              {{ClubProjector, _opts}, pid, :worker, [ClubProjector]} when is_pid(pid) -> true
+              _child -> false
+            end)
++
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{PersonProjector, _opts}, pid, :worker, [PersonProjector]} when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
+   end
+ 
+   test "Membership Commanded app includes the Membership router" do
+-    assert App.__registered_commands__() == Router.__registered_commands__()
+-    assert Router.__registered_commands__() == [CreateClub]
++    expected_commands = MapSet.new([CreateClub, CreatePerson])
++
++    assert MapSet.new(App.__registered_commands__()) == expected_commands
++    assert MapSet.new(Router.__registered_commands__()) == expected_commands
+   end
+ 
+   test "Membership Commanded app dispatches through its router" do
+diff --git a/web/test/memba/membership/create_person_dispatch_test.exs b/web/test/memba/membership/create_person_dispatch_test.exs
+new file mode 100644
+index 0000000..57f68ce
+--- /dev/null
++++ b/web/test/memba/membership/create_person_dispatch_test.exs
+@@ -0,0 +1,51 @@
++defmodule Memba.Membership.CreatePersonDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Person
++
++  test "Membership app dispatch routes CreatePerson to the Person aggregate" do
++    person_id = Ecto.UUID.generate()
++
++    command = %CreatePerson{
++      person_id: person_id,
++      name: "Alice",
++      email: "alice@example.com"
++    }
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 1,
++              events: [
++                %PersonCreated{
++                  person_id: ^person_id,
++                  name: "Alice",
++                  email: "alice@example.com"
++                }
++              ],
++              aggregate_state: %Person{
++                person_id: ^person_id,
++                name: "Alice",
++                email: "alice@example.com"
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++
++    assert %Person{person_id: ^person_id, name: "Alice", email: "alice@example.com"} =
++             App.aggregate_state(Person, person_id)
++  end
++
++  test "Membership app rejects a duplicate CreatePerson for the same aggregate identity" do
++    command = %CreatePerson{
++      person_id: Ecto.UUID.generate(),
++      name: "Alice",
++      email: "alice@example.com"
++    }
++
++    assert :ok = App.dispatch(command, consistency: :strong)
++    assert {:error, :already_created} = App.dispatch(command)
++  end
++end
+diff --git a/web/test/memba/membership/person_projection_test.exs b/web/test/memba/membership/person_projection_test.exs
+new file mode 100644
+index 0000000..ce19617
+--- /dev/null
++++ b/web/test/memba/membership/person_projection_test.exs
+@@ -0,0 +1,36 @@
++defmodule Memba.Membership.PersonProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++
++  test "CreatePerson is projected into the public Membership person query API" do
++    person_id = Ecto.UUID.generate()
++
++    assert is_nil(Membership.get_person(person_id))
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: "Alice",
++                 email: "alice@example.com"
++               },
++               consistency: :strong
++             )
++
++    assert %PersonProjection{
++             person_id: ^person_id,
++             name: "Alice",
++             email: "alice@example.com"
++           } = Membership.get_person(person_id)
++  end
++
++  test "get_person/1 returns nil for missing or invalid person IDs" do
++    assert is_nil(Membership.get_person(Ecto.UUID.generate()))
++    assert is_nil(Membership.get_person(nil))
++    assert is_nil(Membership.get_person("not-a-uuid"))
++  end
++end
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+new file mode 100644
+index 0000000..ff997a4
+--- /dev/null
++++ b/web/test/memba/membership/person_test.exs
+@@ -0,0 +1,99 @@
++defmodule Memba.Membership.PersonTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Person
++
++  describe "execute/2 CreatePerson" do
++    test "emits PersonCreated using the caller-supplied UUID identity" do
++      person_id = Ecto.UUID.generate()
++
++      command = %CreatePerson{
++        person_id: person_id,
++        name: " Alice ",
++        email: " Alice@Example.COM "
++      }
++
++      assert %PersonCreated{
++               person_id: ^person_id,
++               name: "Alice",
++               email: "alice@example.com"
++             } = Person.execute(%Person{}, command)
++    end
++
++    test "rejects missing or malformed person UUIDs" do
++      assert {:error, :invalid_person_id} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: nil,
++                 name: "Alice",
++                 email: "alice@example.com"
++               })
++
++      assert {:error, :invalid_person_id} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: "not-a-uuid",
++                 name: "Alice",
++                 email: "alice@example.com"
++               })
++    end
++
++    test "rejects blank person names" do
++      assert {:error, :invalid_name} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: Ecto.UUID.generate(),
++                 name: "  ",
++                 email: "alice@example.com"
++               })
++    end
++
++    test "rejects blank or malformed email addresses" do
++      assert {:error, :invalid_email} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: Ecto.UUID.generate(),
++                 name: "Alice",
++                 email: "  "
++               })
++
++      assert {:error, :invalid_email} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: Ecto.UUID.generate(),
++                 name: "Alice",
++                 email: "alice.example.com"
++               })
++    end
++
++    test "rejects creating the same aggregate twice" do
++      person_id = Ecto.UUID.generate()
++
++      person =
++        Person.apply(%Person{}, %PersonCreated{
++          person_id: person_id,
++          name: "Alice",
++          email: "alice@example.com"
++        })
++
++      assert {:error, :already_created} =
++               Person.execute(person, %CreatePerson{
++                 person_id: person_id,
++                 name: "Alice",
++                 email: "alice@example.com"
++               })
++    end
++  end
++
++  test "apply/2 records the created person identity, name, and email" do
++    person_id = Ecto.UUID.generate()
++
++    assert %Person{
++             person_id: ^person_id,
++             name: "Alice",
++             email: "alice@example.com"
++           } =
++             Person.apply(%Person{}, %PersonCreated{
++               person_id: person_id,
++               name: "Alice",
++               email: "alice@example.com"
++             })
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index a1a2bdc..7900335 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -11,7 +11,8 @@ defmodule Memba.EventSourcedCase do
+ 
+   @projection_versions_table :projection_versions
+   @projectors [
+-    Memba.Membership.Projectors.Club
++    Memba.Membership.Projectors.Club,
++    Memba.Membership.Projectors.Person
+   ]
+ 
+   using do
