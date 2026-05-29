@@ -1,0 +1,376 @@
+diff --git a/docs/iterations/003-messaging-skeleton/todo.md b/docs/iterations/003-messaging-skeleton/todo.md
+index 85c8704..5270a21 100644
+--- a/docs/iterations/003-messaging-skeleton/todo.md
++++ b/docs/iterations/003-messaging-skeleton/todo.md
+@@ -4,6 +4,6 @@
+ - [x] 002 Add the `Message` aggregate, `SendMessage` command, and `MessageSent` +
+ - [x] 003 Add the application service that resolves recipients via Membership and
+ - [x] 004 Define the fake delivery provider port and wire it into the message
+-- [ ] 005 Add projections and queries for messages and recipient deliveries.
++- [x] 005 Add projections and queries for messages and recipient deliveries.
+ - [ ] 006 Add Cucumber step definitions for "A member sends a club message".
+ - [ ] 007 Run `devenv shell mix precommit` and fix any issues.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index a83c851..562bee8 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -14,7 +14,9 @@ config :memba,
+     :projection_versions,
+     :membership_clubs,
+     :membership_memberships,
+-    :membership_people
++    :membership_people,
++    :messaging_messages,
++    :messaging_recipient_deliveries
+   ],
+   generators: [timestamp_type: :utc_datetime]
+ 
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 3e3f08a..25c303e 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -13,6 +13,8 @@ defmodule Memba.Application do
+       Memba.Membership.App,
+       Memba.Messaging.App,
+       Memba.Messaging.DeliveryProviders.Fake,
++      Memba.Messaging.Projectors.Message,
++      Memba.Messaging.Projectors.RecipientDelivery,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.Membership,
+       Memba.Membership.Projectors.Person,
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index bba0c2b..a22ef15 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -8,7 +8,12 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.DeliveryProvider
+   alias Memba.Messaging.DeliveryRequest
++  alias Memba.Messaging.Projections.Message, as: MessageProjection
++  alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
+   alias Memba.Messaging.Recipient
++  alias Memba.Repo
++
++  import Ecto.Query
+ 
+   @doc """
+   Send a message to the active members of a club.
+@@ -26,6 +31,50 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Fetch a projected message read model by caller-generated UUID.
++
++  Returns `nil` when the ID is absent or is not a valid UUID.
++  """
++  def get_message(message_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
++      Repo.get(MessageProjection, message_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Fetch a projected recipient delivery read model by caller-generated UUID.
++
++  Returns `nil` when the ID is absent or is not a valid UUID.
++  """
++  def get_recipient_delivery(delivery_id) do
++    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
++      Repo.get(RecipientDeliveryProjection, delivery_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  List recipient delivery records for a projected message.
++
++  Invalid or missing message IDs return an empty list. Results are ordered by
++  recipient name and ID to provide deterministic assertions for acceptance
++  plumbing.
++  """
++  def list_recipient_deliveries(message_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
++      RecipientDeliveryProjection
++      |> where([delivery], delivery.message_id == ^message_id)
++      |> order_by([delivery], asc: delivery.recipient_name, asc: delivery.recipient_id)
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   defp dispatch_send_message(%SendMessage{} = command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> {:ok, :ok}
+diff --git a/web/lib/memba/messaging/projections/message.ex b/web/lib/memba/messaging/projections/message.ex
+new file mode 100644
+index 0000000..cc16c52
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/message.ex
+@@ -0,0 +1,17 @@
++defmodule Memba.Messaging.Projections.Message do
++  @moduledoc """
++  Read model projection for a sent message in the Messaging bounded context.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:message_id, :binary_id, autogenerate: false}
++  schema "messaging_messages" do
++    field :club_id, :binary_id
++    field :sender_id, :binary_id
++    field :subject, :string
++    field :body, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projections/recipient_delivery.ex b/web/lib/memba/messaging/projections/recipient_delivery.ex
+new file mode 100644
+index 0000000..4426bc8
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/recipient_delivery.ex
+@@ -0,0 +1,19 @@
++defmodule Memba.Messaging.Projections.RecipientDelivery do
++  @moduledoc """
++  Read model projection for one recipient delivery belonging to a message.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:delivery_id, :binary_id, autogenerate: false}
++  schema "messaging_recipient_deliveries" do
++    field :message_id, :binary_id
++    field :recipient_id, :binary_id
++    field :recipient_name, :string
++    field :recipient_address, :string
++    field :channel, :string
++    field :status, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/message.ex b/web/lib/memba/messaging/projectors/message.ex
+new file mode 100644
+index 0000000..8c00686
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/message.ex
+@@ -0,0 +1,24 @@
++defmodule Memba.Messaging.Projectors.Message do
++  @moduledoc """
++  Projects message events into the Messaging message read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.Message",
++    consistency: :strong
++
++  alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Projections.Message, as: MessageProjection
++
++  project(%MessageSent{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :messaging_message, %MessageProjection{
++      message_id: event.message_id,
++      club_id: event.club_id,
++      sender_id: event.sender_id,
++      subject: event.subject,
++      body: event.body
++    })
++  end)
++end
+diff --git a/web/lib/memba/messaging/projectors/recipient_delivery.ex b/web/lib/memba/messaging/projectors/recipient_delivery.ex
+new file mode 100644
+index 0000000..fe00772
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/recipient_delivery.ex
+@@ -0,0 +1,26 @@
++defmodule Memba.Messaging.Projectors.RecipientDelivery do
++  @moduledoc """
++  Projects recipient delivery events into the Messaging delivery read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.RecipientDelivery",
++    consistency: :strong
++
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
++
++  project(%RecipientDeliveryCreated{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :messaging_recipient_delivery, %RecipientDeliveryProjection{
++      delivery_id: event.delivery_id,
++      message_id: event.message_id,
++      recipient_id: event.recipient_id,
++      recipient_name: event.recipient_name,
++      recipient_address: event.recipient_email,
++      channel: "email",
++      status: "sent"
++    })
++  end)
++end
+diff --git a/web/priv/repo/migrations/20260529202746_create_messaging_projections.exs b/web/priv/repo/migrations/20260529202746_create_messaging_projections.exs
+new file mode 100644
+index 0000000..d0d35c1
+--- /dev/null
++++ b/web/priv/repo/migrations/20260529202746_create_messaging_projections.exs
+@@ -0,0 +1,34 @@
++defmodule Memba.Repo.Migrations.CreateMessagingProjections do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_messages, primary_key: false) do
++      add :message_id, :uuid, primary_key: true
++      add :club_id, :uuid, null: false
++      add :sender_id, :uuid, null: false
++      add :subject, :text, null: false
++      add :body, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:messaging_messages, [:club_id])
++    create index(:messaging_messages, [:sender_id])
++
++    create table(:messaging_recipient_deliveries, primary_key: false) do
++      add :delivery_id, :uuid, primary_key: true
++      add :message_id, :uuid, null: false
++      add :recipient_id, :uuid, null: false
++      add :recipient_name, :text, null: false
++      add :recipient_address, :text, null: false
++      add :channel, :text, null: false
++      add :status, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:messaging_recipient_deliveries, [:message_id])
++    create index(:messaging_recipient_deliveries, [:recipient_id])
++    create unique_index(:messaging_recipient_deliveries, [:message_id, :recipient_id])
++  end
++end
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+new file mode 100644
+index 0000000..4c693ce
+--- /dev/null
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -0,0 +1,97 @@
++defmodule Memba.Messaging.MessageProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.Message, as: MessageProjection
++  alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
++  alias Memba.Messaging.Recipient
++
++  test "SendMessage is projected into public Messaging message and delivery queries" do
++    message_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    bob_id = Ecto.UUID.generate()
++    alice_delivery_id = Ecto.UUID.generate()
++    bob_delivery_id = Ecto.UUID.generate()
++
++    assert is_nil(Messaging.get_message(message_id))
++    assert Messaging.list_recipient_deliveries(message_id) == []
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: sender_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: [
++                   %Recipient{
++                     delivery_id: alice_delivery_id,
++                     person_id: sender_id,
++                     name: "Alice",
++                     email: "alice@example.com"
++                   },
++                   %Recipient{
++                     delivery_id: bob_delivery_id,
++                     person_id: bob_id,
++                     name: "Bob",
++                     email: "bob@example.com"
++                   }
++                 ]
++               },
++               consistency: :strong
++             )
++
++    assert %MessageProjection{
++             message_id: ^message_id,
++             club_id: ^club_id,
++             sender_id: ^sender_id,
++             subject: "Trip planning night",
++             body: "Bring route ideas."
++           } = Messaging.get_message(message_id)
++
++    assert [
++             %RecipientDeliveryProjection{
++               delivery_id: ^alice_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^sender_id,
++               recipient_name: "Alice",
++               recipient_address: "alice@example.com",
++               channel: "email",
++               status: "sent"
++             },
++             %RecipientDeliveryProjection{
++               delivery_id: ^bob_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^bob_id,
++               recipient_name: "Bob",
++               recipient_address: "bob@example.com",
++               channel: "email",
++               status: "sent"
++             }
++           ] = Messaging.list_recipient_deliveries(message_id)
++
++    assert %RecipientDeliveryProjection{
++             delivery_id: ^bob_delivery_id,
++             message_id: ^message_id,
++             recipient_id: ^bob_id
++           } = Messaging.get_recipient_delivery(bob_delivery_id)
++  end
++
++  test "message and delivery queries return empty results for missing or invalid IDs" do
++    assert is_nil(Messaging.get_message(Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_message(nil))
++    assert is_nil(Messaging.get_message("not-a-uuid"))
++
++    assert is_nil(Messaging.get_recipient_delivery(Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_recipient_delivery(nil))
++    assert is_nil(Messaging.get_recipient_delivery("not-a-uuid"))
++
++    assert Messaging.list_recipient_deliveries(Ecto.UUID.generate()) == []
++    assert Messaging.list_recipient_deliveries(nil) == []
++    assert Messaging.list_recipient_deliveries("not-a-uuid") == []
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index b1fe7e4..21e68aa 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -13,7 +13,9 @@ defmodule Memba.EventSourcedCase do
+   @projectors [
+     Memba.Membership.Projectors.Club,
+     Memba.Membership.Projectors.Membership,
+-    Memba.Membership.Projectors.Person
++    Memba.Membership.Projectors.Person,
++    Memba.Messaging.Projectors.Message,
++    Memba.Messaging.Projectors.RecipientDelivery
+   ]
+ 
+   using do
