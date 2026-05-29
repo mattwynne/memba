@@ -15,7 +15,8 @@ defmodule Memba.EventSourcedCase do
     Memba.Membership.Projectors.Membership,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,
-    Memba.Messaging.Projectors.RecipientDelivery
+    Memba.Messaging.Projectors.RecipientDelivery,
+    Memba.Messaging.Projectors.MemberReceipt
   ]
 
   using do

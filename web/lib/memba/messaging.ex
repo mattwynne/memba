@@ -8,6 +8,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.DeliveryProvider
   alias Memba.Messaging.DeliveryRequest
+  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
   alias Memba.Messaging.Recipient
@@ -69,6 +70,52 @@ defmodule Memba.Messaging do
       RecipientDeliveryProjection
       |> where([delivery], delivery.message_id == ^message_id)
       |> order_by([delivery], asc: delivery.recipient_name, asc: delivery.recipient_id)
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
+  Fetch a member-facing receipt read model by delivery UUID.
+
+  Returns `nil` when the ID is absent or is not a valid UUID.
+  """
+  def get_member_receipt(delivery_id) do
+    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+      Repo.get(MemberReceiptProjection, delivery_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch a member-facing receipt for a recipient on a message.
+
+  Invalid or missing IDs return `nil`. The receipt status uses ADR 0006's
+  simplified member vocabulary: sent, delivered, delivery problem, or opened.
+  """
+  def get_member_receipt(message_id, recipient_id) do
+    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
+         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
+      Repo.get_by(MemberReceiptProjection, message_id: message_id, recipient_id: recipient_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  List member-facing receipt records for a projected message.
+
+  Invalid or missing message IDs return an empty list. Results are ordered by
+  recipient name and ID to provide deterministic assertions for acceptance
+  plumbing.
+  """
+  def list_member_receipts(message_id) do
+    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+      MemberReceiptProjection
+      |> where([receipt], receipt.message_id == ^message_id)
+      |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
       |> Repo.all()
     else
       :error -> []
