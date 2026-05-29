@@ -18,6 +18,10 @@ defmodule Memba.Messaging.DeliveryProvider do
   end
 
   defp provider do
-    Application.get_env(:memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake)
+    Application.get_env(
+      :memba,
+      :messaging_delivery_provider,
+      Memba.Messaging.DeliveryProviders.Fake
+    )
   end
 end
