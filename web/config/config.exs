@@ -16,7 +16,9 @@ config :memba,
     :membership_memberships,
     :membership_people,
     :messaging_messages,
-    :messaging_recipient_deliveries
+    :messaging_recipient_deliveries,
+    :messaging_member_receipts,
+    :messaging_operator_deliverabilities
   ],
   generators: [timestamp_type: :utc_datetime]
 

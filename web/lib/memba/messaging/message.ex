@@ -7,9 +7,19 @@ defmodule Memba.Messaging.Message do
   """
 
   alias Commanded.Aggregates.Aggregate
+  alias Memba.Messaging.Commands.ReportDeliveryBounced
+  alias Memba.Messaging.Commands.ReportDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportDeliveryOpened
+  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
+  alias Memba.Messaging.Events.RecipientDeliveryBounced
   alias Memba.Messaging.Events.RecipientDeliveryCreated
+  alias Memba.Messaging.Events.RecipientDeliveryDelayed
+  alias Memba.Messaging.Events.RecipientDeliveryDelivered
+  alias Memba.Messaging.Events.RecipientDeliveryOpened
+  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
   alias Memba.Messaging.Recipient
 
   @behaviour Aggregate
@@ -20,6 +30,7 @@ defmodule Memba.Messaging.Message do
     :sender_id,
     :subject,
     :body,
+    delivery_statuses: %{},
     recipient_delivery_ids: MapSet.new(),
     recipient_ids: MapSet.new()
   ]
@@ -48,6 +59,26 @@ defmodule Memba.Messaging.Message do
 
   def execute(%__MODULE__{}, %SendMessage{}), do: {:error, :already_sent}
 
+  def execute(%__MODULE__{} = message, %ReportDeliveryDelivered{} = command) do
+    report_status(message, command, :delivered, RecipientDeliveryDelivered)
+  end
+
+  def execute(%__MODULE__{} = message, %ReportDeliveryDelayed{} = command) do
+    report_status_with_reason(message, command, :delayed, RecipientDeliveryDelayed)
+  end
+
+  def execute(%__MODULE__{} = message, %ReportDeliveryBounced{} = command) do
+    report_status_with_reason(message, command, :bounced, RecipientDeliveryBounced)
+  end
+
+  def execute(%__MODULE__{} = message, %ReportDeliverySpamComplaint{} = command) do
+    report_status_with_reason(message, command, :spam_complaint, RecipientDeliverySpamComplaint)
+  end
+
+  def execute(%__MODULE__{} = message, %ReportDeliveryOpened{} = command) do
+    report_status(message, command, :opened, RecipientDeliveryOpened)
+  end
+
   @impl Aggregate
   def apply(%__MODULE__{} = message, %MessageSent{} = event) do
     %__MODULE__{
@@ -64,7 +95,114 @@ defmodule Memba.Messaging.Message do
     %__MODULE__{
       message
       | recipient_delivery_ids: MapSet.put(message.recipient_delivery_ids, event.delivery_id),
+        delivery_statuses:
+          Map.put(message.delivery_statuses, event.delivery_id, %{
+            status: :sent,
+            reason: nil
+          }),
         recipient_ids: MapSet.put(message.recipient_ids, event.recipient_id)
+    }
+  end
+
+  def apply(%__MODULE__{} = message, %RecipientDeliveryDelivered{} = event) do
+    put_delivery_status(message, event.delivery_id, :delivered)
+  end
+
+  def apply(%__MODULE__{} = message, %RecipientDeliveryDelayed{} = event) do
+    put_delivery_status(message, event.delivery_id, :delayed, event.reason)
+  end
+
+  def apply(%__MODULE__{} = message, %RecipientDeliveryBounced{} = event) do
+    put_delivery_status(message, event.delivery_id, :bounced, event.reason)
+  end
+
+  def apply(%__MODULE__{} = message, %RecipientDeliverySpamComplaint{} = event) do
+    put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
+  end
+
+  def apply(%__MODULE__{} = message, %RecipientDeliveryOpened{} = event) do
+    put_delivery_status(message, event.delivery_id, :opened)
+  end
+
+  defp report_status(%__MODULE__{} = message, command, next_status, event_module) do
+    with :ok <- validate_delivery_command(message, command),
+         :ok <- validate_status_transition(message, command.delivery_id, next_status, nil) do
+      struct(event_module, message_id: command.message_id, delivery_id: command.delivery_id)
+    end
+  end
+
+  defp report_status_with_reason(%__MODULE__{} = message, command, next_status, event_module) do
+    with :ok <- validate_delivery_command(message, command),
+         {:ok, reason} <- normalize_text(command.reason, :invalid_reason),
+         :ok <- validate_status_transition(message, command.delivery_id, next_status, reason) do
+      struct(event_module,
+        message_id: command.message_id,
+        delivery_id: command.delivery_id,
+        reason: reason
+      )
+    end
+  end
+
+  defp validate_delivery_command(%__MODULE__{} = message, command) do
+    with :ok <- validate_uuid(command.message_id, :invalid_message_id),
+         :ok <- validate_uuid(command.delivery_id, :invalid_delivery_id),
+         :ok <- validate_message_sent(message),
+         :ok <- validate_message_identity(message, command.message_id) do
+      validate_known_delivery(message, command.delivery_id)
+    end
+  end
+
+  defp validate_message_sent(%__MODULE__{message_id: nil}), do: {:error, :message_not_sent}
+  defp validate_message_sent(%__MODULE__{}), do: :ok
+
+  defp validate_message_identity(%__MODULE__{message_id: message_id}, message_id), do: :ok
+  defp validate_message_identity(%__MODULE__{}, _message_id), do: {:error, :message_id_mismatch}
+
+  defp validate_known_delivery(%__MODULE__{} = message, delivery_id) do
+    if MapSet.member?(message.recipient_delivery_ids, delivery_id) do
+      :ok
+    else
+      {:error, :unknown_delivery}
+    end
+  end
+
+  defp validate_status_transition(%__MODULE__{} = message, delivery_id, next_status, reason) do
+    %{status: current_status, reason: current_reason} =
+      Map.fetch!(message.delivery_statuses, delivery_id)
+
+    cond do
+      current_status == next_status and current_reason == reason ->
+        []
+
+      current_status == next_status ->
+        {:error, :conflicting_delivery_status_reason}
+
+      valid_transition?(current_status, next_status) ->
+        :ok
+
+      true ->
+        {:error, :invalid_delivery_status_transition}
+    end
+  end
+
+  defp valid_transition?(:sent, :delivered), do: true
+  defp valid_transition?(:sent, :delayed), do: true
+  defp valid_transition?(:sent, :bounced), do: true
+  defp valid_transition?(:sent, :spam_complaint), do: true
+  defp valid_transition?(:delayed, :delivered), do: true
+  defp valid_transition?(:delayed, :bounced), do: true
+  defp valid_transition?(:delayed, :spam_complaint), do: true
+  defp valid_transition?(:delivered, :opened), do: true
+  defp valid_transition?(_current_status, _next_status), do: false
+
+  defp put_delivery_status(%__MODULE__{} = message, delivery_id, status, reason \\ nil) do
+    %__MODULE__{
+      message
+      | delivery_statuses:
+          Map.put(message.delivery_statuses, delivery_id, %{
+            status: status,
+            reason: reason
+          })
     }
   end
 
@@ -107,8 +245,11 @@ defmodule Memba.Messaging.Message do
   defp normalize_each_recipient(recipients) do
     Enum.reduce_while(recipients, {:ok, []}, fn recipient, {:ok, normalized_recipients} ->
       case normalize_recipient(recipient) do
-        {:ok, normalized_recipient} -> {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
-        {:error, reason} -> {:halt, {:error, reason}}
+        {:ok, normalized_recipient} ->
+          {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     end)
     |> case do

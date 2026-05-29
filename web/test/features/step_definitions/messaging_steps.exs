@@ -4,6 +4,12 @@ defmodule Memba.Cucumber.MessagingSteps do
   import ExUnit.Assertions
 
   alias Memba.Messaging
+  alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.ReportDeliveryBounced
+  alias Memba.Messaging.Commands.ReportDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportDeliveryOpened
+  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
   alias Memba.Messaging.DeliveryProviders.Fake
   alias Memba.Messaging.DeliveryRequest
   alias Memba.Messaging.Projections.RecipientDelivery
@@ -12,34 +18,70 @@ defmodule Memba.Cucumber.MessagingSteps do
        %{args: [sender_name, subject]} = context do
     Fake.reset()
 
-    message_id = Ecto.UUID.generate()
-    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
-    sender_id = fetch_from_context!(context, :people, sender_name)
-    body = "#{subject} details."
+    send_message_to_kootenay_members(context, sender_name, subject)
+  end
 
-    assert :ok =
-             Messaging.send_club_message(
-               %{
-                 message_id: message_id,
-                 club_id: club_id,
-                 sender_id: sender_id,
-                 subject: subject,
-                 body: body
-               },
-               consistency: :strong
-             )
+  step "{word} has sent the message {string} to Kootenay Mountaineering Club members",
+       %{args: [sender_name, subject]} = context do
+    Fake.reset()
 
-    assert Messaging.get_message(message_id)
+    send_message_to_kootenay_members(context, sender_name, subject)
+  end
+
+  step "{word} email for {string} is reported as delivered",
+       %{args: [recipient_name, subject]} = context do
+    report_delivery_status(context, recipient_name, subject, :delivered)
+  end
+
+  step "{word} email for {string} has been reported as delivered",
+       %{args: [recipient_name, subject]} = context do
+    report_delivery_status(context, recipient_name, subject, :delivered)
+  end
+
+  step "{word} email for {string} is reported as delayed because {string}",
+       %{args: [recipient_name, subject, reason]} = context do
+    report_delivery_status(context, recipient_name, subject, :delayed, reason)
+  end
+
+  step "{word} email for {string} is reported as bounced because {string}",
+       %{args: [recipient_name, subject, reason]} = context do
+    report_delivery_status(context, recipient_name, subject, :bounced, reason)
+  end
+
+  step "{word} email for {string} is reported as a spam complaint because {string}",
+       %{args: [recipient_name, subject, reason]} = context do
+    report_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
+  end
+
+  step "{word} opens the email for {string}", %{args: [recipient_name, subject]} = context do
+    report_delivery_status(context, recipient_name, subject, :opened)
+  end
+
+  step "{word} receipt status for {string} should be {string}",
+       %{args: [recipient_name, subject, expected_status]} = context do
+    receipt = member_receipt_for!(context, recipient_name, subject)
+
+    assert receipt.receipt_status == expected_status
 
     context
-    |> Map.put(:sent_message, %{
-      message_id: message_id,
-      club_id: club_id,
-      sender_id: sender_id,
-      subject: subject,
-      body: body
-    })
-    |> Map.put(:last_message_id, message_id)
+  end
+
+  step "{word} operator deliverability status should be {string}",
+       %{args: [recipient_name, expected_status]} = context do
+    deliverability = operator_deliverability_for!(context, recipient_name)
+
+    assert deliverability.status == expected_status
+
+    context
+  end
+
+  step "{word} operator deliverability reason should be {string}",
+       %{args: [recipient_name, expected_reason]} = context do
+    deliverability = operator_deliverability_for!(context, recipient_name)
+
+    assert deliverability.reason == expected_reason
+
+    context
   end
 
   step "the message should be addressed to Alice, Bob, and Carol", context do
@@ -108,6 +150,125 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
+  defp send_message_to_kootenay_members(context, sender_name, subject) do
+    message_id = Ecto.UUID.generate()
+    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+    sender_id = fetch_from_context!(context, :people, sender_name)
+    body = "#{subject} details."
+
+    assert :ok =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: sender_id,
+                 subject: subject,
+                 body: body
+               },
+               consistency: :strong
+             )
+
+    assert Messaging.get_message(message_id)
+
+    context
+    |> Map.put(:sent_message, %{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: sender_id,
+      subject: subject,
+      body: body
+    })
+    |> Map.put(:last_message_id, message_id)
+    |> update_context_map(:messages, subject, %{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: sender_id,
+      subject: subject,
+      body: body
+    })
+  end
+
+  defp report_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
+    recipient_name = normalize_person_name(recipient_name)
+    message = fetch_from_context!(context, :messages, subject)
+    delivery = delivery_for!(context, recipient_name, subject)
+
+    command =
+      case status do
+        :delivered ->
+          %ReportDeliveryDelivered{
+            message_id: message.message_id,
+            delivery_id: delivery.delivery_id
+          }
+
+        :delayed ->
+          %ReportDeliveryDelayed{
+            message_id: message.message_id,
+            delivery_id: delivery.delivery_id,
+            reason: reason
+          }
+
+        :bounced ->
+          %ReportDeliveryBounced{
+            message_id: message.message_id,
+            delivery_id: delivery.delivery_id,
+            reason: reason
+          }
+
+        :spam_complaint ->
+          %ReportDeliverySpamComplaint{
+            message_id: message.message_id,
+            delivery_id: delivery.delivery_id,
+            reason: reason
+          }
+
+        :opened ->
+          %ReportDeliveryOpened{
+            message_id: message.message_id,
+            delivery_id: delivery.delivery_id
+          }
+      end
+
+    assert :ok = App.dispatch(command, consistency: :strong)
+
+    context
+  end
+
+  defp member_receipt_for!(context, recipient_name, subject) do
+    recipient_name = normalize_person_name(recipient_name)
+    message = fetch_from_context!(context, :messages, subject)
+    recipient_id = fetch_from_context!(context, :people, recipient_name)
+
+    Messaging.get_member_receipt(message.message_id, recipient_id) ||
+      flunk("Expected a member receipt for #{recipient_name} and #{inspect(subject)}")
+  end
+
+  defp operator_deliverability_for!(context, recipient_name) do
+    recipient_name = normalize_person_name(recipient_name)
+    subject = context.sent_message.subject
+    message = fetch_from_context!(context, :messages, subject)
+    recipient_id = fetch_from_context!(context, :people, recipient_name)
+
+    Messaging.get_operator_deliverability(message.message_id, recipient_id) ||
+      flunk("Expected operator deliverability for #{recipient_name} and #{inspect(subject)}")
+  end
+
+  defp delivery_for!(context, recipient_name, subject) do
+    message = fetch_from_context!(context, :messages, subject)
+    recipient_id = fetch_from_context!(context, :people, recipient_name)
+
+    message.message_id
+    |> Messaging.list_recipient_deliveries()
+    |> Enum.find(&(&1.recipient_id == recipient_id))
+    |> case do
+      %RecipientDelivery{} = delivery ->
+        delivery
+
+      nil ->
+        flunk("Expected a delivery for #{recipient_name} and #{inspect(subject)}")
+    end
+  end
+
   defp deliveries_for_last_message!(context) do
     context
     |> Map.fetch!(:last_message_id)
@@ -125,6 +286,19 @@ defmodule Memba.Cucumber.MessagingSteps do
       :error ->
         flunk("Expected #{inspect(item_key)} to be present in #{inspect(collection_key)}")
     end
+  end
+
+  defp update_context_map(context, collection_key, item_key, value) do
+    collection =
+      context
+      |> Map.get(collection_key, %{})
+      |> Map.put(item_key, value)
+
+    Map.put(context, collection_key, collection)
+  end
+
+  defp normalize_person_name(name) do
+    String.replace_suffix(name, "'s", "")
   end
 
   defp assert_unique(values) do

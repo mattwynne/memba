@@ -4,6 +4,11 @@ defmodule Memba.Messaging.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.ReportDeliveryBounced
+  alias Memba.Messaging.Commands.ReportDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportDeliveryOpened
+  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Router
 
@@ -19,7 +24,15 @@ defmodule Memba.Messaging.AppTest do
   end
 
   test "Messaging Commanded app includes the Messaging router" do
-    expected_commands = MapSet.new([SendMessage])
+    expected_commands =
+      MapSet.new([
+        SendMessage,
+        ReportDeliveryDelivered,
+        ReportDeliveryDelayed,
+        ReportDeliveryBounced,
+        ReportDeliverySpamComplaint,
+        ReportDeliveryOpened
+      ])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands
     assert MapSet.new(Router.__registered_commands__()) == expected_commands
