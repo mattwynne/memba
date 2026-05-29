@@ -1,4 +1,4 @@
-# Kaizen: PR creation should not depend on an LLM
+# Kaizen: PR creation should not depend on the wrong LLM
 
 Date: 2026-05-29
 
@@ -42,6 +42,30 @@ PR creation failed: LLM generation failed: Invalid request to anthropic: Your cr
 
 So the implementation finished, validation passed, and the run branch was pushed, but delivery stopped because the PR creation path depended on an Anthropic-backed LLM call.
 
+## Root cause
+
+Fabro has two model-selection layers:
+
+1. Graph node models from the workflow stylesheet in `workflow.fabro`.
+2. The run default model from `[run.model]` in Fabro settings or `workflow.toml`.
+
+The iteration implementation graph had been moved to GPT-backed nodes:
+
+```dot
+* { model: gpt-5.5; reasoning_effort: high; }
+```
+
+But PR generation is not a graph node. It uses the run default model. Because no `[run.model]` was set in the machine settings or workflow TOML, Fabro inherited its built-in/default run model:
+
+```json
+{
+  "provider": "anthropic",
+  "name": "claude-sonnet-4-6"
+}
+```
+
+That is why implementation and validation ran on GPT, but built-in PR creation still called Anthropic.
+
 ## Why this is a problem
 
 Opening a pull request is operational plumbing. It should be deterministic and reliable after a successful run.
@@ -60,7 +84,9 @@ This is especially painful after a recovery run, where the whole goal is to fini
 
 ## Desired behavior
 
-PR creation should have a deterministic fallback, or be deterministic by default.
+For Memba operation, built-in PR creation should use the same available GPT model family as the rest of the implementation workflow.
+
+More generally, PR creation should have a deterministic fallback, or be deterministic by default.
 
 At minimum Fabro can create a PR using data it already has:
 
@@ -89,9 +115,43 @@ Validation: dev ci passed
 
 An LLM-generated summary may be added later as a non-blocking comment or optional enhancement. It should not decide whether the PR exists.
 
-## Suggested fix
+## Solution applied
 
-Change Fabro's PR creation path to:
+We fixed the immediate Memba/Fabro operator configuration by setting the global Fabro run default model in:
+
+```text
+~/.fabro/settings.toml
+```
+
+Added:
+
+```toml
+[run.model]
+provider = "openai"
+name = "gpt-5.5"
+```
+
+Verification:
+
+1. Ran `fabro preflight .fabro/workflows/iteration-implementation/workflow.toml`.
+2. Confirmed the LLM preflight now probes `gpt-5.5` via `openai`, not Anthropic.
+3. Created a temporary dry-run Fabro run and inspected its captured run spec.
+4. Confirmed the run model was:
+
+```json
+{
+  "provider": "openai",
+  "name": "gpt-5.5"
+}
+```
+
+5. Removed the temporary run.
+
+This should make future built-in PR generation use GPT unless a workflow or CLI flag overrides the run model.
+
+## Future Fabro product improvement
+
+A stronger product-level fix would change Fabro's PR creation path to:
 
 1. Push the run branch.
 2. Create a PR with a deterministic title/body template.
@@ -112,6 +172,15 @@ PR creation failed because provider unavailable.
 
 ## Acceptance criteria
 
+### Local Memba fix
+
+- `~/.fabro/settings.toml` has `[run.model]` set to OpenAI `gpt-5.5`.
+- `fabro preflight .fabro/workflows/iteration-implementation/workflow.toml` probes OpenAI/GPT as the run model.
+- A created run spec captures `provider = "openai"` and `name = "gpt-5.5"`.
+- Built-in PR creation should no longer fail merely because Anthropic credits are exhausted.
+
+### Future Fabro product fix
+
 - A successful run with `run.pull_request.enabled = true` opens a PR even when the configured/default LLM provider is unavailable.
 - The PR body contains deterministic run metadata sufficient for review.
 - LLM summary generation failure is reported as a non-blocking warning.
@@ -120,4 +189,4 @@ PR creation failed because provider unavailable.
 
 ## Operator workaround
 
-Until Fabro has this fallback, create PRs manually from a clean branch or run branch with `gh pr create` or the GitHub API. Do not rely on Fabro PR automation when provider billing or credentials are unstable.
+If built-in PR creation still fails, create PRs manually from a clean branch or run branch with `gh pr create` or the GitHub API.
