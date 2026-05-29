@@ -1,0 +1,549 @@
+diff --git a/docs/iterations/002-membership-model/todo.md b/docs/iterations/002-membership-model/todo.md
+index 19d10ed..c91d09f 100644
+--- a/docs/iterations/002-membership-model/todo.md
++++ b/docs/iterations/002-membership-model/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Add `Person` aggregate, `CreatePerson` command, `PersonCreated` event,
+-- [ ] 002 Add `Membership` aggregate, `AddMember` command, `MemberAdded` event,
++- [x] 002 Add `Membership` aggregate, `AddMember` command, `MemberAdded` event,
+ - [ ] 003 Implement `list_active_members_of_club/1` and supporting queries on the
+ - [ ] 004 Add Cucumber step definitions for all Background lines in both feature
+ - [ ] 005 Run `devenv shell mix precommit` and fix any issues.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index d4cec38..4f7e0af 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -10,7 +10,12 @@ import Config
+ config :memba,
+   ecto_repos: [Memba.Repo],
+   event_stores: [Memba.EventStore],
+-  event_sourced_projection_tables: [:projection_versions, :membership_clubs, :membership_people],
++  event_sourced_projection_tables: [
++    :projection_versions,
++    :membership_clubs,
++    :membership_memberships,
++    :membership_people
++  ],
+   generators: [timestamp_type: :utc_datetime]
+ 
+ config :memba, Memba.Membership.App,
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 4f22392..232f9da 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -12,6 +12,7 @@ defmodule Memba.Application do
+       Memba.Repo,
+       Memba.Membership.App,
+       Memba.Membership.Projectors.Club,
++      Memba.Membership.Projectors.Membership,
+       Memba.Membership.Projectors.Person,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+       {Phoenix.PubSub, name: Memba.PubSub},
+diff --git a/web/lib/memba/membership/commands/add_member.ex b/web/lib/memba/membership/commands/add_member.ex
+new file mode 100644
+index 0000000..d53316b
+--- /dev/null
++++ b/web/lib/memba/membership/commands/add_member.ex
+@@ -0,0 +1,10 @@
++defmodule Memba.Membership.Commands.AddMember do
++  @moduledoc """
++  Command to add an existing person as an active member of a club.
++
++  The caller supplies the aggregate identity as `membership_id`.
++  """
++
++  @enforce_keys [:membership_id, :club_id, :person_id]
++  defstruct [:membership_id, :club_id, :person_id]
++end
+diff --git a/web/lib/memba/membership/events/member_added.ex b/web/lib/memba/membership/events/member_added.ex
+new file mode 100644
+index 0000000..e6d99ea
+--- /dev/null
++++ b/web/lib/memba/membership/events/member_added.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.MemberAdded do
++  @moduledoc """
++  Event raised when a person has been added as an active club member.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:membership_id, :club_id, :person_id]
++  defstruct [:membership_id, :club_id, :person_id]
++end
+diff --git a/web/lib/memba/membership/membership.ex b/web/lib/memba/membership/membership.ex
+new file mode 100644
+index 0000000..1ba5503
+--- /dev/null
++++ b/web/lib/memba/membership/membership.ex
+@@ -0,0 +1,46 @@
++defmodule Memba.Membership.Membership do
++  @moduledoc """
++  Membership aggregate for the Membership bounded context.
++  """
++
++  alias Commanded.Aggregates.Aggregate
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Events.MemberAdded
++
++  @behaviour Aggregate
++
++  defstruct [:membership_id, :club_id, :person_id, active?: false]
++
++  @impl Aggregate
++  def execute(%__MODULE__{membership_id: nil}, %AddMember{} = command) do
++    with :ok <- validate_uuid(command.membership_id, :invalid_membership_id),
++         :ok <- validate_uuid(command.club_id, :invalid_club_id),
++         :ok <- validate_uuid(command.person_id, :invalid_person_id) do
++      %MemberAdded{
++        membership_id: command.membership_id,
++        club_id: command.club_id,
++        person_id: command.person_id
++      }
++    end
++  end
++
++  def execute(%__MODULE__{}, %AddMember{}), do: {:error, :already_added}
++
++  @impl Aggregate
++  def apply(%__MODULE__{} = membership, %MemberAdded{} = event) do
++    %__MODULE__{
++      membership
++      | membership_id: event.membership_id,
++        club_id: event.club_id,
++        person_id: event.person_id,
++        active?: true
++    }
++  end
++
++  defp validate_uuid(value, error) do
++    case Ecto.UUID.cast(value) do
++      {:ok, ^value} -> :ok
++      _other -> {:error, error}
++    end
++  end
++end
+diff --git a/web/lib/memba/membership/projections/membership.ex b/web/lib/memba/membership/projections/membership.ex
+new file mode 100644
+index 0000000..7c11b06
+--- /dev/null
++++ b/web/lib/memba/membership/projections/membership.ex
+@@ -0,0 +1,16 @@
++defmodule Memba.Membership.Projections.Membership do
++  @moduledoc """
++  Read model projection for a person's membership of a club.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:membership_id, :binary_id, autogenerate: false}
++  schema "membership_memberships" do
++    field :club_id, :binary_id
++    field :person_id, :binary_id
++    field :active?, :boolean, source: :active
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projectors/membership.ex b/web/lib/memba/membership/projectors/membership.ex
+new file mode 100644
+index 0000000..5ca8c1a
+--- /dev/null
++++ b/web/lib/memba/membership/projectors/membership.ex
+@@ -0,0 +1,23 @@
++defmodule Memba.Membership.Projectors.Membership do
++  @moduledoc """
++  Projects membership events into the Membership read model.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Membership.App,
++    repo: Memba.Repo,
++    name: "Memba.Membership.Projectors.Membership",
++    consistency: :strong
++
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++
++  project(%MemberAdded{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :membership_membership, %MembershipProjection{
++      membership_id: event.membership_id,
++      club_id: event.club_id,
++      person_id: event.person_id,
++      active?: true
++    })
++  end)
++end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 41c8569..d546cd7 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -6,13 +6,17 @@ defmodule Memba.Membership.Router do
+   use Commanded.Commands.Router
+ 
+   alias Memba.Membership.Club
++  alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Membership
+   alias Memba.Membership.Person
+ 
+   identify(Club, by: :club_id)
++  identify(Membership, by: :membership_id)
+   identify(Person, by: :person_id)
+ 
++  dispatch(AddMember, to: Membership)
+   dispatch(CreateClub, to: Club)
+   dispatch(CreatePerson, to: Person)
+ end
+diff --git a/web/priv/repo/migrations/20260529073407_create_membership_memberships_projection.exs b/web/priv/repo/migrations/20260529073407_create_membership_memberships_projection.exs
+new file mode 100644
+index 0000000..dfe17d0
+--- /dev/null
++++ b/web/priv/repo/migrations/20260529073407_create_membership_memberships_projection.exs
+@@ -0,0 +1,17 @@
++defmodule Memba.Repo.Migrations.CreateMembershipMembershipsProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:membership_memberships, primary_key: false) do
++      add :membership_id, :uuid, primary_key: true
++      add :club_id, :uuid, null: false
++      add :person_id, :uuid, null: false
++      add :active, :boolean, null: false, default: true
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_memberships, [:club_id])
++    create index(:membership_memberships, [:person_id])
++  end
++end
+diff --git a/web/test/event_sourced_setup_test.exs b/web/test/event_sourced_setup_test.exs
+index 8dfebc0..f1a427c 100644
+--- a/web/test/event_sourced_setup_test.exs
++++ b/web/test/event_sourced_setup_test.exs
+@@ -33,6 +33,7 @@ defmodule Memba.EventSourcedSetupTest do
+   test "projection tables are migrated in the application schema" do
+     assert [[true]] = query!("SELECT to_regclass('public.projection_versions') IS NOT NULL").rows
+     assert [[true]] = query!("SELECT to_regclass('public.membership_clubs') IS NOT NULL").rows
++    assert [[true]] = query!("SELECT to_regclass('public.membership_memberships') IS NOT NULL").rows
+     assert [[true]] = query!("SELECT to_regclass('public.membership_people') IS NOT NULL").rows
+   end
+ 
+@@ -73,9 +74,17 @@ defmodule Memba.EventSourcedSetupTest do
+     VALUES ('#{person_id}', 'Alex Member', 'alex@example.test', now(), now())
+     """)
+ 
++    membership_id = Ecto.UUID.generate()
++
++    query!("""
++    INSERT INTO membership_memberships (membership_id, club_id, person_id, active, inserted_at, updated_at)
++    VALUES ('#{membership_id}', '#{club_id}', '#{person_id}', true, now(), now())
++    """)
++
+     assert [[1]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
+     assert [[1]] = query!("SELECT count(*) FROM projection_versions").rows
+     assert [[1]] = query!("SELECT count(*) FROM membership_clubs").rows
++    assert [[1]] = query!("SELECT count(*) FROM membership_memberships").rows
+     assert [[1]] = query!("SELECT count(*) FROM membership_people").rows
+ 
+     Memba.EventSourcedCase.reset_event_sourced_storage!()
+@@ -83,6 +92,7 @@ defmodule Memba.EventSourcedSetupTest do
+     assert [[0]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
+     assert [[0]] = query!("SELECT count(*) FROM projection_versions").rows
+     assert [[0]] = query!("SELECT count(*) FROM membership_clubs").rows
++    assert [[0]] = query!("SELECT count(*) FROM membership_memberships").rows
+     assert [[0]] = query!("SELECT count(*) FROM membership_people").rows
+     assert [["$all"]] = query!(~S|SELECT stream_uuid FROM "event_store"."streams"|).rows
+   end
+diff --git a/web/test/memba/membership/add_member_dispatch_test.exs b/web/test/memba/membership/add_member_dispatch_test.exs
+new file mode 100644
+index 0000000..7267ff5
+--- /dev/null
++++ b/web/test/memba/membership/add_member_dispatch_test.exs
+@@ -0,0 +1,58 @@
++defmodule Memba.Membership.AddMemberDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Membership
++
++  test "Membership app dispatch routes AddMember to the Membership aggregate" do
++    membership_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    command = %AddMember{
++      membership_id: membership_id,
++      club_id: club_id,
++      person_id: person_id
++    }
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^membership_id,
++              aggregate_version: 1,
++              events: [
++                %MemberAdded{
++                  membership_id: ^membership_id,
++                  club_id: ^club_id,
++                  person_id: ^person_id
++                }
++              ],
++              aggregate_state: %Membership{
++                membership_id: ^membership_id,
++                club_id: ^club_id,
++                person_id: ^person_id,
++                active?: true
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++
++    assert %Membership{
++             membership_id: ^membership_id,
++             club_id: ^club_id,
++             person_id: ^person_id,
++             active?: true
++           } = App.aggregate_state(Membership, membership_id)
++  end
++
++  test "Membership app rejects a duplicate AddMember for the same aggregate identity" do
++    command = %AddMember{
++      membership_id: Ecto.UUID.generate(),
++      club_id: Ecto.UUID.generate(),
++      person_id: Ecto.UUID.generate()
++    }
++
++    assert :ok = App.dispatch(command, consistency: :strong)
++    assert {:error, :already_added} = App.dispatch(command)
++  end
++end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 6f75069..c99e8a9 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -4,9 +4,11 @@ defmodule Memba.Membership.AppTest do
+   import ExUnit.CaptureLog
+ 
+   alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
++  alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Membership.Projectors.Person, as: PersonProjector
+   alias Memba.Membership.Router
+ 
+@@ -24,6 +26,14 @@ defmodule Memba.Membership.AppTest do
+              _child -> false
+            end)
+ 
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{MembershipProjector, _opts}, pid, :worker, [MembershipProjector]} when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
++
+     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+              {{PersonProjector, _opts}, pid, :worker, [PersonProjector]} when is_pid(pid) -> true
+              _child -> false
+@@ -31,7 +41,7 @@ defmodule Memba.Membership.AppTest do
+   end
+ 
+   test "Membership Commanded app includes the Membership router" do
+-    expected_commands = [CreateClub, CreatePerson]
++    expected_commands = [AddMember, CreateClub, CreatePerson]
+ 
+     assert same_commands?(App.__registered_commands__(), Router.__registered_commands__())
+     assert same_commands?(Router.__registered_commands__(), expected_commands)
+diff --git a/web/test/memba/membership/membership_projection_test.exs b/web/test/memba/membership/membership_projection_test.exs
+new file mode 100644
+index 0000000..0c9ab6e
+--- /dev/null
++++ b/web/test/memba/membership/membership_projection_test.exs
+@@ -0,0 +1,48 @@
++defmodule Memba.Membership.MembershipProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++
++  test "an independently created person can be added as an active club member" do
++    membership_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{club_id: club_id, name: "Kootenay Mountaineering Club"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: "Alex Member",
++                 email: "alex@example.test"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %AddMember{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert %MembershipProjection{
++             membership_id: ^membership_id,
++             club_id: ^club_id,
++             person_id: ^person_id,
++             active?: true
++           } = Repo.get(MembershipProjection, membership_id)
++  end
++end
+diff --git a/web/test/memba/membership/membership_test.exs b/web/test/memba/membership/membership_test.exs
+new file mode 100644
+index 0000000..9d84dea
+--- /dev/null
++++ b/web/test/memba/membership/membership_test.exs
+@@ -0,0 +1,113 @@
++defmodule Memba.Membership.MembershipTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Membership
++
++  describe "execute/2 AddMember" do
++    test "emits MemberAdded using caller-supplied UUID identities" do
++      membership_id = Ecto.UUID.generate()
++      club_id = Ecto.UUID.generate()
++      person_id = Ecto.UUID.generate()
++
++      command = %AddMember{
++        membership_id: membership_id,
++        club_id: club_id,
++        person_id: person_id
++      }
++
++      assert %MemberAdded{
++               membership_id: ^membership_id,
++               club_id: ^club_id,
++               person_id: ^person_id
++             } = Membership.execute(%Membership{}, command)
++    end
++
++    test "rejects missing or malformed membership UUIDs" do
++      assert {:error, :invalid_membership_id} =
++               Membership.execute(%Membership{}, %AddMember{
++                 membership_id: nil,
++                 club_id: Ecto.UUID.generate(),
++                 person_id: Ecto.UUID.generate()
++               })
++
++      assert {:error, :invalid_membership_id} =
++               Membership.execute(%Membership{}, %AddMember{
++                 membership_id: "not-a-uuid",
++                 club_id: Ecto.UUID.generate(),
++                 person_id: Ecto.UUID.generate()
++               })
++    end
++
++    test "rejects missing or malformed club UUIDs" do
++      assert {:error, :invalid_club_id} =
++               Membership.execute(%Membership{}, %AddMember{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: nil,
++                 person_id: Ecto.UUID.generate()
++               })
++
++      assert {:error, :invalid_club_id} =
++               Membership.execute(%Membership{}, %AddMember{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: "not-a-uuid",
++                 person_id: Ecto.UUID.generate()
++               })
++    end
++
++    test "rejects missing or malformed person UUIDs" do
++      assert {:error, :invalid_person_id} =
++               Membership.execute(%Membership{}, %AddMember{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: Ecto.UUID.generate(),
++                 person_id: nil
++               })
++
++      assert {:error, :invalid_person_id} =
++               Membership.execute(%Membership{}, %AddMember{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: Ecto.UUID.generate(),
++                 person_id: "not-a-uuid"
++               })
++    end
++
++    test "rejects adding the same membership aggregate twice" do
++      membership_id = Ecto.UUID.generate()
++      club_id = Ecto.UUID.generate()
++      person_id = Ecto.UUID.generate()
++
++      membership =
++        Membership.apply(%Membership{}, %MemberAdded{
++          membership_id: membership_id,
++          club_id: club_id,
++          person_id: person_id
++        })
++
++      assert {:error, :already_added} =
++               Membership.execute(membership, %AddMember{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               })
++    end
++  end
++
++  test "apply/2 records the active membership identity and relationships" do
++    membership_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    assert %Membership{
++             membership_id: ^membership_id,
++             club_id: ^club_id,
++             person_id: ^person_id,
++             active?: true
++           } =
++             Membership.apply(%Membership{}, %MemberAdded{
++               membership_id: membership_id,
++               club_id: club_id,
++               person_id: person_id
++             })
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 7900335..b1fe7e4 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -12,6 +12,7 @@ defmodule Memba.EventSourcedCase do
+   @projection_versions_table :projection_versions
+   @projectors [
+     Memba.Membership.Projectors.Club,
++    Memba.Membership.Projectors.Membership,
+     Memba.Membership.Projectors.Person
+   ]
+ 
