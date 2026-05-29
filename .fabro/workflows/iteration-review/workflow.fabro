@@ -65,6 +65,20 @@ digraph IterationReview {
         max_visits=3
     ]
 
+    collect_implementation_evidence [
+        label="Collect Implementation Evidence",
+        shape=parallelogram,
+        script="set -eu\nbase_ref='{{ inputs.base_ref }}'\nif [ -n \"$base_ref\" ]; then\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    case \"$base_ref\" in\n      origin/*)\n        branch=${base_ref#origin/}\n        git fetch origin \"$branch:refs/remotes/origin/$branch\" || true\n        ;;\n    esac\n  fi\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    echo \"Configured base_ref is not a valid ref: $base_ref\" >&2\n    exit 1\n  fi\nelse\n  git fetch origin main:refs/remotes/origin/main || true\n  for ref in origin/main main; do\n    if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n      base_ref=$ref\n      break\n    fi\n  done\nfi\nmerge_base=$(git merge-base HEAD \"$base_ref\")\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base ref: $base_ref\"\necho \"Merge base: $merge_base\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\ngit diff --stat \"$merge_base\"..HEAD\necho ''\necho '--- git diff --name-status ---'\ngit diff --name-status \"$merge_base\"..HEAD\necho ''\necho '--- changed source/config/test file excerpts ---'\ngit diff --name-only \"$merge_base\"..HEAD | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/)' | while IFS= read -r file; do\n  if [ -f \"$file\" ]; then\n    echo \"=== $file ===\"\n    sed -n '1,220p' \"$file\"\n    echo ''\n  fi\ndone",
+        timeout="120s"
+    ]
+
+    collect_evidence_failed [
+        label="Fail: Evidence Collection",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review failed before gates: implementation evidence could not be collected. Check base_ref and branch visibility, then retry.' >&2\nexit 1"
+    ]
+
     plan_conformance_gate [
         label="Plan Conformance Gate",
         shape=tab,
@@ -194,9 +208,12 @@ digraph IterationReview {
     preflight_sandbox -> preflight_failed
     preflight_failed -> exit
 
-    dev_check -> plan_conformance_gate [label="Dev check passed", condition="outcome=succeeded"]
+    dev_check -> collect_implementation_evidence [label="Dev check passed", condition="outcome=succeeded"]
     dev_check -> fix_dev_check [label="Fix failures"]
     fix_dev_check -> dev_check
+    collect_implementation_evidence -> plan_conformance_gate [condition="outcome=succeeded"]
+    collect_implementation_evidence -> collect_evidence_failed
+    collect_evidence_failed -> exit
 
     plan_conformance_gate -> plan_gate
     plan_gate -> adr_coherence_gate [label="Conformant", condition="context.plan_conformant=true"]
