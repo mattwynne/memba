@@ -1,0 +1,432 @@
+diff --git a/docs/iterations/004-delivery-status-and-views/todo.md b/docs/iterations/004-delivery-status-and-views/todo.md
+index 6b4dc8e..26b2d4b 100644
+--- a/docs/iterations/004-delivery-status-and-views/todo.md
++++ b/docs/iterations/004-delivery-status-and-views/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Extend the Message aggregate with commands and events for delivered,
+-- [ ] 002 Add the member-facing receipt projection and query applying the ADR 0006
++- [x] 002 Add the member-facing receipt projection and query applying the ADR 0006
+ - [ ] 003 Add the operator deliverability projection and query, preserving reason
+ - [ ] 004 Add Cucumber step definitions for the remaining member receipt scenarios
+ - [ ] 005 Sweep the codebase for any remaining CRUD spike artefacts and remove
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 562bee8..95b2d56 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -16,7 +16,8 @@ config :memba,
+     :membership_memberships,
+     :membership_people,
+     :messaging_messages,
+-    :messaging_recipient_deliveries
++    :messaging_recipient_deliveries,
++    :messaging_member_receipts
+   ],
+   generators: [timestamp_type: :utc_datetime]
+ 
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 25c303e..daaec37 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -15,6 +15,7 @@ defmodule Memba.Application do
+       Memba.Messaging.DeliveryProviders.Fake,
+       Memba.Messaging.Projectors.Message,
+       Memba.Messaging.Projectors.RecipientDelivery,
++      Memba.Messaging.Projectors.MemberReceipt,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.Membership,
+       Memba.Membership.Projectors.Person,
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index a22ef15..7897c3c 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -8,6 +8,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.DeliveryProvider
+   alias Memba.Messaging.DeliveryRequest
++  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
+   alias Memba.Messaging.Recipient
+@@ -75,6 +76,52 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Fetch a member-facing receipt read model by delivery UUID.
++
++  Returns `nil` when the ID is absent or is not a valid UUID.
++  """
++  def get_member_receipt(delivery_id) do
++    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
++      Repo.get(MemberReceiptProjection, delivery_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Fetch a member-facing receipt for a recipient on a message.
++
++  Invalid or missing IDs return `nil`. The receipt status uses ADR 0006's
++  simplified member vocabulary: sent, delivered, delivery problem, or opened.
++  """
++  def get_member_receipt(message_id, recipient_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
++         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
++      Repo.get_by(MemberReceiptProjection, message_id: message_id, recipient_id: recipient_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  List member-facing receipt records for a projected message.
++
++  Invalid or missing message IDs return an empty list. Results are ordered by
++  recipient name and ID to provide deterministic assertions for acceptance
++  plumbing.
++  """
++  def list_member_receipts(message_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
++      MemberReceiptProjection
++      |> where([receipt], receipt.message_id == ^message_id)
++      |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   defp dispatch_send_message(%SendMessage{} = command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> {:ok, :ok}
+diff --git a/web/lib/memba/messaging/projections/member_receipt.ex b/web/lib/memba/messaging/projections/member_receipt.ex
+new file mode 100644
+index 0000000..74b88b7
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/member_receipt.ex
+@@ -0,0 +1,20 @@
++defmodule Memba.Messaging.Projections.MemberReceipt do
++  @moduledoc """
++  Member-facing receipt read model for one recipient delivery.
++
++  The `receipt_status` field stores the simplified ADR 0006 vocabulary rather
++  than provider- or operator-facing delivery details.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:delivery_id, :binary_id, autogenerate: false}
++  schema "messaging_member_receipts" do
++    field :message_id, :binary_id
++    field :recipient_id, :binary_id
++    field :recipient_name, :string
++    field :receipt_status, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/member_receipt.ex b/web/lib/memba/messaging/projectors/member_receipt.ex
+new file mode 100644
+index 0000000..5f8d1e1
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/member_receipt.ex
+@@ -0,0 +1,65 @@
++defmodule Memba.Messaging.Projectors.MemberReceipt do
++  @moduledoc """
++  Projects recipient delivery events into member-facing receipt statuses.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.MemberReceipt",
++    consistency: :strong
++
++  alias Ecto.Changeset
++  alias Memba.Messaging.Events.RecipientDeliveryBounced
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Events.RecipientDeliveryDelayed
++  alias Memba.Messaging.Events.RecipientDeliveryDelivered
++  alias Memba.Messaging.Events.RecipientDeliveryOpened
++  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
++  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
++  alias Memba.Repo
++
++  project(%RecipientDeliveryCreated{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :messaging_member_receipt, %MemberReceiptProjection{
++      delivery_id: event.delivery_id,
++      message_id: event.message_id,
++      recipient_id: event.recipient_id,
++      recipient_name: event.recipient_name,
++      receipt_status: "sent"
++    })
++  end)
++
++  project(%RecipientDeliveryDelivered{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivered")
++  end)
++
++  project(%RecipientDeliveryDelayed{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivery problem")
++  end)
++
++  project(%RecipientDeliveryBounced{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivery problem")
++  end)
++
++  project(%RecipientDeliverySpamComplaint{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivery problem")
++  end)
++
++  project(%RecipientDeliveryOpened{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "opened")
++  end)
++
++  defp update_receipt_status(multi, delivery_id, receipt_status) do
++    case Repo.get(MemberReceiptProjection, delivery_id) do
++      nil ->
++        multi
++
++      receipt ->
++        Ecto.Multi.update(
++          multi,
++          {:messaging_member_receipt, delivery_id},
++          Changeset.change(receipt, receipt_status: receipt_status)
++        )
++    end
++  end
++end
+diff --git a/web/priv/repo/migrations/20260529212029_create_messaging_member_receipts_projection.exs b/web/priv/repo/migrations/20260529212029_create_messaging_member_receipts_projection.exs
+new file mode 100644
+index 0000000..d3280b2
+--- /dev/null
++++ b/web/priv/repo/migrations/20260529212029_create_messaging_member_receipts_projection.exs
+@@ -0,0 +1,19 @@
++defmodule Memba.Repo.Migrations.CreateMessagingMemberReceiptsProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_member_receipts, primary_key: false) do
++      add :delivery_id, :uuid, primary_key: true
++      add :message_id, :uuid, null: false
++      add :recipient_id, :uuid, null: false
++      add :recipient_name, :text, null: false
++      add :receipt_status, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:messaging_member_receipts, [:message_id])
++    create index(:messaging_member_receipts, [:recipient_id])
++    create unique_index(:messaging_member_receipts, [:message_id, :recipient_id])
++  end
++end
+diff --git a/web/test/memba/messaging/member_receipt_projection_test.exs b/web/test/memba/messaging/member_receipt_projection_test.exs
+new file mode 100644
+index 0000000..762da9c
+--- /dev/null
++++ b/web/test/memba/messaging/member_receipt_projection_test.exs
+@@ -0,0 +1,186 @@
++defmodule Memba.Messaging.MemberReceiptProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
++  alias Memba.Messaging.Recipient
++
++  test "SendMessage is projected into member-facing sent receipt records" do
++    %{message_id: message_id, recipients: recipients} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    [alice, bob] = recipients
++    alice_delivery_id = alice.delivery_id
++    alice_person_id = alice.person_id
++    bob_delivery_id = bob.delivery_id
++    bob_person_id = bob.person_id
++
++    assert [
++             %MemberReceiptProjection{
++               delivery_id: ^alice_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^alice_person_id,
++               recipient_name: "Alice",
++               receipt_status: "sent"
++             },
++             %MemberReceiptProjection{
++               delivery_id: ^bob_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^bob_person_id,
++               recipient_name: "Bob",
++               receipt_status: "sent"
++             }
++           ] = Messaging.list_member_receipts(message_id)
++
++    assert %MemberReceiptProjection{
++             delivery_id: ^bob_delivery_id,
++             recipient_id: ^bob_person_id,
++             receipt_status: "sent"
++           } = Messaging.get_member_receipt(bob_delivery_id)
++
++    assert %MemberReceiptProjection{
++             delivery_id: ^bob_delivery_id,
++             recipient_id: ^bob_person_id,
++             receipt_status: "sent"
++           } = Messaging.get_member_receipt(message_id, bob_person_id)
++  end
++
++  test "member receipt projection applies the ADR 0006 status mapping" do
++    %{message_id: message_id, recipients: recipients} =
++      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin", "Frank"])
++
++    [_alice, bob, carol, dana, erin, frank] = recipients
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelayed{
++                 message_id: message_id,
++                 delivery_id: carol.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryBounced{
++                 message_id: message_id,
++                 delivery_id: dana.delivery_id,
++                 reason: "mailbox does not exist"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliverySpamComplaint{
++                 message_id: message_id,
++                 delivery_id: erin.delivery_id,
++                 reason: "recipient marked the message as spam"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: frank.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: frank.delivery_id
++               },
++               consistency: :strong
++             )
++
++    receipts_by_recipient =
++      message_id
++      |> Messaging.list_member_receipts()
++      |> Map.new(&{&1.recipient_name, &1.receipt_status})
++
++    assert receipts_by_recipient == %{
++             "Alice" => "sent",
++             "Bob" => "delivered",
++             "Carol" => "delivery problem",
++             "Dana" => "delivery problem",
++             "Erin" => "delivery problem",
++             "Frank" => "opened"
++           }
++  end
++
++  test "member receipt queries return empty results for missing or invalid IDs" do
++    assert is_nil(Messaging.get_member_receipt(Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_member_receipt(nil))
++    assert is_nil(Messaging.get_member_receipt("not-a-uuid"))
++
++    assert is_nil(Messaging.get_member_receipt(Ecto.UUID.generate(), Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_member_receipt(nil, Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_member_receipt(Ecto.UUID.generate(), "not-a-uuid"))
++
++    assert Messaging.list_member_receipts(Ecto.UUID.generate()) == []
++    assert Messaging.list_member_receipts(nil) == []
++    assert Messaging.list_member_receipts("not-a-uuid") == []
++  end
++
++  defp send_message_with_recipients(names) do
++    [sender | _rest] =
++      recipients =
++      Enum.map(names, fn name ->
++        %Recipient{
++          delivery_id: Ecto.UUID.generate(),
++          person_id: Ecto.UUID.generate(),
++          name: name,
++          email: email_for(name)
++        }
++      end)
++
++    message_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: Ecto.UUID.generate(),
++                 sender_id: sender.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: recipients
++               },
++               consistency: :strong
++             )
++
++    %{message_id: message_id, recipients: recipients}
++  end
++
++  defp email_for(name) do
++    normalized_name =
++      name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
++
++    "#{normalized_name}@example.test"
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 21e68aa..f632f72 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -15,7 +15,8 @@ defmodule Memba.EventSourcedCase do
+     Memba.Membership.Projectors.Membership,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
+-    Memba.Messaging.Projectors.RecipientDelivery
++    Memba.Messaging.Projectors.RecipientDelivery,
++    Memba.Messaging.Projectors.MemberReceipt
+   ]
+ 
+   using do
