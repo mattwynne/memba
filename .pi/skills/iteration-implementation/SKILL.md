@@ -68,7 +68,22 @@ Do not implement the iteration directly in the local checkout. Do not edit appli
    - Follow the run using the Fabro CLI output, web UI URL, or appropriate `fabro events` / `fabro logs` commands.
    - If Fabro pauses for human input, summarize the question and options for Matt.
    - If Fabro fails, summarize the failed stage, likely cause, and exact retry/resume command if available.
-   - If Fabro succeeds, report the run ID, PR URL if available, and whether auto-merge was enabled/accepted.
+   - If Fabro succeeds, capture the implementation branch/ref, PR URL if available, base ref, and whether auto-merge was enabled/accepted.
+
+8. **Record review handoff metadata**
+   - After a successful implementation run, write `<iteration-folder>/implementation.md` so the `iteration-review` skill can find the implementation without switching the main checkout.
+   - Use this format:
+     ```markdown
+     # Implementation
+
+     Branch: <implementation-branch-or-ref>
+     Pull request: <pr-url-or-none>
+     Base ref: origin/main
+     Status: ready-for-review
+     ```
+   - The branch/ref should be the PR branch when available, for example `pr/event-sourced-foundation`; otherwise use the Fabro run branch/ref printed by the workflow.
+   - Update `docs/iterations/README.md` status for the iteration to `ready-for-review`.
+   - Commit and push only this review handoff metadata when Matt approves committing it. Do not include unrelated changes.
 
 ## Selection Rules
 
@@ -106,7 +121,9 @@ When the run completes, report:
 
 - Result: succeeded, failed, blocked, or human input needed.
 - Run ID / web UI URL.
+- Implementation branch/ref.
 - PR URL and auto-merge status if available.
+- Review handoff metadata path (`<iteration-folder>/implementation.md`) and whether it was written/committed.
 - Any follow-up Matt needs to do.
 
 ## Key Principles

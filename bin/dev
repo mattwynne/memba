@@ -124,4 +124,57 @@ acceptance() {
   (cd "$repo_root/acceptance-tests" && npm test -- "$@")
 }
 
+# @cmd Review an implementation branch in an isolated worktree
+# @arg branch! Branch/ref to review, e.g. pr/event-sourced-foundation
+# @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
+# @arg base_ref=origin/main Base ref for the implementation diff
+iteration_review() {
+  local branch="${1:-}"
+  local plan_path="${2:-}"
+  local base_ref="${3:-origin/main}"
+
+  if [ -z "$branch" ] || [ -z "$plan_path" ]; then
+    echo "Usage: $0 iteration-review <branch> <plan_path> [base_ref]" >&2
+    exit 2
+  fi
+
+  if ! command -v fabro >/dev/null 2>&1; then
+    echo "Missing required tool: fabro" >&2
+    exit 1
+  fi
+
+  git -C "$repo_root" fetch origin
+
+  local ref="$branch"
+  if ! git -C "$repo_root" rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    ref="origin/$branch"
+  fi
+  if ! git -C "$repo_root" rev-parse --verify --quiet "${ref}^{commit}" >/dev/null; then
+    echo "Could not resolve branch/ref: $branch" >&2
+    exit 1
+  fi
+
+  local safe_branch
+  safe_branch=$(printf '%s' "$branch" | tr '/:' '--' | tr -cd 'A-Za-z0-9._-')
+
+  local worktree_parent="${MEMBA_REVIEW_WORKTREE_ROOT:-$(dirname "$repo_root")}"
+  local worktree="$worktree_parent/memba-review-$safe_branch"
+
+  if [ -e "$worktree" ]; then
+    echo "Review worktree already exists: $worktree" >&2
+    echo "Remove it with: git worktree remove $worktree" >&2
+    exit 1
+  fi
+
+  git -C "$repo_root" worktree add "$worktree" "$ref"
+
+  echo "Running iteration review in isolated worktree: $worktree"
+  (
+    cd "$worktree"
+    fabro run .fabro/workflows/iteration-review/workflow.toml \
+      -I "plan_path=$plan_path" \
+      -I "base_ref=$base_ref"
+  )
+}
+
 eval "$(argc --argc-eval "$0" "$@")"
