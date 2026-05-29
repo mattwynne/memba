@@ -1,0 +1,157 @@
+diff --git a/bin/mix b/bin/mix
+index 65a59ab..c38735d 100755
+--- a/bin/mix
++++ b/bin/mix
+@@ -3,6 +3,44 @@ set -euo pipefail
+ 
+ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ real_mix=""
++started_postgres=0
++
++ensure_postgres() {
++  if [ -z "${PGHOST:-}" ] || [ -z "${PGPORT:-}" ]; then
++    return
++  fi
++
++  if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
++    return
++  fi
++
++  # `devenv shell mix precommit` runs this wrapper without automatically
++  # starting declared services, but the precommit/test aliases need Postgres for
++  # Ecto and EventStore setup.
++  devenv processes down >/dev/null 2>&1 || true
++  DEVENV_TUI=false devenv processes up --strict-ports -d postgres
++  started_postgres=1
++  devenv processes wait --timeout 120
++
++  if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
++    devenv processes logs -n 100 postgres >&2 || true
++    echo "Postgres did not become ready at PGHOST=$PGHOST PGPORT=$PGPORT" >&2
++    exit 1
++  fi
++}
++
++cleanup_started_postgres() {
++  if [ "$started_postgres" = 1 ]; then
++    devenv processes down >/dev/null 2>&1 || true
++  fi
++}
++
++case "${1:-}" in
++  precommit|test|ecto.*|event_store.*)
++    trap cleanup_started_postgres EXIT
++    ensure_postgres
++    ;;
++esac
+ 
+ while IFS= read -r candidate; do
+   if [ "$candidate" != "$repo_root/bin/mix" ]; then
+@@ -17,4 +55,4 @@ if [ -z "$real_mix" ]; then
+ fi
+ 
+ cd "$repo_root/web"
+-exec "$real_mix" "$@"
++"$real_mix" "$@"
+diff --git a/docs/iterations/001-event-sourced-foundation/todo.md b/docs/iterations/001-event-sourced-foundation/todo.md
+index edf831f..23effbb 100644
+--- a/docs/iterations/001-event-sourced-foundation/todo.md
++++ b/docs/iterations/001-event-sourced-foundation/todo.md
+@@ -8,4 +8,4 @@
+ - [x] 006 Add the Club projector and a public `Memba.Membership.get_club/1`
+ - [x] 007 Add Cucumber configuration that reads `acceptance-tests/features/**/*.feature`
+ - [x] 008 Remove conflicting CRUD spike code.
+-- [ ] 009 Run `devenv shell mix precommit` and fix any issues.
++- [x] 009 Run `devenv shell mix precommit` and fix any issues.
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index c07cd8d..2f87fc3 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -12,10 +12,10 @@ defmodule Memba.Membership.Projectors.Club do
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+ 
+-  project %ClubCreated{} = event, fn multi ->
++  project(%ClubCreated{} = event, fn multi ->
+     Ecto.Multi.insert(multi, :membership_club, %ClubProjection{
+       club_id: event.club_id,
+       name: event.name
+     })
+-  end
++  end)
+ end
+diff --git a/web/mix.exs b/web/mix.exs
+index b0dfe95..6ee6557 100644
+--- a/web/mix.exs
++++ b/web/mix.exs
+@@ -87,7 +87,12 @@ defmodule Memba.MixProject do
+   defp aliases do
+     [
+       setup: ["deps.get", "ecto.setup", "assets.setup", "assets.build"],
+-      "ecto.setup": ["ecto.create", "event_store.setup", "ecto.migrate", "run priv/repo/seeds.exs"],
++      "ecto.setup": [
++        "ecto.create",
++        "event_store.setup",
++        "ecto.migrate",
++        "run priv/repo/seeds.exs"
++      ],
+       "ecto.reset": ["ecto.drop", "ecto.setup"],
+       "event_store.setup": ["event_store.create", "event_store.init"],
+       "event_store.reset": ["event_store.drop", "event_store.setup"],
+diff --git a/web/test/event_sourced_setup_test.exs b/web/test/event_sourced_setup_test.exs
+index da83688..e175d05 100644
+--- a/web/test/event_sourced_setup_test.exs
++++ b/web/test/event_sourced_setup_test.exs
+@@ -48,7 +48,10 @@ defmodule Memba.EventSourcedSetupTest do
+       metadata: %{}
+     }
+ 
+-    assert :ok = Memba.EventStore.append_to_stream("reset-test-#{Ecto.UUID.generate()}", 0, [event_data])
++    assert :ok =
++             Memba.EventStore.append_to_stream("reset-test-#{Ecto.UUID.generate()}", 0, [
++               event_data
++             ])
+ 
+     query!("""
+     INSERT INTO projection_versions (projection_name, last_seen_event_number, inserted_at, updated_at)
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index ade6475..7512c02 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -13,12 +13,18 @@ defmodule Memba.CucumberConfigurationTest do
+   test "Cucumber discovers shared features and the selected Background step passes" do
+     shared_feature_paths = configured_feature_paths()
+     assert shared_feature_paths == expected_shared_feature_paths()
+-    assert shared_feature_paths_contain_step?(shared_feature_paths, "Given #{@club_background_step}")
++
++    assert shared_feature_paths_contain_step?(
++             shared_feature_paths,
++             "Given #{@club_background_step}"
++           )
+ 
+     %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
+     assert Map.has_key?(discovery.step_registry, @club_background_step)
+ 
+-    feature_file = feature_file_containing_step!(shared_feature_paths, "Given #{@club_background_step}")
++    feature_file =
++      feature_file_containing_step!(shared_feature_paths, "Given #{@club_background_step}")
++
+     step = %Step{keyword: "Given", text: @club_background_step, line: 6}
+ 
+     context =
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 0e4c875..233dd1e 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -22,7 +22,10 @@ defmodule Memba.Membership.ClubTest do
+ 
+     test "rejects missing or malformed club UUIDs" do
+       assert {:error, :invalid_club_id} =
+-               Club.execute(%Club{}, %CreateClub{club_id: nil, name: "Kootenay Mountaineering Club"})
++               Club.execute(%Club{}, %CreateClub{
++                 club_id: nil,
++                 name: "Kootenay Mountaineering Club"
++               })
+ 
+       assert {:error, :invalid_club_id} =
+                Club.execute(%Club{}, %CreateClub{
