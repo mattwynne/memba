@@ -1,7 +1,7 @@
 # Idea: extract review/repair tail into a separate iteration-review workflow
 
 Date: 2026-05-28
-Status: phase 1 (extraction) shipped; phase 2 (simplification) planned 2026-05-29
+Status: implemented
 
 > **2026-05-29 update.** Phase 1 — extracting the review tail into its own
 > `iteration-review` workflow — is done. Running it against iterations 001/002

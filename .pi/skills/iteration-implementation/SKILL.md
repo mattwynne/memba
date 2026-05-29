@@ -97,9 +97,11 @@ Do not implement the iteration directly in the local checkout. Do not edit appli
      Branch: <implementation-branch-or-ref>
      Pull request: <pr-url-or-none>
      Base ref: origin/main
+     Base sha: <base-commit-sha>
      Status: ready-for-review
      ```
    - The branch/ref should be the PR branch when available, for example `pr/event-sourced-foundation`; otherwise use the Fabro run branch/ref printed by the workflow.
+   - Resolve and record `Base sha:` locally from the implementation branch and base ref (usually the merge-base with `origin/main`) so `iteration-review` can diff deterministically without sandbox merge-base archaeology.
    - Update `docs/iterations/README.md` status for the iteration to `ready-for-review`.
    - Commit and push only this review handoff metadata when Matt approves committing it. Do not include unrelated changes.
 
