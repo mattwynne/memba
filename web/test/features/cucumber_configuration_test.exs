@@ -16,7 +16,8 @@ defmodule Memba.CucumberConfigurationTest do
   ]
 
   @member_message_scenario_steps [
-    {"When", "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+    {"When",
+     "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
      16},
     {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
     {"And", "the message should not be addressed to Pat", 18},

@@ -3,9 +3,13 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.ReportDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportDeliveryOpened
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.RecipientDeliveryCreated
+  alias Memba.Messaging.Events.RecipientDeliveryDelivered
+  alias Memba.Messaging.Events.RecipientDeliveryOpened
   alias Memba.Messaging.Message
   alias Memba.Messaging.Recipient
 
@@ -106,6 +110,89 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
     assert :ok = App.dispatch(command, consistency: :strong)
     assert {:error, :already_sent} = App.dispatch(command)
+  end
+
+  test "Messaging app dispatch routes delivery status reports to the Message aggregate" do
+    command = %SendMessage{
+      message_id: Ecto.UUID.generate(),
+      club_id: Ecto.UUID.generate(),
+      sender_id: Ecto.UUID.generate(),
+      subject: "Trail day",
+      body: "Meet at 9am.",
+      recipients: []
+    }
+
+    [recipient_command] = with_sender_recipient(command)
+    delivery_id = recipient_command.delivery_id
+    command = %SendMessage{command | recipients: [recipient_command]}
+    message_id = command.message_id
+
+    assert :ok = App.dispatch(command, consistency: :strong)
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 3,
+              events: [
+                %RecipientDeliveryDelivered{
+                  message_id: ^message_id,
+                  delivery_id: ^delivery_id
+                }
+              ],
+              aggregate_state: %Message{
+                delivery_statuses: %{
+                  ^delivery_id => %{status: :delivered, reason: nil}
+                }
+              }
+            }} =
+             App.dispatch(
+               %ReportDeliveryDelivered{
+                 message_id: message_id,
+                 delivery_id: delivery_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 4,
+              events: [
+                %RecipientDeliveryOpened{
+                  message_id: ^message_id,
+                  delivery_id: ^delivery_id
+                }
+              ],
+              aggregate_state: %Message{
+                delivery_statuses: %{
+                  ^delivery_id => %{status: :opened, reason: nil}
+                }
+              }
+            }} =
+             App.dispatch(
+               %ReportDeliveryOpened{
+                 message_id: message_id,
+                 delivery_id: delivery_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 4,
+              events: []
+            }} =
+             App.dispatch(
+               %ReportDeliveryOpened{
+                 message_id: message_id,
+                 delivery_id: delivery_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
   end
 
   defp with_sender_recipient(%SendMessage{} = command) do
