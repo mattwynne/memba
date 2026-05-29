@@ -7,8 +7,12 @@ defmodule Memba.Membership.Router do
 
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Person
 
   identify(Club, by: :club_id)
+  identify(Person, by: :person_id)
 
   dispatch(CreateClub, to: Club)
+  dispatch(CreatePerson, to: Person)
 end
