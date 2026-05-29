@@ -1,0 +1,1 @@
+{"cmd": "TODO_PATH='docs/iterations/002-membership-model/todo.md'\nif [ ! -r \"$TODO_PATH\" ]; then\n  echo \"UNREADABLE:$TODO_PATH\"\nelif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"EMPTY:$TODO_PATH\"\nelse\n  sed -n '1,120p' \"$TODO_PATH\"\nfi", "max_output_chars": 2000}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
