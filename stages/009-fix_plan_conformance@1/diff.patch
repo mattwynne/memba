@@ -1,0 +1,367 @@
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 4afcd0e..eea72e9 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -1,15 +1,47 @@
+ defmodule Memba.Membership do
+   @moduledoc """
+-  Public query API for the Membership bounded context.
++  Public API for the Membership bounded context.
+   """
+ 
+   import Ecto.Query
+ 
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+   alias Memba.Repo
+ 
++  @default_dispatch_opts [consistency: :strong]
++
++  @doc """
++  Dispatch a Membership domain command through the Membership context boundary.
++
++  Callers supply aggregate UUIDs on the commands. `AddMember` commands must
++  attach an existing person to an existing club, and a second active membership
++  for the same `{club_id, person_id}` pair is rejected before the Membership
++  aggregate command is dispatched.
++  """
++  def dispatch(command, opts \\ @default_dispatch_opts)
++
++  def dispatch(%CreateClub{} = command, opts) do
++    App.dispatch(command, opts)
++  end
++
++  def dispatch(%CreatePerson{} = command, opts) do
++    App.dispatch(command, opts)
++  end
++
++  def dispatch(%AddMember{} = command, opts) do
++    with :ok <- ensure_club_exists(command.club_id),
++         :ok <- ensure_person_exists(command.person_id),
++         :ok <- ensure_no_active_membership(command.club_id, command.person_id) do
++      App.dispatch(command, opts)
++    end
++  end
++
+   @doc """
+   Fetch a projected club read model by caller-generated UUID.
+ 
+@@ -81,4 +113,28 @@ defmodule Memba.Membership do
+       :error -> false
+     end
+   end
++
++  defp ensure_club_exists(club_id) do
++    if get_club(club_id) do
++      :ok
++    else
++      {:error, :club_not_found}
++    end
++  end
++
++  defp ensure_person_exists(person_id) do
++    if get_person(person_id) do
++      :ok
++    else
++      {:error, :person_not_found}
++    end
++  end
++
++  defp ensure_no_active_membership(club_id, person_id) do
++    if active_member_of_club?(club_id, person_id) do
++      {:error, :already_active_member}
++    else
++      :ok
++    end
++  end
+ end
+diff --git a/web/test/features/step_definitions/membership_steps.exs b/web/test/features/step_definitions/membership_steps.exs
+index 3eca162..80ff8a0 100644
+--- a/web/test/features/step_definitions/membership_steps.exs
++++ b/web/test/features/step_definitions/membership_steps.exs
+@@ -4,7 +4,6 @@ defmodule Memba.Cucumber.MembershipSteps do
+   import ExUnit.Assertions
+ 
+   alias Memba.Membership
+-  alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+@@ -47,10 +46,7 @@ defmodule Memba.Cucumber.MembershipSteps do
+     club_id = Ecto.UUID.generate()
+ 
+     assert :ok =
+-             App.dispatch(
+-               %CreateClub{club_id: club_id, name: club_name},
+-               consistency: :strong
+-             )
++             Membership.dispatch(%CreateClub{club_id: club_id, name: club_name})
+ 
+     assert %ClubProjection{club_id: ^club_id, name: ^club_name} = Membership.get_club(club_id)
+ 
+@@ -66,10 +62,11 @@ defmodule Memba.Cucumber.MembershipSteps do
+     email = email_for(name)
+ 
+     assert :ok =
+-             App.dispatch(
+-               %CreatePerson{person_id: person_id, name: name, email: email},
+-               consistency: :strong
+-             )
++             Membership.dispatch(%CreatePerson{
++               person_id: person_id,
++               name: name,
++               email: email
++             })
+ 
+     assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
+              Membership.get_person(person_id)
+@@ -92,14 +89,11 @@ defmodule Memba.Cucumber.MembershipSteps do
+     membership_id = Ecto.UUID.generate()
+ 
+     assert :ok =
+-             App.dispatch(
+-               %AddMember{
+-                 membership_id: membership_id,
+-                 club_id: club_id,
+-                 person_id: person_id
+-               },
+-               consistency: :strong
+-             )
++             Membership.dispatch(%AddMember{
++               membership_id: membership_id,
++               club_id: club_id,
++               person_id: person_id
++             })
+ 
+     assert Membership.active_member_of_club?(club_id, person_id)
+ 
+diff --git a/web/test/memba/membership/application_service_test.exs b/web/test/memba/membership/application_service_test.exs
+new file mode 100644
+index 0000000..b31ea70
+--- /dev/null
++++ b/web/test/memba/membership/application_service_test.exs
+@@ -0,0 +1,111 @@
++defmodule Memba.Membership.ApplicationServiceTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++
++  test "creates a person independently and adds them as a member of an existing club" do
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.dispatch(%CreateClub{
++               club_id: club_id,
++               name: "Kootenay Mountaineering Club"
++             })
++
++    assert :ok =
++             Membership.dispatch(%CreatePerson{
++               person_id: person_id,
++               name: "Alice",
++               email: "alice@example.com"
++             })
++
++    assert %ClubProjection{club_id: ^club_id} = Membership.get_club(club_id)
++    assert %PersonProjection{person_id: ^person_id} = Membership.get_person(person_id)
++
++    assert :ok =
++             Membership.dispatch(%AddMember{
++               membership_id: Ecto.UUID.generate(),
++               club_id: club_id,
++               person_id: person_id
++             })
++
++    assert Membership.active_member_of_club?(club_id, person_id)
++
++    assert Membership.list_active_members_of_club(club_id) == [
++             %{id: person_id, name: "Alice", email: "alice@example.com"}
++           ]
++  end
++
++  test "rejects adding a member to a missing club" do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.dispatch(%CreatePerson{
++               person_id: person_id,
++               name: "Alice",
++               email: "alice@example.com"
++             })
++
++    assert {:error, :club_not_found} =
++             Membership.dispatch(%AddMember{
++               membership_id: Ecto.UUID.generate(),
++               club_id: Ecto.UUID.generate(),
++               person_id: person_id
++             })
++  end
++
++  test "rejects adding a missing person as a member" do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.dispatch(%CreateClub{
++               club_id: club_id,
++               name: "Kootenay Mountaineering Club"
++             })
++
++    assert {:error, :person_not_found} =
++             Membership.dispatch(%AddMember{
++               membership_id: Ecto.UUID.generate(),
++               club_id: club_id,
++               person_id: Ecto.UUID.generate()
++             })
++  end
++
++  test "rejects a second active membership for the same club and person" do
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.dispatch(%CreateClub{
++               club_id: club_id,
++               name: "Kootenay Mountaineering Club"
++             })
++
++    assert :ok =
++             Membership.dispatch(%CreatePerson{
++               person_id: person_id,
++               name: "Alice",
++               email: "alice@example.com"
++             })
++
++    assert :ok =
++             Membership.dispatch(%AddMember{
++               membership_id: Ecto.UUID.generate(),
++               club_id: club_id,
++               person_id: person_id
++             })
++
++    assert {:error, :already_active_member} =
++             Membership.dispatch(%AddMember{
++               membership_id: Ecto.UUID.generate(),
++               club_id: club_id,
++               person_id: person_id
++             })
++  end
++end
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index 6a0da2f..4f1f8d4 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -3,9 +3,10 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+ 
+   @web_root Path.expand("../../..", __DIR__)
+ 
+-  test "public Membership context remains a query boundary instead of CRUD helpers" do
++  test "public Membership context remains a command/query boundary instead of CRUD helpers" do
+     source = read_source!("lib/memba/membership.ex")
+ 
++    assert source =~ "def dispatch("
+     assert source =~ "def get_club("
+     assert source =~ "def list_active_members_of_club("
+ 
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index b9a97fc..b352265 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -2,16 +2,16 @@ defmodule Memba.Membership.QueryTest do
+   use Memba.EventSourcedCase, async: false
+ 
+   alias Memba.Membership
+-  alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+ 
+   describe "list_active_members_of_club/1" do
+     test "returns active members of the given club and excludes members of other clubs" do
+-      kootenay_club_id = Ecto.UUID.generate()
+-      nelson_club_id = Ecto.UUID.generate()
++      kootenay_club_id = create_club("Kootenay Mountaineering Club")
++      nelson_club_id = create_club("Nelson Paddling Club")
+ 
+       alice = create_person(name: "Alice", email: "alice@example.com")
+       bob = create_person(name: "Bob", email: "bob@example.com")
+@@ -60,8 +60,8 @@ defmodule Memba.Membership.QueryTest do
+ 
+   describe "active_member_of_club?/2" do
+     test "returns true only when the person has an active membership in the club" do
+-      kootenay_club_id = Ecto.UUID.generate()
+-      nelson_club_id = Ecto.UUID.generate()
++      kootenay_club_id = create_club("Kootenay Mountaineering Club")
++      nelson_club_id = create_club("Nelson Paddling Club")
+ 
+       alice = create_person(name: "Alice", email: "alice@example.com")
+       pat = create_person(name: "Pat", email: "pat@example.com")
+@@ -77,6 +77,18 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  defp create_club(name) do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.dispatch(%CreateClub{
++               club_id: club_id,
++               name: name
++             })
++
++    club_id
++  end
++
+   defp create_person(attrs) do
+     person = %{
+       person_id: Ecto.UUID.generate(),
+@@ -85,27 +97,21 @@ defmodule Memba.Membership.QueryTest do
+     }
+ 
+     assert :ok =
+-             App.dispatch(
+-               %CreatePerson{
+-                 person_id: person.person_id,
+-                 name: person.name,
+-                 email: person.email
+-               },
+-               consistency: :strong
+-             )
++             Membership.dispatch(%CreatePerson{
++               person_id: person.person_id,
++               name: person.name,
++               email: person.email
++             })
+ 
+     person
+   end
+ 
+   defp add_member(club_id, person_id) do
+     assert :ok =
+-             App.dispatch(
+-               %AddMember{
+-                 membership_id: Ecto.UUID.generate(),
+-                 club_id: club_id,
+-                 person_id: person_id
+-               },
+-               consistency: :strong
+-             )
++             Membership.dispatch(%AddMember{
++               membership_id: Ecto.UUID.generate(),
++               club_id: club_id,
++               person_id: person_id
++             })
+   end
+ end

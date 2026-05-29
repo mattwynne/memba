@@ -1354,7 +1354,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-29T17:53:26.203629412Z",
-  "last_event_at": "2026-05-29T18:10:29.209154792Z",
+  "last_event_at": "2026-05-29T18:10:32.704517993Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2300,9 +2300,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 451,
       "checkpoint": {
-        "timestamp": "2026-05-29T18:10:29.251478124Z",
+        "timestamp": "2026-05-29T18:10:32.681985998Z",
         "current_node": "fix_plan_conformance",
         "completed_nodes": [
           "start",
@@ -2317,19 +2317,256 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.goal": "Review a completed iteration implementation against plan, ADRs, and independent reviewers",
+          "thread.plan_conformance_gate.current_node": "plan_gate",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "outcome": "succeeded",
+          "thread.start.current_node": "read_plan",
+          "failure_class": "",
+          "internal.retry_count.fix_plan_conformance": 0,
+          "current_node": "fix_plan_conformance",
+          "thread.collect_implementation_evidence.current_node": "plan_conformance_gate",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.thread_id": "snapshot_before_plan_repair",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.snapshot_before_plan_repair.current_node": "fix_plan_conformance",
+          "internal.node_visit_count": 1,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #adr_coherence_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_adr_coherence { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.max_node_visits": "160",
+          "internal.fidelity": "summary:high",
+          "response.fix_plan_conformance": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a textual repair brief. I repaired the concrete gaps identifiable from the plan text, relevant ADR 0011, and current implementation.\n\n## 1. Plan requirement gaps addressed\n\n| Gap | Requirement source | Fix |\n|---|---|---|\n| `AddMember` could be dispatched without proving the person and club already existed. | Plan: Membership aggregate attaches an existing person to an existing club. | Added a public Membership command boundary that checks projected club/person existence before dispatching `AddMember`. |\n| Duplicate active memberships for the same `{club_id, person_id}` pair were not prevented at the application/query boundary. | ADR 0011, cited by the plan. | Added duplicate-active-membership rejection before dispatching `AddMember`. |\n| Cucumber step definitions used lower-level `Memba.Membership.App.dispatch/2` directly instead of the public Membership API boundary. | Plan implementation step 4: step definitions use public Membership API. | Updated step definitions to use `Memba.Membership.dispatch/2`. |\n| Query tests proved `list_active_members_of_club/1` using direct dispatch against arbitrary club IDs rather than created clubs through the Membership boundary. | Acceptance criteria: person created independently can be added via domain commands; active member query excludes other clubs. | Updated query tests to create clubs, people, and memberships through the public Membership command boundary. |\n\n## 2. Concrete changes made\n\n### Public Membership command boundary\n\nUpdated `web/lib/memba/membership.ex`:\n\n- Added `Memba.Membership.dispatch/2`.\n- Supports:\n  - `%CreateClub{}`\n  - `%CreatePerson{}`\n  - `%AddMember{}`\n- Defaults dispatch to `consistency: :strong`.\n- For `AddMember`, validates:\n  - club exists via `get_club/1`\n  - person exists via `get_person/1`\n  - no existing active membership via `active_member_of_club?/2`\n- Returns:\n  - `{:error, :club_not_found}`\n  - `{:error, :person_not_found}`\n  - `{:error, :already_active_member}`\n\n### Cucumber step definitions\n\nUpdated `web/test/features/step_definitions/membership_steps.exs`:\n\n- Replaced direct `Memba.Membership.App.dispatch/2` usage with `Memba.Membership.dispatch/2`.\n- Kept caller-generated UUIDs in the steps.\n\n### Tests\n\nAdded `web/test/memba/membership/application_service_test.exs`:\n\n- Proves a person can be created independently and added to an existing club.\n- Proves missing club rejection.\n- Proves missing person rejection.\n- Proves duplicate active membership rejection.\n\nUpdated `web/test/memba/membership/query_test.exs`:\n\n- Query API tests now create clubs/people/memberships through `Memba.Membership.dispatch/2`.\n- Still verifies `list_active_members_of_club/1` returns only active members of the requested club.\n\nUpdated `web/test/memba/membership/no_crud_spike_test.exs`:\n\n- Adjusted wording/assertion to allow the public command boundary while still preventing CRUD-style helpers.\n\n## 3. Files changed by requirement\n\n### Existing club/person and duplicate membership enforcement\n\n- `web/lib/memba/membership.ex`\n- `web/test/memba/membership/application_service_test.exs`\n\n### Cucumber Background steps use public Membership API\n\n- `web/test/features/step_definitions/membership_steps.exs`\n\n### Query API proven through domain command boundary\n\n- `web/test/memba/membership/query_test.exs`\n\n### Guard against CRUD spike while allowing command boundary\n\n- `web/test/memba/membership/no_crud_spike_test.exs`\n\n## 4. Automated tests added or updated\n\nAdded:\n\n- `Memba.Membership.ApplicationServiceTest`\n\nUpdated:\n\n- `Memba.Membership.QueryTest`\n- `Memba.Cucumber.MembershipSteps`\n- `Memba.Membership.NoCrudSpikeTest`\n\n## 5. Tests run\n\nAll final validations passed:\n\n- `devenv shell bin/mix format --check-formatted` — passed\n- `devenv shell bin/mix test test/memba/membership/application_service_test.exs test/memba/membership/query_test.exs test/features/cucumber_configuration_test.exs test/memba/membership/no_crud_spike_test.exs` — passed, 13 tests, 0 failures\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed, 57 tests, 0 failures\n- `devenv shell bin/mix precommit` — passed, 57 tests, 0 failures\n\n## 6. Remaining gaps or human questions\n\nNo remaining plan gaps identified from the available gate context, plan text, and repository state. No acceptance feature files were modified.",
+          "failure_signature": "",
+          "internal.retry_count.dev_check": 0,
+          "plan_rework_available": true,
+          "graph.rankdir": "LR",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "plan_conformant": false,
+          "command.output": "blob://sha256/3536602b39b5dc9b8c52c1d3b212f1d226494e5db644db44e04723e2f6e8b4b5",
+          "last_stage": "fix_plan_conformance",
+          "thread.plan_gate.current_node": "snapshot_before_plan_repair",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.snapshot_before_plan_repair": 0,
+          "internal.retry_count.start": 0,
+          "graph.default_fidelity": "summary:high",
+          "response.plan_conformance_gate": "{\n  \"context_updates\": {\n    \"plan_conformant\": false,\n    \"plan_rework_available\": true\n  }\n}",
+          "last_response": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a tex",
+          "internal.retry_count.plan_conformance_gate": 0,
+          "internal.retry_count.plan_gate": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.run_id": "01KSTDV77CTJMJX2M6X78QJX5R"
+        },
+        "node_outcomes": {
+          "plan_conformance_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\n  \"context_updates\": {\n    \"plan_conformant\": false,\n    \"plan_rework_available\": true\n  }\n}",
+              "last_stage": "plan_conformance_gate",
+              "response.plan_conformance_gate": "{\n  \"context_updates\": {\n    \"plan_conformant\": false,\n    \"plan_rework_available\": true\n  }\n}",
+              "plan_rework_available": true,
+              "plan_conformant": false
+            },
+            "notes": "Stage completed: plan_conformance_gate",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4540,
+                    "output_tokens": 37,
+                    "reasoning_tokens": 2588,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 101450
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 48589,
+              "tool_time_ms": 0,
+              "active_time_ms": 48589
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/af8edde218f148430536590ba4fca7de7042d8e15aa1a5bb2b7bf6d2e9b98823"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169339,
+              "active_time_ms": 169339
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e2a142161ff3e25c47cd0b7a051282b925edfd4415ffa624c8ea1f9576df97f8"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/002-membership-model/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 271,
+              "active_time_ms": 271
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a503de371f81d4515781c016e55cc1179c4dc9357b34b160ba8d3f47aaa0cdac"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 41248,
+              "active_time_ms": 41248
+            }
+          },
+          "plan_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: plan_gate",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/843ebae4af745c2cf8a2d48c8ae3a285827325c6cb2adec532eb05573d2b951b"
+            },
+            "notes": "Script completed: set -eu\nbase_ref='origin/main'\nmerge_base_err=\"${TMPDIR:-/tmp}/memba-merge-base-$$.err\"\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base ref input: ${base_ref:-<empty>}\"\necho ''\necho '--- available branches ---'\ngit branch -vv || true\necho ''\necho '--- available remote branches ---'\ngit branch -r -vv || true\necho ''\necho '--- recent commits ---'\ngit log --oneline --decorate --max-count=20 --all || true\necho ''\nif [ -n \"$base_ref\" ]; then\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    case \"$base_ref\" in\n      origin/*)\n        branch=${base_ref#origin/}\n        git fetch --quiet origin \"$branch:refs/remotes/origin/$branch\" || true\n        ;;\n    esac\n  fi\n  if ! git rev-parse --verify \"$base_ref\" >/dev/null 2>&1; then\n    echo \"Configured base_ref is not a valid ref: $base_ref\" >&2\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nelse\n  git fetch --quiet origin main:refs/remotes/origin/main || true\n  for ref in origin/main main; do\n    if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n      base_ref=$ref\n      break\n    fi\n  done\n  if [ -z \"$base_ref\" ]; then\n    echo 'Could not determine a base ref. Tried origin/main and main.' >&2\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nfi\nif ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n  echo \"Could not compute merge base between HEAD and $base_ref.\" >&2\n  cat \"$merge_base_err\" >&2 || true\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to fetch deeper history before failing...' >&2\n    case \"$base_ref\" in\n      origin/*)\n        branch=${base_ref#origin/}\n        git fetch --quiet --deepen=100 origin \"$branch:refs/remotes/origin/$branch\" || true\n        ;;\n    esac\n    git fetch --quiet --deepen=100 origin || true\n    if ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n      echo 'Trying to unshallow repository before failing...' >&2\n      git fetch --quiet --unshallow origin || true\n    fi\n  fi\n  if ! merge_base=$(git merge-base HEAD \"$base_ref\" 2>\"$merge_base_err\"); then\n    echo \"Still could not compute merge base between HEAD and $base_ref.\" >&2\n    cat \"$merge_base_err\" >&2 || true\n    git log --oneline --decorate --max-count=20 --all >&2 || true\n    git branch -a -vv >&2 || true\n    git show-ref >&2 || true\n    exit 1\n  fi\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base ref: $base_ref\"\necho \"Merge base: $merge_base\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$merge_base\"..HEAD; then\n  echo \"Could not compute diff stat from $merge_base to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$merge_base\"..HEAD; then\n  echo \"Could not compute diff name-status from $merge_base to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$merge_base\"..HEAD); then\n  echo \"Could not compute changed files from $merge_base to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between merge base and HEAD.'\nelse\n  excerpt_files=$(printf '%s\\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2360,
+              "active_time_ms": 2360
+            }
+          },
+          "snapshot_before_plan_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3536602b39b5dc9b8c52c1d3b212f1d226494e5db644db44e04723e2f6e8b4b5"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='plan'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "fix_plan_conformance": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "fix_plan_conformance",
+              "last_response": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a tex",
+              "response.fix_plan_conformance": "Implemented the plan-conformance repair and validated it.\n\nNote: the provided Plan Conformance Gate output only exposed `plan_conformant=false` / `plan_rework_available=true`; it did not include a textual repair brief. I repaired the concrete gaps identifiable from the plan text, relevant ADR 0011, and current implementation.\n\n## 1. Plan requirement gaps addressed\n\n| Gap | Requirement source | Fix |\n|---|---|---|\n| `AddMember` could be dispatched without proving the person and club already existed. | Plan: Membership aggregate attaches an existing person to an existing club. | Added a public Membership command boundary that checks projected club/person existence before dispatching `AddMember`. |\n| Duplicate active memberships for the same `{club_id, person_id}` pair were not prevented at the application/query boundary. | ADR 0011, cited by the plan. | Added duplicate-active-membership rejection before dispatching `AddMember`. |\n| Cucumber step definitions used lower-level `Memba.Membership.App.dispatch/2` directly instead of the public Membership API boundary. | Plan implementation step 4: step definitions use public Membership API. | Updated step definitions to use `Memba.Membership.dispatch/2`. |\n| Query tests proved `list_active_members_of_club/1` using direct dispatch against arbitrary club IDs rather than created clubs through the Membership boundary. | Acceptance criteria: person created independently can be added via domain commands; active member query excludes other clubs. | Updated query tests to create clubs, people, and memberships through the public Membership command boundary. |\n\n## 2. Concrete changes made\n\n### Public Membership command boundary\n\nUpdated `web/lib/memba/membership.ex`:\n\n- Added `Memba.Membership.dispatch/2`.\n- Supports:\n  - `%CreateClub{}`\n  - `%CreatePerson{}`\n  - `%AddMember{}`\n- Defaults dispatch to `consistency: :strong`.\n- For `AddMember`, validates:\n  - club exists via `get_club/1`\n  - person exists via `get_person/1`\n  - no existing active membership via `active_member_of_club?/2`\n- Returns:\n  - `{:error, :club_not_found}`\n  - `{:error, :person_not_found}`\n  - `{:error, :already_active_member}`\n\n### Cucumber step definitions\n\nUpdated `web/test/features/step_definitions/membership_steps.exs`:\n\n- Replaced direct `Memba.Membership.App.dispatch/2` usage with `Memba.Membership.dispatch/2`.\n- Kept caller-generated UUIDs in the steps.\n\n### Tests\n\nAdded `web/test/memba/membership/application_service_test.exs`:\n\n- Proves a person can be created independently and added to an existing club.\n- Proves missing club rejection.\n- Proves missing person rejection.\n- Proves duplicate active membership rejection.\n\nUpdated `web/test/memba/membership/query_test.exs`:\n\n- Query API tests now create clubs/people/memberships through `Memba.Membership.dispatch/2`.\n- Still verifies `list_active_members_of_club/1` returns only active members of the requested club.\n\nUpdated `web/test/memba/membership/no_crud_spike_test.exs`:\n\n- Adjusted wording/assertion to allow the public command boundary while still preventing CRUD-style helpers.\n\n## 3. Files changed by requirement\n\n### Existing club/person and duplicate membership enforcement\n\n- `web/lib/memba/membership.ex`\n- `web/test/memba/membership/application_service_test.exs`\n\n### Cucumber Background steps use public Membership API\n\n- `web/test/features/step_definitions/membership_steps.exs`\n\n### Query API proven through domain command boundary\n\n- `web/test/memba/membership/query_test.exs`\n\n### Guard against CRUD spike while allowing command boundary\n\n- `web/test/memba/membership/no_crud_spike_test.exs`\n\n## 4. Automated tests added or updated\n\nAdded:\n\n- `Memba.Membership.ApplicationServiceTest`\n\nUpdated:\n\n- `Memba.Membership.QueryTest`\n- `Memba.Cucumber.MembershipSteps`\n- `Memba.Membership.NoCrudSpikeTest`\n\n## 5. Tests run\n\nAll final validations passed:\n\n- `devenv shell bin/mix format --check-formatted` — passed\n- `devenv shell bin/mix test test/memba/membership/application_service_test.exs test/memba/membership/query_test.exs test/features/cucumber_configuration_test.exs test/memba/membership/no_crud_spike_test.exs` — passed, 13 tests, 0 failures\n- `PATH=\"$PWD/bin:$PATH\" dev check` — passed, 57 tests, 0 failures\n- `devenv shell bin/mix precommit` — passed, 57 tests, 0 failures\n\n## 6. Remaining gaps or human questions\n\nNo remaining plan gaps identified from the available gate context, plan text, and repository state. No acceptance feature files were modified."
+            },
+            "notes": "Stage completed: fix_plan_conformance",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 819398,
+                    "output_tokens": 10946,
+                    "reasoning_tokens": 5947,
+                    "cache_read_tokens": 2214912,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5711236
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 461633,
+              "tool_time_ms": 273671,
+              "active_time_ms": 735304
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "verify_plan_repair",
+        "git_commit_sha": "11215a954eed0f2427d7debf6ae140a885d75aad",
+        "node_visits": {
+          "plan_gate": 1,
+          "snapshot_before_plan_repair": 1,
+          "dev_check": 1,
+          "preflight_sandbox": 1,
+          "fix_plan_conformance": 1,
+          "read_plan": 1,
+          "collect_implementation_evidence": 1,
+          "plan_conformance_gate": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex\nindex 4afcd0e..eea72e9 100644\n--- a/web/lib/memba/membership.ex\n+++ b/web/lib/memba/membership.ex\n@@ -1,15 +1,47 @@\n defmodule Memba.Membership do\n   @moduledoc \"\"\"\n-  Public query API for the Membership bounded context.\n+  Public API for the Membership bounded context.\n   \"\"\"\n \n   import Ecto.Query\n \n+  alias Memba.Membership.App\n+  alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.CreateClub\n+  alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Projections.Club\n   alias Memba.Membership.Projections.Membership, as: MembershipProjection\n   alias Memba.Membership.Projections.Person\n   alias Memba.Repo\n \n+  @default_dispatch_opts [consistency: :strong]\n+\n+  @doc \"\"\"\n+  Dispatch a Membership domain command through the Membership context boundary.\n+\n+  Callers supply aggregate UUIDs on the commands. `AddMember` commands must\n+  attach an existing person to an existing club, and a second active membership\n+  for the same `{club_id, person_id}` pair is rejected before the Membership\n+  aggregate command is dispatched.\n+  \"\"\"\n+  def dispatch(command, opts \\\\ @default_dispatch_opts)\n+\n+  def dispatch(%CreateClub{} = command, opts) do\n+    App.dispatch(command, opts)\n+  end\n+\n+  def dispatch(%CreatePerson{} = command, opts) do\n+    App.dispatch(command, opts)\n+  end\n+\n+  def dispatch(%AddMember{} = command, opts) do\n+    with :ok <- ensure_club_exists(command.club_id),\n+         :ok <- ensure_person_exists(command.person_id),\n+         :ok <- ensure_no_active_membership(command.club_id, command.person_id) do\n+      App.dispatch(command, opts)\n+    end\n+  end\n+\n   @doc \"\"\"\n   Fetch a projected club read model by caller-generated UUID.\n \n@@ -81,4 +113,28 @@ defmodule Memba.Membership do\n       :error -> false\n     end\n   end\n+\n+  defp ensure_club_exists(club_id) do\n+    if get_club(club_id) do\n+      :ok\n+    else\n+      {:error, :club_not_found}\n+    end\n+  end\n+\n+  defp ensure_person_exists(person_id) do\n+    if get_person(person_id) do\n+      :ok\n+    else\n+      {:error, :person_not_found}\n+    end\n+  end\n+\n+  defp ensure_no_active_membership(club_id, person_id) do\n+    if active_member_of_club?(club_id, person_id) do\n+      {:error, :already_active_member}\n+    else\n+      :ok\n+    end\n+  end\n end\ndiff --git a/web/test/features/step_definitions/membership_steps.exs b/web/test/features/step_definitions/membership_steps.exs\nindex 3eca162..80ff8a0 100644\n--- a/web/test/features/step_definitions/membership_steps.exs\n+++ b/web/test/features/step_definitions/membership_steps.exs\n@@ -4,7 +4,6 @@ defmodule Memba.Cucumber.MembershipSteps do\n   import ExUnit.Assertions\n \n   alias Memba.Membership\n-  alias Memba.Membership.App\n   alias Memba.Membership.Commands.AddMember\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n@@ -47,10 +46,7 @@ defmodule Memba.Cucumber.MembershipSteps do\n     club_id = Ecto.UUID.generate()\n \n     assert :ok =\n-             App.dispatch(\n-               %CreateClub{club_id: club_id, name: club_name},\n-               consistency: :strong\n-             )\n+             Membership.dispatch(%CreateClub{club_id: club_id, name: club_name})\n \n     assert %ClubProjection{club_id: ^club_id, name: ^club_name} = Membership.get_club(club_id)\n \n@@ -66,10 +62,11 @@ defmodule Memba.Cucumber.MembershipSteps do\n     email = email_for(name)\n \n     assert :ok =\n-             App.dispatch(\n-               %CreatePerson{person_id: person_id, name: name, email: email},\n-               consistency: :strong\n-             )\n+             Membership.dispatch(%CreatePerson{\n+               person_id: person_id,\n+               name: name,\n+               email: email\n+             })\n \n     assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =\n              Membership.get_person(person_id)\n@@ -92,14 +89,11 @@ defmodule Memba.Cucumber.MembershipSteps do\n     membership_id = Ecto.UUID.generate()\n \n     assert :ok =\n-             App.dispatch(\n-               %AddMember{\n-                 membership_id: membership_id,\n-                 club_id: club_id,\n-                 person_id: person_id\n-               },\n-               consistency: :strong\n-             )\n+             Membership.dispatch(%AddMember{\n+               membership_id: membership_id,\n+               club_id: club_id,\n+               person_id: person_id\n+             })\n \n     assert Membership.active_member_of_club?(club_id, person_id)\n \ndiff --git a/web/test/memba/membership/application_service_test.exs b/web/test/memba/membership/application_service_test.exs\nnew file mode 100644\nindex 0000000..b31ea70\n--- /dev/null\n+++ b/web/test/memba/membership/application_service_test.exs\n@@ -0,0 +1,111 @@\n+defmodule Memba.Membership.ApplicationServiceTest do\n+  use Memba.EventSourcedCase, async: false\n+\n+  alias Memba.Membership\n+  alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.CreateClub\n+  alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Membership.Projections.Club, as: ClubProjection\n+  alias Memba.Membership.Projections.Person, as: PersonProjection\n+\n+  test \"creates a person independently and adds them as a member of an existing club\" do\n+    club_id = Ecto.UUID.generate()\n+    person_id = Ecto.UUID.generate()\n+\n+    assert :ok =\n+             Membership.dispatch(%CreateClub{\n+               club_id: club_id,\n+               name: \"Kootenay Mountaineering Club\"\n+             })\n+\n+    assert :ok =\n+             Membership.dispatch(%CreatePerson{\n+               person_id: person_id,\n+               name: \"Alice\",\n+               email: \"alice@example.com\"\n+             })\n+\n+    assert %ClubProjection{club_id: ^club_id} = Membership.get_club(club_id)\n+    assert %PersonProjection{person_id: ^person_id} = Membership.get_person(person_id)\n+\n+    assert :ok =\n+             Membership.dispatch(%AddMember{\n+               membership_id: Ecto.UUID.generate(),\n+               club_id: club_id,\n+               person_id: person_id\n+             })\n+\n+    assert Membership.active_member_of_club?(club_id, person_id)\n+\n+    assert Membership.list_active_members_of_club(club_id) == [\n+             %{id: person_id, name: \"Alice\", email: \"alice@example.com\"}\n+           ]\n+  end\n+\n+  test \"rejects adding a member to a missing club\" do\n+    person_id = Ecto.UUID.generate()\n+\n+    assert :ok =\n+             Membership.dispatch(%CreatePerson{\n+               person_id: person_id,\n+               name: \"Alice\",\n+               email: \"alice@example.com\"\n+             })\n+\n+    assert {:error, :club_not_found} =\n+             Membership.dispatch(%AddMember{\n+               membership_id: Ecto.UUID.generate(),\n+               club_id: Ecto.UUID.generate(),\n+               person_id: person_id\n+             })\n+  end\n+\n+  test \"rejects adding a missing person as a member\" do\n+    club_id = Ecto.UUID.generate()\n+\n+    assert :ok =\n+             Membership.dispatch(%CreateClub{\n+               club_id: club_id,\n+               name: \"Kootenay Mountaineering Club\"\n+             })\n+\n+    assert {:error, :person_not_found} =\n+             Membership.dispatch(%AddMember{\n+               membership_id: Ecto.UUID.generate(),\n+               club_id: club_id,\n+               person_id: Ecto.UUID.generate()\n+             })\n+  end\n+\n+  test \"rejects a second active membership for the same club and person\" do\n+    club_id = Ecto.UUID.generate()\n+    person_id = Ecto.UUID.generate()\n+\n+    assert :ok =\n+             Membership.dispatch(%CreateClub{\n+               club_id: club_id,\n+               name: \"Kootenay Mountaineering Club\"\n+             })\n+\n+    assert :ok =\n+             Membership.dispatch(%CreatePerson{\n+               person_id: person_id,\n+               name: \"Alice\",\n+               email: \"alice@example.com\"\n+             })\n+\n+    assert :ok =\n+             Membership.dispatch(%AddMember{\n+               membership_id: Ecto.UUID.generate(),\n+               club_id: club_id,\n+               person_id: person_id\n+             })\n+\n+    assert {:error, :already_active_member} =\n+             Membership.dispatch(%AddMember{\n+               membership_id: Ecto.UUID.generate(),\n+               club_id: club_id,\n+               person_id: person_id\n+             })\n+  end\n+end\ndiff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs\nindex 6a0da2f..4f1f8d4 100644\n--- a/web/test/memba/membership/no_crud_spike_test.exs\n+++ b/web/test/memba/membership/no_crud_spike_test.exs\n@@ -3,9 +3,10 @@ defmodule Memba.Membership.NoCrudSpikeTest do\n \n   @web_root Path.expand(\"../../..\", __DIR__)\n \n-  test \"public Membership context remains a query boundary instead of CRUD helpers\" do\n+  test \"public Membership context remains a command/query boundary instead of CRUD helpers\" do\n     source = read_source!(\"lib/memba/membership.ex\")\n \n+    assert source =~ \"def dispatch(\"\n     assert source =~ \"def get_club(\"\n     assert source =~ \"def list_active_members_of_club(\"\n \ndiff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs\nindex b9a97fc..b352265 100644\n--- a/web/test/memba/membership/query_test.exs\n+++ b/web/test/memba/membership/query_test.exs\n@@ -2,16 +2,16 @@ defmodule Memba.Membership.QueryTest do\n   use Memba.EventSourcedCase, async: false\n \n   alias Memba.Membership\n-  alias Memba.Membership.App\n   alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Projections.Membership, as: MembershipProjection\n   alias Memba.Membership.Projections.Person, as: PersonProjection\n \n   describe \"list_active_members_of_club/1\" do\n     test \"returns active members of the given club and excludes members of other clubs\" do\n-      kootenay_club_id = Ecto.UUID.generate()\n-      nelson_club_id = Ecto.UUID.generate()\n+      kootenay_club_id = create_club(\"Kootenay Mountaineering Club\")\n+      nelson_club_id = create_club(\"Nelson Paddling Club\")\n \n       alice = create_person(name: \"Alice\", email: \"alice@example.com\")\n       bob = create_person(name: \"Bob\", email: \"bob@example.com\")\n@@ -60,8 +60,8 @@ defmodule Memba.Membership.QueryTest do\n \n   describe \"active_member_of_club?/2\" do\n     test \"returns true only when the person has an active membership in the club\" do\n-      kootenay_club_id = Ecto.UUID.generate()\n-      nelson_club_id = Ecto.UUID.generate()\n+      kootenay_club_id = create_club(\"Kootenay Mountaineering Club\")\n+      nelson_club_id = create_club(\"Nelson Paddling Club\")\n \n       alice = create_person(name: \"Alice\", email: \"alice@example.com\")\n       pat = create_person(name: \"Pat\", email: \"pat@example.com\")\n@@ -77,6 +77,18 @@ defmodule Memba.Membership.QueryTest do\n     end\n   end\n \n+  defp create_club(name) do\n+    club_id = Ecto.UUID.generate()\n+\n+    assert :ok =\n+             Membership.dispatch(%CreateClub{\n+               club_id: club_id,\n+               name: name\n+             })\n+\n+    club_id\n+  end\n+\n   defp create_person(attrs) do\n     person = %{\n       person_id: Ecto.UUID.generate(),\n@@ -85,27 +97,21 @@ defmodule Memba.Membership.QueryTest do\n     }\n \n     assert :ok =\n-             App.dispatch(\n-               %CreatePerson{\n-                 person_id: person.person_id,\n-                 name: person.name,\n-                 email: person.email\n-               },\n-               consistency: :strong\n-             )\n+             Membership.dispatch(%CreatePerson{\n+               person_id: person.person_id,\n+               name: person.name,\n+               email: person.email\n+             })\n \n     person\n   end\n \n   defp add_member(club_id, person_id) do\n     assert :ok =\n-             App.dispatch(\n-               %AddMember{\n-                 membership_id: Ecto.UUID.generate(),\n-                 club_id: club_id,\n-                 person_id: person_id\n-               },\n-               consistency: :strong\n-             )\n+             Membership.dispatch(%AddMember{\n+               membership_id: Ecto.UUID.generate(),\n+               club_id: club_id,\n+               person_id: person_id\n+             })\n   end\n end\n",
+        "summary": {
+          "files_changed": 8,
+          "additions": 208,
+          "deletions": 40
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-29T18:10:32.873595248Z",
+        "current_node": "verify_plan_repair",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "plan_conformance_gate",
+          "plan_gate",
+          "snapshot_before_plan_repair",
+          "fix_plan_conformance",
+          "verify_plan_repair"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.start": 0,
           "failure_class": "",
           "failure_signature": "",
           "thread.read_plan.current_node": "preflight_sandbox",
           "internal.retry_count.snapshot_before_plan_repair": 0,
+          "thread.fix_plan_conformance.current_node": "verify_plan_repair",
           "thread.plan_conformance_gate.current_node": "plan_gate",
           "internal.node_visit_count": 1,
           "internal.run_id": "01KSTDV77CTJMJX2M6X78QJX5R",
-          "current_node": "fix_plan_conformance",
+          "current_node": "verify_plan_repair",
           "plan_conformant": false,
           "graph.default_fidelity": "summary:high",
           "outcome": "succeeded",
-          "command.output": "blob://sha256/3536602b39b5dc9b8c52c1d3b212f1d226494e5db644db44e04723e2f6e8b4b5",
+          "command.output": "blob://sha256/24ca8e3748a28e7f549daa3317d79e2c41fb8bbfcdd210d6261bd5ae01dda46f",
           "response.plan_conformance_gate": "{\n  \"context_updates\": {\n    \"plan_conformant\": false,\n    \"plan_rework_available\": true\n  }\n}",
           "graph.max_node_visits": "160",
           "plan_rework_available": true,
@@ -2338,7 +2575,8 @@
           "internal.retry_count.dev_check": 0,
           "internal.retry_count.plan_conformance_gate": 0,
           "thread.snapshot_before_plan_repair.current_node": "fix_plan_conformance",
-          "internal.thread_id": "snapshot_before_plan_repair",
+          "internal.retry_count.verify_plan_repair": 0,
+          "internal.thread_id": "fix_plan_conformance",
           "internal.retry_count.collect_implementation_evidence": 0,
           "thread.preflight_sandbox.current_node": "dev_check",
           "internal.retry_count.read_plan": 0,
@@ -2496,6 +2734,20 @@
               "active_time_ms": 164
             }
           },
+          "verify_plan_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/24ca8e3748a28e7f549daa3317d79e2c41fb8bbfcdd210d6261bd5ae01dda46f"
+            },
+            "notes": "Script completed: set -eu\nkind='plan'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          },
           "collect_implementation_evidence": {
             "status": "succeeded",
             "context_updates": {
@@ -2511,8 +2763,9 @@
             }
           }
         },
-        "next_node_id": "verify_plan_repair",
+        "next_node_id": "dev_check",
         "node_visits": {
+          "verify_plan_repair": 1,
           "collect_implementation_evidence": 1,
           "preflight_sandbox": 1,
           "snapshot_before_plan_repair": 1,
@@ -2809,6 +3062,33 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "verify_plan_repair@1": {
+      "first_event_seq": 454,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nkind='plan'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+        "command": "exec 2>&1\nset -eu\nkind='plan'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-29T18:10:32.701979606Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "plan_conformance_gate@1": {
       "first_event_seq": 65,
