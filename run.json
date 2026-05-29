@@ -1,0 +1,939 @@
+{
+  "title": "Implement a validated iteration plan and leave the codebase passing dev check",
+  "spec": {
+    "run_id": "01KSS97DPE1D5MD7CAZA9M506K",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Implement a validated iteration plan and leave the codebase passing dev check"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "plan_path": "docs/iterations/002-membership-model/plan.md"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.5",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [
+            "bash /workspace/memba/.fabro/workflows/iteration-implementation/prepare_mix.sh"
+          ],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "ref": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": {
+          "enabled": true,
+          "draft": false,
+          "auto_merge": true,
+          "merge_strategy": "squash"
+        },
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "IterationImplementation",
+      "nodes": {
+        "task_not_ready": {
+          "id": "task_not_ready",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "echo 'Iteration implementation failed: task validation requires human input or exceeded retry budget.' >&2\nexit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "label": {
+              "String": "Fail: Task Needs Human Input"
+            }
+          }
+        },
+        "final_summary": {
+          "id": "final_summary",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "prompt": {
+              "String": "Prepare the final implementation summary for docs/iterations/002-membership-model/plan.md.\n\nUse the implementation context, review synthesis, passing dev check output, and final artifact gate evidence. Do not edit files.\n\n**Critical requirements:**\n\n- You must cite the final artifact gate output to confirm implementation evidence.\n- You must not claim files were changed unless they appear in the final artifact gate evidence.\n- If the final artifact gate shows only working-tree evidence, list those files.\n- If the final artifact gate shows base-head diff evidence, use those file names.\n- Do not invent, assume, or hallucinate changed files that are not present in the artifact evidence.\n\nReturn:\n\n- Result: IMPLEMENTED\n- Plan path\n- Summary of delivered capability\n- ADR conformance summary\n- ADRs considered\n- Evidence for each ADR-relevant implementation decision\n- Any ADR deviations or human follow-ups\n- Key files changed (must match final artifact gate evidence), grouped by area\n- Tests and validation run\n- Any manual demo/checks still recommended\n- Any non-blocking follow-ups"
+            },
+            "label": {
+              "String": "Final Summary"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Exit"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "Msquare"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "resume_failed": {
+          "id": "resume_failed",
+          "attrs": {
+            "label": {
+              "String": "Fail: Dirty Resume State"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Iteration implementation failed before coding: resume gate found uncommitted changes. Commit, stash, or reset/clean the worktree, then retry.' >&2\nexit 1"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "sync_task_list": {
+          "id": "sync_task_list",
+          "attrs": {
+            "script": {
+              "String": "set -eu\nPLAN_PATH='docs/iterations/002-membership-model/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\""
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Sync Task List"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "label": {
+              "String": "Start"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "preflight_failed": {
+          "id": "preflight_failed",
+          "attrs": {
+            "goal_gate": {
+              "Boolean": true
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Iteration implementation failed before coding: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
+            },
+            "label": {
+              "String": "Fail: Sandbox Preflight"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "implement_next_task": {
+          "id": "implement_next_task",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "prompt": {
+              "String": "Implement the next unchecked iteration task from `todo.md`.\n\nPlan path: `docs/iterations/002-membership-model/plan.md`.\nTodo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.\n\n## Ownership rules\n\n- Read the plan and `todo.md` before editing.\n- Pick the first unchecked Markdown task line in `todo.md` (`- [ ] ...`). That task is yours from selection through check-off.\n- Treat earlier checked todo lines as durable completed work. Do not redo them.\n- Inspect recent task commits with `git log --oneline --decorate -20` and use their subjects/bodies as context for what previous runs already completed.\n- Inspect `git status --short` before editing. The resume gate should normally guarantee a clean tree; if uncommitted changes are present, stop for human input unless they are clearly the selected task's in-progress work and you can safely continue it to completion without overwriting it.\n- Never silently overwrite, discard, or duplicate uncommitted work for an unchecked task.\n- Implement exactly the selected task only. Do not opportunistically implement later tasks unless the selected task cannot be completed without splitting/reordering the todo list first.\n- When the implementation and focused validation are complete, check off the same task line you implemented by changing that one line from `- [ ]` to `- [x]`.\n- Do not check off any other ordinary todo line.\n- Do not commit. The deterministic commit node will commit after independent validation.\n\n\n## Local reference docs\n\n- Prefer local project documentation over network lookups. Do not `curl` upstream docs unless the local docs are missing or clearly insufficient.\n- Start with `docs/tools/README.md` for library documentation signposts. Relevant local docs include:\n  - `docs/tools/commanded/README.md` for Commanded.\n  - `docs/tools/commanded-eventstore-adapter/README.md` for the EventStore adapter.\n  - `docs/tools/eventstore/README.md` for EventStore.\n  - `docs/tools/commanded-ecto-projections/README.md` for projections.\n  - `docs/tools/cucumber/README.md` for Elixir Cucumber.\n  - `docs/tools/ecto/README.md` and `docs/tools/ecto-sql/README.md` for Ecto.\n  - `docs/tools/phoenix/README.md` and related Phoenix docs for web framework work.\n- If you need examples, search the local `web/deps/` source tree and `docs/tools/` before using the network.\n\n## Binding rules\n\n- `plan.md` remains the source of truth. `todo.md` is derived execution state.\n- You may split the selected task into smaller unchecked tasks, add required technical subtasks, or reorder pending tasks only to satisfy the approved plan.\n- If the selected task is too large, split it in `todo.md`, leave the parent/current task unchecked or replace it with smaller unchecked tasks, then implement and check off only the first newly available slice.\n- You may not delete, weaken, or silently defer plan-required work.\n- Before editing, read every ADR explicitly referenced by the plan and inspect nearby/current ADRs under `docs/adr/` when relevant.\n- Treat accepted ADRs as binding architecture constraints.\n- Use test-driven development for behaviour changes.\n- Add or update automated tests proving the selected task's behaviour/configuration.\n- Run focused validation appropriate to the selected task and capture the commands/results in your response.\n- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). If a feature file appears wrong, stale, or insufficient, stop and report the issue.\n- Add acceptance step definitions only where the plan explicitly requires executable plumbing for locked shared feature files.\n- Use Req for HTTP requests; do not introduce HTTPoison, Tesla, or `:httpc`.\n- Follow relevant project guidance for Phoenix, LiveView, HEEx, Tailwind, Ecto, Elixir, Mix, and tests.\n- If you hit a real blocker, stop and report it clearly without checking off the task.\n\nWhen finished, summarize:\n\n1. Selected todo line and task text.\n2. Code/config/test/doc changes made for this task only.\n3. Focused validation commands run and results.\n4. The exact todo check-off you made.\n5. Any todo splits/additions/reordering and why they still satisfy the plan.\n6. ADR conformance evidence for this task."
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Implement Next Task"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "validate_task": {
+          "id": "validate_task",
+          "attrs": {
+            "prompt": {
+              "String": "Validate the just-completed iteration task for `docs/iterations/002-membership-model/plan.md`.\n\nYou have tool access. Use it. Decide from live repository state, not from summarized context alone. Read `.fabro/tmp/pre-validate-snapshot.md`, run `git status --short`, inspect `git diff`, and read changed files as needed.\n\nImportant workflow contract: `implement_next_task` does **not** commit. The deterministic `commit_task` node commits **after** this validation. Therefore, at validation time it is correct and expected that HEAD is the **previous** successful task commit while the current task's new/changed files and the `todo.md` check-off are **uncommitted** in the working tree, often as untracked files.\n\nValidate the working tree, not `git log`. A previous task's commit at HEAD is never, by itself, evidence of stale replay, memoization, lost writes, or a filesystem bridge failure. Do not infer infrastructure faults unless live repository evidence proves the expected files or diffs are genuinely absent.\n\nDo not rely on a selected-task temp file. Instead inspect the plan, `todo.md`, relevant ADRs, current repository diff/status, test evidence, and the preceding implementation summary. Identify the completed task by the working-tree `todo.md` diff: exactly one ordinary task line should have changed from unchecked (`- [ ]`) to checked (`- [x]`) unless there is a clear plan-preserving split/reorder rationale.\n\n## Validate\n\nAccept the task only if all are true:\n\n- The checked-off task is the first unchecked task that existed when the implementor started, or a clearly justified first slice after a plan-preserving split.\n- The same task that was implemented has been checked off in `todo.md`.\n- The task has concrete code/config/test/documentation evidence as appropriate; a todo-only change is invalid.\n- The work stays within the approved plan and preserves plan-required scope.\n- Any todo changes split/add/reorder only to satisfy the plan; no plan-required work was deleted, weakened, or silently deferred.\n- Relevant automated tests were added/updated and focused tests were run, or a justified blocker was reported.\n- Accepted ADR constraints relevant to this task are respected.\n- No acceptance feature files (`*.feature`, including under `acceptance-tests/`) were edited.\n- The task is small enough to be committed independently with a useful evidence trail.\n\nIf validation fails but the task is still clear and safe to attempt again, request a clean retry from the last successful task commit. Do not ask for in-place repair. Only request human input when the task, plan, or repository state is ambiguous, unsafe, repeatedly failing for the same non-transient reason, or blocked by a decision/tooling issue that another clean attempt is unlikely to solve.\n\n## Output format\n\nReturn concise Markdown with:\n\n### Decision\nOne of: **VALID**, **RETRY**, or **HUMAN_INPUT**\n\n### Evidence\n- Completed todo/check-off evidence found.\n- Implementation artifacts found.\n- Tests run/results found.\n- ADR/plan conformance notes.\n\n### Retry brief\nOnly if RETRY: exact reason the attempt was rejected from live working-tree evidence, plus concise guidance for the next clean attempt. The workflow will snapshot the failed working tree before resetting and trying again.\n\n### Human input\nOnly if HUMAN_INPUT: exact blocker/question.\n\nEnd your response with exactly one JSON object for Fabro routing, not in a code fence:\n\n- Valid:\n  {\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}\n- Clean retry needed:\n  {\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}\n- Human input required:\n  {\"context_updates\":{\"task_valid\":false,\"task_retry_available\":false}}"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Validate Completed Task"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "commit_task": {
+          "id": "commit_task",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Commit Completed Task"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "set -eu\nPLAN_PATH='docs/iterations/002-membership-model/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"Todo file is missing or empty: $TODO_PATH\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -z \"$status\" ]; then\n  echo 'No changes to commit for completed task.' >&2\n  exit 1\nfi\nif printf '%s\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  exit 1\nfi\ngit add -A\ngit reset -q -- .fabro/tmp 2>/dev/null || true\nfiles=$(git diff --cached --name-only || true)\nif [ -z \"$files\" ]; then\n  echo 'No staged changes remain after excluding Fabro temp files.' >&2\n  exit 1\nfi\nif printf '%s\n' \"$files\" | grep -E '\\.feature$'; then\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\n  git reset -q\n  exit 1\nfi\nnon_todo_files=$(printf '%s\n' \"$files\" | grep -F -x -v \"$TODO_PATH\" || true)\nif [ -z \"$non_todo_files\" ]; then\n  echo 'Refusing to commit only todo.md; completed task has no implementation/test/config/doc artifact staged.' >&2\n  git reset -q\n  exit 1\nfi\nchecked_count=$(git diff --cached -U0 -- \"$TODO_PATH\" | grep -E '^\\+[[:space:]]*- \\[x\\] ' | grep -v '^+++' | wc -l | tr -d ' ')\nunchecked_removed_count=$(git diff --cached -U0 -- \"$TODO_PATH\" | grep -E '^-[[:space:]]*- \\[ \\] ' | grep -v '^---' | wc -l | tr -d ' ')\nif [ \"${checked_count:-0}\" -eq 0 ]; then\n  echo 'Refusing to commit without a todo.md check-off for the completed task.' >&2\n  git reset -q\n  exit 1\nfi\nif [ \"${checked_count:-0}\" -gt 1 ] || [ \"${unchecked_removed_count:-0}\" -gt 1 ]; then\n  echo 'Refusing to commit more than one ordinary todo check-off in a single task commit.' >&2\n  git reset -q\n  exit 1\nfi\nstat=$(git diff --cached --stat || true)\nsubject=$(git diff --cached -U0 -- \"$TODO_PATH\" | grep -E '^\\+[[:space:]]*- \\[x\\] ' | grep -v '^+++' | head -1 | sed -E 's/^\\+[[:space:]]*- \\[x\\] [0-9]*[[:space:]]*//; s/[^A-Za-z0-9._ -]/ /g' | cut -c1-60)\n[ -n \"$subject\" ] || subject='completed task'\nmsg_file=.fabro/tmp/task-commit-message.txt\nmkdir -p .fabro/tmp\n{\n  printf 'Implement iteration task: %s\\n\\n' \"$subject\"\n  printf 'Plan: %s\\n' \"$PLAN_PATH\"\n  printf 'Todo: %s\\n\\n' \"$TODO_PATH\"\n  printf 'Evidence files changed:\\n%s\\n\\n' \"$files\"\n  printf 'Diff stat:\\n%s\\n' \"$stat\"\n} > \"$msg_file\"\ngit commit -F \"$msg_file\"\nrm -f .fabro/tmp/task-commit-message.txt\ngit status --short"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "preflight_sandbox": {
+          "id": "preflight_sandbox",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Preflight Sandbox Toolchain"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 600,
+                "nanos": 0
+              }
+            }
+          }
+        },
+        "reset_task_attempt": {
+          "id": "reset_task_attempt",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Reset Failed Task Attempt"
+            }
+          }
+        },
+        "task_gate": {
+          "id": "task_gate",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Task valid?"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "diamond"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "pre_validate_snapshot": {
+          "id": "pre_validate_snapshot",
+          "attrs": {
+            "script": {
+              "String": "set -eu\nPLAN_PATH='docs/iterations/002-membership-model/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=.fabro/tmp/pre-validate-snapshot.md\nmkdir -p .fabro/tmp\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: implement_next_task has not committed. HEAD should normally be the previous successful task commit, while the current task work and todo.md check-off are uncommitted in the working tree.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\""
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Snapshot Pre-Validation State"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "read_plan": {
+          "id": "read_plan",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Read Iteration Plan"
+            },
+            "script": {
+              "String": "PLAN_PATH='docs/iterations/002-membership-model/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\""
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "dev_check": {
+          "id": "dev_check",
+          "attrs": {
+            "script": {
+              "String": "PATH=\"$PWD/bin:$PATH\" dev ci"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 1800,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Run Dev Check"
+            }
+          }
+        },
+        "resume_gate": {
+          "id": "resume_gate",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Resume Gate"
+            },
+            "script": {
+              "String": "set -eu\nPLAN_PATH='docs/iterations/002-membership-model/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable task commits.'"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "all_tasks_done": {
+          "id": "all_tasks_done",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Check Task List"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "prompt": {
+              "String": "# Check iteration task list\n\nDetermine whether the current iteration todo list has any unchecked implementation tasks remaining.\n\nUse the plan path input from the workflow:\n\n- `docs/iterations/002-membership-model/plan.md`\n\nRules:\n\n- Derive the todo path by replacing the trailing `/plan.md` with `/todo.md`.\n- Read the todo file.\n- If the todo file is missing, empty, or unreadable, report that as a blocking problem and set `task_list_complete` to `false` and `task_list_needs_human` to `true`.\n- If any line matches an unchecked Markdown task (`- [ ] ...`), set `task_list_complete` to `false` and `task_list_needs_human` to `false`.\n- If no unchecked Markdown tasks remain, set `task_list_complete` to `true` and `task_list_needs_human` to `false`.\n- Do not edit files.\n\nReturn a concise explanation and end with exactly one JSON context update object.\n\nExamples:\n\nUnchecked tasks remain:\n\n```json\n{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}\n```\n\nAll tasks complete:\n\n```json\n{\"context_updates\":{\"task_list_complete\":true,\"task_list_needs_human\":false}}\n```\n\nBlocking problem:\n\n```json\n{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":true}}\n```"
+            }
+          }
+        },
+        "read_failed": {
+          "id": "read_failed",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
+            },
+            "label": {
+              "String": "Fail: Plan Missing"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "fix_dev_check": {
+          "id": "fix_dev_check",
+          "attrs": {
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "prompt": {
+              "String": "The preceding Run Dev Check stage failed while implementing docs/iterations/002-membership-model/plan.md.\n\nThis is the automated-test feedback loop for the implementation. Use the dev check output and current working tree to fix the failures until the full automated suite can pass. Stay within the iteration scope.\n\nRules:\n\n- Prefer the smallest correct fix.\n- Do not skip or weaken tests, checks, Credo rules, formatter rules, or compiler warnings unless the plan explicitly says to change them.\n- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria; if they appear wrong, report the blocker instead of changing them.\n- Do not add unrelated cleanup.\n- Re-read relevant project guidance before touching Phoenix, LiveView, HEEx, Ecto, or Elixir test code.\n- Do not commit changes.\n- **Sandbox/runtime boundary**: If the failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.\n- **If no changes were needed**: If after reviewing the failures you determine that no code/config/test changes are required, state that explicitly and provide clear justification for why the dev check failures do not require changes.\n\nWhen finished, summarize:\n\n1. Each dev check failure from the preceding stage.\n2. The concrete code/config/test changes made for each failure (or an explicit statement that no changes were needed with justification).\n3. Files changed (grouped by failure addressed).\n4. Tests run and their results.\n5. Any remaining failures or human questions.\n\nInclude a failure-to-fix mapping showing which files/modules address each dev check failure."
+            },
+            "label": {
+              "String": "Fix Dev Check Failures"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "final_artifact_gate": {
+          "id": "final_artifact_gate",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Final Artifact Gate"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "set -eu\necho '=== Final Artifact Gate ==='\necho ''\necho 'Checking for implementation artifact evidence...'\necho ''\n\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\n# since Fabro may checkpoint changes between nodes.\n\n# 1. Check working tree status first (may be clean if already checkpointed)\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo \"Working tree changes still present:\"\n  printf '%s\\n' \"$status\"\n  echo ''\nelse\n  echo \"Working tree is clean (changes may have been checkpointed).\"\n  echo ''\nfi\n\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\n# Get the base commit (start of workflow) - try common refs\nbase_ref=''\nchanged_files=''\nfor ref in HEAD@{1} HEAD~1 HEAD~2 HEAD~3 origin/main; do\n  if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n    base_ref=\"$ref\"\n    break\n  fi\ndone\n\nif [ -n \"$base_ref\" ]; then\n  echo \"Comparing HEAD with $base_ref...\"\n  changed_files=$(git diff --name-only \"$base_ref\" HEAD 2>/dev/null || true)\n  if [ -n \"$changed_files\" ]; then\n    echo \"Files changed since workflow start:\"\n    printf '%s\\n' \"$changed_files\"\n    echo ''\n    echo \"Change summary:\"\n    git diff --stat \"$base_ref\" HEAD || true\n    echo ''\n  else\n    echo \"No differences found between $base_ref and HEAD.\"\n    echo ''\n  fi\nelse\n  echo \"Could not determine base reference for comparison.\"\n  echo ''\nfi\n\n# 3. Check for very recent commits (Fabro checkpoints)\nrecent_commits=$(git log --oneline -5 --format='%h %s')\nif [ -n \"$recent_commits\" ]; then\n  echo \"Recent commits (may include Fabro checkpoints):\"\n  printf '%s\\n' \"$recent_commits\"\n  echo ''\nfi\n\n# 4. Gather all evidence\nevidence=''\nif [ -n \"$status\" ]; then\n  evidence=\"working-tree\"\nfi\nif [ -n \"$changed_files\" ]; then\n  evidence=\"${evidence:+$evidence, }base-head-diff\"\nfi\n\n# 5. Check for locked .feature file changes\nif [ -n \"$status\" ] && printf '%s\\n' \"$status\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Final working tree includes locked acceptance feature changes.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\nif [ -n \"$changed_files\" ] && printf '%s\\n' \"$changed_files\" | grep -E '\\.feature$'; then\n  echo 'ERROR: Implementation modified locked acceptance feature files.' >&2\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\n  exit 1\nfi\n\n# 6. Fail if no evidence of changes\nif [ -z \"$evidence\" ]; then\n  echo 'ERROR: Implementation workflow reached finalization with no artifact evidence.' >&2\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\n  echo 'Refusing to report success without implementation artifacts.' >&2\n  exit 1\nfi\n\necho \"Final artifact evidence confirmed: $evidence\"\necho 'Final artifact gate passed.'"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_plan",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan",
+          "to": "preflight_sandbox",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "preflight_sandbox",
+          "to": "resume_gate",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "preflight_sandbox",
+          "to": "preflight_failed",
+          "attrs": {}
+        },
+        {
+          "from": "preflight_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "resume_gate",
+          "to": "sync_task_list",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "resume_gate",
+          "to": "resume_failed",
+          "attrs": {}
+        },
+        {
+          "from": "resume_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "sync_task_list",
+          "to": "all_tasks_done",
+          "attrs": {}
+        },
+        {
+          "from": "all_tasks_done",
+          "to": "dev_check",
+          "attrs": {
+            "label": {
+              "String": "No unchecked tasks"
+            },
+            "condition": {
+              "String": "context.task_list_complete=true"
+            }
+          }
+        },
+        {
+          "from": "all_tasks_done",
+          "to": "implement_next_task",
+          "attrs": {
+            "condition": {
+              "String": "context.task_list_complete=false && context.task_list_needs_human=false"
+            },
+            "label": {
+              "String": "Tasks remain"
+            }
+          }
+        },
+        {
+          "from": "all_tasks_done",
+          "to": "task_not_ready",
+          "attrs": {
+            "label": {
+              "String": "Task list problem"
+            }
+          }
+        },
+        {
+          "from": "implement_next_task",
+          "to": "pre_validate_snapshot",
+          "attrs": {}
+        },
+        {
+          "from": "pre_validate_snapshot",
+          "to": "validate_task",
+          "attrs": {}
+        },
+        {
+          "from": "validate_task",
+          "to": "task_gate",
+          "attrs": {}
+        },
+        {
+          "from": "task_gate",
+          "to": "commit_task",
+          "attrs": {
+            "condition": {
+              "String": "context.task_valid=true"
+            },
+            "label": {
+              "String": "Valid"
+            }
+          }
+        },
+        {
+          "from": "task_gate",
+          "to": "reset_task_attempt",
+          "attrs": {
+            "label": {
+              "String": "Retry from last good commit"
+            },
+            "condition": {
+              "String": "context.task_retry_available=true"
+            }
+          }
+        },
+        {
+          "from": "task_gate",
+          "to": "task_not_ready",
+          "attrs": {
+            "label": {
+              "String": "Needs human input or retry budget exhausted"
+            }
+          }
+        },
+        {
+          "from": "reset_task_attempt",
+          "to": "implement_next_task",
+          "attrs": {}
+        },
+        {
+          "from": "commit_task",
+          "to": "sync_task_list",
+          "attrs": {}
+        },
+        {
+          "from": "task_not_ready",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "dev_check",
+          "to": "final_artifact_gate",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            },
+            "label": {
+              "String": "Dev check passed"
+            }
+          }
+        },
+        {
+          "from": "dev_check",
+          "to": "fix_dev_check",
+          "attrs": {
+            "label": {
+              "String": "Fix failures"
+            }
+          }
+        },
+        {
+          "from": "fix_dev_check",
+          "to": "dev_check",
+          "attrs": {}
+        },
+        {
+          "from": "final_artifact_gate",
+          "to": "final_summary",
+          "attrs": {}
+        },
+        {
+          "from": "final_summary",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Implement a validated iteration plan and leave the codebase passing dev check"
+        },
+        "model_stylesheet": {
+          "String": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
+        },
+        "rankdir": {
+          "String": "LR"
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "max_node_visits": {
+          "Integer": 300
+        }
+      }
+    },
+    "graph_source": "digraph IterationImplementation {\n    graph [\n        goal=\"Implement the iteration plan at {{ inputs.plan_path }} and leave the codebase passing dev check\",\n        default_fidelity=\"summary:high\",\n        max_node_visits=300,\n        model_stylesheet=\"\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    read_plan [\n        label=\"Read Iteration Plan\",\n        shape=parallelogram,\n        script=\"PLAN_PATH='{{ inputs.plan_path }}'\\nif [ ! -f \\\"$PLAN_PATH\\\" ]; then\\n  echo \\\"Iteration plan not found: $PLAN_PATH\\\" >&2\\n  exit 1\\nfi\\nprintf 'PLAN_PATH=%s\\\\n\\\\n' \\\"$PLAN_PATH\\\"\\nline_count=0\\nwhile IFS= read -r line && [ \\\"$line_count\\\" -lt 320 ]; do\\n  printf '%s\\\\n' \\\"$line\\\"\\n  line_count=$((line_count + 1))\\ndone < \\\"$PLAN_PATH\\\"\"\n    ]\n\n    read_failed [\n        label=\"Fail: Plan Missing\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\\nexit 1\"\n    ]\n\n    preflight_sandbox [\n        label=\"Preflight Sandbox Toolchain\",\n        shape=parallelogram,\n        script=\"set -eu\\nif [ ! -x bin/dev ]; then\\n  echo \\\"Missing or non-executable bin/dev\\\" >&2\\n  exit 1\\nfi\\nPATH=\\\"$PWD/bin:$PATH\\\" dev sandbox-check\", \n        timeout=\"600s\"\n    ]\n\n    preflight_failed [\n        label=\"Fail: Sandbox Preflight\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration implementation failed before coding: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\\nexit 1\"\n    ]\n\n    sync_task_list [\n        label=\"Sync Task List\",\n        shape=parallelogram,\n        script=\"set -eu\\nPLAN_PATH='{{ inputs.plan_path }}'\\ncase \\\"$PLAN_PATH\\\" in\\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\\n  *) echo \\\"plan_path must end with /plan.md: $PLAN_PATH\\\" >&2; exit 1 ;;\\nesac\\nTODO_PATH=\\\"$ITERATION_DIR/todo.md\\\"\\nmkdir -p .fabro/tmp\\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\\n# from plan.md only when todo.md is absent.\\nif [ ! -f \\\"$TODO_PATH\\\" ]; then\\n  tmp=.fabro/tmp/generated-todo.md\\n  {\\n    printf '# Implementation TODO\\\\n\\\\n'\\n    in_plan=0\\n    count=0\\n    while IFS= read -r line; do\\n      case \\\"$line\\\" in\\n        '## Implementation Plan') in_plan=1; continue ;;\\n        '## '*) if [ \\\"$in_plan\\\" -eq 1 ]; then break; fi ;;\\n      esac\\n      if [ \\\"$in_plan\\\" -eq 1 ]; then\\n        case \\\"$line\\\" in\\n          [0-9]*'. '*)\\n            count=$((count + 1))\\n            task=${line#*. }\\n            printf -- '- [ ] %03d %s\\\\n' \\\"$count\\\" \\\"$task\\\"\\n            ;;\\n        esac\\n      fi\\n    done < \\\"$PLAN_PATH\\\"\\n    if [ \\\"${count:-0}\\\" -eq 0 ]; then\\n      echo \\\"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\\\" >&2\\n      exit 1\\n    fi\\n  } > \\\"$tmp\\\"\\n  mkdir -p \\\"$ITERATION_DIR\\\"\\n  mv \\\"$tmp\\\" \\\"$TODO_PATH\\\"\\n  echo \\\"Created $TODO_PATH from $PLAN_PATH\\\"\\nelse\\n  echo \\\"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\\\"\\nfi\\nprintf 'PLAN_PATH=%s\\\\nTODO_PATH=%s\\\\n' \\\"$PLAN_PATH\\\" \\\"$TODO_PATH\\\"\\nsed -n '1,120p' \\\"$TODO_PATH\\\"\",\n        timeout=\"120s\"\n    ]\n\n    resume_gate [\n        label=\"Resume Gate\",\n        shape=parallelogram,\n        script=\"set -eu\\nPLAN_PATH='{{ inputs.plan_path }}'\\ncase \\\"$PLAN_PATH\\\" in\\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\\n  *) echo \\\"plan_path must end with /plan.md: $PLAN_PATH\\\" >&2; exit 1 ;;\\nesac\\nTODO_PATH=\\\"$ITERATION_DIR/todo.md\\\"\\necho '=== Iteration resume gate ==='\\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\\n  printf 'HEAD: ' && git log -1 --format='%h %s'\\nelse\\n  echo 'HEAD: unavailable'\\nfi\\nif [ -f \\\"$TODO_PATH\\\" ]; then\\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \\\"$TODO_PATH\\\" | wc -l | tr -d ' ')\\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \\\"$TODO_PATH\\\" | wc -l | tr -d ' ')\\n  printf 'Todo: %s (%s checked, %s unchecked)\\\\n' \\\"$TODO_PATH\\\" \\\"${checked:-0}\\\" \\\"${unchecked:-0}\\\"\\nelse\\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\\\n' \\\"$TODO_PATH\\\"\\nfi\\nstatus=$(git status --short)\\nif [ -n \\\"$status\\\" ]; then\\n  echo 'Uncommitted changes present:'\\n  printf '%s\\\\n' \\\"$status\\\"\\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\\n  exit 1\\nfi\\necho 'Working tree clean; safe to resume from durable task commits.'\",\n        timeout=\"120s\"\n    ]\n\n    resume_failed [\n        label=\"Fail: Dirty Resume State\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration implementation failed before coding: resume gate found uncommitted changes. Commit, stash, or reset/clean the worktree, then retry.' >&2\\nexit 1\"\n    ]\n\n    all_tasks_done [\n        label=\"Check Task List\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/check_task_list.md\"\n    ]\n\n    implement_next_task [\n        label=\"Implement Next Task\",\n        prompt=\"@prompts/implement_next_task.md\",\n        timeout=\"2400s\"\n    ]\n\n    pre_validate_snapshot [\n        label=\"Snapshot Pre-Validation State\",\n        shape=parallelogram,\n        script=\"set -eu\\nPLAN_PATH='{{ inputs.plan_path }}'\\ncase \\\"$PLAN_PATH\\\" in\\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\\n  *) echo \\\"plan_path must end with /plan.md: $PLAN_PATH\\\" >&2; exit 1 ;;\\nesac\\nTODO_PATH=\\\"$ITERATION_DIR/todo.md\\\"\\nSNAPSHOT=.fabro/tmp/pre-validate-snapshot.md\\nmkdir -p .fabro/tmp\\n{\\n  echo '# Pre-validation repository snapshot'\\n  echo\\n  echo 'Validation-time contract: implement_next_task has not committed. HEAD should normally be the previous successful task commit, while the current task work and todo.md check-off are uncommitted in the working tree.'\\n  echo\\n  echo '## HEAD'\\n  git rev-parse --short HEAD || true\\n  git log -1 --format='%h %s' || true\\n  echo\\n  echo '## git status --short'\\n  git status --short || true\\n  echo\\n  echo '## git diff --stat'\\n  git diff --stat || true\\n  echo\\n  echo \\\"## Working-tree diff for $TODO_PATH\\\"\\n  if [ -f \\\"$TODO_PATH\\\" ]; then\\n    git diff -- \\\"$TODO_PATH\\\" || true\\n  else\\n    echo \\\"Todo file missing: $TODO_PATH\\\"\\n  fi\\n  echo\\n  echo '## git diff --name-only'\\n  git diff --name-only || true\\n  echo\\n  echo '## Untracked files'\\n  git ls-files --others --exclude-standard || true\\n  echo\\n  echo '## Combined changed path list from git status --porcelain'\\n  git status --porcelain || true\\n} > \\\"$SNAPSHOT\\\"\\necho \\\"Wrote $SNAPSHOT\\\"\\nsed -n '1,220p' \\\"$SNAPSHOT\\\"\",\n        timeout=\"120s\"\n    ]\n\n    validate_task [\n        label=\"Validate Completed Task\",\n        output_schema=\"routing\",\n        prompt=\"@prompts/validate_task.md\"\n    ]\n\n    task_gate [shape=diamond, label=\"Task valid?\"]\n\n    reset_task_attempt [\n        label=\"Reset Failed Task Attempt\",\n        shape=parallelogram,\n        max_visits=3,\n        script=\"set -eu\\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\\nmkdir -p \\\"$attempt_dir/files\\\"\\necho \\\"Snapshotting failed task attempt before reset: $attempt_dir\\\"\\ngit status --short > \\\"$attempt_dir/status-short.txt\\\" || true\\ngit diff > \\\"$attempt_dir/working-tree.diff\\\" || true\\ngit diff --cached > \\\"$attempt_dir/staged.diff\\\" || true\\ngit status --short\\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\\n  if [ -f \\\"$path\\\" ]; then\\n    mkdir -p \\\"$attempt_dir/files/$(dirname \\\"$path\\\")\\\"\\n    cp \\\"$path\\\" \\\"$attempt_dir/files/$path\\\"\\n  fi\\ndone\\necho \\\"Discarding failed task attempt and resetting to last successful task commit: $(git rev-parse --short HEAD)\\\"\\ngit reset --hard HEAD\\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\\necho \\\"Discarded attempt snapshot preserved at $attempt_dir\\\"\\ngit status --short\"\n    ]\n\n    commit_task [\n        label=\"Commit Completed Task\",\n        shape=parallelogram,\n        script=\"set -eu\\nPLAN_PATH='{{ inputs.plan_path }}'\\ncase \\\"$PLAN_PATH\\\" in\\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\\n  *) echo \\\"plan_path must end with /plan.md: $PLAN_PATH\\\" >&2; exit 1 ;;\\nesac\\nTODO_PATH=\\\"$ITERATION_DIR/todo.md\\\"\\nif [ ! -s \\\"$TODO_PATH\\\" ]; then\\n  echo \\\"Todo file is missing or empty: $TODO_PATH\\\" >&2\\n  exit 1\\nfi\\nstatus=$(git status --short)\\nif [ -z \\\"$status\\\" ]; then\\n  echo 'No changes to commit for completed task.' >&2\\n  exit 1\\nfi\\nif printf '%s\\n' \\\"$status\\\" | grep -E '\\\\.feature$'; then\\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\\n  exit 1\\nfi\\ngit add -A\\ngit reset -q -- .fabro/tmp 2>/dev/null || true\\nfiles=$(git diff --cached --name-only || true)\\nif [ -z \\\"$files\\\" ]; then\\n  echo 'No staged changes remain after excluding Fabro temp files.' >&2\\n  exit 1\\nfi\\nif printf '%s\\n' \\\"$files\\\" | grep -E '\\\\.feature$'; then\\n  echo 'Refusing to commit locked acceptance feature file changes.' >&2\\n  git reset -q\\n  exit 1\\nfi\\nnon_todo_files=$(printf '%s\\n' \\\"$files\\\" | grep -F -x -v \\\"$TODO_PATH\\\" || true)\\nif [ -z \\\"$non_todo_files\\\" ]; then\\n  echo 'Refusing to commit only todo.md; completed task has no implementation/test/config/doc artifact staged.' >&2\\n  git reset -q\\n  exit 1\\nfi\\nchecked_count=$(git diff --cached -U0 -- \\\"$TODO_PATH\\\" | grep -E '^\\\\+[[:space:]]*- \\\\[x\\\\] ' | grep -v '^+++' | wc -l | tr -d ' ')\\nunchecked_removed_count=$(git diff --cached -U0 -- \\\"$TODO_PATH\\\" | grep -E '^-[[:space:]]*- \\\\[ \\\\] ' | grep -v '^---' | wc -l | tr -d ' ')\\nif [ \\\"${checked_count:-0}\\\" -eq 0 ]; then\\n  echo 'Refusing to commit without a todo.md check-off for the completed task.' >&2\\n  git reset -q\\n  exit 1\\nfi\\nif [ \\\"${checked_count:-0}\\\" -gt 1 ] || [ \\\"${unchecked_removed_count:-0}\\\" -gt 1 ]; then\\n  echo 'Refusing to commit more than one ordinary todo check-off in a single task commit.' >&2\\n  git reset -q\\n  exit 1\\nfi\\nstat=$(git diff --cached --stat || true)\\nsubject=$(git diff --cached -U0 -- \\\"$TODO_PATH\\\" | grep -E '^\\\\+[[:space:]]*- \\\\[x\\\\] ' | grep -v '^+++' | head -1 | sed -E 's/^\\\\+[[:space:]]*- \\\\[x\\\\] [0-9]*[[:space:]]*//; s/[^A-Za-z0-9._ -]/ /g' | cut -c1-60)\\n[ -n \\\"$subject\\\" ] || subject='completed task'\\nmsg_file=.fabro/tmp/task-commit-message.txt\\nmkdir -p .fabro/tmp\\n{\\n  printf 'Implement iteration task: %s\\\\n\\\\n' \\\"$subject\\\"\\n  printf 'Plan: %s\\\\n' \\\"$PLAN_PATH\\\"\\n  printf 'Todo: %s\\\\n\\\\n' \\\"$TODO_PATH\\\"\\n  printf 'Evidence files changed:\\\\n%s\\\\n\\\\n' \\\"$files\\\"\\n  printf 'Diff stat:\\\\n%s\\\\n' \\\"$stat\\\"\\n} > \\\"$msg_file\\\"\\ngit commit -F \\\"$msg_file\\\"\\nrm -f .fabro/tmp/task-commit-message.txt\\ngit status --short\"\n    ]\n\n    task_not_ready [\n        label=\"Fail: Task Needs Human Input\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration implementation failed: task validation requires human input or exceeded retry budget.' >&2\\nexit 1\"\n    ]\n\n    dev_check [\n        label=\"Run Dev Check\",\n        shape=parallelogram,\n        script=\"PATH=\\\"$PWD/bin:$PATH\\\" dev ci\",\n        timeout=\"1800s\"\n    ]\n\n    fix_dev_check [\n        label=\"Fix Dev Check Failures\",\n        prompt=\"@prompts/fix_dev_check.md\",\n        timeout=\"2400s\",\n        max_visits=3\n    ]\n\n    final_artifact_gate [\n        label=\"Final Artifact Gate\",\n        shape=parallelogram,\n        script=\"set -eu\\necho '=== Final Artifact Gate ==='\\necho ''\\necho 'Checking for implementation artifact evidence...'\\necho ''\\n\\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\\n# since Fabro may checkpoint changes between nodes.\\n\\n# 1. Check working tree status first (may be clean if already checkpointed)\\nstatus=$(git status --short)\\nif [ -n \\\"$status\\\" ]; then\\n  echo \\\"Working tree changes still present:\\\"\\n  printf '%s\\\\n' \\\"$status\\\"\\n  echo ''\\nelse\\n  echo \\\"Working tree is clean (changes may have been checkpointed).\\\"\\n  echo ''\\nfi\\n\\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\\n# Get the base commit (start of workflow) - try common refs\\nbase_ref=''\\nchanged_files=''\\nfor ref in HEAD@{1} HEAD~1 HEAD~2 HEAD~3 origin/main; do\\n  if git rev-parse --verify \\\"$ref\\\" >/dev/null 2>&1; then\\n    base_ref=\\\"$ref\\\"\\n    break\\n  fi\\ndone\\n\\nif [ -n \\\"$base_ref\\\" ]; then\\n  echo \\\"Comparing HEAD with $base_ref...\\\"\\n  changed_files=$(git diff --name-only \\\"$base_ref\\\" HEAD 2>/dev/null || true)\\n  if [ -n \\\"$changed_files\\\" ]; then\\n    echo \\\"Files changed since workflow start:\\\"\\n    printf '%s\\\\n' \\\"$changed_files\\\"\\n    echo ''\\n    echo \\\"Change summary:\\\"\\n    git diff --stat \\\"$base_ref\\\" HEAD || true\\n    echo ''\\n  else\\n    echo \\\"No differences found between $base_ref and HEAD.\\\"\\n    echo ''\\n  fi\\nelse\\n  echo \\\"Could not determine base reference for comparison.\\\"\\n  echo ''\\nfi\\n\\n# 3. Check for very recent commits (Fabro checkpoints)\\nrecent_commits=$(git log --oneline -5 --format='%h %s')\\nif [ -n \\\"$recent_commits\\\" ]; then\\n  echo \\\"Recent commits (may include Fabro checkpoints):\\\"\\n  printf '%s\\\\n' \\\"$recent_commits\\\"\\n  echo ''\\nfi\\n\\n# 4. Gather all evidence\\nevidence=''\\nif [ -n \\\"$status\\\" ]; then\\n  evidence=\\\"working-tree\\\"\\nfi\\nif [ -n \\\"$changed_files\\\" ]; then\\n  evidence=\\\"${evidence:+$evidence, }base-head-diff\\\"\\nfi\\n\\n# 5. Check for locked .feature file changes\\nif [ -n \\\"$status\\\" ] && printf '%s\\\\n' \\\"$status\\\" | grep -E '\\\\.feature$'; then\\n  echo 'ERROR: Final working tree includes locked acceptance feature changes.' >&2\\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\\n  exit 1\\nfi\\nif [ -n \\\"$changed_files\\\" ] && printf '%s\\\\n' \\\"$changed_files\\\" | grep -E '\\\\.feature$'; then\\n  echo 'ERROR: Implementation modified locked acceptance feature files.' >&2\\n  echo 'Acceptance .feature files must not be modified during implementation.' >&2\\n  exit 1\\nfi\\n\\n# 6. Fail if no evidence of changes\\nif [ -z \\\"$evidence\\\" ]; then\\n  echo 'ERROR: Implementation workflow reached finalization with no artifact evidence.' >&2\\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\\n  echo 'Refusing to report success without implementation artifacts.' >&2\\n  exit 1\\nfi\\n\\necho \\\"Final artifact evidence confirmed: $evidence\\\"\\necho 'Final artifact gate passed.'\"\n    ]\n\n    final_summary [\n        label=\"Final Summary\",\n        shape=tab,\n        prompt=\"@prompts/final_summary.md\"\n    ]\n\n    start -> read_plan\n    read_plan -> preflight_sandbox [condition=\"outcome=succeeded\"]\n    read_plan -> read_failed\n    read_failed -> exit\n\n    preflight_sandbox -> resume_gate [condition=\"outcome=succeeded\"]\n    preflight_sandbox -> preflight_failed\n    preflight_failed -> exit\n\n    resume_gate -> sync_task_list [condition=\"outcome=succeeded\"]\n    resume_gate -> resume_failed\n    resume_failed -> exit\n\n    sync_task_list -> all_tasks_done\n    all_tasks_done -> dev_check [label=\"No unchecked tasks\", condition=\"context.task_list_complete=true\"]\n    all_tasks_done -> implement_next_task [label=\"Tasks remain\", condition=\"context.task_list_complete=false && context.task_list_needs_human=false\"]\n    all_tasks_done -> task_not_ready [label=\"Task list problem\"]\n    implement_next_task -> pre_validate_snapshot\n    pre_validate_snapshot -> validate_task\n    validate_task -> task_gate\n    task_gate -> commit_task [label=\"Valid\", condition=\"context.task_valid=true\"]\n    task_gate -> reset_task_attempt [label=\"Retry from last good commit\", condition=\"context.task_retry_available=true\"]\n    task_gate -> task_not_ready [label=\"Needs human input or retry budget exhausted\"]\n    reset_task_attempt -> implement_next_task\n    commit_task -> sync_task_list\n    task_not_ready -> exit\n\n    dev_check -> final_artifact_gate [label=\"Dev check passed\", condition=\"outcome=succeeded\"]\n    dev_check -> fix_dev_check [label=\"Fix failures\"]\n    fix_dev_check -> dev_check\n    final_artifact_gate -> final_summary\n    final_summary -> exit\n}\n",
+    "workflow_slug": "iteration-implementation",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.245.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "30e735b2bb70ecf8c2ba809c2f6203788ad84b56ad280b5c92c5833c391ef8a6",
+    "definition_blob": "fdce3cc39cee0bc4d0b715fe7298c9adb21933a7716f84f6a60d0f85faccb888",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "d497ecc5215cb4bfa2d0bc083ffbfb75f84e35c3",
+      "dirty": "clean",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KSS97DPE1D5MD7CAZA9M506K",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-05-29T07:12:23.828548019Z",
+  "last_event_at": "2026-05-29T07:12:26.784025209Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+    "runtime": {
+      "id": "33b40c6052e3f2fa1b6055ffb9739ee52fe0fafe846c70a910f699885782f46d",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
