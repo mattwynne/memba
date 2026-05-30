@@ -1,0 +1,64 @@
+diff --git a/acceptance-tests/cucumber.js b/acceptance-tests/cucumber.js
+index ba9f840..0313403 100644
+--- a/acceptance-tests/cucumber.js
++++ b/acceptance-tests/cucumber.js
+@@ -3,6 +3,7 @@ module.exports = {
+     paths: ["features/**/*.feature"],
+     require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
+     format: ["progress"],
+-    publishQuiet: true
++    publishQuiet: true,
++    tags: "not @todo-web"
+   }
+ };
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index a953134..af8c3fc 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -9,6 +9,6 @@
+ - [x] 007 Give important forms, controls, rows, and status displays stable IDs or accessible labels suitable for Playwright and PhoenixTest.
+ - [x] 008 Update Playwright/Cucumber step definitions to drive the real LiveView routes for `homepage.feature` and `member_message_deliverability.feature`; delivery/open report steps should make HTTP requests to `POST /webhooks/postmark`.
+ - [x] 009 Add `@todo-web` tags to operator deliverability scenarios that are intentionally not browser-backed in this iteration.
+-- [ ] 010 Configure `acceptance-tests/cucumber.js` so the default browser Cucumber command uses `tags: "not @todo-web"`.
++- [x] 010 Configure `acceptance-tests/cucumber.js` so the default browser Cucumber command uses `tags: "not @todo-web"`.
+ - [ ] 011 Verify the Elixir/domain acceptance path used by `dev check` still runs every shared scenario regardless of `@todo-web` tags.
+ - [ ] 012 Run the browser acceptance suite and `dev check`, fixing any issues.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index fa87514..cae661a 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -267,6 +267,10 @@ defmodule Memba.CucumberConfigurationTest do
+     end)
+   end
+ 
++  test "browser Cucumber default profile excludes todo-web scenarios" do
++    assert browser_cucumber_default_config()["tags"] == "not @todo-web"
++  end
++
+   defp configured_feature_paths do
+     :cucumber
+     |> Application.fetch_env!(:features)
+@@ -277,6 +281,23 @@ defmodule Memba.CucumberConfigurationTest do
+     |> Enum.sort()
+   end
+ 
++  defp browser_cucumber_default_config do
++    script = """
++    const config = require('./acceptance-tests/cucumber.js');
++    process.stdout.write(JSON.stringify(config.default));
++    """
++
++    {json, 0} = System.cmd("node", ["-e", script], cd: repo_root(), stderr_to_stdout: true)
++
++    Jason.decode!(json)
++  end
++
++  defp repo_root do
++    __DIR__
++    |> Path.join("../../..")
++    |> Path.expand()
++  end
++
+   defp discover_steps do
+     cache_key = {__MODULE__, :discovery}
+ 
