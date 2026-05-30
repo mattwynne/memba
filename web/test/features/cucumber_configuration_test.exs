@@ -254,6 +254,19 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
+  test "operator email deliverability scenarios are tagged todo-web for browser acceptance" do
+    operator_feature_file =
+      configured_feature_paths()
+      |> feature_file_named!("operator_email_deliverability.feature")
+
+    feature_text = File.read!(operator_feature_file)
+
+    Enum.each(@operator_scenarios, fn {scenario_name, _scenario_steps} ->
+      assert scenario_has_tag?(feature_text, scenario_name, "@todo-web"),
+             "Expected operator scenario #{inspect(scenario_name)} to be tagged @todo-web"
+    end)
+  end
+
   defp configured_feature_paths do
     :cucumber
     |> Application.fetch_env!(:features)
@@ -300,6 +313,31 @@ defmodule Memba.CucumberConfigurationTest do
   defp feature_file_named!(paths, basename) do
     Enum.find(paths, &(Path.basename(&1) == basename)) ||
       flunk("Expected to discover shared feature file: #{basename}")
+  end
+
+  defp scenario_has_tag?(feature_text, scenario_name, expected_tag) do
+    lines = String.split(feature_text, "\n")
+
+    case Enum.find_index(lines, &(String.trim(&1) == "Scenario: #{scenario_name}")) do
+      nil ->
+        false
+
+      scenario_line_index ->
+        lines
+        |> scenario_tags_before(scenario_line_index)
+        |> Enum.member?(expected_tag)
+    end
+  end
+
+  defp scenario_tags_before(lines, scenario_line_index) do
+    lines
+    |> Enum.take(scenario_line_index)
+    |> Enum.reverse()
+    |> Enum.take_while(fn line ->
+      trimmed_line = String.trim(line)
+      trimmed_line == "" || String.starts_with?(trimmed_line, "@")
+    end)
+    |> Enum.flat_map(&String.split/1)
   end
 
   defp execute_steps(feature_file, scenario_name, steps, step_registry) do
