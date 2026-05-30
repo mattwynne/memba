@@ -31,10 +31,11 @@ The application already records club messages, addressed recipients, one deliver
 - Sort rows by `recipient_name` ascending, then `recipient_email` ascending.
 - Use an empty string for `delivery_reason` when no reason has been recorded.
 - Return 404 for an unknown `message_id`.
+- Use RFC 4180-style CSV escaping: wrap fields containing commas, quotes, or newlines in double quotes and escape internal double quotes as two double quotes.
 
 ### Out of scope
 
-- Authentication, authorization, and permissions.
+- New authentication, authorization, or permissions machinery. This fixture deliberately relies on the existing browser pipeline access model: any user who can access the message detail page may download the same message's CSV receipts.
 - Exports across multiple messages or clubs.
 - Background jobs, email attachments, scheduled reports, or admin dashboards.
 - Changing delivery status domain behaviour.
@@ -69,7 +70,7 @@ None.
 
 ## Open Technical Decisions
 
-None. Use Elixir's standard CSV escaping rules implemented locally for this small fixed-column export; do not add a dependency.
+None. Implement RFC 4180-style CSV escaping locally for this small fixed-column export; do not add a dependency.
 
 ## New Capability
 
