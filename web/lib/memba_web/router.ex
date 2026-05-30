@@ -24,10 +24,11 @@ defmodule MembaWeb.Router do
     live "/messages/:message_id", MessagesLive.Show
   end
 
-  # Other scopes may use custom stacks.
-  # scope "/api", MembaWeb do
-  #   pipe_through :api
-  # end
+  scope "/webhooks", MembaWeb do
+    pipe_through :api
+
+    post "/postmark", PostmarkWebhookController, :create
+  end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:memba, :dev_routes) do

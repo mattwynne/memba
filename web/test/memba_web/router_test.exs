@@ -22,6 +22,24 @@ defmodule MembaWeb.RouterTest do
     end
   end
 
+  describe "webhook routes" do
+    test "routes Postmark webhook requests through the json api pipeline" do
+      assert %{
+               path_params: %{},
+               pipe_through: [:api],
+               plug: MembaWeb.PostmarkWebhookController,
+               plug_opts: :create,
+               route: "/webhooks/postmark"
+             } =
+               Phoenix.Router.route_info(
+                 MembaWeb.Router,
+                 "POST",
+                 "/webhooks/postmark",
+                 "localhost"
+               )
+    end
+  end
+
   defp assert_live_route(path, route_pattern, live_view, path_params) do
     assert %{
              pipe_through: [:browser],
