@@ -13,7 +13,7 @@ Iteration 005 plans the minimal browser substrate for member-facing behaviour: `
 
 The shared `.feature` files remain the acceptance source. The Elixir/domain Cucumber path proves the application behaviour directly, while the Playwright/Cucumber path proves that browser-visible flows can exercise the same member-facing behaviour through the running Phoenix app.
 
-Iteration 006 separately plans the operator deliveries overview. This iteration does not implement the operator browser slice; it preserves the `@todo-web` partition so operator scenarios can remain domain-tested until their browser surface is implemented.
+Iteration 007 separately plans the operator deliveries overview. This iteration does not implement the operator browser slice; it preserves the `@todo-web` partition so operator scenarios can remain domain-tested until their browser surface is implemented.
 
 Prerequisite: the iteration 005 browser routes and webhook endpoint are available on `main` or on a stable implementation branch before this automation slice starts.
 
@@ -41,7 +41,7 @@ Prerequisite: the iteration 005 browser routes and webhook endpoint are availabl
 ### Out of scope
 
 - New product UI, routes, or domain behaviour beyond the already-planned iteration 005 browser substrate.
-- Operator deliveries overview automation for `/deliveries`; iteration 006 remains the browser-backed operator slice.
+- Operator deliveries overview automation for `/deliveries`; iteration 007 remains the browser-backed operator slice.
 - Real outbound email provider integration, webhook signature verification, retries, or provider hardening.
 - Changing the acceptance language except for narrowly needed browser partition tags.
 - Changing production read-model consistency semantics unless an explicit technical decision is made during implementation and documented in the code review.
@@ -98,4 +98,4 @@ Developers can run the shared member-facing acceptance scenarios through a real 
 
 - This plan depends on the iteration 005 routes and webhook endpoint being present before automation starts; if they are not merged, implementation should stop rather than creating duplicate app surfaces in this slice.
 - LiveView and projection timing may reveal race conditions in the harness. Prefer bounded, observable waits with good diagnostics over fixed sleeps.
-- Iteration 006 should remove the operator `@todo-web` deferral and add browser automation for `/deliveries` when that operator slice is implemented.
+- Iteration 007 should remove the operator `@todo-web` deferral and add browser automation for `/deliveries` when that operator slice is implemented.
