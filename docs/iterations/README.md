@@ -11,7 +11,7 @@ scenarios green than before.
 | 002 | 2026-05-28 | merged | Membership model | [plan](002-membership-model/plan.md) |
 | 003 | 2026-05-28 | merged | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
-| 005 | 2026-05-29 | draft | Browser acceptance harness for member-facing behaviour | [plan](005-browser-acceptance-harness/plan.md) |
+| 005 | 2026-05-29 | ready | Browser acceptance harness for member-facing behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 
 Shared acceptance feature files used across these iterations:
 

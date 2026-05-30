@@ -1,7 +1,7 @@
 # Browser acceptance harness for member-facing behaviour
 
 Date: 2026-05-29
-Status: draft
+Status: ready
 
 ## Goal
 
