@@ -95,8 +95,10 @@ in
     adrgen
     argc
     devenv
+    esbuild
     git
     nodejs_22
+    tailwindcss_4
   ];
 
   languages.elixir.enable = true;

@@ -63,8 +63,12 @@ config :memba, MembaWeb.Endpoint,
 config :memba, Memba.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure esbuild (the version is required)
+esbuild_path = System.find_executable("esbuild")
+
 config :esbuild,
   version: "0.25.4",
+  path: esbuild_path,
+  version_check: is_nil(esbuild_path),
   memba: [
     args:
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
@@ -73,8 +77,12 @@ config :esbuild,
   ]
 
 # Configure tailwind (the version is required)
+tailwind_path = System.find_executable("tailwindcss")
+
 config :tailwind,
   version: "4.1.12",
+  path: tailwind_path,
+  version_check: is_nil(tailwind_path),
   memba: [
     args: ~w(
       --input=assets/css/app.css

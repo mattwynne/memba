@@ -4,6 +4,7 @@ module.exports = {
     require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
     format: ["progress"],
     publishQuiet: true,
-    tags: "not @todo-web"
+    tags: "not @todo-web",
+    parallel: 1
   }
 };
