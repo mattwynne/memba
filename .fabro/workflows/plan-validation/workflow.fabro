@@ -33,26 +33,27 @@ digraph PlanValidation {
         script="echo 'Plan validation failed: the plan file could not be read. Fix plan_path or make the plan visible to the sandbox, then retry.' >&2\nexit 1"
     ]
 
+    fork [label="Independent Model Reviews", shape=component, join_policy="wait_all", max_parallel=3]
+
     gemini_review [
         label="Gemini Review",
         shape=tab,
-        output_schema="routing",
         prompt="@prompts/gemini_review.md"
     ]
 
     claude_review [
         label="Claude Review",
         shape=tab,
-        output_schema="routing",
         prompt="@prompts/claude_review.md"
     ]
 
     codex_review [
         label="Codex/GPT Review",
         shape=tab,
-        output_schema="routing",
         prompt="@prompts/codex_review.md"
     ]
+
+    merge [label="Merge Reviews", shape=tripleoctagon]
 
     synthesize [
         label="Opus Synthesis & Repair Brief",
@@ -96,12 +97,16 @@ digraph PlanValidation {
     ]
 
     start -> read_plan
-    read_plan -> gemini_review [condition="outcome=succeeded"]
+    read_plan -> fork [condition="outcome=succeeded"]
     read_plan -> read_failed
     read_failed -> exit
-    gemini_review -> claude_review
-    claude_review -> codex_review
-    codex_review -> synthesize
+    fork -> gemini_review
+    fork -> claude_review
+    fork -> codex_review
+    gemini_review -> merge
+    claude_review -> merge
+    codex_review -> merge
+    merge -> synthesize
     synthesize -> synthesis_gate
     synthesis_gate -> publish_ready [label="Already ready", condition="plan_ready=true"]
     synthesis_gate -> codex_update [label="Apply obvious fixes", condition="plan_needs_fix=true"]
