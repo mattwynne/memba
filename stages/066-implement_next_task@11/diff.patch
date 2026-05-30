@@ -1,0 +1,193 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index af8c3fc..432be96 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -10,5 +10,5 @@
+ - [x] 008 Update Playwright/Cucumber step definitions to drive the real LiveView routes for `homepage.feature` and `member_message_deliverability.feature`; delivery/open report steps should make HTTP requests to `POST /webhooks/postmark`.
+ - [x] 009 Add `@todo-web` tags to operator deliverability scenarios that are intentionally not browser-backed in this iteration.
+ - [x] 010 Configure `acceptance-tests/cucumber.js` so the default browser Cucumber command uses `tags: "not @todo-web"`.
+-- [ ] 011 Verify the Elixir/domain acceptance path used by `dev check` still runs every shared scenario regardless of `@todo-web` tags.
++- [x] 011 Verify the Elixir/domain acceptance path used by `dev check` still runs every shared scenario regardless of `@todo-web` tags.
+ - [ ] 012 Run the browser acceptance suite and `dev check`, fixing any issues.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index cae661a..9b392aa 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -6,6 +6,14 @@ defmodule Memba.CucumberConfigurationTest do
+   alias Gherkin.Step
+   alias Memba.Membership
+ 
++  @homepage_scenarios [
++    {"Visiting the homepage",
++     [
++       {"When", "I visit the homepage", 3},
++       {"Then", "I should see the Memba homepage", 4}
++     ]}
++  ]
++
+   @member_message_background_steps [
+     {"Given", "Kootenay Mountaineering Club is a club", 6},
+     {"And", "Nelson Paddling Club is a club", 7},
+@@ -147,6 +155,10 @@ defmodule Memba.CucumberConfigurationTest do
+     "Alice and Bob are members of Kootenay Mountaineering Club"
+   ]
+ 
++  @required_homepage_scenario_steps for {_scenario_name, steps} <- @homepage_scenarios,
++                                        {_keyword, text, _line} <- steps,
++                                        do: text
++
+   @required_member_message_scenario_steps for {_scenario_name, steps} <-
+                                                 @member_message_scenarios,
+                                               {_keyword, text, _line} <- steps,
+@@ -156,6 +168,11 @@ defmodule Memba.CucumberConfigurationTest do
+                                         {_keyword, text, _line} <- steps,
+                                         do: text
+ 
++  @required_homepage_step_patterns [
++    "I visit the homepage",
++    "I should see the Memba homepage"
++  ]
++
+   @required_messaging_step_patterns [
+     "{word} sends the message {string} to Kootenay Mountaineering Club members",
+     "{word} has sent the message {string} to Kootenay Mountaineering Club members",
+@@ -181,7 +198,8 @@ defmodule Memba.CucumberConfigurationTest do
+     assert_shared_features_contain_steps!(
+       shared_feature_paths,
+       Enum.uniq(
+-        @required_membership_background_steps ++
++        @required_homepage_scenario_steps ++
++          @required_membership_background_steps ++
+           @required_member_message_scenario_steps ++ @required_operator_scenario_steps
+       )
+     )
+@@ -192,11 +210,28 @@ defmodule Memba.CucumberConfigurationTest do
+       assert Map.has_key?(discovery.step_registry, step_text)
+     end)
+ 
++    Enum.each(@required_homepage_step_patterns, fn step_pattern ->
++      assert Map.has_key?(discovery.step_registry, step_pattern)
++    end)
++
+     Enum.each(@required_messaging_step_patterns, fn step_pattern ->
+       assert Map.has_key?(discovery.step_registry, step_pattern)
+     end)
+   end
+ 
++  test "homepage scenario passes through Cucumber runtime" do
++    %Discovery.DiscoveryResult{} = discovery = discover_steps()
++
++    homepage_feature_file =
++      feature_file_named!(configured_feature_paths(), "homepage.feature")
++
++    Enum.each(@homepage_scenarios, fn {scenario_name, scenario_steps} ->
++      homepage_feature_file
++      |> base_cucumber_context(scenario_name)
++      |> execute_steps(scenario_steps, discovery.step_registry)
++    end)
++  end
++
+   test "all member message deliverability scenarios pass through Cucumber runtime" do
+     %Discovery.DiscoveryResult{} = discovery = discover_steps()
+ 
+@@ -271,6 +306,25 @@ defmodule Memba.CucumberConfigurationTest do
+     assert browser_cucumber_default_config()["tags"] == "not @todo-web"
+   end
+ 
++  test "Elixir acceptance path includes every shared scenario regardless of todo-web tags" do
++    shared_feature_paths = configured_feature_paths()
++
++    shared_scenarios = shared_feature_scenarios(shared_feature_paths)
++    shared_scenario_keys = MapSet.new(shared_scenarios, &scenario_key/1)
++    acceptance_scenario_keys = MapSet.new(elixir_acceptance_scenario_keys())
++
++    assert acceptance_scenario_keys == shared_scenario_keys
++
++    todo_web_scenario_keys =
++      shared_scenarios
++      |> Enum.filter(&("@todo-web" in &1.tags))
++      |> MapSet.new(&scenario_key/1)
++
++    assert MapSet.size(todo_web_scenario_keys) == length(@operator_scenarios)
++    assert MapSet.subset?(todo_web_scenario_keys, acceptance_scenario_keys)
++    refute Keyword.has_key?(Application.get_all_env(:cucumber), :tags)
++  end
++
+   defp configured_feature_paths do
+     :cucumber
+     |> Application.fetch_env!(:features)
+@@ -336,6 +390,47 @@ defmodule Memba.CucumberConfigurationTest do
+       flunk("Expected to discover shared feature file: #{basename}")
+   end
+ 
++  defp shared_feature_scenarios(paths) do
++    Enum.flat_map(paths, fn path ->
++      lines =
++        path
++        |> File.read!()
++        |> String.split("\n")
++
++      lines
++      |> Enum.with_index()
++      |> Enum.flat_map(fn {line, line_index} ->
++        trimmed_line = String.trim(line)
++
++        if String.starts_with?(trimmed_line, "Scenario: ") do
++          [
++            %{
++              feature: Path.basename(path),
++              line: line_index + 1,
++              name: String.replace_prefix(trimmed_line, "Scenario: ", ""),
++              tags: scenario_tags_before(lines, line_index)
++            }
++          ]
++        else
++          []
++        end
++      end)
++    end)
++  end
++
++  defp scenario_key(%{feature: feature, name: name}), do: {feature, name}
++
++  defp elixir_acceptance_scenario_keys do
++    [
++      {"homepage.feature", @homepage_scenarios},
++      {"member_message_deliverability.feature", @member_message_scenarios},
++      {"operator_email_deliverability.feature", @operator_scenarios}
++    ]
++    |> Enum.flat_map(fn {feature, scenarios} ->
++      Enum.map(scenarios, fn {scenario_name, _steps} -> {feature, scenario_name} end)
++    end)
++  end
++
+   defp scenario_has_tag?(feature_text, scenario_name, expected_tag) do
+     lines = String.split(feature_text, "\n")
+ 
+diff --git a/web/test/features/step_definitions/homepage_steps.exs b/web/test/features/step_definitions/homepage_steps.exs
+new file mode 100644
+index 0000000..7f1cbd0
+--- /dev/null
++++ b/web/test/features/step_definitions/homepage_steps.exs
+@@ -0,0 +1,21 @@
++defmodule Memba.Cucumber.HomepageSteps do
++  use Cucumber.StepDefinition
++
++  import ExUnit.Assertions
++  import Phoenix.ConnTest
++
++  @endpoint MembaWeb.Endpoint
++
++  step "I visit the homepage", context do
++    Map.put(context, :conn, build_conn() |> get("/"))
++  end
++
++  step "I should see the Memba homepage", context do
++    conn = Map.fetch!(context, :conn)
++    html = html_response(conn, 200)
++
++    assert html =~ "Memba · Phoenix Framework"
++
++    context
++  end
++end
