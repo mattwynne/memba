@@ -1,0 +1,476 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index ed591f2..ea235fe 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add `POST /webhooks/postmark` under an appropriate non-browser pipeline for webhook requests.
+ - [x] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
+ - [x] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
+-- [ ] 006 Build the Postmark webhook controller/handler to parse Postmark-style event payloads and call the public Messaging status-reporting functions.
++- [x] 006 Build the Postmark webhook controller/handler to parse Postmark-style event payloads and call the public Messaging status-reporting functions.
+ - [ ] 007 Give important forms, controls, rows, and status displays stable IDs or accessible labels suitable for Playwright and PhoenixTest.
+ - [ ] 008 Update Playwright/Cucumber step definitions to drive the real LiveView routes for `homepage.feature` and `member_message_deliverability.feature`; delivery/open report steps should make HTTP requests to `POST /webhooks/postmark`.
+ - [ ] 009 Add `@todo-web` tags to operator deliverability scenarios that are intentionally not browser-backed in this iteration.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 5e0e2d9..773432b 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -22,6 +22,8 @@ defmodule Memba.Messaging do
+ 
+   import Ecto.Query
+ 
++  @status_report_dispatch_opts [consistency: :strong]
++
+   @doc """
+   Send a message to the active members of a club.
+ 
+@@ -41,7 +43,7 @@ defmodule Memba.Messaging do
+   @doc """
+   Report that a recipient delivery was accepted by the recipient server.
+   """
+-  def report_delivery_delivered(attrs, dispatch_opts \\ [])
++  def report_delivery_delivered(attrs, dispatch_opts \\ @status_report_dispatch_opts)
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- report_delivery_delivered_command(attrs),
+          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+@@ -52,7 +54,7 @@ defmodule Memba.Messaging do
+   @doc """
+   Report that a recipient delivery was temporarily delayed.
+   """
+-  def report_delivery_delayed(attrs, dispatch_opts \\ [])
++  def report_delivery_delayed(attrs, dispatch_opts \\ @status_report_dispatch_opts)
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- report_delivery_delayed_command(attrs),
+          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+@@ -63,7 +65,7 @@ defmodule Memba.Messaging do
+   @doc """
+   Report that a recipient delivery bounced.
+   """
+-  def report_delivery_bounced(attrs, dispatch_opts \\ [])
++  def report_delivery_bounced(attrs, dispatch_opts \\ @status_report_dispatch_opts)
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- report_delivery_bounced_command(attrs),
+          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+@@ -74,7 +76,7 @@ defmodule Memba.Messaging do
+   @doc """
+   Report that a recipient marked a delivery as spam.
+   """
+-  def report_delivery_spam_complaint(attrs, dispatch_opts \\ [])
++  def report_delivery_spam_complaint(attrs, dispatch_opts \\ @status_report_dispatch_opts)
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- report_delivery_spam_complaint_command(attrs),
+          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+@@ -85,7 +87,7 @@ defmodule Memba.Messaging do
+   @doc """
+   Report that a recipient opened a delivery.
+   """
+-  def report_delivery_opened(attrs, dispatch_opts \\ [])
++  def report_delivery_opened(attrs, dispatch_opts \\ @status_report_dispatch_opts)
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- report_delivery_opened_command(attrs),
+          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+diff --git a/web/lib/memba_web/controllers/postmark_webhook_controller.ex b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+index bca382c..4112ce3 100644
+--- a/web/lib/memba_web/controllers/postmark_webhook_controller.ex
++++ b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+@@ -1,9 +1,213 @@
+ defmodule MembaWeb.PostmarkWebhookController do
+   use MembaWeb, :controller
+ 
+-  def create(conn, _params) do
+-    conn
+-    |> put_status(:not_implemented)
+-    |> json(%{errors: %{detail: "Postmark webhook handler is not implemented yet"}})
++  alias Memba.Messaging
++
++  @successful_status :accepted
++
++  def create(conn, params) do
++    case handle_postmark_event(params) do
++      :ok ->
++        conn
++        |> put_status(@successful_status)
++        |> json(%{status: "accepted"})
++
++      {:error, reason} ->
++        conn
++        |> put_status(:unprocessable_entity)
++        |> json(%{errors: %{detail: error_detail(reason)}})
++    end
++  end
++
++  defp handle_postmark_event(params) do
++    with {:ok, event_type} <- postmark_event_type(params) do
++      params
++      |> status_report_attrs(event_type)
++      |> report_status(event_type)
++      |> normalize_dispatch_result()
++    end
++  end
++
++  defp postmark_event_type(params) do
++    case normalize_token(
++           event_value(params, [:RecordType, "RecordType", :record_type, "record_type"])
++         ) do
++      "delivery" -> {:ok, :delivered}
++      "delivered" -> {:ok, :delivered}
++      "open" -> {:ok, :opened}
++      "opened" -> {:ok, :opened}
++      "delayed" -> {:ok, :delayed}
++      "delay" -> {:ok, :delayed}
++      "bounced" -> {:ok, :bounced}
++      "spamcomplaint" -> {:ok, :spam_complaint}
++      "spam" -> {:ok, :spam_complaint}
++      "bounce" -> {:ok, bounce_event_type(params)}
++      record_type -> {:error, {:unsupported_record_type, record_type}}
++    end
++  end
++
++  defp bounce_event_type(params) do
++    if delayed_bounce?(params), do: :delayed, else: :bounced
++  end
++
++  defp delayed_bounce?(params) do
++    params
++    |> event_value([:Type, "Type", :Name, "Name", :type, "type", :name, "name"])
++    |> normalize_token()
++    |> Kernel.in(["transient", "softbounce", "delayed", "deliverydelayed", "delay"])
++  end
++
++  defp status_report_attrs(params, event_type) do
++    attrs = %{
++      message_id: event_message_id(params),
++      delivery_id: event_delivery_id(params)
++    }
++
++    if event_type in [:delayed, :bounced, :spam_complaint] do
++      Map.put(attrs, :reason, event_reason(params))
++    else
++      attrs
++    end
++  end
++
++  defp report_status(attrs, :delivered),
++    do: Messaging.report_delivery_delivered(attrs, consistency: :strong)
++
++  defp report_status(attrs, :delayed),
++    do: Messaging.report_delivery_delayed(attrs, consistency: :strong)
++
++  defp report_status(attrs, :bounced),
++    do: Messaging.report_delivery_bounced(attrs, consistency: :strong)
++
++  defp report_status(attrs, :spam_complaint),
++    do: Messaging.report_delivery_spam_complaint(attrs, consistency: :strong)
++
++  defp report_status(attrs, :opened),
++    do: Messaging.report_delivery_opened(attrs, consistency: :strong)
++
++  defp normalize_dispatch_result(:ok), do: :ok
++  defp normalize_dispatch_result({:ok, _result}), do: :ok
++  defp normalize_dispatch_result({:error, _reason} = error), do: error
++
++  defp event_message_id(params) do
++    params
++    |> event_metadata()
++    |> event_value([
++      :message_id,
++      "message_id",
++      :memba_message_id,
++      "memba_message_id",
++      "MembaMessageID"
++    ])
++    |> present_or_else(fn ->
++      event_value(params, [
++        :message_id,
++        "message_id",
++        :memba_message_id,
++        "memba_message_id",
++        "MembaMessageID",
++        "MessageID",
++        :MessageID
++      ])
++    end)
++  end
++
++  defp event_delivery_id(params) do
++    params
++    |> event_metadata()
++    |> event_value([
++      :delivery_id,
++      "delivery_id",
++      :memba_delivery_id,
++      "memba_delivery_id",
++      "MembaDeliveryID"
++    ])
++    |> present_or_else(fn ->
++      event_value(params, [
++        :delivery_id,
++        "delivery_id",
++        :memba_delivery_id,
++        "memba_delivery_id",
++        "MembaDeliveryID",
++        "DeliveryID",
++        :DeliveryID
++      ])
++    end)
++  end
++
++  defp event_metadata(params) do
++    case event_value(params, [:Metadata, "Metadata", :metadata, "metadata"]) do
++      metadata when is_map(metadata) -> metadata
++      _other -> %{}
++    end
++  end
++
++  defp event_reason(params) do
++    event_value(params, [
++      :reason,
++      "reason",
++      :Details,
++      "Details",
++      :Description,
++      "Description",
++      :Message,
++      "Message",
++      :Name,
++      "Name",
++      :Type,
++      "Type"
++    ])
++  end
++
++  defp event_value(map, keys) when is_map(map) do
++    Enum.find_value(keys, fn key ->
++      map
++      |> Map.get(key)
++      |> present_value()
++    end)
++  end
++
++  defp event_value(_map, _keys), do: nil
++
++  defp present_or_else(value, fallback) when is_function(fallback, 0) do
++    case present_value(value) do
++      nil -> fallback.()
++      present_value -> present_value
++    end
++  end
++
++  defp present_value(value) when is_binary(value) do
++    case String.trim(value) do
++      "" -> nil
++      trimmed -> trimmed
++    end
++  end
++
++  defp present_value(nil), do: nil
++  defp present_value(value), do: value
++
++  defp normalize_token(nil), do: nil
++
++  defp normalize_token(value) do
++    value
++    |> to_string()
++    |> String.downcase()
++    |> String.replace(~r/[\s_-]+/, "")
++  end
++
++  defp error_detail({:unsupported_record_type, nil}) do
++    "Unsupported Postmark webhook RecordType"
++  end
++
++  defp error_detail({:unsupported_record_type, record_type}) do
++    "Unsupported Postmark webhook RecordType: #{record_type}"
++  end
++
++  defp error_detail({:missing_required_attribute, key}) do
++    "Missing required Postmark webhook attribute: #{key}"
++  end
++
++  defp error_detail(reason) do
++    "Could not process Postmark webhook: #{inspect(reason)}"
+   end
+ end
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+new file mode 100644
+index 0000000..6374d7e
+--- /dev/null
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -0,0 +1,177 @@
++defmodule MembaWeb.PostmarkWebhookControllerTest do
++  use MembaWeb.FeatureCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.App, as: MessagingApp
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Recipient
++
++  import Plug.Conn
++
++  test "maps Postmark delivery and open events to member receipt status reports", %{conn: conn} do
++    %{message_id: message_id, recipients: [bob]} = send_message_to(["Bob"])
++
++    conn =
++      post_postmark_event(conn, %{
++        "RecordType" => "Delivery",
++        "MessageID" => Ecto.UUID.generate(),
++        "Recipient" => bob.email,
++        "Metadata" => %{
++          "message_id" => message_id,
++          "delivery_id" => bob.delivery_id
++        }
++      })
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "delivered"
++
++    conn =
++      conn
++      |> recycle()
++      |> post_postmark_event(%{
++        "RecordType" => "Open",
++        "MessageID" => Ecto.UUID.generate(),
++        "Recipient" => bob.email,
++        "Metadata" => %{
++          "message_id" => message_id,
++          "delivery_id" => bob.delivery_id
++        }
++      })
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "opened"
++    assert Messaging.get_operator_deliverability(message_id, bob.person_id).status == "opened"
++  end
++
++  test "maps Postmark delayed, bounced, and spam complaint events with reasons", %{conn: conn} do
++    %{message_id: message_id, recipients: [bob, carol, dana]} =
++      send_message_to(["Bob", "Carol", "Dana"])
++
++    conn =
++      post_postmark_event(conn, %{
++        "RecordType" => "Bounce",
++        "Type" => "Transient",
++        "Details" => "recipient server is temporarily unavailable",
++        "Metadata" => %{
++          "message_id" => message_id,
++          "delivery_id" => bob.delivery_id
++        }
++      })
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status ==
++             "delivery problem"
++
++    assert Messaging.get_operator_deliverability(message_id, bob.person_id).status == "delayed"
++
++    assert Messaging.get_operator_deliverability(message_id, bob.person_id).reason ==
++             "recipient server is temporarily unavailable"
++
++    conn =
++      conn
++      |> recycle()
++      |> post_postmark_event(%{
++        "RecordType" => "Bounce",
++        "Type" => "HardBounce",
++        "Description" => "mailbox does not exist",
++        "Metadata" => %{
++          "message_id" => message_id,
++          "delivery_id" => carol.delivery_id
++        }
++      })
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert Messaging.get_member_receipt(message_id, carol.person_id).receipt_status ==
++             "delivery problem"
++
++    assert Messaging.get_operator_deliverability(message_id, carol.person_id).status == "bounced"
++
++    assert Messaging.get_operator_deliverability(message_id, carol.person_id).reason ==
++             "mailbox does not exist"
++
++    conn =
++      conn
++      |> recycle()
++      |> post_postmark_event(%{
++        "RecordType" => "SpamComplaint",
++        "Details" => "recipient marked the message as spam",
++        "Metadata" => %{
++          "message_id" => message_id,
++          "delivery_id" => dana.delivery_id
++        }
++      })
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert Messaging.get_member_receipt(message_id, dana.person_id).receipt_status ==
++             "delivery problem"
++
++    assert Messaging.get_operator_deliverability(message_id, dana.person_id).status ==
++             "spam complaint"
++
++    assert Messaging.get_operator_deliverability(message_id, dana.person_id).reason ==
++             "recipient marked the message as spam"
++  end
++
++  test "returns an unprocessable response for unsupported Postmark events", %{conn: conn} do
++    conn =
++      post_postmark_event(conn, %{
++        "RecordType" => "SubscriptionChange",
++        "Metadata" => %{
++          "message_id" => Ecto.UUID.generate(),
++          "delivery_id" => Ecto.UUID.generate()
++        }
++      })
++
++    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
++    assert detail =~ "Unsupported Postmark webhook RecordType"
++  end
++
++  defp post_postmark_event(conn, payload) do
++    conn
++    |> put_req_header("content-type", "application/json")
++    |> post(~p"/webhooks/postmark", Jason.encode!(payload))
++  end
++
++  defp send_message_to(names) do
++    [sender | _rest] =
++      recipients =
++      Enum.map(names, fn name ->
++        %Recipient{
++          delivery_id: Ecto.UUID.generate(),
++          person_id: Ecto.UUID.generate(),
++          name: name,
++          email: email_for(name)
++        }
++      end)
++
++    message_id = Ecto.UUID.generate()
++
++    assert :ok =
++             MessagingApp.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: Ecto.UUID.generate(),
++                 sender_id: sender.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: recipients
++               },
++               consistency: :strong
++             )
++
++    %{message_id: message_id, recipients: recipients}
++  end
++
++  defp email_for(name) do
++    normalized_name =
++      name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
++
++    "#{normalized_name}@example.test"
++  end
++end
