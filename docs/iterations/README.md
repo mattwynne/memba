@@ -1,9 +1,10 @@
 # Iterations
 
 The user-facing capability "member message deliverability" is delivered
-across iterations 001–004. Each iteration is independently shippable: it
-leaves the codebase passing `dev check` and Cucumber, with strictly more
-scenarios green than before.
+across iterations 001–004. Iterations 005 and later bring that behaviour into
+browser-facing surfaces. Each iteration is independently shippable: it leaves
+the codebase passing `dev check` and Cucumber, with strictly more scenarios
+green than before.
 
 | # | Date | Status | Title | Plan |
 | --- | --- | --- | --- | --- |
@@ -12,8 +13,9 @@ scenarios green than before.
 | 003 | 2026-05-28 | merged | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
 | 005 | 2026-05-29 | ready | Browser acceptance harness for member-facing behaviour | [plan](005-browser-acceptance-harness/plan.md) |
+| 006 | 2026-05-29 | ready | Deliveries overview for operator deliverability | [plan](006-deliveries-overview/plan.md) |
 
 Shared acceptance feature files used across these iterations:
 
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature)
-- [`operator_email_deliverability.feature`](../../acceptance-tests/features/operator_email_deliverability.feature) (`@todo-web` marks scenarios deferred from the browser acceptance harness in iteration 005)
+- [`operator_email_deliverability.feature`](../../acceptance-tests/features/operator_email_deliverability.feature) (iteration 006 remodels this as a deliveries overview across messages and removes the browser deferral)

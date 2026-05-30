@@ -4,37 +4,29 @@ Feature: Operator email deliverability
 
   Background:
     Given Kootenay Mountaineering Club is a club
-    And Alice and Bob are people
-    And Alice and Bob are members of Kootenay Mountaineering Club
-    And Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
+    And Alice, Bob, and Carol are people
+    And Alice, Bob, and Carol are members of Kootenay Mountaineering Club
 
-  Rule: Operators see detailed deliverability information per member
+  Rule: Operators monitor detailed delivery records across messages
 
-    @todo-web
-    Scenario: A delivered email is visible to operators
-      When Bob's email for "Trip planning night" is reported as delivered
-      Then Bob's operator deliverability status should be "delivered"
-
-    @todo-web
-    Scenario: A delayed delivery is visible to operators
+    Scenario: Deliveries from different messages appear together
+      Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
+      And Alice has sent the message "Avalanche bulletin" to Kootenay Mountaineering Club members
       When Bob's email for "Trip planning night" is reported as delayed because "recipient server is temporarily unavailable"
-      Then Bob's operator deliverability status should be "delayed"
-      And Bob's operator deliverability reason should be "recipient server is temporarily unavailable"
+      And Carol's email for "Avalanche bulletin" is reported as bounced because "mailbox does not exist"
+      Then operators should see Bob's delivery for "Trip planning night" as "delayed"
+      And operators should see Bob's delivery reason "recipient server is temporarily unavailable"
+      And operators should see Carol's delivery for "Avalanche bulletin" as "bounced"
+      And operators should see Carol's delivery reason "mailbox does not exist"
 
-    @todo-web
-    Scenario: A bounced delivery is visible to operators
-      When Bob's email for "Trip planning night" is reported as bounced because "mailbox does not exist"
-      Then Bob's operator deliverability status should be "bounced"
-      And Bob's operator deliverability reason should be "mailbox does not exist"
-
-    @todo-web
-    Scenario: A spam complaint is visible to operators
+    Scenario: Spam complaints keep the provider reason
+      Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
       When Bob's email for "Trip planning night" is reported as a spam complaint because "recipient marked the message as spam"
-      Then Bob's operator deliverability status should be "spam complaint"
-      And Bob's operator deliverability reason should be "recipient marked the message as spam"
+      Then operators should see Bob's delivery for "Trip planning night" as "spam complaint"
+      And operators should see Bob's delivery reason "recipient marked the message as spam"
 
-    @todo-web
-    Scenario: An opened email is visible to operators
-      Given Bob's email for "Trip planning night" has been reported as delivered
+    Scenario: Opens are visible after delivery
+      Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
+      And Bob's email for "Trip planning night" has been reported as delivered
       When Bob opens the email for "Trip planning night"
-      Then Bob's operator deliverability status should be "opened"
+      Then operators should see Bob's delivery for "Trip planning night" as "opened"
