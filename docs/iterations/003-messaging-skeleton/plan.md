@@ -1,7 +1,7 @@
 # Messaging skeleton (send and per-recipient deliveries)
 
 Date: 2026-05-28
-Status: ready
+Status: merged
 
 ## Goal
 
