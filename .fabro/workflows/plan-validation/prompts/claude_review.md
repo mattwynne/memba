@@ -40,12 +40,6 @@ Return a Markdown report with:
 - Required plan edits: concrete edits the author should make
 - Validation plan: how to prove the iteration succeeded
 
-Before ending, write your complete Markdown report to this exact artifact path so the fan-in synthesis stage can read every parallel reviewer report:
-
-`.fabro/workflows/plan-validation/review-output/claude.md`
-
-Create the directory if needed. The artifact must include the same Decision, Confidence, Blocking gaps, Non-blocking improvements, Smallest viable iteration, Required plan edits, and Validation plan sections as your response.
-
 At the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.
 
 Use these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:

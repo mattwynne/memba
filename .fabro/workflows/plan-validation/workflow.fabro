@@ -33,8 +33,6 @@ digraph PlanValidation {
         script="echo 'Plan validation failed: the plan file could not be read. Fix plan_path or make the plan visible to the sandbox, then retry.' >&2\nexit 1"
     ]
 
-    fork [label="Independent Model Reviews", shape=component, join_policy="wait_all", max_parallel=3]
-
     gemini_review [
         label="Gemini Review",
         shape=tab,
@@ -54,14 +52,6 @@ digraph PlanValidation {
         shape=tab,
         output_schema="routing",
         prompt="@prompts/codex_review.md"
-    ]
-
-    merge [label="Merge Reviews", shape=tripleoctagon]
-
-    collect_reviews [
-        label="Collect Review Artifacts",
-        shape=parallelogram,
-        script="set -eu\nDIR='.fabro/workflows/plan-validation/review-output'\nmissing=0\nfor reviewer in gemini claude codex; do\n  file=\"$DIR/$reviewer.md\"\n  if [ ! -s \"$file\" ]; then\n    echo \"Missing review artifact: $file\" >&2\n    missing=1\n    continue\n  fi\n  if ! grep -Eq '^[-* ]*Decision:[[:space:]]*(READY|NOT READY)' \"$file\"; then\n    echo \"Review artifact lacks a Decision line: $file\" >&2\n    missing=1\n  fi\ndone\nif [ \"$missing\" -ne 0 ]; then\n  echo 'Plan validation failed: not all parallel reviewer artifacts were collected after fan-in.' >&2\n  exit 1\nfi\necho '=== Collected independent review artifacts ==='\nfor reviewer in gemini claude codex; do\n  file=\"$DIR/$reviewer.md\"\n  echo\n  echo \"--- $reviewer review artifact: $file ---\"\n  sed -n '1,240p' \"$file\"\ndone"
     ]
 
     synthesize [
@@ -106,17 +96,12 @@ digraph PlanValidation {
     ]
 
     start -> read_plan
-    read_plan -> fork [condition="outcome=succeeded"]
+    read_plan -> gemini_review [condition="outcome=succeeded"]
     read_plan -> read_failed
     read_failed -> exit
-    fork -> gemini_review
-    fork -> claude_review
-    fork -> codex_review
-    gemini_review -> merge
-    claude_review -> merge
-    codex_review -> merge
-    merge -> collect_reviews
-    collect_reviews -> synthesize
+    gemini_review -> claude_review
+    claude_review -> codex_review
+    codex_review -> synthesize
     synthesize -> synthesis_gate
     synthesis_gate -> publish_ready [label="Already ready", condition="plan_ready=true"]
     synthesis_gate -> codex_update [label="Apply obvious fixes", condition="plan_needs_fix=true"]
