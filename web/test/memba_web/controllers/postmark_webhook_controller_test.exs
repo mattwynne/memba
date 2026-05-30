@@ -23,7 +23,10 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       })
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "delivered"
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "delivered"
+    end)
 
     conn =
       conn
@@ -39,8 +42,11 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       })
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
-    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "opened"
-    assert Messaging.get_operator_deliverability(message_id, bob.person_id).status == "opened"
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "opened"
+      assert Messaging.get_operator_deliverability(message_id, bob.person_id).status == "opened"
+    end)
   end
 
   test "maps Postmark delayed, bounced, and spam complaint events with reasons", %{conn: conn} do
@@ -60,13 +66,15 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
-    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status ==
-             "delivery problem"
+    assert_eventually(fn ->
+      assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status ==
+               "delivery problem"
 
-    assert Messaging.get_operator_deliverability(message_id, bob.person_id).status == "delayed"
+      assert Messaging.get_operator_deliverability(message_id, bob.person_id).status == "delayed"
 
-    assert Messaging.get_operator_deliverability(message_id, bob.person_id).reason ==
-             "recipient server is temporarily unavailable"
+      assert Messaging.get_operator_deliverability(message_id, bob.person_id).reason ==
+               "recipient server is temporarily unavailable"
+    end)
 
     conn =
       conn
@@ -83,13 +91,16 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
-    assert Messaging.get_member_receipt(message_id, carol.person_id).receipt_status ==
-             "delivery problem"
+    assert_eventually(fn ->
+      assert Messaging.get_member_receipt(message_id, carol.person_id).receipt_status ==
+               "delivery problem"
 
-    assert Messaging.get_operator_deliverability(message_id, carol.person_id).status == "bounced"
+      assert Messaging.get_operator_deliverability(message_id, carol.person_id).status ==
+               "bounced"
 
-    assert Messaging.get_operator_deliverability(message_id, carol.person_id).reason ==
-             "mailbox does not exist"
+      assert Messaging.get_operator_deliverability(message_id, carol.person_id).reason ==
+               "mailbox does not exist"
+    end)
 
     conn =
       conn
@@ -105,14 +116,16 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
 
-    assert Messaging.get_member_receipt(message_id, dana.person_id).receipt_status ==
-             "delivery problem"
+    assert_eventually(fn ->
+      assert Messaging.get_member_receipt(message_id, dana.person_id).receipt_status ==
+               "delivery problem"
 
-    assert Messaging.get_operator_deliverability(message_id, dana.person_id).status ==
-             "spam complaint"
+      assert Messaging.get_operator_deliverability(message_id, dana.person_id).status ==
+               "spam complaint"
 
-    assert Messaging.get_operator_deliverability(message_id, dana.person_id).reason ==
-             "recipient marked the message as spam"
+      assert Messaging.get_operator_deliverability(message_id, dana.person_id).reason ==
+               "recipient marked the message as spam"
+    end)
   end
 
   test "returns an unprocessable response for unsupported Postmark events", %{conn: conn} do
