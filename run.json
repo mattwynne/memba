@@ -668,7 +668,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-30T07:33:28.610364891Z",
-  "last_event_at": "2026-05-30T07:36:31.311884835Z",
+  "last_event_at": "2026-05-30T07:36:34.090765490Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1558,9 +1558,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 77,
       "checkpoint": {
-        "timestamp": "2026-05-30T07:36:31.335322753Z",
+        "timestamp": "2026-05-30T07:36:34.079959910Z",
         "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
@@ -1570,6 +1570,287 @@
           "codex_review",
           "synthesize",
           "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "thread.claude_review.current_node": "codex_review",
+          "plan_needs_fix": false,
+          "internal.work_dir": "/workspace/memba",
+          "preferred_label": "synthesis",
+          "claude_review_blocking_gap_count": 1,
+          "codex_review_blocking_gaps": "Access control undefined for CSV endpoint",
+          "gemini_review_decision": "READY",
+          "gemini_review_required_edits": "None",
+          "codex_review_required_edits": "Add explicit authentication/authorization policy for endpoint; Clarify CSV escaping specification (RFC 4180-style)",
+          "internal.retry_count.gemini_review": 0,
+          "codex_review_decision": "NOT READY",
+          "internal.retry_count.claude_review": 0,
+          "command.output": "blob://sha256/5c1c257c34db6f460f2a2b0cbe5865438cb63856b06af4bcf6b9a882927f7d08",
+          "claude_review_required_edits": "Add explicit authentication/authorization statement; Clarify CSV escaping specification (RFC 4180)",
+          "gemini_review_blocking_gap_count": 0,
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.start": 0,
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.synthesis_gate": 0,
+          "gemini_review_confidence": "High",
+          "internal.retry_count.synthesize": 0,
+          "plan_needs_human": true,
+          "response.gemini_review": "{\n  \"report\": \"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\nNone.\\n\\n## Non-blocking improvements\\n1. Ensure the local CSV escaping implementation correctly handles commas and double quotes within `recipient_name`, `message_subject`, or `delivery_reason` fields (e.g., escaping internal quotes and wrapping fields containing commas in double quotes).\\n\\n## Smallest viable iteration\\nThe current scope is already the smallest viable slice (synchronous generation for a single message with fixed columns and deterministic mappings).\\n\\n## Required plan edits\\nNone.\\n\\n## Validation plan\\n- Run the focused controller/export tests.\\n- Manually create a message with delivered, problem, opened, and sent recipients, download the CSV, and verify the columns, row count, ordering, statuses, and reasons.\\n- Run `dev check`.\",\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+          "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+          "last_stage": "synthesize",
+          "response.codex_review": "{\"outcome\":\"succeeded\",\"preferred_next_label\":\"synthesis\",\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Access control undefined for CSV endpoint\",\"codex_review_required_edits\":\"Add explicit authentication/authorization policy for endpoint; Clarify CSV escaping specification (RFC 4180-style)\"},\"suggested_next_ids\":[]}",
+          "thread.gemini_review.current_node": "claude_review",
+          "internal.node_visit_count": 1,
+          "claude_review_confidence": "High",
+          "current_node": "synthesis_gate",
+          "internal.run_id": "01KSVWTMGF87RW3P0Y5VP0V2HP",
+          "response.claude_review": "# Plan Review Report\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Authentication and access control undefined**: The plan explicitly excludes \"Authentication, authorization, and permissions\" from scope, but does not state how the CSV endpoint will be protected. Delivery receipt data is likely sensitive (contains email addresses and delivery statuses). The plan should clarify:\n   - Will the route rely on existing browser pipeline authentication?\n   - Are there additional authorization checks needed (e.g., can any authenticated user download receipts for any message)?\n   - If intentionally public, explain why and acknowledge security implications.\n\n## Non-blocking improvements\n\n1. **CSV escaping specification unclear**: The plan references \"Elixir's standard CSV escaping rules\" but Elixir's standard library doesn't include CSV functionality. Should specify RFC 4180 or the specific escaping algorithm to implement (escaping internal quotes, wrapping fields containing commas/newlines in double quotes).\n\n2. **Status precedence logic implicit**: Acceptance criteria state \"exactly one data row per addressed recipient\" but don't explicitly define how the single status is determined when multiple delivery events exist for one recipient (e.g., delivered, then opened). This is probably based on latest event or priority, but could be stated explicitly.\n\n3. **Module and file names not specified**: Implementation plan could name the specific controller (new or existing), CSV export module path/name, and which LiveView file to modify for the download link.\n\n4. **Empty recipient edge case**: Not clear what happens if a message has zero addressed recipients (likely: CSV with header row only, but could be stated).\n\n## Smallest viable iteration\n\nThe current scope is already minimal and well-focused:\n- Single message CSV export (not batch)\n- Fixed columns, deterministic ordering\n- Simple download link from existing detail view\n- No new domain events or persistence\n- Explicit exclusions are appropriate\n\nThis is the right size.\n\n## Required plan edits\n\n1. **Add authentication statement** to implementation plan or out-of-scope section. Either:\n   - \"Route will use existing browser pipeline authentication; authenticated users can download any message's receipts\" (if that's the intent), OR\n   - \"Route will use browser pipeline authentication; add authorization check to ensure user can access the specific message\" (if authorization is needed), OR\n   - State explicitly if endpoint is intentionally public and why\n\n2. **Clarify CSV escaping approach** in the technical decisions or implementation plan: \"Implement RFC 4180 CSV escaping: escape internal double quotes as double-double-quotes, wrap fields containing commas/newlines/quotes in double quotes.\"\n\n## Validation plan\n\nThe existing validation plan is sound:\n- Run focused controller/export tests covering delivered, delivery problem, opened, sent states, ordering, non-addressed exclusion, and 404 for unknown message\n- Manual verification: create test message with diverse recipient states, download CSV, verify columns, row count, ordering, statuses, and reasons match specification\n- Run `dev check`\n\nAfter blocking gap is resolved, this plan will be ready for implementation.\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":1,\"claude_review_blocking_gaps\":\"Authentication and access control undefined for CSV endpoint\",\"claude_review_required_edits\":\"Add explicit authentication/authorization statement; Clarify CSV escaping specification (RFC 4180)\"}}",
+          "thread.start.current_node": "read_plan",
+          "thread.read_plan.current_node": "gemini_review",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "failure_signature": "",
+          "plan_ready": false,
+          "internal.thread_id": "synthesize",
+          "failure_class": "",
+          "codex_review_blocking_gap_count": 1,
+          "graph.rankdir": "LR",
+          "internal.retry_count.codex_review": 0,
+          "outcome": "succeeded",
+          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+          "claude_review_blocking_gaps": "Authentication and access control undefined for CSV endpoint",
+          "internal.fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "claude_review_decision": "NOT READY",
+          "codex_review_confidence": "High",
+          "thread.codex_review.current_node": "synthesize"
+        },
+        "node_outcomes": {
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\n  \"report\": \"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\nNone.\\n\\n## Non-blocking improvements\\n1. Ensure the local CSV escaping implementation correctly handles commas and double",
+              "gemini_review_blocking_gap_count": 0,
+              "gemini_review_blocking_gaps": "None",
+              "response.gemini_review": "{\n  \"report\": \"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\nNone.\\n\\n## Non-blocking improvements\\n1. Ensure the local CSV escaping implementation correctly handles commas and double quotes within `recipient_name`, `message_subject`, or `delivery_reason` fields (e.g., escaping internal quotes and wrapping fields containing commas in double quotes).\\n\\n## Smallest viable iteration\\nThe current scope is already the smallest viable slice (synchronous generation for a single message with fixed columns and deterministic mappings).\\n\\n## Required plan edits\\nNone.\\n\\n## Validation plan\\n- Run the focused controller/export tests.\\n- Manually create a message with delivered, problem, opened, and sent recipients, download the CSV, and verify the columns, row count, ordering, statuses, and reasons.\\n- Run `dev check`.\",\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+              "last_stage": "gemini_review",
+              "gemini_review_decision": "READY",
+              "gemini_review_confidence": "High",
+              "gemini_review_required_edits": "None"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 1973,
+                    "output_tokens": 283,
+                    "reasoning_tokens": 2467,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 36946
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 21117,
+              "tool_time_ms": 0,
+              "active_time_ms": 21117
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5c1c257c34db6f460f2a2b0cbe5865438cb63856b06af4bcf6b9a882927f7d08"
+            },
+            "notes": "Script completed: PLAN_PATH='.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize",
+              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
+              "plan_needs_human": true,
+              "plan_ready": false,
+              "plan_needs_fix": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 3746,
+                    "output_tokens": 45,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 51100
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20310,
+              "tool_time_ms": 0,
+              "active_time_ms": 20310
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "preferred_label": "synthesis",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gaps": "Access control undefined for CSV endpoint",
+              "codex_review_required_edits": "Add explicit authentication/authorization policy for endpoint; Clarify CSV escaping specification (RFC 4180-style)",
+              "codex_review_decision": "NOT READY",
+              "codex_review_blocking_gap_count": 1,
+              "last_response": "{\"outcome\":\"succeeded\",\"preferred_next_label\":\"synthesis\",\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_bloc",
+              "response.codex_review": "{\"outcome\":\"succeeded\",\"preferred_next_label\":\"synthesis\",\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Access control undefined for CSV endpoint\",\"codex_review_required_edits\":\"Add explicit authentication/authorization policy for endpoint; Clarify CSV escaping specification (RFC 4180-style)\"},\"suggested_next_ids\":[]}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.3-codex"
+                  },
+                  "tokens": {
+                    "input_tokens": 7743,
+                    "output_tokens": 660,
+                    "reasoning_tokens": 603,
+                    "cache_read_tokens": 2816,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 31724
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 25478,
+              "tool_time_ms": 0,
+              "active_time_ms": 25478
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_confidence": "High",
+              "claude_review_required_edits": "Add explicit authentication/authorization statement; Clarify CSV escaping specification (RFC 4180)",
+              "last_stage": "claude_review",
+              "claude_review_decision": "NOT READY",
+              "last_response": "# Plan Review Report\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Authentication and access control undefined**: The plan explicitly excludes \"Authentication, authorization, an",
+              "claude_review_blocking_gap_count": 1,
+              "claude_review_blocking_gaps": "Authentication and access control undefined for CSV endpoint",
+              "response.claude_review": "# Plan Review Report\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking gaps\n\n1. **Authentication and access control undefined**: The plan explicitly excludes \"Authentication, authorization, and permissions\" from scope, but does not state how the CSV endpoint will be protected. Delivery receipt data is likely sensitive (contains email addresses and delivery statuses). The plan should clarify:\n   - Will the route rely on existing browser pipeline authentication?\n   - Are there additional authorization checks needed (e.g., can any authenticated user download receipts for any message)?\n   - If intentionally public, explain why and acknowledge security implications.\n\n## Non-blocking improvements\n\n1. **CSV escaping specification unclear**: The plan references \"Elixir's standard CSV escaping rules\" but Elixir's standard library doesn't include CSV functionality. Should specify RFC 4180 or the specific escaping algorithm to implement (escaping internal quotes, wrapping fields containing commas/newlines in double quotes).\n\n2. **Status precedence logic implicit**: Acceptance criteria state \"exactly one data row per addressed recipient\" but don't explicitly define how the single status is determined when multiple delivery events exist for one recipient (e.g., delivered, then opened). This is probably based on latest event or priority, but could be stated explicitly.\n\n3. **Module and file names not specified**: Implementation plan could name the specific controller (new or existing), CSV export module path/name, and which LiveView file to modify for the download link.\n\n4. **Empty recipient edge case**: Not clear what happens if a message has zero addressed recipients (likely: CSV with header row only, but could be stated).\n\n## Smallest viable iteration\n\nThe current scope is already minimal and well-focused:\n- Single message CSV export (not batch)\n- Fixed columns, deterministic ordering\n- Simple download link from existing detail view\n- No new domain events or persistence\n- Explicit exclusions are appropriate\n\nThis is the right size.\n\n## Required plan edits\n\n1. **Add authentication statement** to implementation plan or out-of-scope section. Either:\n   - \"Route will use existing browser pipeline authentication; authenticated users can download any message's receipts\" (if that's the intent), OR\n   - \"Route will use browser pipeline authentication; add authorization check to ensure user can access the specific message\" (if authorization is needed), OR\n   - State explicitly if endpoint is intentionally public and why\n\n2. **Clarify CSV escaping approach** in the technical decisions or implementation plan: \"Implement RFC 4180 CSV escaping: escape internal double quotes as double-double-quotes, wrap fields containing commas/newlines/quotes in double quotes.\"\n\n## Validation plan\n\nThe existing validation plan is sound:\n- Run focused controller/export tests covering delivered, delivery problem, opened, sent states, ordering, non-addressed exclusion, and 404 for unknown message\n- Manual verification: create test message with diverse recipient states, download CSV, verify columns, row count, ordering, statuses, and reasons match specification\n- Run `dev check`\n\nAfter blocking gap is resolved, this plan will be ready for implementation.\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":1,\"claude_review_blocking_gaps\":\"Authentication and access control undefined for CSV endpoint\",\"claude_review_required_edits\":\"Add explicit authentication/authorization statement; Clarify CSV escaping specification (RFC 4180)\"}}"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 2539,
+                    "output_tokens": 3953,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 66912
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 98974,
+              "tool_time_ms": 0,
+              "active_time_ms": 98974
+            }
+          }
+        },
+        "next_node_id": "not_ready",
+        "git_commit_sha": "2bb058662335d0f08818baf881085989a9152094",
+        "node_visits": {
+          "start": 1,
+          "synthesis_gate": 1,
+          "claude_review": 1,
+          "gemini_review": 1,
+          "synthesize": 1,
+          "read_plan": 1,
+          "codex_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-30T07:36:34.303335971Z",
+        "current_node": "not_ready",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "not_ready"
         ],
         "node_retries": {},
         "context_values": {
@@ -1585,12 +1866,13 @@
           "response.codex_review": "{\"outcome\":\"succeeded\",\"preferred_next_label\":\"synthesis\",\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Access control undefined for CSV endpoint\",\"codex_review_required_edits\":\"Add explicit authentication/authorization policy for endpoint; Clarify CSV escaping specification (RFC 4180-style)\"},\"suggested_next_ids\":[]}",
           "internal.retry_count.codex_review": 0,
           "gemini_review_confidence": "High",
-          "command.output": "blob://sha256/5c1c257c34db6f460f2a2b0cbe5865438cb63856b06af4bcf6b9a882927f7d08",
+          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
           "thread.gemini_review.current_node": "claude_review",
           "plan_needs_fix": false,
-          "failure_class": "",
+          "failure_class": "deterministic",
           "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
           "internal.retry_count.synthesis_gate": 0,
+          "thread.synthesis_gate.current_node": "not_ready",
           "gemini_review_decision": "READY",
           "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": true\n  }\n}",
           "gemini_review_blocking_gaps": "None",
@@ -1598,11 +1880,11 @@
           "internal.run_id": "01KSVWTMGF87RW3P0Y5VP0V2HP",
           "internal.retry_count.start": 0,
           "internal.node_visit_count": 1,
-          "internal.thread_id": "synthesize",
+          "internal.thread_id": "synthesis_gate",
           "claude_review_required_edits": "Add explicit authentication/authorization statement; Clarify CSV escaping specification (RFC 4180)",
           "internal.retry_count.claude_review": 0,
           "codex_review_blocking_gap_count": 1,
-          "outcome": "succeeded",
+          "outcome": "failed",
           "claude_review_blocking_gaps": "Authentication and access control undefined for CSV endpoint",
           "preferred_label": "synthesis",
           "thread.codex_review.current_node": "synthesize",
@@ -1610,16 +1892,17 @@
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "codex_review_required_edits": "Add explicit authentication/authorization policy for endpoint; Clarify CSV escaping specification (RFC 4180-style)",
           "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.not_ready": 0,
           "codex_review_confidence": "High",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "failure_signature": "",
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.",
           "internal.work_dir": "/workspace/memba",
           "thread.read_plan.current_node": "gemini_review",
           "claude_review_blocking_gap_count": 1,
           "codex_review_decision": "NOT READY",
           "plan_ready": false,
           "internal.retry_count.gemini_review": 0,
-          "current_node": "synthesis_gate",
+          "current_node": "not_ready",
           "response.gemini_review": "{\n  \"report\": \"## Decision: READY\\n\\n## Confidence: High\\n\\n## Blocking gaps\\nNone.\\n\\n## Non-blocking improvements\\n1. Ensure the local CSV escaping implementation correctly handles commas and double quotes within `recipient_name`, `message_subject`, or `delivery_reason` fields (e.g., escaping internal quotes and wrapping fields containing commas in double quotes).\\n\\n## Smallest viable iteration\\nThe current scope is already the smallest viable slice (synchronous generation for a single message with fixed columns and deterministic mappings).\\n\\n## Required plan edits\\nNone.\\n\\n## Validation plan\\n- Run the focused controller/export tests.\\n- Manually create a message with delivered, problem, opened, and sent recipients, download the CSV, and verify the columns, row count, ordering, statuses, and reasons.\\n- Run `dev check`.\",\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
           "gemini_review_blocking_gap_count": 0,
           "codex_review_blocking_gaps": "Access control undefined for CSV endpoint",
@@ -1723,6 +2006,23 @@
               "active_time_ms": 20310
             }
           },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167,
+              "active_time_ms": 167
+            }
+          },
           "synthesis_gate": {
             "status": "succeeded",
             "notes": "Conditional node evaluated: synthesis_gate",
@@ -1817,15 +2117,16 @@
             }
           }
         },
-        "next_node_id": "not_ready",
+        "next_node_id": "exit",
         "node_visits": {
-          "synthesize": 1,
           "synthesis_gate": 1,
-          "start": 1,
+          "claude_review": 1,
           "codex_review": 1,
+          "not_ready": 1,
+          "start": 1,
+          "synthesize": 1,
           "gemini_review": 1,
-          "read_plan": 1,
-          "claude_review": 1
+          "read_plan": 1
         }
       },
       "diff": {}
@@ -2021,50 +2322,6 @@
       },
       "state": "succeeded"
     },
-    "codex_review@1": {
-      "first_event_seq": 52,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: codex_review",
-        "failure_reason": null,
-        "timestamp": "2026-05-30T07:36:05.252573057Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openai",
-        "model": "gpt-5.3-codex",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-05-30T07:35:39.721230779Z",
-      "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 25531,
-        "inference_time_ms": 25478,
-        "tool_time_ms": 0,
-        "active_time_ms": 25478
-      },
-      "usage": {
-        "input_tokens": 7743,
-        "output_tokens": 660,
-        "total_tokens": 11822,
-        "reasoning_tokens": 603,
-        "cache_read_tokens": 2816,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 31724
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.3-codex"
-      },
-      "state": "succeeded"
-    },
     "synthesize@1": {
       "first_event_seq": 62,
       "prompt": null,
@@ -2106,6 +2363,111 @@
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 72,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T07:36:31.331332146Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:36:31.327925888Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 3,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "not_ready@1": {
+      "first_event_seq": 80,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:36:34.088183178Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
+    "codex_review@1": {
+      "first_event_seq": 52,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: codex_review",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T07:36:05.252573057Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.3-codex",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:35:39.721230779Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 25531,
+        "inference_time_ms": 25478,
+        "tool_time_ms": 0,
+        "active_time_ms": 25478
+      },
+      "usage": {
+        "input_tokens": 7743,
+        "output_tokens": 660,
+        "total_tokens": 11822,
+        "reasoning_tokens": 603,
+        "cache_read_tokens": 2816,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 31724
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.3-codex"
       },
       "state": "succeeded"
     }
