@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,220p' docs/iterations/006-deliveries-overview/plan.md && echo '--- git branches ---' && git branch --all --verbose --no-abbrev | sed -n '1,120p' && echo '--- log ---' && git log --oneline --decorate --all -n 30", "timeout_ms": 10000}{"cmd": "ls"}{"context_updates":{"plan_ready":true,"plan_needs_fix":false,"plan_needs_human":false}}
