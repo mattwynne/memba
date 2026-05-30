@@ -1240,7 +1240,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-30T05:38:39.692353662Z",
-  "last_event_at": "2026-05-30T09:18:13.830370598Z",
+  "last_event_at": "2026-05-30T09:20:08.603271755Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -24436,9 +24436,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 4826,
       "checkpoint": {
-        "timestamp": "2026-05-30T09:18:18.260311722Z",
+        "timestamp": "2026-05-30T09:19:07.655398902Z",
         "current_node": "pre_validate_snapshot",
         "completed_nodes": [
           "start",
@@ -24522,17 +24522,359 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.validate_task": 0,
+          "current_node": "pre_validate_snapshot",
+          "task_retry_available": true,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "failure_signature": "",
+          "task_list_needs_human": false,
+          "command.output": "blob://sha256/755d626e5ded2a86a4ca3990f335a74e0aa747e22be7d5f13ce282b7bf418248",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.validate_task": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is `d838b12 fabro(...): implement_next_task (failed)`.\n  - `d838b12` does **not** modify `docs/iterations/005-browser-acceptance-harness/todo.md`.\n  - Current `todo.md` still has task `012 Run the browser acceptance suite and dev check, fixing any issues.` unchecked.\n  - Prior successful checkpoint `623cf17` checked off task `011`, leaving `012` as the first unchecked task for this attempt.\n\n- Implementation artifacts found.\n  - `d838b12` changes browser/tooling-related files:\n    - `acceptance-tests/cucumber.js`\n    - `acceptance-tests/features/support/world.js`\n    - `acceptance-tests/package.json`\n    - `acceptance-tests/package-lock.json`\n    - `devenv.nix`\n    - `web/config/config.exs`\n  - No acceptance feature files (`*.feature`) were changed.\n\n- Tests run/results found.\n  - `git diff --check d838b12^ d838b12` passed.\n  - No reliable evidence was found in the snapshot/commit that the browser acceptance suite and `dev check` both passed for task `012`.\n  - `.fabro/tmp/browser-acceptance-server.log` contains Phoenix request/server output, but not a completed `npm test` / `dev check` pass result.\n\n- ADR/plan conformance notes.\n  - The attempted changes are broadly related to task `012`, but completion is not established.\n  - The same task was not checked off in `todo.md`, which violates the validation contract.\n  - Plan-required work was not deleted or weakened, but task `012` remains incomplete from repository evidence.\n\n### Retry brief\nRejecting this attempt because live repository evidence shows task `012` is still unchecked and the latest implementation checkpoint did not update `todo.md` or provide clear passing evidence for both the browser acceptance suite and `dev check`. Next clean attempt should finish task `012`: run the browser acceptance suite, run `PATH=\"$PWD/bin:$PATH\" dev check`, fix any failures, and check off task `012` only after both pass.\n\n{\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}",
+          "internal.retry_count.task_gate": 0,
+          "task_valid": false,
+          "thread.reset_task_attempt.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.start": 0,
+          "thread.task_gate.current_node": "reset_task_attempt",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.node_visit_count": 13,
+          "internal.run_id": "01KSVP69ES02ATWQ9S3E9MGJAD",
+          "internal.work_dir": "/workspace/memba",
+          "failure_class": "",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.reset_task_attempt": 0,
+          "response.implement_next_task": "1. **Selected todo line**\n   - `011 Verify the Elixir/domain acceptance path used by dev check still runs every shared scenario regardless of @todo-web tags.`\n\n2. **Changes made**\n   - Added Elixir Cucumber homepage step definitions:\n     - `web/test/features/step_definitions/homepage_steps.exs`\n   - Updated `web/test/features/cucumber_configuration_test.exs` to:\n     - execute the shared `homepage.feature` scenario through the Elixir Cucumber runtime;\n     - include homepage steps in step-definition discovery checks;\n     - assert the Elixir acceptance coverage list matches every scenario found in the shared feature files;\n     - assert `@todo-web` scenarios are still included in the Elixir acceptance path;\n     - assert Elixir Cucumber config has no `:tags` filter, so the browser `not @todo-web` filter does not leak into the domain/Elixir runner.\n   - Checked off todo item `011`.\n\n3. **Focused validation**\n   - `cd web && mix format --check-formatted test/features/cucumber_configuration_test.exs test/features/step_definitions/homepage_steps.exs`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `112 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 011 Verify the Elixir/domain acceptance path used by dev check still runs every shared scenario regardless of @todo-web tags.`\n   - To:\n     - `- [x] 011 Verify the Elixir/domain acceptance path used by dev check still runs every shared scenario regardless of @todo-web tags.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0010 respected: shared feature files remain unchanged and continue to be the common acceptance source.\n   - ADR 0003 respected: the Elixir acceptance path now explicitly covers the same shared scenarios, including browser-deferred `@todo-web` operator scenarios.\n   - ADR 0013 unaffected: no change to the PhoenixTest strategy or LiveView test approach.",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.start.current_node": "read_plan",
+          "internal.thread_id": "implement_next_task",
+          "last_stage": "validate_task",
+          "last_response": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "graph.rankdir": "LR",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "graph.max_node_visits": "300",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.validate_task.current_node": "task_gate",
+          "graph.default_fidelity": "summary:high",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "task_list_complete": false
+        },
+        "node_outcomes": {
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is",
+              "task_retry_available": true,
+              "last_stage": "validate_task",
+              "task_valid": false,
+              "response.validate_task": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is `d838b12 fabro(...): implement_next_task (failed)`.\n  - `d838b12` does **not** modify `docs/iterations/005-browser-acceptance-harness/todo.md`.\n  - Current `todo.md` still has task `012 Run the browser acceptance suite and dev check, fixing any issues.` unchecked.\n  - Prior successful checkpoint `623cf17` checked off task `011`, leaving `012` as the first unchecked task for this attempt.\n\n- Implementation artifacts found.\n  - `d838b12` changes browser/tooling-related files:\n    - `acceptance-tests/cucumber.js`\n    - `acceptance-tests/features/support/world.js`\n    - `acceptance-tests/package.json`\n    - `acceptance-tests/package-lock.json`\n    - `devenv.nix`\n    - `web/config/config.exs`\n  - No acceptance feature files (`*.feature`) were changed.\n\n- Tests run/results found.\n  - `git diff --check d838b12^ d838b12` passed.\n  - No reliable evidence was found in the snapshot/commit that the browser acceptance suite and `dev check` both passed for task `012`.\n  - `.fabro/tmp/browser-acceptance-server.log` contains Phoenix request/server output, but not a completed `npm test` / `dev check` pass result.\n\n- ADR/plan conformance notes.\n  - The attempted changes are broadly related to task `012`, but completion is not established.\n  - The same task was not checked off in `todo.md`, which violates the validation contract.\n  - Plan-required work was not deleted or weakened, but task `012` remains incomplete from repository evidence.\n\n### Retry brief\nRejecting this attempt because live repository evidence shows task `012` is still unchecked and the latest implementation checkpoint did not update `todo.md` or provide clear passing evidence for both the browser acceptance suite and `dev check`. Next clean attempt should finish task `012`: run the browser acceptance suite, run `PATH=\"$PWD/bin:$PATH\" dev check`, fix any failures, and check off task `012` only after both pass.\n\n{\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 244405,
+                    "output_tokens": 1623,
+                    "reasoning_tokens": 1345,
+                    "cache_read_tokens": 36864,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1329497
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 65045,
+              "tool_time_ms": 1866,
+              "active_time_ms": 66911
+            }
+          },
+          "implement_next_task": {
+            "status": "failed",
+            "failure": {
+              "message": "handler timed out after 2400000ms",
+              "category": "transient_infra",
+              "system_actor": "timeout"
+            },
+            "usage": null
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "task_list_complete": false,
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 34790,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 147,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 179200
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4210,
+              "tool_time_ms": 0,
+              "active_time_ms": 4210
+            }
+          },
+          "reset_task_attempt": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/216c6e0a0cb6de2e5061486faafe38ac46ac654d4f8ca389bfb17ebbb79aeda7"
+            },
+            "notes": "Script completed: set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 438,
+              "active_time_ms": 438
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/509dfd1031f76293109e016beffbeff592809157e6e10e460c9bb480c7804c65"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 176,
+              "active_time_ms": 176
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf3c4570312f4a9c385acd04d9a2f94439fca63987b2c0a7f50777b7325b2830"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 251,
+              "active_time_ms": 251
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5a8693ba01ecc3c732bbf0d11889141f8dbd42420b6396ed0bb8ff0e3ac99b2f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 248,
+              "active_time_ms": 248
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/755d626e5ded2a86a4ca3990f335a74e0aa747e22be7d5f13ce282b7bf418248"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 3245,
+              "active_time_ms": 3245
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/77058b7a1d4b96b892ac8857ec2e4db0602ff5fe324147905e56ac384c4340a4"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170511,
+              "active_time_ms": 170511
+            }
+          }
+        },
+        "next_node_id": "validate_task",
+        "git_commit_sha": "7c8d34a1e99cb82d7198b87141fc223af5a3bee0",
+        "loop_failure_signatures": {
+          "implement_next_task|deterministic|api_deterministic|openai|invalid_request": 1
+        },
+        "node_visits": {
+          "all_tasks_done": 11,
+          "pre_validate_snapshot": 13,
+          "resume_gate": 1,
+          "sync_task_list": 11,
+          "read_plan": 1,
+          "start": 1,
+          "implement_next_task": 13,
+          "task_gate": 12,
+          "reset_task_attempt": 2,
+          "validate_task": 12,
+          "preflight_sandbox": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 27,
+          "additions": 2631,
+          "deletions": 33
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-30T09:20:23.297423676Z",
+        "current_node": "validate_task",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.sync_task_list": 0,
           "task_valid": false,
           "thread.task_gate.current_node": "reset_task_attempt",
           "graph.rankdir": "LR",
           "internal.retry_count.pre_validate_snapshot": 0,
-          "last_response": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is",
+          "last_response": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary tracked diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `c5b5cb5 fabro(.",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "internal.retry_count.reset_task_attempt": 0,
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
-          "internal.thread_id": "implement_next_task",
+          "internal.thread_id": "pre_validate_snapshot",
           "graph.max_node_visits": "300",
           "internal.retry_count.all_tasks_done": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
@@ -24543,7 +24885,7 @@
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "failure_signature": "",
           "internal.retry_count.preflight_sandbox": 0,
-          "response.validate_task": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is `d838b12 fabro(...): implement_next_task (failed)`.\n  - `d838b12` does **not** modify `docs/iterations/005-browser-acceptance-harness/todo.md`.\n  - Current `todo.md` still has task `012 Run the browser acceptance suite and dev check, fixing any issues.` unchecked.\n  - Prior successful checkpoint `623cf17` checked off task `011`, leaving `012` as the first unchecked task for this attempt.\n\n- Implementation artifacts found.\n  - `d838b12` changes browser/tooling-related files:\n    - `acceptance-tests/cucumber.js`\n    - `acceptance-tests/features/support/world.js`\n    - `acceptance-tests/package.json`\n    - `acceptance-tests/package-lock.json`\n    - `devenv.nix`\n    - `web/config/config.exs`\n  - No acceptance feature files (`*.feature`) were changed.\n\n- Tests run/results found.\n  - `git diff --check d838b12^ d838b12` passed.\n  - No reliable evidence was found in the snapshot/commit that the browser acceptance suite and `dev check` both passed for task `012`.\n  - `.fabro/tmp/browser-acceptance-server.log` contains Phoenix request/server output, but not a completed `npm test` / `dev check` pass result.\n\n- ADR/plan conformance notes.\n  - The attempted changes are broadly related to task `012`, but completion is not established.\n  - The same task was not checked off in `todo.md`, which violates the validation contract.\n  - Plan-required work was not deleted or weakened, but task `012` remains incomplete from repository evidence.\n\n### Retry brief\nRejecting this attempt because live repository evidence shows task `012` is still unchecked and the latest implementation checkpoint did not update `todo.md` or provide clear passing evidence for both the browser acceptance suite and `dev check`. Next clean attempt should finish task `012`: run the browser acceptance suite, run `PATH=\"$PWD/bin:$PATH\" dev check`, fix any failures, and check off task `012` only after both pass.\n\n{\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}",
+          "response.validate_task": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary tracked diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `c5b5cb5 fabro(...): implement_next_task (failed)` is the just-completed implementation attempt before `7c8d34a pre_validate_snapshot`.\n  - `docs/iterations/005-browser-acceptance-harness/todo.md` still has task `012 Run the browser acceptance suite and dev check, fixing any issues.` unchecked.\n  - `c5b5cb5` does not modify `todo.md`, so no task was checked off.\n- Implementation artifacts found.\n  - `c5b5cb5` changes `acceptance-tests/features/step_definitions/member_message_deliverability_steps.js`.\n  - The changes add LiveView readiness waits, form submission helpers, reload/retry waits, and row visibility polling for browser acceptance steps.\n  - No `*.feature` files were changed.\n- Tests run/results found.\n  - `git diff --check c5b5cb5^ c5b5cb5` passed.\n  - No reliable evidence was found that the browser acceptance suite passed.\n  - No reliable evidence was found that `PATH=\"$PWD/bin:$PATH\" dev check` passed.\n  - `.fabro/tmp/browser-acceptance-server.log` shows Postgrex connection refused errors; it does not show a completed passing browser suite or `dev check`.\n- ADR/plan conformance notes.\n  - The attempted changes are related to task `012`, but task completion is not established.\n  - The same task was not checked off in `todo.md`, violating the workflow contract.\n  - Plan-required work was not visibly deleted or weakened, but the final validation task remains incomplete.\n\n### Retry brief\nRejecting this attempt because live repository evidence shows task `012` is still unchecked and there is no concrete passing evidence for both the browser acceptance suite and `dev check`. Next clean attempt should run/fix the browser acceptance suite, run `PATH=\"$PWD/bin:$PATH\" dev check`, preserve no `*.feature` edits, and check off task `012` only after both validations pass.\n\n{\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}",
           "task_list_needs_human": false,
           "thread.validate_task.current_node": "task_gate",
           "internal.retry_count.start": 0,
@@ -24562,7 +24904,7 @@
           "internal.retry_count.read_plan": 0,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "current_node": "pre_validate_snapshot",
+          "current_node": "validate_task",
           "task_retry_available": true,
           "thread.start.current_node": "read_plan",
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
@@ -24666,11 +25008,11 @@
           "validate_task": {
             "status": "succeeded",
             "context_updates": {
-              "last_response": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is",
-              "task_retry_available": true,
-              "last_stage": "validate_task",
               "task_valid": false,
-              "response.validate_task": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Latest/recent implementation checkpoint is `d838b12 fabro(...): implement_next_task (failed)`.\n  - `d838b12` does **not** modify `docs/iterations/005-browser-acceptance-harness/todo.md`.\n  - Current `todo.md` still has task `012 Run the browser acceptance suite and dev check, fixing any issues.` unchecked.\n  - Prior successful checkpoint `623cf17` checked off task `011`, leaving `012` as the first unchecked task for this attempt.\n\n- Implementation artifacts found.\n  - `d838b12` changes browser/tooling-related files:\n    - `acceptance-tests/cucumber.js`\n    - `acceptance-tests/features/support/world.js`\n    - `acceptance-tests/package.json`\n    - `acceptance-tests/package-lock.json`\n    - `devenv.nix`\n    - `web/config/config.exs`\n  - No acceptance feature files (`*.feature`) were changed.\n\n- Tests run/results found.\n  - `git diff --check d838b12^ d838b12` passed.\n  - No reliable evidence was found in the snapshot/commit that the browser acceptance suite and `dev check` both passed for task `012`.\n  - `.fabro/tmp/browser-acceptance-server.log` contains Phoenix request/server output, but not a completed `npm test` / `dev check` pass result.\n\n- ADR/plan conformance notes.\n  - The attempted changes are broadly related to task `012`, but completion is not established.\n  - The same task was not checked off in `todo.md`, which violates the validation contract.\n  - Plan-required work was not deleted or weakened, but task `012` remains incomplete from repository evidence.\n\n### Retry brief\nRejecting this attempt because live repository evidence shows task `012` is still unchecked and the latest implementation checkpoint did not update `todo.md` or provide clear passing evidence for both the browser acceptance suite and `dev check`. Next clean attempt should finish task `012`: run the browser acceptance suite, run `PATH=\"$PWD/bin:$PATH\" dev check`, fix any failures, and check off task `012` only after both pass.\n\n{\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}"
+              "last_response": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary tracked diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `c5b5cb5 fabro(.",
+              "last_stage": "validate_task",
+              "task_retry_available": true,
+              "response.validate_task": "### Decision\n**RETRY**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Live working tree has no ordinary tracked diff; only untracked `.fabro/tmp/`.\n  - Recent checkpoint `c5b5cb5 fabro(...): implement_next_task (failed)` is the just-completed implementation attempt before `7c8d34a pre_validate_snapshot`.\n  - `docs/iterations/005-browser-acceptance-harness/todo.md` still has task `012 Run the browser acceptance suite and dev check, fixing any issues.` unchecked.\n  - `c5b5cb5` does not modify `todo.md`, so no task was checked off.\n- Implementation artifacts found.\n  - `c5b5cb5` changes `acceptance-tests/features/step_definitions/member_message_deliverability_steps.js`.\n  - The changes add LiveView readiness waits, form submission helpers, reload/retry waits, and row visibility polling for browser acceptance steps.\n  - No `*.feature` files were changed.\n- Tests run/results found.\n  - `git diff --check c5b5cb5^ c5b5cb5` passed.\n  - No reliable evidence was found that the browser acceptance suite passed.\n  - No reliable evidence was found that `PATH=\"$PWD/bin:$PATH\" dev check` passed.\n  - `.fabro/tmp/browser-acceptance-server.log` shows Postgrex connection refused errors; it does not show a completed passing browser suite or `dev check`.\n- ADR/plan conformance notes.\n  - The attempted changes are related to task `012`, but task completion is not established.\n  - The same task was not checked off in `todo.md`, violating the workflow contract.\n  - Plan-required work was not visibly deleted or weakened, but the final validation task remains incomplete.\n\n### Retry brief\nRejecting this attempt because live repository evidence shows task `012` is still unchecked and there is no concrete passing evidence for both the browser acceptance suite and `dev check`. Next clean attempt should run/fix the browser acceptance suite, run `PATH=\"$PWD/bin:$PATH\" dev check`, preserve no `*.feature` edits, and check off task `012` only after both validations pass.\n\n{\"context_updates\":{\"task_valid\":false,\"task_retry_available\":true}}"
             },
             "notes": "Stage completed: validate_task",
             "usage": {
@@ -24681,10 +25023,10 @@
                     "model_id": "gpt-5.5"
                   },
                   "tokens": {
-                    "input_tokens": 244405,
-                    "output_tokens": 1623,
-                    "reasoning_tokens": 1345,
-                    "cache_read_tokens": 36864,
+                    "input_tokens": 397629,
+                    "output_tokens": 1345,
+                    "reasoning_tokens": 1020,
+                    "cache_read_tokens": 146432,
                     "cache_write_tokens": 0
                   }
                 },
@@ -24692,13 +25034,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 1329497
+              "total_usd_micros": 2132311
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 65045,
-              "tool_time_ms": 1866,
-              "active_time_ms": 66911
+              "inference_time_ms": 62951,
+              "tool_time_ms": 1856,
+              "active_time_ms": 64807
             }
           },
           "task_gate": {
@@ -24749,11 +25091,11 @@
             }
           }
         },
-        "next_node_id": "validate_task",
+        "next_node_id": "task_gate",
         "node_visits": {
           "pre_validate_snapshot": 13,
           "start": 1,
-          "validate_task": 12,
+          "validate_task": 13,
           "sync_task_list": 11,
           "read_plan": 1,
           "resume_gate": 1,
@@ -28137,7 +28479,12 @@
       "first_event_seq": 4819,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T09:18:17.987597499Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -28146,11 +28493,27 @@
         "language": "shell",
         "timeout_ms": 120000
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/755d626e5ded2a86a4ca3990f335a74e0aa747e22be7d5f13ce282b7bf418248",
+        "exit_code": 0,
+        "duration_ms": 3245,
+        "termination": "exited",
+        "output_bytes": 10680,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 10680,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-05-30T09:18:13.622495067Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 4346,
+        "inference_time_ms": 0,
+        "tool_time_ms": 3245,
+        "active_time_ms": 3245
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -28159,7 +28522,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@2": {
       "first_event_seq": 658,
@@ -30448,6 +30811,206 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "validate_task@13": {
+      "first_event_seq": 4829,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T09:19:12.944622131Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 333636,
+        "output_tokens": 865,
+        "total_tokens": 481709,
+        "reasoning_tokens": 776,
+        "cache_read_tokens": 146432,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 63517,
+        "usage_percent": 23.351838235294117,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-05-30T09:20:08.470073061Z",
+        "event_seq": 4873,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1369,
+            "usage_percent": 0.5033088235294118
+          },
+          {
+            "category": "tools",
+            "tokens": 1938,
+            "usage_percent": 0.7125
+          },
+          {
+            "category": "memory",
+            "tokens": 362,
+            "usage_percent": 0.13308823529411765
+          },
+          {
+            "category": "conversation",
+            "tokens": 59842,
+            "usage_percent": 22.000735294117646
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
     },
     "all_tasks_done@1": {
       "first_event_seq": 65,
