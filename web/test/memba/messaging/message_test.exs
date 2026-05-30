@@ -112,13 +112,19 @@ defmodule Memba.Messaging.MessageTest do
       assert {:error, :duplicate_recipient} =
                Message.execute(%Message{}, %SendMessage{
                  valid_command
-                 | recipients: [recipient, %Recipient{recipient | delivery_id: Ecto.UUID.generate()}]
+                 | recipients: [
+                     recipient,
+                     %Recipient{recipient | delivery_id: Ecto.UUID.generate()}
+                   ]
                })
 
       assert {:error, :duplicate_delivery} =
                Message.execute(%Message{}, %SendMessage{
                  valid_command
-                 | recipients: [recipient, %Recipient{recipient | person_id: Ecto.UUID.generate()}]
+                 | recipients: [
+                     recipient,
+                     %Recipient{recipient | person_id: Ecto.UUID.generate()}
+                   ]
                })
     end
 
@@ -146,7 +152,10 @@ defmodule Memba.Messaging.MessageTest do
         })
 
       assert {:error, :already_sent} =
-               Message.execute(message, %SendMessage{valid_send_message() | message_id: message_id})
+               Message.execute(message, %SendMessage{
+                 valid_send_message()
+                 | message_id: message_id
+               })
     end
   end
 

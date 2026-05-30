@@ -107,8 +107,11 @@ defmodule Memba.Messaging.Message do
   defp normalize_each_recipient(recipients) do
     Enum.reduce_while(recipients, {:ok, []}, fn recipient, {:ok, normalized_recipients} ->
       case normalize_recipient(recipient) do
-        {:ok, normalized_recipient} -> {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
-        {:error, reason} -> {:halt, {:error, reason}}
+        {:ok, normalized_recipient} ->
+          {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     end)
     |> case do
