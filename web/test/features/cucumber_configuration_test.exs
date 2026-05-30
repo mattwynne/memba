@@ -267,6 +267,10 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
+  test "browser Cucumber default profile excludes todo-web scenarios" do
+    assert browser_cucumber_default_config()["tags"] == "not @todo-web"
+  end
+
   defp configured_feature_paths do
     :cucumber
     |> Application.fetch_env!(:features)
@@ -275,6 +279,23 @@ defmodule Memba.CucumberConfigurationTest do
     |> Enum.map(&Path.expand/1)
     |> Enum.uniq()
     |> Enum.sort()
+  end
+
+  defp browser_cucumber_default_config do
+    script = """
+    const config = require('./acceptance-tests/cucumber.js');
+    process.stdout.write(JSON.stringify(config.default));
+    """
+
+    {json, 0} = System.cmd("node", ["-e", script], cd: repo_root(), stderr_to_stdout: true)
+
+    Jason.decode!(json)
+  end
+
+  defp repo_root do
+    __DIR__
+    |> Path.join("../../..")
+    |> Path.expand()
   end
 
   defp discover_steps do

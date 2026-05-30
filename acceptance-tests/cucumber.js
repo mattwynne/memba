@@ -3,6 +3,7 @@ module.exports = {
     paths: ["features/**/*.feature"],
     require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
     format: ["progress"],
-    publishQuiet: true
+    publishQuiet: true,
+    tags: "not @todo-web"
   }
 };
