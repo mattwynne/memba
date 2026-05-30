@@ -258,6 +258,76 @@ PY
   echo "- $implementation_path"
 }
 
+# @cmd Mark an iteration as merged after deliver lands implementation/review on main
+# @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
+iteration_mark_merged_style() {
+  local plan_path="${1:-}"
+
+  if [ -z "$plan_path" ]; then
+    echo "Usage: $0 iteration-mark-merged-style <plan_path>" >&2
+    exit 2
+  fi
+
+  case "$plan_path" in
+    */plan.md) ;;
+    *) echo "plan_path must end with /plan.md: $plan_path" >&2; exit 2 ;;
+  esac
+
+  local iteration_dir="${plan_path%/plan.md}"
+  local implementation_path="$iteration_dir/implementation.md"
+  local iteration_slug
+  iteration_slug=$(basename "$iteration_dir")
+  local iteration_number="${iteration_slug%%-*}"
+
+  if [ ! -f "$repo_root/$plan_path" ]; then
+    echo "Plan not found: $plan_path" >&2
+    exit 1
+  fi
+  if [ ! -f "$repo_root/docs/iterations/README.md" ]; then
+    echo "Iteration index not found: docs/iterations/README.md" >&2
+    exit 1
+  fi
+
+  python3 - "$repo_root" "$plan_path" "$implementation_path" "$iteration_number" <<'PY'
+import pathlib
+import re
+import sys
+
+repo = pathlib.Path(sys.argv[1])
+plan_path = repo / sys.argv[2]
+implementation_path = repo / sys.argv[3]
+iteration_number = sys.argv[4]
+readme_path = repo / "docs/iterations/README.md"
+
+
+def replace_status_line(path):
+    text = path.read_text()
+    if re.search(r"^Status: .*$", text, flags=re.MULTILINE):
+        text = re.sub(r"^Status: .*$", "Status: merged", text, count=1, flags=re.MULTILINE)
+    else:
+        text = text.rstrip() + "\nStatus: merged\n"
+    path.write_text(text)
+
+replace_status_line(plan_path)
+if implementation_path.exists():
+    replace_status_line(implementation_path)
+else:
+    implementation_path.write_text("# Implementation\n\nStatus: merged\n")
+
+readme = readme_path.read_text()
+pattern = re.compile(rf"^(\|\s*{re.escape(iteration_number)}\s*\|\s*[^|]+\|\s*)[^|]+(\|.*)$", re.MULTILINE)
+readme, count = pattern.subn(r"\1merged\2", readme, count=1)
+if count != 1:
+    raise SystemExit(f"Could not find iteration {iteration_number} row in docs/iterations/README.md")
+readme_path.write_text(readme)
+PY
+
+  echo "Marked iteration $iteration_number as merged-style in:"
+  echo "- docs/iterations/README.md"
+  echo "- $plan_path"
+  echo "- $implementation_path"
+}
+
 # @cmd Review an implementation branch in an isolated worktree
 # @arg branch! Branch/ref to review, e.g. pr/event-sourced-foundation
 # @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md

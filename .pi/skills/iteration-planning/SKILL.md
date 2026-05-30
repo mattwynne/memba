@@ -1,16 +1,16 @@
 ---
 name: iteration-planning
-description: Interview Matt about the next product/dev iteration, turn the discussion into a focused iteration plan, and submit it to the project's Fabro plan-validation workflow. Use when planning the next iteration, shaping work before implementation, or preparing a plan for Fabro validation.
+description: Interview Matt about the next product/dev iteration, turn the discussion into a focused iteration plan, and launch the project's Fabro iteration-deliver workflow. Use when planning the next iteration, shaping work before implementation, or preparing a plan for delivery.
 ---
 
 # Iteration Planning Interview
 
 ## Overview
 
-Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Interview him through natural collaborative dialogue, write the plan down, and submit it to Fabro's plan-validation workflow.
+Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Interview him through natural collaborative dialogue, write the plan down, and launch Fabro's `iteration-deliver` workflow.
 
 <HARD-GATE>
-Do NOT implement the iteration. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is a submitted Fabro validation run or a clear explanation of why submission was blocked.
+Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is either a launched `iteration-deliver` run handed off after validation starts/succeeds, a revised plan after a validation NOT READY stop, or a clear explanation of why delivery submission was blocked.
 </HARD-GATE>
 
 ## Checklist
@@ -23,8 +23,8 @@ Create a task for each item and complete them in order:
 4. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
 5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration. Maintain `docs/iterations/README.md` as an index.
 6. **Publish planning artifacts** — commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any workflow/skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
-7. **Submit to Fabro** — run the plan-validation workflow against the saved plan.
-8. **Handle Fabro feedback** — if Fabro says NOT READY, summarize blockers and interview/revise/resubmit unless Matt stops.
+7. **Submit to Fabro** — run the `iteration-deliver` workflow against the saved plan.
+8. **Handle Fabro feedback** — monitor only the validation stage. If deliver stops with `validation:not-ready`, summarize blockers and interview/revise/resubmit unless Matt stops. If validation is READY and implementation has been handed off, report the deliver run URL/ID and stop.
 
 ## Process Flow
 
@@ -37,10 +37,10 @@ digraph iteration_planning {
     "Matt approves draft?" [shape=diamond];
     "Write plan file" [shape=box];
     "Commit planning artifacts" [shape=box];
-    "Submit to Fabro" [shape=box];
-    "Fabro says ready?" [shape=diamond];
+    "Launch iteration-deliver" [shape=box];
+    "Validation ready?" [shape=diamond];
     "Revise plan" [shape=box];
-    "Stop: validated plan" [shape=doublecircle];
+    "Stop: delivery handed off" [shape=doublecircle];
 
     "Explore project context" -> "Interview Matt";
     "Interview Matt" -> "Size and slice";
@@ -49,11 +49,11 @@ digraph iteration_planning {
     "Matt approves draft?" -> "Interview Matt" [label="no / unclear"];
     "Matt approves draft?" -> "Write plan file" [label="yes"];
     "Write plan file" -> "Commit planning artifacts";
-    "Commit planning artifacts" -> "Submit to Fabro";
-    "Submit to Fabro" -> "Fabro says ready?";
-    "Fabro says ready?" -> "Stop: validated plan" [label="yes"];
-    "Fabro says ready?" -> "Revise plan" [label="no"];
-    "Revise plan" -> "Submit to Fabro";
+    "Commit planning artifacts" -> "Launch iteration-deliver";
+    "Launch iteration-deliver" -> "Validation ready?";
+    "Validation ready?" -> "Stop: delivery handed off" [label="yes"];
+    "Validation ready?" -> "Revise plan" [label="no"];
+    "Revise plan" -> "Launch iteration-deliver";
 }
 ```
 
@@ -175,7 +175,13 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 
 ## Submitting to Fabro
 
-Submit the saved plan with the project's plan-validation workflow after committing and pushing the planning artifacts. The workflow runs in a clone-based remote sandbox; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
+Submit the saved plan with the project's `iteration-deliver` workflow after committing and pushing the planning artifacts. The workflow starts with plan validation, and only a READY verdict flows onward to implementation and post-merge review. The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
+
+```bash
+fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+```
+
+If Matt wants a validate-only check, run `plan-validation` manually instead:
 
 ```bash
 fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
@@ -187,18 +193,18 @@ If the local Fabro server is unavailable or the command fails before creating a 
 2. Do not treat the plan as validated.
 3. Tell Matt the plan file path and the exact command to retry.
 
-If Fabro completes with NOT READY:
+If deliver stops at `validation:not-ready`:
 
 1. Summarize the blocking gaps.
 2. Ask Matt one question at a time to resolve them.
-3. Edit the plan.
-4. Resubmit.
+3. Edit, commit, and push the plan.
+4. Re-run `iteration-deliver`.
 
-If Fabro completes with READY:
+If deliver reports validation READY / starts implementation:
 
-1. Mark the plan status as `ready`.
-2. Report the plan path and Fabro run/result details.
-3. Stop. Do not implement.
+1. Report the plan path and deliver run ID/URL.
+2. Explain that implementation, review, and merged-status finalization continue unattended in child runs.
+3. Stop monitoring unless Matt explicitly asks you to inspect the delivery run.
 
 ## Key Principles
 
@@ -208,4 +214,4 @@ If Fabro completes with READY:
 - Make technical decisions explicit enough to start.
 - Make acceptance criteria testable.
 - Make validation observable.
-- Do not implement during this skill.
+- Do not implement locally during this skill; `iteration-deliver` owns any implementation it starts after validation.
