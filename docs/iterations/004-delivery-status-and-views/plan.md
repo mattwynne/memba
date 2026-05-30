@@ -1,7 +1,7 @@
 # Delivery statuses, member receipts, and operator views
 
 Date: 2026-05-28
-Status: ready
+Status: merged
 
 ## Goal
 
