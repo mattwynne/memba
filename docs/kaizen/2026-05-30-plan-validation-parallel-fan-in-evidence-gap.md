@@ -49,12 +49,30 @@ Fabro docs/examples say merged branch results should be available to downstream 
 
 Relevant docs read:
 
-- `docs/tools/fabro/public/tutorials/parallel-review.mdx`
-- `docs/tools/fabro/public/tutorials/ensemble.mdx`
-- `docs/tools/fabro/public/workflows/stages-and-nodes.mdx`
-- `docs/tools/fabro/public/execution/context.mdx`
-- `docs/tools/fabro/public/agents/outputs.mdx`
-- `docs/tools/fabro/public/examples/clone-substack.mdx`
+- Local: `docs/tools/fabro/public/tutorials/parallel-review.mdx`
+- Local: `docs/tools/fabro/public/tutorials/ensemble.mdx`
+- Local: `docs/tools/fabro/public/workflows/stages-and-nodes.mdx`
+- Local: `docs/tools/fabro/public/execution/context.mdx`
+- Local: `docs/tools/fabro/public/agents/outputs.mdx`
+- Local: `docs/tools/fabro/public/examples/clone-substack.mdx`
+
+Public docs links:
+
+- https://docs.fabro.dev/tutorials/parallel-review
+- https://docs.fabro.dev/tutorials/ensemble
+- https://docs.fabro.dev/workflows/stages-and-nodes
+- https://docs.fabro.dev/execution/context
+- https://docs.fabro.dev/agents/outputs
+- https://docs.fabro.dev/examples/clone-substack
+
+GitHub issue/PR searches checked:
+
+- https://github.com/fabro-sh/fabro/issues?q=parallel_results.json
+- https://github.com/fabro-sh/fabro/issues?q=fan_in
+- https://github.com/fabro-sh/fabro/issues?q=parallel.fan_in
+- https://github.com/fabro-sh/fabro/issues?q=parallel+merge+preamble
+
+No obvious existing issue matched this exact `parallel_results.json` / reviewer-evidence visibility problem.
 
 The most relevant doc statement is in `workflows/stages-and-nodes.mdx`:
 
