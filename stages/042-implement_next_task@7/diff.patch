@@ -1,0 +1,449 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index ea235fe..9d31fc4 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
+ - [x] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
+ - [x] 006 Build the Postmark webhook controller/handler to parse Postmark-style event payloads and call the public Messaging status-reporting functions.
+-- [ ] 007 Give important forms, controls, rows, and status displays stable IDs or accessible labels suitable for Playwright and PhoenixTest.
++- [x] 007 Give important forms, controls, rows, and status displays stable IDs or accessible labels suitable for Playwright and PhoenixTest.
+ - [ ] 008 Update Playwright/Cucumber step definitions to drive the real LiveView routes for `homepage.feature` and `member_message_deliverability.feature`; delivery/open report steps should make HTTP requests to `POST /webhooks/postmark`.
+ - [ ] 009 Add `@todo-web` tags to operator deliverability scenarios that are intentionally not browser-backed in this iteration.
+ - [ ] 010 Configure `acceptance-tests/cucumber.js` so the default browser Cucumber command uses `tags: "not @todo-web"`.
+diff --git a/web/lib/memba_web/live/clubs_live/index.ex b/web/lib/memba_web/live/clubs_live/index.ex
+index eeb2bcd..54a0113 100644
+--- a/web/lib/memba_web/live/clubs_live/index.ex
++++ b/web/lib/memba_web/live/clubs_live/index.ex
+@@ -66,20 +66,34 @@ defmodule MembaWeb.ClubsLive.Index do
+           <.form
+             for={@club_form}
+             id="new-club-form"
++            aria-label="Create a club"
+             class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end"
+             phx-submit="create_club"
+           >
+             <div class="flex-1">
+-              <.input field={@club_form[:name]} label="Name" required />
++              <.input
++                field={@club_form[:name]}
++                id="club-name-input"
++                label="Name"
++                aria-label="Club name"
++                required
++              />
+             </div>
+-            <.button id="create-club-button" type="submit">Create club</.button>
++            <.button id="create-club-button" type="submit" aria-label="Create club">
++              Create club
++            </.button>
+           </.form>
+         </section>
+ 
+         <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+           <h2 class="text-lg font-semibold text-zinc-900">Existing clubs</h2>
+ 
+-          <div id="clubs" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++          <div
++            id="clubs"
++            aria-label="Clubs"
++            class="mt-4 divide-y divide-zinc-100"
++            phx-update="stream"
++          >
+             <p id="clubs-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+               No clubs yet.
+             </p>
+@@ -87,11 +101,17 @@ defmodule MembaWeb.ClubsLive.Index do
+               :for={{dom_id, club} <- @streams.clubs}
+               id={dom_id}
+               data-testid="club-row"
++              data-club-id={club.club_id}
++              data-club-name={club.name}
++              aria-label={"Club #{club.name}"}
+               class="flex items-center justify-between gap-4 py-3"
+             >
+               <div>
+                 <.link
++                  id={"club-link-#{club.club_id}"}
+                   navigate={~p"/clubs/#{club.club_id}"}
++                  data-testid="club-link"
++                  aria-label={"Open club #{club.name}"}
+                   class="font-medium text-blue-700 hover:text-blue-900"
+                 >
+                   {club.name}
+diff --git a/web/lib/memba_web/live/clubs_live/show.ex b/web/lib/memba_web/live/clubs_live/show.ex
+index c069184..167dab9 100644
+--- a/web/lib/memba_web/live/clubs_live/show.ex
++++ b/web/lib/memba_web/live/clubs_live/show.ex
+@@ -126,7 +126,12 @@ defmodule MembaWeb.ClubsLive.Show do
+     ~H"""
+     <Layouts.app flash={@flash}>
+       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
+-        <.link navigate={~p"/clubs"} class="text-sm font-medium text-blue-700 hover:text-blue-900">
++        <.link
++          id="back-to-clubs-link"
++          navigate={~p"/clubs"}
++          aria-label="Back to clubs"
++          class="text-sm font-medium text-blue-700 hover:text-blue-900"
++        >
+           ← Clubs
+         </.link>
+ 
+@@ -146,15 +151,36 @@ defmodule MembaWeb.ClubsLive.Show do
+               <.form
+                 for={@person_form}
+                 id="new-person-form"
++                aria-label="Create a person"
+                 class="mt-4 space-y-4"
+                 phx-submit="create_person"
+               >
+-                <.input field={@person_form[:name]} label="Name" required />
+-                <.input field={@person_form[:email]} label="Email" type="email" required />
+-                <.button id="create-person-button" type="submit">Create person</.button>
++                <.input
++                  field={@person_form[:name]}
++                  id="person-name-input"
++                  label="Name"
++                  aria-label="Person name"
++                  required
++                />
++                <.input
++                  field={@person_form[:email]}
++                  id="person-email-input"
++                  label="Email"
++                  type="email"
++                  aria-label="Person email"
++                  required
++                />
++                <.button id="create-person-button" type="submit" aria-label="Create person">
++                  Create person
++                </.button>
+               </.form>
+ 
+-              <div id="people" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
++              <div
++                id="people"
++                aria-label="People"
++                class="mt-5 divide-y divide-zinc-100"
++                phx-update="stream"
++              >
+                 <p id="people-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+                   No people yet.
+                 </p>
+@@ -162,6 +188,9 @@ defmodule MembaWeb.ClubsLive.Show do
+                   :for={{dom_id, person} <- @streams.people}
+                   id={dom_id}
+                   data-testid="person-row"
++                  data-person-id={person.person_id}
++                  data-person-name={person.name}
++                  aria-label={"Person #{person.name}"}
+                   class="py-3"
+                 >
+                   <p class="font-medium text-zinc-900">{person.name}</p>
+@@ -176,21 +205,35 @@ defmodule MembaWeb.ClubsLive.Show do
+               <.form
+                 for={@membership_form}
+                 id="add-member-form"
++                aria-label="Add a member"
+                 class="mt-4 space-y-4"
+                 phx-submit="add_member"
+               >
+                 <.input
+                   field={@membership_form[:person_id]}
++                  id="member-person-select"
+                   label="Person"
+                   type="select"
++                  aria-label="Person to add as member"
+                   prompt="Choose a person"
+                   options={@person_options}
+                   required
+                 />
+-                <.button id="add-member-button" type="submit">Add member</.button>
++                <.button
++                  id="add-member-button"
++                  type="submit"
++                  aria-label="Add selected person as member"
++                >
++                  Add member
++                </.button>
+               </.form>
+ 
+-              <div id="members" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
++              <div
++                id="members"
++                aria-label="Members"
++                class="mt-5 divide-y divide-zinc-100"
++                phx-update="stream"
++              >
+                 <p id="members-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+                   No members yet.
+                 </p>
+@@ -198,6 +241,9 @@ defmodule MembaWeb.ClubsLive.Show do
+                   :for={{dom_id, member} <- @streams.members}
+                   id={dom_id}
+                   data-testid="member-row"
++                  data-member-id={member.id}
++                  data-member-name={member.name}
++                  aria-label={"Member #{member.name}"}
+                   class="py-3"
+                 >
+                   <p class="font-medium text-zinc-900">{member.name}</p>
+@@ -213,27 +259,50 @@ defmodule MembaWeb.ClubsLive.Show do
+             <.form
+               for={@message_form}
+               id="new-message-form"
++              aria-label="Send a club message"
+               class="mt-4 grid gap-4 lg:grid-cols-2"
+               phx-submit="send_message"
+             >
+               <.input
+                 field={@message_form[:sender_id]}
++                id="message-sender-select"
+                 label="Sender"
+                 type="select"
++                aria-label="Message sender"
+                 prompt="Choose a sender"
+                 options={@member_options}
+                 required
+               />
+-              <.input field={@message_form[:subject]} label="Subject" required />
++              <.input
++                field={@message_form[:subject]}
++                id="message-subject-input"
++                label="Subject"
++                aria-label="Message subject"
++                required
++              />
+               <div class="lg:col-span-2">
+-                <.input field={@message_form[:body]} label="Body" type="textarea" required />
++                <.input
++                  field={@message_form[:body]}
++                  id="message-body-input"
++                  label="Body"
++                  type="textarea"
++                  aria-label="Message body"
++                  required
++                />
+               </div>
+               <div class="lg:col-span-2">
+-                <.button id="send-message-button" type="submit">Send message</.button>
++                <.button id="send-message-button" type="submit" aria-label="Send club message">
++                  Send message
++                </.button>
+               </div>
+             </.form>
+ 
+-            <div id="messages" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
++            <div
++              id="messages"
++              aria-label="Messages"
++              class="mt-5 divide-y divide-zinc-100"
++              phx-update="stream"
++            >
+               <p id="messages-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+                 No messages yet.
+               </p>
+@@ -241,10 +310,16 @@ defmodule MembaWeb.ClubsLive.Show do
+                 :for={{dom_id, message} <- @streams.messages}
+                 id={dom_id}
+                 data-testid="message-row"
++                data-message-id={message.message_id}
++                data-message-subject={message.subject}
++                aria-label={"Message #{message.subject}"}
+                 class="py-3"
+               >
+                 <.link
++                  id={"message-link-#{message.message_id}"}
+                   navigate={~p"/messages/#{message.message_id}"}
++                  data-testid="message-link"
++                  aria-label={"Open message #{message.subject}"}
+                   class="font-medium text-blue-700 hover:text-blue-900"
+                 >
+                   {message.subject}
+diff --git a/web/lib/memba_web/live/messages_live/show.ex b/web/lib/memba_web/live/messages_live/show.ex
+index 67c29fc..fee646c 100644
+--- a/web/lib/memba_web/live/messages_live/show.ex
++++ b/web/lib/memba_web/live/messages_live/show.ex
+@@ -28,7 +28,9 @@ defmodule MembaWeb.MessagesLive.Show do
+         <%= if @message do %>
+           <section class="space-y-2">
+             <.link
++              id="back-to-club-link"
+               navigate={~p"/clubs/#{@message.club_id}"}
++              aria-label="Back to club"
+               class="text-sm font-medium text-blue-700 hover:text-blue-900"
+             >
+               ← Club
+@@ -40,7 +42,12 @@ defmodule MembaWeb.MessagesLive.Show do
+ 
+           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+             <h2 class="text-lg font-semibold text-zinc-900">Addressed recipients</h2>
+-            <div id="addressed-recipients" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++            <div
++              id="addressed-recipients"
++              aria-label="Addressed recipients"
++              class="mt-4 divide-y divide-zinc-100"
++              phx-update="stream"
++            >
+               <p id="addressed-recipients-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+                 No addressed recipients.
+               </p>
+@@ -48,7 +55,10 @@ defmodule MembaWeb.MessagesLive.Show do
+                 :for={{dom_id, delivery} <- @streams.addressed_recipients}
+                 id={dom_id}
+                 data-testid="addressed-recipient"
++                data-delivery-id={delivery.delivery_id}
++                data-recipient-id={delivery.recipient_id}
+                 data-recipient-name={delivery.recipient_name}
++                aria-label={"Addressed recipient #{delivery.recipient_name}"}
+                 class="py-3"
+               >
+                 <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
+@@ -59,7 +69,12 @@ defmodule MembaWeb.MessagesLive.Show do
+ 
+           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+             <h2 class="text-lg font-semibold text-zinc-900">Delivery records</h2>
+-            <div id="delivery-records" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++            <div
++              id="delivery-records"
++              aria-label="Delivery records"
++              class="mt-4 divide-y divide-zinc-100"
++              phx-update="stream"
++            >
+               <p id="delivery-records-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+                 No delivery records.
+               </p>
+@@ -67,20 +82,36 @@ defmodule MembaWeb.MessagesLive.Show do
+                 :for={{dom_id, delivery} <- @streams.delivery_records}
+                 id={dom_id}
+                 data-testid="delivery-record"
++                data-delivery-id={delivery.delivery_id}
++                data-recipient-id={delivery.recipient_id}
+                 data-recipient-name={delivery.recipient_name}
++                aria-label={"Delivery record for #{delivery.recipient_name}"}
+                 class="grid gap-2 py-3 sm:grid-cols-4"
+               >
+                 <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
+                 <p class="text-sm text-zinc-500">{delivery.recipient_address}</p>
+                 <p class="text-sm text-zinc-500">{delivery.channel}</p>
+-                <p class="text-sm font-medium text-zinc-700">{delivery.status}</p>
++                <p
++                  id={"delivery-status-#{delivery.delivery_id}"}
++                  data-testid="delivery-status"
++                  data-delivery-status={delivery.status}
++                  aria-label={"Delivery status for #{delivery.recipient_name}: #{delivery.status}"}
++                  class="text-sm font-medium text-zinc-700"
++                >
++                  {delivery.status}
++                </p>
+               </div>
+             </div>
+           </section>
+ 
+           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+             <h2 class="text-lg font-semibold text-zinc-900">Member receipt statuses</h2>
+-            <div id="member-receipts" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++            <div
++              id="member-receipts"
++              aria-label="Member receipt statuses"
++              class="mt-4 divide-y divide-zinc-100"
++              phx-update="stream"
++            >
+               <p id="member-receipts-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+                 No member receipts.
+               </p>
+@@ -88,11 +119,20 @@ defmodule MembaWeb.MessagesLive.Show do
+                 :for={{dom_id, receipt} <- @streams.member_receipts}
+                 id={dom_id}
+                 data-testid="member-receipt"
++                data-delivery-id={receipt.delivery_id}
++                data-recipient-id={receipt.recipient_id}
+                 data-recipient-name={receipt.recipient_name}
++                aria-label={"Member receipt for #{receipt.recipient_name}"}
+                 class="flex items-center justify-between gap-4 py-3"
+               >
+                 <p class="font-medium text-zinc-900">{receipt.recipient_name}</p>
+-                <p class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">
++                <p
++                  id={"receipt-status-#{receipt.delivery_id}"}
++                  data-testid="receipt-status"
++                  data-receipt-status={receipt.receipt_status}
++                  aria-label={"Receipt status for #{receipt.recipient_name}: #{receipt.receipt_status}"}
++                  class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
++                >
+                   {receipt.receipt_status}
+                 </p>
+               </div>
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index d6bfd5a..8859f07 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -6,6 +6,68 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Recipient
+ 
++  test "browser routes expose stable automation selectors and accessible labels", %{
++    conn: conn
++  } do
++    conn
++    |> visit("/clubs")
++    |> assert_has("#clubs-index")
++    |> assert_has("#new-club-form[aria-label='Create a club']")
++    |> assert_has("#club-name-input[aria-label='Club name']")
++    |> assert_has("#create-club-button[aria-label='Create club']")
++    |> assert_has("#clubs[aria-label='Clubs']")
++    |> create_club("Kootenay Mountaineering Club")
++    |> assert_has(
++      "#clubs [data-testid='club-row'][data-club-name='Kootenay Mountaineering Club']"
++    )
++    |> assert_has(
++      "a[data-testid='club-link'][aria-label='Open club Kootenay Mountaineering Club']"
++    )
++    |> click_link("Kootenay Mountaineering Club")
++    |> assert_has("#back-to-clubs-link[aria-label='Back to clubs']")
++    |> assert_has("#new-person-form[aria-label='Create a person']")
++    |> assert_has("#person-name-input[aria-label='Person name']")
++    |> assert_has("#person-email-input[aria-label='Person email']")
++    |> assert_has("#create-person-button[aria-label='Create person']")
++    |> assert_has("#people[aria-label='People']")
++    |> assert_has("#add-member-form[aria-label='Add a member']")
++    |> assert_has("#member-person-select[aria-label='Person to add as member']")
++    |> assert_has("#add-member-button[aria-label='Add selected person as member']")
++    |> assert_has("#members[aria-label='Members']")
++    |> assert_has("#new-message-form[aria-label='Send a club message']")
++    |> assert_has("#message-sender-select[aria-label='Message sender']")
++    |> assert_has("#message-subject-input[aria-label='Message subject']")
++    |> assert_has("#message-body-input[aria-label='Message body']")
++    |> assert_has("#send-message-button[aria-label='Send club message']")
++    |> assert_has("#messages[aria-label='Messages']")
++    |> create_person("Alice")
++    |> assert_has("#people [data-testid='person-row'][data-person-name='Alice']")
++    |> add_member("Alice")
++    |> assert_has("#members [data-testid='member-row'][data-member-name='Alice']")
++    |> send_club_message("Alice", "Trip planning night", "Bring route ideas.")
++    |> assert_has(
++      "#messages [data-testid='message-row'][data-message-subject='Trip planning night']"
++    )
++    |> assert_has("a[data-testid='message-link'][aria-label='Open message Trip planning night']")
++    |> click_link("Trip planning night")
++    |> assert_has("#message-show")
++    |> assert_has("#back-to-club-link[aria-label='Back to club']")
++    |> assert_has("#addressed-recipients[aria-label='Addressed recipients']")
++    |> assert_has(
++      "#addressed-recipients [data-testid='addressed-recipient'][data-recipient-name='Alice']"
++    )
++    |> assert_has("#delivery-records[aria-label='Delivery records']")
++    |> assert_has(
++      "#delivery-records [data-testid='delivery-record'][data-recipient-name='Alice']"
++    )
++    |> assert_has(
++      "#delivery-records [data-testid='delivery-status'][data-delivery-status='sent']"
++    )
++    |> assert_has("#member-receipts[aria-label='Member receipt statuses']")
++    |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")
++    |> assert_has("#member-receipts [data-testid='receipt-status'][data-receipt-status='sent']")
++  end
++
+   test "developers can use browser routes to send a club message to active members", %{
+     conn: conn
+   } do
