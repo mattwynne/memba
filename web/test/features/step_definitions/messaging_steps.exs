@@ -84,6 +84,27 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
+  step "operators should see {word} delivery for {string} as {string}",
+       %{args: [recipient_name, subject, expected_status]} = context do
+    deliverability = operator_deliverability_for!(context, recipient_name, subject)
+
+    assert deliverability.status == expected_status
+
+    Map.put(context, :current_operator_deliverability, deliverability)
+  end
+
+  step "operators should see {word} delivery reason {string}",
+       %{args: [recipient_name, expected_reason]} = context do
+    deliverability =
+      Map.get_lazy(context, :current_operator_deliverability, fn ->
+        operator_deliverability_for!(context, recipient_name)
+      end)
+
+    assert deliverability.reason == expected_reason
+
+    context
+  end
+
   step "the message should be addressed to Alice, Bob, and Carol", context do
     expected_names = ["Alice", "Bob", "Carol"]
     deliveries = deliveries_for_last_message!(context)
@@ -244,8 +265,11 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   defp operator_deliverability_for!(context, recipient_name) do
+    operator_deliverability_for!(context, recipient_name, context.sent_message.subject)
+  end
+
+  defp operator_deliverability_for!(context, recipient_name, subject) do
     recipient_name = normalize_person_name(recipient_name)
-    subject = context.sent_message.subject
     message = fetch_from_context!(context, :messages, subject)
     recipient_id = fetch_from_context!(context, :people, recipient_name)
 
