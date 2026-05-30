@@ -1,6 +1,6 @@
 ---
-name: implementation-codex
-description: General-purpose implementation agent using OpenAI Codex; can edit repository files, run tests, and report results
+name: general
+description: General-purpose subagent using OpenAI Codex; can edit repository files, run tests, and report results
 model: openai-codex/gpt-5.5
 tools: read, bash, edit, write
 ---
