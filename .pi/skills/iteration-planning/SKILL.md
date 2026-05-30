@@ -175,16 +175,18 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 
 ## Submitting to Fabro
 
-Submit the saved plan with the project's `iteration-deliver` workflow after committing and pushing the planning artifacts. The workflow starts with plan validation, and only a READY verdict flows onward to implementation and post-merge review. The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
+Submit the saved plan with the project's `iteration-deliver` workflow after committing and pushing the planning artifacts. The workflow starts with plan validation. A READY verdict marks the plan `validated`; implementation and review continue only in delivery mode and only when the implementation WIP slot is clear. The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
+
+To validate a plan without starting implementation, even while another iteration is active:
 
 ```bash
-fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md -I mode=validate_only
 ```
 
-If Matt wants a validate-only check, run `plan-validation` manually instead:
+To validate and continue to implementation when the WIP slot is clear:
 
 ```bash
-fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md -I mode=deliver
 ```
 
 If the local Fabro server is unavailable or the command fails before creating a run:
@@ -199,6 +201,11 @@ If deliver stops at `validation:not-ready`:
 2. Ask Matt one question at a time to resolve them.
 3. Edit, commit, and push the plan.
 4. Re-run `iteration-deliver`.
+
+If deliver reports `validation:validated` in validate-only mode:
+
+1. Report the plan path and validation run ID/URL.
+2. Explain that implementation has not started and can be launched later with `mode=deliver`.
 
 If deliver reports validation READY / starts implementation:
 
