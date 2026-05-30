@@ -1,7 +1,7 @@
 # App substrate for browser-facing member behaviour
 
 Date: 2026-05-29
-Status: ready-for-review
+Status: merged
 
 ## Goal
 
