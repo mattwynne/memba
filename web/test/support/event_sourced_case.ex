@@ -32,6 +32,13 @@ defmodule Memba.EventSourcedCase do
   end
 
   setup tags do
+    setup_event_sourced_sandbox(tags)
+  end
+
+  @doc """
+  Set up database and EventStore isolation for tests that exercise event-sourced flows.
+  """
+  def setup_event_sourced_sandbox(tags) do
     if tags[:async] do
       raise "Memba.EventSourcedCase resets shared EventStore state and cannot be used with async: true"
     end
