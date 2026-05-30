@@ -12,7 +12,7 @@ green than before.
 | 002 | 2026-05-28 | merged | Membership model | [plan](002-membership-model/plan.md) |
 | 003 | 2026-05-28 | merged | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
-| 005 | 2026-05-29 | ready-for-review | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
+| 005 | 2026-05-29 | merged | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 | 006 | 2026-05-29 | ready | Deliveries overview for operator deliverability | [plan](006-deliveries-overview/plan.md) |
 | 007 | 2026-05-30 | validated | Browser Cucumber automation for member-facing acceptance | [plan](007-browser-cucumber-automation/plan.md) |
 
