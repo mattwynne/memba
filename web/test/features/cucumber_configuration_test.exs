@@ -87,52 +87,57 @@ defmodule Memba.CucumberConfigurationTest do
 
   @operator_background_steps [
     {"Given", "Kootenay Mountaineering Club is a club", 6},
-    {"And", "Alice and Bob are people", 7},
-    {"And", "Alice and Bob are members of Kootenay Mountaineering Club", 8},
-    {"And",
-     "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-     9}
+    {"And", "Alice, Bob, and Carol are people", 7},
+    {"And", "Alice, Bob, and Carol are members of Kootenay Mountaineering Club", 8}
   ]
 
   @operator_scenarios [
-    {"A delivered email is visible to operators",
+    {"Deliveries from different messages appear together",
      [
-       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 14},
-       {"Then", "Bob's operator deliverability status should be \"delivered\"", 15}
-     ]},
-    {"A delayed delivery is visible to operators",
-     [
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        13},
+       {"And",
+        "Alice has sent the message \"Avalanche bulletin\" to Kootenay Mountaineering Club members",
+        14},
        {"When",
         "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
-        18},
-       {"Then", "Bob's operator deliverability status should be \"delayed\"", 19},
+        15},
        {"And",
-        "Bob's operator deliverability reason should be \"recipient server is temporarily unavailable\"",
-        20}
+        "Carol's email for \"Avalanche bulletin\" is reported as bounced because \"mailbox does not exist\"",
+        16},
+       {"Then", "operators should see Bob's delivery for \"Trip planning night\" as \"delayed\"",
+        17},
+       {"And",
+        "operators should see Bob's delivery reason \"recipient server is temporarily unavailable\"",
+        18},
+       {"And", "operators should see Carol's delivery for \"Avalanche bulletin\" as \"bounced\"",
+        19},
+       {"And", "operators should see Carol's delivery reason \"mailbox does not exist\"", 20}
      ]},
-    {"A bounced delivery is visible to operators",
+    {"Spam complaints keep the provider reason",
      [
-       {"When",
-        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
         23},
-       {"Then", "Bob's operator deliverability status should be \"bounced\"", 24},
-       {"And", "Bob's operator deliverability reason should be \"mailbox does not exist\"", 25}
-     ]},
-    {"A spam complaint is visible to operators",
-     [
        {"When",
         "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
-        28},
-       {"Then", "Bob's operator deliverability status should be \"spam complaint\"", 29},
+        24},
+       {"Then",
+        "operators should see Bob's delivery for \"Trip planning night\" as \"spam complaint\"",
+        25},
        {"And",
-        "Bob's operator deliverability reason should be \"recipient marked the message as spam\"",
-        30}
+        "operators should see Bob's delivery reason \"recipient marked the message as spam\"", 26}
      ]},
-    {"An opened email is visible to operators",
+    {"Opens are visible after delivery",
      [
-       {"Given", "Bob's email for \"Trip planning night\" has been reported as delivered", 33},
-       {"When", "Bob opens the email for \"Trip planning night\"", 34},
-       {"Then", "Bob's operator deliverability status should be \"opened\"", 35}
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        29},
+       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 30},
+       {"When", "Bob opens the email for \"Trip planning night\"", 31},
+       {"Then", "operators should see Bob's delivery for \"Trip planning night\" as \"opened\"",
+        32}
      ]}
   ]
 
@@ -142,9 +147,7 @@ defmodule Memba.CucumberConfigurationTest do
     "Alice, Bob, and Carol are people",
     "Pat is a person",
     "Alice, Bob, and Carol are members of Kootenay Mountaineering Club",
-    "Pat is a member of Nelson Paddling Club",
-    "Alice and Bob are people",
-    "Alice and Bob are members of Kootenay Mountaineering Club"
+    "Pat is a member of Nelson Paddling Club"
   ]
 
   @required_member_message_scenario_steps for {_scenario_name, steps} <-
@@ -168,6 +171,8 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} receipt status for {string} should be {string}",
     "{word} operator deliverability status should be {string}",
     "{word} operator deliverability reason should be {string}",
+    "operators should see {word} delivery for {string} as {string}",
+    "operators should see {word} delivery reason {string}",
     "the message should be addressed to Alice, Bob, and Carol",
     "the message should not be addressed to {word}",
     "each addressed member should have a separate delivery record",
@@ -245,7 +250,8 @@ defmodule Memba.CucumberConfigurationTest do
 
       assert_active_member_names(operator_context, "Kootenay Mountaineering Club", [
         "Alice",
-        "Bob"
+        "Bob",
+        "Carol"
       ])
 
       operator_context

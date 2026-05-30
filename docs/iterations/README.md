@@ -12,7 +12,7 @@ green than before.
 | 002 | 2026-05-28 | merged | Membership model | [plan](002-membership-model/plan.md) |
 | 003 | 2026-05-28 | merged | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
-| 005 | 2026-05-29 | ready | Browser acceptance harness for member-facing behaviour | [plan](005-browser-acceptance-harness/plan.md) |
+| 005 | 2026-05-29 | ready-for-review | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 | 006 | 2026-05-29 | ready | Deliveries overview for operator deliverability | [plan](006-deliveries-overview/plan.md) |
 | 007 | 2026-05-30 | validated | Browser Cucumber automation for member-facing acceptance | [plan](007-browser-cucumber-automation/plan.md) |
 
@@ -25,4 +25,4 @@ Status notes:
 Shared acceptance feature files used across these iterations:
 
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature)
-- [`operator_email_deliverability.feature`](../../acceptance-tests/features/operator_email_deliverability.feature) (iteration 006 remodels this as a deliveries overview across messages and removes the browser deferral)
+- [`operator_email_deliverability.feature`](../../acceptance-tests/features/operator_email_deliverability.feature) (iteration 006 remodels this as a deliveries overview across messages; browser Cucumber automation for iteration 005 is deferred)
