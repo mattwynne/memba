@@ -1,0 +1,86 @@
+diff --git a/web/lib/memba/messaging/delivery_provider.ex b/web/lib/memba/messaging/delivery_provider.ex
+index 56e3fd1..becf9f9 100644
+--- a/web/lib/memba/messaging/delivery_provider.ex
++++ b/web/lib/memba/messaging/delivery_provider.ex
+@@ -18,6 +18,10 @@ defmodule Memba.Messaging.DeliveryProvider do
+   end
+ 
+   defp provider do
+-    Application.get_env(:memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake)
++    Application.get_env(
++      :memba,
++      :messaging_delivery_provider,
++      Memba.Messaging.DeliveryProviders.Fake
++    )
+   end
+ end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index 926aad4..3ee939e 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -107,8 +107,11 @@ defmodule Memba.Messaging.Message do
+   defp normalize_each_recipient(recipients) do
+     Enum.reduce_while(recipients, {:ok, []}, fn recipient, {:ok, normalized_recipients} ->
+       case normalize_recipient(recipient) do
+-        {:ok, normalized_recipient} -> {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
+-        {:error, reason} -> {:halt, {:error, reason}}
++        {:ok, normalized_recipient} ->
++          {:cont, {:ok, [normalized_recipient | normalized_recipients]}}
++
++        {:error, reason} ->
++          {:halt, {:error, reason}}
+       end
+     end)
+     |> case do
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index efa08ac..7566293 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -16,7 +16,8 @@ defmodule Memba.CucumberConfigurationTest do
+   ]
+ 
+   @member_message_scenario_steps [
+-    {"When", "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++    {"When",
++     "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+      16},
+     {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
+     {"And", "the message should not be addressed to Pat", 18},
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index ceeacc5..d94592c 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -112,13 +112,19 @@ defmodule Memba.Messaging.MessageTest do
+       assert {:error, :duplicate_recipient} =
+                Message.execute(%Message{}, %SendMessage{
+                  valid_command
+-                 | recipients: [recipient, %Recipient{recipient | delivery_id: Ecto.UUID.generate()}]
++                 | recipients: [
++                     recipient,
++                     %Recipient{recipient | delivery_id: Ecto.UUID.generate()}
++                   ]
+                })
+ 
+       assert {:error, :duplicate_delivery} =
+                Message.execute(%Message{}, %SendMessage{
+                  valid_command
+-                 | recipients: [recipient, %Recipient{recipient | person_id: Ecto.UUID.generate()}]
++                 | recipients: [
++                     recipient,
++                     %Recipient{recipient | person_id: Ecto.UUID.generate()}
++                   ]
+                })
+     end
+ 
+@@ -146,7 +152,10 @@ defmodule Memba.Messaging.MessageTest do
+         })
+ 
+       assert {:error, :already_sent} =
+-               Message.execute(message, %SendMessage{valid_send_message() | message_id: message_id})
++               Message.execute(message, %SendMessage{
++                 valid_send_message()
++                 | message_id: message_id
++               })
+     end
+   end
+ 
