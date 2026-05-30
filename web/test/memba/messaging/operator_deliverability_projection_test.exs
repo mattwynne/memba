@@ -172,7 +172,10 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
     assert is_nil(Messaging.get_operator_deliverability(nil))
     assert is_nil(Messaging.get_operator_deliverability("not-a-uuid"))
 
-    assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate(), Ecto.UUID.generate()))
+    assert is_nil(
+             Messaging.get_operator_deliverability(Ecto.UUID.generate(), Ecto.UUID.generate())
+           )
+
     assert is_nil(Messaging.get_operator_deliverability(nil, Ecto.UUID.generate()))
     assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate(), "not-a-uuid"))
 

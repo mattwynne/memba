@@ -165,7 +165,10 @@ defmodule Memba.Messaging do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
       OperatorDeliverabilityProjection
       |> where([deliverability], deliverability.message_id == ^message_id)
-      |> order_by([deliverability], asc: deliverability.recipient_name, asc: deliverability.recipient_id)
+      |> order_by([deliverability],
+        asc: deliverability.recipient_name,
+        asc: deliverability.recipient_id
+      )
       |> Repo.all()
     else
       :error -> []
