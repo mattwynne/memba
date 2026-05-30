@@ -1,0 +1,656 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index b4fa160..ed591f2 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add browser routes under the existing browser pipeline:
+ - [x] 003 Add `POST /webhooks/postmark` under an appropriate non-browser pipeline for webhook requests.
+ - [x] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
+-- [ ] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
++- [x] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
+ - [ ] 006 Build the Postmark webhook controller/handler to parse Postmark-style event payloads and call the public Messaging status-reporting functions.
+ - [ ] 007 Give important forms, controls, rows, and status displays stable IDs or accessible labels suitable for Playwright and PhoenixTest.
+ - [ ] 008 Update Playwright/Cucumber step definitions to drive the real LiveView routes for `homepage.feature` and `member_message_deliverability.feature`; delivery/open report steps should make HTTP requests to `POST /webhooks/postmark`.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 4e466e8..32b9016 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -78,6 +78,28 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  List projected clubs for the browser-facing membership flows.
++
++  Results are ordered by name and ID for stable browser/test output.
++  """
++  def list_clubs() do
++    Club
++    |> order_by([club], asc: club.name, asc: club.club_id)
++    |> Repo.all()
++  end
++
++  @doc """
++  List projected people for the browser-facing membership flows.
++
++  Results are ordered by name and ID for stable browser/test output.
++  """
++  def list_people() do
++    Person
++    |> order_by([person], asc: person.name, asc: person.person_id)
++    |> Repo.all()
++  end
++
+   @doc """
+   List active members of the given club for recipient resolution.
+ 
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 51446e9..5e0e2d9 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -106,6 +106,23 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  List projected messages sent to a club.
++
++  Invalid or missing club IDs return an empty list. Results are ordered by
++  insertion time and ID for stable browser/test output.
++  """
++  def list_messages_for_club(club_id) do
++    with {:ok, club_id} <- Ecto.UUID.cast(club_id) do
++      MessageProjection
++      |> where([message], message.club_id == ^club_id)
++      |> order_by([message], asc: message.inserted_at, asc: message.message_id)
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   @doc """
+   Fetch a projected recipient delivery read model by caller-generated UUID.
+ 
+diff --git a/web/lib/memba_web/live/clubs_live/index.ex b/web/lib/memba_web/live/clubs_live/index.ex
+index 54add67..eeb2bcd 100644
+--- a/web/lib/memba_web/live/clubs_live/index.ex
++++ b/web/lib/memba_web/live/clubs_live/index.ex
+@@ -1,11 +1,110 @@
+ defmodule MembaWeb.ClubsLive.Index do
+   use MembaWeb, :live_view
+ 
++  alias Memba.Membership
++
++  @empty_club %{"name" => ""}
++
++  @impl Phoenix.LiveView
++  def mount(_params, _session, socket) do
++    clubs = Membership.list_clubs()
++
++    {:ok,
++     socket
++     |> assign(:club_form, to_form(@empty_club, as: :club))
++     |> stream(:clubs, clubs, dom_id: &"club-#{&1.club_id}")}
++  end
++
++  @impl Phoenix.LiveView
++  def handle_event("create_club", %{"club" => club_params}, socket) do
++    attrs =
++      club_params
++      |> Map.take(["name"])
++      |> Map.put("club_id", Ecto.UUID.generate())
++
++    case Membership.create_club(attrs, consistency: :strong) do
++      :ok ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Club created")
++         |> assign(:club_form, to_form(@empty_club, as: :club))
++         |> stream(:clubs, Membership.list_clubs(), reset: true, dom_id: &"club-#{&1.club_id}")}
++
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Club created")
++         |> assign(:club_form, to_form(@empty_club, as: :club))
++         |> stream(:clubs, Membership.list_clubs(), reset: true, dom_id: &"club-#{&1.club_id}")}
++
++      {:error, reason} ->
++        {:noreply,
++         socket
++         |> put_flash(:error, "Could not create club: #{format_reason(reason)}")
++         |> assign(:club_form, to_form(club_params, as: :club))}
++    end
++  end
++
++  @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+     <Layouts.app flash={@flash}>
+-      <h1>Clubs</h1>
++      <main id="clubs-index" class="mx-auto max-w-5xl space-y-8 p-6">
++        <section class="space-y-2">
++          <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
++            Browser acceptance harness
++          </p>
++          <h1 class="text-3xl font-bold tracking-tight text-zinc-900">Clubs</h1>
++          <p class="text-zinc-600">
++            Create a club, then open it to add people, members, and club messages.
++          </p>
++        </section>
++
++        <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++          <h2 class="text-lg font-semibold text-zinc-900">Create a club</h2>
++
++          <.form
++            for={@club_form}
++            id="new-club-form"
++            class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end"
++            phx-submit="create_club"
++          >
++            <div class="flex-1">
++              <.input field={@club_form[:name]} label="Name" required />
++            </div>
++            <.button id="create-club-button" type="submit">Create club</.button>
++          </.form>
++        </section>
++
++        <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++          <h2 class="text-lg font-semibold text-zinc-900">Existing clubs</h2>
++
++          <div id="clubs" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++            <p id="clubs-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++              No clubs yet.
++            </p>
++            <div
++              :for={{dom_id, club} <- @streams.clubs}
++              id={dom_id}
++              data-testid="club-row"
++              class="flex items-center justify-between gap-4 py-3"
++            >
++              <div>
++                <.link
++                  navigate={~p"/clubs/#{club.club_id}"}
++                  class="font-medium text-blue-700 hover:text-blue-900"
++                >
++                  {club.name}
++                </.link>
++              </div>
++              <span class="text-xs text-zinc-500">{club.club_id}</span>
++            </div>
++          </div>
++        </section>
++      </main>
+     </Layouts.app>
+     """
+   end
++
++  defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
+ end
+diff --git a/web/lib/memba_web/live/clubs_live/show.ex b/web/lib/memba_web/live/clubs_live/show.ex
+index f7e1172..c069184 100644
+--- a/web/lib/memba_web/live/clubs_live/show.ex
++++ b/web/lib/memba_web/live/clubs_live/show.ex
+@@ -1,11 +1,302 @@
+ defmodule MembaWeb.ClubsLive.Show do
+   use MembaWeb, :live_view
+ 
++  alias Memba.Membership
++  alias Memba.Messaging
++
++  @empty_person %{"name" => "", "email" => ""}
++  @empty_membership %{"person_id" => ""}
++  @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
++
++  @impl Phoenix.LiveView
++  def mount(%{"club_id" => club_id}, _session, socket) do
++    club = Membership.get_club(club_id)
++    people = Membership.list_people()
++    members = Membership.list_active_members_of_club(club_id)
++    messages = Messaging.list_messages_for_club(club_id)
++
++    {:ok,
++     socket
++     |> assign(:club_id, club_id)
++     |> assign(:club, club)
++     |> assign_forms()
++     |> assign(:person_options, person_options(people))
++     |> assign(:member_options, member_options(members))
++     |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
++     |> stream(:members, members, dom_id: &"member-#{&1.id}")
++     |> stream(:messages, messages, dom_id: &"message-#{&1.message_id}")}
++  end
++
++  @impl Phoenix.LiveView
++  def handle_event("create_person", %{"person" => person_params}, socket) do
++    attrs =
++      person_params
++      |> Map.take(["name", "email"])
++      |> Map.put("person_id", Ecto.UUID.generate())
++
++    case Membership.create_person(attrs, consistency: :strong) do
++      :ok ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Person created")
++         |> assign(:person_form, to_form(@empty_person, as: :person))
++         |> refresh_people()}
++
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Person created")
++         |> assign(:person_form, to_form(@empty_person, as: :person))
++         |> refresh_people()}
++
++      {:error, reason} ->
++        {:noreply,
++         socket
++         |> put_flash(:error, "Could not create person: #{format_reason(reason)}")
++         |> assign(:person_form, to_form(person_params, as: :person))}
++    end
++  end
++
++  def handle_event("add_member", %{"membership" => membership_params}, socket) do
++    attrs =
++      membership_params
++      |> Map.take(["person_id"])
++      |> Map.merge(%{
++        "membership_id" => Ecto.UUID.generate(),
++        "club_id" => socket.assigns.club_id
++      })
++
++    case Membership.add_member(attrs, consistency: :strong) do
++      :ok ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Member added")
++         |> assign(:membership_form, to_form(@empty_membership, as: :membership))
++         |> refresh_members()}
++
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Member added")
++         |> assign(:membership_form, to_form(@empty_membership, as: :membership))
++         |> refresh_members()}
++
++      {:error, reason} ->
++        {:noreply,
++         socket
++         |> put_flash(:error, "Could not add member: #{format_reason(reason)}")
++         |> assign(:membership_form, to_form(membership_params, as: :membership))}
++    end
++  end
++
++  def handle_event("send_message", %{"message" => message_params}, socket) do
++    attrs =
++      message_params
++      |> Map.take(["sender_id", "subject", "body"])
++      |> Map.merge(%{
++        "message_id" => Ecto.UUID.generate(),
++        "club_id" => socket.assigns.club_id
++      })
++
++    case Messaging.send_club_message(attrs, consistency: :strong) do
++      :ok ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Message sent")
++         |> assign(:message_form, to_form(@empty_message, as: :message))
++         |> refresh_messages()}
++
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Message sent")
++         |> assign(:message_form, to_form(@empty_message, as: :message))
++         |> refresh_messages()}
++
++      {:error, reason} ->
++        {:noreply,
++         socket
++         |> put_flash(:error, "Could not send message: #{format_reason(reason)}")
++         |> assign(:message_form, to_form(message_params, as: :message))}
++    end
++  end
++
++  @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+     <Layouts.app flash={@flash}>
+-      <h1>Club</h1>
++      <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
++        <.link navigate={~p"/clubs"} class="text-sm font-medium text-blue-700 hover:text-blue-900">
++          ← Clubs
++        </.link>
++
++        <%= if @club do %>
++          <section class="space-y-2">
++            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
++            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
++            <p class="text-zinc-600">
++              Add people to this club, then send a message to the active members.
++            </p>
++          </section>
++
++          <div class="grid gap-6 lg:grid-cols-2">
++            <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++              <h2 class="text-lg font-semibold text-zinc-900">Create a person</h2>
++
++              <.form
++                for={@person_form}
++                id="new-person-form"
++                class="mt-4 space-y-4"
++                phx-submit="create_person"
++              >
++                <.input field={@person_form[:name]} label="Name" required />
++                <.input field={@person_form[:email]} label="Email" type="email" required />
++                <.button id="create-person-button" type="submit">Create person</.button>
++              </.form>
++
++              <div id="people" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
++                <p id="people-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++                  No people yet.
++                </p>
++                <div
++                  :for={{dom_id, person} <- @streams.people}
++                  id={dom_id}
++                  data-testid="person-row"
++                  class="py-3"
++                >
++                  <p class="font-medium text-zinc-900">{person.name}</p>
++                  <p class="text-sm text-zinc-500">{person.email}</p>
++                </div>
++              </div>
++            </section>
++
++            <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++              <h2 class="text-lg font-semibold text-zinc-900">Members</h2>
++
++              <.form
++                for={@membership_form}
++                id="add-member-form"
++                class="mt-4 space-y-4"
++                phx-submit="add_member"
++              >
++                <.input
++                  field={@membership_form[:person_id]}
++                  label="Person"
++                  type="select"
++                  prompt="Choose a person"
++                  options={@person_options}
++                  required
++                />
++                <.button id="add-member-button" type="submit">Add member</.button>
++              </.form>
++
++              <div id="members" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
++                <p id="members-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++                  No members yet.
++                </p>
++                <div
++                  :for={{dom_id, member} <- @streams.members}
++                  id={dom_id}
++                  data-testid="member-row"
++                  class="py-3"
++                >
++                  <p class="font-medium text-zinc-900">{member.name}</p>
++                  <p class="text-sm text-zinc-500">{member.email}</p>
++                </div>
++              </div>
++            </section>
++          </div>
++
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h2 class="text-lg font-semibold text-zinc-900">Send a club message</h2>
++
++            <.form
++              for={@message_form}
++              id="new-message-form"
++              class="mt-4 grid gap-4 lg:grid-cols-2"
++              phx-submit="send_message"
++            >
++              <.input
++                field={@message_form[:sender_id]}
++                label="Sender"
++                type="select"
++                prompt="Choose a sender"
++                options={@member_options}
++                required
++              />
++              <.input field={@message_form[:subject]} label="Subject" required />
++              <div class="lg:col-span-2">
++                <.input field={@message_form[:body]} label="Body" type="textarea" required />
++              </div>
++              <div class="lg:col-span-2">
++                <.button id="send-message-button" type="submit">Send message</.button>
++              </div>
++            </.form>
++
++            <div id="messages" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
++              <p id="messages-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++                No messages yet.
++              </p>
++              <div
++                :for={{dom_id, message} <- @streams.messages}
++                id={dom_id}
++                data-testid="message-row"
++                class="py-3"
++              >
++                <.link
++                  navigate={~p"/messages/#{message.message_id}"}
++                  class="font-medium text-blue-700 hover:text-blue-900"
++                >
++                  {message.subject}
++                </.link>
++                <p class="mt-1 text-sm text-zinc-600">{message.body}</p>
++              </div>
++            </div>
++          </section>
++        <% else %>
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h1 class="text-2xl font-bold text-zinc-900">Club not found</h1>
++            <p class="mt-2 text-zinc-600">No projected club exists for this URL.</p>
++          </section>
++        <% end %>
++      </main>
+     </Layouts.app>
+     """
+   end
++
++  defp assign_forms(socket) do
++    socket
++    |> assign(:person_form, to_form(@empty_person, as: :person))
++    |> assign(:membership_form, to_form(@empty_membership, as: :membership))
++    |> assign(:message_form, to_form(@empty_message, as: :message))
++  end
++
++  defp refresh_people(socket) do
++    people = Membership.list_people()
++
++    socket
++    |> assign(:person_options, person_options(people))
++    |> stream(:people, people, reset: true, dom_id: &"person-#{&1.person_id}")
++  end
++
++  defp refresh_members(socket) do
++    members = Membership.list_active_members_of_club(socket.assigns.club_id)
++
++    socket
++    |> assign(:member_options, member_options(members))
++    |> stream(:members, members, reset: true, dom_id: &"member-#{&1.id}")
++  end
++
++  defp refresh_messages(socket) do
++    stream(socket, :messages, Messaging.list_messages_for_club(socket.assigns.club_id),
++      reset: true,
++      dom_id: &"message-#{&1.message_id}"
++    )
++  end
++
++  defp person_options(people), do: Enum.map(people, &{&1.name, &1.person_id})
++
++  defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
++
++  defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
+ end
+diff --git a/web/lib/memba_web/live/messages_live/show.ex b/web/lib/memba_web/live/messages_live/show.ex
+index 7029a78..67c29fc 100644
+--- a/web/lib/memba_web/live/messages_live/show.ex
++++ b/web/lib/memba_web/live/messages_live/show.ex
+@@ -1,10 +1,110 @@
+ defmodule MembaWeb.MessagesLive.Show do
+   use MembaWeb, :live_view
+ 
++  alias Memba.Messaging
++
++  @impl Phoenix.LiveView
++  def mount(%{"message_id" => message_id}, _session, socket) do
++    message = Messaging.get_message(message_id)
++    deliveries = Messaging.list_recipient_deliveries(message_id)
++    receipts = Messaging.list_member_receipts(message_id)
++
++    {:ok,
++     socket
++     |> assign(:message_id, message_id)
++     |> assign(:message, message)
++     |> stream(:addressed_recipients, deliveries,
++       dom_id: &"addressed-recipient-#{&1.delivery_id}"
++     )
++     |> stream(:delivery_records, deliveries, dom_id: &"delivery-record-#{&1.delivery_id}")
++     |> stream(:member_receipts, receipts, dom_id: &"member-receipt-#{&1.delivery_id}")}
++  end
++
++  @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+     <Layouts.app flash={@flash}>
+-      <h1>Message</h1>
++      <main id="message-show" class="mx-auto max-w-6xl space-y-8 p-6">
++        <%= if @message do %>
++          <section class="space-y-2">
++            <.link
++              navigate={~p"/clubs/#{@message.club_id}"}
++              class="text-sm font-medium text-blue-700 hover:text-blue-900"
++            >
++              ← Club
++            </.link>
++            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Message</p>
++            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@message.subject}</h1>
++            <p class="max-w-3xl whitespace-pre-wrap text-zinc-700">{@message.body}</p>
++          </section>
++
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h2 class="text-lg font-semibold text-zinc-900">Addressed recipients</h2>
++            <div id="addressed-recipients" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++              <p id="addressed-recipients-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++                No addressed recipients.
++              </p>
++              <div
++                :for={{dom_id, delivery} <- @streams.addressed_recipients}
++                id={dom_id}
++                data-testid="addressed-recipient"
++                data-recipient-name={delivery.recipient_name}
++                class="py-3"
++              >
++                <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
++                <p class="text-sm text-zinc-500">{delivery.recipient_address}</p>
++              </div>
++            </div>
++          </section>
++
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h2 class="text-lg font-semibold text-zinc-900">Delivery records</h2>
++            <div id="delivery-records" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++              <p id="delivery-records-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++                No delivery records.
++              </p>
++              <div
++                :for={{dom_id, delivery} <- @streams.delivery_records}
++                id={dom_id}
++                data-testid="delivery-record"
++                data-recipient-name={delivery.recipient_name}
++                class="grid gap-2 py-3 sm:grid-cols-4"
++              >
++                <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
++                <p class="text-sm text-zinc-500">{delivery.recipient_address}</p>
++                <p class="text-sm text-zinc-500">{delivery.channel}</p>
++                <p class="text-sm font-medium text-zinc-700">{delivery.status}</p>
++              </div>
++            </div>
++          </section>
++
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h2 class="text-lg font-semibold text-zinc-900">Member receipt statuses</h2>
++            <div id="member-receipts" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
++              <p id="member-receipts-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
++                No member receipts.
++              </p>
++              <div
++                :for={{dom_id, receipt} <- @streams.member_receipts}
++                id={dom_id}
++                data-testid="member-receipt"
++                data-recipient-name={receipt.recipient_name}
++                class="flex items-center justify-between gap-4 py-3"
++              >
++                <p class="font-medium text-zinc-900">{receipt.recipient_name}</p>
++                <p class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">
++                  {receipt.receipt_status}
++                </p>
++              </div>
++            </div>
++          </section>
++        <% else %>
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h1 class="text-2xl font-bold text-zinc-900">Message not found</h1>
++            <p class="mt-2 text-zinc-600">No projected message exists for this URL.</p>
++          </section>
++        <% end %>
++      </main>
+     </Layouts.app>
+     """
+   end
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index a2ec271..6dbd33f 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -10,6 +10,8 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def create_person("
+     assert source =~ "def add_member("
+     assert source =~ "def get_club("
++    assert source =~ "def list_clubs("
++    assert source =~ "def list_people("
+     assert source =~ "def list_active_members_of_club("
+ 
+     list_functions =
+@@ -17,7 +19,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+       |> Regex.scan(source, capture: :all_but_first)
+       |> List.flatten()
+ 
+-    assert list_functions == ["list_active_members_of_club"]
++    assert list_functions == ["list_clubs", "list_people", "list_active_members_of_club"]
+ 
+     create_functions =
+       ~r/\bdef\s+(create_[a-zA-Z0-9_]+)\b/
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 7ee0634..9f406a8 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -8,6 +8,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+ 
+     assert source =~ "def send_club_message("
+     assert source =~ "def get_message("
++    assert source =~ "def list_messages_for_club("
+     assert source =~ "def get_recipient_delivery("
+     assert source =~ "def get_member_receipt("
+     assert source =~ "def get_operator_deliverability("
+@@ -21,6 +22,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+       |> List.flatten()
+ 
+     assert list_functions == [
++             "list_messages_for_club",
+              "list_recipient_deliveries",
+              "list_member_receipts",
+              "list_operator_deliverabilities"
