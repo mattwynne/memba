@@ -19,7 +19,7 @@ Create a task for each item and complete them in order:
 
 1. **Explore project context** — read relevant project docs, current plans, ADRs, recent commits, and code only as needed to understand the iteration.
 2. **Interview Matt** — ask clarifying questions one at a time about goal, scope, acceptance criteria, business decisions, implementation shape, and validation.
-3. **Propose 2-3 iteration slices** — include trade-offs and recommend the smallest useful slice.
+3. **Size and slice** — decide whether the work is one shippable slice or several. If it is more than one, split it into separate iteration plans before going further (see Sizing and Slicing).
 4. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
 5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration. Maintain `docs/iterations/README.md` as an index.
 6. **Publish planning artifacts** — commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any workflow/skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
@@ -32,7 +32,7 @@ Create a task for each item and complete them in order:
 digraph iteration_planning {
     "Explore project context" [shape=box];
     "Interview Matt" [shape=box];
-    "Propose iteration slices" [shape=box];
+    "Size and slice" [shape=box];
     "Present draft plan" [shape=box];
     "Matt approves draft?" [shape=diamond];
     "Write plan file" [shape=box];
@@ -43,8 +43,8 @@ digraph iteration_planning {
     "Stop: validated plan" [shape=doublecircle];
 
     "Explore project context" -> "Interview Matt";
-    "Interview Matt" -> "Propose iteration slices";
-    "Propose iteration slices" -> "Present draft plan";
+    "Interview Matt" -> "Size and slice";
+    "Size and slice" -> "Present draft plan";
     "Present draft plan" -> "Matt approves draft?";
     "Matt approves draft?" -> "Interview Matt" [label="no / unclear"];
     "Matt approves draft?" -> "Write plan file" [label="yes"];
@@ -75,7 +75,7 @@ Cover these topics:
 
 - **Goal** — what should be true after the iteration that is not true now?
 - **Beneficiary** — who benefits: club admin, member, developer/operator, or another actor?
-- **Smallest useful slice** — what is the smallest deliverable that changes capability?
+- **Smallest useful slice** — is this one rule or one piece of engineering, or several? (see Sizing and Slicing)
 - **Scope boundaries** — what is explicitly out of scope?
 - **Acceptance criteria** — concrete behaviours, examples, edge cases, permissions, and error states.
 - **Business decisions** — domain, policy, copy, workflow, pricing, privacy, or support questions.
@@ -84,15 +84,36 @@ Cover these topics:
 
 Stop interviewing when you can write a plan that an engineer could start without inventing material product or technical decisions.
 
-## Iteration Slice Options
+## Sizing and Slicing
 
-Before drafting the plan, propose 2-3 possible slices:
+An iteration should be **one shippable slice**: either one behaviour rule, or
+one piece of engineering. Before drafting the plan, check the size and split
+if needed.
 
-- Lead with the recommended smallest useful slice.
-- Explain what each slice delivers.
-- Explain what each slice defers.
-- Call out major risks and unknowns.
-- Ask Matt which slice to use.
+- **Classify the work.** Is it behaviour-facing (changes what a user can
+  observe) or technical/engineering (enables or restructures, with no new
+  user-observable behaviour)?
+- **Find the seams.** For behaviour-facing work, each Rule from example
+  mapping is normally its own shippable slice, with that rule's examples as
+  the slice's acceptance scenarios. For technical work, slice by capability.
+- **Foundation first.** When behaviour needs architecture that does not exist
+  yet (e.g. an event store before the first message can be sent), make that
+  enabling architecture its own earlier technical iteration.
+- **Split when it is more than one slice.** If the work spans several rules or
+  bundles new architecture with behaviour, write it as several iteration
+  plans, each independently shippable, rather than one big plan. A good slice
+  leaves the build green with strictly more scenarios passing — or, for a
+  technical slice, the same scenarios but a proven capability.
+
+If you split a plan, replace it with the child plans (no parent/epic doc) and
+number them sequentially before any of them is implemented.
+
+Worked example: the original "member message deliverability" plan bundled the
+whole event-sourced stack, two contexts, and all delivery statuses into 18
+tasks, and repeatedly failed to implement. It was split into four shippable
+iterations — `001` event-sourced foundation (technical), then `002`
+membership, `003` messaging, `004` statuses and views (one rule each). See
+`docs/iterations/`.
 
 ## Plan Format
 
@@ -182,7 +203,7 @@ If Fabro completes with READY:
 ## Key Principles
 
 - One question at a time.
-- Prefer the smallest useful iteration.
+- One iteration is one slice: one rule, or one piece of engineering. Split anything bigger.
 - Make business decisions explicit.
 - Make technical decisions explicit enough to start.
 - Make acceptance criteria testable.
