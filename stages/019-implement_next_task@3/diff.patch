@@ -1,0 +1,77 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index 3240d8e..d3b6e62 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Use TDD with PhoenixTest as the preferred high-level LiveView test API. Start by writing failing PhoenixTest coverage for the real route flows listed in the acceptance criteria.
+ - [x] 002 Add browser routes under the existing browser pipeline:
+-- [ ] 003 Add `POST /webhooks/postmark` under an appropriate non-browser pipeline for webhook requests.
++- [x] 003 Add `POST /webhooks/postmark` under an appropriate non-browser pipeline for webhook requests.
+ - [ ] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
+ - [ ] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
+ - [ ] 006 Build the Postmark webhook controller/handler to parse Postmark-style event payloads and call the public Messaging status-reporting functions.
+diff --git a/web/lib/memba_web/controllers/postmark_webhook_controller.ex b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+new file mode 100644
+index 0000000..bca382c
+--- /dev/null
++++ b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+@@ -0,0 +1,9 @@
++defmodule MembaWeb.PostmarkWebhookController do
++  use MembaWeb, :controller
++
++  def create(conn, _params) do
++    conn
++    |> put_status(:not_implemented)
++    |> json(%{errors: %{detail: "Postmark webhook handler is not implemented yet"}})
++  end
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 22450bf..08df238 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -24,10 +24,11 @@ defmodule MembaWeb.Router do
+     live "/messages/:message_id", MessagesLive.Show
+   end
+ 
+-  # Other scopes may use custom stacks.
+-  # scope "/api", MembaWeb do
+-  #   pipe_through :api
+-  # end
++  scope "/webhooks", MembaWeb do
++    pipe_through :api
++
++    post "/postmark", PostmarkWebhookController, :create
++  end
+ 
+   # Enable LiveDashboard and Swoosh mailbox preview in development
+   if Application.compile_env(:memba, :dev_routes) do
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 577449d..437114f 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -22,6 +22,24 @@ defmodule MembaWeb.RouterTest do
+     end
+   end
+ 
++  describe "webhook routes" do
++    test "routes Postmark webhook requests through the json api pipeline" do
++      assert %{
++               path_params: %{},
++               pipe_through: [:api],
++               plug: MembaWeb.PostmarkWebhookController,
++               plug_opts: :create,
++               route: "/webhooks/postmark"
++             } =
++               Phoenix.Router.route_info(
++                 MembaWeb.Router,
++                 "POST",
++                 "/webhooks/postmark",
++                 "localhost"
++               )
++    end
++  end
++
+   defp assert_live_route(path, route_pattern, live_view, path_params) do
+     assert %{
+              pipe_through: [:browser],
