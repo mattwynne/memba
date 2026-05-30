@@ -52,7 +52,7 @@ The existing subagents were read-only review agents:
 
 They correctly refused to edit files. We added a new project-local implementation agent:
 
-- `.pi/agents/implementation-codex.md`
+- `.pi/agents/general.md`
 
 This agent can edit repository files and run validation, while preserving unrelated working-tree changes and avoiding commits unless requested.
 
