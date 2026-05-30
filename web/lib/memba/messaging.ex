@@ -22,6 +22,8 @@ defmodule Memba.Messaging do
 
   import Ecto.Query
 
+  @status_report_dispatch_opts [consistency: :strong]
+
   @doc """
   Send a message to the active members of a club.
 
@@ -41,7 +43,7 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient delivery was accepted by the recipient server.
   """
-  def report_delivery_delivered(attrs, dispatch_opts \\ [])
+  def report_delivery_delivered(attrs, dispatch_opts \\ @status_report_dispatch_opts)
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- report_delivery_delivered_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
@@ -52,7 +54,7 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient delivery was temporarily delayed.
   """
-  def report_delivery_delayed(attrs, dispatch_opts \\ [])
+  def report_delivery_delayed(attrs, dispatch_opts \\ @status_report_dispatch_opts)
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- report_delivery_delayed_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
@@ -63,7 +65,7 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient delivery bounced.
   """
-  def report_delivery_bounced(attrs, dispatch_opts \\ [])
+  def report_delivery_bounced(attrs, dispatch_opts \\ @status_report_dispatch_opts)
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- report_delivery_bounced_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
@@ -74,7 +76,7 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient marked a delivery as spam.
   """
-  def report_delivery_spam_complaint(attrs, dispatch_opts \\ [])
+  def report_delivery_spam_complaint(attrs, dispatch_opts \\ @status_report_dispatch_opts)
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- report_delivery_spam_complaint_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
@@ -85,7 +87,7 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient opened a delivery.
   """
-  def report_delivery_opened(attrs, dispatch_opts \\ [])
+  def report_delivery_opened(attrs, dispatch_opts \\ @status_report_dispatch_opts)
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- report_delivery_opened_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
