@@ -10,5 +10,5 @@
 - [x] 008 Update Playwright/Cucumber step definitions to drive the real LiveView routes for `homepage.feature` and `member_message_deliverability.feature`; delivery/open report steps should make HTTP requests to `POST /webhooks/postmark`.
 - [x] 009 Add `@todo-web` tags to operator deliverability scenarios that are intentionally not browser-backed in this iteration.
 - [x] 010 Configure `acceptance-tests/cucumber.js` so the default browser Cucumber command uses `tags: "not @todo-web"`.
-- [ ] 011 Verify the Elixir/domain acceptance path used by `dev check` still runs every shared scenario regardless of `@todo-web` tags.
+- [x] 011 Verify the Elixir/domain acceptance path used by `dev check` still runs every shared scenario regardless of `@todo-web` tags.
 - [ ] 012 Run the browser acceptance suite and `dev check`, fixing any issues.
