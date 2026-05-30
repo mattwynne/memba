@@ -14,7 +14,7 @@ green than before.
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
 | 005 | 2026-05-29 | ready | Browser acceptance harness for member-facing behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 | 006 | 2026-05-29 | ready | Deliveries overview for operator deliverability | [plan](006-deliveries-overview/plan.md) |
-| 007 | 2026-05-30 | ready | Browser Cucumber automation for member-facing acceptance | [plan](007-browser-cucumber-automation/plan.md) |
+| 007 | 2026-05-30 | validated | Browser Cucumber automation for member-facing acceptance | [plan](007-browser-cucumber-automation/plan.md) |
 
 Status notes:
 
