@@ -7,7 +7,7 @@ description: Pick the next ready iteration plan from docs/iterations and execute
 
 ## Overview
 
-Pick the next ready iteration from `docs/iterations/README.md`, submit it to the project's Fabro iteration-implementation workflow, and monitor the run until it is complete or blocked.
+Manual escape hatch: pick the next ready iteration from `docs/iterations/README.md`, submit it directly to the project's Fabro iteration-implementation workflow, and monitor the run until it is complete or blocked. Normal delivery should use the `iteration-deliver` skill/workflow so validation, implementation, review, and status finalization are orchestrated together.
 
 The workflow is intentionally test-first-at-runtime:
 

@@ -1,7 +1,7 @@
 # Kaizen: nest validate→implement→review into one iteration-deliver workflow
 
 Date: 2026-05-29
-Status: proposed
+Status: implemented
 
 > Builds on the trunk-based delivery model in
 > `2026-05-29-deliver-iterations-by-merging-to-main.md` (implementation merges to

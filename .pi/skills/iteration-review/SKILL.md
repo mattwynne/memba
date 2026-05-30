@@ -7,7 +7,7 @@ description: Run the project's Fabro iteration-review workflow for a completed i
 
 ## Overview
 
-Review a completed implementation of an iteration plan by running the project's Fabro iteration-review workflow in an isolated worktree. The workflow reviews the implementation branch against its base branch, without switching the main checkout and without disturbing other agents.
+Manual escape hatch: review a completed implementation of an iteration plan by running the project's Fabro iteration-review workflow in an isolated worktree. Normal delivery should use the `iteration-deliver` workflow, which runs review post-merge as a child run. This skill remains for manual reruns and resume scenarios.
 
 <HARD-GATE>
 Do not review or modify application code directly as part of this skill. Do not switch the main checkout's branch. Do not edit application code, migrations, tests, acceptance feature files, step definitions, UI, or production docs. This skill may read iteration metadata and execute the committed review workflow. If required metadata is missing, ask Matt for the missing branch/PR/base information or, with explicit approval, record it in the iteration folder.
