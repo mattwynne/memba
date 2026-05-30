@@ -668,7 +668,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-30T08:04:22.721779824Z",
-  "last_event_at": "2026-05-30T08:08:11.279153804Z",
+  "last_event_at": "2026-05-30T08:08:14.665343441Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2152,9 +2152,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 119,
       "checkpoint": {
-        "timestamp": "2026-05-30T08:08:11.464133124Z",
+        "timestamp": "2026-05-30T08:08:14.585136806Z",
         "current_node": "read_updated_plan",
         "completed_nodes": [
           "start",
@@ -2169,36 +2169,376 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.read_plan.current_node": "gemini_review",
+          "thread.synthesis_gate.current_node": "codex_update",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "failure_signature": "",
+          "codex_review_blocking_gap_count": 0,
+          "claude_review_blocking_gaps": "No specification for null/empty recipient_name or recipient_email CSV representation",
+          "gemini_review_required_edits": "None",
+          "claude_review_decision": "NOT READY",
+          "claude_review_required_edits": "Add AC for null/empty recipient data handling; Add AC for zero-recipient case; Add AC for filename and headers; Specify exact module/function location",
+          "claude_review_confidence": "Medium",
+          "gemini_review_decision": "READY",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.gemini_review": 0,
+          "internal.run_id": "01KSVYK42DXWJFAT7PTYF6DBK8",
+          "plan_needs_fix": true,
+          "internal.retry_count.synthesis_gate": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "response.synthesize": "{\n  \"provisional_decision\": \"OBVIOUS FIXES NEEDED\",\n  \"reviewer_decision_table\": [\n    {\n      \"reviewer\": \"Gemini\",\n      \"decision\": \"READY\",\n      \"confidence\": \"High\",\n      \"blocking_gaps_count\": 0,\n      \"notes\": \"Found no blocking gaps or required edits.\"\n    },\n    {\n      \"reviewer\": \"Claude\",\n      \"decision\": \"NOT READY\",\n      \"confidence\": \"Medium\",\n      \"blocking_gaps_count\": 1,\n      \"notes\": \"Flagged missing specification for null/empty recipient_name or recipient_email representation. Also suggested adding filename, headers, zero-recipient behavior, and clearer module/function location.\"\n    },\n    {\n      \"reviewer\": \"Codex/GPT\",\n      \"decision\": \"READY\",\n      \"confidence\": \"Medium\",\n      \"blocking_gaps_count\": 0,\n      \"notes\": \"Found no blocking gaps or required edits.\"\n    }\n  ],\n  \"consensus_findings\": [\n    \"All three reviewer decisions and blocking-gap summaries are visible, so validation evidence is complete.\",\n    \"The core capability is clear: add a deterministic CSV delivery receipt download for a single already-sent message.\",\n    \"The scope is appropriately small and excludes broader reporting, background jobs, permissions changes, and domain behavior changes.\",\n    \"The main acceptance criteria are testable: exact columns, row count, ordering, status mappings, non-addressed exclusion, unknown-message 404, and dev check.\",\n    \"Two reviewers considered the plan ready; one reviewer found edge-case specification gaps. The identified issues are fixable by clarifying already-implied export behavior rather than requiring new product or architecture decisions.\"\n  ],\n  \"reviewer_objections_addressed\": [\n    {\n      \"objection\": \"No specification for null/empty recipient_name or recipient_email CSV representation.\",\n      \"resolution\": \"Accepted as a real clarity gap, but downgraded from needing Matt to an obvious fix. CSV export fields have no native null representation, and for this fixed-column export the least surprising/testable behavior is to render nil or empty source values as an empty CSV field. This does not require a new product policy decision.\"\n    }\n  ],\n  \"corrected_findings\": [\n    {\n      \"finding\": \"Filename, Content-Type, and Content-Disposition are missing.\",\n      \"correction\": \"Accepted as useful objective acceptance criteria, but not a blocker requiring human input. A CSV download endpoint should state these standard HTTP behaviors so tests can validate the response.\"\n    },\n    {\n      \"finding\": \"Message with zero addressed recipients is missing.\",\n      \"correction\": \"Accepted as an obvious edge-case clarification implied by 'one data row per addressed recipient': zero addressed recipients means header row only.\"\n    },\n    {\n      \"finding\": \"Implementation step 2 must specify exact module/function location.\",\n      \"correction\": \"Partially accepted. The current wording leaves a minor technical choice, but not a major design decision. Codex can tighten it to a conventional context-facing function or dedicated module only if that matches existing project conventions discovered from the codebase; otherwise it should keep the context-facing API wording without inventing architecture.\"\n    },\n    {\n      \"finding\": \"Character encoding should be explicit.\",\n      \"correction\": \"Accepted as an optional objective clarification. UTF-8 can be stated alongside Content-Type.\"\n    }\n  ],\n  \"blocking_gaps\": [\n    {\n      \"gap\": \"A few CSV response and edge-case behaviors are not yet explicit enough for objective end-of-iteration validation.\",\n      \"why_it_blocks_implementation\": \"An engineer could still implement the feature, but tests/review could disagree on nil/empty recipient fields, zero-recipient CSV output, and download response headers. These are small specification gaps, not product decisions, so they should be repaired before marking the plan validated.\"\n    }\n  ],\n  \"codex_repair_brief\": [\n    \"Edit the plan only; do not begin implementation.\",\n    \"Add acceptance criteria stating that nil or empty recipient_name values render as an empty CSV field.\",\n    \"Add acceptance criteria stating that nil or empty recipient_email values render as an empty CSV field, if such data can exist in current read models; if email is schema-required, instead state that recipient_email uses the existing addressed recipient email value.\",\n    \"Add an acceptance criterion for a message with zero addressed recipients: the CSV contains exactly the header row and no data rows.\",\n    \"Add acceptance criteria for the CSV response: Content-Type is `text/csv; charset=utf-8`; response uses a Content-Disposition attachment header; filename is `message_{message_id}_delivery_receipts.csv`.\",\n    \"Add a note that CSV output is UTF-8 encoded.\",\n    \"Tighten implementation step 2 without making a large design choice: prefer a context-facing export function/module following existing Messages conventions, and keep CSV escaping local with no dependency as already stated.\",\n    \"Update the validation plan to include tests/checks for nil or empty recipient fields where representable, zero-recipient output, filename, Content-Type, Content-Disposition, and non-ASCII UTF-8 content.\",\n    \"Do not add new scope, authentication/authorization changes, background jobs, reporting features, or domain event/command changes.\"\n  ],\n  \"questions_for_matt\": \"None\",\n  \"validation_checklist\": [\n    \"Confirm the revised plan still describes only a single-message CSV delivery receipt export.\",\n    \"Confirm acceptance criteria include exact columns, sorting, status mappings, non-addressed exclusion, unknown-message 404, zero-recipient behavior, nil/empty recipient field behavior, CSV escaping, UTF-8, filename, and response headers.\",\n    \"Confirm implementation plan does not introduce unresolved technical choices or dependencies.\",\n    \"Confirm validation plan covers focused automated tests plus `dev check`.\",\n    \"Confirm no implementation code changes were made during plan repair.\"\n  ],\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": true,\n    \"plan_needs_human\": false\n  }\n}",
+          "thread.start.current_node": "read_plan",
+          "command.output": "blob://sha256/2270ef38d85f466210b1b35706e24f5209fc478fd7911898f35123beb91d1226",
+          "internal.retry_count.claude_review": 0,
+          "codex_review_blocking_gaps": "None",
+          "codex_review_decision": "READY",
           "current_node": "read_updated_plan",
+          "internal.retry_count.start": 0,
+          "codex_review_required_edits": "None",
+          "internal.retry_count.synthesize": 0,
+          "plan_needs_human": false,
+          "internal.retry_count.codex_update": 0,
+          "gemini_review_blocking_gap_count": 0,
+          "internal.retry_count.read_plan": 0,
+          "response.claude_review": "# Iteration Plan Review\n\n## Decision: NOT READY\n\n## Confidence: Medium\n\n## Blocking Gaps\n\n1. **No specification for null/empty recipient data handling** - The acceptance criteria specify how to populate `receipt_status`, `delivery_status`, and `delivery_reason` fields, but do not specify what happens when `recipient_name` or `recipient_email` values are null or empty in the source data. This affects the data contract and test cases. Should null names render as empty string, \"Unknown\", or something else?\n\n## Non-blocking Improvements\n\n1. **CSV file download name not specified** - For consistency and user experience, specify the filename (e.g., `delivery_receipts_{message_id}_{timestamp}.csv` or `message_{message_id}_receipts.csv`)\n\n2. **Character encoding not explicit** - While UTF-8 is standard, state it explicitly in acceptance criteria\n\n3. **HTTP headers not specified** - Content-Type (`text/csv; charset=utf-8`) and Content-Disposition headers should be in acceptance criteria for the download to work correctly\n\n4. **Implementation step 1 phrasing unclear** - \"Add Phoenix controller coverage for GET route before implementation\" should clarify whether this means \"write test first\" or \"add tests alongside implementation\"\n\n5. **Module organization vague** - \"focused CSV export module or context function\" leaves the implementer to choose. Specify whether this lives in the Messages context, a dedicated export module, or as a controller helper\n\n6. **Missing edge case: message with zero addressed recipients** - While implied by \"one data row per addressed recipient,\" explicitly state the expected behavior (header row only, no data rows)\n\n## Smallest Viable Iteration\n\nThis iteration is already minimal - it's focused on a single CSV export endpoint for one message. It could not be meaningfully smaller while remaining useful. The only reduction would be to omit the LiveView download link and only expose the HTTP endpoint, but that would reduce discoverability.\n\n## Required Plan Edits\n\nAdd to acceptance criteria:\n\n- \"When `recipient_name` is null or empty, the CSV contains an empty string in the `recipient_name` column\"\n- \"When a message has zero addressed recipients, the CSV contains only the header row\"\n- \"The CSV file downloads with filename `message_{message_id}_delivery_receipts.csv`\"\n- \"The response has Content-Type `text/csv; charset=utf-8` and appropriate Content-Disposition header\"\n\nClarify implementation step 2:\n\n- Change \"Add a focused CSV export module or context function\" to specify either \"Add `Memba.Messages.export_delivery_receipts_csv/1` function\" or \"Add `Memba.Messages.DeliveryReceipts.to_csv/1` module and function\" (whichever matches project conventions)\n\n## Validation Plan\n\nThe existing validation plan is adequate:\n- Run focused controller and export tests covering all specified scenarios\n- Manual verification with realistic test data including null/empty names\n- Run `dev check`\n\nAdd to manual verification:\n- Verify filename and download headers in browser\n- Verify character encoding with non-ASCII characters in names/subjects\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"Medium\",\"claude_review_blocking_gap_count\":1,\"claude_review_blocking_gaps\":\"No specification for null/empty recipient_name or recipient_email CSV representation\",\"claude_review_required_edits\":\"Add AC for null/empty recipient data handling; Add AC for zero-recipient case; Add AC for filename and headers; Specify exact module/function location\"}}",
+          "graph.default_fidelity": "summary:high",
+          "response.codex_update": "### Files changed\n- `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`\n\n### Summary of edits\nI applied targeted plan-only clarifications to close the synthesis-identified spec gaps without changing scope or starting implementation:\n\n1. **Scope (In scope)**\n   - Added explicit behavior for `recipient_name`/`recipient_email` when nil/empty: emit empty CSV fields.\n   - Added explicit CSV response requirements:\n     - UTF-8 encoding via `Content-Type: text/csv; charset=utf-8`\n     - `Content-Disposition: attachment` with filename `message_{message_id}_delivery_receipts.csv`\n\n2. **Acceptance Criteria**\n   - Added **zero-recipient case**: header row only, no data rows.\n   - Added **nil/empty recipient field behavior**: empty CSV fields.\n   - Added explicit **UTF-8 Content-Type** criterion.\n   - Added explicit **Content-Disposition + filename** criterion.\n\n3. **Implementation Plan**\n   - Tightened step 2 to a **Messages context-facing export function**, while still allowing a helper module per existing conventions (no hard architecture invention).\n   - Expanded step 6 test list to include:\n     - nil/empty recipient field rendering (when representable),\n     - zero-recipient output,\n     - response headers/filename,\n     - UTF-8 content.\n\n4. **Validation Plan**\n   - Added manual verification for headers/filename.\n   - Added manual verification for zero-recipient output, nil/empty field behavior (when representable), and non-ASCII UTF-8 handling.\n\n---\n\n### Opus instructions applied\n- ✅ Edit plan only; no implementation work.\n- ✅ Add AC for nil/empty recipient field behavior.\n- ✅ Add AC for zero-recipient/header-only behavior.\n- ✅ Add AC for Content-Type, Content-Disposition, and filename.\n- ✅ Add UTF-8 note/criterion.\n- ✅ Tighten implementation step 2 toward context-facing Messages API without forcing a major design decision.\n- ✅ Update validation plan for the newly explicit checks.\n- ✅ Kept scope boundaries intact (no auth/reporting/background/domain changes).\n\n---\n\n### Instructions skipped (need Matt’s judgment)\n- **None skipped.**  \n  All requested fixes were applied in a way that avoids introducing new product or architecture decisions.\n\n---\n\n### Recheck attention points\n- Confirm the phrasing **“when representable in existing read models”** for nil/empty recipient fields is acceptable and sufficiently non-speculative.\n- Confirm the filename requirement `message_{message_id}_delivery_receipts.csv` is exactly what downstream reviewers expect.\n",
+          "failure_class": "",
+          "internal.node_visit_count": 1,
+          "claude_review_blocking_gap_count": 1,
+          "gemini_review_confidence": "High",
+          "last_stage": "codex_update",
+          "gemini_review_blocking_gaps": "None",
+          "outcome": "succeeded",
+          "last_response": "### Files changed\n- `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`\n\n### Summary of edits\nI applied targeted plan-only clarifications to close the synthesis-identified spec gap",
+          "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "thread.codex_review.current_node": "synthesize",
+          "thread.codex_update.current_node": "read_updated_plan",
+          "internal.thread_id": "codex_update",
+          "plan_ready": false,
+          "graph.rankdir": "LR",
+          "codex_review_confidence": "Medium",
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.read_updated_plan": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"Medium\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "thread.gemini_review.current_node": "claude_review"
+        },
+        "node_outcomes": {
+          "read_updated_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2270ef38d85f466210b1b35706e24f5209fc478fd7911898f35123beb91d1226"
+            },
+            "notes": "Script completed: PLAN_PATH='.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found after Codex update: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'UPDATED PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 171,
+              "active_time_ms": 171
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c28b7e010ff5b24ffcd34306c11ff02e4f05b54f27d66a2b9b8dd2f5c4e0c986"
+            },
+            "notes": "Script completed: PLAN_PATH='.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 233,
+              "active_time_ms": 233
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.claude_review": "# Iteration Plan Review\n\n## Decision: NOT READY\n\n## Confidence: Medium\n\n## Blocking Gaps\n\n1. **No specification for null/empty recipient data handling** - The acceptance criteria specify how to populate `receipt_status`, `delivery_status`, and `delivery_reason` fields, but do not specify what happens when `recipient_name` or `recipient_email` values are null or empty in the source data. This affects the data contract and test cases. Should null names render as empty string, \"Unknown\", or something else?\n\n## Non-blocking Improvements\n\n1. **CSV file download name not specified** - For consistency and user experience, specify the filename (e.g., `delivery_receipts_{message_id}_{timestamp}.csv` or `message_{message_id}_receipts.csv`)\n\n2. **Character encoding not explicit** - While UTF-8 is standard, state it explicitly in acceptance criteria\n\n3. **HTTP headers not specified** - Content-Type (`text/csv; charset=utf-8`) and Content-Disposition headers should be in acceptance criteria for the download to work correctly\n\n4. **Implementation step 1 phrasing unclear** - \"Add Phoenix controller coverage for GET route before implementation\" should clarify whether this means \"write test first\" or \"add tests alongside implementation\"\n\n5. **Module organization vague** - \"focused CSV export module or context function\" leaves the implementer to choose. Specify whether this lives in the Messages context, a dedicated export module, or as a controller helper\n\n6. **Missing edge case: message with zero addressed recipients** - While implied by \"one data row per addressed recipient,\" explicitly state the expected behavior (header row only, no data rows)\n\n## Smallest Viable Iteration\n\nThis iteration is already minimal - it's focused on a single CSV export endpoint for one message. It could not be meaningfully smaller while remaining useful. The only reduction would be to omit the LiveView download link and only expose the HTTP endpoint, but that would reduce discoverability.\n\n## Required Plan Edits\n\nAdd to acceptance criteria:\n\n- \"When `recipient_name` is null or empty, the CSV contains an empty string in the `recipient_name` column\"\n- \"When a message has zero addressed recipients, the CSV contains only the header row\"\n- \"The CSV file downloads with filename `message_{message_id}_delivery_receipts.csv`\"\n- \"The response has Content-Type `text/csv; charset=utf-8` and appropriate Content-Disposition header\"\n\nClarify implementation step 2:\n\n- Change \"Add a focused CSV export module or context function\" to specify either \"Add `Memba.Messages.export_delivery_receipts_csv/1` function\" or \"Add `Memba.Messages.DeliveryReceipts.to_csv/1` module and function\" (whichever matches project conventions)\n\n## Validation Plan\n\nThe existing validation plan is adequate:\n- Run focused controller and export tests covering all specified scenarios\n- Manual verification with realistic test data including null/empty names\n- Run `dev check`\n\nAdd to manual verification:\n- Verify filename and download headers in browser\n- Verify character encoding with non-ASCII characters in names/subjects\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"Medium\",\"claude_review_blocking_gap_count\":1,\"claude_review_blocking_gaps\":\"No specification for null/empty recipient_name or recipient_email CSV representation\",\"claude_review_required_edits\":\"Add AC for null/empty recipient data handling; Add AC for zero-recipient case; Add AC for filename and headers; Specify exact module/function location\"}}",
+              "claude_review_blocking_gap_count": 1,
+              "last_stage": "claude_review",
+              "claude_review_required_edits": "Add AC for null/empty recipient data handling; Add AC for zero-recipient case; Add AC for filename and headers; Specify exact module/function location",
+              "claude_review_decision": "NOT READY",
+              "last_response": "# Iteration Plan Review\n\n## Decision: NOT READY\n\n## Confidence: Medium\n\n## Blocking Gaps\n\n1. **No specification for null/empty recipient data handling** - The acceptance criteria specify how to popula",
+              "claude_review_confidence": "Medium",
+              "claude_review_blocking_gaps": "No specification for null/empty recipient_name or recipient_email CSV representation"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 2337,
+                    "output_tokens": 4150,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 69261
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 102585,
+              "tool_time_ms": 0,
+              "active_time_ms": 102585
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "{\n  \"provisional_decision\": \"OBVIOUS FIXES NEEDED\",\n  \"reviewer_decision_table\": [\n    {\n      \"reviewer\": \"Gemini\",\n      \"decision\": \"READY\",\n      \"confidence\": \"High\",\n      \"blocking_gaps_count\": 0,\n      \"notes\": \"Found no blocking gaps or required edits.\"\n    },\n    {\n      \"reviewer\": \"Claude\",\n      \"decision\": \"NOT READY\",\n      \"confidence\": \"Medium\",\n      \"blocking_gaps_count\": 1,\n      \"notes\": \"Flagged missing specification for null/empty recipient_name or recipient_email representation. Also suggested adding filename, headers, zero-recipient behavior, and clearer module/function location.\"\n    },\n    {\n      \"reviewer\": \"Codex/GPT\",\n      \"decision\": \"READY\",\n      \"confidence\": \"Medium\",\n      \"blocking_gaps_count\": 0,\n      \"notes\": \"Found no blocking gaps or required edits.\"\n    }\n  ],\n  \"consensus_findings\": [\n    \"All three reviewer decisions and blocking-gap summaries are visible, so validation evidence is complete.\",\n    \"The core capability is clear: add a deterministic CSV delivery receipt download for a single already-sent message.\",\n    \"The scope is appropriately small and excludes broader reporting, background jobs, permissions changes, and domain behavior changes.\",\n    \"The main acceptance criteria are testable: exact columns, row count, ordering, status mappings, non-addressed exclusion, unknown-message 404, and dev check.\",\n    \"Two reviewers considered the plan ready; one reviewer found edge-case specification gaps. The identified issues are fixable by clarifying already-implied export behavior rather than requiring new product or architecture decisions.\"\n  ],\n  \"reviewer_objections_addressed\": [\n    {\n      \"objection\": \"No specification for null/empty recipient_name or recipient_email CSV representation.\",\n      \"resolution\": \"Accepted as a real clarity gap, but downgraded from needing Matt to an obvious fix. CSV export fields have no native null representation, and for this fixed-column export the least surprising/testable behavior is to render nil or empty source values as an empty CSV field. This does not require a new product policy decision.\"\n    }\n  ],\n  \"corrected_findings\": [\n    {\n      \"finding\": \"Filename, Content-Type, and Content-Disposition are missing.\",\n      \"correction\": \"Accepted as useful objective acceptance criteria, but not a blocker requiring human input. A CSV download endpoint should state these standard HTTP behaviors so tests can validate the response.\"\n    },\n    {\n      \"finding\": \"Message with zero addressed recipients is missing.\",\n      \"correction\": \"Accepted as an obvious edge-case clarification implied by 'one data row per addressed recipient': zero addressed recipients means header row only.\"\n    },\n    {\n      \"finding\": \"Implementation step 2 must specify exact module/function location.\",\n      \"correction\": \"Partially accepted. The current wording leaves a minor technical choice, but not a major design decision. Codex can tighten it to a conventional context-facing function or dedicated module only if that matches existing project conventions discovered from the codebase; otherwise it should keep the context-facing API wording without inventing architecture.\"\n    },\n    {\n      \"finding\": \"Character encoding should be explicit.\",\n      \"correction\": \"Accepted as an optional objective clarification. UTF-8 can be stated alongside Content-Type.\"\n    }\n  ],\n  \"blocking_gaps\": [\n    {\n      \"gap\": \"A few CSV response and edge-case behaviors are not yet explicit enough for objective end-of-iteration validation.\",\n      \"why_it_blocks_implementation\": \"An engineer could still implement the feature, but tests/review could disagree on nil/empty recipient fields, zero-recipient CSV output, and download response headers. These are small specification gaps, not product decisions, so they should be repaired before marking the plan validated.\"\n    }\n  ],\n  \"codex_repair_brief\": [\n    \"Edit the plan only; do not begin implementation.\",\n    \"Add acceptance criteria stating that nil or empty recipient_name values render as an empty CSV field.\",\n    \"Add acceptance criteria stating that nil or empty recipient_email values render as an empty CSV field, if such data can exist in current read models; if email is schema-required, instead state that recipient_email uses the existing addressed recipient email value.\",\n    \"Add an acceptance criterion for a message with zero addressed recipients: the CSV contains exactly the header row and no data rows.\",\n    \"Add acceptance criteria for the CSV response: Content-Type is `text/csv; charset=utf-8`; response uses a Content-Disposition attachment header; filename is `message_{message_id}_delivery_receipts.csv`.\",\n    \"Add a note that CSV output is UTF-8 encoded.\",\n    \"Tighten implementation step 2 without making a large design choice: prefer a context-facing export function/module following existing Messages conventions, and keep CSV escaping local with no dependency as already stated.\",\n    \"Update the validation plan to include tests/checks for nil or empty recipient fields where representable, zero-recipient output, filename, Content-Type, Content-Disposition, and non-ASCII UTF-8 content.\",\n    \"Do not add new scope, authentication/authorization changes, background jobs, reporting features, or domain event/command changes.\"\n  ],\n  \"questions_for_matt\": \"None\",\n  \"validation_checklist\": [\n    \"Confirm the revised plan still describes only a single-message CSV delivery receipt export.\",\n    \"Confirm acceptance criteria include exact columns, sorting, status mappings, non-addressed exclusion, unknown-message 404, zero-recipient behavior, nil/empty recipient field behavior, CSV escaping, UTF-8, filename, and response headers.\",\n    \"Confirm implementation plan does not introduce unresolved technical choices or dependencies.\",\n    \"Confirm validation plan covers focused automated tests plus `dev check`.\",\n    \"Confirm no implementation code changes were made during plan repair.\"\n  ],\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": true,\n    \"plan_needs_human\": false\n  }\n}",
+              "plan_needs_human": false,
+              "last_stage": "synthesize",
+              "plan_needs_fix": true,
+              "last_response": "{\n  \"provisional_decision\": \"OBVIOUS FIXES NEEDED\",\n  \"reviewer_decision_table\": [\n    {\n      \"reviewer\": \"Gemini\",\n      \"decision\": \"READY\",\n      \"confidence\": \"High\",\n      \"blocking_gaps_count\":",
+              "plan_ready": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 3563,
+                    "output_tokens": 1259,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 71065
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 34514,
+              "tool_time_ms": 0,
+              "active_time_ms": 34514
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "gemini_review_blocking_gap_count": 0,
+              "gemini_review_required_edits": "None",
+              "gemini_review_blocking_gaps": "None",
+              "last_stage": "gemini_review",
+              "gemini_review_confidence": "High",
+              "gemini_review_decision": "READY"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 2029,
+                    "output_tokens": 60,
+                    "reasoning_tokens": 1199,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 19166
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11148,
+              "tool_time_ms": 0,
+              "active_time_ms": 11148
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gaps": "None",
+              "last_stage": "codex_review",
+              "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"Medium\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "last_response": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"Medium\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_required_edits": "None",
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_decision": "READY",
+              "codex_review_confidence": "Medium"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.3-codex"
+                  },
+                  "tokens": {
+                    "input_tokens": 2988,
+                    "output_tokens": 58,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 13265
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11122,
+              "tool_time_ms": 0,
+              "active_time_ms": 11122
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "codex_update": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_update",
+              "response.codex_update": "### Files changed\n- `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`\n\n### Summary of edits\nI applied targeted plan-only clarifications to close the synthesis-identified spec gaps without changing scope or starting implementation:\n\n1. **Scope (In scope)**\n   - Added explicit behavior for `recipient_name`/`recipient_email` when nil/empty: emit empty CSV fields.\n   - Added explicit CSV response requirements:\n     - UTF-8 encoding via `Content-Type: text/csv; charset=utf-8`\n     - `Content-Disposition: attachment` with filename `message_{message_id}_delivery_receipts.csv`\n\n2. **Acceptance Criteria**\n   - Added **zero-recipient case**: header row only, no data rows.\n   - Added **nil/empty recipient field behavior**: empty CSV fields.\n   - Added explicit **UTF-8 Content-Type** criterion.\n   - Added explicit **Content-Disposition + filename** criterion.\n\n3. **Implementation Plan**\n   - Tightened step 2 to a **Messages context-facing export function**, while still allowing a helper module per existing conventions (no hard architecture invention).\n   - Expanded step 6 test list to include:\n     - nil/empty recipient field rendering (when representable),\n     - zero-recipient output,\n     - response headers/filename,\n     - UTF-8 content.\n\n4. **Validation Plan**\n   - Added manual verification for headers/filename.\n   - Added manual verification for zero-recipient output, nil/empty field behavior (when representable), and non-ASCII UTF-8 handling.\n\n---\n\n### Opus instructions applied\n- ✅ Edit plan only; no implementation work.\n- ✅ Add AC for nil/empty recipient field behavior.\n- ✅ Add AC for zero-recipient/header-only behavior.\n- ✅ Add AC for Content-Type, Content-Disposition, and filename.\n- ✅ Add UTF-8 note/criterion.\n- ✅ Tighten implementation step 2 toward context-facing Messages API without forcing a major design decision.\n- ✅ Update validation plan for the newly explicit checks.\n- ✅ Kept scope boundaries intact (no auth/reporting/background/domain changes).\n\n---\n\n### Instructions skipped (need Matt’s judgment)\n- **None skipped.**  \n  All requested fixes were applied in a way that avoids introducing new product or architecture decisions.\n\n---\n\n### Recheck attention points\n- Confirm the phrasing **“when representable in existing read models”** for nil/empty recipient fields is acceptable and sufficiently non-speculative.\n- Confirm the filename requirement `message_{message_id}_delivery_receipts.csv` is exactly what downstream reviewers expect.\n",
+              "last_response": "### Files changed\n- `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`\n\n### Summary of edits\nI applied targeted plan-only clarifications to close the synthesis-identified spec gap"
+            },
+            "notes": "Stage completed: codex_update",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.3-codex"
+                  },
+                  "tokens": {
+                    "input_tokens": 35778,
+                    "output_tokens": 1382,
+                    "reasoning_tokens": 362,
+                    "cache_read_tokens": 6144,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 88102
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 38917,
+              "tool_time_ms": 425,
+              "active_time_ms": 39342
+            }
+          }
+        },
+        "next_node_id": "opus_recheck",
+        "git_commit_sha": "e5672897658008f675ccce2c7f7d0b9f305405ab",
+        "node_visits": {
+          "synthesize": 1,
+          "codex_update": 1,
+          "start": 1,
+          "gemini_review": 1,
+          "claude_review": 1,
+          "codex_review": 1,
+          "synthesis_gate": 1,
+          "read_updated_plan": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 1,
+          "additions": 11,
+          "deletions": 3
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-30T08:08:31.570960407Z",
+        "current_node": "opus_recheck",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "codex_update",
+          "read_updated_plan",
+          "opus_recheck"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.opus_recheck": 0,
+          "current_node": "opus_recheck",
           "graph.rankdir": "LR",
           "internal.node_visit_count": 1,
           "thread.gemini_review.current_node": "claude_review",
-          "last_stage": "codex_update",
+          "last_stage": "opus_recheck",
           "internal.retry_count.claude_review": 0,
           "gemini_review_confidence": "High",
           "internal.fidelity": "summary:high",
           "graph.default_fidelity": "summary:high",
-          "last_response": "### Files changed\n- `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`\n\n### Summary of edits\nI applied targeted plan-only clarifications to close the synthesis-identified spec gap",
+          "last_response": "## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex fixed successfully\n\nCodex made the requested plan-only updates and the `read_updated_plan` stage confirms the file was actually changed.",
           "plan_needs_human": false,
           "internal.retry_count.read_updated_plan": 0,
           "response.synthesize": "{\n  \"provisional_decision\": \"OBVIOUS FIXES NEEDED\",\n  \"reviewer_decision_table\": [\n    {\n      \"reviewer\": \"Gemini\",\n      \"decision\": \"READY\",\n      \"confidence\": \"High\",\n      \"blocking_gaps_count\": 0,\n      \"notes\": \"Found no blocking gaps or required edits.\"\n    },\n    {\n      \"reviewer\": \"Claude\",\n      \"decision\": \"NOT READY\",\n      \"confidence\": \"Medium\",\n      \"blocking_gaps_count\": 1,\n      \"notes\": \"Flagged missing specification for null/empty recipient_name or recipient_email representation. Also suggested adding filename, headers, zero-recipient behavior, and clearer module/function location.\"\n    },\n    {\n      \"reviewer\": \"Codex/GPT\",\n      \"decision\": \"READY\",\n      \"confidence\": \"Medium\",\n      \"blocking_gaps_count\": 0,\n      \"notes\": \"Found no blocking gaps or required edits.\"\n    }\n  ],\n  \"consensus_findings\": [\n    \"All three reviewer decisions and blocking-gap summaries are visible, so validation evidence is complete.\",\n    \"The core capability is clear: add a deterministic CSV delivery receipt download for a single already-sent message.\",\n    \"The scope is appropriately small and excludes broader reporting, background jobs, permissions changes, and domain behavior changes.\",\n    \"The main acceptance criteria are testable: exact columns, row count, ordering, status mappings, non-addressed exclusion, unknown-message 404, and dev check.\",\n    \"Two reviewers considered the plan ready; one reviewer found edge-case specification gaps. The identified issues are fixable by clarifying already-implied export behavior rather than requiring new product or architecture decisions.\"\n  ],\n  \"reviewer_objections_addressed\": [\n    {\n      \"objection\": \"No specification for null/empty recipient_name or recipient_email CSV representation.\",\n      \"resolution\": \"Accepted as a real clarity gap, but downgraded from needing Matt to an obvious fix. CSV export fields have no native null representation, and for this fixed-column export the least surprising/testable behavior is to render nil or empty source values as an empty CSV field. This does not require a new product policy decision.\"\n    }\n  ],\n  \"corrected_findings\": [\n    {\n      \"finding\": \"Filename, Content-Type, and Content-Disposition are missing.\",\n      \"correction\": \"Accepted as useful objective acceptance criteria, but not a blocker requiring human input. A CSV download endpoint should state these standard HTTP behaviors so tests can validate the response.\"\n    },\n    {\n      \"finding\": \"Message with zero addressed recipients is missing.\",\n      \"correction\": \"Accepted as an obvious edge-case clarification implied by 'one data row per addressed recipient': zero addressed recipients means header row only.\"\n    },\n    {\n      \"finding\": \"Implementation step 2 must specify exact module/function location.\",\n      \"correction\": \"Partially accepted. The current wording leaves a minor technical choice, but not a major design decision. Codex can tighten it to a conventional context-facing function or dedicated module only if that matches existing project conventions discovered from the codebase; otherwise it should keep the context-facing API wording without inventing architecture.\"\n    },\n    {\n      \"finding\": \"Character encoding should be explicit.\",\n      \"correction\": \"Accepted as an optional objective clarification. UTF-8 can be stated alongside Content-Type.\"\n    }\n  ],\n  \"blocking_gaps\": [\n    {\n      \"gap\": \"A few CSV response and edge-case behaviors are not yet explicit enough for objective end-of-iteration validation.\",\n      \"why_it_blocks_implementation\": \"An engineer could still implement the feature, but tests/review could disagree on nil/empty recipient fields, zero-recipient CSV output, and download response headers. These are small specification gaps, not product decisions, so they should be repaired before marking the plan validated.\"\n    }\n  ],\n  \"codex_repair_brief\": [\n    \"Edit the plan only; do not begin implementation.\",\n    \"Add acceptance criteria stating that nil or empty recipient_name values render as an empty CSV field.\",\n    \"Add acceptance criteria stating that nil or empty recipient_email values render as an empty CSV field, if such data can exist in current read models; if email is schema-required, instead state that recipient_email uses the existing addressed recipient email value.\",\n    \"Add an acceptance criterion for a message with zero addressed recipients: the CSV contains exactly the header row and no data rows.\",\n    \"Add acceptance criteria for the CSV response: Content-Type is `text/csv; charset=utf-8`; response uses a Content-Disposition attachment header; filename is `message_{message_id}_delivery_receipts.csv`.\",\n    \"Add a note that CSV output is UTF-8 encoded.\",\n    \"Tighten implementation step 2 without making a large design choice: prefer a context-facing export function/module following existing Messages conventions, and keep CSV escaping local with no dependency as already stated.\",\n    \"Update the validation plan to include tests/checks for nil or empty recipient fields where representable, zero-recipient output, filename, Content-Type, Content-Disposition, and non-ASCII UTF-8 content.\",\n    \"Do not add new scope, authentication/authorization changes, background jobs, reporting features, or domain event/command changes.\"\n  ],\n  \"questions_for_matt\": \"None\",\n  \"validation_checklist\": [\n    \"Confirm the revised plan still describes only a single-message CSV delivery receipt export.\",\n    \"Confirm acceptance criteria include exact columns, sorting, status mappings, non-addressed exclusion, unknown-message 404, zero-recipient behavior, nil/empty recipient field behavior, CSV escaping, UTF-8, filename, and response headers.\",\n    \"Confirm implementation plan does not introduce unresolved technical choices or dependencies.\",\n    \"Confirm validation plan covers focused automated tests plus `dev check`.\",\n    \"Confirm no implementation code changes were made during plan repair.\"\n  ],\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": true,\n    \"plan_needs_human\": false\n  }\n}",
           "internal.retry_count.gemini_review": 0,
           "codex_review_decision": "READY",
           "internal.retry_count.start": 0,
-          "plan_needs_fix": true,
-          "internal.thread_id": "codex_update",
+          "plan_needs_fix": false,
+          "internal.thread_id": "read_updated_plan",
           "gemini_review_blocking_gap_count": 0,
           "gemini_review_blocking_gaps": "None",
           "claude_review_blocking_gaps": "No specification for null/empty recipient_name or recipient_email CSV representation",
           "internal.retry_count.codex_review": 0,
-          "plan_ready": false,
+          "plan_ready": true,
           "codex_review_required_edits": "None",
           "codex_review_blocking_gap_count": 0,
           "codex_review_confidence": "Medium",
           "claude_review_blocking_gap_count": 1,
           "thread.synthesis_gate.current_node": "codex_update",
           "failure_signature": "",
+          "thread.read_updated_plan.current_node": "opus_recheck",
           "claude_review_required_edits": "Add AC for null/empty recipient data handling; Add AC for zero-recipient case; Add AC for filename and headers; Specify exact module/function location",
           "codex_review_blocking_gaps": "None",
           "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
@@ -2207,6 +2547,7 @@
           "command.output": "blob://sha256/2270ef38d85f466210b1b35706e24f5209fc478fd7911898f35123beb91d1226",
           "internal.work_dir": "/workspace/memba",
           "gemini_review_required_edits": "None",
+          "response.opus_recheck": "## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex fixed successfully\n\nCodex made the requested plan-only updates and the `read_updated_plan` stage confirms the file was actually changed.\n\nThe updated plan now includes objective acceptance criteria for:\n\n- Zero-recipient messages: header row only.\n- Nil/empty `recipient_name` or `recipient_email`: empty CSV field.\n- UTF-8 CSV response with `Content-Type: text/csv; charset=utf-8`.\n- `Content-Disposition: attachment` with filename `message_{message_id}_delivery_receipts.csv`.\n- Existing status mappings, ordering, exact columns, non-addressed exclusion, unknown-message 404, and `dev check`.\n\nThe implementation plan was also tightened appropriately:\n\n- It now specifies a Messages context-facing CSV export function, directly or through a focused helper module following existing conventions.\n- It preserves the intended boundary: use existing receipt/delivery read models only; do not add domain events, commands, new auth, reports, background jobs, or dependencies.\n\nThe validation plan now covers the newly explicit cases, including headers/filename, zero-recipient output, nil/empty field rendering where representable, and non-ASCII UTF-8 content.\n\n## 4. Remaining blocking gaps\n\nNone.\n\nThe remaining implementation details are normal engineering choices within established project conventions, not unresolved product/business or material technical design decisions.\n\n## 5. Follow-up repair instructions for Codex\n\nNone. Another edit pass is not justified.\n\n## 6. Questions for Matt\n\nNone.\n\n## 7. Final validation plan\n\nThe iteration succeeds when:\n\n- Focused controller/export tests pass for:\n  - Exact CSV columns.\n  - One row per addressed recipient.\n  - Recipient ordering by name, then email.\n  - Delivered, delivery problem, opened, and sent status mappings.\n  - Empty delivery reasons where required.\n  - Non-addressed member exclusion.\n  - Zero-recipient header-only CSV.\n  - Nil/empty recipient name/email rendering where representable.\n  - RFC 4180-style CSV escaping.\n  - UTF-8/non-ASCII content.\n  - `Content-Type` and `Content-Disposition` filename.\n  - Unknown message 404.\n- The message detail LiveView exposes the CSV download link.\n- The export uses existing read models only and introduces no out-of-scope auth, reporting, background job, or domain behavior changes.\n- `dev check` passes.\n\n{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "internal.run_id": "01KSVYK42DXWJFAT7PTYF6DBK8",
           "thread.synthesize.current_node": "synthesis_gate",
           "thread.read_plan.current_node": "gemini_review",
@@ -2433,6 +2774,45 @@
               "active_time_ms": 39342
             }
           },
+          "opus_recheck": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_human": false,
+              "last_response": "## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex fixed successfully\n\nCodex made the requested plan-only updates and the `read_updated_plan` stage confirms the file was actually changed.",
+              "last_stage": "opus_recheck",
+              "response.opus_recheck": "## 1. Decision: READY\n\n## 2. Confidence: High\n\n## 3. What Codex fixed successfully\n\nCodex made the requested plan-only updates and the `read_updated_plan` stage confirms the file was actually changed.\n\nThe updated plan now includes objective acceptance criteria for:\n\n- Zero-recipient messages: header row only.\n- Nil/empty `recipient_name` or `recipient_email`: empty CSV field.\n- UTF-8 CSV response with `Content-Type: text/csv; charset=utf-8`.\n- `Content-Disposition: attachment` with filename `message_{message_id}_delivery_receipts.csv`.\n- Existing status mappings, ordering, exact columns, non-addressed exclusion, unknown-message 404, and `dev check`.\n\nThe implementation plan was also tightened appropriately:\n\n- It now specifies a Messages context-facing CSV export function, directly or through a focused helper module following existing conventions.\n- It preserves the intended boundary: use existing receipt/delivery read models only; do not add domain events, commands, new auth, reports, background jobs, or dependencies.\n\nThe validation plan now covers the newly explicit cases, including headers/filename, zero-recipient output, nil/empty field rendering where representable, and non-ASCII UTF-8 content.\n\n## 4. Remaining blocking gaps\n\nNone.\n\nThe remaining implementation details are normal engineering choices within established project conventions, not unresolved product/business or material technical design decisions.\n\n## 5. Follow-up repair instructions for Codex\n\nNone. Another edit pass is not justified.\n\n## 6. Questions for Matt\n\nNone.\n\n## 7. Final validation plan\n\nThe iteration succeeds when:\n\n- Focused controller/export tests pass for:\n  - Exact CSV columns.\n  - One row per addressed recipient.\n  - Recipient ordering by name, then email.\n  - Delivered, delivery problem, opened, and sent status mappings.\n  - Empty delivery reasons where required.\n  - Non-addressed member exclusion.\n  - Zero-recipient header-only CSV.\n  - Nil/empty recipient name/email rendering where representable.\n  - RFC 4180-style CSV escaping.\n  - UTF-8/non-ASCII content.\n  - `Content-Type` and `Content-Disposition` filename.\n  - Unknown message 404.\n- The message detail LiveView exposes the CSV download link.\n- The export uses existing read models only and introduces no out-of-scope auth, reporting, background job, or domain behavior changes.\n- `dev check` passes.\n\n{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_ready": true,
+              "plan_needs_fix": false
+            },
+            "notes": "Stage completed: opus_recheck",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6256,
+                    "output_tokens": 533,
+                    "reasoning_tokens": 355,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 57920
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 16772,
+              "tool_time_ms": 0,
+              "active_time_ms": 16772
+            }
+          },
           "start": {
             "status": "succeeded",
             "usage": null
@@ -2466,8 +2846,9 @@
             }
           }
         },
-        "next_node_id": "opus_recheck",
+        "next_node_id": "recheck_gate",
         "node_visits": {
+          "opus_recheck": 1,
           "synthesis_gate": 1,
           "read_plan": 1,
           "claude_review": 1,
@@ -3010,7 +3391,12 @@
       "first_event_seq": 112,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PLAN_PATH='.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found after Codex update: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'UPDATED PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T08:08:11.460602830Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -3018,11 +3404,55 @@
         "command": "exec 2>&1\nPLAN_PATH='.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found after Codex update: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'UPDATED PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,320p' \"$PLAN_PATH\"",
         "language": "shell"
       },
+      "script_timing": {
+        "output": "blob://sha256/2270ef38d85f466210b1b35706e24f5209fc478fd7911898f35123beb91d1226",
+        "exit_code": 0,
+        "duration_ms": 171,
+        "termination": "exited",
+        "output_bytes": 5676,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 5676,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-05-30T08:08:11.275556864Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 184,
+        "inference_time_ms": 0,
+        "tool_time_ms": 171,
+        "active_time_ms": 171
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "opus_recheck@1": {
+      "first_event_seq": 122,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-05-30T08:08:11.275556864Z",
-      "handler": "command",
+      "started_at": "2026-05-30T08:08:14.612521540Z",
+      "handler": "prompt",
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
