@@ -1,0 +1,7 @@
+{"cmd": "ls"}{
+  "context_updates": {
+    "plan_ready": false,
+    "plan_needs_fix": false,
+    "plan_needs_human": true
+  }
+}
