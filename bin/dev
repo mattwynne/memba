@@ -158,6 +158,33 @@ acceptance() {
   (cd "$repo_root/acceptance-tests" && npm test -- "$@")
 }
 
+# @cmd Validate a future iteration plan without starting implementation
+# @arg plan_path! Iteration plan path, e.g. docs/iterations/006-deliveries-overview/plan.md
+iteration_validate_plan() {
+  local plan_path="${1:-}"
+  if [ -z "$plan_path" ]; then
+    echo "Usage: $0 iteration-validate-plan <plan_path>" >&2
+    exit 2
+  fi
+  (cd "$repo_root" && fabro run .fabro/workflows/iteration-deliver/workflow.toml \
+    -I plan_path="$plan_path" \
+    -I mode=validate_only)
+}
+
+# @cmd Start delivery for a validated/ready iteration when the implementation WIP slot is clear
+# @arg plan_path! Iteration plan path, e.g. docs/iterations/006-deliveries-overview/plan.md
+iteration_start() {
+  local plan_path="${1:-}"
+  if [ -z "$plan_path" ]; then
+    echo "Usage: $0 iteration-start <plan_path>" >&2
+    exit 2
+  fi
+  (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path")
+  (cd "$repo_root" && fabro run .fabro/workflows/iteration-deliver/workflow.toml \
+    -I plan_path="$plan_path" \
+    -I mode=deliver)
+}
+
 # @cmd Mark an iteration as merged after its implementation branch has landed on main
 # @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
 # @arg branch Branch/ref that was merged; defaults to Branch: from implementation.md

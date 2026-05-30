@@ -107,3 +107,33 @@ Enforce a single active implementation slot:
 - Add `bin/dev iteration-start <plan_path>` or an `iteration-deliver` mode that requires the plan to be validated and the implementation slot to be free.
 - Teach `iteration-planning` to run standalone validation when another iteration is active, then stop after reporting READY rather than launching full delivery.
 - Make the WIP check deterministic by reading `docs/iterations/README.md` and/or Fabro active runs before implementation starts.
+
+## Resolution
+
+Date: 2026-05-29
+
+Root cause: the delivery workflow had only one command shape (`iteration-deliver`) for validation plus implementation/review/finalization, and it had no explicit implementation WIP reservation/check before starting the implementation child.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-deliver/workflow.toml`: added a `mode` input with `deliver` and `validate_only` modes.
+- `.fabro/workflows/iteration-deliver/prompts/orchestrate.md`: taught the parent orchestrator to stop after validation in `validate_only` mode, and to check/reserve the implementation WIP slot before creating the implementation child in delivery mode.
+- `.fabro/workflows/scripts/iteration_status.py`: added a deterministic status helper that reads `docs/iterations/README.md`, detects active implementation statuses, and updates the selected plan/index status.
+- `.fabro/workflows/plan-validation/scripts/publish_ready.sh`: changed successful validation to mark plans `validated` rather than `ready`, making the pre-implementation holding state explicit.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: added a direct-run WIP gate so the manual implementation escape hatch refuses to start when another iteration is active.
+- `bin/dev`: added `iteration-validate-plan` and `iteration-start` wrappers.
+- `.pi/skills/iteration-*`: updated iteration planning/delivery/implementation instructions to recognise `validated` and the validate-only flow.
+- `.fabro/workflows/README.md` and `docs/iterations/README.md`: documented the split between parallel plan validation and single-piece-flow implementation.
+
+Validation:
+
+- `fabro validate .fabro/workflows/iteration-deliver/workflow.toml` — passed.
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml` — passed with existing goal-gate retry warnings.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — passed with existing-style goal-gate retry warnings, plus the new WIP-blocked gate warning.
+- `python3 -m py_compile .fabro/workflows/scripts/iteration_status.py` — passed.
+- `.fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/005-browser-acceptance-harness/plan.md` — passed; the implementation WIP slot was clear.
+- `dev check` — failed in the pre-existing Cucumber configuration test because `web/test/features/cucumber_configuration_test.exs` expects operator feature text (`Alice and Bob are people`, `Alice and Bob are members of Kootenay Mountaineering Club`) that is no longer present in `acceptance-tests/features/operator_email_deliverability.feature`. The kaizen fix did not change acceptance feature files or web tests.
+
+Remaining follow-up:
+
+- Repair the existing Cucumber configuration test / operator feature drift separately so `dev check` is green again.

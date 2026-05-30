@@ -15,6 +15,12 @@ green than before.
 | 005 | 2026-05-29 | ready | Browser acceptance harness for member-facing behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 | 006 | 2026-05-29 | ready | Deliveries overview for operator deliverability | [plan](006-deliveries-overview/plan.md) |
 
+Status notes:
+
+- `ready` means a human-approved plan is waiting for validation or implementation.
+- `validated` means plan validation has passed; it may wait while another iteration is active.
+- `implementing`, `ready-for-review`, `in-review`, `reviewing`, and `finalizing` occupy the single implementation WIP slot.
+
 Shared acceptance feature files used across these iterations:
 
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature)

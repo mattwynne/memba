@@ -28,7 +28,7 @@ Do not implement the iteration directly in the local checkout. Do not edit appli
 
 2. **Find the next ready iteration**
    - Read `docs/iterations/README.md`.
-   - Select the lowest-numbered iteration whose status is `ready` or `fabro-ready` and whose plan link exists.
+   - Select the lowest-numbered iteration whose status is `ready`, `validated`, or `fabro-ready` and whose plan link exists.
    - If no ready iteration exists, stop and report that there is nothing ready to implement.
    - If there are multiple ready iterations, pick the lowest numbered one unless Matt specified another.
 
@@ -110,8 +110,9 @@ Do not implement the iteration directly in the local checkout. Do not edit appli
 Use the iteration index table as the source of truth. Status meanings for this skill:
 
 - `ready` — eligible for implementation.
+- `validated` — eligible for implementation; plan validation has already passed and implementation is waiting for the WIP slot.
 - `fabro-ready` — eligible for implementation.
-- `draft`, `needs-revision`, `implemented`, `done`, or any other status — not eligible unless Matt explicitly chooses it.
+- `draft`, `needs-revision`, `implementing`, `ready-for-review`, `implemented`, `done`, or any other status — not eligible unless Matt explicitly chooses it.
 
 When Matt specifies an iteration number, title, folder, or plan path, use that instead of auto-selecting, but still verify the plan exists and is ready.
 

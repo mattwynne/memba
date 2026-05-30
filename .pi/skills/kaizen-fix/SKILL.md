@@ -67,6 +67,12 @@ Use the commands as aids, not as a substitute for reading candidate notes. Some 
    - Append or update a resolution section in the original note.
    - Preserve the original observation text.
    - Include the date, root cause, applied fix or options, files changed, validation performed, and remaining follow-up.
+8. **Commit the completed kaizen fix**
+   - Review `git status --short` and `git diff --stat`.
+   - Commit only the kaizen fix, its resolution-note update, and directly supporting workflow/skill/doc changes.
+   - Do not include unrelated user work.
+   - Use a concise message such as `kaizen: <short resolved problem>`.
+   - Do not push unless Matt explicitly asks.
 
 ## Resolution Section Template
 
@@ -123,7 +129,8 @@ If an existing resolution section is present but incomplete, update it rather th
 - Prefer the smallest change that prevents recurrence of the observed workflow/tooling problem.
 - Do not rewrite the observation note into a plan; append the resolution while keeping historical evidence intact.
 - Do not make broad product-code changes unless the kaizen note clearly points to a delivery-machinery defect in that code and the fix is obvious.
-- Do not commit, push, or create a PR unless Matt explicitly asks.
+- Commit the completed kaizen fix before reporting done, unless Matt explicitly asks not to commit.
+- Do not push or create a PR unless Matt explicitly asks.
 - Report changed file paths and validation results at the end.
 
 ## Reporting Format
@@ -135,4 +142,5 @@ When done, report:
 - Whether a fix was applied or options were proposed.
 - Files changed.
 - Validation run and result.
+- Commit SHA and message, or why no commit was made.
 - Any remaining follow-up or decision needed from Matt.

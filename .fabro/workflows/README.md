@@ -2,20 +2,37 @@
 
 Fabro iteration work normally flows through `iteration-deliver`, a lightweight parent workflow that orchestrates three child runs:
 
-1. `plan-validation` validates the plan at `plan_path` and gates delivery. NOT READY stops before implementation.
+1. `plan-validation` validates the plan at `plan_path` and gates delivery. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
 2. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
 3. `iteration-review` reviews the merged implementation diff from the parent-captured pre-implementation `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, and pushes any green polish as a separate `review polish: iteration NNN` commit to `main`.
 
-Typical command:
+Plan validation can run ahead of implementation, even while another iteration is active:
 
 ```bash
-fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+bin/dev iteration-validate-plan docs/iterations/NNN-topic/plan.md
+# equivalent to:
+fabro run .fabro/workflows/iteration-deliver/workflow.toml \
+  -I plan_path=docs/iterations/NNN-topic/plan.md \
+  -I mode=validate_only
+```
+
+Starting implementation remains single-piece-flow. `iteration-deliver` checks and reserves the implementation WIP slot by marking the selected iteration `implementing` before it starts the implementation child. It refuses to start while another iteration is `implementing`, `ready-for-review`, `in-review`, `reviewing`, or `finalizing`.
+
+Typical delivery command once the implementation slot is clear:
+
+```bash
+bin/dev iteration-start docs/iterations/NNN-topic/plan.md
+# equivalent to:
+fabro run .fabro/workflows/iteration-deliver/workflow.toml \
+  -I plan_path=docs/iterations/NNN-topic/plan.md \
+  -I mode=deliver
 ```
 
 Manual split-phase escape hatches remain available:
 
 ```bash
 fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+.fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
 fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
 bin/dev iteration-review main docs/iterations/NNN-topic/plan.md <base-sha>
 ```

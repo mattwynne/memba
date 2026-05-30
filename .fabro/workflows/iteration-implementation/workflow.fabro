@@ -34,6 +34,20 @@ digraph IterationImplementation {
         script="echo 'Iteration implementation failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
     ]
 
+    wip_gate [
+        label="Check Implementation WIP Slot",
+        shape=parallelogram,
+        script=".fabro/workflows/scripts/iteration_status.py check-clear '{{ inputs.plan_path }}' --allow-same-iteration",
+        timeout="120s"
+    ]
+
+    wip_blocked [
+        label="Fail: Implementation WIP Occupied",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration implementation failed before coding: another iteration already occupies the implementation WIP slot. Plan validation may run in parallel, but implementation must remain single-piece-flow.' >&2\nexit 1"
+    ]
+
     preflight_sandbox [
         label="Preflight Sandbox Toolchain",
         shape=parallelogram,
@@ -196,9 +210,13 @@ digraph IterationImplementation {
     ]
 
     start -> read_plan
-    read_plan -> preflight_sandbox [condition="outcome=succeeded"]
+    read_plan -> wip_gate [condition="outcome=succeeded"]
     read_plan -> read_failed
     read_failed -> exit
+
+    wip_gate -> preflight_sandbox [condition="outcome=succeeded"]
+    wip_gate -> wip_blocked
+    wip_blocked -> exit
 
     preflight_sandbox -> resume_gate [condition="outcome=succeeded"]
     preflight_sandbox -> preflight_failed

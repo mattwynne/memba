@@ -7,7 +7,7 @@ description: Pick a ready iteration plan and launch the Fabro iteration-deliver 
 
 ## Overview
 
-Pick a ready iteration from `docs/iterations/README.md` or use Matt's specified plan path, then launch the project's `iteration-deliver` workflow.
+Pick a ready or validated iteration from `docs/iterations/README.md` or use Matt's specified plan path, then launch the project's `iteration-deliver` workflow. Plan validation can run early in `validate_only` mode; implementation remains single-piece-flow.
 
 <HARD-GATE>
 Do not implement or review application code directly in the local checkout. This skill only selects/verifies the plan, validates the delivery workflow, starts the Fabro parent run, and reports/monitors high-level stage status when asked.
@@ -18,7 +18,7 @@ Do not implement or review application code directly in the local checkout. This
 1. Check `git status --short --branch`. If required workflow/plan artifacts are uncommitted or unpushed, ask Matt before committing/pushing them.
 2. Select the plan:
    - Use Matt's specified iteration number/folder/plan path when provided.
-   - Otherwise read `docs/iterations/README.md` and choose the lowest-numbered iteration with status `ready` or `fabro-ready`.
+   - Otherwise read `docs/iterations/README.md` and choose the lowest-numbered iteration with status `ready`, `validated`, or `fabro-ready`.
 3. Verify the plan file exists and ends with `/plan.md`.
 4. Validate the deliver workflow:
    ```bash
@@ -26,7 +26,7 @@ Do not implement or review application code directly in the local checkout. This
    ```
 5. Launch delivery:
    ```bash
-   fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
+   fabro run .fabro/workflows/iteration-deliver/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md -I mode=deliver
    ```
 6. Report the selected iteration, plan path, command, run ID/URL if printed, and that child runs will appear under the deliver run's Children tab.
 
@@ -34,6 +34,8 @@ Do not implement or review application code directly in the local checkout. This
 
 - `validation:not-ready`: summarize blockers and recommend returning to `iteration-planning` to revise the plan.
 - `validation:failed`: report as workflow/tooling failure before implementation.
+- `validation:validated`: validate-only mode succeeded; report that implementation has not started.
+- `implementation:wip-blocked`: another iteration occupies the implementation WIP slot; report the active iteration and do not start implementation.
 - `implementation:failed`: report as implementation failure; no review ran.
 - `delivered:with-review-notes`: delivery landed on `main`; surface review failure/notes as follow-up.
 - `delivered:clean`: implementation, review, and merged-status finalization completed.
@@ -41,6 +43,7 @@ Do not implement or review application code directly in the local checkout. This
 
 ## Key principles
 
-- One parent run, three child runs: validation → implementation → review.
+- One parent run, three child runs in delivery mode: validation → implementation → review.
+- Plan validation may run ahead of implementation with `-I mode=validate_only`; it must not reserve the implementation WIP slot.
 - Review is post-merge and non-blocking.
-- The parent owns the final `ready`/`fabro-ready` → `merged` status update.
+- The parent owns `ready`/`validated`/`fabro-ready` → `implementing` reservation and the final `implementing` → `merged` status update.
