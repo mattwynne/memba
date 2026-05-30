@@ -139,13 +139,14 @@ async function createClub(world, name) {
   const page = world.page;
   await page.goto(`${world.baseUrl}/clubs`);
   await expect(page.locator("#clubs-index")).toBeVisible();
+  await waitForLiveView(page);
 
   const beforeIds = new Set(
     await rowIdsForName(page, "club-row", "data-club-name", name, "data-club-id")
   );
 
   await page.getByLabel("Club name").fill(name);
-  await page.getByRole("button", { name: "Create club" }).click();
+  await submitForm(page, "#new-club-form");
 
   const clubId = await waitForNewRowId(
     page,
@@ -153,7 +154,11 @@ async function createClub(world, name) {
     "data-club-name",
     name,
     "data-club-id",
-    beforeIds
+    beforeIds,
+    async () => {
+      await page.reload();
+      await waitForLiveView(page);
+    }
   );
   world.clubs[name] = clubId;
 }
@@ -176,7 +181,7 @@ async function createPerson(world, name) {
 
   await page.getByLabel("Person name").fill(name);
   await page.getByLabel("Person email").fill(email);
-  await page.getByRole("button", { name: "Create person" }).click();
+  await submitForm(page, "#new-person-form");
 
   const personId = await waitForNewRowId(
     page,
@@ -184,7 +189,11 @@ async function createPerson(world, name) {
     "data-person-name",
     name,
     "data-person-id",
-    beforeIds
+    beforeIds,
+    async () => {
+      await page.reload();
+      await waitForLiveView(page);
+    }
   );
   const row = rowByAttribute(page, "person-row", "data-person-id", personId);
   await expect(row).toContainText(email);
@@ -210,9 +219,12 @@ async function addMember(world, name) {
   }
 
   await page.locator("#member-person-select").selectOption(person.id);
-  await page.locator("#add-member-button").click();
+  await submitForm(page, "#add-member-form");
 
-  await expect(row).toBeVisible();
+  await waitForVisible(row, async () => {
+    await page.reload();
+    await waitForLiveView(page);
+  });
 }
 
 async function sendClubMessage(world, senderName, subject, body) {
@@ -229,7 +241,7 @@ async function sendClubMessage(world, senderName, subject, body) {
   await page.locator("#message-sender-select").selectOption(sender.id);
   await page.getByLabel("Message subject").fill(subject);
   await page.getByLabel("Message body").fill(body);
-  await page.locator("#send-message-button").click();
+  await submitForm(page, "#new-message-form");
 
   const messageId = await waitForNewRowId(
     page,
@@ -237,7 +249,11 @@ async function sendClubMessage(world, senderName, subject, body) {
     "data-message-subject",
     subject,
     "data-message-id",
-    beforeIds
+    beforeIds,
+    async () => {
+      await page.reload();
+      await waitForLiveView(page);
+    }
   );
 
   world.messages[subject] = { id: messageId, clubId, subject };
@@ -277,12 +293,14 @@ async function reportDeliveryStatus(world, recipientName, subject, recordType, o
 async function openClub(world, clubId) {
   await world.page.goto(`${world.baseUrl}/clubs/${clubId}`);
   await expect(world.page.locator("#club-show")).toBeVisible();
+  await waitForLiveView(world.page);
 }
 
 async function openMessage(world, subject) {
   const message = messageFor(world, subject);
   await world.page.goto(`${world.baseUrl}/messages/${message.id}`);
   await expect(world.page.locator("#message-show")).toContainText(subject);
+  await waitForLiveView(world.page);
 }
 
 async function rowIdsForName(page, testId, nameAttribute, name, idAttribute) {
@@ -296,19 +314,78 @@ async function rowIdsForName(page, testId, nameAttribute, name, idAttribute) {
   );
 }
 
-async function waitForNewRowId(page, testId, nameAttribute, name, idAttribute, beforeIds) {
-  await expect
-    .poll(async () => {
-      const ids = await rowIdsForName(page, testId, nameAttribute, name, idAttribute);
-      return ids.find((id) => !beforeIds.has(id)) || null;
-    })
-    .not.toBeNull();
+async function waitForNewRowId(
+  page,
+  testId,
+  nameAttribute,
+  name,
+  idAttribute,
+  beforeIds,
+  refresh
+) {
+  const deadline = Date.now() + 20000;
+  let lastRefreshAt = Date.now();
 
-  const ids = await rowIdsForName(page, testId, nameAttribute, name, idAttribute);
-  const id = ids.find((candidate) => !beforeIds.has(candidate));
+  while (Date.now() < deadline) {
+    const rows = rowByAttribute(page, testId, nameAttribute, name);
+    const rowCount = await rows.count();
+    const ids = [];
 
-  assert.ok(id, `Expected a new ${testId} row named ${name}`);
-  return id;
+    for (let index = 0; index < rowCount; index++) {
+      const id = await rows.nth(index).getAttribute(idAttribute);
+
+      if (id) {
+        ids.push(id);
+      }
+    }
+
+    const id = ids.find((candidate) => !beforeIds.has(candidate));
+
+    if (id) {
+      return id;
+    }
+
+    if (refresh && Date.now() - lastRefreshAt > 1000) {
+      lastRefreshAt = Date.now();
+      await refresh();
+    } else {
+      await page.waitForTimeout(250);
+    }
+  }
+
+  throw new Error(`Expected a new ${testId} row named ${name}`);
+}
+
+async function waitForVisible(locator, refresh) {
+  const deadline = Date.now() + 20000;
+  let lastRefreshAt = Date.now();
+
+  while (Date.now() < deadline) {
+    if ((await locator.count()) > 0 && (await locator.first().isVisible())) {
+      return;
+    }
+
+    if (refresh && Date.now() - lastRefreshAt > 1000) {
+      lastRefreshAt = Date.now();
+      await refresh();
+    } else {
+      await locator.page().waitForTimeout(250);
+    }
+  }
+
+  await expect(locator).toBeVisible();
+}
+
+async function waitForLiveView(page) {
+  await page.waitForFunction(
+    () => window.liveSocket && typeof window.liveSocket.isConnected === "function" && window.liveSocket.isConnected(),
+    null,
+    { timeout: 10000 }
+  );
+}
+
+async function submitForm(page, selector) {
+  await page.locator(selector).evaluate((form) => form.requestSubmit());
 }
 
 function rowByAttribute(page, testId, attribute, value) {
