@@ -1,0 +1,3 @@
+{"cmd": "git status --short && find .fabro -maxdepth 4 -type f -print | sed -n '1,200p'", "timeout": 120000}{"cmd": "ls -R .fabro 2>/dev/null | sed -n '1,200p' && git log --oneline --max-count=3", "timeout": 120000}{"cmd": "pwd; git status --short; find . -maxdepth 3 -type f -name '*review*' -o -path './.fabro/*' | sed -n '1,200p'", "timeout": 120000}{"cmd": "echo hello", "timeout": 120000}{"cmd": "false", "timeout": 120000}No code-health entry is needed.
+
+`docs/code-health.md` was not updated because the review synthesis accepted the implementation, indicated no review fixes were available, and no judgement-worthy residual findings were surfaced for `docs/iterations/005-browser-acceptance-harness/plan.md`. No files were changed.
