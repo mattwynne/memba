@@ -1240,7 +1240,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-30T05:38:39.692353662Z",
-  "last_event_at": "2026-05-30T06:22:33.437189483Z",
+  "last_event_at": "2026-05-30T06:22:58.906095355Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -7419,9 +7419,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1519,
       "checkpoint": {
-        "timestamp": "2026-05-30T06:22:55.906283682Z",
+        "timestamp": "2026-05-30T06:22:58.906095355Z",
         "current_node": "validate_task",
         "completed_nodes": [
           "start",
@@ -7455,6 +7455,304 @@
         "node_retries": {},
         "context_values": {
           "internal.retry_count.resume_gate": 0,
+          "graph.default_fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "command.output": "blob://sha256/fe0704f01c66acc1ba8728b91acd2a78e35aae7d4b2b3a31a7aa0bec2a1b1fdf",
+          "internal.retry_count.validate_task": 0,
+          "last_stage": "validate_task",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Working tree is clean; checkpoint evidence is in recent commit `28e67cc fabro(...): implement_next_task`.\n  - `git show 28e67cc -- docs/iterations/005-browser-acceptance-harness/todo.md` shows exactly one ordinary todo line changed:\n    - `004 Add thin public context APIs...` from `- [ ]` to `- [x]`.\n  - The parent todo state at `28e67cc^` shows task 004 was the first unchecked task when implementation started.\n  - Current `todo.md` has 001–004 checked and 005 as the first unchecked task.\n\n- Implementation artifacts found.\n  - `web/lib/memba/membership.ex` now exposes public command-style APIs:\n    - `create_club/1,2`\n    - `create_person/1,2`\n    - `add_member/1,2`\n  - These dispatch via `Memba.Membership.App` and use existing command structs.\n  - `add_member/1,2` checks active duplicate club/person membership before dispatch.\n  - `web/lib/memba/messaging.ex` now exposes public status-reporting APIs:\n    - `report_delivery_delivered/1,2`\n    - `report_delivery_delayed/1,2`\n    - `report_delivery_bounced/1,2`\n    - `report_delivery_spam_complaint/1,2`\n    - `report_delivery_opened/1,2`\n  - Added focused tests:\n    - `web/test/memba/membership/public_api_test.exs`\n    - `web/test/memba/messaging/status_report_api_test.exs`\n  - Updated `web/test/memba/membership/no_crud_spike_test.exs` to allow the approved public command APIs while still rejecting CRUD helpers.\n\n- Tests run/results found.\n  - I ran `cd web && MIX_ENV=test mix compile --warnings-as-errors`; it passed.\n  - The implementation summary reports focused public API tests passed:\n    - `mix test test/memba/membership/public_api_test.exs test/memba/messaging/status_report_api_test.exs`\n    - `5 tests, 0 failures`\n  - It also reports related Membership/Messaging tests passed:\n    - `80 tests, 0 failures`\n  - My direct focused `mix test` attempt outside the dev-managed Postgres shell was blocked by a missing `/tmp/devenv/postgres/.s.PGSQL.5432` socket; this is an environment service prerequisite, not live evidence of a code failure.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan item 004 exactly: adds thin public context APIs so upcoming LiveViews/controllers do not dispatch Commanded commands directly.\n  - ADR 0007 respected: Membership and Messaging remain separate contexts; Messaging status APIs dispatch Messaging commands only.\n  - ADR 0011 respected: caller-supplied UUID identities are preserved; duplicate active membership prevention is enforced via the Membership query boundary.\n  - ADR 0010 respected: no `*.feature` files were edited in the implementation checkpoint.\n  - ADR 0013 not weakened; this task did not alter the PhoenixTest web-test approach.\n  - Scope is appropriately small and independently checkpointed.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "task_list_complete": false,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Working tree is clean; checkpoint evidence is in recent commit `28e67cc fabro(...): implement_next_task`.\n  - `git s",
+          "task_list_needs_human": false,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "current_node": "validate_task",
+          "thread.validate_task.current_node": "task_gate",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:`\n\n2. **Changes made**\n   - Added public Membership context command APIs in `web/lib/memba/membership.ex`:\n     - `Memba.Membership.create_club/1,2`\n     - `Memba.Membership.create_person/1,2`\n     - `Memba.Membership.add_member/1,2`\n   - These build existing command structs and dispatch through `Memba.Membership.App`.\n   - `add_member/1,2` prevents a duplicate active `{club_id, person_id}` membership via the public Membership query boundary before dispatch.\n   - Added public Messaging status-report APIs in `web/lib/memba/messaging.ex`:\n     - `report_delivery_delivered/1,2`\n     - `report_delivery_delayed/1,2`\n     - `report_delivery_bounced/1,2`\n     - `report_delivery_spam_complaint/1,2`\n     - `report_delivery_opened/1,2`\n   - These build existing delivery-report command structs and dispatch through `Memba.Messaging.App`.\n   - Public APIs accept atom-keyed or string-keyed attrs for upcoming LiveView/controller use.\n   - Added tests:\n     - `web/test/memba/membership/public_api_test.exs`\n     - `web/test/memba/messaging/status_report_api_test.exs`\n   - Updated the Membership no-CRUD guard test to allow the now-plan-approved command-style context APIs while still rejecting CRUD-style Repo helpers.\n\n3. **Focused validation**\n   - `cd web && MIX_ENV=test mix compile --warnings-as-errors`\n     - Passed.\n   - `cd web && mix format lib/memba/membership.ex lib/memba/messaging.ex test/memba/membership/public_api_test.exs test/memba/messaging/status_report_api_test.exs --check-formatted`\n     - Passed.\n   - Focused public API tests with dev-managed Postgres:\n     - `mix test test/memba/membership/public_api_test.exs test/memba/messaging/status_report_api_test.exs`\n     - Passed: `5 tests, 0 failures`.\n   - Related Membership/Messaging tests:\n     - `mix test test/memba/membership test/memba/messaging`\n     - Passed: `80 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n   - Required project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Failed only on the existing pending browser harness TDD failures for task 005:\n       - missing `#clubs-index`\n       - missing `#message-show`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:`\n   - To:\n     - `- [x] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0010 respected: no `.feature` files were edited.\n   - ADR 0013 respected: no web feature-test approach was weakened; existing PhoenixTest browser failures remain for the later LiveView task.\n   - ADR 0007 respected: Membership and Messaging remain separate contexts; Messaging status APIs dispatch only Messaging commands.\n   - ADR 0011 respected: public APIs require caller-supplied UUID identities and `add_member/1,2` enforces duplicate active membership prevention at the application-service/query boundary.",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.task_gate": 0,
+          "outcome": "succeeded",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.read_plan": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.rankdir": "LR",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.node_visit_count": 4,
+          "graph.max_node_visits": "300",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "failure_signature": "",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.start.current_node": "read_plan",
+          "task_retry_available": false,
+          "internal.work_dir": "/workspace/memba",
+          "task_valid": true,
+          "failure_class": "",
+          "internal.run_id": "01KSVP69ES02ATWQ9S3E9MGJAD",
+          "internal.thread_id": "pre_validate_snapshot",
+          "internal.retry_count.all_tasks_done": 0
+        },
+        "node_outcomes": {
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a0731677366ad4fdd7dddd5e8d0cc73914c3ebd8d42cc8ff11b2dcc91d97c88d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf3c4570312f4a9c385acd04d9a2f94439fca63987b2c0a7f50777b7325b2830"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 251,
+              "active_time_ms": 251
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fe0704f01c66acc1ba8728b91acd2a78e35aae7d4b2b3a31a7aa0bec2a1b1fdf"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 208,
+              "active_time_ms": 208
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Working tree is clean; checkpoint evidence is in recent commit `28e67cc fabro(...): implement_next_task`.\n  - `git show 28e67cc -- docs/iterations/005-browser-acceptance-harness/todo.md` shows exactly one ordinary todo line changed:\n    - `004 Add thin public context APIs...` from `- [ ]` to `- [x]`.\n  - The parent todo state at `28e67cc^` shows task 004 was the first unchecked task when implementation started.\n  - Current `todo.md` has 001–004 checked and 005 as the first unchecked task.\n\n- Implementation artifacts found.\n  - `web/lib/memba/membership.ex` now exposes public command-style APIs:\n    - `create_club/1,2`\n    - `create_person/1,2`\n    - `add_member/1,2`\n  - These dispatch via `Memba.Membership.App` and use existing command structs.\n  - `add_member/1,2` checks active duplicate club/person membership before dispatch.\n  - `web/lib/memba/messaging.ex` now exposes public status-reporting APIs:\n    - `report_delivery_delivered/1,2`\n    - `report_delivery_delayed/1,2`\n    - `report_delivery_bounced/1,2`\n    - `report_delivery_spam_complaint/1,2`\n    - `report_delivery_opened/1,2`\n  - Added focused tests:\n    - `web/test/memba/membership/public_api_test.exs`\n    - `web/test/memba/messaging/status_report_api_test.exs`\n  - Updated `web/test/memba/membership/no_crud_spike_test.exs` to allow the approved public command APIs while still rejecting CRUD helpers.\n\n- Tests run/results found.\n  - I ran `cd web && MIX_ENV=test mix compile --warnings-as-errors`; it passed.\n  - The implementation summary reports focused public API tests passed:\n    - `mix test test/memba/membership/public_api_test.exs test/memba/messaging/status_report_api_test.exs`\n    - `5 tests, 0 failures`\n  - It also reports related Membership/Messaging tests passed:\n    - `80 tests, 0 failures`\n  - My direct focused `mix test` attempt outside the dev-managed Postgres shell was blocked by a missing `/tmp/devenv/postgres/.s.PGSQL.5432` socket; this is an environment service prerequisite, not live evidence of a code failure.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan item 004 exactly: adds thin public context APIs so upcoming LiveViews/controllers do not dispatch Commanded commands directly.\n  - ADR 0007 respected: Membership and Messaging remain separate contexts; Messaging status APIs dispatch Messaging commands only.\n  - ADR 0011 respected: caller-supplied UUID identities are preserved; duplicate active membership prevention is enforced via the Membership query boundary.\n  - ADR 0010 respected: no `*.feature` files were edited in the implementation checkpoint.\n  - ADR 0013 not weakened; this task did not alter the PhoenixTest web-test approach.\n  - Scope is appropriately small and independently checkpointed.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Working tree is clean; checkpoint evidence is in recent commit `28e67cc fabro(...): implement_next_task`.\n  - `git s",
+              "task_retry_available": false
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 378427,
+                    "output_tokens": 2511,
+                    "reasoning_tokens": 1920,
+                    "cache_read_tokens": 162304,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2106217
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 109988,
+              "tool_time_ms": 4339,
+              "active_time_ms": 114327
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:`\n\n2. **Changes made**\n   - Added public Membership context command APIs in `web/lib/memba/membership.ex`:\n     - `Memba.Membership.create_club/1,2`\n     - `Memba.Membership.create_person/1,2`\n     - `Memba.Membership.add_member/1,2`\n   - These build existing command structs and dispatch through `Memba.Membership.App`.\n   - `add_member/1,2` prevents a duplicate active `{club_id, person_id}` membership via the public Membership query boundary before dispatch.\n   - Added public Messaging status-report APIs in `web/lib/memba/messaging.ex`:\n     - `report_delivery_delivered/1,2`\n     - `report_delivery_delayed/1,2`\n     - `report_delivery_bounced/1,2`\n     - `report_delivery_spam_complaint/1,2`\n     - `report_delivery_opened/1,2`\n   - These build existing delivery-report command structs and dispatch through `Memba.Messaging.App`.\n   - Public APIs accept atom-keyed or string-keyed attrs for upcoming LiveView/controller use.\n   - Added tests:\n     - `web/test/memba/membership/public_api_test.exs`\n     - `web/test/memba/messaging/status_report_api_test.exs`\n   - Updated the Membership no-CRUD guard test to allow the now-plan-approved command-style context APIs while still rejecting CRUD-style Repo helpers.\n\n3. **Focused validation**\n   - `cd web && MIX_ENV=test mix compile --warnings-as-errors`\n     - Passed.\n   - `cd web && mix format lib/memba/membership.ex lib/memba/messaging.ex test/memba/membership/public_api_test.exs test/memba/messaging/status_report_api_test.exs --check-formatted`\n     - Passed.\n   - Focused public API tests with dev-managed Postgres:\n     - `mix test test/memba/membership/public_api_test.exs test/memba/messaging/status_report_api_test.exs`\n     - Passed: `5 tests, 0 failures`.\n   - Related Membership/Messaging tests:\n     - `mix test test/memba/membership test/memba/messaging`\n     - Passed: `80 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n   - Required project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Failed only on the existing pending browser harness TDD failures for task 005:\n       - missing `#clubs-index`\n       - missing `#message-show`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:`\n   - To:\n     - `- [x] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0010 respected: no `.feature` files were edited.\n   - ADR 0013 respected: no web feature-test approach was weakened; existing PhoenixTest browser failures remain for the later LiveView task.\n   - ADR 0007 respected: Membership and Messaging remain separate contexts; Messaging status APIs dispatch only Messaging commands.\n   - ADR 0011 respected: public APIs require caller-supplied UUID identities and `add_member/1,2` enforces duplicate active membership prevention at the application-service/query boundary.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web ",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 921909,
+                    "output_tokens": 13977,
+                    "reasoning_tokens": 5490,
+                    "cache_read_tokens": 3837952,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 7112531
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 507473,
+              "tool_time_ms": 177365,
+              "active_time_ms": 684838
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 13072,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 59,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 67970
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 2815,
+              "tool_time_ms": 0,
+              "active_time_ms": 2815
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/77058b7a1d4b96b892ac8857ec2e4db0602ff5fe324147905e56ac384c4340a4"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170511,
+              "active_time_ms": 170511
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/509dfd1031f76293109e016beffbeff592809157e6e10e460c9bb480c7804c65"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 176,
+              "active_time_ms": 176
+            }
+          }
+        },
+        "next_node_id": "task_gate",
+        "git_commit_sha": "3d7fab2d509f4a536494d3dd2246c405b23ea2fa",
+        "node_visits": {
+          "read_plan": 1,
+          "implement_next_task": 4,
+          "preflight_sandbox": 1,
+          "resume_gate": 1,
+          "start": 1,
+          "sync_task_list": 4,
+          "pre_validate_snapshot": 4,
+          "all_tasks_done": 4,
+          "task_gate": 3,
+          "validate_task": 4
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 16,
+          "additions": 817,
+          "deletions": 13
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-30T06:22:58.929546469Z",
+        "current_node": "task_gate",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.resume_gate": 0,
           "internal.retry_count.sync_task_list": 0,
           "task_valid": true,
           "thread.task_gate.current_node": "sync_task_list",
@@ -7463,7 +7761,7 @@
           "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Working tree is clean; checkpoint evidence is in recent commit `28e67cc fabro(...): implement_next_task`.\n  - `git s",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "graph.max_node_visits": "300",
           "internal.retry_count.all_tasks_done": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
@@ -7492,7 +7790,7 @@
           "internal.retry_count.read_plan": 0,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "task_retry_available": false,
           "thread.start.current_node": "read_plan",
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
@@ -7692,7 +7990,7 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "pre_validate_snapshot": 4,
           "start": 1,
@@ -7700,7 +7998,7 @@
           "sync_task_list": 4,
           "read_plan": 1,
           "resume_gate": 1,
-          "task_gate": 3,
+          "task_gate": 4,
           "preflight_sandbox": 1,
           "implement_next_task": 4,
           "all_tasks_done": 4
@@ -8092,7 +8390,12 @@
       "first_event_seq": 1414,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T06:22:55.903052772Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -8106,13 +8409,20 @@
       "output": null,
       "started_at": "2026-05-30T06:21:01.083659304Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 114819,
+        "inference_time_ms": 109988,
+        "tool_time_ms": 4339,
+        "active_time_ms": 114327
+      },
       "usage": {
-        "input_tokens": 371909,
-        "output_tokens": 1804,
-        "total_tokens": 497626,
-        "reasoning_tokens": 1545,
-        "cache_read_tokens": 122368,
-        "cache_write_tokens": 0
+        "input_tokens": 384945,
+        "output_tokens": 3218,
+        "total_tokens": 592698,
+        "reasoning_tokens": 2295,
+        "cache_read_tokens": 202240,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 2106217
       },
       "model": {
         "provider": "openai",
@@ -8251,32 +8561,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 46359,
-        "usage_percent": 17.04375,
+        "input_tokens": 46454,
+        "usage_percent": 17.078676470588235,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-05-30T06:22:33.365300876Z",
-        "event_seq": 1508,
+        "generated_at": "2026-05-30T06:22:55.902314743Z",
+        "event_seq": 1515,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1097,
-            "usage_percent": 0.4033088235294118
+            "tokens": 1089,
+            "usage_percent": 0.40036764705882355
           },
           {
             "category": "tools",
-            "tokens": 1559,
-            "usage_percent": 0.5731617647058823
+            "tokens": 1548,
+            "usage_percent": 0.5691176470588235
           },
           {
             "category": "memory",
-            "tokens": 291,
-            "usage_percent": 0.10698529411764705
+            "tokens": 289,
+            "usage_percent": 0.10625
           },
           {
             "category": "conversation",
-            "tokens": 43406,
-            "usage_percent": 15.958088235294118
+            "tokens": 43522,
+            "usage_percent": 16.000735294117646
           },
           {
             "category": "other",
@@ -8286,7 +8596,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "all_tasks_done@1": {
       "first_event_seq": 65,
