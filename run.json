@@ -668,7 +668,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-30T07:47:01.518487021Z",
-  "last_event_at": "2026-05-30T07:49:30.583863127Z",
+  "last_event_at": "2026-05-30T07:49:33.672706939Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1554,9 +1554,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 76,
       "checkpoint": {
-        "timestamp": "2026-05-30T07:49:30.606138729Z",
+        "timestamp": "2026-05-30T07:49:33.655466062Z",
         "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
@@ -1569,6 +1569,285 @@
         ],
         "node_retries": {},
         "context_values": {
+          "claude_review_confidence": "High",
+          "codex_review_required_edits": "None",
+          "outcome": "succeeded",
+          "internal.node_visit_count": 1,
+          "response.gemini_review": "{\n  \"markdown_report\": \"# Iteration Plan Review\\n\\n**Decision:** READY\\n**Confidence:** High\\n\\n**Blocking gaps:**\\nNone.\\n\\n**Non-blocking improvements:**\\n1. The implementation plan could explicitly mention adding a content disposition header (e.g., `attachment; filename=\\\"...\\\"`) to ensure the browser prompts a download rather than displaying the CSV inline, though standard Phoenix `send_download` covers this if used.\\n\\n**Smallest viable iteration:**\\nThe proposed scope is already an excellent smallest useful slice. It avoids background jobs, multi-message exports, and new dependencies.\\n\\n**Required plan edits:**\\nNone.\\n\\n**Validation plan:**\\nThe validation plan provided in the iteration plan is sufficient. It requires running focused tests, manually verifying the CSV output for various recipient states, and ensuring `dev check` passes.\",\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+          "claude_review_blocking_gaps": "None",
+          "internal.retry_count.gemini_review": 0,
+          "thread.synthesize.current_node": "synthesis_gate",
+          "codex_review_blocking_gaps": "None",
+          "claude_review_required_edits": "None",
+          "plan_needs_fix": false,
+          "claude_review_blocking_gap_count": 0,
+          "codex_review_confidence": "High",
+          "command.output": "blob://sha256/c28b7e010ff5b24ffcd34306c11ff02e4f05b54f27d66a2b9b8dd2f5c4e0c986",
+          "graph.rankdir": "LR",
+          "plan_ready": true,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "claude_review_decision": "READY",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "gemini_review_blocking_gaps": "None",
+          "gemini_review_confidence": "High",
+          "internal.retry_count.codex_review": 0,
+          "internal.run_id": "01KSVXKE6BK22YHBW4YV2PHHXR",
+          "internal.thread_id": "synthesize",
+          "failure_class": "",
+          "internal.retry_count.claude_review": 0,
+          "codex_review_blocking_gap_count": 0,
+          "internal.retry_count.synthesize": 0,
+          "last_stage": "synthesize",
+          "plan_needs_human": false,
+          "internal.retry_count.read_plan": 0,
+          "gemini_review_blocking_gap_count": 0,
+          "internal.retry_count.start": 0,
+          "response.claude_review": "# Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **CSV escaping verification**: Add an explicit acceptance criterion for CSV field escaping, such as \"A message subject or delivery reason containing commas, quotes, or newlines is properly escaped per RFC 4180 in the downloaded CSV.\"\n\n2. **Empty recipient list behavior**: Clarify what happens when a message exists but has zero addressed recipients. Should it return an empty CSV with headers only, or handle it differently?\n\n3. **Download link placement**: Specify where in the message detail LiveView the download link should appear (e.g., \"Add a 'Download CSV' link in the message actions section\") and what the link text should be, though this could reasonably follow existing UI conventions.\n\n4. **Module naming**: Consider naming the specific module that will implement CSV export (e.g., `MembaWeb.MessageDeliveryReceipts.CSV` or `MembaWeb.Exports.MessageDeliveryReceipts`) to give implementers a clearer starting point.\n\n## Smallest viable iteration\n\nThe proposed scope is already an excellent minimal viable slice. It focuses on a single message, read-only operation, no background jobs, and reuses existing domain models. No further reduction is recommended.\n\n## Required plan edits\n\nNone. The plan is implementable as written.\n\n## Validation plan\n\nThe provided validation plan is sufficient and concrete:\n\n1. Run the focused controller and CSV export tests\n2. Manually create a message with delivered, problem, opened, and sent recipients\n3. Download the CSV and verify:\n   - Exact column headers and order\n   - One row per addressed recipient\n   - Correct status values for each recipient state\n   - Proper sorting (name ascending, then email ascending)\n   - Delivery reasons appear correctly\n   - Non-addressed members are excluded\n4. Test the 404 behavior for unknown message IDs\n5. Run `dev check` and ensure it passes\n\nOptional additional manual validation:\n- Test CSV with special characters in subject line and delivery reasons to verify RFC 4180 escaping\n- Test browser download behavior (file naming, content disposition)\n\n## Assessment\n\nThis is a well-structured, focused plan with clear boundaries and comprehensive acceptance criteria. The goal is articulated from the operator's perspective, the scope explicitly excludes complexity, and the implementation steps are ordered and specific. All business and technical decisions are resolved. The iteration delivers a single coherent capability that can be objectively validated.\n\nThe minor improvements listed above would strengthen the plan slightly but are not blockers. The plan can be implemented successfully as written, with any edge cases (empty recipients, null values) being handled during implementation based on existing domain constraints.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "response.codex_review": "{\"outcome\":\"succeeded\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "thread.claude_review.current_node": "codex_review",
+          "gemini_review_required_edits": "None",
+          "thread.codex_review.current_node": "synthesize",
+          "gemini_review_decision": "READY",
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.read_plan.current_node": "gemini_review",
+          "thread.start.current_node": "read_plan",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.synthesis_gate": 0,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "graph.default_fidelity": "summary:high",
+          "current_node": "synthesis_gate",
+          "codex_review_decision": "READY",
+          "failure_signature": "",
+          "internal.fidelity": "summary:high"
+        },
+        "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_blocking_gaps": "None",
+              "claude_review_required_edits": "None",
+              "response.claude_review": "# Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **CSV escaping verification**: Add an explicit acceptance criterion for CSV field escaping, such as \"A message subject or delivery reason containing commas, quotes, or newlines is properly escaped per RFC 4180 in the downloaded CSV.\"\n\n2. **Empty recipient list behavior**: Clarify what happens when a message exists but has zero addressed recipients. Should it return an empty CSV with headers only, or handle it differently?\n\n3. **Download link placement**: Specify where in the message detail LiveView the download link should appear (e.g., \"Add a 'Download CSV' link in the message actions section\") and what the link text should be, though this could reasonably follow existing UI conventions.\n\n4. **Module naming**: Consider naming the specific module that will implement CSV export (e.g., `MembaWeb.MessageDeliveryReceipts.CSV` or `MembaWeb.Exports.MessageDeliveryReceipts`) to give implementers a clearer starting point.\n\n## Smallest viable iteration\n\nThe proposed scope is already an excellent minimal viable slice. It focuses on a single message, read-only operation, no background jobs, and reuses existing domain models. No further reduction is recommended.\n\n## Required plan edits\n\nNone. The plan is implementable as written.\n\n## Validation plan\n\nThe provided validation plan is sufficient and concrete:\n\n1. Run the focused controller and CSV export tests\n2. Manually create a message with delivered, problem, opened, and sent recipients\n3. Download the CSV and verify:\n   - Exact column headers and order\n   - One row per addressed recipient\n   - Correct status values for each recipient state\n   - Proper sorting (name ascending, then email ascending)\n   - Delivery reasons appear correctly\n   - Non-addressed members are excluded\n4. Test the 404 behavior for unknown message IDs\n5. Run `dev check` and ensure it passes\n\nOptional additional manual validation:\n- Test CSV with special characters in subject line and delivery reasons to verify RFC 4180 escaping\n- Test browser download behavior (file naming, content disposition)\n\n## Assessment\n\nThis is a well-structured, focused plan with clear boundaries and comprehensive acceptance criteria. The goal is articulated from the operator's perspective, the scope explicitly excludes complexity, and the implementation steps are ordered and specific. All business and technical decisions are resolved. The iteration delivers a single coherent capability that can be objectively validated.\n\nThe minor improvements listed above would strengthen the plan slightly but are not blockers. The plan can be implemented successfully as written, with any edge cases (empty recipients, null values) being handled during implementation based on existing domain constraints.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "last_stage": "claude_review",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gap_count": 0,
+              "last_response": "# Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **CSV escaping verification**: Add an explicit acceptance criterion for C",
+              "claude_review_decision": "READY"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 2588,
+                    "output_tokens": 3763,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 64209
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 83754,
+              "tool_time_ms": 0,
+              "active_time_ms": 83754
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c28b7e010ff5b24ffcd34306c11ff02e4f05b54f27d66a2b9b8dd2f5c4e0c986"
+            },
+            "notes": "Script completed: PLAN_PATH='.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_required_edits": "None",
+              "gemini_review_blocking_gap_count": 0,
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_decision": "READY",
+              "gemini_review_confidence": "High",
+              "last_stage": "gemini_review",
+              "response.gemini_review": "{\n  \"markdown_report\": \"# Iteration Plan Review\\n\\n**Decision:** READY\\n**Confidence:** High\\n\\n**Blocking gaps:**\\nNone.\\n\\n**Non-blocking improvements:**\\n1. The implementation plan could explicitly mention adding a content disposition header (e.g., `attachment; filename=\\\"...\\\"`) to ensure the browser prompts a download rather than displaying the CSV inline, though standard Phoenix `send_download` covers this if used.\\n\\n**Smallest viable iteration:**\\nThe proposed scope is already an excellent smallest useful slice. It avoids background jobs, multi-message exports, and new dependencies.\\n\\n**Required plan edits:**\\nNone.\\n\\n**Validation plan:**\\nThe validation plan provided in the iteration plan is sufficient. It requires running focused tests, manually verifying the CSV output for various recipient states, and ensuring `dev check` passes.\",\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+              "last_response": "{\n  \"markdown_report\": \"# Iteration Plan Review\\n\\n**Decision:** READY\\n**Confidence:** High\\n\\n**Blocking gaps:**\\nNone.\\n\\n**Non-blocking improvements:**\\n1. The implementation plan could explicitly"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 2029,
+                    "output_tokens": 281,
+                    "reasoning_tokens": 2482,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 37214
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 23868,
+              "tool_time_ms": 0,
+              "active_time_ms": 23868
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_fix": false,
+              "plan_needs_human": false,
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "plan_ready": true
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 3625,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 92,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 21875
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4311,
+              "tool_time_ms": 0,
+              "active_time_ms": 4311
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_decision": "READY",
+              "response.codex_review": "{\"outcome\":\"succeeded\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_confidence": "High",
+              "codex_review_required_edits": "None",
+              "codex_review_blocking_gap_count": 0,
+              "last_response": "{\"outcome\":\"succeeded\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_require",
+              "codex_review_blocking_gaps": "None",
+              "last_stage": "codex_review"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.3-codex"
+                  },
+                  "tokens": {
+                    "input_tokens": 10314,
+                    "output_tokens": 557,
+                    "reasoning_tokens": 382,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 31195
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20685,
+              "tool_time_ms": 0,
+              "active_time_ms": 20685
+            }
+          }
+        },
+        "next_node_id": "publish_ready",
+        "git_commit_sha": "5414f173f65ce9bf35799421fbe3dd0e292935aa",
+        "node_visits": {
+          "codex_review": 1,
+          "gemini_review": 1,
+          "synthesis_gate": 1,
+          "synthesize": 1,
+          "claude_review": 1,
+          "start": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-30T07:49:33.852672156Z",
+        "current_node": "publish_ready",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "publish_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.run_id": "01KSVXKE6BK22YHBW4YV2PHHXR",
           "thread.start.current_node": "read_plan",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
@@ -1576,6 +1855,7 @@
           "plan_needs_human": false,
           "internal.retry_count.synthesize": 0,
           "codex_review_confidence": "High",
+          "thread.synthesis_gate.current_node": "publish_ready",
           "plan_needs_fix": false,
           "internal.retry_count.gemini_review": 0,
           "internal.node_visit_count": 1,
@@ -1583,13 +1863,13 @@
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.start": 0,
-          "command.output": "blob://sha256/c28b7e010ff5b24ffcd34306c11ff02e4f05b54f27d66a2b9b8dd2f5c4e0c986",
+          "command.output": "blob://sha256/7c4ba476b23d30e3a3b72b994b830f401575465e1ca4bda6b51f3f04ee271ba4",
           "claude_review_blocking_gaps": "None",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "response.claude_review": "# Iteration Plan Review\n\n**Decision:** READY  \n**Confidence:** High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **CSV escaping verification**: Add an explicit acceptance criterion for CSV field escaping, such as \"A message subject or delivery reason containing commas, quotes, or newlines is properly escaped per RFC 4180 in the downloaded CSV.\"\n\n2. **Empty recipient list behavior**: Clarify what happens when a message exists but has zero addressed recipients. Should it return an empty CSV with headers only, or handle it differently?\n\n3. **Download link placement**: Specify where in the message detail LiveView the download link should appear (e.g., \"Add a 'Download CSV' link in the message actions section\") and what the link text should be, though this could reasonably follow existing UI conventions.\n\n4. **Module naming**: Consider naming the specific module that will implement CSV export (e.g., `MembaWeb.MessageDeliveryReceipts.CSV` or `MembaWeb.Exports.MessageDeliveryReceipts`) to give implementers a clearer starting point.\n\n## Smallest viable iteration\n\nThe proposed scope is already an excellent minimal viable slice. It focuses on a single message, read-only operation, no background jobs, and reuses existing domain models. No further reduction is recommended.\n\n## Required plan edits\n\nNone. The plan is implementable as written.\n\n## Validation plan\n\nThe provided validation plan is sufficient and concrete:\n\n1. Run the focused controller and CSV export tests\n2. Manually create a message with delivered, problem, opened, and sent recipients\n3. Download the CSV and verify:\n   - Exact column headers and order\n   - One row per addressed recipient\n   - Correct status values for each recipient state\n   - Proper sorting (name ascending, then email ascending)\n   - Delivery reasons appear correctly\n   - Non-addressed members are excluded\n4. Test the 404 behavior for unknown message IDs\n5. Run `dev check` and ensure it passes\n\nOptional additional manual validation:\n- Test CSV with special characters in subject line and delivery reasons to verify RFC 4180 escaping\n- Test browser download behavior (file naming, content disposition)\n\n## Assessment\n\nThis is a well-structured, focused plan with clear boundaries and comprehensive acceptance criteria. The goal is articulated from the operator's perspective, the scope explicitly excludes complexity, and the implementation steps are ordered and specific. All business and technical decisions are resolved. The iteration delivers a single coherent capability that can be objectively validated.\n\nThe minor improvements listed above would strengthen the plan slightly but are not blockers. The plan can be implemented successfully as written, with any edge cases (empty recipients, null values) being handled during implementation based on existing domain constraints.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "internal.thread_id": "synthesize",
+          "internal.thread_id": "synthesis_gate",
           "graph.default_fidelity": "summary:high",
-          "current_node": "synthesis_gate",
+          "current_node": "publish_ready",
           "gemini_review_confidence": "High",
           "claude_review_confidence": "High",
           "response.gemini_review": "{\n  \"markdown_report\": \"# Iteration Plan Review\\n\\n**Decision:** READY\\n**Confidence:** High\\n\\n**Blocking gaps:**\\nNone.\\n\\n**Non-blocking improvements:**\\n1. The implementation plan could explicitly mention adding a content disposition header (e.g., `attachment; filename=\\\"...\\\"`) to ensure the browser prompts a download rather than displaying the CSV inline, though standard Phoenix `send_download` covers this if used.\\n\\n**Smallest viable iteration:**\\nThe proposed scope is already an excellent smallest useful slice. It avoids background jobs, multi-message exports, and new dependencies.\\n\\n**Required plan edits:**\\nNone.\\n\\n**Validation plan:**\\nThe validation plan provided in the iteration plan is sufficient. It requires running focused tests, manually verifying the CSV output for various recipient states, and ensuring `dev check` passes.\",\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
@@ -1612,6 +1892,7 @@
           "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "plan_ready": true,
           "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.publish_ready": 0,
           "codex_review_decision": "READY",
           "codex_review_blocking_gap_count": 0,
           "internal.retry_count.codex_review": 0,
@@ -1791,6 +2072,20 @@
               "active_time_ms": 20685
             }
           },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7c4ba476b23d30e3a3b72b994b830f401575465e1ca4bda6b51f3f04ee271ba4"
+            },
+            "notes": "Script completed: if [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169,
+              "active_time_ms": 169
+            }
+          },
           "synthesis_gate": {
             "status": "succeeded",
             "notes": "Conditional node evaluated: synthesis_gate",
@@ -1811,14 +2106,15 @@
             }
           }
         },
-        "next_node_id": "publish_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "start": 1,
-          "read_plan": 1,
-          "codex_review": 1,
           "synthesize": 1,
-          "synthesis_gate": 1,
           "gemini_review": 1,
+          "read_plan": 1,
+          "synthesis_gate": 1,
+          "publish_ready": 1,
+          "codex_review": 1,
           "claude_review": 1
         }
       },
@@ -1845,6 +2141,128 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "claude_review@1": {
+      "first_event_seq": 41,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T07:48:56.551358446Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:47:32.739276678Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 83812,
+        "inference_time_ms": 83754,
+        "tool_time_ms": 0,
+        "active_time_ms": 83754
+      },
+      "usage": {
+        "input_tokens": 2588,
+        "output_tokens": 3763,
+        "total_tokens": 6351,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 64209
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
+      },
+      "state": "succeeded"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 71,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T07:49:30.601701506Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:49:30.592110324Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 9,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "codex_review@1": {
+      "first_event_seq": 51,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: codex_review",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T07:49:20.195809541Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.3-codex",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:48:59.436549545Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 20759,
+        "inference_time_ms": 20685,
+        "tool_time_ms": 0,
+        "active_time_ms": 20685
+      },
+      "usage": {
+        "input_tokens": 10314,
+        "output_tokens": 557,
+        "total_tokens": 11253,
+        "reasoning_tokens": 382,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 31195
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.3-codex"
+      },
+      "state": "succeeded"
+    },
     "gemini_review@1": {
       "first_event_seq": 31,
       "prompt": null,
@@ -1967,6 +2385,33 @@
       },
       "state": "succeeded"
     },
+    "publish_ready@1": {
+      "first_event_seq": 79,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "if [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'",
+        "command": "exec 2>&1\nif [ 'false' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md'",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-30T07:49:33.669437421Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "read_plan@1": {
       "first_event_seq": 21,
       "prompt": null,
@@ -2012,94 +2457,6 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "claude_review@1": {
-      "first_event_seq": 41,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: claude_review",
-        "failure_reason": null,
-        "timestamp": "2026-05-30T07:48:56.551358446Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "anthropic",
-        "model": "claude-sonnet-4-5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-05-30T07:47:32.739276678Z",
-      "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 83812,
-        "inference_time_ms": 83754,
-        "tool_time_ms": 0,
-        "active_time_ms": 83754
-      },
-      "usage": {
-        "input_tokens": 2588,
-        "output_tokens": 3763,
-        "total_tokens": 6351,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 64209
-      },
-      "model": {
-        "provider": "anthropic",
-        "model_id": "claude-sonnet-4-5"
-      },
-      "state": "succeeded"
-    },
-    "codex_review@1": {
-      "first_event_seq": 51,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: codex_review",
-        "failure_reason": null,
-        "timestamp": "2026-05-30T07:49:20.195809541Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openai",
-        "model": "gpt-5.3-codex",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-05-30T07:48:59.436549545Z",
-      "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 20759,
-        "inference_time_ms": 20685,
-        "tool_time_ms": 0,
-        "active_time_ms": 20685
-      },
-      "usage": {
-        "input_tokens": 10314,
-        "output_tokens": 557,
-        "total_tokens": 11253,
-        "reasoning_tokens": 382,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 31195
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.3-codex"
       },
       "state": "succeeded"
     }
