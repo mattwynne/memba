@@ -3,9 +3,12 @@ defmodule Memba.Membership.NoCrudSpikeTest do
 
   @web_root Path.expand("../../..", __DIR__)
 
-  test "public Membership context remains a query boundary instead of CRUD helpers" do
+  test "public Membership context exposes approved command APIs instead of CRUD helpers" do
     source = read_source!("lib/memba/membership.ex")
 
+    assert source =~ "def create_club("
+    assert source =~ "def create_person("
+    assert source =~ "def add_member("
     assert source =~ "def get_club("
     assert source =~ "def list_active_members_of_club("
 
@@ -15,7 +18,15 @@ defmodule Memba.Membership.NoCrudSpikeTest do
       |> List.flatten()
 
     assert list_functions == ["list_active_members_of_club"]
-    refute source =~ ~r/\bdef\s+(create|update|delete|change)_[a-zA-Z0-9_]+\b/
+
+    create_functions =
+      ~r/\bdef\s+(create_[a-zA-Z0-9_]+)\b/
+      |> Regex.scan(source, capture: :all_but_first)
+      |> List.flatten()
+
+    assert create_functions == ["create_club", "create_person"]
+    refute source =~ ~r/\bdef\s+(update|delete|change)_[a-zA-Z0-9_]+\b/
+    refute source =~ ~r/\bRepo\.(insert|update|delete)\b/
   end
 
   test "club aggregate is not the former Ecto schema and changeset module" do

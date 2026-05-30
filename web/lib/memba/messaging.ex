@@ -5,6 +5,11 @@ defmodule Memba.Messaging do
 
   alias Memba.Membership
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.ReportDeliveryBounced
+  alias Memba.Messaging.Commands.ReportDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportDeliveryOpened
+  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.DeliveryProvider
   alias Memba.Messaging.DeliveryRequest
@@ -27,8 +32,63 @@ defmodule Memba.Messaging do
   def send_club_message(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- send_club_message_command(attrs),
-         {:ok, dispatch_result} <- dispatch_send_message(command, dispatch_opts),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts),
          :ok <- deliver_to_provider(command) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Report that a recipient delivery was accepted by the recipient server.
+  """
+  def report_delivery_delivered(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- report_delivery_delivered_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Report that a recipient delivery was temporarily delayed.
+  """
+  def report_delivery_delayed(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- report_delivery_delayed_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Report that a recipient delivery bounced.
+  """
+  def report_delivery_bounced(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- report_delivery_bounced_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Report that a recipient marked a delivery as spam.
+  """
+  def report_delivery_spam_complaint(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- report_delivery_spam_complaint_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
+      dispatch_result
+    end
+  end
+
+  @doc """
+  Report that a recipient opened a delivery.
+  """
+  def report_delivery_opened(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- report_delivery_opened_command(attrs),
+         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
   end
@@ -175,7 +235,7 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp dispatch_send_message(%SendMessage{} = command, dispatch_opts) do
+  defp dispatch_command(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
       :ok -> {:ok, :ok}
       {:ok, _result} = ok -> {:ok, ok}
@@ -201,10 +261,66 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp report_delivery_delivered_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
+      {:ok, %ReportDeliveryDelivered{message_id: message_id, delivery_id: delivery_id}}
+    end
+  end
+
+  defp report_delivery_delayed_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
+         {:ok, reason} <- fetch_required(attrs, :reason) do
+      {:ok,
+       %ReportDeliveryDelayed{
+         message_id: message_id,
+         delivery_id: delivery_id,
+         reason: reason
+       }}
+    end
+  end
+
+  defp report_delivery_bounced_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
+         {:ok, reason} <- fetch_required(attrs, :reason) do
+      {:ok,
+       %ReportDeliveryBounced{
+         message_id: message_id,
+         delivery_id: delivery_id,
+         reason: reason
+       }}
+    end
+  end
+
+  defp report_delivery_spam_complaint_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
+         {:ok, reason} <- fetch_required(attrs, :reason) do
+      {:ok,
+       %ReportDeliverySpamComplaint{
+         message_id: message_id,
+         delivery_id: delivery_id,
+         reason: reason
+       }}
+    end
+  end
+
+  defp report_delivery_opened_command(attrs) do
+    with {:ok, message_id} <- fetch_required(attrs, :message_id),
+         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
+      {:ok, %ReportDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}
+    end
+  end
+
   defp fetch_required(attrs, key) do
-    case Map.fetch(attrs, key) do
-      {:ok, value} -> {:ok, value}
-      :error -> {:error, {:missing_required_attribute, key}}
+    string_key = Atom.to_string(key)
+
+    case attrs do
+      %{^key => value} -> {:ok, value}
+      %{^string_key => value} -> {:ok, value}
+      _attrs -> {:error, {:missing_required_attribute, key}}
     end
   end
 
