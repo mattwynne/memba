@@ -46,7 +46,7 @@ Usually not candidates:
 3. Choose a concise slug and create:
    - `docs/kaizen/YYYY-MM-DD-short-observation-slug.md`
 4. Keep the note factual and diagnostic.
-5. Ask before committing the note. Do not include unrelated working-tree changes.
+5. Commit the note once written. Do not include unrelated working-tree changes.
 
 ## Note Template
 
