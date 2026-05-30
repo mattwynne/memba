@@ -1240,7 +1240,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-30T05:38:39.692353662Z",
-  "last_event_at": "2026-05-30T06:09:17.168485518Z",
+  "last_event_at": "2026-05-30T06:09:20.357903079Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -5948,9 +5948,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1082,
       "checkpoint": {
-        "timestamp": "2026-05-30T06:09:17.178023945Z",
+        "timestamp": "2026-05-30T06:09:20.153456256Z",
         "current_node": "task_gate",
         "completed_nodes": [
           "start",
@@ -5978,6 +5978,299 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.implement_next_task": 0,
+          "failure_class": "",
+          "thread.start.current_node": "read_plan",
+          "internal.fidelity": "summary:high",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Current `todo.md` has tasks 001–003 checked and 004 as the first unchecked task.\n  - `git show 479d614 -- docs/iterations/005-browser-acceptance-harness/todo.md` shows exactly one ordinary task line changed:\n    - `003 Add POST /webhooks/postmark...` from `- [ ]` to `- [x]`.\n  - The parent todo state at `479d614^` shows task 003 was the first unchecked task when this implementation started.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/router.ex` now has a non-browser webhook scope:\n    - `scope \"/webhooks\", MembaWeb`\n    - `pipe_through :api`\n    - `post \"/postmark\", PostmarkWebhookController, :create`\n  - `web/lib/memba_web/controllers/postmark_webhook_controller.ex` was added as a compile-safe controller target returning `501 Not Implemented`, appropriately leaving payload/status handling for later task 006.\n  - `web/test/memba_web/router_test.exs` was updated with route coverage asserting `POST /webhooks/postmark` routes through `[:api]` to `MembaWeb.PostmarkWebhookController.create/2`.\n  - Changed files in the implementation checkpoint are limited and relevant:\n    - `todo.md`\n    - router\n    - controller\n    - router test\n\n- Tests run/results found.\n  - I ran focused router coverage without starting the app/database:\n    - `cd web && MIX_ENV=test mix run --no-start -e ...`\n    - Result: `4 tests, 0 failures`.\n  - A normal `mix test test/memba_web/router_test.exs` attempt was blocked by unavailable local Postgres socket, not by the route code.\n  - Implementation summary also reports compile, format, diff check, and `dev check` were run; `dev check` failed only on expected pending TDD failures for later LiveView implementation work.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan item 3 exactly: add `POST /webhooks/postmark` under an appropriate non-browser pipeline.\n  - Uses existing `:api` JSON pipeline, not the browser pipeline.\n  - Does not implement deferred task 006 webhook parsing/status-reporting behavior prematurely.\n  - ADR 0010 respected: no shared `.feature` files were edited.\n  - ADR 0013 respected: focused lower-level router testing is appropriate for route configuration, while PhoenixTest flow coverage remains for later browser behavior tasks.\n  - No plan-required work was deleted, weakened, or silently deferred beyond the task boundary.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.task_gate": 0,
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.resume_gate": 0,
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n2. **Changes made**\n   - Added a non-browser webhook scope in `web/lib/memba_web/router.ex`:\n     - `POST /webhooks/postmark`\n     - routed through `pipe_through :api`\n     - dispatched to `MembaWeb.PostmarkWebhookController.create/2`\n   - Added a minimal compile-safe controller target:\n     - `web/lib/memba_web/controllers/postmark_webhook_controller.ex`\n     - currently returns `501 Not Implemented` JSON, leaving Postmark payload parsing/status handling for task 006.\n   - Added router coverage in `web/test/memba_web/router_test.exs` asserting:\n     - route is registered for `POST /webhooks/postmark`\n     - route uses `[:api]`, not `[:browser]`\n     - route targets `MembaWeb.PostmarkWebhookController`\n     - action is `:create`\n\n3. **Focused validation**\n   - Confirmed the router test failed first before implementation:\n     - `Phoenix.Router.route_info(...)` returned `:error`\n   - Passed:\n     - `cd web && MIX_ENV=test mix run --no-start -e '...'`\n     - Result: `4 tests, 0 failures`\n   - Passed:\n     - `cd web && MIX_ENV=test mix compile --warnings-as-errors`\n   - Passed:\n     - `cd web && mix format ... --check-formatted`\n   - Passed:\n     - `git diff --check`\n   - Ran required project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: failed with the pre-existing/pending TDD failures from task 001:\n       - missing `#clubs-index`\n       - missing `#message-show`\n     - These are expected to be addressed by later LiveView implementation task 005, not by this route-only task.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n   - To:\n     - `- [x] 003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - Plan references ADR 0010 and ADR 0013; no ADR files were present under `docs/adr/` in this checkout.\n   - Preserved ADR 0010 intent: no `*.feature` files were edited.\n   - Preserved ADR 0013 intent: added automated web/router coverage without bypassing the existing PhoenixTest acceptance harness.\n   - Kept task 006 deferred: no Postmark payload parsing or Messaging status-reporting behaviour was implemented here.",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "current_node": "task_gate",
+          "task_valid": true,
+          "failure_signature": "",
+          "graph.default_fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.validate_task": 0,
+          "command.output": "blob://sha256/c5271863d61fe3d8e23a1b26632b5a76cc68cd594392dbb4469ffcb3342d98ca",
+          "internal.run_id": "01KSVP69ES02ATWQ9S3E9MGJAD",
+          "graph.max_node_visits": "300",
+          "internal.retry_count.read_plan": 0,
+          "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Current `todo.md` has tasks 001–003 checked and 004 as the first unchecked task.\n  - `git show 479d614 -- docs/ite",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "last_stage": "validate_task",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.validate_task.current_node": "task_gate",
+          "task_list_complete": false,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.node_visit_count": 3,
+          "task_retry_available": false,
+          "outcome": "succeeded",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.thread_id": "validate_task",
+          "task_list_needs_human": false,
+          "thread.sync_task_list.current_node": "all_tasks_done"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/77058b7a1d4b96b892ac8857ec2e4db0602ff5fe324147905e56ac384c4340a4"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170511,
+              "active_time_ms": 170511
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d813f3a9fd68804e9375a41f36cbc8147dbab24e745c07a0d581a8e63bf1b69d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161,
+              "active_time_ms": 161
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Current `todo.md` has tasks 001–003 checked and 004 as the first unchecked task.\n  - `git show 479d614 -- docs/iterations/005-browser-acceptance-harness/todo.md` shows exactly one ordinary task line changed:\n    - `003 Add POST /webhooks/postmark...` from `- [ ]` to `- [x]`.\n  - The parent todo state at `479d614^` shows task 003 was the first unchecked task when this implementation started.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/router.ex` now has a non-browser webhook scope:\n    - `scope \"/webhooks\", MembaWeb`\n    - `pipe_through :api`\n    - `post \"/postmark\", PostmarkWebhookController, :create`\n  - `web/lib/memba_web/controllers/postmark_webhook_controller.ex` was added as a compile-safe controller target returning `501 Not Implemented`, appropriately leaving payload/status handling for later task 006.\n  - `web/test/memba_web/router_test.exs` was updated with route coverage asserting `POST /webhooks/postmark` routes through `[:api]` to `MembaWeb.PostmarkWebhookController.create/2`.\n  - Changed files in the implementation checkpoint are limited and relevant:\n    - `todo.md`\n    - router\n    - controller\n    - router test\n\n- Tests run/results found.\n  - I ran focused router coverage without starting the app/database:\n    - `cd web && MIX_ENV=test mix run --no-start -e ...`\n    - Result: `4 tests, 0 failures`.\n  - A normal `mix test test/memba_web/router_test.exs` attempt was blocked by unavailable local Postgres socket, not by the route code.\n  - Implementation summary also reports compile, format, diff check, and `dev check` were run; `dev check` failed only on expected pending TDD failures for later LiveView implementation work.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan item 3 exactly: add `POST /webhooks/postmark` under an appropriate non-browser pipeline.\n  - Uses existing `:api` JSON pipeline, not the browser pipeline.\n  - Does not implement deferred task 006 webhook parsing/status-reporting behavior prematurely.\n  - ADR 0010 respected: no shared `.feature` files were edited.\n  - ADR 0013 respected: focused lower-level router testing is appropriate for route configuration, while PhoenixTest flow coverage remains for later browser behavior tasks.\n  - No plan-required work was deleted, weakened, or silently deferred beyond the task boundary.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Current `todo.md` has tasks 001–003 checked and 004 as the first unchecked task.\n  - `git show 479d614 -- docs/ite",
+              "task_valid": true,
+              "task_retry_available": false,
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 174119,
+                    "output_tokens": 2044,
+                    "reasoning_tokens": 1041,
+                    "cache_read_tokens": 118784,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1022537
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 78181,
+              "tool_time_ms": 3628,
+              "active_time_ms": 81809
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c5271863d61fe3d8e23a1b26632b5a76cc68cd594392dbb4469ffcb3342d98ca"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 176,
+              "active_time_ms": 176
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf3c4570312f4a9c385acd04d9a2f94439fca63987b2c0a7f50777b7325b2830"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 251,
+              "active_time_ms": 251
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/509dfd1031f76293109e016beffbeff592809157e6e10e460c9bb480c7804c65"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 176,
+              "active_time_ms": 176
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9868,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 82,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 52640
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3013,
+              "tool_time_ms": 0,
+              "active_time_ms": 3013
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n2. **Changes made**\n  ",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n2. **Changes made**\n   - Added a non-browser webhook scope in `web/lib/memba_web/router.ex`:\n     - `POST /webhooks/postmark`\n     - routed through `pipe_through :api`\n     - dispatched to `MembaWeb.PostmarkWebhookController.create/2`\n   - Added a minimal compile-safe controller target:\n     - `web/lib/memba_web/controllers/postmark_webhook_controller.ex`\n     - currently returns `501 Not Implemented` JSON, leaving Postmark payload parsing/status handling for task 006.\n   - Added router coverage in `web/test/memba_web/router_test.exs` asserting:\n     - route is registered for `POST /webhooks/postmark`\n     - route uses `[:api]`, not `[:browser]`\n     - route targets `MembaWeb.PostmarkWebhookController`\n     - action is `:create`\n\n3. **Focused validation**\n   - Confirmed the router test failed first before implementation:\n     - `Phoenix.Router.route_info(...)` returned `:error`\n   - Passed:\n     - `cd web && MIX_ENV=test mix run --no-start -e '...'`\n     - Result: `4 tests, 0 failures`\n   - Passed:\n     - `cd web && MIX_ENV=test mix compile --warnings-as-errors`\n   - Passed:\n     - `cd web && mix format ... --check-formatted`\n   - Passed:\n     - `git diff --check`\n   - Ran required project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: failed with the pre-existing/pending TDD failures from task 001:\n       - missing `#clubs-index`\n       - missing `#message-show`\n     - These are expected to be addressed by later LiveView implementation task 005, not by this route-only task.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n   - To:\n     - `- [x] 003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - Plan references ADR 0010 and ADR 0013; no ADR files were present under `docs/adr/` in this checkout.\n   - Preserved ADR 0010 intent: no `*.feature` files were edited.\n   - Preserved ADR 0013 intent: added automated web/router coverage without bypassing the existing PhoenixTest acceptance harness.\n   - Kept task 006 deferred: no Postmark payload parsing or Messaging status-reporting behaviour was implemented here."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 336012,
+                    "output_tokens": 4628,
+                    "reasoning_tokens": 3383,
+                    "cache_read_tokens": 893952,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2367366
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 224906,
+              "tool_time_ms": 56833,
+              "active_time_ms": 281739
+            }
+          }
+        },
+        "next_node_id": "sync_task_list",
+        "git_commit_sha": "37a314d5eb9519ba42f413107f60a0b37a727f67",
+        "node_visits": {
+          "all_tasks_done": 3,
+          "sync_task_list": 3,
+          "read_plan": 1,
+          "implement_next_task": 3,
+          "task_gate": 3,
+          "resume_gate": 1,
+          "start": 1,
+          "preflight_sandbox": 1,
+          "validate_task": 3,
+          "pre_validate_snapshot": 3
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 11,
+          "additions": 362,
+          "deletions": 5
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-30T06:09:20.366205492Z",
+        "current_node": "sync_task_list",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.sync_task_list": 0,
           "task_valid": true,
@@ -5987,12 +6280,12 @@
           "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Current `todo.md` has tasks 001–003 checked and 004 as the first unchecked task.\n  - `git show 479d614 -- docs/ite",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
-          "internal.thread_id": "validate_task",
+          "internal.thread_id": "task_gate",
           "graph.max_node_visits": "300",
           "internal.retry_count.all_tasks_done": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
           "graph.default_fidelity": "summary:high",
-          "internal.node_visit_count": 3,
+          "internal.node_visit_count": 4,
           "failure_class": "",
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
@@ -6005,7 +6298,7 @@
           "internal.retry_count.implement_next_task": 0,
           "last_stage": "validate_task",
           "internal.fidelity": "summary:high",
-          "command.output": "blob://sha256/c5271863d61fe3d8e23a1b26632b5a76cc68cd594392dbb4469ffcb3342d98ca",
+          "command.output": "blob://sha256/a0731677366ad4fdd7dddd5e8d0cc73914c3ebd8d42cc8ff11b2dcc91d97c88d",
           "internal.retry_count.validate_task": 0,
           "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n2. **Changes made**\n   - Added a non-browser webhook scope in `web/lib/memba_web/router.ex`:\n     - `POST /webhooks/postmark`\n     - routed through `pipe_through :api`\n     - dispatched to `MembaWeb.PostmarkWebhookController.create/2`\n   - Added a minimal compile-safe controller target:\n     - `web/lib/memba_web/controllers/postmark_webhook_controller.ex`\n     - currently returns `501 Not Implemented` JSON, leaving Postmark payload parsing/status handling for task 006.\n   - Added router coverage in `web/test/memba_web/router_test.exs` asserting:\n     - route is registered for `POST /webhooks/postmark`\n     - route uses `[:api]`, not `[:browser]`\n     - route targets `MembaWeb.PostmarkWebhookController`\n     - action is `:create`\n\n3. **Focused validation**\n   - Confirmed the router test failed first before implementation:\n     - `Phoenix.Router.route_info(...)` returned `:error`\n   - Passed:\n     - `cd web && MIX_ENV=test mix run --no-start -e '...'`\n     - Result: `4 tests, 0 failures`\n   - Passed:\n     - `cd web && MIX_ENV=test mix compile --warnings-as-errors`\n   - Passed:\n     - `cd web && mix format ... --check-formatted`\n   - Passed:\n     - `git diff --check`\n   - Ran required project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: failed with the pre-existing/pending TDD failures from task 001:\n       - missing `#clubs-index`\n       - missing `#message-show`\n     - These are expected to be addressed by later LiveView implementation task 005, not by this route-only task.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n   - To:\n     - `- [x] 003 Add POST /webhooks/postmark under an appropriate non-browser pipeline for webhook requests.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - Plan references ADR 0010 and ADR 0013; no ADR files were present under `docs/adr/` in this checkout.\n   - Preserved ADR 0010 intent: no `*.feature` files were edited.\n   - Preserved ADR 0013 intent: added automated web/router coverage without bypassing the existing PhoenixTest acceptance harness.\n   - Kept task 006 deferred: no Postmark payload parsing or Messaging status-reporting behaviour was implemented here.",
           "outcome": "succeeded",
@@ -6016,7 +6309,7 @@
           "internal.retry_count.read_plan": 0,
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "current_node": "task_gate",
+          "current_node": "sync_task_list",
           "task_retry_available": false,
           "thread.start.current_node": "read_plan",
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
@@ -6190,15 +6483,15 @@
           "sync_task_list": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/d813f3a9fd68804e9375a41f36cbc8147dbab24e745c07a0d581a8e63bf1b69d"
+              "command.output": "blob://sha256/a0731677366ad4fdd7dddd5e8d0cc73914c3ebd8d42cc8ff11b2dcc91d97c88d"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 161,
-              "active_time_ms": 161
+              "tool_time_ms": 164,
+              "active_time_ms": 164
             }
           },
           "preflight_sandbox": {
@@ -6216,12 +6509,12 @@
             }
           }
         },
-        "next_node_id": "sync_task_list",
+        "next_node_id": "all_tasks_done",
         "node_visits": {
           "pre_validate_snapshot": 3,
           "start": 1,
           "validate_task": 3,
-          "sync_task_list": 3,
+          "sync_task_list": 4,
           "read_plan": 1,
           "resume_gate": 1,
           "task_gate": 3,
@@ -6301,6 +6594,44 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "sync_task_list@4": {
+      "first_event_seq": 1085,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/005-browser-acceptance-harness/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/a0731677366ad4fdd7dddd5e8d0cc73914c3ebd8d42cc8ff11b2dcc91d97c88d",
+        "exit_code": 0,
+        "duration_ms": 164,
+        "termination": "exited",
+        "output_bytes": 1997,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 1997,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-05-30T06:09:20.180160581Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "implement_next_task@2": {
       "first_event_seq": 436,
@@ -6823,7 +7154,12 @@
       "first_event_seq": 1077,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: task_gate",
+        "failure_reason": null,
+        "timestamp": "2026-05-30T06:09:17.174724855Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": null,
@@ -6832,6 +7168,12 @@
       "output": null,
       "started_at": "2026-05-30T06:09:17.168485518Z",
       "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 6,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -6840,7 +7182,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "resume_gate@1": {
       "first_event_seq": 45,
