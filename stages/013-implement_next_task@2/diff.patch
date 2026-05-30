@@ -1,0 +1,120 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index 9353d62..3240d8e 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Use TDD with PhoenixTest as the preferred high-level LiveView test API. Start by writing failing PhoenixTest coverage for the real route flows listed in the acceptance criteria.
+-- [ ] 002 Add browser routes under the existing browser pipeline:
++- [x] 002 Add browser routes under the existing browser pipeline:
+ - [ ] 003 Add `POST /webhooks/postmark` under an appropriate non-browser pipeline for webhook requests.
+ - [ ] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
+ - [ ] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
+diff --git a/web/lib/memba_web/live/clubs_live/index.ex b/web/lib/memba_web/live/clubs_live/index.ex
+new file mode 100644
+index 0000000..54add67
+--- /dev/null
++++ b/web/lib/memba_web/live/clubs_live/index.ex
+@@ -0,0 +1,11 @@
++defmodule MembaWeb.ClubsLive.Index do
++  use MembaWeb, :live_view
++
++  def render(assigns) do
++    ~H"""
++    <Layouts.app flash={@flash}>
++      <h1>Clubs</h1>
++    </Layouts.app>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/live/clubs_live/show.ex b/web/lib/memba_web/live/clubs_live/show.ex
+new file mode 100644
+index 0000000..f7e1172
+--- /dev/null
++++ b/web/lib/memba_web/live/clubs_live/show.ex
+@@ -0,0 +1,11 @@
++defmodule MembaWeb.ClubsLive.Show do
++  use MembaWeb, :live_view
++
++  def render(assigns) do
++    ~H"""
++    <Layouts.app flash={@flash}>
++      <h1>Club</h1>
++    </Layouts.app>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/live/messages_live/show.ex b/web/lib/memba_web/live/messages_live/show.ex
+new file mode 100644
+index 0000000..7029a78
+--- /dev/null
++++ b/web/lib/memba_web/live/messages_live/show.ex
+@@ -0,0 +1,11 @@
++defmodule MembaWeb.MessagesLive.Show do
++  use MembaWeb, :live_view
++
++  def render(assigns) do
++    ~H"""
++    <Layouts.app flash={@flash}>
++      <h1>Message</h1>
++    </Layouts.app>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 730f0eb..22450bf 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -18,6 +18,10 @@ defmodule MembaWeb.Router do
+     pipe_through :browser
+ 
+     get "/", PageController, :home
++
++    live "/clubs", ClubsLive.Index
++    live "/clubs/:club_id", ClubsLive.Show
++    live "/messages/:message_id", MessagesLive.Show
+   end
+ 
+   # Other scopes may use custom stacks.
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+new file mode 100644
+index 0000000..577449d
+--- /dev/null
++++ b/web/test/memba_web/router_test.exs
+@@ -0,0 +1,35 @@
++defmodule MembaWeb.RouterTest do
++  use ExUnit.Case, async: true
++
++  describe "browser LiveView routes" do
++    test "routes /clubs through the browser pipeline to the clubs index LiveView" do
++      assert_live_route("/clubs", "/clubs", MembaWeb.ClubsLive.Index, %{})
++    end
++
++    test "routes /clubs/:club_id through the browser pipeline to the club show LiveView" do
++      assert_live_route("/clubs/club-123", "/clubs/:club_id", MembaWeb.ClubsLive.Show, %{
++        "club_id" => "club-123"
++      })
++    end
++
++    test "routes /messages/:message_id through the browser pipeline to the message show LiveView" do
++      assert_live_route(
++        "/messages/message-123",
++        "/messages/:message_id",
++        MembaWeb.MessagesLive.Show,
++        %{"message_id" => "message-123"}
++      )
++    end
++  end
++
++  defp assert_live_route(path, route_pattern, live_view, path_params) do
++    assert %{
++             pipe_through: [:browser],
++             phoenix_live_view: {^live_view, nil, _opts, _live_session},
++             plug: Phoenix.LiveView.Plug,
++             plug_opts: nil,
++             path_params: ^path_params,
++             route: ^route_pattern
++           } = Phoenix.Router.route_info(MembaWeb.Router, "GET", path, "localhost")
++  end
++end
