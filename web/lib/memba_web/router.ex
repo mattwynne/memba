@@ -18,6 +18,10 @@ defmodule MembaWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    live "/clubs", ClubsLive.Index
+    live "/clubs/:club_id", ClubsLive.Show
+    live "/messages/:message_id", MessagesLive.Show
   end
 
   # Other scopes may use custom stacks.
