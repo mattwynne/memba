@@ -1,0 +1,570 @@
+diff --git a/docs/iterations/005-browser-acceptance-harness/todo.md b/docs/iterations/005-browser-acceptance-harness/todo.md
+index d3b6e62..b4fa160 100644
+--- a/docs/iterations/005-browser-acceptance-harness/todo.md
++++ b/docs/iterations/005-browser-acceptance-harness/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Use TDD with PhoenixTest as the preferred high-level LiveView test API. Start by writing failing PhoenixTest coverage for the real route flows listed in the acceptance criteria.
+ - [x] 002 Add browser routes under the existing browser pipeline:
+ - [x] 003 Add `POST /webhooks/postmark` under an appropriate non-browser pipeline for webhook requests.
+-- [ ] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
++- [x] 004 Add thin public context APIs following the existing pattern rather than dispatching Commanded commands from the web layer directly:
+ - [ ] 005 Build `MembaWeb.ClubsLive.Index`, `MembaWeb.ClubsLive.Show`, and `MembaWeb.MessagesLive.Show` with simple forms/actions for club creation, person creation, membership, club message sending, and receipt viewing.
+ - [ ] 006 Build the Postmark webhook controller/handler to parse Postmark-style event payloads and call the public Messaging status-reporting functions.
+ - [ ] 007 Give important forms, controls, rows, and status displays stable IDs or accessible labels suitable for Playwright and PhoenixTest.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 4afcd0e..4e466e8 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -1,15 +1,57 @@
+ defmodule Memba.Membership do
+   @moduledoc """
+-  Public query API for the Membership bounded context.
++  Public application service and query API for the Membership bounded context.
+   """
+ 
+   import Ecto.Query
+ 
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+   alias Memba.Repo
+ 
++  @doc """
++  Create a club through the Membership Commanded application.
++
++  The caller supplies the club aggregate identity as `:club_id` or
++  `"club_id"`.
++  """
++  def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- create_club_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
++  @doc """
++  Create a person through the Membership Commanded application.
++
++  The caller supplies the person aggregate identity as `:person_id` or
++  `"person_id"`.
++  """
++  def create_person(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- create_person_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
++  @doc """
++  Add a person as an active member of a club through the Membership context.
++
++  The caller supplies the membership aggregate identity as `:membership_id` or
++  `"membership_id"`. A second active membership for the same club/person pair is
++  rejected before dispatch.
++  """
++  def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- add_member_command(attrs),
++         :ok <- prevent_duplicate_active_membership(command) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Fetch a projected club read model by caller-generated UUID.
+ 
+@@ -81,4 +123,53 @@ defmodule Memba.Membership do
+       :error -> false
+     end
+   end
++
++  defp create_club_command(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, name} <- fetch_required(attrs, :name) do
++      {:ok, %CreateClub{club_id: club_id, name: name}}
++    end
++  end
++
++  defp create_person_command(attrs) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, name} <- fetch_required(attrs, :name),
++         {:ok, email} <- fetch_required(attrs, :email) do
++      {:ok, %CreatePerson{person_id: person_id, name: name, email: email}}
++    end
++  end
++
++  defp add_member_command(attrs) do
++    with {:ok, membership_id} <- fetch_required(attrs, :membership_id),
++         {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, person_id} <- fetch_required(attrs, :person_id) do
++      {:ok, %AddMember{membership_id: membership_id, club_id: club_id, person_id: person_id}}
++    end
++  end
++
++  defp prevent_duplicate_active_membership(%AddMember{} = command) do
++    if active_member_of_club?(command.club_id, command.person_id) do
++      {:error, :already_active_member}
++    else
++      :ok
++    end
++  end
++
++  defp dispatch(command, dispatch_opts) do
++    case App.dispatch(command, dispatch_opts) do
++      :ok -> :ok
++      {:ok, _result} = ok -> ok
++      {:error, _reason} = error -> error
++    end
++  end
++
++  defp fetch_required(attrs, key) when is_atom(key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> {:ok, value}
++      %{^string_key => value} -> {:ok, value}
++      _attrs -> {:error, {:missing_required_attribute, key}}
++    end
++  end
+ end
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 5a8ee76..51446e9 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -5,6 +5,11 @@ defmodule Memba.Messaging do
+ 
+   alias Memba.Membership
+   alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.DeliveryProvider
+   alias Memba.Messaging.DeliveryRequest
+@@ -27,12 +32,67 @@ defmodule Memba.Messaging do
+   def send_club_message(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command} <- send_club_message_command(attrs),
+-         {:ok, dispatch_result} <- dispatch_send_message(command, dispatch_opts),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts),
+          :ok <- deliver_to_provider(command) do
+       dispatch_result
+     end
+   end
+ 
++  @doc """
++  Report that a recipient delivery was accepted by the recipient server.
++  """
++  def report_delivery_delivered(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- report_delivery_delivered_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
++  @doc """
++  Report that a recipient delivery was temporarily delayed.
++  """
++  def report_delivery_delayed(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- report_delivery_delayed_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
++  @doc """
++  Report that a recipient delivery bounced.
++  """
++  def report_delivery_bounced(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- report_delivery_bounced_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
++  @doc """
++  Report that a recipient marked a delivery as spam.
++  """
++  def report_delivery_spam_complaint(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- report_delivery_spam_complaint_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
++  @doc """
++  Report that a recipient opened a delivery.
++  """
++  def report_delivery_opened(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- report_delivery_opened_command(attrs),
++         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
++      dispatch_result
++    end
++  end
++
+   @doc """
+   Fetch a projected message read model by caller-generated UUID.
+ 
+@@ -175,7 +235,7 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
+-  defp dispatch_send_message(%SendMessage{} = command, dispatch_opts) do
++  defp dispatch_command(command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> {:ok, :ok}
+       {:ok, _result} = ok -> {:ok, ok}
+@@ -201,10 +261,66 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp report_delivery_delivered_command(attrs) do
++    with {:ok, message_id} <- fetch_required(attrs, :message_id),
++         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
++      {:ok, %ReportDeliveryDelivered{message_id: message_id, delivery_id: delivery_id}}
++    end
++  end
++
++  defp report_delivery_delayed_command(attrs) do
++    with {:ok, message_id} <- fetch_required(attrs, :message_id),
++         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
++         {:ok, reason} <- fetch_required(attrs, :reason) do
++      {:ok,
++       %ReportDeliveryDelayed{
++         message_id: message_id,
++         delivery_id: delivery_id,
++         reason: reason
++       }}
++    end
++  end
++
++  defp report_delivery_bounced_command(attrs) do
++    with {:ok, message_id} <- fetch_required(attrs, :message_id),
++         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
++         {:ok, reason} <- fetch_required(attrs, :reason) do
++      {:ok,
++       %ReportDeliveryBounced{
++         message_id: message_id,
++         delivery_id: delivery_id,
++         reason: reason
++       }}
++    end
++  end
++
++  defp report_delivery_spam_complaint_command(attrs) do
++    with {:ok, message_id} <- fetch_required(attrs, :message_id),
++         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
++         {:ok, reason} <- fetch_required(attrs, :reason) do
++      {:ok,
++       %ReportDeliverySpamComplaint{
++         message_id: message_id,
++         delivery_id: delivery_id,
++         reason: reason
++       }}
++    end
++  end
++
++  defp report_delivery_opened_command(attrs) do
++    with {:ok, message_id} <- fetch_required(attrs, :message_id),
++         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
++      {:ok, %ReportDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}
++    end
++  end
++
+   defp fetch_required(attrs, key) do
+-    case Map.fetch(attrs, key) do
+-      {:ok, value} -> {:ok, value}
+-      :error -> {:error, {:missing_required_attribute, key}}
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> {:ok, value}
++      %{^string_key => value} -> {:ok, value}
++      _attrs -> {:error, {:missing_required_attribute, key}}
+     end
+   end
+ 
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index 6a0da2f..a2ec271 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -3,9 +3,12 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+ 
+   @web_root Path.expand("../../..", __DIR__)
+ 
+-  test "public Membership context remains a query boundary instead of CRUD helpers" do
++  test "public Membership context exposes approved command APIs instead of CRUD helpers" do
+     source = read_source!("lib/memba/membership.ex")
+ 
++    assert source =~ "def create_club("
++    assert source =~ "def create_person("
++    assert source =~ "def add_member("
+     assert source =~ "def get_club("
+     assert source =~ "def list_active_members_of_club("
+ 
+@@ -15,7 +18,15 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+       |> List.flatten()
+ 
+     assert list_functions == ["list_active_members_of_club"]
+-    refute source =~ ~r/\bdef\s+(create|update|delete|change)_[a-zA-Z0-9_]+\b/
++
++    create_functions =
++      ~r/\bdef\s+(create_[a-zA-Z0-9_]+)\b/
++      |> Regex.scan(source, capture: :all_but_first)
++      |> List.flatten()
++
++    assert create_functions == ["create_club", "create_person"]
++    refute source =~ ~r/\bdef\s+(update|delete|change)_[a-zA-Z0-9_]+\b/
++    refute source =~ ~r/\bRepo\.(insert|update|delete)\b/
+   end
+ 
+   test "club aggregate is not the former Ecto schema and changeset module" do
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+new file mode 100644
+index 0000000..808eee3
+--- /dev/null
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -0,0 +1,106 @@
++defmodule Memba.Membership.PublicApiTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Membership
++  alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Events.PersonCreated
++  alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++
++  test "create_club/2 dispatches CreateClub through the Membership context" do
++    club_id = Ecto.UUID.generate()
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [%ClubCreated{club_id: ^club_id, name: "Kootenay Mountaineering Club"}]
++            }} =
++             Membership.create_club(
++               %{"club_id" => club_id, "name" => " Kootenay Mountaineering Club "},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %ClubProjection{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
++             Membership.get_club(club_id)
++  end
++
++  test "create_person/2 dispatches CreatePerson through the Membership context" do
++    person_id = Ecto.UUID.generate()
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonCreated{
++                  person_id: ^person_id,
++                  name: "Alice",
++                  email: "alice@example.com"
++                }
++              ]
++            }} =
++             Membership.create_person(
++               %{person_id: person_id, name: " Alice ", email: " Alice@Example.COM "},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %PersonProjection{person_id: ^person_id, name: "Alice", email: "alice@example.com"} =
++             Membership.get_person(person_id)
++  end
++
++  test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++    membership_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: "Alice",
++                 email: "alice@example.com"
++               },
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^membership_id,
++              events: [
++                %MemberAdded{
++                  membership_id: ^membership_id,
++                  club_id: ^club_id,
++                  person_id: ^person_id
++                }
++              ]
++            }} =
++             Membership.add_member(
++               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert Membership.active_member_of_club?(club_id, person_id)
++
++    assert {:error, :already_active_member} =
++             Membership.add_member(
++               %{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++
++    assert [%{id: ^person_id}] = Membership.list_active_members_of_club(club_id)
++  end
++end
+diff --git a/web/test/memba/messaging/status_report_api_test.exs b/web/test/memba/messaging/status_report_api_test.exs
+new file mode 100644
+index 0000000..b95c710
+--- /dev/null
++++ b/web/test/memba/messaging/status_report_api_test.exs
+@@ -0,0 +1,123 @@
++defmodule Memba.Messaging.StatusReportApiTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Recipient
++
++  test "public status reporting APIs dispatch delivery status commands" do
++    message_id = Ecto.UUID.generate()
++    recipients = recipients(["Alice", "Bob", "Carol", "Dana", "Erin"])
++    [alice, bob, carol, dana, erin] = recipients
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: Ecto.UUID.generate(),
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: recipients
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.report_delivery_delivered(
++               %{"message_id" => message_id, "delivery_id" => bob.delivery_id},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.report_delivery_delayed(
++               %{
++                 message_id: message_id,
++                 delivery_id: carol.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.report_delivery_bounced(
++               %{
++                 message_id: message_id,
++                 delivery_id: dana.delivery_id,
++                 reason: "mailbox does not exist"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.report_delivery_delivered(
++               %{message_id: message_id, delivery_id: erin.delivery_id},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.report_delivery_opened(
++               %{message_id: message_id, delivery_id: erin.delivery_id},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Messaging.report_delivery_spam_complaint(
++               %{
++                 message_id: message_id,
++                 delivery_id: alice.delivery_id,
++                 reason: "recipient marked the message as spam"
++               },
++               consistency: :strong
++             )
++
++    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "delivered"
++
++    assert Messaging.get_member_receipt(message_id, carol.person_id).receipt_status ==
++             "delivery problem"
++
++    assert Messaging.get_operator_deliverability(message_id, carol.person_id).status == "delayed"
++
++    assert Messaging.get_operator_deliverability(message_id, carol.person_id).reason ==
++             "recipient server is temporarily unavailable"
++
++    assert Messaging.get_member_receipt(message_id, dana.person_id).receipt_status ==
++             "delivery problem"
++
++    assert Messaging.get_operator_deliverability(message_id, dana.person_id).status == "bounced"
++    assert Messaging.get_operator_deliverability(message_id, erin.person_id).status == "opened"
++
++    assert Messaging.get_operator_deliverability(message_id, alice.person_id).status ==
++             "spam complaint"
++  end
++
++  test "public status reporting APIs surface aggregate validation errors" do
++    assert {:error, :message_not_sent} =
++             Messaging.report_delivery_delivered(%{
++               message_id: Ecto.UUID.generate(),
++               delivery_id: Ecto.UUID.generate()
++             })
++  end
++
++  defp recipients(names) do
++    Enum.map(names, fn name ->
++      %Recipient{
++        delivery_id: Ecto.UUID.generate(),
++        person_id: Ecto.UUID.generate(),
++        name: name,
++        email: email_for(name)
++      }
++    end)
++  end
++
++  defp email_for(name) do
++    normalized_name =
++      name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
++
++    "#{normalized_name}@example.test"
++  end
++end
