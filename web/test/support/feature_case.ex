@@ -22,4 +22,24 @@ defmodule MembaWeb.FeatureCase do
 
     {:ok, conn: Phoenix.ConnTest.build_conn() |> PhoenixTest.put_endpoint(MembaWeb.Endpoint)}
   end
+
+  def assert_eventually(assertion, opts \\ []) when is_function(assertion, 0) do
+    timeout = Keyword.get(opts, :timeout, 1_000)
+    interval = Keyword.get(opts, :interval, 10)
+    deadline = System.monotonic_time(:millisecond) + timeout
+
+    assert_eventually(assertion, deadline, interval)
+  end
+
+  defp assert_eventually(assertion, deadline, interval) do
+    assertion.()
+  rescue
+    error in [ExUnit.AssertionError, KeyError] ->
+      if System.monotonic_time(:millisecond) >= deadline do
+        reraise error, __STACKTRACE__
+      else
+        Process.sleep(interval)
+        assert_eventually(assertion, deadline, interval)
+      end
+  end
 end
