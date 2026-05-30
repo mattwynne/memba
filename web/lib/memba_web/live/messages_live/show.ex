@@ -28,7 +28,9 @@ defmodule MembaWeb.MessagesLive.Show do
         <%= if @message do %>
           <section class="space-y-2">
             <.link
+              id="back-to-club-link"
               navigate={~p"/clubs/#{@message.club_id}"}
+              aria-label="Back to club"
               class="text-sm font-medium text-blue-700 hover:text-blue-900"
             >
               ← Club
@@ -40,7 +42,12 @@ defmodule MembaWeb.MessagesLive.Show do
 
           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Addressed recipients</h2>
-            <div id="addressed-recipients" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
+            <div
+              id="addressed-recipients"
+              aria-label="Addressed recipients"
+              class="mt-4 divide-y divide-zinc-100"
+              phx-update="stream"
+            >
               <p id="addressed-recipients-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
                 No addressed recipients.
               </p>
@@ -48,7 +55,10 @@ defmodule MembaWeb.MessagesLive.Show do
                 :for={{dom_id, delivery} <- @streams.addressed_recipients}
                 id={dom_id}
                 data-testid="addressed-recipient"
+                data-delivery-id={delivery.delivery_id}
+                data-recipient-id={delivery.recipient_id}
                 data-recipient-name={delivery.recipient_name}
+                aria-label={"Addressed recipient #{delivery.recipient_name}"}
                 class="py-3"
               >
                 <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
@@ -59,7 +69,12 @@ defmodule MembaWeb.MessagesLive.Show do
 
           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Delivery records</h2>
-            <div id="delivery-records" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
+            <div
+              id="delivery-records"
+              aria-label="Delivery records"
+              class="mt-4 divide-y divide-zinc-100"
+              phx-update="stream"
+            >
               <p id="delivery-records-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
                 No delivery records.
               </p>
@@ -67,20 +82,36 @@ defmodule MembaWeb.MessagesLive.Show do
                 :for={{dom_id, delivery} <- @streams.delivery_records}
                 id={dom_id}
                 data-testid="delivery-record"
+                data-delivery-id={delivery.delivery_id}
+                data-recipient-id={delivery.recipient_id}
                 data-recipient-name={delivery.recipient_name}
+                aria-label={"Delivery record for #{delivery.recipient_name}"}
                 class="grid gap-2 py-3 sm:grid-cols-4"
               >
                 <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
                 <p class="text-sm text-zinc-500">{delivery.recipient_address}</p>
                 <p class="text-sm text-zinc-500">{delivery.channel}</p>
-                <p class="text-sm font-medium text-zinc-700">{delivery.status}</p>
+                <p
+                  id={"delivery-status-#{delivery.delivery_id}"}
+                  data-testid="delivery-status"
+                  data-delivery-status={delivery.status}
+                  aria-label={"Delivery status for #{delivery.recipient_name}: #{delivery.status}"}
+                  class="text-sm font-medium text-zinc-700"
+                >
+                  {delivery.status}
+                </p>
               </div>
             </div>
           </section>
 
           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
             <h2 class="text-lg font-semibold text-zinc-900">Member receipt statuses</h2>
-            <div id="member-receipts" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
+            <div
+              id="member-receipts"
+              aria-label="Member receipt statuses"
+              class="mt-4 divide-y divide-zinc-100"
+              phx-update="stream"
+            >
               <p id="member-receipts-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
                 No member receipts.
               </p>
@@ -88,11 +119,20 @@ defmodule MembaWeb.MessagesLive.Show do
                 :for={{dom_id, receipt} <- @streams.member_receipts}
                 id={dom_id}
                 data-testid="member-receipt"
+                data-delivery-id={receipt.delivery_id}
+                data-recipient-id={receipt.recipient_id}
                 data-recipient-name={receipt.recipient_name}
+                aria-label={"Member receipt for #{receipt.recipient_name}"}
                 class="flex items-center justify-between gap-4 py-3"
               >
                 <p class="font-medium text-zinc-900">{receipt.recipient_name}</p>
-                <p class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700">
+                <p
+                  id={"receipt-status-#{receipt.delivery_id}"}
+                  data-testid="receipt-status"
+                  data-receipt-status={receipt.receipt_status}
+                  aria-label={"Receipt status for #{receipt.recipient_name}: #{receipt.receipt_status}"}
+                  class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
+                >
                   {receipt.receipt_status}
                 </p>
               </div>

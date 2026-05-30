@@ -126,7 +126,12 @@ defmodule MembaWeb.ClubsLive.Show do
     ~H"""
     <Layouts.app flash={@flash}>
       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
-        <.link navigate={~p"/clubs"} class="text-sm font-medium text-blue-700 hover:text-blue-900">
+        <.link
+          id="back-to-clubs-link"
+          navigate={~p"/clubs"}
+          aria-label="Back to clubs"
+          class="text-sm font-medium text-blue-700 hover:text-blue-900"
+        >
           ← Clubs
         </.link>
 
@@ -146,15 +151,36 @@ defmodule MembaWeb.ClubsLive.Show do
               <.form
                 for={@person_form}
                 id="new-person-form"
+                aria-label="Create a person"
                 class="mt-4 space-y-4"
                 phx-submit="create_person"
               >
-                <.input field={@person_form[:name]} label="Name" required />
-                <.input field={@person_form[:email]} label="Email" type="email" required />
-                <.button id="create-person-button" type="submit">Create person</.button>
+                <.input
+                  field={@person_form[:name]}
+                  id="person-name-input"
+                  label="Name"
+                  aria-label="Person name"
+                  required
+                />
+                <.input
+                  field={@person_form[:email]}
+                  id="person-email-input"
+                  label="Email"
+                  type="email"
+                  aria-label="Person email"
+                  required
+                />
+                <.button id="create-person-button" type="submit" aria-label="Create person">
+                  Create person
+                </.button>
               </.form>
 
-              <div id="people" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
+              <div
+                id="people"
+                aria-label="People"
+                class="mt-5 divide-y divide-zinc-100"
+                phx-update="stream"
+              >
                 <p id="people-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
                   No people yet.
                 </p>
@@ -162,6 +188,9 @@ defmodule MembaWeb.ClubsLive.Show do
                   :for={{dom_id, person} <- @streams.people}
                   id={dom_id}
                   data-testid="person-row"
+                  data-person-id={person.person_id}
+                  data-person-name={person.name}
+                  aria-label={"Person #{person.name}"}
                   class="py-3"
                 >
                   <p class="font-medium text-zinc-900">{person.name}</p>
@@ -176,21 +205,35 @@ defmodule MembaWeb.ClubsLive.Show do
               <.form
                 for={@membership_form}
                 id="add-member-form"
+                aria-label="Add a member"
                 class="mt-4 space-y-4"
                 phx-submit="add_member"
               >
                 <.input
                   field={@membership_form[:person_id]}
+                  id="member-person-select"
                   label="Person"
                   type="select"
+                  aria-label="Person to add as member"
                   prompt="Choose a person"
                   options={@person_options}
                   required
                 />
-                <.button id="add-member-button" type="submit">Add member</.button>
+                <.button
+                  id="add-member-button"
+                  type="submit"
+                  aria-label="Add selected person as member"
+                >
+                  Add member
+                </.button>
               </.form>
 
-              <div id="members" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
+              <div
+                id="members"
+                aria-label="Members"
+                class="mt-5 divide-y divide-zinc-100"
+                phx-update="stream"
+              >
                 <p id="members-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
                   No members yet.
                 </p>
@@ -198,6 +241,9 @@ defmodule MembaWeb.ClubsLive.Show do
                   :for={{dom_id, member} <- @streams.members}
                   id={dom_id}
                   data-testid="member-row"
+                  data-member-id={member.id}
+                  data-member-name={member.name}
+                  aria-label={"Member #{member.name}"}
                   class="py-3"
                 >
                   <p class="font-medium text-zinc-900">{member.name}</p>
@@ -213,27 +259,50 @@ defmodule MembaWeb.ClubsLive.Show do
             <.form
               for={@message_form}
               id="new-message-form"
+              aria-label="Send a club message"
               class="mt-4 grid gap-4 lg:grid-cols-2"
               phx-submit="send_message"
             >
               <.input
                 field={@message_form[:sender_id]}
+                id="message-sender-select"
                 label="Sender"
                 type="select"
+                aria-label="Message sender"
                 prompt="Choose a sender"
                 options={@member_options}
                 required
               />
-              <.input field={@message_form[:subject]} label="Subject" required />
+              <.input
+                field={@message_form[:subject]}
+                id="message-subject-input"
+                label="Subject"
+                aria-label="Message subject"
+                required
+              />
               <div class="lg:col-span-2">
-                <.input field={@message_form[:body]} label="Body" type="textarea" required />
+                <.input
+                  field={@message_form[:body]}
+                  id="message-body-input"
+                  label="Body"
+                  type="textarea"
+                  aria-label="Message body"
+                  required
+                />
               </div>
               <div class="lg:col-span-2">
-                <.button id="send-message-button" type="submit">Send message</.button>
+                <.button id="send-message-button" type="submit" aria-label="Send club message">
+                  Send message
+                </.button>
               </div>
             </.form>
 
-            <div id="messages" class="mt-5 divide-y divide-zinc-100" phx-update="stream">
+            <div
+              id="messages"
+              aria-label="Messages"
+              class="mt-5 divide-y divide-zinc-100"
+              phx-update="stream"
+            >
               <p id="messages-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
                 No messages yet.
               </p>
@@ -241,10 +310,16 @@ defmodule MembaWeb.ClubsLive.Show do
                 :for={{dom_id, message} <- @streams.messages}
                 id={dom_id}
                 data-testid="message-row"
+                data-message-id={message.message_id}
+                data-message-subject={message.subject}
+                aria-label={"Message #{message.subject}"}
                 class="py-3"
               >
                 <.link
+                  id={"message-link-#{message.message_id}"}
                   navigate={~p"/messages/#{message.message_id}"}
+                  data-testid="message-link"
+                  aria-label={"Open message #{message.subject}"}
                   class="font-medium text-blue-700 hover:text-blue-900"
                 >
                   {message.subject}

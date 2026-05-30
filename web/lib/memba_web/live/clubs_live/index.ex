@@ -66,20 +66,34 @@ defmodule MembaWeb.ClubsLive.Index do
           <.form
             for={@club_form}
             id="new-club-form"
+            aria-label="Create a club"
             class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end"
             phx-submit="create_club"
           >
             <div class="flex-1">
-              <.input field={@club_form[:name]} label="Name" required />
+              <.input
+                field={@club_form[:name]}
+                id="club-name-input"
+                label="Name"
+                aria-label="Club name"
+                required
+              />
             </div>
-            <.button id="create-club-button" type="submit">Create club</.button>
+            <.button id="create-club-button" type="submit" aria-label="Create club">
+              Create club
+            </.button>
           </.form>
         </section>
 
         <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
           <h2 class="text-lg font-semibold text-zinc-900">Existing clubs</h2>
 
-          <div id="clubs" class="mt-4 divide-y divide-zinc-100" phx-update="stream">
+          <div
+            id="clubs"
+            aria-label="Clubs"
+            class="mt-4 divide-y divide-zinc-100"
+            phx-update="stream"
+          >
             <p id="clubs-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
               No clubs yet.
             </p>
@@ -87,11 +101,17 @@ defmodule MembaWeb.ClubsLive.Index do
               :for={{dom_id, club} <- @streams.clubs}
               id={dom_id}
               data-testid="club-row"
+              data-club-id={club.club_id}
+              data-club-name={club.name}
+              aria-label={"Club #{club.name}"}
               class="flex items-center justify-between gap-4 py-3"
             >
               <div>
                 <.link
+                  id={"club-link-#{club.club_id}"}
                   navigate={~p"/clubs/#{club.club_id}"}
+                  data-testid="club-link"
+                  aria-label={"Open club #{club.name}"}
                   class="font-medium text-blue-700 hover:text-blue-900"
                 >
                   {club.name}
