@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,260p' docs/iterations/005-browser-acceptance-harness/plan.md && git log --oneline --decorate -5 && git branch --all --contains 326bdce2743f1131846dd686d3a703fb4d1256e8"}{"context_updates":{"plan_ready":true,"plan_needs_fix":false,"plan_needs_human":false}}
