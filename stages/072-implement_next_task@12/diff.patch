@@ -1,0 +1,201 @@
+diff --git a/acceptance-tests/cucumber.js b/acceptance-tests/cucumber.js
+index 0313403..8c2938c 100644
+--- a/acceptance-tests/cucumber.js
++++ b/acceptance-tests/cucumber.js
+@@ -4,6 +4,7 @@ module.exports = {
+     require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
+     format: ["progress"],
+     publishQuiet: true,
+-    tags: "not @todo-web"
++    tags: "not @todo-web",
++    parallel: 1
+   }
+ };
+diff --git a/acceptance-tests/features/support/world.js b/acceptance-tests/features/support/world.js
+index 516ba62..fd09048 100644
+--- a/acceptance-tests/features/support/world.js
++++ b/acceptance-tests/features/support/world.js
+@@ -1,5 +1,7 @@
+-const { setWorldConstructor, Before, After } = require("@cucumber/cucumber");
++const { setWorldConstructor, setDefaultTimeout, Before, After } = require("@cucumber/cucumber");
+ const { chromium } = require("playwright");
++const fs = require("fs");
++const path = require("path");
+ 
+ class AcceptanceWorld {
+   constructor() {
+@@ -13,9 +15,17 @@ class AcceptanceWorld {
+ }
+ 
+ setWorldConstructor(AcceptanceWorld);
++setDefaultTimeout(30 * 1000);
+ 
+ Before(async function () {
+-  this.browser = await chromium.launch({ headless: process.env.HEADLESS !== "false" });
++  const launchOptions = { headless: process.env.HEADLESS !== "false" };
++  const executablePath = chromiumExecutablePath();
++
++  if (executablePath) {
++    launchOptions.executablePath = executablePath;
++  }
++
++  this.browser = await chromium.launch(launchOptions);
+   this.page = await this.browser.newPage();
+ });
+ 
+@@ -24,3 +34,32 @@ After(async function () {
+     await this.browser.close();
+   }
+ });
++
++function chromiumExecutablePath() {
++  if (process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH) {
++    return process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
++  }
++
++  const browsersPath = process.env.PLAYWRIGHT_BROWSERS_PATH;
++
++  if (!browsersPath) {
++    return null;
++  }
++
++  const chromiumDirectory = fs
++    .readdirSync(browsersPath, { withFileTypes: true })
++    .filter(
++      (entry) => (entry.isDirectory() || entry.isSymbolicLink()) && /^chromium-\d+$/.test(entry.name)
++    )
++    .map((entry) => entry.name)
++    .sort()
++    .at(-1);
++
++  if (!chromiumDirectory) {
++    return null;
++  }
++
++  const executablePath = path.join(browsersPath, chromiumDirectory, "chrome-linux64", "chrome");
++
++  return fs.existsSync(executablePath) ? executablePath : null;
++}
+diff --git a/acceptance-tests/package-lock.json b/acceptance-tests/package-lock.json
+index c18c757..472104c 100644
+--- a/acceptance-tests/package-lock.json
++++ b/acceptance-tests/package-lock.json
+@@ -9,8 +9,8 @@
+       "version": "0.1.0",
+       "devDependencies": {
+         "@cucumber/cucumber": "^12.2.0",
+-        "@playwright/test": "^1.56.1",
+-        "playwright": "^1.56.1"
++        "@playwright/test": "1.59.1",
++        "playwright": "1.59.1"
+       }
+     },
+     "node_modules/@babel/code-frame": {
+@@ -278,13 +278,13 @@
+       "license": "MIT"
+     },
+     "node_modules/@playwright/test": {
+-      "version": "1.60.0",
+-      "resolved": "https://registry.npmjs.org/@playwright/test/-/test-1.60.0.tgz",
+-      "integrity": "sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==",
++      "version": "1.59.1",
++      "resolved": "https://registry.npmjs.org/@playwright/test/-/test-1.59.1.tgz",
++      "integrity": "sha512-PG6q63nQg5c9rIi4/Z5lR5IVF7yU5MqmKaPOe0HSc0O2cX1fPi96sUQu5j7eo4gKCkB2AnNGoWt7y4/Xx3Kcqg==",
+       "dev": true,
+       "license": "Apache-2.0",
+       "dependencies": {
+-        "playwright": "1.60.0"
++        "playwright": "1.59.1"
+       },
+       "bin": {
+         "playwright": "cli.js"
+@@ -979,13 +979,13 @@
+       "license": "ISC"
+     },
+     "node_modules/playwright": {
+-      "version": "1.60.0",
+-      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.60.0.tgz",
+-      "integrity": "sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==",
++      "version": "1.59.1",
++      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.59.1.tgz",
++      "integrity": "sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw==",
+       "dev": true,
+       "license": "Apache-2.0",
+       "dependencies": {
+-        "playwright-core": "1.60.0"
++        "playwright-core": "1.59.1"
+       },
+       "bin": {
+         "playwright": "cli.js"
+@@ -998,9 +998,9 @@
+       }
+     },
+     "node_modules/playwright-core": {
+-      "version": "1.60.0",
+-      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.60.0.tgz",
+-      "integrity": "sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==",
++      "version": "1.59.1",
++      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.59.1.tgz",
++      "integrity": "sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==",
+       "dev": true,
+       "license": "Apache-2.0",
+       "bin": {
+diff --git a/acceptance-tests/package.json b/acceptance-tests/package.json
+index 632bf12..183073d 100644
+--- a/acceptance-tests/package.json
++++ b/acceptance-tests/package.json
+@@ -9,7 +9,7 @@
+   },
+   "devDependencies": {
+     "@cucumber/cucumber": "^12.2.0",
+-    "@playwright/test": "^1.56.1",
+-    "playwright": "^1.56.1"
++    "@playwright/test": "1.59.1",
++    "playwright": "1.59.1"
+   }
+ }
+diff --git a/devenv.nix b/devenv.nix
+index b650ba6..d5d76e9 100644
+--- a/devenv.nix
++++ b/devenv.nix
+@@ -95,8 +95,10 @@ in
+     adrgen
+     argc
+     devenv
++    esbuild
+     git
+     nodejs_22
++    tailwindcss_4
+   ];
+ 
+   languages.elixir.enable = true;
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 4797099..58d1014 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -63,8 +63,12 @@ config :memba, MembaWeb.Endpoint,
+ config :memba, Memba.Mailer, adapter: Swoosh.Adapters.Local
+ 
+ # Configure esbuild (the version is required)
++esbuild_path = System.find_executable("esbuild")
++
+ config :esbuild,
+   version: "0.25.4",
++  path: esbuild_path,
++  version_check: is_nil(esbuild_path),
+   memba: [
+     args:
+       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
+@@ -73,8 +77,12 @@ config :esbuild,
+   ]
+ 
+ # Configure tailwind (the version is required)
++tailwind_path = System.find_executable("tailwindcss")
++
+ config :tailwind,
+   version: "4.1.12",
++  path: tailwind_path,
++  version_check: is_nil(tailwind_path),
+   memba: [
+     args: ~w(
+       --input=assets/css/app.css
