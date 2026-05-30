@@ -56,30 +56,12 @@ digraph PlanValidation {
         prompt="@prompts/codex_review.md"
     ]
 
-    persist_gemini_review [
-        label="Persist Gemini Review",
-        shape=parallelogram,
-        script="mkdir -p .fabro/workflows/plan-validation/review-output\ncat > .fabro/workflows/plan-validation/review-output/gemini.md <<'FABRO_REVIEW'\n{{ response.gemini_review }}\nFABRO_REVIEW\ntest -s .fabro/workflows/plan-validation/review-output/gemini.md"
-    ]
-
-    persist_claude_review [
-        label="Persist Claude Review",
-        shape=parallelogram,
-        script="mkdir -p .fabro/workflows/plan-validation/review-output\ncat > .fabro/workflows/plan-validation/review-output/claude.md <<'FABRO_REVIEW'\n{{ response.claude_review }}\nFABRO_REVIEW\ntest -s .fabro/workflows/plan-validation/review-output/claude.md"
-    ]
-
-    persist_codex_review [
-        label="Persist Codex Review",
-        shape=parallelogram,
-        script="mkdir -p .fabro/workflows/plan-validation/review-output\ncat > .fabro/workflows/plan-validation/review-output/codex.md <<'FABRO_REVIEW'\n{{ response.codex_review }}\nFABRO_REVIEW\ntest -s .fabro/workflows/plan-validation/review-output/codex.md"
-    ]
-
     merge [label="Merge Reviews", shape=tripleoctagon]
 
     collect_reviews [
         label="Collect Review Artifacts",
         shape=parallelogram,
-        script="set -eu\nDIR='.fabro/workflows/plan-validation/review-output'\nCOLLECTED='.fabro/workflows/plan-validation/collected-reviews'\nmkdir -p \"$COLLECTED\"\nmissing=0\nfind_review() {\n  reviewer=\"$1\"\n  path=\"$DIR/$reviewer.md\"\n  if [ -s \"$path\" ]; then\n    cat \"$path\"\n    return 0\n  fi\n  for commit in $(git rev-list --all --max-count=300); do\n    if git cat-file -e \"$commit:$path\" 2>/dev/null; then\n      git show \"$commit:$path\"\n      return 0\n    fi\n  done\n  return 1\n}\nfor reviewer in gemini claude codex; do\n  out=\"$COLLECTED/$reviewer.md\"\n  if ! find_review \"$reviewer\" > \"$out\" || [ ! -s \"$out\" ]; then\n    echo \"Missing review artifact for $reviewer\" >&2\n    missing=1\n    continue\n  fi\n  if ! grep -Eq '^[-* ]*Decision:[[:space:]]*(READY|NOT READY)' \"$out\"; then\n    echo \"Review artifact lacks a Decision line: $out\" >&2\n    missing=1\n  fi\ndone\nif [ \"$missing\" -ne 0 ]; then\n  echo 'Plan validation failed: not all parallel reviewer artifacts were collected after fan-in.' >&2\n  exit 1\nfi\necho '=== Collected independent review artifacts ==='\nfor reviewer in gemini claude codex; do\n  file=\"$COLLECTED/$reviewer.md\"\n  echo\n  echo \"--- $reviewer review artifact: $file ---\"\n  sed -n '1,240p' \"$file\"\ndone"
+        script="set -eu\nDIR='.fabro/workflows/plan-validation/review-output'\nmissing=0\nfor reviewer in gemini claude codex; do\n  file=\"$DIR/$reviewer.md\"\n  if [ ! -s \"$file\" ]; then\n    echo \"Missing review artifact: $file\" >&2\n    missing=1\n    continue\n  fi\n  if ! grep -Eq '^[-* ]*Decision:[[:space:]]*(READY|NOT READY)' \"$file\"; then\n    echo \"Review artifact lacks a Decision line: $file\" >&2\n    missing=1\n  fi\ndone\nif [ \"$missing\" -ne 0 ]; then\n  echo 'Plan validation failed: not all parallel reviewer artifacts were collected after fan-in.' >&2\n  exit 1\nfi\necho '=== Collected independent review artifacts ==='\nfor reviewer in gemini claude codex; do\n  file=\"$DIR/$reviewer.md\"\n  echo\n  echo \"--- $reviewer review artifact: $file ---\"\n  sed -n '1,240p' \"$file\"\ndone"
     ]
 
     synthesize [
@@ -130,12 +112,9 @@ digraph PlanValidation {
     fork -> gemini_review
     fork -> claude_review
     fork -> codex_review
-    gemini_review -> persist_gemini_review
-    claude_review -> persist_claude_review
-    codex_review -> persist_codex_review
-    persist_gemini_review -> merge
-    persist_claude_review -> merge
-    persist_codex_review -> merge
+    gemini_review -> merge
+    claude_review -> merge
+    codex_review -> merge
     merge -> collect_reviews
     collect_reviews -> synthesize
     synthesize -> synthesis_gate
