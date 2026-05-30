@@ -1,0 +1,2583 @@
+diff --git a/docs/iterations/003-messaging-skeleton/implementation.md b/docs/iterations/003-messaging-skeleton/implementation.md
+new file mode 100644
+index 0000000..4ae0460
+--- /dev/null
++++ b/docs/iterations/003-messaging-skeleton/implementation.md
+@@ -0,0 +1,7 @@
++# Implementation
++
++Branch: 8fcf5e6
++Pull request: none
++Base ref: origin/main
++Base sha: 75c1d673cb9ee6c4247f605ac12fb32a62da884c
++Status: ready-for-review
+diff --git a/docs/iterations/004-delivery-status-and-views/implementation.md b/docs/iterations/004-delivery-status-and-views/implementation.md
+new file mode 100644
+index 0000000..27effb4
+--- /dev/null
++++ b/docs/iterations/004-delivery-status-and-views/implementation.md
+@@ -0,0 +1,7 @@
++# Implementation
++
++Branch: e35b20e
++Pull request: none
++Base ref: origin/main
++Base sha: d5361cf805a61a320973bf536c7d75678f16fc76
++Status: merged
+diff --git a/docs/iterations/004-delivery-status-and-views/plan.md b/docs/iterations/004-delivery-status-and-views/plan.md
+index 4f56c14..1b0699a 100644
+--- a/docs/iterations/004-delivery-status-and-views/plan.md
++++ b/docs/iterations/004-delivery-status-and-views/plan.md
+@@ -1,7 +1,7 @@
+ # Delivery statuses, member receipts, and operator views
+ 
+ Date: 2026-05-28
+-Status: ready
++Status: merged
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/004-delivery-status-and-views/todo.md b/docs/iterations/004-delivery-status-and-views/todo.md
+new file mode 100644
+index 0000000..6dd2ac9
+--- /dev/null
++++ b/docs/iterations/004-delivery-status-and-views/todo.md
+@@ -0,0 +1,8 @@
++# Implementation TODO
++
++- [x] 001 Extend the Message aggregate with commands and events for delivered,
++- [x] 002 Add the member-facing receipt projection and query applying the ADR 0006
++- [x] 003 Add the operator deliverability projection and query, preserving reason
++- [x] 004 Add Cucumber step definitions for the remaining member receipt scenarios
++- [x] 005 Sweep the codebase for any remaining CRUD spike artefacts and remove
++- [x] 006 Run `devenv shell mix precommit` and fix any issues.
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index b485316..469a8d8 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -9,8 +9,8 @@ scenarios green than before.
+ | --- | --- | --- | --- | --- |
+ | 001 | 2026-05-28 | merged | Event-sourced foundation | [plan](001-event-sourced-foundation/plan.md) |
+ | 002 | 2026-05-28 | merged | Membership model | [plan](002-membership-model/plan.md) |
+-| 003 | 2026-05-28 | ready | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
+-| 004 | 2026-05-28 | ready | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
++| 003 | 2026-05-28 | ready-for-review | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
++| 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
+ 
+ Shared acceptance feature files used across these iterations:
+ 
+diff --git a/docs/kaizen/2026-05-29-review-checkpoint-adds-ignored-tmp.md b/docs/kaizen/2026-05-29-review-checkpoint-adds-ignored-tmp.md
+new file mode 100644
+index 0000000..342928e
+--- /dev/null
++++ b/docs/kaizen/2026-05-29-review-checkpoint-adds-ignored-tmp.md
+@@ -0,0 +1,44 @@
++# Problem: Iteration review checkpoint tried to add ignored .fabro/tmp
++
++Date: 2026-05-29
++
++Selected iteration: 004 Delivery statuses and views
++Plan path: docs/iterations/004-delivery-status-and-views/plan.md
++Implementation ref: e35b20e7d205357fd5f27356d361a1602c7d42c3
++Base sha: d5361cf805a61a320973bf536c7d75678f16fc76
++
++Fabro run ID: 01KSV12PCV8X7ENEW642PZHXTZ
++Web UI: https://fabro.home.wynne.family/runs/01KSV12PCV8X7ENEW642PZHXTZ
++
++Failed stage/status: checkpoint after `preflight_sandbox`; run status FAILED.
++
++Exact failure text:
++
++```text
++git checkpoint commit failed for node 'preflight_sandbox': git add failed (exit 1)
++```
++
++Observed cause:
++
++```text
++The review preflight script added .fabro/tmp/ to .git/info/exclude and then wrote .fabro/tmp/review-start-sha.txt. During checkpoint, Fabro tried to add the ignored .fabro/tmp path and git refused.
++```
++
++Commands used:
++
++```bash
++bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
++```
++
++Observations:
++
++- The review sandbox initialized and preflight itself succeeded.
++- The failure occurred in Fabro's checkpoint machinery immediately after preflight, before review gates or reviewer agents ran.
++- This is the same class of workflow/tooling failure previously fixed for the iteration implementation workflow.
++- No implementation or review-polish code was attempted.
++
++Retry command after applying the workflow metadata fix:
++
++```bash
++bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
++```
+diff --git a/docs/kaizen/2026-05-29-review-publish-used-stale-tmp-ignore.md b/docs/kaizen/2026-05-29-review-publish-used-stale-tmp-ignore.md
+new file mode 100644
+index 0000000..63f1e7c
+--- /dev/null
++++ b/docs/kaizen/2026-05-29-review-publish-used-stale-tmp-ignore.md
+@@ -0,0 +1,41 @@
++# Problem: Iteration review publish checkpoint used stale tmp ignore from review branch
++
++Date: 2026-05-29
++
++Selected iteration: 004 Delivery statuses and views
++Plan path: docs/iterations/004-delivery-status-and-views/plan.md
++Review branch: review/004-delivery-status-and-views
++Implementation ref under review: e35b20e7d205357fd5f27356d361a1602c7d42c3
++Base sha: d5361cf805a61a320973bf536c7d75678f16fc76
++
++Fabro run ID: 01KSV1FB1HGF626VA38H8EVYE8
++Web UI: https://fabro.home.wynne.family/runs/01KSV1FB1HGF626VA38H8EVYE8
++
++Failed stage/status: checkpoint after `publish_polish_to_main`; run status FAILED.
++
++Exact failure text:
++
++```text
++git checkpoint commit failed for node 'publish_polish_to_main': git add failed (exit 1)
++```
++
++Observed output:
++
++```text
++docs/code-health.md was not updated.
++Reason: the review synthesis accepted the implementation (`implementation_accepted: true`) and reported no outstanding review fixes or judgement-worthy code-health findings (`review_fixes_available: false`).
++```
++
++Observations:
++
++- The review workflow itself had been fixed on `main` to avoid adding `.fabro/tmp/` to `.git/info/exclude`.
++- The reviewed branch still pointed at the implementation commit, which contained the older `publish_polish_to_main.sh` script that adds `.fabro/tmp/` to `.git/info/exclude`.
++- The review stages completed and accepted the implementation with no review fixes or code-health findings.
++- The failure happened after the publish script during checkpointing, not during code review or validation.
++- This is a workflow/stale-branch interaction rather than an implementation failure.
++
++Retry command after updating the review branch to include the review workflow fix:
++
++```bash
++bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
++```
+diff --git a/docs/kaizen/2026-05-29-review-sandbox-clone-no-space.md b/docs/kaizen/2026-05-29-review-sandbox-clone-no-space.md
+new file mode 100644
+index 0000000..bd9f1cc
+--- /dev/null
++++ b/docs/kaizen/2026-05-29-review-sandbox-clone-no-space.md
+@@ -0,0 +1,56 @@
++# Problem: Iteration review sandbox clone failed with no space left on device
++
++Date: 2026-05-29
++
++Selected iteration: 003 Messaging skeleton
++Plan path: docs/iterations/003-messaging-skeleton/plan.md
++Implementation ref: 8fcf5e6
++Base sha: 75c1d673cb9ee6c4247f605ac12fb32a62da884c
++
++Fabro review run IDs:
++
++- 01KSTRE5PPQXG7RDG0JHXF44YJ
++- 01KSTREWPRHTGSGC5846WK73SQ
++
++Web UI:
++
++- https://fabro.home.wynne.family/runs/01KSTRE5PPQXG7RDG0JHXF44YJ
++- https://fabro.home.wynne.family/runs/01KSTREWPRHTGSGC5846WK73SQ
++
++Failed stage/status: sandbox initialization; run status FAILED.
++
++Exact failure text:
++
++```text
++Failed to initialize sandbox
++  caused by: Failed to clone repo into Docker sandbox: fatal: cannot create directory at 'docs/tools/fabro/public/integrations': No space left on device
++warning: Clone succeeded, but checkout failed.
++You can inspect what was checked out with 'git status'
++and retry with 'git restore --source=HEAD :/'
++```
++
++Commands used:
++
++```bash
++bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
++fabro system df
++fabro system prune --older-than 1h --yes
++fabro system prune --older-than 24h --yes
++```
++
++Observations:
++
++- The implementation workflow for iteration 003 had already succeeded and published commit `8fcf5e6` to `main`.
++- A review branch `review/003-messaging-skeleton` was created and pushed for the review command because the recorded implementation metadata used a commit SHA and `bin/dev iteration-review` requires a branch.
++- The review run failed before any review stage executed, during Docker sandbox repository checkout.
++- Retrying the same command produced the same sandbox initialization failure.
++- Local disk space on the client machine was not exhausted, and the failure text came from the Fabro server-side Docker sandbox clone.
++- `fabro system df` reported only Fabro storage usage, not the Docker filesystem that failed checkout.
++- Attempts to run `fabro system prune` timed out after 30 seconds.
++- This is a workflow/infrastructure failure rather than a code review or implementation failure.
++
++Retry command after server-side Docker disk space is recovered:
++
++```bash
++bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
++```
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 562bee8..4797099 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -16,7 +16,9 @@ config :memba,
+     :membership_memberships,
+     :membership_people,
+     :messaging_messages,
+-    :messaging_recipient_deliveries
++    :messaging_recipient_deliveries,
++    :messaging_member_receipts,
++    :messaging_operator_deliverabilities
+   ],
+   generators: [timestamp_type: :utc_datetime]
+ 
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 25c303e..494d825 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -15,6 +15,8 @@ defmodule Memba.Application do
+       Memba.Messaging.DeliveryProviders.Fake,
+       Memba.Messaging.Projectors.Message,
+       Memba.Messaging.Projectors.RecipientDelivery,
++      Memba.Messaging.Projectors.MemberReceipt,
++      Memba.Messaging.Projectors.OperatorDeliverability,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.Membership,
+       Memba.Membership.Projectors.Person,
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index a22ef15..5a8ee76 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -8,7 +8,9 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.DeliveryProvider
+   alias Memba.Messaging.DeliveryRequest
++  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
++  alias Memba.Messaging.Projections.OperatorDeliverability, as: OperatorDeliverabilityProjection
+   alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
+   alias Memba.Messaging.Recipient
+   alias Memba.Repo
+@@ -75,6 +77,104 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Fetch a member-facing receipt read model by delivery UUID.
++
++  Returns `nil` when the ID is absent or is not a valid UUID.
++  """
++  def get_member_receipt(delivery_id) do
++    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
++      Repo.get(MemberReceiptProjection, delivery_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Fetch a member-facing receipt for a recipient on a message.
++
++  Invalid or missing IDs return `nil`. The receipt status uses ADR 0006's
++  simplified member vocabulary: sent, delivered, delivery problem, or opened.
++  """
++  def get_member_receipt(message_id, recipient_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
++         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
++      Repo.get_by(MemberReceiptProjection, message_id: message_id, recipient_id: recipient_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  List member-facing receipt records for a projected message.
++
++  Invalid or missing message IDs return an empty list. Results are ordered by
++  recipient name and ID to provide deterministic assertions for acceptance
++  plumbing.
++  """
++  def list_member_receipts(message_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
++      MemberReceiptProjection
++      |> where([receipt], receipt.message_id == ^message_id)
++      |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
++  @doc """
++  Fetch an operator deliverability read model by delivery UUID.
++
++  Returns `nil` when the ID is absent or is not a valid UUID.
++  """
++  def get_operator_deliverability(delivery_id) do
++    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
++      Repo.get(OperatorDeliverabilityProjection, delivery_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Fetch an operator deliverability record for a recipient on a message.
++
++  Invalid or missing IDs return `nil`. This view keeps detailed delivery status
++  and reason text for delayed, bounced, and spam complaint reports.
++  """
++  def get_operator_deliverability(message_id, recipient_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
++         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
++      Repo.get_by(OperatorDeliverabilityProjection,
++        message_id: message_id,
++        recipient_id: recipient_id
++      )
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  List operator deliverability records for a projected message.
++
++  Invalid or missing message IDs return an empty list. Results are ordered by
++  recipient name and ID to provide deterministic assertions for acceptance
++  plumbing.
++  """
++  def list_operator_deliverabilities(message_id) do
++    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
++      OperatorDeliverabilityProjection
++      |> where([deliverability], deliverability.message_id == ^message_id)
++      |> order_by([deliverability],
++        asc: deliverability.recipient_name,
++        asc: deliverability.recipient_id
++      )
++      |> Repo.all()
++    else
++      :error -> []
++    end
++  end
++
+   defp dispatch_send_message(%SendMessage{} = command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> {:ok, :ok}
+diff --git a/web/lib/memba/messaging/commands/report_delivery_bounced.ex b/web/lib/memba/messaging/commands/report_delivery_bounced.ex
+new file mode 100644
+index 0000000..5c2a1c5
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/report_delivery_bounced.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.ReportDeliveryBounced do
++  @moduledoc """
++  Command to report that an email delivery bounced.
++  """
++
++  @enforce_keys [:message_id, :delivery_id, :reason]
++  defstruct [:message_id, :delivery_id, :reason]
++end
+diff --git a/web/lib/memba/messaging/commands/report_delivery_delayed.ex b/web/lib/memba/messaging/commands/report_delivery_delayed.ex
+new file mode 100644
+index 0000000..19420d1
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/report_delivery_delayed.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.ReportDeliveryDelayed do
++  @moduledoc """
++  Command to report that an email delivery was temporarily delayed.
++  """
++
++  @enforce_keys [:message_id, :delivery_id, :reason]
++  defstruct [:message_id, :delivery_id, :reason]
++end
+diff --git a/web/lib/memba/messaging/commands/report_delivery_delivered.ex b/web/lib/memba/messaging/commands/report_delivery_delivered.ex
+new file mode 100644
+index 0000000..c2768e9
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/report_delivery_delivered.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.ReportDeliveryDelivered do
++  @moduledoc """
++  Command to report that an email delivery was accepted by the recipient server.
++  """
++
++  @enforce_keys [:message_id, :delivery_id]
++  defstruct [:message_id, :delivery_id]
++end
+diff --git a/web/lib/memba/messaging/commands/report_delivery_opened.ex b/web/lib/memba/messaging/commands/report_delivery_opened.ex
+new file mode 100644
+index 0000000..eefe180
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/report_delivery_opened.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.ReportDeliveryOpened do
++  @moduledoc """
++  Command to report that a recipient opened an email delivery at least once.
++  """
++
++  @enforce_keys [:message_id, :delivery_id]
++  defstruct [:message_id, :delivery_id]
++end
+diff --git a/web/lib/memba/messaging/commands/report_delivery_spam_complaint.ex b/web/lib/memba/messaging/commands/report_delivery_spam_complaint.ex
+new file mode 100644
+index 0000000..055d4a5
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/report_delivery_spam_complaint.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Messaging.Commands.ReportDeliverySpamComplaint do
++  @moduledoc """
++  Command to report that a recipient marked an email delivery as spam.
++  """
++
++  @enforce_keys [:message_id, :delivery_id, :reason]
++  defstruct [:message_id, :delivery_id, :reason]
++end
+diff --git a/web/lib/memba/messaging/events/recipient_delivery_bounced.ex b/web/lib/memba/messaging/events/recipient_delivery_bounced.ex
+new file mode 100644
+index 0000000..87b1429
+--- /dev/null
++++ b/web/lib/memba/messaging/events/recipient_delivery_bounced.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.RecipientDeliveryBounced do
++  @moduledoc """
++  Event raised when a recipient delivery has bounced.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :delivery_id, :reason]
++  defstruct [:message_id, :delivery_id, :reason]
++end
+diff --git a/web/lib/memba/messaging/events/recipient_delivery_delayed.ex b/web/lib/memba/messaging/events/recipient_delivery_delayed.ex
+new file mode 100644
+index 0000000..6eaedaa
+--- /dev/null
++++ b/web/lib/memba/messaging/events/recipient_delivery_delayed.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.RecipientDeliveryDelayed do
++  @moduledoc """
++  Event raised when a recipient delivery has been delayed.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :delivery_id, :reason]
++  defstruct [:message_id, :delivery_id, :reason]
++end
+diff --git a/web/lib/memba/messaging/events/recipient_delivery_delivered.ex b/web/lib/memba/messaging/events/recipient_delivery_delivered.ex
+new file mode 100644
+index 0000000..bfc980c
+--- /dev/null
++++ b/web/lib/memba/messaging/events/recipient_delivery_delivered.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.RecipientDeliveryDelivered do
++  @moduledoc """
++  Event raised when a recipient delivery has been delivered.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :delivery_id]
++  defstruct [:message_id, :delivery_id]
++end
+diff --git a/web/lib/memba/messaging/events/recipient_delivery_opened.ex b/web/lib/memba/messaging/events/recipient_delivery_opened.ex
+new file mode 100644
+index 0000000..8c4b899
+--- /dev/null
++++ b/web/lib/memba/messaging/events/recipient_delivery_opened.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.RecipientDeliveryOpened do
++  @moduledoc """
++  Event raised when a recipient delivery has been opened at least once.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :delivery_id]
++  defstruct [:message_id, :delivery_id]
++end
+diff --git a/web/lib/memba/messaging/events/recipient_delivery_spam_complaint.ex b/web/lib/memba/messaging/events/recipient_delivery_spam_complaint.ex
+new file mode 100644
+index 0000000..058fbb6
+--- /dev/null
++++ b/web/lib/memba/messaging/events/recipient_delivery_spam_complaint.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Messaging.Events.RecipientDeliverySpamComplaint do
++  @moduledoc """
++  Event raised when a recipient delivery has a spam complaint.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:message_id, :delivery_id, :reason]
++  defstruct [:message_id, :delivery_id, :reason]
++end
+diff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex
+index 3ee939e..855ee3d 100644
+--- a/web/lib/memba/messaging/message.ex
++++ b/web/lib/memba/messaging/message.ex
+@@ -7,9 +7,19 @@ defmodule Memba.Messaging.Message do
+   """
+ 
+   alias Commanded.Aggregates.Aggregate
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.RecipientDeliveryBounced
+   alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Events.RecipientDeliveryDelayed
++  alias Memba.Messaging.Events.RecipientDeliveryDelivered
++  alias Memba.Messaging.Events.RecipientDeliveryOpened
++  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
+   alias Memba.Messaging.Recipient
+ 
+   @behaviour Aggregate
+@@ -20,6 +30,7 @@ defmodule Memba.Messaging.Message do
+     :sender_id,
+     :subject,
+     :body,
++    delivery_statuses: %{},
+     recipient_delivery_ids: MapSet.new(),
+     recipient_ids: MapSet.new()
+   ]
+@@ -48,6 +59,26 @@ defmodule Memba.Messaging.Message do
+ 
+   def execute(%__MODULE__{}, %SendMessage{}), do: {:error, :already_sent}
+ 
++  def execute(%__MODULE__{} = message, %ReportDeliveryDelivered{} = command) do
++    report_status(message, command, :delivered, RecipientDeliveryDelivered)
++  end
++
++  def execute(%__MODULE__{} = message, %ReportDeliveryDelayed{} = command) do
++    report_status_with_reason(message, command, :delayed, RecipientDeliveryDelayed)
++  end
++
++  def execute(%__MODULE__{} = message, %ReportDeliveryBounced{} = command) do
++    report_status_with_reason(message, command, :bounced, RecipientDeliveryBounced)
++  end
++
++  def execute(%__MODULE__{} = message, %ReportDeliverySpamComplaint{} = command) do
++    report_status_with_reason(message, command, :spam_complaint, RecipientDeliverySpamComplaint)
++  end
++
++  def execute(%__MODULE__{} = message, %ReportDeliveryOpened{} = command) do
++    report_status(message, command, :opened, RecipientDeliveryOpened)
++  end
++
+   @impl Aggregate
+   def apply(%__MODULE__{} = message, %MessageSent{} = event) do
+     %__MODULE__{
+@@ -64,10 +95,117 @@ defmodule Memba.Messaging.Message do
+     %__MODULE__{
+       message
+       | recipient_delivery_ids: MapSet.put(message.recipient_delivery_ids, event.delivery_id),
++        delivery_statuses:
++          Map.put(message.delivery_statuses, event.delivery_id, %{
++            status: :sent,
++            reason: nil
++          }),
+         recipient_ids: MapSet.put(message.recipient_ids, event.recipient_id)
+     }
+   end
+ 
++  def apply(%__MODULE__{} = message, %RecipientDeliveryDelivered{} = event) do
++    put_delivery_status(message, event.delivery_id, :delivered)
++  end
++
++  def apply(%__MODULE__{} = message, %RecipientDeliveryDelayed{} = event) do
++    put_delivery_status(message, event.delivery_id, :delayed, event.reason)
++  end
++
++  def apply(%__MODULE__{} = message, %RecipientDeliveryBounced{} = event) do
++    put_delivery_status(message, event.delivery_id, :bounced, event.reason)
++  end
++
++  def apply(%__MODULE__{} = message, %RecipientDeliverySpamComplaint{} = event) do
++    put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
++  end
++
++  def apply(%__MODULE__{} = message, %RecipientDeliveryOpened{} = event) do
++    put_delivery_status(message, event.delivery_id, :opened)
++  end
++
++  defp report_status(%__MODULE__{} = message, command, next_status, event_module) do
++    with :ok <- validate_delivery_command(message, command),
++         :ok <- validate_status_transition(message, command.delivery_id, next_status, nil) do
++      struct(event_module, message_id: command.message_id, delivery_id: command.delivery_id)
++    end
++  end
++
++  defp report_status_with_reason(%__MODULE__{} = message, command, next_status, event_module) do
++    with :ok <- validate_delivery_command(message, command),
++         {:ok, reason} <- normalize_text(command.reason, :invalid_reason),
++         :ok <- validate_status_transition(message, command.delivery_id, next_status, reason) do
++      struct(event_module,
++        message_id: command.message_id,
++        delivery_id: command.delivery_id,
++        reason: reason
++      )
++    end
++  end
++
++  defp validate_delivery_command(%__MODULE__{} = message, command) do
++    with :ok <- validate_uuid(command.message_id, :invalid_message_id),
++         :ok <- validate_uuid(command.delivery_id, :invalid_delivery_id),
++         :ok <- validate_message_sent(message),
++         :ok <- validate_message_identity(message, command.message_id) do
++      validate_known_delivery(message, command.delivery_id)
++    end
++  end
++
++  defp validate_message_sent(%__MODULE__{message_id: nil}), do: {:error, :message_not_sent}
++  defp validate_message_sent(%__MODULE__{}), do: :ok
++
++  defp validate_message_identity(%__MODULE__{message_id: message_id}, message_id), do: :ok
++  defp validate_message_identity(%__MODULE__{}, _message_id), do: {:error, :message_id_mismatch}
++
++  defp validate_known_delivery(%__MODULE__{} = message, delivery_id) do
++    if MapSet.member?(message.recipient_delivery_ids, delivery_id) do
++      :ok
++    else
++      {:error, :unknown_delivery}
++    end
++  end
++
++  defp validate_status_transition(%__MODULE__{} = message, delivery_id, next_status, reason) do
++    %{status: current_status, reason: current_reason} =
++      Map.fetch!(message.delivery_statuses, delivery_id)
++
++    cond do
++      current_status == next_status and current_reason == reason ->
++        []
++
++      current_status == next_status ->
++        {:error, :conflicting_delivery_status_reason}
++
++      valid_transition?(current_status, next_status) ->
++        :ok
++
++      true ->
++        {:error, :invalid_delivery_status_transition}
++    end
++  end
++
++  defp valid_transition?(:sent, :delivered), do: true
++  defp valid_transition?(:sent, :delayed), do: true
++  defp valid_transition?(:sent, :bounced), do: true
++  defp valid_transition?(:sent, :spam_complaint), do: true
++  defp valid_transition?(:delayed, :delivered), do: true
++  defp valid_transition?(:delayed, :bounced), do: true
++  defp valid_transition?(:delayed, :spam_complaint), do: true
++  defp valid_transition?(:delivered, :opened), do: true
++  defp valid_transition?(_current_status, _next_status), do: false
++
++  defp put_delivery_status(%__MODULE__{} = message, delivery_id, status, reason \\ nil) do
++    %__MODULE__{
++      message
++      | delivery_statuses:
++          Map.put(message.delivery_statuses, delivery_id, %{
++            status: status,
++            reason: reason
++          })
++    }
++  end
++
+   defp recipient_delivery_created(message_id, %Recipient{} = recipient) do
+     %RecipientDeliveryCreated{
+       message_id: message_id,
+diff --git a/web/lib/memba/messaging/projections/member_receipt.ex b/web/lib/memba/messaging/projections/member_receipt.ex
+new file mode 100644
+index 0000000..74b88b7
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/member_receipt.ex
+@@ -0,0 +1,20 @@
++defmodule Memba.Messaging.Projections.MemberReceipt do
++  @moduledoc """
++  Member-facing receipt read model for one recipient delivery.
++
++  The `receipt_status` field stores the simplified ADR 0006 vocabulary rather
++  than provider- or operator-facing delivery details.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:delivery_id, :binary_id, autogenerate: false}
++  schema "messaging_member_receipts" do
++    field :message_id, :binary_id
++    field :recipient_id, :binary_id
++    field :recipient_name, :string
++    field :receipt_status, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projections/operator_deliverability.ex b/web/lib/memba/messaging/projections/operator_deliverability.ex
+new file mode 100644
+index 0000000..27b59e8
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/operator_deliverability.ex
+@@ -0,0 +1,23 @@
++defmodule Memba.Messaging.Projections.OperatorDeliverability do
++  @moduledoc """
++  Operator-facing deliverability read model for one recipient delivery.
++
++  Unlike member-facing receipts, this projection keeps the detailed delivery
++  status and the provider/channel reason text operators need for diagnosis.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:delivery_id, :binary_id, autogenerate: false}
++  schema "messaging_operator_deliverabilities" do
++    field :message_id, :binary_id
++    field :recipient_id, :binary_id
++    field :recipient_name, :string
++    field :recipient_address, :string
++    field :channel, :string
++    field :status, :string
++    field :reason, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/member_receipt.ex b/web/lib/memba/messaging/projectors/member_receipt.ex
+new file mode 100644
+index 0000000..5f8d1e1
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/member_receipt.ex
+@@ -0,0 +1,65 @@
++defmodule Memba.Messaging.Projectors.MemberReceipt do
++  @moduledoc """
++  Projects recipient delivery events into member-facing receipt statuses.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.MemberReceipt",
++    consistency: :strong
++
++  alias Ecto.Changeset
++  alias Memba.Messaging.Events.RecipientDeliveryBounced
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Events.RecipientDeliveryDelayed
++  alias Memba.Messaging.Events.RecipientDeliveryDelivered
++  alias Memba.Messaging.Events.RecipientDeliveryOpened
++  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
++  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
++  alias Memba.Repo
++
++  project(%RecipientDeliveryCreated{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :messaging_member_receipt, %MemberReceiptProjection{
++      delivery_id: event.delivery_id,
++      message_id: event.message_id,
++      recipient_id: event.recipient_id,
++      recipient_name: event.recipient_name,
++      receipt_status: "sent"
++    })
++  end)
++
++  project(%RecipientDeliveryDelivered{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivered")
++  end)
++
++  project(%RecipientDeliveryDelayed{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivery problem")
++  end)
++
++  project(%RecipientDeliveryBounced{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivery problem")
++  end)
++
++  project(%RecipientDeliverySpamComplaint{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "delivery problem")
++  end)
++
++  project(%RecipientDeliveryOpened{} = event, fn multi ->
++    update_receipt_status(multi, event.delivery_id, "opened")
++  end)
++
++  defp update_receipt_status(multi, delivery_id, receipt_status) do
++    case Repo.get(MemberReceiptProjection, delivery_id) do
++      nil ->
++        multi
++
++      receipt ->
++        Ecto.Multi.update(
++          multi,
++          {:messaging_member_receipt, delivery_id},
++          Changeset.change(receipt, receipt_status: receipt_status)
++        )
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/operator_deliverability.ex b/web/lib/memba/messaging/projectors/operator_deliverability.ex
+new file mode 100644
+index 0000000..c291163
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/operator_deliverability.ex
+@@ -0,0 +1,75 @@
++defmodule Memba.Messaging.Projectors.OperatorDeliverability do
++  @moduledoc """
++  Projects recipient delivery events into the operator deliverability view.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.OperatorDeliverability",
++    consistency: :strong
++
++  alias Ecto.Changeset
++  alias Memba.Messaging.Events.RecipientDeliveryBounced
++  alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Events.RecipientDeliveryDelayed
++  alias Memba.Messaging.Events.RecipientDeliveryDelivered
++  alias Memba.Messaging.Events.RecipientDeliveryOpened
++  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
++  alias Memba.Messaging.Projections.OperatorDeliverability, as: OperatorDeliverabilityProjection
++  alias Memba.Repo
++
++  project(%RecipientDeliveryCreated{} = event, fn multi ->
++    Ecto.Multi.insert(
++      multi,
++      :messaging_operator_deliverability,
++      %OperatorDeliverabilityProjection{
++        delivery_id: event.delivery_id,
++        message_id: event.message_id,
++        recipient_id: event.recipient_id,
++        recipient_name: event.recipient_name,
++        recipient_address: event.recipient_email,
++        channel: "email",
++        status: "sent",
++        reason: nil
++      }
++    )
++  end)
++
++  project(%RecipientDeliveryDelivered{} = event, fn multi ->
++    update_deliverability(multi, event.delivery_id, status: "delivered", reason: nil)
++  end)
++
++  project(%RecipientDeliveryDelayed{} = event, fn multi ->
++    update_deliverability(multi, event.delivery_id, status: "delayed", reason: event.reason)
++  end)
++
++  project(%RecipientDeliveryBounced{} = event, fn multi ->
++    update_deliverability(multi, event.delivery_id, status: "bounced", reason: event.reason)
++  end)
++
++  project(%RecipientDeliverySpamComplaint{} = event, fn multi ->
++    update_deliverability(multi, event.delivery_id,
++      status: "spam complaint",
++      reason: event.reason
++    )
++  end)
++
++  project(%RecipientDeliveryOpened{} = event, fn multi ->
++    update_deliverability(multi, event.delivery_id, status: "opened", reason: nil)
++  end)
++
++  defp update_deliverability(multi, delivery_id, attrs) do
++    case Repo.get(OperatorDeliverabilityProjection, delivery_id) do
++      nil ->
++        multi
++
++      deliverability ->
++        Ecto.Multi.update(
++          multi,
++          {:messaging_operator_deliverability, delivery_id},
++          Changeset.change(deliverability, attrs)
++        )
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+index 32c3a57..09ca66d 100644
+--- a/web/lib/memba/messaging/router.ex
++++ b/web/lib/memba/messaging/router.ex
+@@ -6,9 +6,24 @@ defmodule Memba.Messaging.Router do
+   use Commanded.Commands.Router
+ 
+   alias Memba.Messaging.Message
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+ 
+   identify(Message, by: :message_id)
+ 
+-  dispatch(SendMessage, to: Message)
++  dispatch(
++    [
++      SendMessage,
++      ReportDeliveryDelivered,
++      ReportDeliveryDelayed,
++      ReportDeliveryBounced,
++      ReportDeliverySpamComplaint,
++      ReportDeliveryOpened
++    ],
++    to: Message
++  )
+ end
+diff --git a/web/priv/repo/migrations/20260529212029_create_messaging_member_receipts_projection.exs b/web/priv/repo/migrations/20260529212029_create_messaging_member_receipts_projection.exs
+new file mode 100644
+index 0000000..d3280b2
+--- /dev/null
++++ b/web/priv/repo/migrations/20260529212029_create_messaging_member_receipts_projection.exs
+@@ -0,0 +1,19 @@
++defmodule Memba.Repo.Migrations.CreateMessagingMemberReceiptsProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_member_receipts, primary_key: false) do
++      add :delivery_id, :uuid, primary_key: true
++      add :message_id, :uuid, null: false
++      add :recipient_id, :uuid, null: false
++      add :recipient_name, :text, null: false
++      add :receipt_status, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:messaging_member_receipts, [:message_id])
++    create index(:messaging_member_receipts, [:recipient_id])
++    create unique_index(:messaging_member_receipts, [:message_id, :recipient_id])
++  end
++end
+diff --git a/web/priv/repo/migrations/20260529213347_create_messaging_operator_deliverabilities_projection.exs b/web/priv/repo/migrations/20260529213347_create_messaging_operator_deliverabilities_projection.exs
+new file mode 100644
+index 0000000..fff75fa
+--- /dev/null
++++ b/web/priv/repo/migrations/20260529213347_create_messaging_operator_deliverabilities_projection.exs
+@@ -0,0 +1,22 @@
++defmodule Memba.Repo.Migrations.CreateMessagingOperatorDeliverabilitiesProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_operator_deliverabilities, primary_key: false) do
++      add :delivery_id, :uuid, primary_key: true
++      add :message_id, :uuid, null: false
++      add :recipient_id, :uuid, null: false
++      add :recipient_name, :text, null: false
++      add :recipient_address, :text, null: false
++      add :channel, :text, null: false
++      add :status, :text, null: false
++      add :reason, :text
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:messaging_operator_deliverabilities, [:message_id])
++    create index(:messaging_operator_deliverabilities, [:recipient_id])
++    create unique_index(:messaging_operator_deliverabilities, [:message_id, :recipient_id])
++  end
++end
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index 7566293..f92ef90 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -15,6 +15,76 @@ defmodule Memba.CucumberConfigurationTest do
+     {"And", "Pat is a member of Nelson Paddling Club", 11}
+   ]
+ 
++<<<<<<< HEAD
++  @member_message_scenarios [
++    {"A member sends a club message",
++     [
++       {"When",
++        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        16},
++       {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
++       {"And", "the message should not be addressed to Pat", 18},
++       {"And", "each addressed member should have a separate delivery record", 19},
++       {"And", "each delivery should be sent through the email provider", 20}
++     ]},
++    {"A sent message is waiting for delivery confirmation",
++     [
++       {"When",
++        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        25},
++       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"sent\"", 26}
++     ]},
++    {"A delivered message is shown as delivered",
++     [
++       {"Given",
++        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        29},
++       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 30},
++       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivered\"", 31}
++     ]},
++    {"A delayed delivery is shown as a delivery problem",
++     [
++       {"Given",
++        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        34},
++       {"When",
++        "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
++        35},
++       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
++        36}
++     ]},
++    {"A bounced delivery is shown as a delivery problem",
++     [
++       {"Given",
++        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        39},
++       {"When",
++        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
++        40},
++       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
++        41}
++     ]},
++    {"A spam complaint is shown as a delivery problem",
++     [
++       {"Given",
++        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        44},
++       {"When",
++        "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
++        45},
++       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
++        46}
++     ]},
++    {"An opened message is shown as opened",
++     [
++       {"Given",
++        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++        49},
++       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 50},
++       {"When", "Bob opens the email for \"Trip planning night\"", 51},
++       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"opened\"", 52}
++     ]}
++=======
+   @member_message_scenario_steps [
+     {"When",
+      "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+@@ -23,12 +93,58 @@ defmodule Memba.CucumberConfigurationTest do
+     {"And", "the message should not be addressed to Pat", 18},
+     {"And", "each addressed member should have a separate delivery record", 19},
+     {"And", "each delivery should be sent through the email provider", 20}
++>>>>>>> f165284 (review polish: iteration 003)
+   ]
+ 
+-  @operator_membership_background_steps [
++  @operator_background_steps [
+     {"Given", "Kootenay Mountaineering Club is a club", 6},
+     {"And", "Alice and Bob are people", 7},
+-    {"And", "Alice and Bob are members of Kootenay Mountaineering Club", 8}
++    {"And", "Alice and Bob are members of Kootenay Mountaineering Club", 8},
++    {"And",
++     "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++     9}
++  ]
++
++  @operator_scenarios [
++    {"A delivered email is visible to operators",
++     [
++       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 14},
++       {"Then", "Bob's operator deliverability status should be \"delivered\"", 15}
++     ]},
++    {"A delayed delivery is visible to operators",
++     [
++       {"When",
++        "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
++        18},
++       {"Then", "Bob's operator deliverability status should be \"delayed\"", 19},
++       {"And",
++        "Bob's operator deliverability reason should be \"recipient server is temporarily unavailable\"",
++        20}
++     ]},
++    {"A bounced delivery is visible to operators",
++     [
++       {"When",
++        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
++        23},
++       {"Then", "Bob's operator deliverability status should be \"bounced\"", 24},
++       {"And", "Bob's operator deliverability reason should be \"mailbox does not exist\"", 25}
++     ]},
++    {"A spam complaint is visible to operators",
++     [
++       {"When",
++        "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
++        28},
++       {"Then", "Bob's operator deliverability status should be \"spam complaint\"", 29},
++       {"And",
++        "Bob's operator deliverability reason should be \"recipient marked the message as spam\"",
++        30}
++     ]},
++    {"An opened email is visible to operators",
++     [
++       {"Given", "Bob's email for \"Trip planning night\" has been reported as delivered", 33},
++       {"When", "Bob opens the email for \"Trip planning night\"", 34},
++       {"Then", "Bob's operator deliverability status should be \"opened\"", 35}
++     ]}
+   ]
+ 
+   @required_membership_background_steps [
+@@ -42,65 +158,111 @@ defmodule Memba.CucumberConfigurationTest do
+     "Alice and Bob are members of Kootenay Mountaineering Club"
+   ]
+ 
+-  @required_member_message_scenario_steps Enum.map(@member_message_scenario_steps, fn {_keyword,
+-                                                                                       text,
+-                                                                                       _line} ->
+-                                            text
+-                                          end)
++  @required_member_message_scenario_steps for {_scenario_name, steps} <-
++                                                @member_message_scenarios,
++                                              {_keyword, text, _line} <- steps,
++                                              do: text
++
++  @required_operator_scenario_steps for {_scenario_name, steps} <- @operator_scenarios,
++                                        {_keyword, text, _line} <- steps,
++                                        do: text
+ 
+-  test "Cucumber discovers shared features and the member message scenario passes" do
++  @required_messaging_step_patterns [
++    "{word} sends the message {string} to Kootenay Mountaineering Club members",
++    "{word} has sent the message {string} to Kootenay Mountaineering Club members",
++    "{word} email for {string} is reported as delivered",
++    "{word} email for {string} has been reported as delivered",
++    "{word} email for {string} is reported as delayed because {string}",
++    "{word} email for {string} is reported as bounced because {string}",
++    "{word} email for {string} is reported as a spam complaint because {string}",
++    "{word} opens the email for {string}",
++    "{word} receipt status for {string} should be {string}",
++    "{word} operator deliverability status should be {string}",
++    "{word} operator deliverability reason should be {string}",
++    "the message should be addressed to Alice, Bob, and Carol",
++    "the message should not be addressed to {word}",
++    "each addressed member should have a separate delivery record",
++    "each delivery should be sent through the email provider"
++  ]
++
++  test "Cucumber discovers shared features and required step definitions" do
+     shared_feature_paths = configured_feature_paths()
+     assert shared_feature_paths == expected_shared_feature_paths()
+ 
+     assert_shared_features_contain_steps!(
+       shared_feature_paths,
+-      @required_membership_background_steps ++ @required_member_message_scenario_steps
++      Enum.uniq(
++        @required_membership_background_steps ++
++          @required_member_message_scenario_steps ++ @required_operator_scenario_steps
++      )
+     )
+ 
+-    %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
++    %Discovery.DiscoveryResult{} = discovery = discover_steps()
+ 
+     Enum.each(@required_membership_background_steps, fn step_text ->
+       assert Map.has_key?(discovery.step_registry, step_text)
+     end)
+ 
++    Enum.each(@required_messaging_step_patterns, fn step_pattern ->
++      assert Map.has_key?(discovery.step_registry, step_pattern)
++    end)
++  end
++
++  test "all member message deliverability scenarios pass through Cucumber runtime" do
++    %Discovery.DiscoveryResult{} = discovery = discover_steps()
++
+     member_message_feature_file =
+-      feature_file_named!(shared_feature_paths, "member_message_deliverability.feature")
+-
+-    member_context =
+-      execute_steps(
+-        member_message_feature_file,
+-        "member message Background smoke test",
+-        @member_message_background_steps,
+-        discovery.step_registry
+-      )
++      feature_file_named!(configured_feature_paths(), "member_message_deliverability.feature")
++
++    Enum.each(@member_message_scenarios, fn {scenario_name, scenario_steps} ->
++      member_context =
++        execute_steps(
++          member_message_feature_file,
++          "#{scenario_name} Background",
++          @member_message_background_steps,
++          discovery.step_registry
++        )
+ 
+-    assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
+-      "Alice",
+-      "Bob",
+-      "Carol"
+-    ])
++      assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
++        "Alice",
++        "Bob",
++        "Carol"
++      ])
+ 
+-    assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
++      assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
+ 
+-    member_context
+-    |> Map.put(:scenario_name, "A member sends a club message")
+-    |> execute_steps(@member_message_scenario_steps, discovery.step_registry)
++      member_context
++      |> Map.put(:scenario_name, scenario_name)
++      |> execute_steps(scenario_steps, discovery.step_registry)
++    end)
++  end
++
++  test "all operator email deliverability scenarios pass through Cucumber runtime" do
++    %Discovery.DiscoveryResult{} = discovery = discover_steps()
++
++    shared_feature_paths = configured_feature_paths()
+ 
+     operator_feature_file =
+       feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
+ 
+-    operator_context =
+-      execute_steps(
+-        operator_feature_file,
+-        "operator email membership Background smoke test",
+-        @operator_membership_background_steps,
+-        discovery.step_registry
+-      )
++    Enum.each(@operator_scenarios, fn {scenario_name, scenario_steps} ->
++      operator_context =
++        execute_steps(
++          operator_feature_file,
++          "#{scenario_name} Background",
++          @operator_background_steps,
++          discovery.step_registry
++        )
+ 
+-    assert_active_member_names(operator_context, "Kootenay Mountaineering Club", [
+-      "Alice",
+-      "Bob"
+-    ])
++      assert_active_member_names(operator_context, "Kootenay Mountaineering Club", [
++        "Alice",
++        "Bob"
++      ])
++
++      operator_context
++      |> Map.put(:scenario_name, scenario_name)
++      |> execute_steps(scenario_steps, discovery.step_registry)
++    end)
+   end
+ 
+   defp configured_feature_paths do
+@@ -113,6 +275,20 @@ defmodule Memba.CucumberConfigurationTest do
+     |> Enum.sort()
+   end
+ 
++  defp discover_steps do
++    cache_key = {__MODULE__, :discovery}
++
++    case :persistent_term.get(cache_key, nil) do
++      nil ->
++        %Discovery.DiscoveryResult{} = discovery = Discovery.discover(features: [])
++        :persistent_term.put(cache_key, discovery)
++        discovery
++
++      %Discovery.DiscoveryResult{} = discovery ->
++        discovery
++    end
++  end
++
+   defp expected_shared_feature_paths do
+     __DIR__
+     |> Path.join("../../../acceptance-tests/features/**/*.feature")
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index cd353c2..d4ab10c 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -4,6 +4,12 @@ defmodule Memba.Cucumber.MessagingSteps do
+   import ExUnit.Assertions
+ 
+   alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.DeliveryProviders.Fake
+   alias Memba.Messaging.DeliveryRequest
+   alias Memba.Messaging.Projections.RecipientDelivery
+@@ -12,34 +18,70 @@ defmodule Memba.Cucumber.MessagingSteps do
+        %{args: [sender_name, subject]} = context do
+     Fake.reset()
+ 
+-    message_id = Ecto.UUID.generate()
+-    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+-    sender_id = fetch_from_context!(context, :people, sender_name)
+-    body = "#{subject} details."
++    send_message_to_kootenay_members(context, sender_name, subject)
++  end
+ 
+-    assert :ok =
+-             Messaging.send_club_message(
+-               %{
+-                 message_id: message_id,
+-                 club_id: club_id,
+-                 sender_id: sender_id,
+-                 subject: subject,
+-                 body: body
+-               },
+-               consistency: :strong
+-             )
++  step "{word} has sent the message {string} to Kootenay Mountaineering Club members",
++       %{args: [sender_name, subject]} = context do
++    Fake.reset()
+ 
+-    assert Messaging.get_message(message_id)
++    send_message_to_kootenay_members(context, sender_name, subject)
++  end
++
++  step "{word} email for {string} is reported as delivered",
++       %{args: [recipient_name, subject]} = context do
++    report_delivery_status(context, recipient_name, subject, :delivered)
++  end
++
++  step "{word} email for {string} has been reported as delivered",
++       %{args: [recipient_name, subject]} = context do
++    report_delivery_status(context, recipient_name, subject, :delivered)
++  end
++
++  step "{word} email for {string} is reported as delayed because {string}",
++       %{args: [recipient_name, subject, reason]} = context do
++    report_delivery_status(context, recipient_name, subject, :delayed, reason)
++  end
++
++  step "{word} email for {string} is reported as bounced because {string}",
++       %{args: [recipient_name, subject, reason]} = context do
++    report_delivery_status(context, recipient_name, subject, :bounced, reason)
++  end
++
++  step "{word} email for {string} is reported as a spam complaint because {string}",
++       %{args: [recipient_name, subject, reason]} = context do
++    report_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
++  end
++
++  step "{word} opens the email for {string}", %{args: [recipient_name, subject]} = context do
++    report_delivery_status(context, recipient_name, subject, :opened)
++  end
++
++  step "{word} receipt status for {string} should be {string}",
++       %{args: [recipient_name, subject, expected_status]} = context do
++    receipt = member_receipt_for!(context, recipient_name, subject)
++
++    assert receipt.receipt_status == expected_status
++
++    context
++  end
++
++  step "{word} operator deliverability status should be {string}",
++       %{args: [recipient_name, expected_status]} = context do
++    deliverability = operator_deliverability_for!(context, recipient_name)
++
++    assert deliverability.status == expected_status
++
++    context
++  end
++
++  step "{word} operator deliverability reason should be {string}",
++       %{args: [recipient_name, expected_reason]} = context do
++    deliverability = operator_deliverability_for!(context, recipient_name)
++
++    assert deliverability.reason == expected_reason
+ 
+     context
+-    |> Map.put(:sent_message, %{
+-      message_id: message_id,
+-      club_id: club_id,
+-      sender_id: sender_id,
+-      subject: subject,
+-      body: body
+-    })
+-    |> Map.put(:last_message_id, message_id)
+   end
+ 
+   step "the message should be addressed to Alice, Bob, and Carol", context do
+@@ -108,6 +150,125 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  defp send_message_to_kootenay_members(context, sender_name, subject) do
++    message_id = Ecto.UUID.generate()
++    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
++    sender_id = fetch_from_context!(context, :people, sender_name)
++    body = "#{subject} details."
++
++    assert :ok =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: sender_id,
++                 subject: subject,
++                 body: body
++               },
++               consistency: :strong
++             )
++
++    assert Messaging.get_message(message_id)
++
++    context
++    |> Map.put(:sent_message, %{
++      message_id: message_id,
++      club_id: club_id,
++      sender_id: sender_id,
++      subject: subject,
++      body: body
++    })
++    |> Map.put(:last_message_id, message_id)
++    |> update_context_map(:messages, subject, %{
++      message_id: message_id,
++      club_id: club_id,
++      sender_id: sender_id,
++      subject: subject,
++      body: body
++    })
++  end
++
++  defp report_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
++    recipient_name = normalize_person_name(recipient_name)
++    message = fetch_from_context!(context, :messages, subject)
++    delivery = delivery_for!(context, recipient_name, subject)
++
++    command =
++      case status do
++        :delivered ->
++          %ReportDeliveryDelivered{
++            message_id: message.message_id,
++            delivery_id: delivery.delivery_id
++          }
++
++        :delayed ->
++          %ReportDeliveryDelayed{
++            message_id: message.message_id,
++            delivery_id: delivery.delivery_id,
++            reason: reason
++          }
++
++        :bounced ->
++          %ReportDeliveryBounced{
++            message_id: message.message_id,
++            delivery_id: delivery.delivery_id,
++            reason: reason
++          }
++
++        :spam_complaint ->
++          %ReportDeliverySpamComplaint{
++            message_id: message.message_id,
++            delivery_id: delivery.delivery_id,
++            reason: reason
++          }
++
++        :opened ->
++          %ReportDeliveryOpened{
++            message_id: message.message_id,
++            delivery_id: delivery.delivery_id
++          }
++      end
++
++    assert :ok = App.dispatch(command, consistency: :strong)
++
++    context
++  end
++
++  defp member_receipt_for!(context, recipient_name, subject) do
++    recipient_name = normalize_person_name(recipient_name)
++    message = fetch_from_context!(context, :messages, subject)
++    recipient_id = fetch_from_context!(context, :people, recipient_name)
++
++    Messaging.get_member_receipt(message.message_id, recipient_id) ||
++      flunk("Expected a member receipt for #{recipient_name} and #{inspect(subject)}")
++  end
++
++  defp operator_deliverability_for!(context, recipient_name) do
++    recipient_name = normalize_person_name(recipient_name)
++    subject = context.sent_message.subject
++    message = fetch_from_context!(context, :messages, subject)
++    recipient_id = fetch_from_context!(context, :people, recipient_name)
++
++    Messaging.get_operator_deliverability(message.message_id, recipient_id) ||
++      flunk("Expected operator deliverability for #{recipient_name} and #{inspect(subject)}")
++  end
++
++  defp delivery_for!(context, recipient_name, subject) do
++    message = fetch_from_context!(context, :messages, subject)
++    recipient_id = fetch_from_context!(context, :people, recipient_name)
++
++    message.message_id
++    |> Messaging.list_recipient_deliveries()
++    |> Enum.find(&(&1.recipient_id == recipient_id))
++    |> case do
++      %RecipientDelivery{} = delivery ->
++        delivery
++
++      nil ->
++        flunk("Expected a delivery for #{recipient_name} and #{inspect(subject)}")
++    end
++  end
++
+   defp deliveries_for_last_message!(context) do
+     context
+     |> Map.fetch!(:last_message_id)
+@@ -127,6 +288,19 @@ defmodule Memba.Cucumber.MessagingSteps do
+     end
+   end
+ 
++  defp update_context_map(context, collection_key, item_key, value) do
++    collection =
++      context
++      |> Map.get(collection_key, %{})
++      |> Map.put(item_key, value)
++
++    Map.put(context, collection_key, collection)
++  end
++
++  defp normalize_person_name(name) do
++    String.replace_suffix(name, "'s", "")
++  end
++
+   defp assert_unique(values) do
+     assert Enum.uniq(values) == values
+   end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index c4cf00b..ab4ce56 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -4,6 +4,11 @@ defmodule Memba.Messaging.AppTest do
+   import ExUnit.CaptureLog
+ 
+   alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Router
+ 
+@@ -19,7 +24,15 @@ defmodule Memba.Messaging.AppTest do
+   end
+ 
+   test "Messaging Commanded app includes the Messaging router" do
+-    expected_commands = MapSet.new([SendMessage])
++    expected_commands =
++      MapSet.new([
++        SendMessage,
++        ReportDeliveryDelivered,
++        ReportDeliveryDelayed,
++        ReportDeliveryBounced,
++        ReportDeliverySpamComplaint,
++        ReportDeliveryOpened
++      ])
+ 
+     assert MapSet.new(App.__registered_commands__()) == expected_commands
+     assert MapSet.new(Router.__registered_commands__()) == expected_commands
+diff --git a/web/test/memba/messaging/member_receipt_projection_test.exs b/web/test/memba/messaging/member_receipt_projection_test.exs
+new file mode 100644
+index 0000000..762da9c
+--- /dev/null
++++ b/web/test/memba/messaging/member_receipt_projection_test.exs
+@@ -0,0 +1,186 @@
++defmodule Memba.Messaging.MemberReceiptProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
++  alias Memba.Messaging.Recipient
++
++  test "SendMessage is projected into member-facing sent receipt records" do
++    %{message_id: message_id, recipients: recipients} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    [alice, bob] = recipients
++    alice_delivery_id = alice.delivery_id
++    alice_person_id = alice.person_id
++    bob_delivery_id = bob.delivery_id
++    bob_person_id = bob.person_id
++
++    assert [
++             %MemberReceiptProjection{
++               delivery_id: ^alice_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^alice_person_id,
++               recipient_name: "Alice",
++               receipt_status: "sent"
++             },
++             %MemberReceiptProjection{
++               delivery_id: ^bob_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^bob_person_id,
++               recipient_name: "Bob",
++               receipt_status: "sent"
++             }
++           ] = Messaging.list_member_receipts(message_id)
++
++    assert %MemberReceiptProjection{
++             delivery_id: ^bob_delivery_id,
++             recipient_id: ^bob_person_id,
++             receipt_status: "sent"
++           } = Messaging.get_member_receipt(bob_delivery_id)
++
++    assert %MemberReceiptProjection{
++             delivery_id: ^bob_delivery_id,
++             recipient_id: ^bob_person_id,
++             receipt_status: "sent"
++           } = Messaging.get_member_receipt(message_id, bob_person_id)
++  end
++
++  test "member receipt projection applies the ADR 0006 status mapping" do
++    %{message_id: message_id, recipients: recipients} =
++      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin", "Frank"])
++
++    [_alice, bob, carol, dana, erin, frank] = recipients
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelayed{
++                 message_id: message_id,
++                 delivery_id: carol.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryBounced{
++                 message_id: message_id,
++                 delivery_id: dana.delivery_id,
++                 reason: "mailbox does not exist"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliverySpamComplaint{
++                 message_id: message_id,
++                 delivery_id: erin.delivery_id,
++                 reason: "recipient marked the message as spam"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: frank.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: frank.delivery_id
++               },
++               consistency: :strong
++             )
++
++    receipts_by_recipient =
++      message_id
++      |> Messaging.list_member_receipts()
++      |> Map.new(&{&1.recipient_name, &1.receipt_status})
++
++    assert receipts_by_recipient == %{
++             "Alice" => "sent",
++             "Bob" => "delivered",
++             "Carol" => "delivery problem",
++             "Dana" => "delivery problem",
++             "Erin" => "delivery problem",
++             "Frank" => "opened"
++           }
++  end
++
++  test "member receipt queries return empty results for missing or invalid IDs" do
++    assert is_nil(Messaging.get_member_receipt(Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_member_receipt(nil))
++    assert is_nil(Messaging.get_member_receipt("not-a-uuid"))
++
++    assert is_nil(Messaging.get_member_receipt(Ecto.UUID.generate(), Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_member_receipt(nil, Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_member_receipt(Ecto.UUID.generate(), "not-a-uuid"))
++
++    assert Messaging.list_member_receipts(Ecto.UUID.generate()) == []
++    assert Messaging.list_member_receipts(nil) == []
++    assert Messaging.list_member_receipts("not-a-uuid") == []
++  end
++
++  defp send_message_with_recipients(names) do
++    [sender | _rest] =
++      recipients =
++      Enum.map(names, fn name ->
++        %Recipient{
++          delivery_id: Ecto.UUID.generate(),
++          person_id: Ecto.UUID.generate(),
++          name: name,
++          email: email_for(name)
++        }
++      end)
++
++    message_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: Ecto.UUID.generate(),
++                 sender_id: sender.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: recipients
++               },
++               consistency: :strong
++             )
++
++    %{message_id: message_id, recipients: recipients}
++  end
++
++  defp email_for(name) do
++    normalized_name =
++      name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
++
++    "#{normalized_name}@example.test"
++  end
++end
+diff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs
+index d94592c..37fb47b 100644
+--- a/web/test/memba/messaging/message_test.exs
++++ b/web/test/memba/messaging/message_test.exs
+@@ -1,9 +1,19 @@
+ defmodule Memba.Messaging.MessageTest do
+   use ExUnit.Case, async: true
+ 
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Events.MessageSent
++  alias Memba.Messaging.Events.RecipientDeliveryBounced
+   alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Events.RecipientDeliveryDelayed
++  alias Memba.Messaging.Events.RecipientDeliveryDelivered
++  alias Memba.Messaging.Events.RecipientDeliveryOpened
++  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
+   alias Memba.Messaging.Message
+   alias Memba.Messaging.Recipient
+ 
+@@ -156,6 +166,241 @@ defmodule Memba.Messaging.MessageTest do
+                  valid_send_message()
+                  | message_id: message_id
+                })
++<<<<<<< HEAD
++    end
++  end
++
++  describe "execute/2 delivery status reports" do
++    test "emits delivered, delayed, bounced, spam complaint, and opened events" do
++      {message, ids} = sent_message()
++
++      assert %RecipientDeliveryDelivered{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id
++             } ==
++               Message.execute(message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++
++      assert %RecipientDeliveryDelayed{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id,
++               reason: "recipient server is temporarily unavailable"
++             } ==
++               Message.execute(message, %ReportDeliveryDelayed{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: " recipient server is temporarily unavailable "
++               })
++
++      assert %RecipientDeliveryBounced{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id,
++               reason: "mailbox does not exist"
++             } ==
++               Message.execute(message, %ReportDeliveryBounced{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "mailbox does not exist"
++               })
++
++      assert %RecipientDeliverySpamComplaint{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id,
++               reason: "recipient marked the message as spam"
++             } ==
++               Message.execute(message, %ReportDeliverySpamComplaint{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "recipient marked the message as spam"
++               })
++
++      delivered_message =
++        Message.apply(
++          message,
++          %RecipientDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
++        )
++
++      assert %RecipientDeliveryOpened{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id
++             } ==
++               Message.execute(delivered_message, %ReportDeliveryOpened{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++    end
++
++    test "rejects malformed status report commands" do
++      {message, ids} = sent_message()
++
++      assert {:error, :invalid_message_id} =
++               Message.execute(message, %ReportDeliveryDelivered{
++                 message_id: nil,
++                 delivery_id: ids.delivery_id
++               })
++
++      assert {:error, :invalid_delivery_id} =
++               Message.execute(message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: "not-a-uuid"
++               })
++
++      assert {:error, :invalid_reason} =
++               Message.execute(message, %ReportDeliveryDelayed{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "  "
++               })
++
++      assert {:error, :message_not_sent} =
++               Message.execute(%Message{}, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++
++      assert {:error, :message_id_mismatch} =
++               Message.execute(message, %ReportDeliveryDelivered{
++                 message_id: Ecto.UUID.generate(),
++                 delivery_id: ids.delivery_id
++               })
++
++      assert {:error, :unknown_delivery} =
++               Message.execute(message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: Ecto.UUID.generate()
++               })
++    end
++
++    test "allows delayed delivery to recover or become a terminal problem" do
++      {message, ids} = sent_message()
++
++      delayed_message =
++        Message.apply(message, %RecipientDeliveryDelayed{
++          message_id: ids.message_id,
++          delivery_id: ids.delivery_id,
++          reason: "recipient server is temporarily unavailable"
++        })
++
++      assert %RecipientDeliveryDelivered{} =
++               Message.execute(delayed_message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++
++      assert %RecipientDeliveryBounced{} =
++               Message.execute(delayed_message, %ReportDeliveryBounced{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "mailbox does not exist"
++               })
++
++      assert %RecipientDeliverySpamComplaint{} =
++               Message.execute(delayed_message, %ReportDeliverySpamComplaint{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "recipient marked the message as spam"
++               })
++    end
++
++    test "rejects invalid delivery status transitions" do
++      {message, ids} = sent_message()
++
++      assert {:error, :invalid_delivery_status_transition} =
++               Message.execute(message, %ReportDeliveryOpened{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++
++      delivered_message =
++        Message.apply(
++          message,
++          %RecipientDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
++        )
++
++      assert {:error, :invalid_delivery_status_transition} =
++               Message.execute(delivered_message, %ReportDeliveryDelayed{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               })
++
++      opened_message =
++        Message.apply(
++          delivered_message,
++          %RecipientDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
++        )
++
++      assert {:error, :invalid_delivery_status_transition} =
++               Message.execute(opened_message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++
++      bounced_message =
++        Message.apply(message, %RecipientDeliveryBounced{
++          message_id: ids.message_id,
++          delivery_id: ids.delivery_id,
++          reason: "mailbox does not exist"
++        })
++
++      assert {:error, :invalid_delivery_status_transition} =
++               Message.execute(bounced_message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++    end
++
++    test "treats repeated equivalent reports as idempotent" do
++      {message, ids} = sent_message()
++
++      delivered_message =
++        Message.apply(
++          message,
++          %RecipientDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
++        )
++
++      assert [] =
++               Message.execute(delivered_message, %ReportDeliveryDelivered{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++
++      delayed_message =
++        Message.apply(message, %RecipientDeliveryDelayed{
++          message_id: ids.message_id,
++          delivery_id: ids.delivery_id,
++          reason: "recipient server is temporarily unavailable"
++        })
++
++      assert [] =
++               Message.execute(delayed_message, %ReportDeliveryDelayed{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               })
++
++      assert {:error, :conflicting_delivery_status_reason} =
++               Message.execute(delayed_message, %ReportDeliveryDelayed{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id,
++                 reason: "different temporary failure"
++               })
++
++      opened_message =
++        Message.apply(
++          delivered_message,
++          %RecipientDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
++        )
++
++      assert [] =
++               Message.execute(opened_message, %ReportDeliveryOpened{
++                 message_id: ids.message_id,
++                 delivery_id: ids.delivery_id
++               })
++=======
++>>>>>>> f165284 (review polish: iteration 003)
+     end
+   end
+ 
+@@ -186,12 +431,48 @@ defmodule Memba.Messaging.MessageTest do
+              message_id: ^message_id,
+              club_id: ^club_id,
+              sender_id: ^sender_id,
++             delivery_statuses: delivery_statuses,
+              recipient_delivery_ids: recipient_delivery_ids,
+              recipient_ids: recipient_ids
+            } = message
+ 
+     assert MapSet.equal?(recipient_delivery_ids, MapSet.new([delivery_id]))
+     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id]))
++    assert delivery_statuses == %{delivery_id => %{status: :sent, reason: nil}}
++  end
++
++  test "apply/2 records delivery status changes" do
++    {message, ids} = sent_message()
++    delivery_id = ids.delivery_id
++
++    assert %{^delivery_id => %{status: :delivered, reason: nil}} =
++             message
++             |> Message.apply(%RecipientDeliveryDelivered{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id
++             })
++             |> Map.fetch!(:delivery_statuses)
++
++    assert %{^delivery_id => %{status: :delayed, reason: "temporary failure"}} =
++             message
++             |> Message.apply(%RecipientDeliveryDelayed{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id,
++               reason: "temporary failure"
++             })
++             |> Map.fetch!(:delivery_statuses)
++
++    assert %{^delivery_id => %{status: :opened, reason: nil}} =
++             message
++             |> Message.apply(%RecipientDeliveryDelivered{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id
++             })
++             |> Message.apply(%RecipientDeliveryOpened{
++               message_id: ids.message_id,
++               delivery_id: ids.delivery_id
++             })
++             |> Map.fetch!(:delivery_statuses)
+   end
+ 
+   defp valid_send_message do
+@@ -213,4 +494,30 @@ defmodule Memba.Messaging.MessageTest do
+       ]
+     }
+   end
++
++  defp sent_message do
++    message_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    delivery_id = Ecto.UUID.generate()
++
++    message =
++      %Message{}
++      |> Message.apply(%MessageSent{
++        message_id: message_id,
++        club_id: club_id,
++        sender_id: sender_id,
++        subject: "Trail day",
++        body: "Meet at 9am."
++      })
++      |> Message.apply(%RecipientDeliveryCreated{
++        message_id: message_id,
++        delivery_id: delivery_id,
++        recipient_id: sender_id,
++        recipient_name: "Alice Sender",
++        recipient_email: "alice@example.com"
++      })
++
++    {message, %{message_id: message_id, delivery_id: delivery_id}}
++  end
+ end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+new file mode 100644
+index 0000000..7ee0634
+--- /dev/null
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -0,0 +1,95 @@
++defmodule Memba.Messaging.NoCrudSpikeTest do
++  use ExUnit.Case, async: true
++
++  @web_root Path.expand("../../..", __DIR__)
++
++  test "public Messaging context exposes command and query APIs instead of CRUD helpers" do
++    source = read_source!("lib/memba/messaging.ex")
++
++    assert source =~ "def send_club_message("
++    assert source =~ "def get_message("
++    assert source =~ "def get_recipient_delivery("
++    assert source =~ "def get_member_receipt("
++    assert source =~ "def get_operator_deliverability("
++    assert source =~ "def list_recipient_deliveries("
++    assert source =~ "def list_member_receipts("
++    assert source =~ "def list_operator_deliverabilities("
++
++    list_functions =
++      ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/
++      |> Regex.scan(source, capture: :all_but_first)
++      |> List.flatten()
++
++    assert list_functions == [
++             "list_recipient_deliveries",
++             "list_member_receipts",
++             "list_operator_deliverabilities"
++           ]
++
++    refute source =~ ~r/\bdef\s+(create|update|delete|change)_[a-zA-Z0-9_]+\b/
++    refute source =~ ~r/\bRepo\.(insert|update|delete)\b/
++  end
++
++  test "message aggregate is not a generated Ecto schema and changeset module" do
++    source = read_source!("lib/memba/messaging/message.ex")
++
++    assert source =~ "@behaviour Aggregate"
++    assert source =~ "def execute("
++    assert source =~ "def apply("
++    refute source =~ "use Ecto.Schema"
++    refute source =~ ~r/\bdef\s+changeset\b/
++  end
++
++  test "Messaging migrations only create projection storage for this slice" do
++    migration_sources =
++      "priv/repo/migrations/*.exs"
++      |> path()
++      |> Path.wildcard()
++      |> Enum.map(&File.read!/1)
++
++    assert Enum.any?(
++             migration_sources,
++             &String.contains?(&1, "create table(:messaging_messages")
++           )
++
++    assert Enum.any?(
++             migration_sources,
++             &String.contains?(&1, "create table(:messaging_recipient_deliveries")
++           )
++
++    assert Enum.any?(
++             migration_sources,
++             &String.contains?(&1, "create table(:messaging_member_receipts")
++           )
++
++    assert Enum.any?(
++             migration_sources,
++             &String.contains?(&1, "create table(:messaging_operator_deliverabilities")
++           )
++
++    refute Enum.any?(migration_sources, fn source ->
++             source =~
++               ~r/create\s+table\(\s*:(messages|message_recipients|message_deliveries|recipient_deliveries|deliveries)\b/
++           end)
++  end
++
++  test "legacy generated Messaging CRUD web and fixture files are absent" do
++    refute "test/memba/messaging_test.exs" |> path() |> File.exists?()
++    refute "test/support/fixtures/messaging_fixtures.ex" |> path() |> File.exists?()
++    refute "lib/memba_web/controllers/message_controller.ex" |> path() |> File.exists?()
++    refute "test/memba_web/controllers/message_controller_test.exs" |> path() |> File.exists?()
++    refute "lib/memba_web/controllers/message_html.ex" |> path() |> File.exists?()
++    refute "lib/memba_web/controllers/message_json.ex" |> path() |> File.exists?()
++    refute "lib/memba_web/live/message_live/index.ex" |> path() |> File.exists?()
++    refute "lib/memba_web/live/message_live/show.ex" |> path() |> File.exists?()
++    refute "lib/memba_web/live/message_live/form_component.ex" |> path() |> File.exists?()
++  end
++
++  defp read_source!(relative_path) do
++    relative_path
++    |> path()
++    |> File.read!()
++  end
++
++  defp path(relative_path), do: Path.join(@web_root, relative_path)
++end
+diff --git a/web/test/memba/messaging/operator_deliverability_projection_test.exs b/web/test/memba/messaging/operator_deliverability_projection_test.exs
+new file mode 100644
+index 0000000..bda303f
+--- /dev/null
++++ b/web/test/memba/messaging/operator_deliverability_projection_test.exs
+@@ -0,0 +1,226 @@
++defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryBounced
++  alias Memba.Messaging.Commands.ReportDeliveryDelayed
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
++  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
++  alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.OperatorDeliverability, as: OperatorDeliverabilityProjection
++  alias Memba.Messaging.Recipient
++
++  test "SendMessage is projected into operator deliverability records" do
++    %{message_id: message_id, recipients: recipients} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    [alice, bob] = recipients
++    alice_delivery_id = alice.delivery_id
++    alice_person_id = alice.person_id
++    bob_delivery_id = bob.delivery_id
++    bob_person_id = bob.person_id
++
++    assert [
++             %OperatorDeliverabilityProjection{
++               delivery_id: ^alice_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^alice_person_id,
++               recipient_name: "Alice",
++               recipient_address: "alice@example.test",
++               channel: "email",
++               status: "sent",
++               reason: nil
++             },
++             %OperatorDeliverabilityProjection{
++               delivery_id: ^bob_delivery_id,
++               message_id: ^message_id,
++               recipient_id: ^bob_person_id,
++               recipient_name: "Bob",
++               recipient_address: "bob@example.test",
++               channel: "email",
++               status: "sent",
++               reason: nil
++             }
++           ] = Messaging.list_operator_deliverabilities(message_id)
++
++    assert %OperatorDeliverabilityProjection{
++             delivery_id: ^bob_delivery_id,
++             recipient_id: ^bob_person_id,
++             status: "sent",
++             reason: nil
++           } = Messaging.get_operator_deliverability(bob_delivery_id)
++
++    assert %OperatorDeliverabilityProjection{
++             delivery_id: ^bob_delivery_id,
++             recipient_id: ^bob_person_id,
++             status: "sent",
++             reason: nil
++           } = Messaging.get_operator_deliverability(message_id, bob_person_id)
++  end
++
++  test "operator deliverability projection keeps detailed statuses and reason text" do
++    %{message_id: message_id, recipients: recipients} =
++      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin", "Frank"])
++
++    [_alice, bob, carol, dana, erin, frank] = recipients
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelayed{
++                 message_id: message_id,
++                 delivery_id: carol.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryBounced{
++                 message_id: message_id,
++                 delivery_id: dana.delivery_id,
++                 reason: "mailbox does not exist"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliverySpamComplaint{
++                 message_id: message_id,
++                 delivery_id: erin.delivery_id,
++                 reason: "recipient marked the message as spam"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: frank.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: frank.delivery_id
++               },
++               consistency: :strong
++             )
++
++    deliverabilities_by_recipient =
++      message_id
++      |> Messaging.list_operator_deliverabilities()
++      |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
++
++    assert deliverabilities_by_recipient == %{
++             "Alice" => {"sent", nil},
++             "Bob" => {"delivered", nil},
++             "Carol" => {"delayed", "recipient server is temporarily unavailable"},
++             "Dana" => {"bounced", "mailbox does not exist"},
++             "Erin" => {"spam complaint", "recipient marked the message as spam"},
++             "Frank" => {"opened", nil}
++           }
++  end
++
++  test "operator deliverability clears prior delay reason when delivery recovers" do
++    %{message_id: message_id, recipients: [_alice, bob]} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelayed{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id
++               },
++               consistency: :strong
++             )
++
++    assert %OperatorDeliverabilityProjection{
++             status: "delivered",
++             reason: nil
++           } = Messaging.get_operator_deliverability(message_id, bob.person_id)
++  end
++
++  test "operator deliverability queries return empty results for missing or invalid IDs" do
++    assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_operator_deliverability(nil))
++    assert is_nil(Messaging.get_operator_deliverability("not-a-uuid"))
++
++    assert is_nil(
++             Messaging.get_operator_deliverability(Ecto.UUID.generate(), Ecto.UUID.generate())
++           )
++
++    assert is_nil(Messaging.get_operator_deliverability(nil, Ecto.UUID.generate()))
++    assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate(), "not-a-uuid"))
++
++    assert Messaging.list_operator_deliverabilities(Ecto.UUID.generate()) == []
++    assert Messaging.list_operator_deliverabilities(nil) == []
++    assert Messaging.list_operator_deliverabilities("not-a-uuid") == []
++  end
++
++  defp send_message_with_recipients(names) do
++    [sender | _rest] =
++      recipients =
++      Enum.map(names, fn name ->
++        %Recipient{
++          delivery_id: Ecto.UUID.generate(),
++          person_id: Ecto.UUID.generate(),
++          name: name,
++          email: email_for(name)
++        }
++      end)
++
++    message_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %SendMessage{
++                 message_id: message_id,
++                 club_id: Ecto.UUID.generate(),
++                 sender_id: sender.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas.",
++                 recipients: recipients
++               },
++               consistency: :strong
++             )
++
++    %{message_id: message_id, recipients: recipients}
++  end
++
++  defp email_for(name) do
++    normalized_name =
++      name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
++
++    "#{normalized_name}@example.test"
++  end
++end
+diff --git a/web/test/memba/messaging/send_message_dispatch_test.exs b/web/test/memba/messaging/send_message_dispatch_test.exs
+index e36d83b..8b85373 100644
+--- a/web/test/memba/messaging/send_message_dispatch_test.exs
++++ b/web/test/memba/messaging/send_message_dispatch_test.exs
+@@ -3,9 +3,13 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+ 
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.ReportDeliveryDelivered
++  alias Memba.Messaging.Commands.ReportDeliveryOpened
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.RecipientDeliveryCreated
++  alias Memba.Messaging.Events.RecipientDeliveryDelivered
++  alias Memba.Messaging.Events.RecipientDeliveryOpened
+   alias Memba.Messaging.Message
+   alias Memba.Messaging.Recipient
+ 
+@@ -108,6 +112,89 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
+     assert {:error, :already_sent} = App.dispatch(command)
+   end
+ 
++  test "Messaging app dispatch routes delivery status reports to the Message aggregate" do
++    command = %SendMessage{
++      message_id: Ecto.UUID.generate(),
++      club_id: Ecto.UUID.generate(),
++      sender_id: Ecto.UUID.generate(),
++      subject: "Trail day",
++      body: "Meet at 9am.",
++      recipients: []
++    }
++
++    [recipient_command] = with_sender_recipient(command)
++    delivery_id = recipient_command.delivery_id
++    command = %SendMessage{command | recipients: [recipient_command]}
++    message_id = command.message_id
++
++    assert :ok = App.dispatch(command, consistency: :strong)
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 3,
++              events: [
++                %RecipientDeliveryDelivered{
++                  message_id: ^message_id,
++                  delivery_id: ^delivery_id
++                }
++              ],
++              aggregate_state: %Message{
++                delivery_statuses: %{
++                  ^delivery_id => %{status: :delivered, reason: nil}
++                }
++              }
++            }} =
++             App.dispatch(
++               %ReportDeliveryDelivered{
++                 message_id: message_id,
++                 delivery_id: delivery_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 4,
++              events: [
++                %RecipientDeliveryOpened{
++                  message_id: ^message_id,
++                  delivery_id: ^delivery_id
++                }
++              ],
++              aggregate_state: %Message{
++                delivery_statuses: %{
++                  ^delivery_id => %{status: :opened, reason: nil}
++                }
++              }
++            }} =
++             App.dispatch(
++               %ReportDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: delivery_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^message_id,
++              aggregate_version: 4,
++              events: []
++            }} =
++             App.dispatch(
++               %ReportDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: delivery_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
+   defp with_sender_recipient(%SendMessage{} = command) do
+     [
+       %Recipient{
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 21e68aa..23e885e 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -15,7 +15,9 @@ defmodule Memba.EventSourcedCase do
+     Memba.Membership.Projectors.Membership,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
+-    Memba.Messaging.Projectors.RecipientDelivery
++    Memba.Messaging.Projectors.RecipientDelivery,
++    Memba.Messaging.Projectors.MemberReceipt,
++    Memba.Messaging.Projectors.OperatorDeliverability
+   ]
+ 
+   using do
