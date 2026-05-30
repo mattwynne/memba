@@ -30,6 +30,9 @@ The application already records club messages, addressed recipients, one deliver
   - `delivery_reason`
 - Sort rows by `recipient_name` ascending, then `recipient_email` ascending.
 - Use an empty string for `delivery_reason` when no reason has been recorded.
+- Render `recipient_name` and `recipient_email` as empty CSV fields when corresponding read-model values are nil or empty.
+- Return UTF-8 encoded CSV with `Content-Type: text/csv; charset=utf-8`.
+- Return a `Content-Disposition: attachment` response header with filename `message_{message_id}_delivery_receipts.csv`.
 - Return 404 for an unknown `message_id`.
 - Use RFC 4180-style CSV escaping: wrap fields containing commas, quotes, or newlines in double quotes and escape internal double quotes as two double quotes.
 
@@ -50,7 +53,11 @@ The application already records club messages, addressed recipients, one deliver
 - A delayed, bounced, or spam-complaint recipient has `receipt_status` of `delivery problem`, the corresponding provider `delivery_status`, and the recorded provider reason.
 - An opened recipient has `receipt_status` of `opened`, `delivery_status` of `opened`, and an empty `delivery_reason`.
 - A recipient with no provider confirmation has `receipt_status` of `sent`, `delivery_status` of `sent`, and an empty `delivery_reason`.
+- When a message has zero addressed recipients, the CSV contains exactly the header row and no data rows.
+- If `recipient_name` or `recipient_email` is nil or empty in existing read data, the CSV field is empty.
 - Non-addressed club members do not appear in the CSV.
+- The response is UTF-8 encoded with `Content-Type` `text/csv; charset=utf-8`.
+- The response includes a `Content-Disposition: attachment` header with filename `message_{message_id}_delivery_receipts.csv`.
 - Requesting `/messages/:message_id/delivery_receipts.csv` for an unknown message returns 404.
 - `dev check` passes.
 
@@ -61,11 +68,11 @@ None.
 ## Implementation Plan
 
 1. Add Phoenix controller coverage for `GET /messages/:message_id/delivery_receipts.csv` before implementation.
-2. Add a focused CSV export module or context function that reads existing message delivery receipt data and returns rows in the specified order.
+2. Add a Messages context-facing CSV export function (implemented directly or via a focused helper module, following existing Messages conventions) that reads existing message delivery receipt data and returns rows in the specified order.
 3. Add the CSV route under the browser pipeline.
 4. Add a download link from the message detail LiveView to the CSV route.
 5. Ensure the export uses existing receipt/delivery read models only; do not add new domain events or commands.
-6. Add tests for delivered, delivery problem, opened, sent, non-addressed exclusion, ordering, blank reasons, and unknown message 404.
+6. Add tests for delivered, delivery problem, opened, sent, non-addressed exclusion, ordering, blank reasons, nil/empty recipient field rendering (when representable), zero-recipient header-only output, response headers/filename, UTF-8 content, and unknown message 404.
 7. Run `dev check`.
 
 ## Open Technical Decisions
@@ -79,5 +86,6 @@ An operator can download a deterministic CSV delivery receipt report for one alr
 ## Validation Plan
 
 - Run the focused controller/export tests.
-- Manually create a message with delivered, problem, opened, and sent recipients, download the CSV, and verify the columns, row count, ordering, statuses, and reasons.
+- Manually create a message with delivered, problem, opened, and sent recipients, download the CSV, and verify the columns, row count, ordering, statuses, reasons, filename, and response headers.
+- Manually verify zero-recipient output (header only), nil/empty recipient field rendering when representable in existing read models, and non-ASCII UTF-8 characters.
 - Run `dev check`.
