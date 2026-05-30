@@ -79,6 +79,28 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List projected clubs for the browser-facing membership flows.
+
+  Results are ordered by name and ID for stable browser/test output.
+  """
+  def list_clubs() do
+    Club
+    |> order_by([club], asc: club.name, asc: club.club_id)
+    |> Repo.all()
+  end
+
+  @doc """
+  List projected people for the browser-facing membership flows.
+
+  Results are ordered by name and ID for stable browser/test output.
+  """
+  def list_people() do
+    Person
+    |> order_by([person], asc: person.name, asc: person.person_id)
+    |> Repo.all()
+  end
+
+  @doc """
   List active members of the given club for recipient resolution.
 
   Returns plain maps containing the public identity needed outside the

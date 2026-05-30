@@ -8,6 +8,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
 
     assert source =~ "def send_club_message("
     assert source =~ "def get_message("
+    assert source =~ "def list_messages_for_club("
     assert source =~ "def get_recipient_delivery("
     assert source =~ "def get_member_receipt("
     assert source =~ "def get_operator_deliverability("
@@ -21,6 +22,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
       |> List.flatten()
 
     assert list_functions == [
+             "list_messages_for_club",
              "list_recipient_deliveries",
              "list_member_receipts",
              "list_operator_deliverabilities"

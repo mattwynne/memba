@@ -107,6 +107,23 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  List projected messages sent to a club.
+
+  Invalid or missing club IDs return an empty list. Results are ordered by
+  insertion time and ID for stable browser/test output.
+  """
+  def list_messages_for_club(club_id) do
+    with {:ok, club_id} <- Ecto.UUID.cast(club_id) do
+      MessageProjection
+      |> where([message], message.club_id == ^club_id)
+      |> order_by([message], asc: message.inserted_at, asc: message.message_id)
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   Fetch a projected recipient delivery read model by caller-generated UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
