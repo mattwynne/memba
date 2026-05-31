@@ -92,7 +92,7 @@ Fix applied:
 - `.fabro/workflows/iteration-implementation/workflow.fabro`: preflight now checks that `python3` is available on the bare sandbox `PATH` before expensive implementation work begins, with an error that points to rebuilding the Fabro sandbox image.
 - `bin/dev`: `sandbox-check` now includes `python3` in the declared sandbox toolchain.
 - `devenv.nix`: adds `python3` to the devenv packages and to the explicit Fabro container root layer so finalization scripts can invoke it directly.
-- `docs/reference/fabro-devenv.md`: documents that bare-shell workflow tools include `python3` and updates the Docker image verification command.
+- `docs/reference/fabro-devenv.md`: documents that bare-shell workflow tools include `python3`, that CI publishes commit-tagged images, and updates the Docker image verification command.
 
 Validation:
 
@@ -103,4 +103,4 @@ Validation:
 
 Remaining follow-up:
 
-- Rebuild and load the `mattwynne/memba-fabro-dev:latest` image on the Fabro host so the new `/bin/python3` is present in remote sandboxes.
+- Push the changes to `main` so CI can publish the commit-tagged `ghcr.io/mattwynne/memba-fabro-dev:<sha>` image used by future Fabro delivery runs.

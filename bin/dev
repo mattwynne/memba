@@ -230,6 +230,39 @@ _fabro_plan_status() {
   awk -F': *' '/^Status:/ {print tolower($2); exit}' "$repo_root/$plan_path"
 }
 
+_fabro_sandbox_image_tag() {
+  git -C "$repo_root" fetch origin >/dev/null
+  git -C "$repo_root" rev-parse origin/main^{commit}
+}
+
+_fabro_wait_for_sandbox_image_tag() {
+  local tag="$1"
+  local image="ghcr.io/mattwynne/memba-fabro-dev:$tag"
+  local timeout_seconds="${2:-1200}"
+  local poll_interval="${3:-30}"
+  local deadline=$(( $(date +%s) + timeout_seconds ))
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker CLI is not available; cannot preflight sandbox image tag $image" >&2
+    echo "Continuing without local registry check. Fabro will fail early if the image tag is missing." >&2
+    return 0
+  fi
+
+  while true; do
+    if docker manifest inspect "$image" >/dev/null 2>&1; then
+      echo "Sandbox image tag is available: $image"
+      return 0
+    fi
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "Timed out waiting for sandbox image tag: $image" >&2
+      echo "Check the Build Fabro dev image GitHub Actions workflow for commit $tag." >&2
+      exit 1
+    fi
+    echo "Waiting ${poll_interval}s for sandbox image tag to be published: $image"
+    sleep "$poll_interval"
+  done
+}
+
 _fabro_remote_wip_status() {
   local plan_path="$1"
   git -C "$repo_root" show origin/main:docs/iterations/README.md | python3 -c '
@@ -369,6 +402,10 @@ _fabro_deliver() {
     (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path" --allow-same-iteration)
   fi
 
+  local sandbox_image_tag
+  sandbox_image_tag=$(_fabro_sandbox_image_tag)
+  _fabro_wait_for_sandbox_image_tag "$sandbox_image_tag"
+
   echo "== Reserving implementation WIP slot =="
   (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path" --allow-same-iteration)
   (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py mark "$plan_path" implementing --check-clear-first)
@@ -389,8 +426,10 @@ _fabro_deliver() {
   echo "Review base SHA: $base_sha"
 
   echo "== Running implementation workflow =="
+  echo "Sandbox image tag: $sandbox_image_tag"
   (cd "$repo_root" && command fabro run .fabro/workflows/iteration-implementation/workflow.toml \
     -I plan_path="$plan_path" \
+    -I sandbox_image_tag="$sandbox_image_tag" \
     --auto-approve)
 
   echo "== Running review workflow =="
@@ -502,17 +541,23 @@ _fabro_review() {
     fi
   fi
 
+  local sandbox_image_tag
+  sandbox_image_tag=$(_fabro_sandbox_image_tag)
+  _fabro_wait_for_sandbox_image_tag "$sandbox_image_tag"
+
   echo "Running iteration review in isolated worktree: $worktree"
   echo "Review branch: $worktree_branch"
   echo "Review HEAD: $(git -C "$worktree" rev-parse HEAD)"
   echo "Review upstream: $(git -C "$worktree" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
   echo "Review base input: $base_ref_or_base_sha"
   echo "Review base sha: $base_sha"
+  echo "Sandbox image tag: $sandbox_image_tag"
   (
     cd "$worktree"
     command fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \
       -I "plan_path=$plan_path" \
       -I "base_sha=$base_sha" \
+      -I "sandbox_image_tag=$sandbox_image_tag" \
       --auto-approve
   )
 }

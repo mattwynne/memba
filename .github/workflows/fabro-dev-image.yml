@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - devenv.nix
-      - devenv.lock
-      - devenv.yaml
-      - .github/workflows/fabro-dev-image.yml
 
 permissions:
   contents: read
@@ -47,3 +42,13 @@ jobs:
 
       - name: Push devenv container to GHCR
         run: devenv container copy fabro-dev
+
+      - name: Push commit-tagged image to GHCR
+        run: |
+          docker tag mattwynne/memba-fabro-dev:latest ghcr.io/mattwynne/memba-fabro-dev:${{ github.sha }}
+          docker push ghcr.io/mattwynne/memba-fabro-dev:${{ github.sha }}
+
+      - name: Smoke test published commit-tagged image
+        run: |
+          docker run --rm --entrypoint /bin/sh ghcr.io/mattwynne/memba-fabro-dev:${{ github.sha }} -lc \
+            'command -v git && git --version && command -v python3 && python3 --version'
