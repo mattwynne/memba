@@ -1,0 +1,283 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index 5f241a7..c0fff5c 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the current delivery-provider port, message send flow, Swoosh configuration, and Postmark webhook correlation code.
+ - [x] 002 Decide the smallest provider shape: likely `Memba.Messaging.DeliveryProviders.Postmark` implementing `Memba.Messaging.DeliveryProvider` and using `Memba.Mailer`/Swoosh.
+ - [x] 003 Add configuration for selecting the Postmark provider only when explicitly configured, preserving the fake provider for tests and local defaults.
+-- [ ] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
++- [x] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
+ - [ ] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ - [ ] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+ - [ ] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+diff --git a/web/config/runtime.exs b/web/config/runtime.exs
+index 1058e74..e8c042f 100644
+--- a/web/config/runtime.exs
++++ b/web/config/runtime.exs
+@@ -26,6 +26,18 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(
+   :default ->
+     :ok
+ 
++  Memba.Messaging.DeliveryProviders.Postmark = delivery_provider ->
++    postmark_config = Memba.Messaging.DeliveryProviders.PostmarkConfig.from_env!()
++
++    config :memba, :messaging_delivery_provider, delivery_provider
++
++    config :memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Postmark,
++      api_key: postmark_config.server_token
++
++    config :memba, Memba.Messaging.DeliveryProviders.Postmark, from: postmark_config.from
++    config :swoosh, :api_client, Swoosh.ApiClient.Req
++
+   delivery_provider ->
+     config :memba, :messaging_delivery_provider, delivery_provider
+ end
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark.ex b/web/lib/memba/messaging/delivery_providers/postmark.ex
+index a9736cc..d894495 100644
+--- a/web/lib/memba/messaging/delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/delivery_providers/postmark.ex
+@@ -9,11 +9,18 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
+ 
+   alias Memba.Messaging.DeliveryProvider
+   alias Memba.Messaging.DeliveryRequest
++  alias Memba.Messaging.DeliveryProviders.PostmarkConfig
+ 
+   @behaviour DeliveryProvider
+ 
+   @impl DeliveryProvider
+   def deliver(%DeliveryRequest{}) do
+-    {:error, :postmark_delivery_not_configured}
++    case PostmarkConfig.from_application_env() do
++      {:ok, %PostmarkConfig{}} ->
++        {:error, :postmark_delivery_not_implemented}
++
++      {:error, message} ->
++        {:error, {:postmark_configuration_error, message}}
++    end
+   end
+ end
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark_config.ex b/web/lib/memba/messaging/delivery_providers/postmark_config.ex
+new file mode 100644
+index 0000000..ac72766
+--- /dev/null
++++ b/web/lib/memba/messaging/delivery_providers/postmark_config.ex
+@@ -0,0 +1,113 @@
++defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
++  @moduledoc """
++  Required runtime configuration for the Postmark delivery provider.
++
++  Real Postmark delivery is only enabled when explicitly selected. When it is
++  selected, the server token and sender/from address must be present so the
++  failure mode is clear instead of silently falling back to fake delivery.
++  """
++
++  @enforce_keys [:server_token, :from]
++  defstruct [:server_token, :from]
++
++  @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
++  @from_address_env "MEMBA_POSTMARK_FROM_ADDRESS"
++
++  @type t :: %__MODULE__{
++          server_token: String.t(),
++          from: String.t()
++        }
++
++  @doc """
++  Read and validate required Postmark provider settings from environment.
++  """
++  def from_env(get_env \\ &System.get_env/1) when is_function(get_env, 1) do
++    validate(
++      %{
++        @server_token_env => get_env.(@server_token_env),
++        @from_address_env => get_env.(@from_address_env)
++      },
++      source: :environment
++    )
++  end
++
++  @doc """
++  Read and validate required Postmark provider settings from environment or raise.
++  """
++  def from_env!(get_env \\ &System.get_env/1) when is_function(get_env, 1) do
++    case from_env(get_env) do
++      {:ok, config} -> config
++      {:error, message} -> raise ArgumentError, message
++    end
++  end
++
++  @doc """
++  Read and validate required Postmark provider settings from application config.
++  """
++  def from_application_env do
++    mailer_config = Application.get_env(:memba, Memba.Mailer, [])
++    provider_config = Application.get_env(:memba, Memba.Messaging.DeliveryProviders.Postmark, [])
++
++    validate(
++      %{
++        @server_token_env => Keyword.get(mailer_config, :api_key),
++        @from_address_env => Keyword.get(provider_config, :from)
++      },
++      source: :application
++    )
++  end
++
++  @doc """
++  Read and validate required Postmark provider settings from application config or raise.
++  """
++  def from_application_env! do
++    case from_application_env() do
++      {:ok, config} -> config
++      {:error, message} -> raise ArgumentError, message
++    end
++  end
++
++  defp validate(values, opts) do
++    normalized_values =
++      Map.new(values, fn {key, value} ->
++        {key, normalize(value)}
++      end)
++
++    missing =
++      normalized_values
++      |> Enum.filter(fn {_key, value} -> is_nil(value) end)
++      |> Enum.map(fn {key, _value} -> key end)
++      |> Enum.sort()
++
++    case missing do
++      [] ->
++        {:ok,
++         %__MODULE__{
++           server_token: Map.fetch!(normalized_values, @server_token_env),
++           from: Map.fetch!(normalized_values, @from_address_env)
++         }}
++
++      missing ->
++        {:error, missing_config_message(missing, opts[:source])}
++    end
++  end
++
++  defp normalize(value) when is_binary(value) do
++    case String.trim(value) do
++      "" -> nil
++      value -> value
++    end
++  end
++
++  defp normalize(_value), do: nil
++
++  defp missing_config_message(missing, source) do
++    "Postmark delivery provider is enabled, but required #{source_label(source)} " <>
++      "configuration is missing: #{Enum.join(missing, ", ")}. " <>
++      "Set #{@server_token_env} and #{@from_address_env}, or leave " <>
++      "MEMBA_MESSAGING_DELIVERY_PROVIDER unset to use the fake provider."
++  end
++
++  defp source_label(:application), do: "application"
++  defp source_label(:environment), do: "environment"
++end
+diff --git a/web/test/memba/messaging/delivery_provider_test.exs b/web/test/memba/messaging/delivery_provider_test.exs
+index 21002b5..6fcfbbe 100644
+--- a/web/test/memba/messaging/delivery_provider_test.exs
++++ b/web/test/memba/messaging/delivery_provider_test.exs
+@@ -8,6 +8,8 @@ defmodule Memba.Messaging.DeliveryProviderTest do
+ 
+   setup do
+     original_provider = Application.get_env(:memba, :messaging_delivery_provider)
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_postmark_config = Application.get_env(:memba, Postmark)
+ 
+     Fake.reset()
+ 
+@@ -18,6 +20,8 @@ defmodule Memba.Messaging.DeliveryProviderTest do
+         Application.put_env(:memba, :messaging_delivery_provider, original_provider)
+       end
+ 
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(Postmark, original_postmark_config)
+       Fake.reset()
+     end)
+ 
+@@ -38,7 +42,26 @@ defmodule Memba.Messaging.DeliveryProviderTest do
+ 
+     request = delivery_request()
+ 
+-    assert {:error, :postmark_delivery_not_configured} = DeliveryProvider.deliver(request)
++    assert {:error, {:postmark_configuration_error, message}} = DeliveryProvider.deliver(request)
++    assert message =~ "Postmark delivery provider is enabled"
++    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
++    assert message =~ "MEMBA_POSTMARK_FROM_ADDRESS"
++    assert Fake.deliveries() == []
++  end
++
++  test "validates required Postmark config before later email delivery work" do
++    Application.put_env(:memba, :messaging_delivery_provider, Postmark)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Postmark,
++      api_key: "server-token"
++    )
++
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    assert {:error, :postmark_delivery_not_implemented} =
++             DeliveryProvider.deliver(delivery_request())
++
+     assert Fake.deliveries() == []
+   end
+ 
+@@ -54,4 +77,7 @@ defmodule Memba.Messaging.DeliveryProviderTest do
+       body: "Meet at 9am."
+     }
+   end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
+diff --git a/web/test/memba/messaging/delivery_providers/postmark_config_test.exs b/web/test/memba/messaging/delivery_providers/postmark_config_test.exs
+new file mode 100644
+index 0000000..cd7de37
+--- /dev/null
++++ b/web/test/memba/messaging/delivery_providers/postmark_config_test.exs
+@@ -0,0 +1,40 @@
++defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.DeliveryProviders.PostmarkConfig
++
++  test "reads required Postmark provider settings from environment" do
++    assert {:ok,
++            %PostmarkConfig{
++              server_token: "server-token",
++              from: "messages@mail.memba.io"
++            }} =
++             PostmarkConfig.from_env(fn
++               "MEMBA_POSTMARK_SERVER_TOKEN" -> "  server-token  "
++               "MEMBA_POSTMARK_FROM_ADDRESS" -> " messages@mail.memba.io "
++             end)
++  end
++
++  test "reports missing required environment settings clearly" do
++    assert {:error, message} =
++             PostmarkConfig.from_env(fn
++               "MEMBA_POSTMARK_SERVER_TOKEN" -> "  "
++               "MEMBA_POSTMARK_FROM_ADDRESS" -> nil
++             end)
++
++    assert message =~ "Postmark delivery provider is enabled"
++    assert message =~ "required environment configuration is missing"
++    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
++    assert message =~ "MEMBA_POSTMARK_FROM_ADDRESS"
++    assert message =~ "MEMBA_MESSAGING_DELIVERY_PROVIDER"
++  end
++
++  test "raises clearly for missing required environment settings" do
++    assert_raise ArgumentError, ~r/MEMBA_POSTMARK_FROM_ADDRESS/, fn ->
++      PostmarkConfig.from_env!(fn
++        "MEMBA_POSTMARK_SERVER_TOKEN" -> "server-token"
++        "MEMBA_POSTMARK_FROM_ADDRESS" -> nil
++      end)
++    end
++  end
++end
