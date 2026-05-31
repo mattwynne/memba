@@ -17,6 +17,7 @@ test("default browser Cucumber profile selects all web-backed shared features", 
   const selectedFeatureNames = browserSelectedFeatureNames();
 
   assert.deepEqual(selectedFeatureNames, [
+    "authentication.feature",
     "homepage.feature",
     "member_message_deliverability.feature",
     "operator_email_deliverability.feature"

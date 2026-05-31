@@ -32,7 +32,7 @@ defmodule MembaWeb.AuthController do
         conn
         |> UserAuth.log_in_identity(email)
         |> put_flash(:info, "Signed in.")
-        |> redirect(to: safe_return_to(return_to) || ~p"/")
+        |> redirect(to: safe_return_to(return_to) || default_after_sign_in_path(email))
 
       {:error, reason} ->
         Logger.warning("Rejected auth magic link callback: #{inspect(reason)}")
@@ -94,4 +94,12 @@ defmodule MembaWeb.AuthController do
   end
 
   defp safe_return_to(_return_to), do: nil
+
+  defp default_after_sign_in_path(email) do
+    if Accounts.staff_email?(email) do
+      ~p"/admin/clubs"
+    else
+      ~p"/"
+    end
+  end
 end

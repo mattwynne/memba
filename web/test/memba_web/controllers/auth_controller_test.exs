@@ -31,6 +31,7 @@ defmodule MembaWeb.AuthControllerTest do
       html = LazyHTML.from_fragment(response)
 
       assert response =~ "Sign in to Memba"
+      assert response =~ "signs up anyone with a memba.io email as Memba staff"
 
       assert html
              |> LazyHTML.query("form#magic-link-form[action='/auth'][method='post']")
@@ -61,7 +62,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert flash(unknown_conn, :info) == neutral_notice()
     end
 
-    test "creates a magic token and sends a callback URL email for known recipients", %{
+    test "creates a magic token and sends a callback URL email for known member recipients", %{
       conn: conn
     } do
       configure_auth_email()
@@ -78,6 +79,22 @@ defmodule MembaWeb.AuthControllerTest do
       assert email.html_body =~ "http://localhost:4000/auth/magic/"
     end
 
+    test "creates a magic token and sends a callback URL email for new Memba staff", %{
+      conn: conn
+    } do
+      configure_auth_email()
+
+      conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " New.Staff@Memba.IO "}})
+
+      assert redirected_to(conn) == ~p"/auth"
+      assert [%MagicToken{email: "new.staff@memba.io"}] = Repo.all(MagicToken)
+      assert_received {:email, %Swoosh.Email{} = email}
+
+      assert email.to == [{"", "new.staff@memba.io"}]
+      assert email.text_body =~ "http://localhost:4000/auth/magic/"
+      assert email.html_body =~ "http://localhost:4000/auth/magic/"
+    end
+
     test "does not create a token or send email for unknown recipients", %{conn: conn} do
       configure_auth_email()
 
@@ -90,12 +107,14 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "GET /auth/magic/:token" do
-    test "consumes a valid token, signs the browser in, and redirects home", %{conn: conn} do
+    test "consumes a valid staff token, signs the browser in, and redirects to admin", %{
+      conn: conn
+    } do
       assert {:ok, %{token: token}} = Accounts.request_magic_link("Pat@Memba.IO")
 
       conn = get(conn, ~p"/auth/magic/#{token}")
 
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/admin/clubs"
       assert get_session(conn, UserAuth.identity_session_key()) == "pat@memba.io"
       assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
     end

@@ -16,19 +16,21 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "https://donkey.red"
   end
 
-  test "GET / presents operational links as staff admin entry points", %{conn: conn} do
+  test "GET / presents sign-in links instead of staff admin entry points", %{conn: conn} do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
     assert html
-           |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/admin/clubs']")
+           |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/auth']")
            |> Enum.any?()
 
-    assert html |> LazyHTML.query("main a[href='/admin/clubs']") |> Enum.any?()
-    assert html |> LazyHTML.query("a[href='/admin/clubs']") |> Enum.any?()
-    assert response =~ "Internal staff admin"
-    assert response =~ "Open internal staff admin"
+    assert html |> LazyHTML.query("header > a[href='/auth']") |> Enum.any?()
+    assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.any?()
+    assert response =~ "Sign In"
+    refute response =~ "Internal staff admin"
+    refute response =~ "Open internal staff admin"
+    refute response =~ ~s(href="/admin/clubs")
     refute response =~ ~s(href="/clubs")
   end
 
