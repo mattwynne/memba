@@ -48,7 +48,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.admin flash={@flash}>
       <main id="clubs-index" class="mx-auto max-w-5xl space-y-8 p-6">
         <section class="space-y-2">
           <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
@@ -122,7 +122,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
           </div>
         </section>
       </main>
-    </Layouts.app>
+    </Layouts.admin>
     """
   end
 

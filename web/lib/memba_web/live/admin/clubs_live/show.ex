@@ -124,7 +124,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.admin flash={@flash}>
       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
         <.link
           id="back-to-clubs-link"
@@ -335,7 +335,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
           </section>
         <% end %>
       </main>
-    </Layouts.app>
+    </Layouts.admin>
     """
   end
 

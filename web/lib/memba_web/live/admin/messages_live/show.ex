@@ -23,7 +23,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.admin flash={@flash}>
       <main id="message-show" class="mx-auto max-w-6xl space-y-8 p-6">
         <%= if @message do %>
           <section class="space-y-2">
@@ -145,7 +145,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
           </section>
         <% end %>
       </main>
-    </Layouts.app>
+    </Layouts.admin>
     """
   end
 end

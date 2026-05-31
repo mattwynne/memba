@@ -11,6 +11,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   } do
     conn
     |> visit("/admin/clubs")
+    |> assert_has("#admin-layout[data-surface='admin']")
+    |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
     |> assert_has("#clubs-index")
     |> assert_has("#new-club-form[aria-label='Create a club']")
     |> assert_has("#club-name-input[aria-label='Club name']")
