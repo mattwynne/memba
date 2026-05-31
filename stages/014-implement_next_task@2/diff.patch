@@ -1,0 +1,117 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/todo.md b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+index 78b612e..2025543 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/todo.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Update `web/lib/memba_web/router.ex`:
+-- [ ] 002 Move or rename existing LiveView modules into an admin namespace:
++- [x] 002 Move or rename existing LiveView modules into an admin namespace:
+ - [ ] 003 Update all internal verified routes and links:
+ - [ ] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
+ - [ ] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
+diff --git a/web/lib/memba_web/live/clubs_live/index.ex b/web/lib/memba_web/live/admin/clubs_live/index.ex
+similarity index 98%
+rename from web/lib/memba_web/live/clubs_live/index.ex
+rename to web/lib/memba_web/live/admin/clubs_live/index.ex
+index 37e01f2..b959a3c 100644
+--- a/web/lib/memba_web/live/clubs_live/index.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/index.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.ClubsLive.Index do
++defmodule MembaWeb.Admin.ClubsLive.Index do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
+diff --git a/web/lib/memba_web/live/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+similarity index 99%
+rename from web/lib/memba_web/live/clubs_live/show.ex
+rename to web/lib/memba_web/live/admin/clubs_live/show.ex
+index e2a6159..a7a9323 100644
+--- a/web/lib/memba_web/live/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.ClubsLive.Show do
++defmodule MembaWeb.Admin.ClubsLive.Show do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
+diff --git a/web/lib/memba_web/live/deliveries_live/index.ex b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+similarity index 99%
+rename from web/lib/memba_web/live/deliveries_live/index.ex
+rename to web/lib/memba_web/live/admin/deliveries_live/index.ex
+index 134e016..e24ed9c 100644
+--- a/web/lib/memba_web/live/deliveries_live/index.ex
++++ b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.DeliveriesLive.Index do
++defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Messaging
+diff --git a/web/lib/memba_web/live/messages_live/show.ex b/web/lib/memba_web/live/admin/messages_live/show.ex
+similarity index 99%
+rename from web/lib/memba_web/live/messages_live/show.ex
+rename to web/lib/memba_web/live/admin/messages_live/show.ex
+index dbf69ee..a3e8d9b 100644
+--- a/web/lib/memba_web/live/messages_live/show.ex
++++ b/web/lib/memba_web/live/admin/messages_live/show.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.MessagesLive.Show do
++defmodule MembaWeb.Admin.MessagesLive.Show do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Messaging
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index ffdca5a..e94ebc9 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -32,7 +32,7 @@ defmodule MembaWeb.Router do
+     get "/privacy", PageController, :privacy
+   end
+ 
+-  scope "/admin", MembaWeb do
++  scope "/admin", MembaWeb.Admin do
+     pipe_through :staff_browser
+ 
+     live "/clubs", ClubsLive.Index
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 0c3ff48..c33b255 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -3,14 +3,14 @@ defmodule MembaWeb.RouterTest do
+ 
+   describe "staff admin LiveView routes" do
+     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
+-      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.ClubsLive.Index, %{})
++      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
+     end
+ 
+     test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
+       assert_live_route(
+         "/admin/clubs/club-123",
+         "/admin/clubs/:club_id",
+-        MembaWeb.ClubsLive.Show,
++        MembaWeb.Admin.ClubsLive.Show,
+         %{
+           "club_id" => "club-123"
+         }
+@@ -21,7 +21,7 @@ defmodule MembaWeb.RouterTest do
+       assert_live_route(
+         "/admin/deliveries",
+         "/admin/deliveries",
+-        MembaWeb.DeliveriesLive.Index,
++        MembaWeb.Admin.DeliveriesLive.Index,
+         %{}
+       )
+     end
+@@ -30,7 +30,7 @@ defmodule MembaWeb.RouterTest do
+       assert_live_route(
+         "/admin/messages/message-123",
+         "/admin/messages/:message_id",
+-        MembaWeb.MessagesLive.Show,
++        MembaWeb.Admin.MessagesLive.Show,
+         %{"message_id" => "message-123"}
+       )
+     end
