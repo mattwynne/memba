@@ -302,17 +302,17 @@ function worldWithPage(page = new FakePage()) {
 }
 
 test("member-message route URL and generated emails match the browser app surface", () => {
-  assert.equal(appUrl("http://127.0.0.1:4444", "/clubs"), "http://127.0.0.1:4444/clubs");
+  assert.equal(appUrl("http://127.0.0.1:4444", "/admin/clubs"), "http://127.0.0.1:4444/admin/clubs");
   assert.equal(
-    appUrl("http://127.0.0.1:4444/", "/messages/message-1"),
-    "http://127.0.0.1:4444/messages/message-1"
+    appUrl("http://127.0.0.1:4444/", "/admin/messages/message-1"),
+    "http://127.0.0.1:4444/admin/messages/message-1"
   );
   assert.equal(emailFor("Alice"), "alice@example.test");
   assert.equal(emailFor("Kootenay Mountaineering Club"), "kootenay.mountaineering.club@example.test");
   assert.equal(cssString('Bob "The Sender"'), '"Bob \\"The Sender\\""');
 });
 
-test("creating a club drives /clubs and stores the generated club id from the UI", async () => {
+test("creating a club drives /admin/clubs and stores the generated club id from the UI", async () => {
   const page = new FakePage();
   page.rows.clubs.push(rowWithAttrs({
     "data-club-id": "club-existing-1",
@@ -324,7 +324,7 @@ test("creating a club drives /clubs and stores the generated club id from the UI
   await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
 
   assert.deepEqual(page.actions, [
-    ["goto", "http://127.0.0.1:4444/clubs"],
+    ["goto", "http://127.0.0.1:4444/admin/clubs"],
     ["fill", "Club name", kootenayClubName],
     ["click", "button", { name: "Create club" }]
   ]);
@@ -373,7 +373,7 @@ test("browser interaction failures are reported separately from projection waits
 
   await assert.rejects(
     () => createClub(world, kootenayClubName, { expect: fakeExpect([]) }),
-    /Browser interaction failed: visit \/clubs\.\nCause: browser context closed/
+    /Browser interaction failed: visit \/admin\/clubs\.\nCause: browser context closed/
   );
 });
 
@@ -437,7 +437,7 @@ test("sending a Kootenay member message drives the club form and opens the real 
     ["fill", "Message subject", "Trip planning night"],
     ["fill", "Message body", "Trip planning night details."],
     ["click", "button", { name: "Send club message" }],
-    ["goto", "http://127.0.0.1:4444/messages/message-trip-planning-night-1"]
+    ["goto", "http://127.0.0.1:4444/admin/messages/message-trip-planning-night-1"]
   ]);
 });
 
@@ -547,7 +547,7 @@ test("operator delivery assertions inspect the /deliveries overview by message a
 
   assert.deepEqual(
     page.actions.filter((action) => action[0] === "goto").map((action) => action[1]),
-    ["http://127.0.0.1:4444/deliveries", "http://127.0.0.1:4444/deliveries"]
+    ["http://127.0.0.1:4444/admin/deliveries", "http://127.0.0.1:4444/admin/deliveries"]
   );
   assert.deepEqual(world.currentOperatorDelivery, {
     recipientName: "Bob",

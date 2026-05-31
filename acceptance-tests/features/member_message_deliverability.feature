@@ -18,6 +18,7 @@ Feature: Member message deliverability
       And the message should not be addressed to Pat
       And each addressed member should have a separate delivery record
       And each delivery should be sent through the email provider
+      And each addressed member should receive the email in the test mailbox
 
   Rule: Members see simple receipt statuses
 
