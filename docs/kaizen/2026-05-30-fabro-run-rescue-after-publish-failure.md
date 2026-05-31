@@ -51,3 +51,26 @@ A successful implementation can become expensive to recover if the publish gate,
 - Should Fabro prevent oversized generated files from entering checkpoint history before attempting to push run branches?
 - Should the acceptance harness have a first-class `bin/dev postgres`/service-readiness contract documented before implementation workflows depend on it?
 - Should `devenv.nix` or acceptance tests assert that the installed Playwright package version matches `pkgs.playwright-driver.browsers`?
+
+## Resolution options
+
+Date: 2026-05-30
+
+Root cause: This was not primarily an upstream-main drift problem. The implementation publish script already fetches `origin/main` and runs `git pull --rebase origin main` before pushing. The expensive rescue came from two earlier resilience gaps: the final publish guard had no way to distinguish an explicitly planned acceptance tag-only edit from an accidental `.feature` change, and Fabro checkpoint history already contained an oversized generated `acceptance-tests/core` file, so the run branch could not be pushed for normal recovery.
+
+Options:
+
+1. Add an explicit planned feature-edit allowance — for example a workflow input or plan metadata listing allowed `.feature` files and restricting their diffs to tag-only changes. Benefit: keeps the locked-feature guard while allowing iterations like browser partitioning. Cost/risk: adds policy surface and must avoid becoming a broad bypass.
+2. Add a checkpoint-size/generated-file defence — at minimum keep `acceptance-tests/core` ignored/excluded and prefer running acceptance tests through a wrapper that disables/removes core dumps; ideally Fabro itself should reject or skip blobs over the remote host limit before checkpoint commits enter history. Benefit: preserves pushed run branches for recovery. Cost/risk: repository-side guards cannot fully protect against files created inside arbitrary agent commands immediately before Fabro checkpoints.
+3. Rebase earlier, before final validation — fetch/rebase onto current `origin/main` before `dev ci` and plan conformance, not only inside publish. Benefit: validates the final implementation against current trunk and surfaces conflicts before the last publish step. Cost/risk: does not address the observed locked-feature or oversized-blob failures; conflict handling still needs a clear stop/resume path.
+4. Make recovery independent of remote run-branch push — document a deterministic local rescue command that extracts the final checkpoint patch from Fabro metadata/events when `origin/fabro/run/<id>` is unavailable. Benefit: reduces archaeology when the remote branch cannot be pushed. Cost/risk: fallback only; it does not prevent the failure.
+
+Recommendation: implement options 1 and 2 first. Add option 3 as a nice hardening step because it moves trunk-drift conflicts earlier, but do not expect rebasing alone to prevent this class of rescue. Option 4 is useful documentation after the preventive fixes.
+
+Validation plan:
+
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` after any workflow-input or guard changes.
+- A targeted shell test for allowed tag-only feature diffs versus rejected scenario-text feature diffs.
+- A smoke run or local script check proving `acceptance-tests/core` is ignored/excluded and not present in publish/checkpoint candidate paths.
+
+Status: awaiting decision.
