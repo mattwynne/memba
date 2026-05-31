@@ -58,3 +58,26 @@ A workflow that reports failure after accepting the implementation creates avoid
 - Should the `.feature` guard accept explicitly planned feature-tag changes, or receive a list of permitted `.feature` paths/patches from the implementation workflow?
 - Should review sandbox preflight verify that `python3` is available before reaching finalization?
 - Should the workflow stop immediately after a failed final artifact gate instead of continuing into status finalization?
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Review finalization used the implementation `base_sha..HEAD` diff to enforce a blanket `.feature` lock, so explicitly planned implementation feature-file changes were treated as forbidden review changes after the review had already accepted the implementation. The final artifact gate also had no explicit failure node, so a policy failure could continue into status finalization and produce an ambiguous "accepted but failed" run. The separate `python3` failure was an environment-contract gap for scripts that run outside `bin/dev`'s devenv shell.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-review/scripts/final_artifact_gate.sh`: extracted the final artifact policy into a tested script. It now applies the implementation workflow's explicit plan-permission guard to implementation feature-file changes since `base_sha`, while separately rejecting any `.feature` changes made during review polish since `.fabro/tmp/review-start-sha.txt`.
+- `.fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh`: added regression coverage for planned implementation feature edits, missing plan permission, and forbidden review-polish feature edits.
+- `.fabro/workflows/iteration-review/workflow.fabro`: calls the extracted final artifact gate script, checks for bare `python3` during review preflight before later finalization scripts need it, and routes final artifact policy failures to an explicit accepted-but-final-artifact-failed terminal node instead of continuing toward status finalization.
+
+Validation:
+
+- `.fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
+- `.fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml` — passed with existing goal-gate retry warnings.
+- `dev check` — passed (132 ExUnit tests, 0 failures).
+
+Remaining follow-up:
+
+- None for this note.
