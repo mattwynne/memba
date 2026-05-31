@@ -122,6 +122,34 @@ defmodule MembaWeb.AuthControllerTest do
       assert flash(conn, :error) == "That sign-in link is invalid or has expired."
       assert get_session(conn, UserAuth.identity_session_key()) == nil
     end
+
+    test "rejects expired tokens without signing in", %{conn: conn} do
+      requested_at = ~U[2000-01-01 12:00:00.000000Z]
+      expired_at = DateTime.add(requested_at, 16 * 60, :second)
+
+      assert {:ok, %{token: token}} =
+               Accounts.request_magic_link("pat@memba.io", now: requested_at)
+
+      conn = get(conn, ~p"/auth/magic/#{token}")
+
+      assert redirected_to(conn) == ~p"/auth"
+      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
+      assert get_session(conn, UserAuth.identity_session_key()) == nil
+      assert [%MagicToken{consumed_at: nil}] = Repo.all(MagicToken)
+      assert {:error, :expired} = Accounts.consume_magic_token(token, now: expired_at)
+    end
+
+    test "rejects already-consumed tokens without signing in", %{conn: conn} do
+      assert {:ok, %{token: token}} = Accounts.request_magic_link("pat@memba.io")
+      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_magic_token(token)
+
+      conn = get(conn, ~p"/auth/magic/#{token}")
+
+      assert redirected_to(conn) == ~p"/auth"
+      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
+      assert get_session(conn, UserAuth.identity_session_key()) == nil
+      assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
+    end
   end
 
   describe "DELETE /auth" do

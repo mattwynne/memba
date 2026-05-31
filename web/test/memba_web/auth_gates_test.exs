@@ -48,12 +48,27 @@ defmodule MembaWeb.AuthGatesTest do
       assert get_session(conn, UserAuth.return_to_session_key()) == "/?club_id=#{club_id}"
     end
 
-    test "forbid signed-in browsers without active membership in the requested club", %{conn: conn} do
+    test "forbid signed-in browsers without active membership in the requested club", %{
+      conn: conn
+    } do
       club = create_active_member(email: "alice@example.com")
 
       conn =
         conn
         |> init_test_session(%{UserAuth.identity_session_key() => "other@example.com"})
+        |> get(~p"/?#{[club_id: club.club_id]}")
+
+      assert response(conn, 403) == "Forbidden"
+    end
+
+    test "forbid signed-in browsers with only inactive membership in the requested club", %{
+      conn: conn
+    } do
+      club = create_active_member(email: "alice@example.com", active: false)
+
+      conn =
+        conn
+        |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
       assert response(conn, 403) == "Forbidden"
@@ -91,7 +106,7 @@ defmodule MembaWeb.AuthGatesTest do
       membership_id: Ecto.UUID.generate(),
       club_id: club_id,
       person_id: person_id,
-      active: true
+      active: Keyword.get(attrs, :active, true)
     })
 
     club
