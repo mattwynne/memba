@@ -7,4 +7,4 @@
 - [x] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
 - [x] 006 Update controller and LiveView tests to assert the new paths.
 - [x] 007 Add route tests asserting old harness paths return 404 (not redirects).
-- [ ] 008 Run `bin/dev check` and fix any route/module/test failures.
+- [x] 008 Run `bin/dev check` and fix any route/module/test failures.
