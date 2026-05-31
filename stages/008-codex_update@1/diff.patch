@@ -1,0 +1,60 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/plan.md b/docs/iterations/009-routing-and-liveview-surface-split/plan.md
+index b91c2f0..6ccddf2 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/plan.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/plan.md
+@@ -73,7 +73,7 @@ Those routes mix staff operations, member-facing reading, message composition, a
+ - Visiting `/admin/clubs/:club_id` shows the selected club, its members, and the existing staff tools for member/message management.
+ - Visiting `/admin/messages/:message_id` shows delivery diagnostics for that message.
+ - Visiting `/admin/deliveries` shows the operator delivery overview.
+-- Visiting old harness URLs `/clubs`, `/clubs/:club_id`, `/messages/:message_id`, and `/deliveries` no longer reaches the old pages.
++- Visiting old harness URLs `/clubs`, `/clubs/:club_id`, `/messages/:message_id`, and `/deliveries` returns the normal 404 page (no redirects).
+ - Public homepage navigation and calls to action no longer point at `/clubs`; staff/admin entry points use `/admin/clubs` where needed.
+ - `POST /webhooks/postmark` remains routed exactly as before.
+ - The codebase has named layout/module seams for public, admin, and future club-site surfaces.
+@@ -94,7 +94,7 @@ Business decisions explicitly deferred:
+ 
+ 1. Update `web/lib/memba_web/router.ex`:
+    - Keep public controller routes under `/`.
+-   - Add an `/admin` browser scope for staff LiveViews.
++   - Add an `/admin` scope for staff LiveViews using a `:staff_browser` pipeline that currently mirrors `:browser`.
+    - Remove the old public harness LiveView routes.
+    - Leave `/webhooks/postmark` unchanged.
+ 2. Move or rename existing LiveView modules into an admin namespace:
+@@ -112,14 +112,14 @@ Business decisions explicitly deferred:
+    - Add a club-site layout seam for future white-label pages using CSS custom properties with a neutral slate default, but do not wire fake club routing into production routes.
+ 5. Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
+ 6. Update controller and LiveView tests to assert the new paths.
+-7. Add route tests asserting old harness paths do not return the old pages.
++7. Add route tests asserting old harness paths return 404 (not redirects).
+ 8. Run `bin/dev check` and fix any route/module/test failures.
+ 
+-## Open Technical Decisions
++## Technical Decisions
+ 
+-- Whether to physically move LiveView files into `web/lib/memba_web/live/admin/...` or leave files in place while renaming modules. Prefer moving files to match module names.
+-- Whether to introduce a `:staff_browser` pipeline now for future staff auth, or keep `:browser` with a clearly named `/admin` scope. Prefer a `:staff_browser` pipeline that currently delegates to `:browser`-equivalent plugs, leaving an obvious auth insertion point.
+-- Whether the club-site layout seam should be a real `Layouts.club_site` function now or a documented placeholder module/component. Prefer a real layout function with default theme assigns because it is small and guides future work.
++- Physically move LiveView files into `web/lib/memba_web/live/admin/...` to match module names.
++- Introduce a `:staff_browser` pipeline now for future staff auth; it should currently delegate to `:browser`-equivalent plugs as an obvious auth insertion point.
++- Implement a real `Layouts.club_site` layout seam with default theme assigns (rather than a placeholder module/component).
+ 
+ ## New Capability
+ 
+@@ -131,7 +131,7 @@ The application will have a clean routing and module structure that reflects the
+ - Automated route/controller/LiveView tests should cover:
+   - public pages still work,
+   - admin routes render the moved pages,
+-  - old harness routes no longer render the old pages,
++  - old harness routes return 404 (no redirects),
+   - Postmark webhook route remains available.
+ - Manual smoke test:
+   1. Open `/` and confirm public homepage renders.
+@@ -140,7 +140,7 @@ The application will have a clean routing and module structure that reflects the
+   4. Send or inspect a message if test data is available.
+   5. Open `/admin/messages/:message_id` and confirm diagnostics are staff-facing.
+   6. Open `/admin/deliveries` and confirm the operator overview renders.
+-  7. Confirm `/clubs` does not render the club list.
++  7. Confirm `/clubs` returns the normal 404 page (and does not render the club list).
+ 
+ ## Risks / Follow-ups
+ 
