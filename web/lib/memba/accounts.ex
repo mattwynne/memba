@@ -116,8 +116,7 @@ defmodule Memba.Accounts do
   """
   def list_clubs_for_email(email) do
     with {:ok, email} <- normalize_email(email) do
-      Membership.list_clubs()
-      |> Enum.filter(&active_member_of_club?(email, &1.club_id))
+      Membership.list_active_clubs_for_member_email(email)
     else
       {:error, :invalid_email} -> []
     end
@@ -128,9 +127,7 @@ defmodule Memba.Accounts do
   """
   def active_member_of_club?(email, club_id) do
     with {:ok, email} <- normalize_email(email) do
-      club_id
-      |> Membership.list_active_members_of_club()
-      |> Enum.any?(fn member -> member.email == email end)
+      Membership.active_member_email_of_club?(club_id, email)
     else
       {:error, :invalid_email} -> false
     end
