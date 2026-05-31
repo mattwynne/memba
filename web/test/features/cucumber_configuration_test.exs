@@ -202,6 +202,16 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
+  test "domain Cucumber configuration does not filter todo-web shared scenarios" do
+    refute Application.get_env(:cucumber, :tags)
+
+    operator_feature_file =
+      configured_feature_paths()
+      |> feature_file_named!("operator_email_deliverability.feature")
+
+    assert File.read!(operator_feature_file) =~ ~r/^\s*@todo-web\s*\n\s*Feature:/m
+  end
+
   test "all member message deliverability scenarios pass through Cucumber runtime" do
     %Discovery.DiscoveryResult{} = discovery = discover_steps()
 
