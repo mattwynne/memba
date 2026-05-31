@@ -1,0 +1,158 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/persistence.md b/docs/iterations/010-shared-magic-link-auth/persistence.md
+new file mode 100644
+index 0000000..670bb20
+--- /dev/null
++++ b/docs/iterations/010-shared-magic-link-auth/persistence.md
+@@ -0,0 +1,22 @@
++# Authentication persistence notes
++
++Task: `002 Add persistence for authentication:`
++
++## Tables
++
++- `auth_magic_tokens` stores magic-link request state:
++  - `email` for the normalized recipient address the later auth context will use,
++  - `token_hash` as unique `bytea` storage for the server-side token digest,
++  - `expires_at` for the 15-minute validity window,
++  - `consumed_at` for single-use token consumption,
++  - regular `inserted_at` and `updated_at` timestamps.
++
++The table intentionally has no plaintext token column.
++
++## Identity/session table decision
++
++No separate identity or session-support table is added for this slice. Browser
++sessions are already cookie-backed, and iteration 010 authorization can be
++derived from the signed-in email plus Membership query APIs. If later audit or
++explicit staff/user management needs arise, a dedicated identity table can be
++added without changing the magic-token storage shape.
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 16de12d..3a9b8bb 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the post-iteration-009 route structure and admin pipeline.
+-- [ ] 002 Add persistence for authentication:
++- [x] 002 Add persistence for authentication:
+ - [ ] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [ ] 004 Extend `Memba.Membership` query API as needed:
+ - [ ] 005 Add auth email delivery:
+diff --git a/web/priv/repo/migrations/20260531184305_create_auth_magic_tokens.exs b/web/priv/repo/migrations/20260531184305_create_auth_magic_tokens.exs
+new file mode 100644
+index 0000000..4896d30
+--- /dev/null
++++ b/web/priv/repo/migrations/20260531184305_create_auth_magic_tokens.exs
+@@ -0,0 +1,18 @@
++defmodule Memba.Repo.Migrations.CreateAuthMagicTokens do
++  use Ecto.Migration
++
++  def change do
++    create table(:auth_magic_tokens) do
++      add :email, :text, null: false
++      add :token_hash, :binary, null: false
++      add :expires_at, :utc_datetime_usec, null: false
++      add :consumed_at, :utc_datetime_usec
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create unique_index(:auth_magic_tokens, [:token_hash])
++    create index(:auth_magic_tokens, [:email])
++    create index(:auth_magic_tokens, [:expires_at])
++  end
++end
+diff --git a/web/test/memba/auth_persistence_test.exs b/web/test/memba/auth_persistence_test.exs
+new file mode 100644
+index 0000000..da6aa4c
+--- /dev/null
++++ b/web/test/memba/auth_persistence_test.exs
+@@ -0,0 +1,87 @@
++defmodule Memba.AuthPersistenceTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Repo
++
++  test "magic token table stores only token hashes with expiry and consumption timestamps" do
++    columns = auth_magic_token_columns()
++
++    assert columns["email"] == %{data_type: "text", nullable?: false}
++    assert columns["token_hash"] == %{data_type: "bytea", nullable?: false}
++    assert columns["expires_at"].nullable? == false
++    assert columns["consumed_at"].nullable? == true
++    assert columns["inserted_at"].nullable? == false
++    assert columns["updated_at"].nullable? == false
++
++    refute Map.has_key?(columns, "token")
++    refute Map.has_key?(columns, "plaintext_token")
++  end
++
++  test "magic token table indexes hashes uniquely and supports email and expiry lookups" do
++    index_definitions = auth_magic_token_index_definitions()
++
++    assert Enum.any?(index_definitions, fn definition ->
++             definition =~ "UNIQUE INDEX" and definition =~ "(token_hash)"
++           end)
++
++    assert Enum.any?(index_definitions, &(&1 =~ "(email)"))
++    assert Enum.any?(index_definitions, &(&1 =~ "(expires_at)"))
++  end
++
++  test "magic token rows can be consumed after being inserted" do
++    token_hash = :crypto.hash(:sha256, "not stored as plaintext")
++    expires_at = NaiveDateTime.utc_now() |> NaiveDateTime.add(15, :minute)
++
++    result =
++      Repo.query!(
++        """
++        INSERT INTO auth_magic_tokens (email, token_hash, expires_at, inserted_at, updated_at)
++        VALUES ($1, $2, $3, now(), now())
++        RETURNING id
++        """,
++        ["alice@example.com", token_hash, expires_at]
++      )
++
++    [[token_id]] = result.rows
++    consumed_at = NaiveDateTime.utc_now()
++
++    Repo.query!(
++      """
++      UPDATE auth_magic_tokens
++      SET consumed_at = $1, updated_at = now()
++      WHERE id = $2
++      """,
++      [consumed_at, token_id]
++    )
++
++    assert %{rows: [[^consumed_at]]} =
++             Repo.query!(
++               "SELECT consumed_at FROM auth_magic_tokens WHERE id = $1",
++               [token_id]
++             )
++  end
++
++  defp auth_magic_token_columns do
++    result =
++      Repo.query!("""
++      SELECT column_name, data_type, is_nullable
++      FROM information_schema.columns
++      WHERE table_schema = 'public' AND table_name = 'auth_magic_tokens'
++      """)
++
++    Map.new(result.rows, fn [name, data_type, is_nullable] ->
++      {name, %{data_type: data_type, nullable?: is_nullable == "YES"}}
++    end)
++  end
++
++  defp auth_magic_token_index_definitions do
++    result =
++      Repo.query!("""
++      SELECT indexdef
++      FROM pg_indexes
++      WHERE schemaname = 'public' AND tablename = 'auth_magic_tokens'
++      """)
++
++    Enum.map(result.rows, fn [definition] -> definition end)
++  end
++end
