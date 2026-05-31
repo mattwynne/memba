@@ -2,10 +2,12 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
   @moduledoc """
   Postmark-backed delivery provider selected by explicit runtime configuration.
 
-  Email construction and Swoosh delivery are implemented by later tasks in the
-  Postmark integration iteration. Until then, selecting this provider fails
-  visibly instead of silently falling back to fake delivery.
+  The provider builds a multipart Swoosh email and hands it to `Memba.Mailer`.
+  Recipient-specific delivery outcomes remain webhook-driven after Postmark
+  accepts the handoff.
   """
+
+  import Swoosh.Email
 
   alias Memba.Messaging.DeliveryProvider
   alias Memba.Messaging.DeliveryRequest
@@ -14,13 +16,60 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
   @behaviour DeliveryProvider
 
   @impl DeliveryProvider
-  def deliver(%DeliveryRequest{}) do
+  def deliver(%DeliveryRequest{channel: :email} = request) do
     case PostmarkConfig.from_application_env() do
-      {:ok, %PostmarkConfig{}} ->
-        {:error, :postmark_delivery_not_implemented}
+      {:ok, %PostmarkConfig{} = config} ->
+        request
+        |> email(config)
+        |> Memba.Mailer.deliver()
+        |> normalize_delivery_result()
 
       {:error, message} ->
         {:error, {:postmark_configuration_error, message}}
     end
   end
+
+  def deliver(%DeliveryRequest{channel: channel}),
+    do: {:error, {:unsupported_delivery_channel, channel}}
+
+  defp email(%DeliveryRequest{} = request, %PostmarkConfig{} = config) do
+    new()
+    |> from(config.from)
+    |> maybe_reply_to(config.reply_to)
+    |> to({request.recipient_name, request.recipient_address})
+    |> subject(request.subject)
+    |> text_body(request.body)
+    |> html_body(html_body(request.body))
+    |> put_provider_option(:metadata, metadata(request))
+  end
+
+  defp maybe_reply_to(email, nil), do: email
+  defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
+
+  defp metadata(%DeliveryRequest{} = request) do
+    %{
+      "memba_message_id" => request.message_id,
+      "memba_delivery_id" => request.delivery_id,
+      "memba_club_id" => request.club_id
+    }
+  end
+
+  defp html_body(text) do
+    escaped_body =
+      text
+      |> String.split(~r/\r\n|\n|\r/, trim: false)
+      |> Enum.map(&html_escape_to_string/1)
+      |> Enum.join("<br>\n")
+
+    "<html><body><p>#{escaped_body}</p></body></html>"
+  end
+
+  defp html_escape_to_string(text) do
+    text
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+  end
+
+  defp normalize_delivery_result({:ok, _result}), do: :ok
+  defp normalize_delivery_result({:error, _reason} = error), do: error
 end

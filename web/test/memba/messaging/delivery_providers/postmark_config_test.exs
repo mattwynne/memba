@@ -7,11 +7,13 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
     assert {:ok,
             %PostmarkConfig{
               server_token: "server-token",
-              from: "messages@mail.memba.io"
+              from: "messages@mail.memba.io",
+              reply_to: "help@memba.io"
             }} =
              PostmarkConfig.from_env(fn
                "MEMBA_POSTMARK_SERVER_TOKEN" -> "  server-token  "
                "MEMBA_POSTMARK_FROM_ADDRESS" -> " messages@mail.memba.io "
+               "MEMBA_POSTMARK_REPLY_TO_ADDRESS" -> " help@memba.io "
              end)
   end
 
@@ -20,6 +22,7 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
              PostmarkConfig.from_env(fn
                "MEMBA_POSTMARK_SERVER_TOKEN" -> "  "
                "MEMBA_POSTMARK_FROM_ADDRESS" -> nil
+               "MEMBA_POSTMARK_REPLY_TO_ADDRESS" -> "  "
              end)
 
     assert message =~ "Postmark delivery provider is enabled"
@@ -34,6 +37,7 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
       PostmarkConfig.from_env!(fn
         "MEMBA_POSTMARK_SERVER_TOKEN" -> "server-token"
         "MEMBA_POSTMARK_FROM_ADDRESS" -> nil
+        "MEMBA_POSTMARK_REPLY_TO_ADDRESS" -> nil
       end)
     end
   end

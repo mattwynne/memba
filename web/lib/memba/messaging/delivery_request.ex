@@ -4,10 +4,13 @@ defmodule Memba.Messaging.DeliveryRequest do
 
   The first messaging slice sends email, but the request shape keeps the provider
   boundary focused on deliveries rather than an email-specific domain concept.
+  It carries Memba's own message, delivery, and club identifiers so providers can
+  attach correlation metadata without querying domain state.
   """
 
   @enforce_keys [
     :message_id,
+    :club_id,
     :delivery_id,
     :recipient_id,
     :recipient_name,
@@ -18,6 +21,7 @@ defmodule Memba.Messaging.DeliveryRequest do
   ]
   defstruct [
     :message_id,
+    :club_id,
     :delivery_id,
     :recipient_id,
     :recipient_name,
@@ -29,6 +33,7 @@ defmodule Memba.Messaging.DeliveryRequest do
 
   @type t :: %__MODULE__{
           message_id: Ecto.UUID.t(),
+          club_id: Ecto.UUID.t(),
           delivery_id: Ecto.UUID.t(),
           recipient_id: Ecto.UUID.t(),
           recipient_name: String.t(),

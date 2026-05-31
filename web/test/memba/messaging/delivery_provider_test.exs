@@ -53,14 +53,14 @@ defmodule Memba.Messaging.DeliveryProviderTest do
     Application.put_env(:memba, :messaging_delivery_provider, Postmark)
 
     Application.put_env(:memba, Memba.Mailer,
-      adapter: Swoosh.Adapters.Postmark,
+      adapter: Swoosh.Adapters.Test,
       api_key: "server-token"
     )
 
     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
 
-    assert {:error, :postmark_delivery_not_implemented} =
-             DeliveryProvider.deliver(delivery_request())
+    assert :ok = DeliveryProvider.deliver(delivery_request())
+    assert_received {:email, %Swoosh.Email{}}
 
     assert Fake.deliveries() == []
   end
@@ -68,6 +68,7 @@ defmodule Memba.Messaging.DeliveryProviderTest do
   defp delivery_request do
     %DeliveryRequest{
       message_id: Ecto.UUID.generate(),
+      club_id: Ecto.UUID.generate(),
       delivery_id: Ecto.UUID.generate(),
       recipient_id: Ecto.UUID.generate(),
       recipient_name: "Alice",

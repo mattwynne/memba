@@ -4,18 +4,21 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
 
   Real Postmark delivery is only enabled when explicitly selected. When it is
   selected, the server token and sender/from address must be present so the
-  failure mode is clear instead of silently falling back to fake delivery.
+  failure mode is clear instead of silently falling back to fake delivery. A
+  monitored reply-to address is optional but used when configured.
   """
 
   @enforce_keys [:server_token, :from]
-  defstruct [:server_token, :from]
+  defstruct [:server_token, :from, :reply_to]
 
   @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
   @from_address_env "MEMBA_POSTMARK_FROM_ADDRESS"
+  @reply_to_address_env "MEMBA_POSTMARK_REPLY_TO_ADDRESS"
 
   @type t :: %__MODULE__{
           server_token: String.t(),
-          from: String.t()
+          from: String.t(),
+          reply_to: String.t() | nil
         }
 
   @doc """
@@ -25,7 +28,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
     validate(
       %{
         @server_token_env => get_env.(@server_token_env),
-        @from_address_env => get_env.(@from_address_env)
+        @from_address_env => get_env.(@from_address_env),
+        @reply_to_address_env => get_env.(@reply_to_address_env)
       },
       source: :environment
     )
@@ -51,7 +55,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
     validate(
       %{
         @server_token_env => Keyword.get(mailer_config, :api_key),
-        @from_address_env => Keyword.get(provider_config, :from)
+        @from_address_env => Keyword.get(provider_config, :from),
+        @reply_to_address_env => Keyword.get(provider_config, :reply_to)
       },
       source: :application
     )
@@ -73,18 +78,20 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
         {key, normalize(value)}
       end)
 
-    missing =
+    missing_required =
       normalized_values
+      |> Map.take(required_config_keys())
       |> Enum.filter(fn {_key, value} -> is_nil(value) end)
       |> Enum.map(fn {key, _value} -> key end)
       |> Enum.sort()
 
-    case missing do
+    case missing_required do
       [] ->
         {:ok,
          %__MODULE__{
            server_token: Map.fetch!(normalized_values, @server_token_env),
-           from: Map.fetch!(normalized_values, @from_address_env)
+           from: Map.fetch!(normalized_values, @from_address_env),
+           reply_to: Map.fetch!(normalized_values, @reply_to_address_env)
          }}
 
       missing ->
@@ -100,6 +107,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
   end
 
   defp normalize(_value), do: nil
+
+  defp required_config_keys, do: [@server_token_env, @from_address_env]
 
   defp missing_config_message(missing, source) do
     "Postmark delivery provider is enabled, but required #{source_label(source)} " <>

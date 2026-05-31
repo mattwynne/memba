@@ -159,6 +159,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     Enum.zip(deliveries, provider_deliveries)
     |> Enum.each(fn {%RecipientDelivery{} = delivery, %DeliveryRequest{} = request} ->
       assert request.message_id == delivery.message_id
+      assert request.club_id == context.sent_message.club_id
       assert request.delivery_id == delivery.delivery_id
       assert request.recipient_id == delivery.recipient_id
       assert request.recipient_name == delivery.recipient_name

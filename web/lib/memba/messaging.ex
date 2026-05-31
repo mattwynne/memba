@@ -413,6 +413,7 @@ defmodule Memba.Messaging do
   defp delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
     %DeliveryRequest{
       message_id: command.message_id,
+      club_id: command.club_id,
       delivery_id: recipient.delivery_id,
       recipient_id: recipient.person_id,
       recipient_name: recipient.name,
