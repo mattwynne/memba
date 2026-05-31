@@ -1,0 +1,241 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/todo.md b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+index 121b14f..78b612e 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/todo.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Update `web/lib/memba_web/router.ex`:
++- [x] 001 Update `web/lib/memba_web/router.ex`:
+ - [ ] 002 Move or rename existing LiveView modules into an admin namespace:
+ - [ ] 003 Update all internal verified routes and links:
+ - [ ] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
+diff --git a/web/lib/memba_web/controllers/page_html/home.html.heex b/web/lib/memba_web/controllers/page_html/home.html.heex
+index 084a5ef..1f0ff20 100644
+--- a/web/lib/memba_web/controllers/page_html/home.html.heex
++++ b/web/lib/memba_web/controllers/page_html/home.html.heex
+@@ -10,15 +10,15 @@
+     >
+       <a href="#how-it-works" class="transition hover:text-ink">How it works</a>
+       <a href="#features" class="transition hover:text-ink">Features</a>
+-      <a href={~p"/clubs"} class="transition hover:text-ink">Clubs</a>
++      <a href={~p"/admin/clubs"} class="transition hover:text-ink">Staff admin</a>
+       <a href={~p"/about"} class="transition hover:text-ink">About</a>
+     </nav>
+ 
+     <a
+-      href={~p"/clubs"}
++      href={~p"/admin/clubs"}
+       class="rounded-full border border-sage-600 bg-sage-600 px-5 py-2.5 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+     >
+-      Open Memba
++      Staff admin
+     </a>
+   </header>
+ 
+@@ -45,10 +45,10 @@
+ 
+           <div class="mt-10 flex flex-col gap-4 sm:flex-row">
+             <a
+-              href={~p"/clubs"}
++              href={~p"/admin/clubs"}
+               class="inline-flex items-center justify-center rounded-full bg-sage-600 px-7 py-4 text-base font-semibold text-cream shadow-lg shadow-sage-800/10 transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-xl"
+             >
+-              Manage clubs
++              Open staff admin
+             </a>
+             <a
+               href="#features"
+diff --git a/web/lib/memba_web/live/clubs_live/index.ex b/web/lib/memba_web/live/clubs_live/index.ex
+index 54a0113..37e01f2 100644
+--- a/web/lib/memba_web/live/clubs_live/index.ex
++++ b/web/lib/memba_web/live/clubs_live/index.ex
+@@ -109,7 +109,7 @@ defmodule MembaWeb.ClubsLive.Index do
+               <div>
+                 <.link
+                   id={"club-link-#{club.club_id}"}
+-                  navigate={~p"/clubs/#{club.club_id}"}
++                  navigate={~p"/admin/clubs/#{club.club_id}"}
+                   data-testid="club-link"
+                   aria-label={"Open club #{club.name}"}
+                   class="font-medium text-blue-700 hover:text-blue-900"
+diff --git a/web/lib/memba_web/live/clubs_live/show.ex b/web/lib/memba_web/live/clubs_live/show.ex
+index 167dab9..e2a6159 100644
+--- a/web/lib/memba_web/live/clubs_live/show.ex
++++ b/web/lib/memba_web/live/clubs_live/show.ex
+@@ -128,7 +128,7 @@ defmodule MembaWeb.ClubsLive.Show do
+       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
+         <.link
+           id="back-to-clubs-link"
+-          navigate={~p"/clubs"}
++          navigate={~p"/admin/clubs"}
+           aria-label="Back to clubs"
+           class="text-sm font-medium text-blue-700 hover:text-blue-900"
+         >
+@@ -317,7 +317,7 @@ defmodule MembaWeb.ClubsLive.Show do
+               >
+                 <.link
+                   id={"message-link-#{message.message_id}"}
+-                  navigate={~p"/messages/#{message.message_id}"}
++                  navigate={~p"/admin/messages/#{message.message_id}"}
+                   data-testid="message-link"
+                   aria-label={"Open message #{message.subject}"}
+                   class="font-medium text-blue-700 hover:text-blue-900"
+diff --git a/web/lib/memba_web/live/messages_live/show.ex b/web/lib/memba_web/live/messages_live/show.ex
+index fee646c..dbf69ee 100644
+--- a/web/lib/memba_web/live/messages_live/show.ex
++++ b/web/lib/memba_web/live/messages_live/show.ex
+@@ -29,7 +29,7 @@ defmodule MembaWeb.MessagesLive.Show do
+           <section class="space-y-2">
+             <.link
+               id="back-to-club-link"
+-              navigate={~p"/clubs/#{@message.club_id}"}
++              navigate={~p"/admin/clubs/#{@message.club_id}"}
+               aria-label="Back to club"
+               class="text-sm font-medium text-blue-700 hover:text-blue-900"
+             >
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index fb74e00..ffdca5a 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -10,6 +10,15 @@ defmodule MembaWeb.Router do
+     plug :put_secure_browser_headers
+   end
+ 
++  pipeline :staff_browser do
++    plug :accepts, ["html"]
++    plug :fetch_session
++    plug :fetch_live_flash
++    plug :put_root_layout, html: {MembaWeb.Layouts, :root}
++    plug :protect_from_forgery
++    plug :put_secure_browser_headers
++  end
++
+   pipeline :api do
+     plug :accepts, ["json"]
+   end
+@@ -21,6 +30,10 @@ defmodule MembaWeb.Router do
+     get "/about", PageController, :about
+     get "/terms", PageController, :terms
+     get "/privacy", PageController, :privacy
++  end
++
++  scope "/admin", MembaWeb do
++    pipe_through :staff_browser
+ 
+     live "/clubs", ClubsLive.Index
+     live "/clubs/:club_id", ClubsLive.Show
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 22432fd..535fee1 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -10,7 +10,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     conn: conn
+   } do
+     conn
+-    |> visit("/clubs")
++    |> visit("/admin/clubs")
+     |> assert_has("#clubs-index")
+     |> assert_has("#new-club-form[aria-label='Create a club']")
+     |> assert_has("#club-name-input[aria-label='Club name']")
+@@ -72,7 +72,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     conn: conn
+   } do
+     conn
+-    |> visit("/clubs")
++    |> visit("/admin/clubs")
+     |> assert_has("#clubs-index")
+     |> create_club("Kootenay Mountaineering Club")
+     |> click_link("Kootenay Mountaineering Club")
+@@ -107,7 +107,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     delivery_ids_by_name = Map.new(recipients, &{&1.name, &1.delivery_id})
+ 
+     conn
+-    |> visit("/messages/#{message_id}")
++    |> visit("/admin/messages/#{message_id}")
+     |> assert_has("#message-show", "Trip planning night")
+     |> assert_member_receipt("Alice", "sent")
+ 
+@@ -151,7 +151,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+              })
+ 
+     conn
+-    |> visit("/messages/#{message_id}")
++    |> visit("/admin/messages/#{message_id}")
+     |> assert_member_receipt("Alice", "sent")
+     |> assert_member_receipt("Bob", "delivered")
+     |> assert_member_receipt("Carol", "delivery problem")
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index 46ae7aa..e631c24 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -51,7 +51,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
+              )
+ 
+     conn
+-    |> visit("/deliveries")
++    |> visit("/admin/deliveries")
+     |> assert_has("#deliveries-overview")
+     |> assert_has("#deliveries-table[aria-label='Delivery records']")
+     |> assert_has("[data-test-id^='delivery-row-']", count: 2)
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 0241f8f..0c3ff48 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -1,25 +1,35 @@
+ defmodule MembaWeb.RouterTest do
+   use ExUnit.Case, async: true
+ 
+-  describe "browser LiveView routes" do
+-    test "routes /clubs through the browser pipeline to the clubs index LiveView" do
+-      assert_live_route("/clubs", "/clubs", MembaWeb.ClubsLive.Index, %{})
++  describe "staff admin LiveView routes" do
++    test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
++      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.ClubsLive.Index, %{})
+     end
+ 
+-    test "routes /clubs/:club_id through the browser pipeline to the club show LiveView" do
+-      assert_live_route("/clubs/club-123", "/clubs/:club_id", MembaWeb.ClubsLive.Show, %{
+-        "club_id" => "club-123"
+-      })
++    test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
++      assert_live_route(
++        "/admin/clubs/club-123",
++        "/admin/clubs/:club_id",
++        MembaWeb.ClubsLive.Show,
++        %{
++          "club_id" => "club-123"
++        }
++      )
+     end
+ 
+-    test "routes /deliveries through the browser pipeline to the deliveries index LiveView" do
+-      assert_live_route("/deliveries", "/deliveries", MembaWeb.DeliveriesLive.Index, %{})
++    test "routes /admin/deliveries through the staff browser pipeline to the deliveries index LiveView" do
++      assert_live_route(
++        "/admin/deliveries",
++        "/admin/deliveries",
++        MembaWeb.DeliveriesLive.Index,
++        %{}
++      )
+     end
+ 
+-    test "routes /messages/:message_id through the browser pipeline to the message show LiveView" do
++    test "routes /admin/messages/:message_id through the staff browser pipeline to the message show LiveView" do
+       assert_live_route(
+-        "/messages/message-123",
+-        "/messages/:message_id",
++        "/admin/messages/message-123",
++        "/admin/messages/:message_id",
+         MembaWeb.MessagesLive.Show,
+         %{"message_id" => "message-123"}
+       )
+@@ -46,7 +56,7 @@ defmodule MembaWeb.RouterTest do
+ 
+   defp assert_live_route(path, route_pattern, live_view, path_params) do
+     assert %{
+-             pipe_through: [:browser],
++             pipe_through: [:staff_browser],
+              phoenix_live_view: {^live_view, nil, _opts, _live_session},
+              plug: Phoenix.LiveView.Plug,
+              plug_opts: nil,
