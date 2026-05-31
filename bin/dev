@@ -263,36 +263,6 @@ _fabro_wait_for_sandbox_image_tag() {
   done
 }
 
-_fabro_run_with_sandbox_image_tag() {
-  local workflow_toml="$1"
-  local tag="$2"
-  shift 2
-
-  local workflow_dir workflow_base tmp_workflow
-  workflow_dir=$(dirname "$workflow_toml")
-  workflow_base=$(basename "$workflow_toml" .toml)
-  tmp_workflow="$workflow_dir/.${workflow_base}-${tag}-$$.toml"
-
-  python3 - "$workflow_toml" "$tmp_workflow" "$tag" <<'PY'
-import sys
-from pathlib import Path
-source = Path(sys.argv[1])
-target = Path(sys.argv[2])
-tag = sys.argv[3]
-text = source.read_text()
-old = 'ref = "ghcr.io/mattwynne/memba-fabro-dev:latest"'
-new = f'ref = "ghcr.io/mattwynne/memba-fabro-dev:{tag}"'
-if old not in text:
-    raise SystemExit(f"Could not find sandbox image ref in {source}")
-target.write_text(text.replace(old, new, 1))
-PY
-
-  command fabro run "$tmp_workflow" "$@"
-  local status=$?
-  rm -f "$tmp_workflow"
-  return "$status"
-}
-
 _fabro_remote_wip_status() {
   local plan_path="$1"
   git -C "$repo_root" show origin/main:docs/iterations/README.md | python3 -c '
@@ -457,8 +427,9 @@ _fabro_deliver() {
 
   echo "== Running implementation workflow =="
   echo "Sandbox image tag: $sandbox_image_tag"
-  (cd "$repo_root" && _fabro_run_with_sandbox_image_tag .fabro/workflows/iteration-implementation/workflow.toml "$sandbox_image_tag" \
+  (cd "$repo_root" && command fabro run .fabro/workflows/iteration-implementation/workflow.toml \
     -I plan_path="$plan_path" \
+    -I sandbox_image_tag="$sandbox_image_tag" \
     --auto-approve)
 
   echo "== Running review workflow =="
@@ -583,9 +554,10 @@ _fabro_review() {
   echo "Sandbox image tag: $sandbox_image_tag"
   (
     cd "$worktree"
-    _fabro_run_with_sandbox_image_tag "$repo_root/.fabro/workflows/iteration-review/workflow.toml" "$sandbox_image_tag" \
+    command fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \
       -I "plan_path=$plan_path" \
       -I "base_sha=$base_sha" \
+      -I "sandbox_image_tag=$sandbox_image_tag" \
       --auto-approve
   )
 }
