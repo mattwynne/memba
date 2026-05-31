@@ -41,6 +41,18 @@ The application already records club messages, addressed recipients, one deliver
 - Changing delivery status domain behaviour.
 - Styling beyond a plain download link.
 
+## Iteration Type
+
+Behaviour-facing. This adds one operator-observable reporting behaviour: downloading delivery receipts for an already-sent club message.
+
+## Acceptance Scenarios / Feature Files
+
+Add or update `acceptance-tests/features/member_message_deliverability.feature` with stakeholder-readable scenarios for downloading a one-message delivery-receipts CSV, including delivered, problem, opened, sent, non-addressed exclusion, ordering, and unknown-message cases. Keep scenarios at the domain level; controller/export tests may provide lower-level CSV escaping coverage.
+
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/member_message_deliverability.feature`: add delivery-receipts CSV scenarios for the approved reporting behaviour; coverage is intentionally expanded and must remain green under `dev check`.
+
 ## Acceptance Criteria
 
 - Given a message addressed to Alice, Bob, and Carol, when an operator downloads the CSV, then it contains one header row and exactly one data row per addressed recipient.
