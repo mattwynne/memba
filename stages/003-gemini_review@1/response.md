@@ -1,0 +1,9 @@
+{
+  "context_updates": {
+    "gemini_review_decision": "READY",
+    "gemini_review_confidence": "High",
+    "gemini_review_blocking_gap_count": 0,
+    "gemini_review_blocking_gaps": "None",
+    "gemini_review_required_edits": "Change 'Open Technical Decisions' to finalized decisions adopting the stated preferences"
+  }
+}
