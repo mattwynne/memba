@@ -49,6 +49,26 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(
     config :memba, :messaging_delivery_provider, delivery_provider
 end
 
+case Memba.Accounts.AuthEmailConfig.provider_override!(
+       System.get_env("MEMBA_AUTH_EMAIL_PROVIDER")
+     ) do
+  :default ->
+    :ok
+
+  :postmark ->
+    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!()
+
+    config :memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Postmark,
+      api_key: auth_email_config.server_token
+
+    config :memba, Memba.Accounts.AuthEmail,
+      from: auth_email_config.from,
+      message_stream: auth_email_config.message_stream
+
+    config :swoosh, :api_client, Swoosh.ApiClient.Req
+end
+
 config :memba, MembaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 if config_env() == :prod do

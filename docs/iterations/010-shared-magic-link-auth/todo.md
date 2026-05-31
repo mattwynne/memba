@@ -4,7 +4,7 @@
 - [x] 002 Add persistence for authentication:
 - [x] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
 - [x] 004 Extend `Memba.Membership` query API as needed:
-- [ ] 005 Add auth email delivery:
+- [x] 005 Add auth email delivery:
 - [ ] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
 - [ ] 007 Add `/auth` UI and callback handling:
 - [ ] 008 Update the home page:
