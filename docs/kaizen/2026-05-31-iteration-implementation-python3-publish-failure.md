@@ -80,3 +80,27 @@ Late workflow-tool failures waste the most expensive part of an implementation r
 - Add `python3` to the implementation sandbox preflight check, or remove the Python dependency from final gates and publish scripts.
 - Add a workflow-level smoke test that executes every local helper script used by finalization with `--help` or a harmless fixture before implementation begins.
 - Make publish failures distinguish between product validation failures and workflow/runtime failures, with a clear recovery command when the run branch contains validated work.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: the iteration implementation workflow used `python3` during finalization outside the `bin/dev`/`devenv shell` boundary, but the Fabro container image did not put `python3` on the bare container `PATH`, and the preflight only checked the `dev sandbox-check` environment.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: preflight now checks that `python3` is available on the bare sandbox `PATH` before expensive implementation work begins, with an error that points to rebuilding the Fabro sandbox image.
+- `bin/dev`: `sandbox-check` now includes `python3` in the declared sandbox toolchain.
+- `devenv.nix`: adds `python3` to the devenv packages and to the explicit Fabro container root layer so finalization scripts can invoke it directly.
+- `docs/reference/fabro-devenv.md`: documents that bare-shell workflow tools include `python3` and updates the Docker image verification command.
+
+Validation:
+
+- `.fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
+- `command -v python3 && python3 --version && bash -n bin/dev .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh` — passed.
+- `PATH="$PWD/bin:$PATH" dev check` — passed, 132 tests, 0 failures.
+- `PATH="$PWD/bin:$PATH" dev sandbox-check` — passed.
+
+Remaining follow-up:
+
+- Rebuild and load the `mattwynne/memba-fabro-dev:latest` image on the Fabro host so the new `/bin/python3` is present in remote sandboxes.
