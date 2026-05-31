@@ -97,7 +97,15 @@ digraph IterationReview {
         label="Synthesize Review",
         shape=tab,
         output_schema="routing",
-        prompt="@prompts/synthesize_review.md"
+        prompt="@prompts/synthesize_review.md",
+        retry_policy="patient",
+        allow_partial=true
+    ]
+    synthesis_unavailable [
+        label="Fail: Review Synthesis Unavailable",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review could not synthesize completed independent reviews after retrying a transient LLM/provider failure. Product review evidence exists in the completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
     ]
     review_gate [shape=diamond, label="Implementation accepted?"]
     snapshot_before_review_repair [
@@ -199,7 +207,9 @@ digraph IterationReview {
     codex_review -> review_merge
     gemini_review -> review_merge
     review_merge -> synthesize_review
-    synthesize_review -> review_gate
+    synthesize_review -> review_gate [condition="outcome=succeeded"]
+    synthesize_review -> synthesis_unavailable [label="Synthesis unavailable"]
+    synthesis_unavailable -> exit
     review_gate -> record_code_health [label="Accepted", condition="context.implementation_accepted=true"]
     review_gate -> snapshot_before_review_repair [label="Fix", condition="context.review_fixes_available=true"]
     review_gate -> not_ready [label="Needs human input"]
