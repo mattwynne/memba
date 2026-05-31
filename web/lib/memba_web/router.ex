@@ -18,6 +18,9 @@ defmodule MembaWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/about", PageController, :about
+    get "/terms", PageController, :terms
+    get "/privacy", PageController, :privacy
 
     live "/clubs", ClubsLive.Index
     live "/clubs/:club_id", ClubsLive.Show
