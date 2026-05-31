@@ -141,13 +141,38 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function errorMessage(error) {
+  return error && error.message ? error.message : String(error);
+}
+
+async function browserInteraction(description, action) {
+  try {
+    return await action();
+  } catch (error) {
+    throw new Error(`Browser interaction failed: ${description}.\nCause: ${errorMessage(error)}`, {
+      cause: error
+    });
+  }
+}
+
+function assertFinalBrowserState(description, assertion) {
+  try {
+    return assertion();
+  } catch (error) {
+    throw new Error(`Assertion mismatch: ${description}.\nCause: ${errorMessage(error)}`, {
+      cause: error
+    });
+  }
+}
+
 async function withProjectionWait(description, assertion) {
   try {
     return await assertion();
   } catch (error) {
     throw new Error(
-      `Timed out waiting for projected browser UI: ${description}.\n` +
-        `Last assertion error: ${error.message}`
+      `Projection timing timeout: timed out waiting for projected browser UI: ${description}.\n` +
+        `Last assertion error: ${errorMessage(error)}`,
+      { cause: error }
     );
   }
 }
@@ -201,7 +226,7 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
 }
 
 async function visitClubsIndex(world) {
-  await world.page.goto(appUrl(world.baseUrl, "/clubs"));
+  await browserInteraction("visit /clubs", () => world.page.goto(appUrl(world.baseUrl, "/clubs")));
 }
 
 async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
@@ -210,7 +235,9 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs 
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
 
-  await world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`));
+  await browserInteraction(`visit club page for ${clubName}`, () =>
+    world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`))
+  );
   await waitForProjectedVisible(
     world,
     world.page.getByRole("heading", { name: clubName }),
@@ -225,7 +252,9 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
   const message = world.messages[subject];
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
 
-  await world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`));
+  await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>
+    world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`))
+  );
   await waitForProjectedVisible(
     world,
     world.page.getByRole("heading", { name: subject }),
@@ -242,8 +271,10 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
   const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
   const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
 
-  await world.page.getByLabel("Club name").fill(clubName);
-  await world.page.getByRole("button", { name: "Create club" }).click();
+  await browserInteraction(`submit club creation form for ${clubName}`, async () => {
+    await world.page.getByLabel("Club name").fill(clubName);
+    await world.page.getByRole("button", { name: "Create club" }).click();
+  });
   await waitForProjectedCount(
     world,
     clubRows,
@@ -287,9 +318,11 @@ async function createPersonOnCurrentClubPage(world, name, { expect = playwrightE
   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
   const email = emailFor(name);
 
-  await world.page.getByLabel("Person name").fill(name);
-  await world.page.getByLabel("Person email").fill(email);
-  await world.page.getByRole("button", { name: "Create person" }).click();
+  await browserInteraction(`submit person creation form for ${name}`, async () => {
+    await world.page.getByLabel("Person name").fill(name);
+    await world.page.getByLabel("Person email").fill(email);
+    await world.page.getByRole("button", { name: "Create person" }).click();
+  });
   await waitForProjectedCount(
     world,
     personRows,
@@ -338,8 +371,10 @@ async function addMemberOnCurrentClubPage(
   const memberRows = rowsByData(world.page, "member-row", "data-member-name", personName);
   const previousMemberIds = await rowAttributeValues(memberRows, "data-member-id");
 
-  await world.page.getByLabel("Person to add as member").selectOption(person.personId);
-  await world.page.getByRole("button", { name: "Add member" }).click();
+  await browserInteraction(`submit add-member form for ${personName} in ${clubName}`, async () => {
+    await world.page.getByLabel("Person to add as member").selectOption(person.personId);
+    await world.page.getByRole("button", { name: "Add member" }).click();
+  });
   await waitForProjectedCount(
     world,
     memberRows,
@@ -386,10 +421,12 @@ async function sendMessageToKootenayMembers(
   const sender = world.people[senderName];
   assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
 
-  await world.page.getByLabel("Message sender").selectOption(sender.personId);
-  await world.page.getByLabel("Message subject").fill(subject);
-  await world.page.getByLabel("Message body").fill(body);
-  await world.page.getByRole("button", { name: "Send club message" }).click();
+  await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {
+    await world.page.getByLabel("Message sender").selectOption(sender.personId);
+    await world.page.getByLabel("Message subject").fill(subject);
+    await world.page.getByLabel("Message body").fill(body);
+    await world.page.getByRole("button", { name: "Send club message" }).click();
+  });
   await waitForProjectedCount(
     world,
     messageRows,
@@ -442,7 +479,10 @@ async function assertLastMessageAddressedTo(
   );
 
   const actualNames = await rowDatasetValues(rows, "recipientName");
-  assert.deepEqual(actualNames, expectedNames);
+  assertFinalBrowserState(
+    `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,
+    () => assert.deepEqual(actualNames, expectedNames)
+  );
 
   world.addressedMemberNames = expectedNames;
   world.addressedMemberIds = expectedNames.map((name) => {
@@ -463,9 +503,13 @@ async function assertLastMessageNotAddressedTo(
 
   const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
   const actualNames = await rowDatasetValues(rows, "recipientName");
-  assert.ok(
-    !actualNames.includes(excludedName),
-    `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
+  assertFinalBrowserState(
+    `addressed recipients should not include ${excludedName}`,
+    () =>
+      assert.ok(
+        !actualNames.includes(excludedName),
+        `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
+      )
   );
 
   return world;
@@ -496,7 +540,9 @@ async function assertEachAddressedMemberHasSeparateDeliveryRecord(
   const deliveryIds = await rowDatasetValues(rows, "deliveryId");
   const recipientNames = await rowDatasetValues(rows, "recipientName");
 
-  assert.deepEqual(recipientIds, expectedIds);
+  assertFinalBrowserState(`delivery recipient IDs for ${JSON.stringify(world.lastMessageSubject)}`, () =>
+    assert.deepEqual(recipientIds, expectedIds)
+  );
   assertUnique(deliveryIds, "delivery IDs");
   assertUnique(recipientIds, "recipient IDs");
 
@@ -630,10 +676,10 @@ async function waitForProjectedReceiptStatus(
   } while (Date.now() <= deadline);
 
   throw new Error(
-    `Timed out after ${timeoutMs}ms waiting for projected receipt status: ` +
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for projected receipt status: ` +
       `${recipientName}'s receipt for ${JSON.stringify(subject)} should become ${JSON.stringify(
         expectedStatus
-      )}.\nLast projection error: ${lastError ? lastError.message : "(none)"}`
+      )}.\nLast projection error: ${lastError ? errorMessage(lastError) : "(none)"}`
   );
 }
 
@@ -732,12 +778,22 @@ async function postPostmarkWebhook(world, payload) {
     "Expected Playwright request context to be available for Postmark webhook submission"
   );
 
-  const response = await request.post(appUrl(world.baseUrl, "/webhooks/postmark"), {
-    data: payload,
-    headers: {
-      "content-type": "application/json"
-    }
-  });
+  let response;
+
+  try {
+    response = await request.post(appUrl(world.baseUrl, "/webhooks/postmark"), {
+      data: payload,
+      headers: {
+        "content-type": "application/json"
+      }
+    });
+  } catch (error) {
+    throw new Error(
+      `Postmark webhook submission failed: POST /webhooks/postmark request error.\n` +
+        `Payload: ${JSON.stringify(payload)}\nCause: ${errorMessage(error)}`,
+      { cause: error }
+    );
+  }
   const status = response.status();
 
   if (status !== 202) {
@@ -757,10 +813,12 @@ async function rowDatasetValues(rows, datasetName) {
 }
 
 function assertUnique(values, label) {
-  assert.deepEqual(
-    [...new Set(values)],
-    values,
-    `Expected ${label} to be unique; saw ${values.join(", ")}`
+  assertFinalBrowserState(`${label} should be unique`, () =>
+    assert.deepEqual(
+      [...new Set(values)],
+      values,
+      `Expected ${label} to be unique; saw ${values.join(", ")}`
+    )
   );
 }
 

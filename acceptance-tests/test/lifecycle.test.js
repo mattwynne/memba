@@ -107,3 +107,28 @@ test("readiness timeout reports Phoenix startup/readiness diagnostics", async ()
     /Phoenix startup\/readiness failed: timed out after 0ms/
   );
 });
+
+test("database setup failures report database setup diagnostics", async () => {
+  const env = testEnv({ MEMBA_DEVENV_SHELL: "1" });
+  const lifecycle = createBrowserAcceptanceLifecycle({
+    env,
+    processRunner: {
+      async run(_spec, { label }) {
+        if (label === "Database setup: migrate test database") {
+          throw new Error("migration failed");
+        }
+      },
+      async start() {
+        throw new Error("Phoenix should not start after database setup failure");
+      }
+    },
+    async httpReady() {
+      return { statusCode: 200 };
+    }
+  });
+
+  await assert.rejects(
+    () => lifecycle.start(),
+    /Database setup failed while migrate test database\.\nCause: migration failed/
+  );
+});

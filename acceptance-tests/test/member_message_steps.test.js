@@ -352,6 +352,20 @@ test("browser command projection waits use bounded Playwright assertion timeouts
   );
 });
 
+test("browser interaction failures are reported separately from projection waits", async () => {
+  const page = new FakePage();
+  page.goto = async (url) => {
+    page.actions.push(["goto", url]);
+    throw new Error("browser context closed");
+  };
+  const world = worldWithPage(page);
+
+  await assert.rejects(
+    () => createClub(world, kootenayClubName, { expect: fakeExpect([]) }),
+    /Browser interaction failed: visit \/clubs\.\nCause: browser context closed/
+  );
+});
+
 test("creating people and members uses accessible form labels and keeps browser ids in scenario state", async () => {
   const page = new FakePage();
   const expectations = [];
@@ -475,6 +489,29 @@ test("message assertions read addressed recipients, delivery records, email chan
     recipientName: "Bob"
   });
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+});
+
+test("final assertion mismatches are reported separately from projection timing", async () => {
+  const page = new FakePage();
+  page.rows.addressedRecipients.push(
+    { dataset: { recipientName: "Alice", recipientId: "person-alice" } },
+    { dataset: { recipientName: "Bob", recipientId: "person-bob" } }
+  );
+  const world = worldWithPage(page);
+  world.lastMessageSubject = "Trip planning night";
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = {
+    Alice: { personId: "person-alice" },
+    Bob: { personId: "person-bob" }
+  };
+
+  await assert.rejects(
+    () =>
+      assertLastMessageAddressedTo(world, ["Alice", "Carol"], {
+        expect: fakeExpect([])
+      }),
+    /Assertion mismatch: addressed recipients for "Trip planning night"\.\nCause:/
+  );
 });
 
 test("Postmark webhook payloads map member-facing status events onto the app endpoint shape", () => {
@@ -653,6 +690,21 @@ test("Postmark webhook submission failures report the endpoint and response deta
   await assert.rejects(
     () => postPostmarkWebhook(world, { RecordType: "SubscriptionChange" }),
     /Postmark webhook submission failed: expected HTTP 202 from POST \/webhooks\/postmark, got HTTP 422/
+  );
+});
+
+test("projection timing failures are reported separately from final assertion mismatches", async () => {
+  const page = new FakePage();
+  const world = worldWithPage(page);
+  world.projectionTimeoutMs = 1;
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+
+  await assert.rejects(
+    () =>
+      assertReceiptStatus(world, "Bob", "Trip planning night", "delivered", {
+        expect: flakyReceiptTextExpect([], 100)
+      }),
+    /Projection timing timeout: timed out waiting for projected browser UI:/
   );
 });
 

@@ -405,11 +405,17 @@ function createBrowserAcceptanceLifecycle(options = {}) {
         });
 
         for (const step of databaseSetupSteps) {
-          await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {
-            label: `Database setup: ${step.label}`,
-            timeoutMs: currentConfig.commandTimeoutMs,
-            logBuffer
-          });
+          try {
+            await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {
+              label: `Database setup: ${step.label}`,
+              timeoutMs: currentConfig.commandTimeoutMs,
+              logBuffer
+            });
+          } catch (error) {
+            throw new Error(`Database setup failed while ${step.label}.\nCause: ${error.message}`, {
+              cause: error
+            });
+          }
         }
 
         phoenixProcess = await processRunner.start(buildPhoenixCommand(currentConfig), {
