@@ -1,0 +1,640 @@
+diff --git a/.fabro/workflows/iteration-implementation/workflow.fabro b/.fabro/workflows/iteration-implementation/workflow.fabro
+index 7317efb..ffbde1d 100644
+--- a/.fabro/workflows/iteration-implementation/workflow.fabro
++++ b/.fabro/workflows/iteration-implementation/workflow.fabro
+@@ -51,7 +51,7 @@ digraph IterationImplementation {
+     preflight_sandbox [
+         label="Preflight Sandbox Toolchain",
+         shape=parallelogram,
+-        script="set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check", 
++        script="set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check", 
+         timeout="600s"
+     ]
+ 
+diff --git a/bin/dev b/bin/dev
+index 5742d5f..5cb0141 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -124,7 +124,7 @@ sandbox_check() {
+     printf '%s=%s\n' "$name" "$value"
+   done
+ 
+-  for tool in devenv git pg_isready elixir mix node npm; do
++  for tool in devenv git pg_isready elixir mix node npm python3; do
+     if ! command -v "$tool" >/dev/null 2>&1; then
+       echo "Missing required sandbox tool: $tool" >&2
+       exit 1
+diff --git a/devenv.nix b/devenv.nix
+index e5bfc5c..572ed84 100644
+--- a/devenv.nix
++++ b/devenv.nix
+@@ -97,6 +97,7 @@ in
+     devenv
+     git
+     nodejs_22
++    python3
+     tailwindcss_4
+     fontconfig
+     esbuild
+@@ -163,10 +164,11 @@ in
+               gnugrep
+               gnused
+               nodejs_22
+-    tailwindcss_4
+-    fontconfig
+-    esbuild
+-    flyctl
++              python3
++              tailwindcss_4
++              fontconfig
++              esbuild
++              flyctl
+               which
+               (hiPrio fabroDevenv)
+               (hiPrio fabroGit)
+@@ -210,6 +212,7 @@ in
+     export ELIXIR_ERL_OPTIONS="''${ELIXIR_ERL_OPTIONS:-+fnu}"
+     mkdir -p "$HOME" "$MIX_HOME" "$HEX_HOME"
+     export PATH="$PWD/bin:$PATH"
++    export MEMBA_DEVENV_SHELL=1
+ 
+     mix() {
+       (cd web && command mix "$@")
+diff --git a/docs/iterations/008-postmark-email-integration/plan.md b/docs/iterations/008-postmark-email-integration/plan.md
+index 2814899..23c5f16 100644
+--- a/docs/iterations/008-postmark-email-integration/plan.md
++++ b/docs/iterations/008-postmark-email-integration/plan.md
+@@ -1,7 +1,7 @@
+ # Postmark email integration for outbound member messages
+ 
+ Date: 2026-05-30
+-Status: implementing
++Status: merged
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/plan.md b/docs/iterations/009-routing-and-liveview-surface-split/plan.md
+new file mode 100644
+index 0000000..b586013
+--- /dev/null
++++ b/docs/iterations/009-routing-and-liveview-surface-split/plan.md
+@@ -0,0 +1,150 @@
++# Routing and LiveView surface split
++
++Date: 2026-05-31
++Status: implementing
++
++## Goal
++
++Split the current unauthenticated browser harness into clear public, staff-admin, and future club-site surfaces, without adding member auth, custom-domain routing, or new business behaviour yet.
++
++After this iteration, the existing operational tools live under `/admin/*`, the public site remains Memba-branded, and the codebase has explicit seams for the future white-label club member site.
++
++## Background / Context
++
++The designer handoff in `design_handoff_navigation/README.md` and `blueprint/index.html` defines three audiences:
++
++1. Visitors use the Memba-branded public marketing site.
++2. Memba staff use a Memba-branded internal back-end to create clubs, add members, and inspect delivery health.
++3. Club members use a white-label site on the club's own domain, with only a quiet “Powered by Memba” credit.
++
++The app currently exposes the browser acceptance harness at unauthenticated routes:
++
++- `/clubs`
++- `/clubs/:club_id`
++- `/messages/:message_id`
++- `/deliveries`
++
++Those routes mix staff operations, member-facing reading, message composition, and delivery diagnostics. This iteration re-homes the existing staff/operator behaviour first and prepares the module/layout structure for later member-facing work.
++
++## Scope
++
++### In scope
++
++- Move existing staff/operator LiveViews to `/admin/*` route paths:
++  - `/admin/clubs`
++  - `/admin/clubs/:club_id`
++  - `/admin/messages/:message_id`
++  - `/admin/deliveries`
++- Rename or wrap LiveView modules so their names reflect the staff surface, for example:
++  - `MembaWeb.Admin.ClubsLive.Index`
++  - `MembaWeb.Admin.ClubsLive.Show`
++  - `MembaWeb.Admin.MessagesLive.Show`
++  - `MembaWeb.Admin.DeliveriesLive.Index`
++- Remove the old harness routes immediately. They should return the normal 404; no redirects are needed because nobody is using the product yet.
++- Keep public pages at `/`, `/about`, `/terms`, and `/privacy`.
++- Introduce layout/component seams for the three surfaces:
++  - public Memba marketing layout/chrome,
++  - staff admin layout/chrome,
++  - club-site white-label layout/chrome for future use.
++- Introduce a club-site namespace and skeleton modules only where useful to make the next slice obvious. Do not expose production member routes unless they can avoid fake club resolution.
++- Preserve `POST /webhooks/postmark` unchanged.
++- Update tests and navigation links to the new `/admin/*` paths.
++- Keep `dev check` green.
++
++### Out of scope
++
++- Magic-link member authentication.
++- Staff authentication or authorization beyond the route split.
++- Request-an-account lead capture.
++- Real custom-domain club resolution.
++- Temporary production-like club resolution by query string, path prefix, or “first club”.
++- Club brand persistence, logo upload, or self-serve brand controls.
++- Club-branded emails.
++- Directory and sent-message member views as working product pages.
++- High-fidelity implementation of the marketing prototype.
++- Billing, subscriptions, renewals, dues, events, or public club page editing.
++
++## Acceptance Criteria
++
++- Visiting `/` still shows the Memba marketing homepage.
++- Visiting `/about`, `/terms`, and `/privacy` still returns successful public pages.
++- Visiting `/admin/clubs` shows the club list and create-club form.
++- Creating a club from `/admin/clubs` still dispatches the existing `Membership.create_club/2` behaviour.
++- Visiting `/admin/clubs/:club_id` shows the selected club, its members, and the existing staff tools for member/message management.
++- Visiting `/admin/messages/:message_id` shows delivery diagnostics for that message.
++- Visiting `/admin/deliveries` shows the operator delivery overview.
++- Visiting old harness URLs `/clubs`, `/clubs/:club_id`, `/messages/:message_id`, and `/deliveries` returns the normal 404 page (no redirects).
++- Public homepage navigation and calls to action no longer point at `/clubs`; staff/admin entry points use `/admin/clubs` where needed.
++- `POST /webhooks/postmark` remains routed exactly as before.
++- The codebase has named layout/module seams for public, admin, and future club-site surfaces.
++- No temporary club resolver is introduced for member routes.
++
++## Open Business Decisions
++
++None known for this technical slice.
++
++Business decisions explicitly deferred:
++
++- How staff users authenticate.
++- How club domains map to clubs.
++- How club-branded sending domains are verified and used.
++- How account requests are reviewed and converted into clubs.
++
++## Implementation Plan
++
++1. Update `web/lib/memba_web/router.ex`:
++   - Keep public controller routes under `/`.
++   - Add an `/admin` scope for staff LiveViews using a `:staff_browser` pipeline that currently mirrors `:browser`.
++   - Remove the old public harness LiveView routes.
++   - Leave `/webhooks/postmark` unchanged.
++2. Move or rename existing LiveView modules into an admin namespace:
++   - `ClubsLive.Index` → `Admin.ClubsLive.Index`.
++   - `ClubsLive.Show` → `Admin.ClubsLive.Show`.
++   - `MessagesLive.Show` → `Admin.MessagesLive.Show`.
++   - `DeliveriesLive.Index` → `Admin.DeliveriesLive.Index`.
++3. Update all internal verified routes and links:
++   - Club list/detail links should use `/admin/clubs` and `/admin/clubs/:club_id`.
++   - Message diagnostic links should use `/admin/messages/:message_id`.
++   - Delivery overview links should use `/admin/deliveries`.
++4. Add or adjust layout functions in `MembaWeb.Layouts`:
++   - Keep a Memba-branded public/app layout for marketing/legal pages.
++   - Add an admin layout for staff pages, with utilitarian Memba chrome.
++   - Add a club-site layout seam for future white-label pages using CSS custom properties with a neutral slate default, but do not wire fake club routing into production routes.
++5. Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
++6. Update controller and LiveView tests to assert the new paths.
++7. Add route tests asserting old harness paths return 404 (not redirects).
++8. Run `bin/dev check` and fix any route/module/test failures.
++
++## Technical Decisions
++
++- Physically move LiveView files into `web/lib/memba_web/live/admin/...` to match module names.
++- Introduce a `:staff_browser` pipeline now for future staff auth; it should currently delegate to `:browser`-equivalent plugs as an obvious auth insertion point.
++- Implement a real `Layouts.club_site` layout seam with default theme assigns (rather than a placeholder module/component).
++
++## New Capability
++
++The application will have a clean routing and module structure that reflects the product's three surfaces. Staff tools will no longer masquerade as public pages, and future club-member work can start from a named white-label surface instead of extracting behaviour from the harness.
++
++## Validation Plan
++
++- Run `bin/dev check`.
++- Automated route/controller/LiveView tests should cover:
++  - public pages still work,
++  - admin routes render the moved pages,
++  - old harness routes return 404 (no redirects),
++  - Postmark webhook route remains available.
++- Manual smoke test:
++  1. Open `/` and confirm public homepage renders.
++  2. Open `/admin/clubs`, create a club, and open its detail page.
++  3. Add or view members on `/admin/clubs/:club_id`.
++  4. Send or inspect a message if test data is available.
++  5. Open `/admin/messages/:message_id` and confirm diagnostics are staff-facing.
++  6. Open `/admin/deliveries` and confirm the operator overview renders.
++  7. Confirm `/clubs` returns the normal 404 page (and does not render the club list).
++
++## Risks / Follow-ups
++
++- This does not provide real security for `/admin/*`; staff auth must be a later slice before real users or sensitive data are present.
++- The member-facing white-label routes are intentionally not exposed yet. The next member-facing slice should start with real club resolution and/or magic-link auth rather than temporary URL hacks.
++- Moving modules can break tests that refer to route paths, DOM IDs, or module names; keep DOM IDs stable where acceptance tests depend on them.
++- The existing `ClubsLive.Show` still mixes add-member, send-message, and message list responsibilities. Further extraction should happen when member-facing noticeboard/compose pages are implemented.
+diff --git a/docs/iterations/010-shared-magic-link-auth/plan.md b/docs/iterations/010-shared-magic-link-auth/plan.md
+new file mode 100644
+index 0000000..cc31214
+--- /dev/null
++++ b/docs/iterations/010-shared-magic-link-auth/plan.md
+@@ -0,0 +1,187 @@
++# Shared magic-link authentication
++
++Date: 2026-05-31
++Status: ready
++
++## Goal
++
++Add one shared email magic-link authentication system for members and Memba staff.
++
++After this iteration, a person can sign in with their email address, receive a real magic-link email through Postmark, and land on the home page. The signed-in home page shows their clubs. If their email address is a Memba staff address, it also shows an admin link and allows access to `/admin/*`.
++
++## Background / Context
++
++The navigation handoff defines three surfaces: public Memba marketing, staff admin, and the future white-label club site. Iteration 009 splits the route/module structure so staff tools live under `/admin/*` and member-facing work has a clearer seam.
++
++Authentication should be shared rather than separate by role:
++
++- Everyone signs in by email magic link.
++- Staff authorization is simple: a signed-in email at the `memba.io` domain is staff.
++- Club membership authorization comes from active memberships associated with the signed-in email.
++- A person may belong to more than one club.
++- A Memba staff person may also be a member of one or more clubs.
++
++For now, do not solve custom domains. Club links may carry `club_id` in the query string until host/domain resolution is implemented later.
++
++## Scope
++
++### In scope
++
++- Add `/auth` as the single sign-in page:
++  - email field,
++  - submit button,
++  - neutral success response that does not reveal whether the email is known.
++- Add a magic-link callback route under `/auth`, such as `/auth/magic/:token` or `/auth/callback/:token`.
++- Generate secure, single-use, expiring magic-link tokens.
++- Store only token hashes server-side.
++- Send real magic-link emails through Postmark.
++- Add Postmark configuration for auth emails, including a dedicated auth/transactional message stream if supported by the adapter/API.
++- Establish a signed-in browser session after a valid magic link is consumed.
++- Add sign out.
++- Change the signed-in home page (`/`) to show “My clubs” rather than adding a separate `/my-clubs` route.
++- On the signed-in home page, list every club where the signed-in email belongs to an active member.
++- If the signed-in email is a Memba staff email, show an Admin link on the home page.
++- Protect `/admin/*` so only signed-in `@memba.io` users can access it.
++- Protect club/member routes that use `?club_id=<uuid>` so only active members of that club can access them.
++- Preserve the public marketing home page for unauthenticated visitors at `/`.
++- Add tests for token generation/consumption, session establishment, staff authorization, member authorization, and Postmark auth email construction.
++- Keep `dev check` green.
++
++### Out of scope
++
++- Custom club domains or host-based club resolution.
++- Club-branded sign-in pages.
++- Per-club sending domains for magic-link emails.
++- Passwords.
++- OAuth/social login.
++- Invite emails beyond the sign-in magic link.
++- Account/profile management UI.
++- Staff user management UI.
++- Changing how people/members are created, except for query support needed to find clubs by email.
++- Self-serve signup or request-an-account lead capture.
++- Billing/subscriptions.
++
++## Acceptance Criteria
++
++- Visiting `/auth` shows a sign-in form with one email field.
++- Submitting an email on `/auth` always shows a neutral response such as “If we know that email, we sent a sign-in link.”
++- Submitting an email that belongs to at least one active member or a `memba.io` staff address creates a magic-link token and sends a real Postmark email when Postmark auth-email configuration is enabled.
++- Magic-link emails contain a link back to the application under `/auth`.
++- Magic-link tokens expire after 15 minutes.
++- Magic-link tokens can be used only once.
++- Token values are not stored in plaintext.
++- Following a valid magic link signs the browser in and redirects to `/`.
++- Following an expired, unknown, or already-consumed magic link does not sign the browser in and shows a safe error.
++- When signed in as a club member, `/` shows a “My clubs” list containing every club where that email is an active member.
++- Club links from the signed-in home page include `club_id` in the query string for now.
++- When signed in with an email at the `memba.io` domain, `/` also shows an Admin link.
++- Signed-in `@memba.io` users can access `/admin/*`.
++- Signed-in non-`@memba.io` users cannot access `/admin/*`.
++- A signed-in person who is both staff and club member sees both their clubs and the Admin link.
++- A signed-in person who belongs to multiple clubs sees all of them.
++- A signed-in person can access a club-member route with `?club_id=<uuid>` only when their email belongs to an active member of that club.
++- `POST /webhooks/postmark` remains unchanged.
++- Local/test environments do not send real emails unless explicitly configured; tests use deterministic email assertions.
++- Missing required auth-email Postmark configuration fails clearly when real auth-email sending is enabled.
++- `dev check` passes.
++
++## Open Business Decisions
++
++None known for this slice.
++
++Business decisions intentionally deferred:
++
++- The final club-domain sign-in flow.
++- Whether magic-link emails should later be branded as Memba or as the club, depending on how the person arrived.
++- Whether staff auth should later require stronger controls than an email domain check.
++
++## Implementation Plan
++
++1. Inspect the post-iteration-009 route structure and admin pipeline.
++2. Add persistence for authentication:
++   - generate migrations with `mix ecto.gen.migration`,
++   - add an identity/session-support table if useful,
++   - add a magic-token table with email, hashed token, expiry timestamp, consumed timestamp, and timestamps.
++3. Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
++   - normalize email addresses,
++   - determine staff status from the `memba.io` domain,
++   - request a magic link,
++   - create and hash a token,
++   - consume a token exactly once,
++   - list clubs for an email,
++   - check whether an email is an active member of a club.
++4. Extend `Memba.Membership` query API as needed:
++   - find active clubs for a member email,
++   - check active membership by club and email.
++5. Add auth email delivery:
++   - build a concise plain-text and HTML magic-link email,
++   - use `Memba.Mailer`/Swoosh/Postmark,
++   - configure a dedicated auth/transactional stream if supported,
++   - use clear runtime configuration errors when real auth email is enabled but credentials/stream/from address are missing.
++6. Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
++   - fetch current signed-in identity from the session,
++   - require authentication,
++   - require Memba staff,
++   - require active membership for a `club_id` query parameter.
++7. Add `/auth` UI and callback handling:
++   - sign-in form,
++   - request submission,
++   - callback token consumption,
++   - sign out route/action.
++8. Update the home page:
++   - unauthenticated visitors see the existing marketing page,
++   - signed-in users see “My clubs”, club links with `?club_id=...`, and an Admin link when staff.
++9. Apply auth gates:
++   - `/admin/*` requires staff,
++   - member/club routes using `?club_id=...` require active membership.
++10. Add focused tests:
++    - context/token tests,
++    - auth email tests using Swoosh test facilities or an adapter stub,
++    - controller/LiveView tests for `/auth`, callback, sign out, home page variants, admin access, and member authorization.
++11. Update operational documentation for auth Postmark environment variables and the required message stream.
++12. Run `bin/dev check` and fix regressions.
++
++## Open Technical Decisions
++
++- Exact module name: prefer `Memba.Accounts` if following Phoenix convention, or `Memba.Identity` if we want to avoid implying full account management.
++- Exact callback route under `/auth`: choose the clearest route during implementation, keeping the sign-in form at `/auth`.
++- Exact Swoosh/Postmark option for message streams. Confirm adapter support; if insufficient, use Req against Postmark directly for auth emails while still following the project rule to use Req for HTTP.
++- Whether to persist staff identities. Staff authorization can be derived from email alone, but an identity row may still be useful for token/session audit.
++- Whether unauthenticated access to protected routes redirects to `/auth` with a return path. Prefer preserving the originally requested path, including `club_id`, where safe.
++
++## New Capability
++
++People can authenticate with Memba using only their email address. The app can distinguish staff access from club membership access after sign-in, support people with multiple clubs, and support people who are both staff and members.
++
++## Validation Plan
++
++- Run `bin/dev check`.
++- Automated tests should prove:
++  - token hashes are stored, not plaintext tokens,
++  - tokens expire,
++  - tokens are single-use,
++  - valid token consumption creates a browser session,
++  - `/auth` does not reveal whether an email is known,
++  - auth emails are constructed with the configured sender/stream and correct callback URL,
++  - signed-in home page lists all clubs for an active member email,
++  - staff see an Admin link,
++  - staff can access `/admin/*`,
++  - non-staff cannot access `/admin/*`,
++  - membership checks enforce `club_id` access,
++  - the Postmark webhook route is unchanged.
++- Manual demo:
++  1. Configure auth email Postmark settings in a controlled environment.
++  2. Create a club and add a member with a real test email.
++  3. Visit `/auth`, submit the email, receive the magic link, and follow it.
++  4. Confirm `/` shows that member's club.
++  5. Add the same email to a second club and confirm both clubs appear.
++  6. Sign in with a `memba.io` address and confirm the Admin link appears and `/admin/*` is accessible.
++  7. Confirm a non-staff member cannot access `/admin/*`.
++
++## Risks / Follow-ups
++
++- Email-domain-only staff authorization is intentionally simple; later production hardening may require explicit staff records, MFA, or allow-lists.
++- Magic links sent through email inherit email account security risks; this is acceptable for the first product slice but should be revisited if admin capabilities become more sensitive.
++- Auth email deliverability may need a dedicated Postmark stream, template, and monitored sender reputation.
++- Club-domain sign-in and club-branded auth emails remain important follow-ups.
++- Query-string `club_id` is temporary and should be replaced by host/domain club resolution when custom domains are implemented.
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index eee41a7..6b094aa 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -1,5 +1,7 @@
+ # Iterations
+ 
++See [roadmap.md](roadmap.md) for the current product sequencing after the routing and authentication foundations.
++
+ The user-facing capability "member message deliverability" is delivered
+ across iterations 001–004. Iterations 005 and later bring that behaviour into
+ browser-facing surfaces. Each iteration is independently shippable: it leaves
+@@ -15,7 +17,9 @@ green than before.
+ | 005 | 2026-05-29 | merged | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
+ | 006 | 2026-05-30 | merged | Browser Cucumber automation for member-facing acceptance | [plan](006-browser-cucumber-automation/plan.md) |
+ | 007 | 2026-05-29 | merged | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |
+-| 008 | 2026-05-30 | implementing | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |
++| 008 | 2026-05-30 | merged | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |
++| 009 | 2026-05-31 | implementing | Routing and LiveView surface split | [plan](009-routing-and-liveview-surface-split/plan.md) |
++| 010 | 2026-05-31 | ready | Shared magic-link authentication | [plan](010-shared-magic-link-auth/plan.md) |
+ 
+ Status notes:
+ 
+diff --git a/docs/iterations/roadmap.md b/docs/iterations/roadmap.md
+new file mode 100644
+index 0000000..7bf2cb8
+--- /dev/null
++++ b/docs/iterations/roadmap.md
+@@ -0,0 +1,124 @@
++# Memba product roadmap
++
++Date: 2026-05-31
++
++This roadmap follows the navigation and pages handoff from the designer package. It assumes iteration 009 splits the app into public, admin, and future club-site surfaces, and iteration 010 adds shared magic-link authentication.
++
++## Near-term sequence
++
++### 1. Club-site member shell
++
++Create the first signed-in member surface using the temporary `?club_id=...` approach.
++
++Expected shape:
++
++- `/members?club_id=...`
++- white-label club layout with the neutral default slate theme
++- club wordmark from club name
++- tabs: Noticeboard · Directory · Sent
++- clear “New message” action
++- quiet “Powered by Memba” footer credit
++
++Purpose: make the authenticated member experience real without waiting for custom domains.
++
++### 2. Member noticeboard and read-message split
++
++Move member reading into clean club-site pages.
++
++Expected shape:
++
++- noticeboard lists recent club messages
++- `/messages/:message_id?club_id=...` shows a clean reading view
++- delivery diagnostics stay in `/admin/messages/:message_id`
++- members do not see operational delivery records
++
++Purpose: separate member experience from staff diagnostics.
++
++### 3. Member compose
++
++Let a signed-in active member send a message to the whole club.
++
++Expected shape:
++
++- `/compose?club_id=...`
++- subject and body fields
++- fixed audience: whole club
++- sender comes from the authenticated person, not a dropdown
++
++Purpose: turn the member site from read-only into the core club noticeboard workflow.
++
++### 4. Directory and sent messages
++
++Add the remaining member tabs.
++
++Expected shape:
++
++- `/directory?club_id=...` — searchable/read-only active member directory
++- `/sent?club_id=...` — messages sent by the signed-in member
++
++Purpose: complete the first useful club member area.
++
++### 5. Request-an-account flow
++
++Replace public “get started” links with a lead-capture flow.
++
++Expected shape:
++
++- public request form
++- fields: name, club, email, short note about the club
++- submitting creates a lead and emails Memba
++- no club/account is created automatically
++- staff can review requests in `/admin/requests`
++
++Purpose: support invite-only onboarding without self-serve signup or billing.
++
++### 6. Club branding controls
++
++Let staff set the basic brand layer for a club.
++
++Expected shape:
++
++- `/admin/clubs/:club_id/brand`
++- brand colour
++- domain field, even before full domain routing is live
++- text wordmark from club name
++- CSS variables drive member-facing colour
++- no logo upload yet unless it becomes trivial
++
++Purpose: make the white-label model explicit and configurable.
++
++### 7. Custom-domain club resolution
++
++Replace `?club_id=...` with host-based club resolution.
++
++Expected shape:
++
++- incoming host maps to a club
++- club-domain `/auth` and member routes
++- member links no longer need `club_id` query strings
++- central Memba home can still list “my clubs” and link out to each club site
++
++Purpose: deliver the intended white-label experience where members use their club’s own website.
++
++## Deliberately later
++
++- Club logo and image upload
++- Self-serve brand controls for club admins
++- Self-serve signup
++- Subscriptions and billing
++- Renewals and dues
++- Club-built public pages
++- Events/trips
++- Member-to-member email list
++- Google Sheet sync
++- AT Protocol and social profiles
++
++## Guiding decisions
++
++- Authentication is shared: everyone signs in by email magic link.
++- Staff authorization is simple for now: `@memba.io` email addresses are staff.
++- People can be members of multiple clubs.
++- Staff can also be members of clubs.
++- Member-facing pages are white-label: club brand, not Memba brand.
++- Until custom domains exist, member routes may carry `club_id` in the query string.
++- The query-string approach is temporary and should be removed once host-based club resolution exists.
+diff --git a/docs/kaizen/2026-05-31-iteration-implementation-python3-publish-failure.md b/docs/kaizen/2026-05-31-iteration-implementation-python3-publish-failure.md
+index be2f9e6..1dc6849 100644
+--- a/docs/kaizen/2026-05-31-iteration-implementation-python3-publish-failure.md
++++ b/docs/kaizen/2026-05-31-iteration-implementation-python3-publish-failure.md
+@@ -80,3 +80,27 @@ Late workflow-tool failures waste the most expensive part of an implementation r
+ - Add `python3` to the implementation sandbox preflight check, or remove the Python dependency from final gates and publish scripts.
+ - Add a workflow-level smoke test that executes every local helper script used by finalization with `--help` or a harmless fixture before implementation begins.
+ - Make publish failures distinguish between product validation failures and workflow/runtime failures, with a clear recovery command when the run branch contains validated work.
++
++## Resolution
++
++Date: 2026-05-31
++
++Root cause: the iteration implementation workflow used `python3` during finalization outside the `bin/dev`/`devenv shell` boundary, but the Fabro container image did not put `python3` on the bare container `PATH`, and the preflight only checked the `dev sandbox-check` environment.
++
++Fix applied:
++
++- `.fabro/workflows/iteration-implementation/workflow.fabro`: preflight now checks that `python3` is available on the bare sandbox `PATH` before expensive implementation work begins, with an error that points to rebuilding the Fabro sandbox image.
++- `bin/dev`: `sandbox-check` now includes `python3` in the declared sandbox toolchain.
++- `devenv.nix`: adds `python3` to the devenv packages and to the explicit Fabro container root layer so finalization scripts can invoke it directly.
++- `docs/reference/fabro-devenv.md`: documents that bare-shell workflow tools include `python3` and updates the Docker image verification command.
++
++Validation:
++
++- `.fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
++- `command -v python3 && python3 --version && bash -n bin/dev .fabro/workflows/iteration-implementation/scripts/publish_to_main.sh` — passed.
++- `PATH="$PWD/bin:$PATH" dev check` — passed, 132 tests, 0 failures.
++- `PATH="$PWD/bin:$PATH" dev sandbox-check` — passed.
++
++Remaining follow-up:
++
++- Rebuild and load the `mattwynne/memba-fabro-dev:latest` image on the Fabro host so the new `/bin/python3` is present in remote sandboxes.
+diff --git a/docs/reference/fabro-devenv.md b/docs/reference/fabro-devenv.md
+index 862b583..9b8f9fa 100644
+--- a/docs/reference/fabro-devenv.md
++++ b/docs/reference/fabro-devenv.md
+@@ -34,7 +34,9 @@ devenv container run fabro-dev
+ 
+ Fabro expects common tools such as `git` to be available on `PATH` inside the generated container. The default `devenv` container root supplies a `/bin` with shell/coreutils, but packages in the top-level `packages` list are not automatically linked into `/bin`.
+ 
+-In this project, we make Git available to Fabro by adding an explicit container layer. `/bin/git` in the Fabro image is a wrapper that adds two sandbox-init accommodations before delegating to the real Git binary:
++In this project, we make bare-shell workflow tools available to Fabro by adding an explicit container layer. This includes `python3`, which iteration finalization scripts invoke directly, outside `bin/dev`'s `devenv shell` boundary.
++
++`/bin/git` in the Fabro image is a wrapper that adds two sandbox-init accommodations before delegating to the real Git binary:
+ 
+ - it adds `--quiet` to `git clone`, because Fabro currently treats any stderr from the pre-shell clone step as a clone failure, while ordinary `git clone` writes `Cloning into ...` to stderr even when it succeeds;
+ - it strips embedded credentials from GitHub HTTPS clone URLs, allowing public repository clones to succeed even if Fabro's GitHub App token path is unavailable or misconfigured.
+@@ -120,7 +122,7 @@ A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-d
+ After rebuilding/loading the image on Fabro, verify with:
+ 
+ ```sh
+-docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
++docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && command -v python3 && python3 --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
+ ```
+ 
+ Expected shape:
+@@ -128,4 +130,6 @@ Expected shape:
+ ```sh
+ /bin/git
+ git version ...
++/bin/python3
++Python ...
+ ```
