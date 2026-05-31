@@ -1,6 +1,8 @@
 defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
   use ExUnit.Case, async: false
 
+  import Swoosh.TestAssertions
+
   alias Memba.Messaging.DeliveryProviders.Postmark
   alias Memba.Messaging.DeliveryRequest
 
@@ -60,6 +62,28 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
     assert :ok = Postmark.deliver(delivery_request())
 
     assert_received {:email, %Swoosh.Email{reply_to: nil}}
+  end
+
+  test "does not hand an email to Swoosh when required Postmark configuration is missing" do
+    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    assert {:error, {:postmark_configuration_error, message}} =
+             Postmark.deliver(delivery_request())
+
+    assert message =~ "Postmark delivery provider is enabled"
+    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
+
+    assert_no_email_sent()
+  end
+
+  test "does not hand unsupported delivery channels to Swoosh" do
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    assert {:error, {:unsupported_delivery_channel, :sms}} =
+             Postmark.deliver(delivery_request(channel: :sms))
+
+    assert_no_email_sent()
   end
 
   test "returns a visible Postmark delivery error when Swoosh reports an API failure" do
