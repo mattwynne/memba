@@ -1,0 +1,81 @@
+diff --git a/web/lib/memba_web/endpoint.ex b/web/lib/memba_web/endpoint.ex
+index da2d376..0262041 100644
+--- a/web/lib/memba_web/endpoint.ex
++++ b/web/lib/memba_web/endpoint.ex
+@@ -15,6 +15,8 @@ defmodule MembaWeb.Endpoint do
+     websocket: [connect_info: [session: @session_options]],
+     longpoll: [connect_info: [session: @session_options]]
+ 
++  plug MembaWeb.Plugs.CanonicalHostRedirect
++
+   # Serve at "/" the static files from "priv/static" directory.
+   #
+   # When code reloading is disabled (e.g., in production),
+diff --git a/web/lib/memba_web/plugs/canonical_host_redirect.ex b/web/lib/memba_web/plugs/canonical_host_redirect.ex
+new file mode 100644
+index 0000000..bb76388
+--- /dev/null
++++ b/web/lib/memba_web/plugs/canonical_host_redirect.ex
+@@ -0,0 +1,31 @@
++defmodule MembaWeb.Plugs.CanonicalHostRedirect do
++  @moduledoc """
++  Redirects Fly's default hostname to the canonical public hostname.
++  """
++
++  import Plug.Conn
++
++  @fly_hostname "memba.fly.dev"
++  @canonical_url "https://memba.io"
++
++  def init(opts), do: opts
++
++  def call(%Plug.Conn{host: @fly_hostname} = conn, _opts) do
++    conn
++    |> put_resp_header("location", redirect_url(conn))
++    |> send_resp(:moved_permanently, "")
++    |> halt()
++  end
++
++  def call(conn, _opts), do: conn
++
++  defp redirect_url(conn) do
++    query_string =
++      case conn.query_string do
++        "" -> ""
++        query_string -> "?#{query_string}"
++      end
++
++    @canonical_url <> conn.request_path <> query_string
++  end
++end
+diff --git a/web/test/memba_web/plugs/canonical_host_redirect_test.exs b/web/test/memba_web/plugs/canonical_host_redirect_test.exs
+new file mode 100644
+index 0000000..35e1482
+--- /dev/null
++++ b/web/test/memba_web/plugs/canonical_host_redirect_test.exs
+@@ -0,0 +1,25 @@
++defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
++  use MembaWeb.ConnCase, async: true
++
++  test "redirects the Fly hostname to the canonical domain and preserves path and query", %{
++    conn: conn
++  } do
++    conn =
++      conn
++      |> Map.put(:host, "memba.fly.dev")
++      |> get("/admin/clubs?sort=name")
++
++    assert response(conn, 301) == ""
++    assert get_resp_header(conn, "location") == ["https://memba.io/admin/clubs?sort=name"]
++  end
++
++  test "does not redirect the canonical hostname", %{conn: conn} do
++    conn =
++      conn
++      |> Map.put(:host, "memba.io")
++      |> get("/admin/clubs")
++
++    assert html_response(conn, 200) =~ "Clubs"
++    assert get_resp_header(conn, "location") == []
++  end
++end
