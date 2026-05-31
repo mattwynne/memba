@@ -1,0 +1,367 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/todo.md b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+index 6e4ba4f..f555ef6 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/todo.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Update `web/lib/memba_web/router.ex`:
+ - [x] 002 Move or rename existing LiveView modules into an admin namespace:
+ - [x] 003 Update all internal verified routes and links:
+-- [ ] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
++- [x] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
+ - [ ] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
+ - [ ] 006 Update controller and LiveView tests to assert the new paths.
+ - [ ] 007 Add route tests asserting old harness paths return 404 (not redirects).
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index af93456..60ec528 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -53,6 +53,129 @@ defmodule MembaWeb.Layouts do
+     """
+   end
+ 
++  @doc """
++  Renders the staff admin layout.
++
++  The admin surface keeps Memba branding visible while using a compact,
++  utilitarian navigation bar for internal operations.
++  """
++  attr :flash, :map, required: true, doc: "the map of flash messages"
++
++  attr :current_scope, :map,
++    default: nil,
++    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
++
++  slot :inner_block, required: true
++
++  def admin(assigns) do
++    ~H"""
++    <div id="admin-layout" data-surface="admin" class="min-h-screen bg-zinc-100 text-zinc-900">
++      <header class="border-b border-zinc-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
++        <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
++          <a href={~p"/admin/clubs"} class="inline-flex w-fit items-center gap-3" aria-label="Memba admin home">
++            <.logo />
++            <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600">
++              Admin
++            </span>
++          </a>
++
++          <nav class="flex flex-wrap gap-2 text-sm font-medium" aria-label="Staff admin navigation">
++            <.link
++              navigate={~p"/admin/clubs"}
++              class="rounded-md px-3 py-2 text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
++            >
++              Clubs
++            </.link>
++            <.link
++              navigate={~p"/admin/deliveries"}
++              class="rounded-md px-3 py-2 text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
++            >
++              Deliveries
++            </.link>
++          </nav>
++        </div>
++      </header>
++
++      {render_slot(@inner_block)}
++    </div>
++
++    <.flash_group flash={@flash} />
++    """
++  end
++
++  @club_site_theme_defaults %{
++    background: "#f8fafc",
++    paper: "#ffffff",
++    ink: "#0f172a",
++    muted: "#64748b",
++    accent: "#334155",
++    line: "#e2e8f0"
++  }
++
++  @doc """
++  Renders the future club-site layout seam.
++
++  This layout is intentionally not wired into production routes yet. It provides
++  neutral slate defaults via CSS custom properties so a later white-label slice
++  can pass resolved club theme values without extracting layout structure from
++  the staff admin surface.
++  """
++  attr :flash, :map, required: true, doc: "the map of flash messages"
++  attr :club_name, :string, default: "Club", doc: "the club name shown in the site chrome"
++  attr :theme, :map, default: %{}, doc: "optional CSS color values keyed by the club-site theme names"
++
++  attr :current_scope, :map,
++    default: nil,
++    doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
++
++  slot :inner_block, required: true
++
++  def club_site(assigns) do
++    assigns = assign(assigns, :theme_style, club_site_theme_style(assigns.theme))
++
++    ~H"""
++    <div
++      id="club-site-layout"
++      data-surface="club-site"
++      class="min-h-screen bg-[var(--club-site-bg)] text-[var(--club-site-ink)]"
++      style={@theme_style}
++    >
++      <header class="border-b border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 sm:px-6 lg:px-8">
++        <div class="mx-auto flex max-w-7xl items-center justify-between py-4">
++          <a href={~p"/"} class="text-lg font-semibold tracking-tight text-[var(--club-site-ink)]">
++            {@club_name}
++          </a>
++          <span class="text-xs font-medium text-[var(--club-site-muted)]">
++            Powered by <span class="font-semibold text-[var(--club-site-accent)]">Memba</span>
++          </span>
++        </div>
++      </header>
++
++      <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
++        {render_slot(@inner_block)}
++      </main>
++    </div>
++
++    <.flash_group flash={@flash} />
++    """
++  end
++
++  defp club_site_theme_style(theme) do
++    Enum.map_join(@club_site_theme_defaults, " ", fn {name, default_value} ->
++      value = theme_value(theme, name, default_value)
++      "--club-site-#{css_name(name)}: #{value};"
++    end)
++  end
++
++  defp theme_value(theme, name, default_value) when is_map(theme) do
++    Map.get(theme, name) || Map.get(theme, to_string(name)) || default_value
++  end
++
++  defp theme_value(_theme, _name, default_value), do: default_value
++
++  defp css_name(:background), do: "bg"
++  defp css_name(name), do: to_string(name)
++
+   @doc """
+   Shows the flash group with standard titles and content.
+ 
+diff --git a/web/lib/memba_web/live/admin/clubs_live/index.ex b/web/lib/memba_web/live/admin/clubs_live/index.ex
+index b959a3c..e8c31b1 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/index.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/index.ex
+@@ -48,7 +48,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+-    <Layouts.app flash={@flash}>
++    <Layouts.admin flash={@flash}>
+       <main id="clubs-index" class="mx-auto max-w-5xl space-y-8 p-6">
+         <section class="space-y-2">
+           <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+@@ -122,7 +122,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
+           </div>
+         </section>
+       </main>
+-    </Layouts.app>
++    </Layouts.admin>
+     """
+   end
+ 
+diff --git a/web/lib/memba_web/live/admin/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+index a7a9323..55148de 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -124,7 +124,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+-    <Layouts.app flash={@flash}>
++    <Layouts.admin flash={@flash}>
+       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
+         <.link
+           id="back-to-clubs-link"
+@@ -335,7 +335,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+           </section>
+         <% end %>
+       </main>
+-    </Layouts.app>
++    </Layouts.admin>
+     """
+   end
+ 
+diff --git a/web/lib/memba_web/live/admin/deliveries_live/index.ex b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+index e24ed9c..5256088 100644
+--- a/web/lib/memba_web/live/admin/deliveries_live/index.ex
++++ b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+@@ -16,7 +16,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+-    <Layouts.app flash={@flash}>
++    <Layouts.admin flash={@flash}>
+       <main id="deliveries-overview" class="mx-auto max-w-7xl space-y-6 p-6">
+         <section class="space-y-2">
+           <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+@@ -123,7 +123,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+           </div>
+         </section>
+       </main>
+-    </Layouts.app>
++    </Layouts.admin>
+     """
+   end
+ 
+diff --git a/web/lib/memba_web/live/admin/messages_live/show.ex b/web/lib/memba_web/live/admin/messages_live/show.ex
+index a3e8d9b..2ae58ec 100644
+--- a/web/lib/memba_web/live/admin/messages_live/show.ex
++++ b/web/lib/memba_web/live/admin/messages_live/show.ex
+@@ -23,7 +23,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+-    <Layouts.app flash={@flash}>
++    <Layouts.admin flash={@flash}>
+       <main id="message-show" class="mx-auto max-w-6xl space-y-8 p-6">
+         <%= if @message do %>
+           <section class="space-y-2">
+@@ -145,7 +145,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+           </section>
+         <% end %>
+       </main>
+-    </Layouts.app>
++    </Layouts.admin>
+     """
+   end
+ end
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+new file mode 100644
+index 0000000..438a6e6
+--- /dev/null
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -0,0 +1,100 @@
++defmodule MembaWeb.LayoutsTest do
++  use MembaWeb.ConnCase, async: true
++
++  import Phoenix.Component
++  import Phoenix.LiveViewTest
++
++  alias MembaWeb.Layouts
++
++  test "public app layout keeps Memba-branded chrome for public pages" do
++    assigns = %{flash: %{}}
++
++    html =
++      rendered_to_string(~H"""
++      <Layouts.app flash={@flash}>
++        <section id="public-layout-slot">Public page content</section>
++      </Layouts.app>
++      """)
++
++    assert_selector(html, "a[aria-label='Memba home'][href='/']")
++    assert_selector(html, "#public-layout-slot")
++    refute_selector(html, "#admin-layout")
++    refute_selector(html, "#club-site-layout")
++  end
++
++  test "admin layout provides utilitarian staff chrome and admin navigation" do
++    assigns = %{flash: %{}}
++
++    html =
++      rendered_to_string(~H"""
++      <Layouts.admin flash={@flash}>
++        <main id="admin-layout-slot">Admin page content</main>
++      </Layouts.admin>
++      """)
++
++    assert_selector(html, "#admin-layout[data-surface='admin']")
++    assert_selector(html, "a[aria-label='Memba admin home'][href='/admin/clubs']")
++    assert_selector(html, "nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
++    assert_selector(html, "nav[aria-label='Staff admin navigation'] a[href='/admin/deliveries']")
++    assert_selector(html, "#admin-layout-slot")
++    refute_selector(html, "#club-site-layout")
++  end
++
++  test "club-site layout seam exposes neutral slate CSS custom properties without routes" do
++    assigns = %{
++      flash: %{},
++      theme: %{"background" => "#f1f5f9", accent: "#0f766e"}
++    }
++
++    html =
++      rendered_to_string(~H"""
++      <Layouts.club_site flash={@flash} club_name="Riverside Tennis Club" theme={@theme}>
++        <section id="club-site-layout-slot">Future club member page content</section>
++      </Layouts.club_site>
++      """)
++
++    assert_selector(html, "#club-site-layout[data-surface='club-site']")
++    assert_selector(html, "#club-site-layout-slot")
++    assert_text(html, "#club-site-layout header", "Riverside Tennis Club")
++    assert_text(html, "#club-site-layout header", "Powered by Memba")
++
++    style = only_attribute(html, "#club-site-layout", "style")
++    assert style =~ "--club-site-bg: #f1f5f9;"
++    assert style =~ "--club-site-paper: #ffffff;"
++    assert style =~ "--club-site-ink: #0f172a;"
++    assert style =~ "--club-site-muted: #64748b;"
++    assert style =~ "--club-site-accent: #0f766e;"
++    assert style =~ "--club-site-line: #e2e8f0;"
++  end
++
++  defp assert_selector(html, selector) do
++    assert html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?(),
++           "Expected rendered layout to include selector #{inspect(selector)}"
++  end
++
++  defp refute_selector(html, selector) do
++    refute html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?(),
++           "Expected rendered layout not to include selector #{inspect(selector)}"
++  end
++
++  defp assert_text(html, selector, expected_text) do
++    text =
++      html
++      |> LazyHTML.from_fragment()
++      |> LazyHTML.query(selector)
++      |> LazyHTML.text()
++
++    assert text =~ expected_text
++  end
++
++  defp only_attribute(html, selector, attribute) do
++    attributes =
++      html
++      |> LazyHTML.from_fragment()
++      |> LazyHTML.query(selector)
++      |> LazyHTML.attribute(attribute)
++
++    assert [value] = attributes
++    value
++  end
++end
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 535fee1..c8b5673 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -11,6 +11,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+   } do
+     conn
+     |> visit("/admin/clubs")
++    |> assert_has("#admin-layout[data-surface='admin']")
++    |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
+     |> assert_has("#clubs-index")
+     |> assert_has("#new-club-form[aria-label='Create a club']")
+     |> assert_has("#club-name-input[aria-label='Club name']")
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index e631c24..0fd601b 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -52,6 +52,8 @@ defmodule MembaWeb.DeliveriesLiveTest do
+ 
+     conn
+     |> visit("/admin/deliveries")
++    |> assert_has("#admin-layout[data-surface='admin']")
++    |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/deliveries']")
+     |> assert_has("#deliveries-overview")
+     |> assert_has("#deliveries-table[aria-label='Delivery records']")
+     |> assert_has("[data-test-id^='delivery-row-']", count: 2)
