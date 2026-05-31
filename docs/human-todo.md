@@ -3,12 +3,14 @@
 ## Postmark setup for iteration 008
 
 Before or during Postmark email integration, Matt needs to set up the following outside the codebase.
+See [`postmark-email.md`](postmark-email.md) for the exact runtime configuration
+and webhook details.
 
 ### Postmark account
 
 - [x] Create or confirm access to a Postmark account for Memba.
 - [x] Create a dedicated Message Stream for outbound member broadcasts: `outbound-member-broadcasts`.
-- [x] Record the Postmark server token somewhere secure for deployment configuration; do not commit it to the repository. Local secret: `POSTMARK_SERVER_TOKEN`.
+- [x] Record the Postmark server token somewhere secure for deployment configuration; do not commit it to the repository. Local secret: `MEMBA_POSTMARK_SERVER_TOKEN`.
 
 ### Sending domain
 
@@ -35,11 +37,10 @@ Before or during Postmark email integration, Matt needs to set up the following 
 ### Deployment configuration
 
 - [x] Provide deployment secrets/config for local configuration:
-  - `POSTMARK_SERVER_TOKEN`
-  - configured From address
-  - configured Reply-To address
-  - delivery provider selection for real Postmark sending
-  - Postmark message stream and open-tracking option
+  - `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`
+  - `MEMBA_POSTMARK_SERVER_TOKEN`
+  - `MEMBA_POSTMARK_FROM_ADDRESS`
+  - `MEMBA_POSTMARK_REPLY_TO_ADDRESS`
 - [ ] Add the same secrets/config to the production deployment environment once Fly.io deploys are set up.
 - [x] Keep local/test environments on fake delivery unless explicitly opting into real Postmark sending.
 
@@ -54,5 +55,5 @@ Before or during Postmark email integration, Matt needs to set up the following 
 
 Notes:
 
-- A local send smoke test can exercise the Postmark provider by opting into `MEMBA_DELIVERY_PROVIDER=postmark` and using `POSTMARK_SERVER_TOKEN`.
+- A local send smoke test can exercise the Postmark provider by opting into `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` and using `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_POSTMARK_FROM_ADDRESS`, and `MEMBA_POSTMARK_REPLY_TO_ADDRESS`.
 - Real Postmark webhooks cannot reach a purely local Phoenix server unless we expose it with a public HTTPS tunnel such as ngrok or Cloudflare Tunnel and temporarily point the Postmark webhook at that URL. Otherwise, webhook smoke testing should happen against the deployed `https://memba.io/webhooks/postmark` endpoint.

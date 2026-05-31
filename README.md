@@ -15,3 +15,9 @@ Use the development helper from the repository root:
 * Run `./bin/dev down` to stop development services after interrupting the app.
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
+
+## Email delivery
+
+Local development and automated tests use fake/test email delivery by default.
+To opt an environment into real member-message email through Postmark, see
+[`docs/postmark-email.md`](docs/postmark-email.md).

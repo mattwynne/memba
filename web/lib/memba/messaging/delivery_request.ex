@@ -4,6 +4,8 @@ defmodule Memba.Messaging.DeliveryRequest do
 
   The first messaging slice sends email, but the request shape keeps the provider
   boundary focused on deliveries rather than an email-specific domain concept.
+  It carries Memba's own message, delivery, and club identifiers so providers can
+  attach correlation metadata without querying domain state.
   """
 
   @enforce_keys [
