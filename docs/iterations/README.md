@@ -14,7 +14,7 @@ green than before.
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
 | 005 | 2026-05-29 | merged | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 | 006 | 2026-05-30 | implementing | Browser Cucumber automation for member-facing acceptance | [plan](006-browser-cucumber-automation/plan.md) |
-| 007 | 2026-05-29 | ready | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |
+| 007 | 2026-05-29 | validated | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |
 
 Status notes:
 
