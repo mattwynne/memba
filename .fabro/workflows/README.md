@@ -19,6 +19,7 @@ Canonical commands:
 bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
 bin/dev fabro deliver docs/iterations/NNN-topic/plan.md
 bin/dev fabro review <branch> docs/iterations/NNN-topic/plan.md [base_ref_or_base_sha]
+bin/dev fabro clean-branches [--force]
 ```
 
 Plan validation can run ahead of implementation, even while another iteration is active. It uses the standalone validation workflow directly so no implementation WIP slot is checked or reserved:
@@ -57,6 +58,8 @@ Implementation publishes with a deterministic script after `dev ci` and plan con
 Review is post-merge and non-blocking. It must never push red: changes flow back through `dev ci`, and the publish script only runs after that green check. If there are no review changes, the publish step exits successfully without touching `main`. If there are bounded safe changes, they are squashed into one `review polish: iteration NNN` commit and pushed to `main`. Human-judgement findings belong in `docs/code-health.md`, not in a PR or blocking gate.
 
 After review publish/no-op succeeds, the review workflow marks the iteration `merged` in the plan, implementation record when present, and `docs/iterations/README.md`, then commits and pushes that status finalization to `main`. If review fails, the iteration remains in its current in-progress state; rerun review with the printed `bin/dev fabro review ...` command after resolving the failure.
+
+When `bin/dev fabro review` must review `origin/main` while local `main` is checked out, it creates a temporary pushed branch under `review/tmp/` so Fabro can clone a real branch without detaching `main`. These branches are safe to delete only after their foreground review run has finished and their tip is already contained in `origin/main`. Use `bin/dev fabro clean-branches` to dry-run safe cleanup, then `bin/dev fabro clean-branches --force` to delete the listed temporary local and remote branches. The cleanup command also recognises older `review/main-YYYYMMDDHHMMSS` temporary branches.
 
 ## Resuming a failed implementation
 
