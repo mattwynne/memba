@@ -57,3 +57,37 @@ Notes:
 
 - A local send smoke test can exercise the Postmark provider by opting into `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` and using `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_POSTMARK_FROM_ADDRESS`, and `MEMBA_POSTMARK_REPLY_TO_ADDRESS`.
 - Real Postmark webhooks cannot reach a purely local Phoenix server unless we expose it with a public HTTPS tunnel such as ngrok or Cloudflare Tunnel and temporarily point the Postmark webhook at that URL. Otherwise, webhook smoke testing should happen against the deployed `https://memba.io/webhooks/postmark` endpoint.
+
+## Postmark setup for iteration 010 auth magic links
+
+Before enabling real shared magic-link sign-in email, Matt needs to set up the
+following outside the codebase. See [`postmark-email.md`](postmark-email.md) for
+the exact runtime configuration and smoke-test steps.
+
+### Auth message stream
+
+- [ ] Create a dedicated Postmark Transactional Message Stream for authentication email: `outbound-authentication`.
+- [ ] Keep auth email separate from the member broadcast stream `outbound-member-broadcasts`.
+- [ ] Do not point auth-stream delivery/open/bounce events at `POST /webhooks/postmark` unless the app is later extended to process auth-email webhook events.
+
+### Auth sender address
+
+- [ ] Choose a verified Memba-controlled From address for auth email. Suggested: `auth@mail.memba.io`.
+- [ ] Make sure the address is allowed by the verified `mail.memba.io` sender domain/account settings.
+
+### Deployment configuration
+
+- [ ] Provide deployment secrets/config for environments that should send real auth email:
+  - `MEMBA_AUTH_EMAIL_PROVIDER=postmark`
+  - `MEMBA_POSTMARK_SERVER_TOKEN`
+  - `MEMBA_AUTH_EMAIL_FROM_ADDRESS`
+  - `MEMBA_AUTH_EMAIL_MESSAGE_STREAM=outbound-authentication`
+- [ ] Keep local/test environments from sending real auth email unless explicitly opting into a controlled smoke test.
+
+### Manual smoke test
+
+- [ ] Pick a controlled recipient inbox for the first real auth send.
+- [ ] Submit the recipient email at `/auth` from an explicitly configured environment.
+- [ ] Confirm Postmark accepts the email on the `outbound-authentication` stream.
+- [ ] Confirm the magic-link email arrives from the configured auth From address.
+- [ ] Follow the magic link and confirm the browser signs in and redirects to `/`.

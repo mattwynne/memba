@@ -1,9 +1,12 @@
 defmodule MembaWeb.Router do
   use MembaWeb, :router
 
+  import MembaWeb.UserAuth
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
+    plug :fetch_current_identity
     plug :fetch_live_flash
     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
     plug :protect_from_forgery
@@ -13,10 +16,16 @@ defmodule MembaWeb.Router do
   pipeline :staff_browser do
     plug :accepts, ["html"]
     plug :fetch_session
+    plug :fetch_current_identity
+    plug :require_staff_identity
     plug :fetch_live_flash
     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+  end
+
+  pipeline :club_member_context do
+    plug :require_active_club_member_if_club_id_present
   end
 
   pipeline :api do
@@ -24,9 +33,18 @@ defmodule MembaWeb.Router do
   end
 
   scope "/", MembaWeb do
-    pipe_through :browser
+    pipe_through [:browser, :club_member_context]
 
     get "/", PageController, :home
+  end
+
+  scope "/", MembaWeb do
+    pipe_through :browser
+
+    get "/auth", AuthController, :new
+    post "/auth", AuthController, :create
+    get "/auth/magic/:token", AuthController, :callback
+    delete "/auth", AuthController, :delete
     get "/about", PageController, :about
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
@@ -35,10 +53,12 @@ defmodule MembaWeb.Router do
   scope "/admin", MembaWeb.Admin do
     pipe_through :staff_browser
 
-    live "/clubs", ClubsLive.Index
-    live "/clubs/:club_id", ClubsLive.Show
-    live "/deliveries", DeliveriesLive.Index
-    live "/messages/:message_id", MessagesLive.Show
+    live_session :staff_admin, on_mount: [{MembaWeb.UserAuth, :require_staff_identity}] do
+      live "/clubs", ClubsLive.Index
+      live "/clubs/:club_id", ClubsLive.Show
+      live "/deliveries", DeliveriesLive.Index
+      live "/messages/:message_id", MessagesLive.Show
+    end
   end
 
   scope "/webhooks", MembaWeb do

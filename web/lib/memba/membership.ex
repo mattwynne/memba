@@ -129,6 +129,38 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List active clubs for a member email address.
+
+  Email lookup is normalized by trimming whitespace and comparing
+  case-insensitively. Results are ordered by name and ID for stable
+  browser/test output. Invalid or blank email addresses return an empty list.
+  """
+  def list_active_clubs_for_member_email(email) do
+    case normalize_email(email) do
+      nil ->
+        []
+
+      normalized_email ->
+        MembershipProjection
+        |> join(:inner, [membership], person in Person,
+          on: person.person_id == membership.person_id
+        )
+        |> join(:inner, [membership, _person], club in Club,
+          on: club.club_id == membership.club_id
+        )
+        |> where([membership, _person, _club], membership.active == true)
+        |> where(
+          [_membership, person, _club],
+          fragment("lower(btrim(?))", person.email) == ^normalized_email
+        )
+        |> distinct(true)
+        |> order_by([_membership, _person, club], asc: club.name, asc: club.club_id)
+        |> select([_membership, _person, club], club)
+        |> Repo.all()
+    end
+  end
+
+  @doc """
   Return whether a person currently has an active membership in a club.
 
   Invalid club or person IDs return `false`.
@@ -143,6 +175,31 @@ defmodule Memba.Membership do
       |> Repo.exists?()
     else
       :error -> false
+    end
+  end
+
+  @doc """
+  Return whether an email address currently has an active membership in a club.
+
+  Email lookup is normalized by trimming whitespace and comparing
+  case-insensitively. Invalid club IDs and blank email addresses return `false`.
+  """
+  def active_member_of_club_by_email?(club_id, email) do
+    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
+         normalized_email when is_binary(normalized_email) <- normalize_email(email) do
+      MembershipProjection
+      |> join(:inner, [membership], person in Person,
+        on: person.person_id == membership.person_id
+      )
+      |> where([membership, _person], membership.club_id == ^club_id)
+      |> where([membership, _person], membership.active == true)
+      |> where(
+        [_membership, person],
+        fragment("lower(btrim(?))", person.email) == ^normalized_email
+      )
+      |> Repo.exists?()
+    else
+      _invalid -> false
     end
   end
 
@@ -194,4 +251,13 @@ defmodule Memba.Membership do
       _attrs -> {:error, {:missing_required_attribute, key}}
     end
   end
+
+  defp normalize_email(email) when is_binary(email) do
+    case email |> String.trim() |> String.downcase() do
+      "" -> nil
+      normalized_email -> normalized_email
+    end
+  end
+
+  defp normalize_email(_email), do: nil
 end
