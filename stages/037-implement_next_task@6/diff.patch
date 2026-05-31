@@ -1,0 +1,295 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index c1641fd..08f5b82 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -5,6 +5,8 @@ const {
+   assertEachDeliverySentThroughEmailProvider,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertOperatorDeliveryReason,
++  assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+   createClub,
+   createPeople,
+@@ -113,3 +115,17 @@ When(
+ When("{word} opens the email for {string}", async function (recipientName, subject) {
+   await reportRecipientEmailStatus(this, recipientName, subject, "opened");
+ });
++
++Then(
++  "operators should see {word}'s delivery for {string} as {string}",
++  async function (recipientName, subject, expectedStatus) {
++    await assertOperatorDeliveryStatus(this, recipientName, subject, expectedStatus);
++  }
++);
++
++Then(
++  "operators should see {word}'s delivery reason {string}",
++  async function (recipientName, expectedReason) {
++    await assertOperatorDeliveryReason(this, recipientName, expectedReason);
++  }
++);
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 36bcd79..b5cd639 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -263,6 +263,18 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
+   );
+ }
+ 
++async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
++  await browserInteraction("visit /deliveries", () =>
++    world.page.goto(appUrl(world.baseUrl, "/deliveries"))
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.getByRole("heading", { name: "Deliveries" }),
++    "deliveries overview heading",
++    { expect, timeoutMs }
++  );
++}
++
+ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
+   ensureState(world);
+ 
+@@ -613,6 +625,92 @@ async function assertReceiptStatus(world, recipientName, subject, expectedStatus
+   return world;
+ }
+ 
++async function assertOperatorDeliveryStatus(
++  world,
++  recipientName,
++  subject,
++  expectedStatus,
++  { expect = playwrightExpect } = {}
++) {
++  await openDeliveriesOverview(world, { expect });
++
++  const row = operatorDeliveryRow(world, recipientName, subject);
++  await waitForProjectedVisible(
++    world,
++    row,
++    `${recipientName}'s operator delivery row for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++  await waitForProjectedText(
++    world,
++    row.locator("[data-test-id=\"delivery-status\"]"),
++    expectedStatus,
++    `${recipientName}'s operator delivery status for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++
++  world.currentOperatorDelivery = { recipientName, subject };
++
++  return world;
++}
++
++async function assertOperatorDeliveryReason(
++  world,
++  recipientName,
++  expectedReason,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const currentDelivery = world.currentOperatorDelivery;
++  assert.ok(
++    currentDelivery,
++    "Expected an operator delivery status assertion before checking its reason"
++  );
++  assert.equal(
++    currentDelivery.recipientName,
++    recipientName,
++    `Expected current operator delivery to belong to ${recipientName}`
++  );
++
++  await openDeliveriesOverview(world, { expect });
++
++  const row = operatorDeliveryRow(world, recipientName, currentDelivery.subject);
++  await waitForProjectedVisible(
++    world,
++    row,
++    `${recipientName}'s operator delivery row for ${JSON.stringify(currentDelivery.subject)}`,
++    { expect }
++  );
++  await waitForProjectedText(
++    world,
++    row.locator("[data-test-id=\"delivery-reason\"]"),
++    expectedReason,
++    `${recipientName}'s operator delivery reason for ${JSON.stringify(currentDelivery.subject)}`,
++    { expect }
++  );
++
++  return world;
++}
++
++function operatorDeliveryRow(world, recipientName, subject) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
++
++  const recipient = world.people[recipientName];
++  assert.ok(recipient, `Expected ${recipientName} to have been created`);
++
++  return world.page
++    .locator(
++      `[data-test-id^="delivery-row-"][data-message-id=${cssString(
++        message.messageId
++      )}][data-recipient-id=${cssString(recipient.personId)}]`
++    )
++    .last();
++}
++
+ function memberReceiptStatusForEventType(eventType) {
+   switch (eventType) {
+     case "delivered":
+@@ -829,6 +927,8 @@ module.exports = {
+   assertEachDeliverySentThroughEmailProvider,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertOperatorDeliveryReason,
++  assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+   createClub,
+   createPeople,
+@@ -845,6 +945,7 @@ module.exports = {
+   projectionTimeoutMs,
+   reportRecipientEmailStatus,
+   rowAttributeValues,
++  openDeliveriesOverview,
+   openClub,
+   openMessage,
+   sendMessageToKootenayMembers,
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 82c3512..c6e7bea 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -8,6 +8,8 @@ const {
+   assertEachDeliverySentThroughEmailProvider,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertOperatorDeliveryReason,
++  assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+   createClub,
+   createPeople,
+@@ -55,10 +57,15 @@ class FakeLocator {
+   }
+ 
+   locator(selector) {
++    const childText =
++      selector.includes('data-test-id="delivery-reason"')
++        ? this.attrs.deliveryReason
++        : this.attrs.deliveryStatus || this.attrs.receiptStatus;
++
+     return new FakeLocator(this.page, `${this.selector} ${selector}`, {
+       kind: "child",
+       value: selector,
+-      text: this.attrs.deliveryStatus || this.attrs.receiptStatus
++      text: childText
+     });
+   }
+ 
+@@ -96,6 +103,7 @@ class FakePage {
+       messages: [],
+       addressedRecipients: [],
+       deliveryRecords: [],
++      operatorDeliveries: [],
+       memberReceipts: []
+     };
+   }
+@@ -212,6 +220,9 @@ function rowsForSelector(rows, selector) {
+   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
+   if (selector.includes("#member-receipts")) return rows.memberReceipts;
+   if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
++  if (selector.includes('data-test-id^="delivery-row-"')) {
++    return filterRows(rows.operatorDeliveries, selector);
++  }
+   if (selector.includes('data-testid="member-receipt"')) return filterRows(rows.memberReceipts, selector);
+ 
+   return [];
+@@ -499,6 +510,69 @@ test("message assertions read addressed recipients, delivery records, email chan
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+ });
+ 
++test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
++  const page = new FakePage();
++  page.rows.operatorDeliveries.push(
++    rowWithAttrs({
++      "data-test-id": "delivery-row-delivery-other",
++      "data-message-id": "message-2",
++      "data-recipient-id": "person-bob",
++      "data-recipient-name": "Bob",
++      deliveryReason: "mailbox does not exist",
++      deliveryStatus: "bounced"
++    }),
++    rowWithAttrs({
++      "data-test-id": "delivery-row-delivery-bob",
++      "data-message-id": "message-1",
++      "data-recipient-id": "person-bob",
++      "data-recipient-name": "Bob",
++      deliveryReason: "recipient server is temporarily unavailable",
++      deliveryStatus: "delayed"
++    })
++  );
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.messages = {
++    "Avalanche bulletin": { messageId: "message-2", subject: "Avalanche bulletin" },
++    "Trip planning night": { messageId: "message-1", subject: "Trip planning night" }
++  };
++  world.people = { Bob: { personId: "person-bob" } };
++
++  await assertOperatorDeliveryStatus(world, "Bob", "Trip planning night", "delayed", {
++    expect: fakeExpect(expectations)
++  });
++  await assertOperatorDeliveryReason(world, "Bob", "recipient server is temporarily unavailable", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.deepEqual(
++    page.actions.filter((action) => action[0] === "goto").map((action) => action[1]),
++    ["http://127.0.0.1:4444/deliveries", "http://127.0.0.1:4444/deliveries"]
++  );
++  assert.deepEqual(world.currentOperatorDelivery, {
++    recipientName: "Bob",
++    subject: "Trip planning night"
++  });
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "text" &&
++        expectation[1].includes('data-message-id="message-1"') &&
++        expectation[1].includes('data-test-id="delivery-status"') &&
++        expectation[2] === "delayed"
++    )
++  );
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "text" &&
++        expectation[1].includes('data-message-id="message-1"') &&
++        expectation[1].includes('data-test-id="delivery-reason"') &&
++        expectation[2] === "recipient server is temporarily unavailable"
++    )
++  );
++});
++
+ test("final assertion mismatches are reported separately from projection timing", async () => {
+   const page = new FakePage();
+   page.rows.addressedRecipients.push(
+diff --git a/docs/iterations/007-deliveries-overview/todo.md b/docs/iterations/007-deliveries-overview/todo.md
+index bb0e309..bb55539 100644
+--- a/docs/iterations/007-deliveries-overview/todo.md
++++ b/docs/iterations/007-deliveries-overview/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Reshape the public Messaging operator-deliverability query toward a deliveries-overview API, for example an options-shaped list function. Preserve any existing message-scoped needs through options or a compatibility wrapper only if still required by current code.
+ - [x] 004 Add the `/deliveries` LiveView route under the browser pipeline.
+ - [x] 005 Build the deliveries LiveView as a simple read-only table with stable accessible labels or IDs for browser acceptance.
+-- [ ] 006 Update browser Cucumber step definitions for `operator_email_deliverability.feature` so operator assertions inspect `/deliveries`.
++- [x] 006 Update browser Cucumber step definitions for `operator_email_deliverability.feature` so operator assertions inspect `/deliveries`.
+ - [ ] 007 Remove `@todo-web` tags from operator scenarios once they are browser-backed.
+ - [ ] 008 Verify browser Cucumber still defaults to excluding `@todo-web`, while now including the operator scenarios because they are no longer tagged.
+ - [ ] 009 Run the browser acceptance suite and `dev check`, fixing any issues.
