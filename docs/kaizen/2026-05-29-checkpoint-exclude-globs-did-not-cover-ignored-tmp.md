@@ -50,3 +50,21 @@ fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=d
 ```
 
 Do not retry with a workflow that writes `.fabro/tmp/` into `.git/info/exclude` before Fabro checkpoints; it is expected to fail deterministically at the same stage.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Checkpoint exclude globs did not prevent Git from rejecting ignored `.fabro/tmp` paths during staging.
+
+Fix applied:
+
+- `75c1d67`: avoided the ignored-tmp checkpoint failure by changing how Fabro tmp paths are handled.
+
+Validation:
+
+- Historical delivery evidence: the ignored-tmp checkpoint fix is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

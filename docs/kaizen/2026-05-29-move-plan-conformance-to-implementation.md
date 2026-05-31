@@ -99,3 +99,22 @@ plan-repair loop.
 - Do not let the implementation-side gate weaken into "tests are green, ship it":
   passing dev check is necessary but not sufficient for plan conformance, as the
   current review gate already warns.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Plan-conformance checks belonged in the implementation loop, where drift could be repaired before review, rather than only in later review workflow steps.
+
+Fix applied:
+
+- `4e448f1`, `1b942f7`, and `0459ee5`: added plan-conformance workflow nodes, gate prompt, and repair loop wiring.
+- `c5ab3c0`: recorded deterministic review base metadata after the review simplification work.
+
+Validation:
+
+- Historical delivery evidence: the plan-conformance gate and repair loop commits are present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

@@ -173,3 +173,21 @@ problem is earlier: the implementor is looking at the wrong checkout.
 The workflow is resumable only inside the limits of the checkout it starts
 from. Preserving `todo.md` is necessary, but not sufficient. The previous
 progress must be present in Git where the next run can reach it.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Checkpoint commits alone were not an operator-friendly resume contract; recovery also needed an accessible branch/run workspace.
+
+Fix applied:
+
+- `b12f326`: restored Fabro-managed iteration clones and run branches, giving resumable work a visible branch/workspace contract.
+
+Validation:
+
+- Historical delivery evidence: the resumability fix is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

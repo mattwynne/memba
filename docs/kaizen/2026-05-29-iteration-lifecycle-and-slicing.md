@@ -55,3 +55,21 @@ in the skill. They did not need a subsystem.
 
 - `2026-05-28-extract-iteration-review-workflow.md`
 - `2026-05-28-resumable-iteration-implementation.md`
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Iteration planning lacked a strong habit for keeping slices small enough to implement, review, and recover safely.
+
+Fix applied:
+
+- `7d89a36`: added the sizing and slicing habit to the iteration-planning skill.
+
+Validation:
+
+- Historical delivery evidence: the planning-skill update is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

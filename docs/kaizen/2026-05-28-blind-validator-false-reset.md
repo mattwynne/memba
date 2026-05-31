@@ -242,3 +242,21 @@ Item 5 (`scope_next_task` / `post_commit_verify`) was deferred as optional; the
 items above are what unblock the task-4 stall. The remaining proof is the manual
 rehearsal: re-run against `001-event-sourced-foundation/plan.md` and confirm
 task 4 now validates and the loop advances.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The validator lacked live repository evidence and could hallucinate that persisted work was missing, causing false reset recommendations.
+
+Fix applied:
+
+- `2b5b59a`: gave the iteration validator live repository evidence.
+
+Validation:
+
+- Historical delivery evidence: the validator evidence fix is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

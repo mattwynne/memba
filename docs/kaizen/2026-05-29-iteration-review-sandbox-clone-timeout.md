@@ -100,3 +100,23 @@ The original failure was a transient network timeout on the Fabro server. No wor
 
 - A review run can reliably enter the first workflow stage for PR #1. ✓ (run `01KSS5RWAN6X9DZCFRFVACAYFQ` passed sandbox and is running)
 - The main-checkout isolation requirement is preserved: worktree is used, main checkout is undisturbed. ✓
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Review sandbox setup could fail opaquely during clone/setup, leaving the operator without a usable recovery path.
+
+Fix applied:
+
+- `48edd9c`: recorded the clone-timeout finding.
+- `d136afb`: fixed iteration-review run branch handling so review evidence collection targets the intended branch/workspace.
+- `23d7eeb`: made iteration review evidence failures diagnostic.
+
+Validation:
+
+- Historical delivery evidence: the branch-handling and diagnostic evidence commits are present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

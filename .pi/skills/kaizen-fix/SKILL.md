@@ -26,6 +26,8 @@ Matt may provide:
    - List `docs/kaizen/*.md` newest first.
    - Treat a note as resolved when it has a heading named `## Resolution`, `## Resolution applied`, `## Resolution plan`, or another clear resolution heading with substantive content.
    - Treat a note as unresolved when it lacks a substantive resolution heading.
+   - Before presenting unresolved notes, check recent git history for each candidate. Some older notes are implementation plans or observations that were completed but never backfilled with a resolution.
+   - When git history or repository state clearly shows a candidate was already fixed, do not present it as unresolved; append a concise `## Resolution` section with the evidence instead.
    - Ignore archive or non-markdown files.
 3. If no unresolved notes exist, report that there is nothing unresolved in `docs/kaizen/`.
 4. If exactly one unresolved note exists, select it automatically and tell Matt which note was selected.
@@ -40,6 +42,8 @@ rg -L '^## Resolution( |$)|^## Resolution applied$|^## Resolution plan' docs/kai
 
 Use the commands as aids, not as a substitute for reading candidate notes. Some notes may use a variant resolution heading; inspect before deciding.
 
+Before asking Matt to choose from multiple unresolved notes, run targeted `git log --oneline -- <note>` and, when useful, repository-wide `git log --oneline --grep='<keywords>'` checks for stale candidates. Backfill resolutions for candidates that have already been completed, then recompute the unresolved list.
+
 ## Investigation Workflow
 
 1. **Protect unrelated work**
@@ -52,7 +56,7 @@ Use the commands as aids, not as a substitute for reading candidate notes. Some 
    - Reproduce or validate the problem when it is cheap and safe.
    - Use `/systematic-debugging` as the default investigation method for failures, surprising behaviour, or unclear causes. Load and follow that skill before proposing or applying fixes.
    - Keep evidence factual. Separate observations from hypotheses.
-4. **Find the root cause**}]}agext.functions.edit /settingsdialog Harold Error: Invalid JSON: string contains control character at line 1 column 754 (char 753) None as JSON had newline? Also weird trailing. Retry. Need valid JSON.禧 Need old text exact maybe. Use python? let's edit.禧 (there is invalid due paste 
+4. **Find the root cause**
    - State the smallest causal mechanism that explains the observation.
    - Identify whether the problem is in code, prompt instructions, workflow graph, handoff metadata, environment/sandbox setup, documentation, or operator procedure.
 5. **Choose the action**

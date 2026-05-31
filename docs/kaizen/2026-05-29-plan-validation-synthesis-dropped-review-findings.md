@@ -194,3 +194,23 @@ Before implementation, update the plan using the real reviewer findings:
 - Bound the auth deferral explicitly.
 
 Then re-run validation only after the synthesis workflow is fixed or manually inspect all reviewer outputs again.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Parallel fan-in exposed branch status metadata to synthesis without reliably exposing each reviewer body, allowing synthesis to publish READY while reviewer objections were effectively hidden.
+
+Fix applied:
+
+- `9cee076`: exposed reviewer findings to plan-validation synthesis.
+- Subsequent workflow changes kept the validation path fail-closed by returning to the safe sequential reviewer chain when parallel fan-in still lacked reliable evidence visibility.
+- `docs/kaizen/2026-05-30-plan-validation-parallel-fan-in-evidence-gap.md`: captured the remaining upstream/tooling limitation separately.
+
+Validation:
+
+- `.fabro/workflows/plan-validation/test.sh` — historical eval evidence in the follow-up note shows unanimous-pass succeeds and definite-fail fails under the safe workflow.
+
+Remaining follow-up:
+
+- Track first-class parallel fan-in evidence support in `docs/kaizen/2026-05-30-plan-validation-parallel-fan-in-evidence-gap.md`.

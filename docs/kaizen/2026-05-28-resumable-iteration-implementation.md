@@ -173,3 +173,22 @@ Use this rehearsal before relying on resumability for a long iteration:
 - Once resume works reliably, the temptation to make plans bigger increases.
   The "shrink iteration plans" kaizen should land alongside this one so we
   don't compensate for plan ambition by leaning on resumability.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Long implementation runs needed resumable workflow boundaries rather than one fragile all-or-nothing execution.
+
+Fix applied:
+
+- `1b1d6d9`: split Fabro iteration review workflow and moved toward resumable run boundaries.
+- `b12f326`: restored Fabro-managed clones/run branches, completing the practical resume contract.
+
+Validation:
+
+- Historical delivery evidence: the resumability-related workflow commits are present on `main`.
+
+Remaining follow-up:
+
+- None for this note.
