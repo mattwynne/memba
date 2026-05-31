@@ -1,0 +1,275 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 1c66aa3..2f70715 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 001a Reconcile the missing post-iteration-009 admin route structure before auth gates: move the existing harness LiveViews under `/admin/*`, introduce a `:staff_browser` seam, update links/tests, and preserve `POST /webhooks/postmark`.
+ - [x] 002 Add persistence for authentication:
+ - [x] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+-- [ ] 004 Extend `Memba.Membership` query API as needed:
++- [x] 004 Extend `Memba.Membership` query API as needed:
+ - [ ] 005 Add auth email delivery:
+ - [ ] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
+ - [ ] 007 Add `/auth` UI and callback handling:
+diff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex
+index f9a4e53..9b9b6ed 100644
+--- a/web/lib/memba/accounts.ex
++++ b/web/lib/memba/accounts.ex
+@@ -116,8 +116,7 @@ defmodule Memba.Accounts do
+   """
+   def list_clubs_for_email(email) do
+     with {:ok, email} <- normalize_email(email) do
+-      Membership.list_clubs()
+-      |> Enum.filter(&active_member_of_club?(email, &1.club_id))
++      Membership.list_active_clubs_for_member_email(email)
+     else
+       {:error, :invalid_email} -> []
+     end
+@@ -128,9 +127,7 @@ defmodule Memba.Accounts do
+   """
+   def active_member_of_club?(email, club_id) do
+     with {:ok, email} <- normalize_email(email) do
+-      club_id
+-      |> Membership.list_active_members_of_club()
+-      |> Enum.any?(fn member -> member.email == email end)
++      Membership.active_member_email_of_club?(club_id, email)
+     else
+       {:error, :invalid_email} -> false
+     end
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 32b9016..caf5afc 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -128,6 +128,31 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  List clubs where the given email belongs to an active member.
++
++  Results are ordered by club name and ID for stable browser/test output.
++  Invalid email addresses return an empty list. Active memberships without a
++  projected club are excluded.
++  """
++  def list_active_clubs_for_member_email(email) do
++    with {:ok, email} <- normalize_email(email) do
++      MembershipProjection
++      |> join(:inner, [membership], person in Person,
++        on: person.person_id == membership.person_id
++      )
++      |> join(:inner, [membership, _person], club in Club, on: club.club_id == membership.club_id)
++      |> where([membership, _person, _club], membership.active == true)
++      |> where([_membership, person, _club], person.email == ^email)
++      |> distinct(true)
++      |> order_by([_membership, _person, club], asc: club.name, asc: club.club_id)
++      |> select([_membership, _person, club], club)
++      |> Repo.all()
++    else
++      {:error, :invalid_email} -> []
++    end
++  end
++
+   @doc """
+   Return whether a person currently has an active membership in a club.
+ 
+@@ -146,6 +171,28 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Return whether an email address currently has an active membership in a club.
++
++  Invalid club IDs or email addresses return `false`.
++  """
++  def active_member_email_of_club?(club_id, email) do
++    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
++         {:ok, email} <- normalize_email(email) do
++      MembershipProjection
++      |> join(:inner, [membership], person in Person,
++        on: person.person_id == membership.person_id
++      )
++      |> where([membership, _person], membership.club_id == ^club_id)
++      |> where([membership, _person], membership.active == true)
++      |> where([_membership, person], person.email == ^email)
++      |> Repo.exists?()
++    else
++      :error -> false
++      {:error, :invalid_email} -> false
++    end
++  end
++
+   defp create_club_command(attrs) do
+     with {:ok, club_id} <- fetch_required(attrs, :club_id),
+          {:ok, name} <- fetch_required(attrs, :name) do
+@@ -194,4 +241,23 @@ defmodule Memba.Membership do
+       _attrs -> {:error, {:missing_required_attribute, key}}
+     end
+   end
++
++  defp normalize_email(email) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, :invalid_email}
++    end
++  end
++
++  defp normalize_email(_email), do: {:error, :invalid_email}
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _other -> false
++    end
++  end
+ end
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index 6dbd33f..c9e310c 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -13,13 +13,19 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def list_clubs("
+     assert source =~ "def list_people("
+     assert source =~ "def list_active_members_of_club("
++    assert source =~ "def list_active_clubs_for_member_email("
+ 
+     list_functions =
+       ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/
+       |> Regex.scan(source, capture: :all_but_first)
+       |> List.flatten()
+ 
+-    assert list_functions == ["list_clubs", "list_people", "list_active_members_of_club"]
++    assert list_functions == [
++             "list_clubs",
++             "list_people",
++             "list_active_members_of_club",
++             "list_active_clubs_for_member_email"
++           ]
+ 
+     create_functions =
+       ~r/\bdef\s+(create_[a-zA-Z0-9_]+)\b/
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index b9a97fc..893bc93 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -4,7 +4,9 @@ defmodule Memba.Membership.QueryTest do
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+ 
+@@ -77,6 +79,94 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "list_active_clubs_for_member_email/1" do
++    test "returns active clubs for the normalized member email in stable name order" do
++      alpine = create_club(name: "Alpine Club")
++      kootenay = create_club(name: "Kootenay Mountaineering Club")
++      other = create_club(name: "Other Club")
++      inactive = create_club(name: "Inactive Club")
++
++      alice = create_person(name: "Alice", email: "Member@Example.COM")
++      duplicate_alice = create_person(name: "Alice Duplicate", email: "member@example.com")
++      bob = create_person(name: "Bob", email: "other@example.com")
++      inactive_alice = create_person(name: "Inactive Alice", email: "member@example.com")
++
++      add_member(kootenay.club_id, alice.person_id)
++      add_member(alpine.club_id, alice.person_id)
++      add_member(alpine.club_id, duplicate_alice.person_id)
++      add_member(other.club_id, bob.person_id)
++
++      insert_projected_membership(
++        club_id: inactive.club_id,
++        person_id: inactive_alice.person_id,
++        active: false
++      )
++
++      assert Membership.list_active_clubs_for_member_email(" MEMBER@example.com ") == [
++               alpine,
++               kootenay
++             ]
++
++      assert Membership.list_active_clubs_for_member_email("unknown@example.com") == []
++      assert Membership.list_active_clubs_for_member_email("not-an-email") == []
++    end
++
++    test "excludes active memberships whose club projection is missing" do
++      missing_club_id = Ecto.UUID.generate()
++      person = create_person(name: "Alice", email: "member@example.com")
++
++      add_member(missing_club_id, person.person_id)
++
++      assert Membership.list_active_clubs_for_member_email("member@example.com") == []
++    end
++  end
++
++  describe "active_member_email_of_club?/2" do
++    test "returns true only when the normalized email has an active membership in the club" do
++      club = create_club()
++      other_club = create_club()
++
++      alice = create_person(name: "Alice", email: "Member@Example.COM")
++      bob = create_person(name: "Bob", email: "other@example.com")
++      inactive_alice = create_person(name: "Inactive Alice", email: "inactive@example.com")
++
++      add_member(club.club_id, alice.person_id)
++      add_member(other_club.club_id, bob.person_id)
++
++      insert_projected_membership(
++        club_id: club.club_id,
++        person_id: inactive_alice.person_id,
++        active: false
++      )
++
++      assert Membership.active_member_email_of_club?(club.club_id, " MEMBER@example.com ")
++
++      refute Membership.active_member_email_of_club?(club.club_id, "other@example.com")
++      refute Membership.active_member_email_of_club?(other_club.club_id, "member@example.com")
++      refute Membership.active_member_email_of_club?(club.club_id, "inactive@example.com")
++      refute Membership.active_member_email_of_club?("not-a-uuid", "member@example.com")
++      refute Membership.active_member_email_of_club?(club.club_id, "not-an-email")
++    end
++  end
++
++  defp create_club(attrs \\ []) do
++    club = %{
++      club_id: Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0),
++      name: Keyword.get(attrs, :name, "Club #{System.unique_integer([:positive])}")
++    }
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club.club_id,
++                 name: club.name
++               },
++               consistency: :strong
++             )
++
++    Repo.get!(ClubProjection, club.club_id)
++  end
++
+   defp create_person(attrs) do
+     person = %{
+       person_id: Ecto.UUID.generate(),
+@@ -108,4 +198,13 @@ defmodule Memba.Membership.QueryTest do
+                consistency: :strong
+              )
+   end
++
++  defp insert_projected_membership(attrs) do
++    Repo.insert!(%MembershipProjection{
++      membership_id: Keyword.get_lazy(attrs, :membership_id, &Ecto.UUID.generate/0),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      person_id: Keyword.fetch!(attrs, :person_id),
++      active: Keyword.get(attrs, :active, true)
++    })
++  end
+ end
