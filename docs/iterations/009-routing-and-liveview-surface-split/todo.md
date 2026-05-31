@@ -5,6 +5,6 @@
 - [x] 003 Update all internal verified routes and links:
 - [x] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
 - [x] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
-- [ ] 006 Update controller and LiveView tests to assert the new paths.
+- [x] 006 Update controller and LiveView tests to assert the new paths.
 - [ ] 007 Add route tests asserting old harness paths return 404 (not redirects).
 - [ ] 008 Run `bin/dev check` and fix any route/module/test failures.

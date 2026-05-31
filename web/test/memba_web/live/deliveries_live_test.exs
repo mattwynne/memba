@@ -52,6 +52,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
 
     conn
     |> visit("/admin/deliveries")
+    |> assert_path("/admin/deliveries")
     |> assert_has("#admin-layout[data-surface='admin']")
     |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/deliveries']")
     |> assert_has("#deliveries-overview")
