@@ -31,6 +31,10 @@ defmodule MembaWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+    get "/auth", AuthController, :new
+    post "/auth", AuthController, :create
+    get "/auth/magic/:token", AuthController, :callback
+    delete "/auth", AuthController, :delete
     get "/about", PageController, :about
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy

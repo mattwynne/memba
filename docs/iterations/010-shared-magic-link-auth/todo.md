@@ -6,7 +6,7 @@
 - [x] 004 Extend `Memba.Membership` query API as needed:
 - [x] 005 Add auth email delivery:
 - [x] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
-- [ ] 007 Add `/auth` UI and callback handling:
+- [x] 007 Add `/auth` UI and callback handling:
 - [ ] 008 Update the home page:
 - [ ] 009 Apply auth gates:
 - [ ] 010 Add focused tests:
