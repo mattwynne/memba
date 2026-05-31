@@ -8,6 +8,6 @@
 - [x] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
 - [x] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
 - [x] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
-- [ ] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
+- [x] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
 - [ ] 010 Update documentation for enabling Postmark, configuring environment variables, configuring the Postmark webhook URL, and choosing a monitored Memba-controlled sending subdomain.
 - [ ] 011 Run the existing browser/domain acceptance suites and `dev check`, fixing regressions without weakening fake-provider determinism.
