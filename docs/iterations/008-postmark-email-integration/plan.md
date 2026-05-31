@@ -1,7 +1,7 @@
 # Postmark email integration for outbound member messages
 
 Date: 2026-05-30
-Status: implementing
+Status: merged
 
 ## Goal
 
