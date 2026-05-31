@@ -1,0 +1,181 @@
+diff --git a/README.md b/README.md
+index 34d1ade..58c3327 100644
+--- a/README.md
++++ b/README.md
+@@ -15,3 +15,9 @@ Use the development helper from the repository root:
+ * Run `./bin/dev down` to stop development services after interrupting the app.
+ 
+ Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
++
++## Email delivery
++
++Local development and automated tests use fake/test email delivery by default.
++To opt an environment into real member-message email through Postmark, see
++[`docs/postmark-email.md`](docs/postmark-email.md).
+diff --git a/docs/human-todo.md b/docs/human-todo.md
+index 24f9441..0db6a1d 100644
+--- a/docs/human-todo.md
++++ b/docs/human-todo.md
+@@ -3,6 +3,8 @@
+ ## Postmark setup for iteration 008
+ 
+ Before or during Postmark email integration, Matt needs to set up the following outside the codebase.
++See [`postmark-email.md`](postmark-email.md) for the exact runtime configuration
++and webhook details.
+ 
+ ### Postmark account
+ 
+@@ -35,11 +37,10 @@ Before or during Postmark email integration, Matt needs to set up the following
+ ### Deployment configuration
+ 
+ - Provide deployment secrets/config for:
+-  - Postmark server token
+-  - configured From address
+-  - configured Reply-To address
+-  - delivery provider selection for real Postmark sending
+-  - any Postmark message stream or open-tracking option required by the implementation
++  - `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`
++  - `MEMBA_POSTMARK_SERVER_TOKEN`
++  - `MEMBA_POSTMARK_FROM_ADDRESS`
++  - `MEMBA_POSTMARK_REPLY_TO_ADDRESS`
+ - Keep local/test environments on fake delivery unless explicitly opting into real Postmark sending.
+ 
+ ### Manual smoke test
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index 96771e6..6ff31d8 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -9,5 +9,5 @@
+ - [x] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+ - [x] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
+ - [x] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
+-- [ ] 010 Update documentation for enabling Postmark, configuring environment variables, configuring the Postmark webhook URL, and choosing a monitored Memba-controlled sending subdomain.
++- [x] 010 Update documentation for enabling Postmark, configuring environment variables, configuring the Postmark webhook URL, and choosing a monitored Memba-controlled sending subdomain.
+ - [ ] 011 Run the existing browser/domain acceptance suites and `dev check`, fixing regressions without weakening fake-provider determinism.
+diff --git a/docs/postmark-email.md b/docs/postmark-email.md
+new file mode 100644
+index 0000000..e060581
+--- /dev/null
++++ b/docs/postmark-email.md
+@@ -0,0 +1,121 @@
++# Postmark email delivery
++
++Memba sends real member-message email through Postmark only when an environment
++explicitly opts in. Leaving the Postmark provider unset keeps the default fake
++delivery provider, which is required for deterministic local development and
++automated tests.
++
++## Enable real Postmark sending
++
++Set these environment variables for the environment that should send real email:
++
++| Variable | Required? | Purpose |
++| --- | --- | --- |
++| `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` | Yes | Opts the environment into the Postmark delivery provider. If unset or blank, Memba keeps the configured default provider, which is fake in local/test defaults. |
++| `MEMBA_POSTMARK_SERVER_TOKEN` | Yes with Postmark | Postmark server token used by Swoosh as the Postmark API key. Keep this secret out of the repository. |
++| `MEMBA_POSTMARK_FROM_ADDRESS` | Yes with Postmark | Sender/from address for member-message email. Use a verified, monitored Memba-controlled sending address. |
++| `MEMBA_POSTMARK_REPLY_TO_ADDRESS` | Recommended | Reply-To/contact address added to outbound email when configured. This inbox should be monitored by a human. |
++
++Example local opt-in for a controlled real-send test:
++
++```sh
++export MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark
++export MEMBA_POSTMARK_SERVER_TOKEN="postmark-server-token"
++export MEMBA_POSTMARK_FROM_ADDRESS="messages@mail.memba.io"
++export MEMBA_POSTMARK_REPLY_TO_ADDRESS="support@memba.io"
++./bin/dev up
++```
++
++Do not set `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` in routine automated
++test environments. Acceptance and domain tests should continue to use fake or
++test adapters unless a manual smoke test explicitly needs real email.
++
++When Postmark is selected, Memba fails clearly if the server token or from
++address is missing. It does not silently fall back to fake delivery.
++
++## Sender domain and addresses
++
++For first production use, prefer a dedicated Memba-controlled sending subdomain
++instead of the root domain, for example:
++
++- sending domain: `mail.memba.io`
++- from address: `messages@mail.memba.io`
++- reply-to/contact address: `support@memba.io` or another monitored shared inbox
++
++In Postmark, add the sending domain and complete Postmark's required DNS setup
++for SPF, DKIM, return-path/bounce handling, and any recommended DMARC alignment.
++Wait for Postmark to verify the domain before enabling real sends.
++
++Club-owned sender domains are intentionally deferred. Use one configured
++Memba-controlled sender for this first real-send slice.
++
++## Webhook configuration
++
++Configure the Postmark webhook URL for each deployed Memba environment:
++
++```text
++https://<memba-host>/webhooks/postmark
++```
++
++The route is `POST /webhooks/postmark` and accepts JSON webhook payloads. Enable
++the Postmark events that Memba currently maps onto delivery state:
++
++- `Delivery`
++- `Open`
++- `Bounce` for both transient/delayed and hard bounce outcomes
++- `SpamComplaint`
++
++Memba returns `202 Accepted` with `{"status":"accepted"}` when a webhook event is
++processed. Unsupported or incomplete events return `422 Unprocessable Entity`.
++
++Webhook signature verification is not part of this slice, so production exposure
++should account for that follow-up security work.
++
++## Correlation metadata
++
++Outbound Postmark email includes Swoosh/Postmark metadata so webhook payloads can
++be correlated to Memba records without parsing recipients, subjects, or bodies:
++
++| Metadata key | Value |
++| --- | --- |
++| `memba_message_id` | Memba message aggregate ID |
++| `memba_delivery_id` | Memba recipient delivery ID |
++| `memba_club_id` | Club ID for the message |
++
++The webhook handler correlates status updates by `memba_message_id` and
++`memba_delivery_id` from the webhook `Metadata` object. `memba_club_id` is sent
++with the email for diagnostics and end-to-end provider correlation.
++
++## Outbound email behaviour
++
++For member-message email, the Postmark provider:
++
++- builds multipart email with the original message as plain text and a minimal,
++  escaped HTML body;
++- sets the configured sender/from address;
++- sets the configured reply-to address when present;
++- enables Postmark open tracking per email;
++- sends through `Memba.Mailer` using Swoosh's Postmark adapter.
++
++Postmark API, authentication, transport, configuration, or unexpected Swoosh
++failures make the send command fail visibly. Recipient-specific outcomes after a
++successful Postmark handoff remain webhook-driven and appear through Memba's
++existing delivery status model.
++
++No environment variable currently selects a Postmark message stream. Use the
++Postmark account/server defaults for this slice unless a later iteration adds
++message-stream configuration.
++
++## Manual smoke test
++
++For a controlled environment only:
++
++1. Verify the sending subdomain and sender address in Postmark.
++2. Set the Postmark environment variables above.
++3. Configure the environment-specific webhook URL in Postmark.
++4. Send one member message to a controlled inbox.
++5. Confirm Postmark accepts the email and the inbox receives it from the
++   configured sender with the configured reply-to address.
++6. Open the HTML email and confirm an open webhook reaches Memba.
++7. Trigger or observe delivery/problem webhooks and confirm the message receipt
++   and `/deliveries` overview update through Memba's delivery records.
