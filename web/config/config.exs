@@ -40,6 +40,13 @@ config :memba, Memba.Messaging.App,
 
 config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake
 
+config :memba, Memba.Messaging.DeliveryProviders.Postmark,
+  from: {"Memba", "messages@mail.memba.io"},
+  reply_to: {"Matt Wynne", "matt@mattwynne.net"},
+  message_stream: "outbound-member-broadcasts",
+  track_opens: true,
+  track_links: "None"
+
 config :commanded_ecto_projections, schema_prefix: nil
 
 # Configure the endpoint
