@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,160p' docs/iterations/006-browser-cucumber-automation/todo.md"}{"cmd": "grep -nE '^[[:space:]]*- \\[ \\] ' docs/iterations/006-browser-cucumber-automation/todo.md || true"}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
