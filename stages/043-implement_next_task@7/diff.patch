@@ -1,0 +1,50 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/todo.md b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+index 47df7c9..47e7fe3 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/todo.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+@@ -6,5 +6,5 @@
+ - [x] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
+ - [x] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
+ - [x] 006 Update controller and LiveView tests to assert the new paths.
+-- [ ] 007 Add route tests asserting old harness paths return 404 (not redirects).
++- [x] 007 Add route tests asserting old harness paths return 404 (not redirects).
+ - [ ] 008 Run `bin/dev check` and fix any route/module/test failures.
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index c33b255..6e46392 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -1,5 +1,12 @@
+ defmodule MembaWeb.RouterTest do
+-  use ExUnit.Case, async: true
++  use MembaWeb.ConnCase, async: true
++
++  @old_harness_paths [
++    "/clubs",
++    "/clubs/club-123",
++    "/deliveries",
++    "/messages/message-123"
++  ]
+ 
+   describe "staff admin LiveView routes" do
+     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
+@@ -54,6 +61,20 @@ defmodule MembaWeb.RouterTest do
+     end
+   end
+ 
++  describe "removed public harness routes" do
++    test "old harness paths return the normal 404 response without redirects", %{conn: conn} do
++      Enum.each(@old_harness_paths, fn path ->
++        conn =
++          conn
++          |> recycle()
++          |> get(path)
++
++        assert response(conn, 404) == "Not Found"
++        assert get_resp_header(conn, "location") == []
++      end)
++    end
++  end
++
+   defp assert_live_route(path, route_pattern, live_view, path_params) do
+     assert %{
+              pipe_through: [:staff_browser],
