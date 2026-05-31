@@ -1,4 +1,4 @@
-defmodule MembaWeb.MessagesLive.Show do
+defmodule MembaWeb.Admin.MessagesLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Messaging

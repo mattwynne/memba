@@ -3,14 +3,14 @@ defmodule MembaWeb.RouterTest do
 
   describe "staff admin LiveView routes" do
     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
-      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.ClubsLive.Index, %{})
+      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
     end
 
     test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
       assert_live_route(
         "/admin/clubs/club-123",
         "/admin/clubs/:club_id",
-        MembaWeb.ClubsLive.Show,
+        MembaWeb.Admin.ClubsLive.Show,
         %{
           "club_id" => "club-123"
         }
@@ -21,7 +21,7 @@ defmodule MembaWeb.RouterTest do
       assert_live_route(
         "/admin/deliveries",
         "/admin/deliveries",
-        MembaWeb.DeliveriesLive.Index,
+        MembaWeb.Admin.DeliveriesLive.Index,
         %{}
       )
     end
@@ -30,7 +30,7 @@ defmodule MembaWeb.RouterTest do
       assert_live_route(
         "/admin/messages/message-123",
         "/admin/messages/:message_id",
-        MembaWeb.MessagesLive.Show,
+        MembaWeb.Admin.MessagesLive.Show,
         %{"message_id" => "message-123"}
       )
     end

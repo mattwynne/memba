@@ -1,4 +1,4 @@
-defmodule MembaWeb.DeliveriesLive.Index do
+defmodule MembaWeb.Admin.DeliveriesLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Messaging

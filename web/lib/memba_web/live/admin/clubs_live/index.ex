@@ -1,4 +1,4 @@
-defmodule MembaWeb.ClubsLive.Index do
+defmodule MembaWeb.Admin.ClubsLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Membership

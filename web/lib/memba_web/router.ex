@@ -32,7 +32,7 @@ defmodule MembaWeb.Router do
     get "/privacy", PageController, :privacy
   end
 
-  scope "/admin", MembaWeb do
+  scope "/admin", MembaWeb.Admin do
     pipe_through :staff_browser
 
     live "/clubs", ClubsLive.Index
