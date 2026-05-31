@@ -1,0 +1,436 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index b5cd639..4bed96c 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -226,7 +226,9 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
+ }
+ 
+ async function visitClubsIndex(world) {
+-  await browserInteraction("visit /clubs", () => world.page.goto(appUrl(world.baseUrl, "/clubs")));
++  await browserInteraction("visit /admin/clubs", () =>
++    world.page.goto(appUrl(world.baseUrl, "/admin/clubs"))
++  );
+ }
+ 
+ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
+@@ -236,7 +238,7 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs
+   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
+ 
+   await browserInteraction(`visit club page for ${clubName}`, () =>
+-    world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`))
++    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`))
+   );
+   await waitForProjectedVisible(
+     world,
+@@ -253,7 +255,7 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
+   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+ 
+   await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>
+-    world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`))
++    world.page.goto(appUrl(world.baseUrl, `/admin/messages/${message.messageId}`))
+   );
+   await waitForProjectedVisible(
+     world,
+@@ -264,8 +266,8 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
+ }
+ 
+ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
+-  await browserInteraction("visit /deliveries", () =>
+-    world.page.goto(appUrl(world.baseUrl, "/deliveries"))
++  await browserInteraction("visit /admin/deliveries", () =>
++    world.page.goto(appUrl(world.baseUrl, "/admin/deliveries"))
+   );
+   await waitForProjectedVisible(
+     world,
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index c6e7bea..055caf5 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -302,17 +302,20 @@ function worldWithPage(page = new FakePage()) {
+ }
+ 
+ test("member-message route URL and generated emails match the browser app surface", () => {
+-  assert.equal(appUrl("http://127.0.0.1:4444", "/clubs"), "http://127.0.0.1:4444/clubs");
+   assert.equal(
+-    appUrl("http://127.0.0.1:4444/", "/messages/message-1"),
+-    "http://127.0.0.1:4444/messages/message-1"
++    appUrl("http://127.0.0.1:4444", "/admin/clubs"),
++    "http://127.0.0.1:4444/admin/clubs"
++  );
++  assert.equal(
++    appUrl("http://127.0.0.1:4444/", "/admin/messages/message-1"),
++    "http://127.0.0.1:4444/admin/messages/message-1"
+   );
+   assert.equal(emailFor("Alice"), "alice@example.test");
+   assert.equal(emailFor("Kootenay Mountaineering Club"), "kootenay.mountaineering.club@example.test");
+   assert.equal(cssString('Bob "The Sender"'), '"Bob \\"The Sender\\""');
+ });
+ 
+-test("creating a club drives /clubs and stores the generated club id from the UI", async () => {
++test("creating a club drives /admin/clubs and stores the generated club id from the UI", async () => {
+   const page = new FakePage();
+   page.rows.clubs.push(rowWithAttrs({
+     "data-club-id": "club-existing-1",
+@@ -324,7 +327,7 @@ test("creating a club drives /clubs and stores the generated club id from the UI
+   await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
+ 
+   assert.deepEqual(page.actions, [
+-    ["goto", "http://127.0.0.1:4444/clubs"],
++    ["goto", "http://127.0.0.1:4444/admin/clubs"],
+     ["fill", "Club name", kootenayClubName],
+     ["click", "button", { name: "Create club" }]
+   ]);
+@@ -373,7 +376,7 @@ test("browser interaction failures are reported separately from projection waits
+ 
+   await assert.rejects(
+     () => createClub(world, kootenayClubName, { expect: fakeExpect([]) }),
+-    /Browser interaction failed: visit \/clubs\.\nCause: browser context closed/
++    /Browser interaction failed: visit \/admin\/clubs\.\nCause: browser context closed/
+   );
+ });
+ 
+@@ -437,7 +440,7 @@ test("sending a Kootenay member message drives the club form and opens the real
+     ["fill", "Message subject", "Trip planning night"],
+     ["fill", "Message body", "Trip planning night details."],
+     ["click", "button", { name: "Send club message" }],
+-    ["goto", "http://127.0.0.1:4444/messages/message-trip-planning-night-1"]
++    ["goto", "http://127.0.0.1:4444/admin/messages/message-trip-planning-night-1"]
+   ]);
+ });
+ 
+@@ -510,7 +513,7 @@ test("message assertions read addressed recipients, delivery records, email chan
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+ });
+ 
+-test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
++test("operator delivery assertions inspect the /admin/deliveries overview by message and recipient", async () => {
+   const page = new FakePage();
+   page.rows.operatorDeliveries.push(
+     rowWithAttrs({
+@@ -547,7 +550,10 @@ test("operator delivery assertions inspect the /deliveries overview by message a
+ 
+   assert.deepEqual(
+     page.actions.filter((action) => action[0] === "goto").map((action) => action[1]),
+-    ["http://127.0.0.1:4444/deliveries", "http://127.0.0.1:4444/deliveries"]
++    [
++      "http://127.0.0.1:4444/admin/deliveries",
++      "http://127.0.0.1:4444/admin/deliveries"
++    ]
+   );
+   assert.deepEqual(world.currentOperatorDelivery, {
+     recipientName: "Bob",
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 523e5ad..50fd8e7 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the post-iteration-009 route structure and admin pipeline.
+-- [ ] 001a Reconcile the missing post-iteration-009 admin route structure before auth gates: move the existing harness LiveViews under `/admin/*`, introduce a `:staff_browser` seam, update links/tests, and preserve `POST /webhooks/postmark`.
++- [x] 001a Reconcile the missing post-iteration-009 admin route structure before auth gates: move the existing harness LiveViews under `/admin/*`, introduce a `:staff_browser` seam, update links/tests, and preserve `POST /webhooks/postmark`.
+ - [ ] 002 Add persistence for authentication:
+ - [ ] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [ ] 004 Extend `Memba.Membership` query API as needed:
+diff --git a/web/lib/memba_web/controllers/page_html/home.html.heex b/web/lib/memba_web/controllers/page_html/home.html.heex
+index 084a5ef..e0e7e2d 100644
+--- a/web/lib/memba_web/controllers/page_html/home.html.heex
++++ b/web/lib/memba_web/controllers/page_html/home.html.heex
+@@ -10,15 +10,15 @@
+     >
+       <a href="#how-it-works" class="transition hover:text-ink">How it works</a>
+       <a href="#features" class="transition hover:text-ink">Features</a>
+-      <a href={~p"/clubs"} class="transition hover:text-ink">Clubs</a>
++      <a href={~p"/admin/clubs"} class="transition hover:text-ink">Admin</a>
+       <a href={~p"/about"} class="transition hover:text-ink">About</a>
+     </nav>
+ 
+     <a
+-      href={~p"/clubs"}
++      href={~p"/admin/clubs"}
+       class="rounded-full border border-sage-600 bg-sage-600 px-5 py-2.5 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+     >
+-      Open Memba
++      Open admin
+     </a>
+   </header>
+ 
+@@ -45,10 +45,10 @@
+ 
+           <div class="mt-10 flex flex-col gap-4 sm:flex-row">
+             <a
+-              href={~p"/clubs"}
++              href={~p"/admin/clubs"}
+               class="inline-flex items-center justify-center rounded-full bg-sage-600 px-7 py-4 text-base font-semibold text-cream shadow-lg shadow-sage-800/10 transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-xl"
+             >
+-              Manage clubs
++              Manage clubs in admin
+             </a>
+             <a
+               href="#features"
+diff --git a/web/lib/memba_web/live/clubs_live/index.ex b/web/lib/memba_web/live/admin/clubs_live/index.ex
+similarity index 97%
+rename from web/lib/memba_web/live/clubs_live/index.ex
+rename to web/lib/memba_web/live/admin/clubs_live/index.ex
+index 54a0113..b959a3c 100644
+--- a/web/lib/memba_web/live/clubs_live/index.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/index.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.ClubsLive.Index do
++defmodule MembaWeb.Admin.ClubsLive.Index do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
+@@ -109,7 +109,7 @@ defmodule MembaWeb.ClubsLive.Index do
+               <div>
+                 <.link
+                   id={"club-link-#{club.club_id}"}
+-                  navigate={~p"/clubs/#{club.club_id}"}
++                  navigate={~p"/admin/clubs/#{club.club_id}"}
+                   data-testid="club-link"
+                   aria-label={"Open club #{club.name}"}
+                   class="font-medium text-blue-700 hover:text-blue-900"
+diff --git a/web/lib/memba_web/live/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+similarity index 98%
+rename from web/lib/memba_web/live/clubs_live/show.ex
+rename to web/lib/memba_web/live/admin/clubs_live/show.ex
+index 167dab9..a7a9323 100644
+--- a/web/lib/memba_web/live/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.ClubsLive.Show do
++defmodule MembaWeb.Admin.ClubsLive.Show do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
+@@ -128,7 +128,7 @@ defmodule MembaWeb.ClubsLive.Show do
+       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
+         <.link
+           id="back-to-clubs-link"
+-          navigate={~p"/clubs"}
++          navigate={~p"/admin/clubs"}
+           aria-label="Back to clubs"
+           class="text-sm font-medium text-blue-700 hover:text-blue-900"
+         >
+@@ -317,7 +317,7 @@ defmodule MembaWeb.ClubsLive.Show do
+               >
+                 <.link
+                   id={"message-link-#{message.message_id}"}
+-                  navigate={~p"/messages/#{message.message_id}"}
++                  navigate={~p"/admin/messages/#{message.message_id}"}
+                   data-testid="message-link"
+                   aria-label={"Open message #{message.subject}"}
+                   class="font-medium text-blue-700 hover:text-blue-900"
+diff --git a/web/lib/memba_web/live/deliveries_live/index.ex b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+similarity index 99%
+rename from web/lib/memba_web/live/deliveries_live/index.ex
+rename to web/lib/memba_web/live/admin/deliveries_live/index.ex
+index 134e016..e24ed9c 100644
+--- a/web/lib/memba_web/live/deliveries_live/index.ex
++++ b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.DeliveriesLive.Index do
++defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Messaging
+diff --git a/web/lib/memba_web/live/messages_live/show.ex b/web/lib/memba_web/live/admin/messages_live/show.ex
+similarity index 98%
+rename from web/lib/memba_web/live/messages_live/show.ex
+rename to web/lib/memba_web/live/admin/messages_live/show.ex
+index fee646c..a3e8d9b 100644
+--- a/web/lib/memba_web/live/messages_live/show.ex
++++ b/web/lib/memba_web/live/admin/messages_live/show.ex
+@@ -1,4 +1,4 @@
+-defmodule MembaWeb.MessagesLive.Show do
++defmodule MembaWeb.Admin.MessagesLive.Show do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Messaging
+@@ -29,7 +29,7 @@ defmodule MembaWeb.MessagesLive.Show do
+           <section class="space-y-2">
+             <.link
+               id="back-to-club-link"
+-              navigate={~p"/clubs/#{@message.club_id}"}
++              navigate={~p"/admin/clubs/#{@message.club_id}"}
+               aria-label="Back to club"
+               class="text-sm font-medium text-blue-700 hover:text-blue-900"
+             >
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index fb74e00..e94ebc9 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -10,6 +10,15 @@ defmodule MembaWeb.Router do
+     plug :put_secure_browser_headers
+   end
+ 
++  pipeline :staff_browser do
++    plug :accepts, ["html"]
++    plug :fetch_session
++    plug :fetch_live_flash
++    plug :put_root_layout, html: {MembaWeb.Layouts, :root}
++    plug :protect_from_forgery
++    plug :put_secure_browser_headers
++  end
++
+   pipeline :api do
+     plug :accepts, ["json"]
+   end
+@@ -21,6 +30,10 @@ defmodule MembaWeb.Router do
+     get "/about", PageController, :about
+     get "/terms", PageController, :terms
+     get "/privacy", PageController, :privacy
++  end
++
++  scope "/admin", MembaWeb.Admin do
++    pipe_through :staff_browser
+ 
+     live "/clubs", ClubsLive.Index
+     live "/clubs/:club_id", ClubsLive.Show
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index a1b6eec..5ac27e3 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -6,6 +6,8 @@ defmodule MembaWeb.PageControllerTest do
+     response = html_response(conn, 200)
+ 
+     assert response =~ "Keep every member in the loop."
++    assert response =~ ~s(href="/admin/clubs")
++    refute response =~ ~s(href="/clubs")
+     assert response =~ "Red Donkey Technology Corp"
+     assert response =~ "https://donkey.red"
+   end
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 22432fd..535fee1 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -10,7 +10,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     conn: conn
+   } do
+     conn
+-    |> visit("/clubs")
++    |> visit("/admin/clubs")
+     |> assert_has("#clubs-index")
+     |> assert_has("#new-club-form[aria-label='Create a club']")
+     |> assert_has("#club-name-input[aria-label='Club name']")
+@@ -72,7 +72,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     conn: conn
+   } do
+     conn
+-    |> visit("/clubs")
++    |> visit("/admin/clubs")
+     |> assert_has("#clubs-index")
+     |> create_club("Kootenay Mountaineering Club")
+     |> click_link("Kootenay Mountaineering Club")
+@@ -107,7 +107,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     delivery_ids_by_name = Map.new(recipients, &{&1.name, &1.delivery_id})
+ 
+     conn
+-    |> visit("/messages/#{message_id}")
++    |> visit("/admin/messages/#{message_id}")
+     |> assert_has("#message-show", "Trip planning night")
+     |> assert_member_receipt("Alice", "sent")
+ 
+@@ -151,7 +151,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+              })
+ 
+     conn
+-    |> visit("/messages/#{message_id}")
++    |> visit("/admin/messages/#{message_id}")
+     |> assert_member_receipt("Alice", "sent")
+     |> assert_member_receipt("Bob", "delivered")
+     |> assert_member_receipt("Carol", "delivery problem")
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index 46ae7aa..e631c24 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -51,7 +51,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
+              )
+ 
+     conn
+-    |> visit("/deliveries")
++    |> visit("/admin/deliveries")
+     |> assert_has("#deliveries-overview")
+     |> assert_has("#deliveries-table[aria-label='Delivery records']")
+     |> assert_has("[data-test-id^='delivery-row-']", count: 2)
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 0241f8f..20658b9 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -1,31 +1,54 @@
+ defmodule MembaWeb.RouterTest do
+   use ExUnit.Case, async: true
+ 
+-  describe "browser LiveView routes" do
+-    test "routes /clubs through the browser pipeline to the clubs index LiveView" do
+-      assert_live_route("/clubs", "/clubs", MembaWeb.ClubsLive.Index, %{})
++  describe "admin LiveView routes" do
++    test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
++      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
+     end
+ 
+-    test "routes /clubs/:club_id through the browser pipeline to the club show LiveView" do
+-      assert_live_route("/clubs/club-123", "/clubs/:club_id", MembaWeb.ClubsLive.Show, %{
+-        "club_id" => "club-123"
+-      })
++    test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
++      assert_live_route(
++        "/admin/clubs/club-123",
++        "/admin/clubs/:club_id",
++        MembaWeb.Admin.ClubsLive.Show,
++        %{"club_id" => "club-123"}
++      )
+     end
+ 
+-    test "routes /deliveries through the browser pipeline to the deliveries index LiveView" do
+-      assert_live_route("/deliveries", "/deliveries", MembaWeb.DeliveriesLive.Index, %{})
++    test "routes /admin/deliveries through the staff browser pipeline to the deliveries index LiveView" do
++      assert_live_route(
++        "/admin/deliveries",
++        "/admin/deliveries",
++        MembaWeb.Admin.DeliveriesLive.Index,
++        %{}
++      )
+     end
+ 
+-    test "routes /messages/:message_id through the browser pipeline to the message show LiveView" do
++    test "routes /admin/messages/:message_id through the staff browser pipeline to the message show LiveView" do
+       assert_live_route(
+-        "/messages/message-123",
+-        "/messages/:message_id",
+-        MembaWeb.MessagesLive.Show,
++        "/admin/messages/message-123",
++        "/admin/messages/:message_id",
++        MembaWeb.Admin.MessagesLive.Show,
+         %{"message_id" => "message-123"}
+       )
+     end
+   end
+ 
++  describe "retired public harness routes" do
++    test "old public harness routes are not routable" do
++      assert Phoenix.Router.route_info(MembaWeb.Router, "GET", "/clubs", "localhost") == :error
++
++      assert Phoenix.Router.route_info(MembaWeb.Router, "GET", "/clubs/club-123", "localhost") ==
++               :error
++
++      assert Phoenix.Router.route_info(MembaWeb.Router, "GET", "/deliveries", "localhost") ==
++               :error
++
++      assert Phoenix.Router.route_info(MembaWeb.Router, "GET", "/messages/message-123", "localhost") ==
++               :error
++    end
++  end
++
+   describe "webhook routes" do
+     test "routes Postmark webhook requests through the json api pipeline" do
+       assert %{
+@@ -46,7 +69,7 @@ defmodule MembaWeb.RouterTest do
+ 
+   defp assert_live_route(path, route_pattern, live_view, path_params) do
+     assert %{
+-             pipe_through: [:browser],
++             pipe_through: [:staff_browser],
+              phoenix_live_view: {^live_view, nil, _opts, _live_session},
+              plug: Phoenix.LiveView.Plug,
+              plug_opts: nil,
