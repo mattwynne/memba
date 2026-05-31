@@ -661,7 +661,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-31T15:37:45.696562223Z",
-  "last_event_at": "2026-05-31T15:40:38.935372187Z",
+  "last_event_at": "2026-05-31T15:40:41.846956784Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1831,9 +1831,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 86,
       "checkpoint": {
-        "timestamp": "2026-05-31T15:40:38.940661801Z",
+        "timestamp": "2026-05-31T15:40:41.844278757Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -1847,62 +1847,71 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.read_plan": 0,
+          "last_stage": "synthesize",
+          "preferred_label": "mark_validated",
+          "codex_review_required_edits": "None",
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01KSZAY3NSYW4GSKX18TVMPGZE",
+          "gemini_review_blocking_gap_count": 0,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.retry_count.start": 0,
+          "codex_review_confidence": "Medium",
+          "command.output": "blob://sha256/4bbfeb0a54eb724a76e775078547dd3dab003792c8644409b670eb282e102e5a",
+          "gemini_review_decision": "READY",
+          "failure_signature": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.thread_id": "synthesis_gate",
+          "outcome": "succeeded",
+          "thread.codex_review.current_node": "synthesize",
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "internal.fidelity": "summary:high",
+          "thread.read_plan.current_node": "gemini_review",
+          "gemini_review_blocking_gaps": "None",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "gemini_review_confidence": "Medium",
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.start.current_node": "read_plan",
+          "claude_review_blocking_gaps": "None",
+          "plan_needs_fix": false,
+          "current_node": "publish_ready",
+          "response.codex_review": "{\"outcome\":\"succeeded\",\"preferred_next_label\":\"mark_validated\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"Medium\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
           "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"Medium\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
           "response.claude_review": "# Iteration Plan Review: Shared Magic Link Authentication\n\n## Decision: READY\n\n## Confidence: Medium\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. **Move security requirement to acceptance criteria**: The validation plan tests that \"/auth does not reveal whether an email is known,\" but this security requirement should be an explicit acceptance criterion, not just a test assertion.\n\n2. **Add acceptance criterion for unauthenticated access**: Currently listed as an open decision, but the user-facing behavior for unauthenticated access to protected routes should be in acceptance criteria. The plan states a preference (\"Prefer preserving the originally requested path\"), which provides implementation guidance, but this should be formalized.\n\n3. **Add acceptance criteria for token error states**: The validation plan tests expired tokens, single-use tokens, and invalid tokens, but acceptance criteria don't specify what users see when encountering these states.\n\n4. **Specify token expiration duration**: Mentioned in implementation (\"appropriate expiration\") but not decided. A concrete duration (e.g., 15 minutes, 1 hour) would remove ambiguity.\n\n5. **Clarify sign-out behavior**: Not mentioned in acceptance criteria. Even if it's just \"clear session,\" this should be explicit.\n\n6. **Decide staff identity persistence before implementation**: Currently an open decision, but choosing upfront (even if the choice is \"decide during implementation based on code clarity\") would be cleaner.\n\n## Smallest viable iteration\n\nThe current iteration is already quite focused. A smaller slice would be:\n\n**Magic link authentication only**, deferring:\n- Multiple club support (show only first club or require query param)\n- Staff/admin distinction (all authenticated users see same view)\n\nHowever, this would deliver limited value. The current scope is reasonable because:\n- Multiple clubs is core to the member experience\n- Staff/admin distinction is minimal code but important for operational access\n- The whole iteration is bounded by a single authentication pattern\n\nI recommend keeping the current scope.\n\n## Required plan edits\n\nNone. The plan is implementable as written. The validation plan is comprehensive and covers the user-facing behaviors not fully enumerated in acceptance criteria. Open technical decisions are appropriately deferred to implementation.\n\n## Validation plan\n\nThe plan includes excellent validation:\n\n**Automated tests** cover:\n- Token security (hashing, expiration, single-use)\n- Session creation\n- Privacy (no email enumeration)\n- Email construction\n- Authorization (staff vs member, admin access, club access)\n- Webhook preservation\n\n**Manual demo** covers:\n- End-to-end magic link flow\n- Multiple club display\n- Staff admin access\n- Authorization enforcement\n\n**Stop condition**: Clear - when `bin/dev check` passes and all automated tests prove the documented behaviors.\n\n## Recommendations\n\n1. The iteration is well-structured and ready for implementation.\n\n2. Consider promoting the security, error-state, and redirect behaviors from validation plan to acceptance criteria for future iterations—this makes the contract clearer upfront.\n\n3. The implementer should use the stated preferences in \"Open Technical Decisions\" as guidance rather than blockers. For example, \"prefer preserving the originally requested path\" is sufficient direction.\n\n4. The validation plan is strong enough to catch any ambiguities during implementation, making this safe to proceed despite minor acceptance criteria gaps.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"Medium\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "internal.retry_count.read_plan": 0,
-          "gemini_review_blocking_gaps": "None",
-          "thread.gemini_review.current_node": "claude_review",
-          "graph.rankdir": "LR",
-          "failure_signature": "",
-          "claude_review_decision": "READY",
-          "codex_review_confidence": "Medium",
-          "outcome": "succeeded",
-          "command.output": "blob://sha256/4bbfeb0a54eb724a76e775078547dd3dab003792c8644409b670eb282e102e5a",
+          "codex_review_blocking_gaps": "None",
+          "thread.claude_review.current_node": "codex_review",
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "claude_review_blocking_gap_count": 0,
           "codex_review_blocking_gap_count": 0,
+          "internal.retry_count.synthesize": 0,
           "plan_ready": true,
-          "internal.retry_count.claude_review": 0,
           "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.publish_ready": 0,
           "claude_review_confidence": "Medium",
+          "claude_review_required_edits": "None",
+          "graph.rankdir": "LR",
+          "claude_review_decision": "READY",
+          "graph.default_fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.gemini_review": 0,
+          "plan_needs_human": false,
           "codex_review_decision": "READY",
           "failure_class": "",
-          "internal.retry_count.start": 0,
-          "thread.read_plan.current_node": "gemini_review",
-          "internal.retry_count.codex_review": 0,
-          "internal.thread_id": "synthesis_gate",
           "gemini_review_required_edits": "None",
-          "internal.retry_count.gemini_review": 0,
-          "codex_review_blocking_gaps": "None",
-          "internal.node_visit_count": 1,
-          "claude_review_blocking_gaps": "None",
-          "preferred_label": "mark_validated",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "thread.codex_review.current_node": "synthesize",
-          "plan_needs_human": false,
-          "plan_needs_fix": false,
-          "thread.synthesis_gate.current_node": "publish_ready",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "current_node": "publish_ready",
-          "thread.start.current_node": "read_plan",
-          "internal.retry_count.synthesize": 0,
-          "internal.retry_count.synthesis_gate": 0,
-          "internal.retry_count.publish_ready": 0,
-          "gemini_review_decision": "READY",
-          "claude_review_required_edits": "None",
-          "internal.work_dir": "/workspace/memba",
-          "thread.claude_review.current_node": "codex_review",
-          "response.codex_review": "{\"outcome\":\"succeeded\",\"preferred_next_label\":\"mark_validated\",\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"Medium\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "last_stage": "synthesize",
-          "codex_review_required_edits": "None",
-          "claude_review_blocking_gap_count": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "internal.run_id": "01KSZAY3NSYW4GSKX18TVMPGZE",
-          "graph.default_fidelity": "summary:high",
-          "gemini_review_blocking_gap_count": 0,
-          "internal.fidelity": "summary:high"
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.codex_review": 0
         },
         "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1944,59 +1953,6 @@
               "inference_time_ms": 91481,
               "tool_time_ms": 0,
               "active_time_ms": 91481
-            }
-          },
-          "publish_ready": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/4bbfeb0a54eb724a76e775078547dd3dab003792c8644409b670eb282e102e5a"
-            },
-            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/010-shared-magic-link-auth/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 1882,
-              "active_time_ms": 1882
-            }
-          },
-          "synthesize": {
-            "status": "succeeded",
-            "context_updates": {
-              "plan_ready": true,
-              "last_stage": "synthesize",
-              "plan_needs_human": false,
-              "plan_needs_fix": false,
-              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
-            },
-            "notes": "Stage completed: synthesize",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 3704,
-                    "output_tokens": 33,
-                    "reasoning_tokens": 319,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 29080
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 8006,
-              "tool_time_ms": 0,
-              "active_time_ms": 8006
             }
           },
           "gemini_review": {
@@ -2041,29 +1997,6 @@
               "active_time_ms": 31941
             }
           },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
-          "read_plan": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/3267025971816bc738c6c309794f83bec643d3f462574d27fe1dd5cb214ad55c"
-            },
-            "notes": "Script completed: PLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 168,
-              "active_time_ms": 168
-            }
-          },
           "codex_review": {
             "status": "succeeded",
             "preferred_label": "mark_validated",
@@ -2105,24 +2038,214 @@
               "tool_time_ms": 0,
               "active_time_ms": 19582
             }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_ready": true,
+              "last_stage": "synthesize",
+              "plan_needs_human": false,
+              "plan_needs_fix": false,
+              "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 3704,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 319,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 29080
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 8006,
+              "tool_time_ms": 0,
+              "active_time_ms": 8006
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3267025971816bc738c6c309794f83bec643d3f462574d27fe1dd5cb214ad55c"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Plan file not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nsed -n '1,260p' \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168,
+              "active_time_ms": 168
+            }
+          },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4bbfeb0a54eb724a76e775078547dd3dab003792c8644409b670eb282e102e5a"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/010-shared-magic-link-auth/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1882,
+              "active_time_ms": 1882
+            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "56eb4c162f2c1f120f8fa696dccf99130f11a6db",
         "node_visits": {
-          "codex_review": 1,
-          "read_plan": 1,
+          "claude_review": 1,
+          "gemini_review": 1,
+          "synthesize": 1,
           "start": 1,
           "synthesis_gate": 1,
+          "read_plan": 1,
           "publish_ready": 1,
-          "gemini_review": 1,
-          "claude_review": 1,
-          "synthesize": 1
+          "codex_review": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/010-shared-magic-link-auth/plan.md b/docs/iterations/010-shared-magic-link-auth/plan.md\nindex cc31214..750a7d0 100644\n--- a/docs/iterations/010-shared-magic-link-auth/plan.md\n+++ b/docs/iterations/010-shared-magic-link-auth/plan.md\n@@ -1,7 +1,7 @@\n # Shared magic-link authentication\n \n Date: 2026-05-31\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex 6b094aa..82b4082 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -19,7 +19,7 @@ green than before.\n | 007 | 2026-05-29 | merged | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |\n | 008 | 2026-05-30 | merged | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |\n | 009 | 2026-05-31 | implementing | Routing and LiveView surface split | [plan](009-routing-and-liveview-surface-split/plan.md) |\n-| 010 | 2026-05-31 | ready | Shared magic-link authentication | [plan](010-shared-magic-link-auth/plan.md) |\n+| 010 | 2026-05-31 | validated | Shared magic-link authentication | [plan](010-shared-magic-link-auth/plan.md) |\n \n Status notes:\n \n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-05-31T15:40:41.870157075Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 176154,
+      "inference_time_ms": 151010,
+      "tool_time_ms": 2050,
+      "active_time_ms": 153060
+    },
+    "final_git_commit_sha": "56eb4c162f2c1f120f8fa696dccf99130f11a6db",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan",
+        "stage_label": "read_plan",
+        "timing": {
+          "wall_time_ms": 175,
+          "inference_time_ms": 0,
+          "tool_time_ms": 168,
+          "active_time_ms": 168
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 32008,
+          "inference_time_ms": 31941,
+          "tool_time_ms": 0,
+          "active_time_ms": 31941
+        },
+        "billing_usd_micros": 44944,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 91532,
+          "inference_time_ms": 91481,
+          "tool_time_ms": 0,
+          "active_time_ms": 91481
+        },
+        "billing_usd_micros": 64254,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 19638,
+          "inference_time_ms": 19582,
+          "tool_time_ms": 0,
+          "active_time_ms": 19582
+        },
+        "billing_usd_micros": 26476,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 8058,
+          "inference_time_ms": 8006,
+          "tool_time_ms": 0,
+          "active_time_ms": 8006
+        },
+        "billing_usd_micros": 29080,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 4,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 1891,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1882,
+          "active_time_ms": 1882
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 15738,
+      "output_tokens": 4465,
+      "total_tokens": 27018,
+      "reasoning_tokens": 3999,
+      "cache_read_tokens": 2816,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 164754
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -2142,6 +2265,40 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "exit@1": {
+      "first_event_seq": 89,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-05-31T15:40:41.846956784Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-31T15:40:41.846841032Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "synthesis_gate@1": {
       "first_event_seq": 71,
       "prompt": null,
@@ -2268,7 +2425,12 @@
       "first_event_seq": 79,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/010-shared-magic-link-auth/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-05-31T15:40:38.935820356Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -2291,6 +2453,12 @@
       "termination": "exited",
       "started_at": "2026-05-31T15:40:37.044644321Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 1891,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1882,
+        "active_time_ms": 1882
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -2299,7 +2467,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "gemini_review@1": {
       "first_event_seq": 31,
