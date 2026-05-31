@@ -1,0 +1,347 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 6f13cbc..1c66aa3 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the post-iteration-009 route structure and admin pipeline.
+ - [x] 001a Reconcile the missing post-iteration-009 admin route structure before auth gates: move the existing harness LiveViews under `/admin/*`, introduce a `:staff_browser` seam, update links/tests, and preserve `POST /webhooks/postmark`.
+ - [x] 002 Add persistence for authentication:
+-- [ ] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
++- [x] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [ ] 004 Extend `Memba.Membership` query API as needed:
+ - [ ] 005 Add auth email delivery:
+ - [ ] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
+diff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex
+new file mode 100644
+index 0000000..f9a4e53
+--- /dev/null
++++ b/web/lib/memba/accounts.ex
+@@ -0,0 +1,155 @@
++defmodule Memba.Accounts do
++  @moduledoc """
++  Authentication context for shared email magic-link sign-in.
++
++  The context owns magic-token generation and consumption while delegating club
++  membership decisions to the public Membership query API.
++  """
++
++  import Ecto.Query
++
++  alias Memba.Accounts.MagicToken
++  alias Memba.Membership
++  alias Memba.Repo
++
++  @magic_token_bytes 32
++  @magic_token_ttl_minutes 15
++  @staff_domain "memba.io"
++
++  @doc """
++  Normalize an email address for authentication lookups.
++  """
++  def normalize_email(email) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, :invalid_email}
++    end
++  end
++
++  def normalize_email(_email), do: {:error, :invalid_email}
++
++  @doc """
++  Return whether an email address belongs to Memba staff.
++  """
++  def staff_email?(email) do
++    case normalize_email(email) do
++      {:ok, email} -> String.ends_with?(email, "@#{@staff_domain}")
++      {:error, :invalid_email} -> false
++    end
++  end
++
++  @doc """
++  Request a magic-link token for an email that is allowed to sign in.
++
++  Staff emails and active member emails receive a token request map containing
++  the normalized email, raw token, and expiry. Valid but unknown emails return
++  `{:ok, :not_requested}` so callers can keep user-facing responses neutral.
++  """
++  def request_magic_link(email, opts \\ []) when is_list(opts) do
++    with {:ok, email} <- normalize_email(email) do
++      if sign_in_allowed?(email) do
++        create_magic_token(email, opts)
++      else
++        {:ok, :not_requested}
++      end
++    end
++  end
++
++  @doc """
++  Create and persist a one-time magic-link token for a normalized email.
++
++  Only the SHA-256 hash is stored; the raw token is returned once to the caller.
++  """
++  def create_magic_token(email, opts \\ []) when is_list(opts) do
++    with {:ok, email} <- normalize_email(email) do
++      now = Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)
++      token = Keyword.get_lazy(opts, :token, &generate_magic_token/0)
++      expires_at = DateTime.add(now, @magic_token_ttl_minutes, :minute)
++
++      {:ok, _magic_token} =
++        Repo.insert(%MagicToken{
++          email: email,
++          token_hash: hash_magic_token(token),
++          expires_at: expires_at
++        })
++
++      {:ok, %{email: email, token: token, expires_at: expires_at}}
++    end
++  end
++
++  @doc """
++  Hash a raw magic-link token for persistence or lookup.
++  """
++  def hash_magic_token(token) when is_binary(token) do
++    :crypto.hash(:sha256, token)
++  end
++
++  @doc """
++  Consume a valid, unexpired magic-link token exactly once.
++  """
++  def consume_magic_token(token, opts \\ [])
++
++  def consume_magic_token(token, opts) when is_binary(token) and is_list(opts) do
++    now = Keyword.get_lazy(opts, :now, fn -> DateTime.utc_now(:microsecond) end)
++    token_hash = hash_magic_token(token)
++
++    query =
++      MagicToken
++      |> where([magic_token], magic_token.token_hash == ^token_hash)
++      |> where([magic_token], is_nil(magic_token.consumed_at))
++      |> where([magic_token], magic_token.expires_at > ^now)
++      |> select([magic_token], magic_token.email)
++
++    case Repo.update_all(query, set: [consumed_at: now, updated_at: now]) do
++      {1, [email]} -> {:ok, email}
++      {0, []} -> {:error, :invalid_or_expired_token}
++    end
++  end
++
++  def consume_magic_token(_token, _opts), do: {:error, :invalid_or_expired_token}
++
++  @doc """
++  List active clubs for an email address.
++  """
++  def list_clubs_for_email(email) do
++    with {:ok, email} <- normalize_email(email) do
++      Membership.list_clubs()
++      |> Enum.filter(&active_member_of_club?(email, &1.club_id))
++    else
++      {:error, :invalid_email} -> []
++    end
++  end
++
++  @doc """
++  Return whether an email address is an active member of the given club.
++  """
++  def active_member_of_club?(email, club_id) do
++    with {:ok, email} <- normalize_email(email) do
++      club_id
++      |> Membership.list_active_members_of_club()
++      |> Enum.any?(fn member -> member.email == email end)
++    else
++      {:error, :invalid_email} -> false
++    end
++  end
++
++  defp sign_in_allowed?(email) do
++    staff_email?(email) or list_clubs_for_email(email) != []
++  end
++
++  defp generate_magic_token do
++    @magic_token_bytes
++    |> :crypto.strong_rand_bytes()
++    |> Base.url_encode64(padding: false)
++  end
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _other -> false
++    end
++  end
++end
+diff --git a/web/test/memba/accounts_test.exs b/web/test/memba/accounts_test.exs
+new file mode 100644
+index 0000000..a662108
+--- /dev/null
++++ b/web/test/memba/accounts_test.exs
+@@ -0,0 +1,167 @@
++defmodule Memba.AccountsTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Accounts
++  alias Memba.Accounts.MagicToken
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Projections.Person
++
++  describe "normalize_email/1" do
++    test "trims and lowercases email addresses" do
++      assert Accounts.normalize_email("  Member@Example.COM  ") == {:ok, "member@example.com"}
++    end
++
++    test "rejects invalid email addresses" do
++      assert Accounts.normalize_email("not-an-email") == {:error, :invalid_email}
++      assert Accounts.normalize_email("@example.com") == {:error, :invalid_email}
++      assert Accounts.normalize_email(nil) == {:error, :invalid_email}
++    end
++  end
++
++  describe "staff_email?/1" do
++    test "returns true only for normalized memba.io addresses" do
++      assert Accounts.staff_email?(" Staff@Memba.IO ")
++
++      refute Accounts.staff_email?("member@example.com")
++      refute Accounts.staff_email?("staff@sub.memba.io")
++      refute Accounts.staff_email?("not-an-email")
++    end
++  end
++
++  describe "request_magic_link/1" do
++    test "creates a hashed expiring token for a staff email" do
++      before_request = DateTime.utc_now(:microsecond)
++
++      assert {:ok, request} = Accounts.request_magic_link(" Staff@Memba.IO ")
++
++      assert request.email == "staff@memba.io"
++      assert is_binary(request.token)
++      assert byte_size(request.token) > 20
++      assert DateTime.diff(request.expires_at, before_request, :minute) in 14..15
++
++      assert [magic_token] = Repo.all(MagicToken)
++      assert magic_token.email == "staff@memba.io"
++      assert magic_token.token_hash == Accounts.hash_magic_token(request.token)
++      refute magic_token.token_hash == request.token
++      assert DateTime.compare(magic_token.expires_at, request.expires_at) == :eq
++      assert is_nil(magic_token.consumed_at)
++    end
++
++    test "creates a token for an active member email" do
++      club = insert_projected_club(name: "Kootenay Mountaineering Club")
++      person = insert_projected_person(email: "member@example.com")
++      insert_projected_membership(club_id: club.club_id, person_id: person.person_id)
++
++      assert {:ok, %{email: "member@example.com", token: token}} =
++               Accounts.request_magic_link(" MEMBER@example.com ")
++
++      assert [%MagicToken{token_hash: token_hash}] = Repo.all(MagicToken)
++      assert token_hash == Accounts.hash_magic_token(token)
++    end
++
++    test "does not create a token for a valid but unknown email" do
++      assert {:ok, :not_requested} = Accounts.request_magic_link("unknown@example.com")
++
++      assert Repo.all(MagicToken) == []
++    end
++  end
++
++  describe "consume_magic_token/1" do
++    test "returns the email and marks a valid token consumed exactly once" do
++      assert {:ok, %{token: token}} = Accounts.create_magic_token("member@example.com")
++
++      assert {:ok, "member@example.com"} = Accounts.consume_magic_token(token)
++      assert {:error, :invalid_or_expired_token} = Accounts.consume_magic_token(token)
++
++      assert %MagicToken{consumed_at: %DateTime{}} = Repo.one!(MagicToken)
++    end
++
++    test "rejects expired tokens without consuming them" do
++      token = "expired-token"
++
++      Repo.insert!(%MagicToken{
++        email: "member@example.com",
++        token_hash: Accounts.hash_magic_token(token),
++        expires_at: DateTime.add(DateTime.utc_now(:microsecond), -1, :minute)
++      })
++
++      assert {:error, :invalid_or_expired_token} = Accounts.consume_magic_token(token)
++
++      assert %MagicToken{consumed_at: nil} = Repo.one!(MagicToken)
++    end
++
++    test "rejects unknown or malformed token values" do
++      assert {:error, :invalid_or_expired_token} = Accounts.consume_magic_token("missing-token")
++      assert {:error, :invalid_or_expired_token} = Accounts.consume_magic_token(nil)
++    end
++  end
++
++  describe "club membership queries by email" do
++    test "lists clubs where the normalized email belongs to an active member" do
++      alpine = insert_projected_club(name: "Alpine Club")
++      kootenay = insert_projected_club(name: "Kootenay Mountaineering Club")
++      other = insert_projected_club(name: "Other Club")
++      inactive = insert_projected_club(name: "Inactive Club")
++
++      alice = insert_projected_person(name: "Alice", email: "member@example.com")
++      bob = insert_projected_person(name: "Bob", email: "other@example.com")
++
++      inactive_alice =
++        insert_projected_person(name: "Inactive Alice", email: "member@example.com")
++
++      insert_projected_membership(club_id: kootenay.club_id, person_id: alice.person_id)
++      insert_projected_membership(club_id: alpine.club_id, person_id: alice.person_id)
++      insert_projected_membership(club_id: other.club_id, person_id: bob.person_id)
++
++      insert_projected_membership(
++        club_id: inactive.club_id,
++        person_id: inactive_alice.person_id,
++        active: false
++      )
++
++      assert Accounts.list_clubs_for_email(" MEMBER@example.com ") == [alpine, kootenay]
++      assert Accounts.list_clubs_for_email("unknown@example.com") == []
++      assert Accounts.list_clubs_for_email("not-an-email") == []
++    end
++
++    test "checks whether an email is an active member of a club" do
++      club = insert_projected_club()
++      other_club = insert_projected_club()
++      person = insert_projected_person(email: "member@example.com")
++
++      insert_projected_membership(club_id: club.club_id, person_id: person.person_id)
++
++      assert Accounts.active_member_of_club?(" MEMBER@example.com ", club.club_id)
++
++      refute Accounts.active_member_of_club?("member@example.com", other_club.club_id)
++      refute Accounts.active_member_of_club?("other@example.com", club.club_id)
++      refute Accounts.active_member_of_club?("not-an-email", club.club_id)
++      refute Accounts.active_member_of_club?("member@example.com", "not-a-uuid")
++    end
++  end
++
++  defp insert_projected_club(attrs \\ []) do
++    Repo.insert!(%Club{
++      club_id: Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0),
++      name: Keyword.get(attrs, :name, "Club #{System.unique_integer([:positive])}")
++    })
++  end
++
++  defp insert_projected_person(attrs) do
++    Repo.insert!(%Person{
++      person_id: Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0),
++      name: Keyword.get(attrs, :name, "Member #{System.unique_integer([:positive])}"),
++      email: Keyword.get(attrs, :email, "member#{System.unique_integer([:positive])}@example.com")
++    })
++  end
++
++  defp insert_projected_membership(attrs) do
++    Repo.insert!(%MembershipProjection{
++      membership_id: Keyword.get_lazy(attrs, :membership_id, &Ecto.UUID.generate/0),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      person_id: Keyword.fetch!(attrs, :person_id),
++      active: Keyword.get(attrs, :active, true)
++    })
++  end
++end
