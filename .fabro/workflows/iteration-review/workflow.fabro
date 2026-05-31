@@ -150,6 +150,20 @@ digraph IterationReview {
         script="echo 'Iteration review failed: could not publish green review polish to main. Check push credentials, branch protection, and whether origin/main moved with conflicts.' >&2\nexit 1"
     ]
 
+    finalize_iteration_status [
+        label="Finalize Iteration Status",
+        shape=parallelogram,
+        script="bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh '{{ inputs.plan_path }}'",
+        timeout="300s"
+    ]
+
+    finalize_failed [
+        label="Fail: Finalize Iteration Status",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.' >&2\nexit 1"
+    ]
+
     final_summary [
         label="Final Summary",
         shape=tab,
@@ -189,9 +203,12 @@ digraph IterationReview {
 
     record_code_health -> final_artifact_gate
     final_artifact_gate -> publish_polish_to_main
-    publish_polish_to_main -> final_summary [condition="outcome=succeeded"]
+    publish_polish_to_main -> finalize_iteration_status [condition="outcome=succeeded"]
     publish_polish_to_main -> publish_failed
     publish_failed -> exit
+    finalize_iteration_status -> final_summary [condition="outcome=succeeded"]
+    finalize_iteration_status -> finalize_failed
+    finalize_failed -> exit
     final_summary -> exit
     not_ready -> exit
 }
