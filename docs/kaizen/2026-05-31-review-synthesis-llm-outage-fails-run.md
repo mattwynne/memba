@@ -88,3 +88,24 @@ Late-stage synthesis is a summarisation/reduction step, not the only source of t
 - Route synthesis provider failures to a separate `Needs manual synthesis` path with a clear message and artifact locations.
 - Preserve and surface independent review artifacts even when synthesis fails.
 - Change terminal copy so provider failures do not say reviewers found blocking issues.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The `iteration-review` workflow treated a failed `Synthesize Review` prompt like any other missing routing decision. The node had no node-level retry policy, no fallback route for failed or partially completed synthesis, and an unconditional edge into the normal review gate. When the OpenAI call failed after provider-level retries, the workflow continued to `review_gate` without the context keys normally emitted by synthesis, then fell through to the generic `not_ready` failure. That conflated infrastructure failure with reviewer rejection.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-review/workflow.fabro`: added `retry_policy="patient"` and `allow_partial=true` to `synthesize_review`, so transient handler failures get node-level retry and exhausted retryable failures can be routed explicitly.
+- `.fabro/workflows/iteration-review/workflow.fabro`: added a dedicated `synthesis_unavailable` goal-gate node with an infrastructure-specific message that tells the operator independent review evidence exists and should be inspected or manually synthesized.
+- `.fabro/workflows/iteration-review/workflow.fabro`: changed routing after `synthesize_review` so only `outcome=succeeded` reaches the normal review gate; all other outcomes route to `synthesis_unavailable` instead of the generic `Needs Human Review` path.
+
+Validation:
+
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed. Existing goal-gate retry warnings remain, plus the new expected warning for the dedicated `synthesis_unavailable` terminal gate.
+
+Remaining follow-up:
+
+- Consider adding provider/model fallbacks for synthesis once the preferred fallback model policy is clear.
+- Consider surfacing direct artifact links in the `synthesis_unavailable` message if Fabro exposes run/artifact paths to command nodes.
