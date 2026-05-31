@@ -9,7 +9,7 @@ bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--wait|--no-wait] [--po
 The helper runs the real workflows directly from the CLI, so approval stays at the user-run command boundary instead of inside worker-created child runs:
 
 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
-2. `bin/dev` waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the slot is clear, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
+2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
 3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
 4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and marks the iteration `merged` after a successful review.
 
@@ -32,12 +32,13 @@ fabro run .fabro/workflows/plan-validation/workflow.toml \
   --auto-approve
 ```
 
-Starting implementation remains single-piece-flow. `bin/dev fabro deliver` waits by default while another iteration is `implementing`, `ready-for-review`, `in-review`, `reviewing`, or `finalizing`; with `--no-wait` it refuses immediately instead.
+Starting implementation remains ordered single-piece-flow. `bin/dev fabro deliver` refuses to start iteration N until earlier-numbered iterations are `merged`. It also waits by default while another iteration is `implementing`, `ready-for-review`, `in-review`, `reviewing`, or `finalizing`; with `--no-wait` it refuses immediately instead.
 
 Manual split-phase escape hatches remain available:
 
 ```bash
 fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
+.fabro/workflows/scripts/iteration_status.py check-predecessors docs/iterations/NNN-topic/plan.md
 .fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
 fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
 bin/dev fabro review <branch> docs/iterations/NNN-topic/plan.md <base-sha>

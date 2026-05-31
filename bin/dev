@@ -165,7 +165,7 @@ acceptance() {
 }
 
 # @cmd Manage iteration lifecycle status
-# @arg command![status|mark|check-clear] Helper command
+# @arg command![status|mark|check-clear|check-predecessors] Helper command
 # @arg args~ Arguments for the helper command
 iteration() {
   local command_name="${1:-}"
@@ -188,6 +188,9 @@ iteration() {
     check-clear)
       _iteration_status_tool check-clear "$@"
       ;;
+    check-predecessors)
+      _iteration_status_tool check-predecessors "$@"
+      ;;
     -h|--help|"")
       cat >&2 <<EOF
 Usage: $0 iteration <command> [args]
@@ -196,6 +199,7 @@ Commands:
   status <plan_path>
   mark <plan_path> <status> [--check-clear-first]
   check-clear <plan_path> [--allow-same-iteration]
+  check-predecessors <plan_path>
 EOF
       ;;
     *)
@@ -414,6 +418,8 @@ _fabro_deliver() {
     exit 1
   fi
 
+  git -C "$repo_root" pull --ff-only origin main
+
   local plan_status
   plan_status=$(_fabro_plan_status "$plan_path")
   case "$plan_status" in
@@ -439,6 +445,9 @@ _fabro_deliver() {
       exit 1
       ;;
   esac
+
+  echo "== Checking predecessor iterations =="
+  "$0" iteration check-predecessors "$plan_path"
 
   echo "== Waiting for implementation WIP slot =="
   if [ "$wait_for_wip" -eq 1 ]; then
