@@ -8,8 +8,8 @@ Rules:
 - Do not reinterpret, weaken, or ignore accepted ADRs.
 - Do not replace ADR-mandated architecture with simpler local substitutes.
 - Add or update automated tests proving the ADR-relevant behaviour, wiring, or structure.
-- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria.
-- If a fix requires changing feature files, changing ADRs, changing the iteration plan, or making a product/architecture decision, stop and request human input.
+- Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If the plan permits a feature edit, make only that explicit edit and preserve/validate the coverage promised by the plan.
+- If a fix requires changing feature files beyond explicit plan permission, changing ADRs, changing the iteration plan, or making a product/architecture decision, stop and request human input.
 - Do not add unrelated cleanup or new product behaviour.
 - Do not skip or weaken existing validation.
 - Do not commit changes.

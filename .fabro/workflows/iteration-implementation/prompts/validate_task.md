@@ -19,7 +19,7 @@ Accept the task only if all are true:
 - Any todo changes split/add/reorder only to satisfy the plan; no plan-required work was deleted, weakened, or silently deferred.
 - Relevant automated tests were added/updated and focused tests were run, or a justified blocker was reported.
 - Accepted ADR constraints relevant to this task are respected.
-- No acceptance feature files (`*.feature`, including under `acceptance-tests/`) were edited.
+- Acceptance feature files (`*.feature`, including under `acceptance-tests/`) were not edited unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change; any permitted edit stays within that explicit permission and preserves/validates the coverage promised by the plan.
 - The task is small enough to stand independently with a useful Fabro checkpoint evidence trail.
 
 If validation fails but the task is still clear and safe to attempt again, request a clean retry from the last successful checkpoint. Do not ask for in-place repair. Only request human input when the task, plan, or repository state is ambiguous, unsafe, repeatedly failing for the same non-transient reason, or blocked by a decision/tooling issue that another clean attempt is unlikely to solve.

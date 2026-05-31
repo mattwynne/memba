@@ -73,4 +73,31 @@ Validation plan:
 - A targeted shell test for allowed tag-only feature diffs versus rejected scenario-text feature diffs.
 - A smoke run or local script check proving `acceptance-tests/core` is ignored/excluded and not present in publish/checkpoint candidate paths.
 
-Status: awaiting decision.
+Status: accepted; implemented the explicit-plan-permission path for acceptance feature edits.
+
+## Resolution applied
+
+Date: 2026-05-30
+
+Root cause: Plan validation allowed an iteration to require acceptance `.feature` edits while implementation and publish treated every `.feature` diff as forbidden. The lock was right by default, but too blunt: it could not distinguish unplanned acceptance-criteria drift from an explicitly approved feature-file change in the plan.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py`: added a deterministic publish/final-gate guard. `.feature` files are locked by default; edits are allowed only when the plan contains `## Allowed acceptance feature changes` naming the exact file. If the permission says `tag-only`, non-tag Gherkin line changes are rejected.
+- `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: replaced the blanket `.feature` rejection with the new guard.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: final artifact gate now runs the same guard before publish.
+- `.fabro/workflows/iteration-implementation/prompts/`: aligned implementation, validation, repair, and review-synthesis prompts with the explicit-plan-permission rule.
+- `.fabro/workflows/plan-validation/prompts/`: taught plan validation to fail plans that expect shared `.feature` edits without an explicit allowed-change section naming files, change kind, reason, and coverage preservation.
+- `.fabro/workflows/README.md`: documented the plan section format and tag-only enforcement.
+- `docs/iterations/007-deliveries-overview/plan.md`: added the explicit allowed feature-change section for the already planned operator feature remodel.
+
+Validation:
+
+- `.fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed; covers rejected unplanned feature edits, allowed tag-only edits, rejected non-tag edits under tag-only permission, and allowed explicitly planned non-tag edits.
+- `python3 -m py_compile .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py` — passed.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — passed with existing goal-gate retry warnings.
+- `dev check` — passed.
+
+Remaining follow-up:
+
+- Consider an upstream Fabro oversized-blob checkpoint guard separately; this fix addresses the planned `.feature` edit failure, not the core-dump push failure.

@@ -35,6 +35,6 @@ Todo path: `<iteration directory>/todo.md`.
 - You may not delete, weaken, silently defer, or hide plan-required work.
 - If you discover work outside the approved plan, add it under an `## Out of scope / discovered` section or report a blocker; do not mix it into the in-scope task list.
 - Do not edit the approved `plan.md`.
-- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). They are locked.
+- Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change.
 
 When finished, summarize the todo path and any changes you made to align it with the plan.

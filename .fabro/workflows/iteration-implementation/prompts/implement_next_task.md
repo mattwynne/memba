@@ -41,8 +41,8 @@ Todo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.
 - Use test-driven development for behaviour changes.
 - Add or update automated tests proving the selected task's behaviour/configuration.
 - Run focused validation appropriate to the selected task and capture the commands/results in your response.
-- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). If a feature file appears wrong, stale, or insufficient, stop and report the issue.
-- Add acceptance step definitions only where the plan explicitly requires executable plumbing for locked shared feature files.
+- Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If the plan permits a feature edit, make only that explicit edit and preserve/validate the coverage promised by the plan. If a feature file appears wrong, stale, or insufficient without explicit permission, stop and report the issue.
+- Add acceptance step definitions only where the plan explicitly requires executable plumbing for shared feature files.
 - Use Req for HTTP requests; do not introduce HTTPoison, Tesla, or `:httpc`.
 - Follow relevant project guidance for Phoenix, LiveView, HEEx, Tailwind, Ecto, Elixir, Mix, and tests.
 - If you hit a real blocker, stop and report it clearly without checking off the task.

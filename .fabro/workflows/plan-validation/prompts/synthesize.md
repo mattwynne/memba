@@ -24,6 +24,7 @@ A plan is NOT READY if any of these are true:
 - Important business decisions remain open.
 - Implementation steps require major technical choices that are not made.
 - The expected new capability or success validation is unclear.
+- The plan expects shared acceptance `.feature` file edits but lacks a `## Allowed acceptance feature changes` section naming each exact file, the allowed kind of change, the reason, and how coverage is preserved or intentionally changed.
 
 Correction policy:
 

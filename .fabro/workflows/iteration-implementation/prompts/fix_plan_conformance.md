@@ -9,8 +9,8 @@ Rules:
 - Do not omit, weaken, or substitute plan-mandated architecture, tests, configurations, migrations, commands, or deliverables.
 - Add or update automated tests proving each repaired plan requirement is satisfied.
 - Add code, configuration, migrations, scripts, or modules needed to satisfy each explicit plan requirement.
-- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria.
-- If a fix requires changing feature files, changing the plan, or making a product/architecture decision, stop and request human input.
+- Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If the plan permits a feature edit, make only that explicit edit and preserve/validate the coverage promised by the plan.
+- If a fix requires changing feature files beyond explicit plan permission, changing the plan, or making a product/architecture decision, stop and request human input.
 - If the repair brief is too large, ambiguous, conflicting, or requires a decision beyond the plan scope, stop and request human input.
 - Do not add unrelated cleanup or new product behaviour beyond the plan requirements.
 - Do not skip or weaken existing validation.

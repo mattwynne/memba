@@ -53,7 +53,17 @@ Prepare steps should reference files through `/workspace/memba/...` or run from 
 
 ## Delivery contract
 
-Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses locked `.feature` changes, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
+Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses `.feature` changes unless the plan explicitly permits them in a `## Allowed acceptance feature changes` section, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
+
+Acceptance feature files are locked by default. When an iteration genuinely needs to change shared `.feature` files, the plan must include:
+
+```markdown
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/example.feature`: tag-only change to add `@todo-web`; covered by the Elixir/domain acceptance path in `dev check`.
+```
+
+Each bullet must name the exact `.feature` path and the allowed kind of change. If the bullet says `tag-only`, the publish guard rejects any non-tag Gherkin line changes in that file.
 
 Review is post-merge and non-blocking. It must never push red: changes flow back through `dev ci`, and the publish script only runs after that green check. If there are no review changes, the publish step exits successfully without touching `main`. If there are bounded safe changes, they are squashed into one `review polish: iteration NNN` commit and pushed to `main`. Human-judgement findings belong in `docs/code-health.md`, not in a PR or blocking gate.
 

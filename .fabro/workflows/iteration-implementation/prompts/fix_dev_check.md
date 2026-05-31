@@ -6,7 +6,7 @@ Rules:
 
 - Prefer the smallest correct fix.
 - Do not skip or weaken tests, checks, Credo rules, formatter rules, or compiler warnings unless the plan explicitly says to change them.
-- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria; if they appear wrong, report the blocker instead of changing them.
+- Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If the plan permits a feature edit, make only that explicit edit and preserve/validate the coverage promised by the plan; otherwise report the blocker instead of changing feature files.
 - Do not add unrelated cleanup.
 - Re-read relevant project guidance before touching Phoenix, LiveView, HEEx, Ecto, or Elixir test code.
 - Do not commit changes.
