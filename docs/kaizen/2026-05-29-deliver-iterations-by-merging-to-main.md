@@ -110,3 +110,21 @@ iteration-review (after):  clone main → review the iteration's diff
 - **Depends on plan conformance actually moving into implementation**
   (`2026-05-29-move-plan-conformance-to-implementation.md`). If review still had
   to gate correctness, fix-forward would be unsafe.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Delivering through PR creation added unnecessary model/tooling dependence for the current iteration workflow.
+
+Fix applied:
+
+- `2c685b1`: changed the delivery path to push/merge iterations to `main` directly.
+
+Validation:
+
+- Historical delivery evidence: the direct-to-main delivery workflow commit is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

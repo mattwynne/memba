@@ -40,3 +40,22 @@ bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messa
 ```
 
 A safer retry may require a review branch based on current `main` or a publish script path that can run from the committed workflow definition rather than from stale reviewed branch contents.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Review polish publishing could fail late when rebasing or publishing from stale review state.
+
+Fix applied:
+
+- `d9d54ea`: used the fixed review workflow for the iteration 003 review.
+- `e635796`: marked iteration 003 merged after the corrected path completed.
+
+Validation:
+
+- Historical delivery evidence: iteration 003 was marked merged on `main`.
+
+Remaining follow-up:
+
+- None for this note.

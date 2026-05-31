@@ -98,3 +98,21 @@ If a task repeatedly fails after clean retries, stop for human input.
 - Retry resets to the last successful task commit and reruns the implementor.
 - Commit guardrails prevent check-off-only commits.
 - The workflow validates with `fabro validate .fabro/workflows/iteration-implementation/workflow.toml`.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The iteration task loop had too much ownership ambiguity between workflow orchestration and task-level agents.
+
+Fix applied:
+
+- `abbb391`: simplified the Fabro iteration task loop.
+
+Validation:
+
+- Historical delivery evidence: the simplified task-loop commit is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

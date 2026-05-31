@@ -190,3 +190,21 @@ PR creation failed because provider unavailable.
 ## Operator workaround
 
 If built-in PR creation still fails, create PRs manually from a clean branch or run branch with `gh pr create` or the GitHub API.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: PR creation depended on model behavior/configuration instead of a deterministic workflow step.
+
+Fix applied:
+
+- `adbb27d`: documented and applied the Fabro PR model configuration fix so PR creation no longer depended on the wrong LLM choice.
+
+Validation:
+
+- Historical delivery evidence: the PR model configuration fix is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

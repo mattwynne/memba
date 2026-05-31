@@ -173,3 +173,21 @@ A throwaway deliver run that *only* validates and stops is a good first step to 
   reintroduce a pause without redesigning deliver.
 - **Kaizen authorship stays human.** Deliver's stage-labeled summary should give a human
   enough to write a workflow-failure kaizen; the workflow does not author one.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Validate, implement, and review were separate operator steps, creating handoff friction and stale state risk.
+
+Fix applied:
+
+- `af1cd03`: added the nested iteration-deliver workflow.
+
+Validation:
+
+- Historical delivery evidence: the iteration-deliver workflow commit is present on `main`.
+
+Remaining follow-up:
+
+- Later notes track specific delivery-workflow hardening issues.

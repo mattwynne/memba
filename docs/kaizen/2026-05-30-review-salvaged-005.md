@@ -34,3 +34,22 @@ Use the project `iteration-review` workflow/skill against the salvaged implement
 - Review completes.
 - Any review polish is applied and `dev check` passes.
 - Iteration 005 is either merged/marked complete or has clear review blockers.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The original review target was the failed mixed run branch, so the work needed a clean salvaged implementation branch before review could be meaningful.
+
+Fix applied:
+
+- `8eda13a` / `aab6d3a`: created the clean salvaged iteration 005 app substrate for review.
+- `27062a0`: marked iteration 005 merged, closing the review/recovery path.
+
+Validation:
+
+- Historical delivery evidence: the salvaged iteration 005 slice was merged on `main`.
+
+Remaining follow-up:
+
+- None.

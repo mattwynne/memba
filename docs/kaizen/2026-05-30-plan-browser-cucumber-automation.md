@@ -55,3 +55,22 @@ The shared member-facing acceptance scenarios run reliably through Playwright/Cu
 - A new iteration plan exists under `docs/iterations/`.
 - The plan is validated by Fabro.
 - The plan explicitly documents the synchronization strategy for eventually consistent projections.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Browser Cucumber automation was too large and entangled to keep inside the iteration 005 salvage slice.
+
+Fix applied:
+
+- `8a1b654`: planned browser Cucumber automation as a separate iteration.
+- `e112917`: implemented the browser Cucumber automation work separately from the iteration 005 salvage.
+
+Validation:
+
+- Historical delivery evidence: the separate browser automation implementation commit is present on `main`.
+
+Remaining follow-up:
+
+- None for this planning note.

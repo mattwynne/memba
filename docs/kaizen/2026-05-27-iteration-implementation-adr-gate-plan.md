@@ -251,3 +251,23 @@ Expected harness result after this change:
 - The ADR gate may be too strict for intentionally lightweight slices. Mitigation: the plan should explicitly state which ADR-mandated decisions are in or out of scope; otherwise accepted ADRs remain binding.
 - LLM gates can still be inconsistent. Mitigation: use explicit routing rules, require ADR/evidence tables, and add simple script evidence where useful.
 - Rework may become large. Mitigation: cap ADR rework visits and route repeated or architectural uncertainty to human input.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Iteration implementation needed an ADR-aware gate so architectural decisions were checked before/while tasks were implemented.
+
+Fix applied:
+
+- `8e58711`: added the ADR-aware kaizen plans and review prompt.
+- `349f24f`: added the ADR repair evidence gate.
+- Later hardening commits integrated the ADR gate into the broader implementation workflow.
+
+Validation:
+
+- Historical delivery evidence: the ADR gate and related hardening commits are present on `main`.
+
+Remaining follow-up:
+
+- None for this plan note.

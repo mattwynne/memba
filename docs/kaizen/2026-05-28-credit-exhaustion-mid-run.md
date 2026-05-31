@@ -96,3 +96,21 @@ struck on the last task (009 of 009), after 8 durable task commits.
   `docs/iterations/001-event-sourced-foundation/plan.md`.
 - Confirm it resumes at task 009 with no rework (resume rehearsal), then let it
   finish and hand off to `iteration-review`.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Long runs could fail opaquely when Anthropic credits were exhausted because model routing still depended on Anthropic-backed providers.
+
+Fix applied:
+
+- `357e9d7`: switched workflow/model usage away from Anthropic models for the affected path.
+
+Validation:
+
+- Historical delivery evidence: the model-routing fix is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

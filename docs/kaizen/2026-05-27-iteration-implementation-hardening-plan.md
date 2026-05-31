@@ -711,3 +711,24 @@ All four items completed. The updated `synthesize_review.md` prompt now includes
 - [x] Exercise Regression 5 with a dry-run, fixture, or documented manual graph check.
   - Validation note (2026-05-27): Manual Fabro graph/prompt check completed. `synthesize_review.md` explicitly detects prior blocker IDs/titles, uses `missing-commanded-eventstore` as the repeated-blocker example, and requires unresolved blockers after repair to route to `HUMAN_INPUT` with `review_fixes_available:false` and `repeated_blockers`. The workflow routes that context to `not_ready`, not acceptance or another repair pass.
 - [x] Review final diff to ensure only harness/docs files changed unless Matt approved product-script changes. Result: only `.fabro/workflows/iteration-implementation/` harness files and this `docs/kaizen/` plan changed; no product app code or product scripts changed.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The implementation workflow needed stronger gates for plan conformance, repair evidence, final artifact evidence, and sandbox boundaries.
+
+Fix applied:
+
+- `eb1576c`: hardened sandbox preflight boundaries.
+- `4e448f1`, `1b942f7`, `0459ee5`: added plan-conformance nodes, gate prompt, and repair loop.
+- `7f1df99`, `1253fb8`, `2328a7e`: added repair and final artifact evidence gates.
+- `430ba3e` and `e70a66a`: recorded workflow and local `dev check` validation results.
+
+Validation:
+
+- Historical delivery evidence: the hardening commits and recorded validation commits are present on `main`.
+
+Remaining follow-up:
+
+- None for this plan note.

@@ -108,3 +108,21 @@ Then existing whole-iteration stages run:
 - Agents can add/split/reorder todos only when needed to satisfy the plan.
 - Completed tasks have durable commits with evidence in commit messages.
 - Whole-plan conformance still runs after all todos are checked off.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The iteration implementation loop needed explicit task draining so progress could be made and resumed task-by-task.
+
+Fix applied:
+
+- `20f73c3`: added the task-draining workflow kaizen implementation agent.
+
+Validation:
+
+- Historical delivery evidence: the task-draining workflow commit is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

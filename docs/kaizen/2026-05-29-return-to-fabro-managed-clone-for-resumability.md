@@ -331,3 +331,21 @@ Mitigation: after managed clone is restored, run a recovery rehearsal and docume
 ## Current recommendation
 
 Proceed with the managed-clone restoration. The smoke test shows it gives us exactly the missing pieces: a pushed `fabro/run/<run-id>` branch and checkpoint `git_commit_sha`. That aligns the workflow with Fabro's native recovery model instead of maintaining a parallel manual clone strategy that now undermines resumability.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Running implementation work outside Fabro-managed clones made run state and recovery harder to resume reliably.
+
+Fix applied:
+
+- `b12f326`: restored Fabro-managed iteration clones and run branches as the implementation execution model.
+
+Validation:
+
+- Historical delivery evidence: the Fabro-managed clone restoration commit is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

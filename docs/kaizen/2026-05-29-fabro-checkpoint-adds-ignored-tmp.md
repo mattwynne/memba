@@ -47,3 +47,21 @@ fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=d
 ```
 
 Do not retry until the checkpoint/ignored-file interaction is resolved, otherwise the run is expected to fail deterministically at the same stage.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Fabro checkpointing attempted to stage ignored `.fabro/tmp` content, causing checkpoint failure.
+
+Fix applied:
+
+- `75c1d67`: changed the workflow so Fabro tmp content is not ignored in a way that breaks checkpoint staging.
+
+Validation:
+
+- Historical delivery evidence: the checkpoint tmp fix is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

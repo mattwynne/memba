@@ -40,3 +40,21 @@ or from a future post-merge pipeline step.
 If we finish the direct-to-main workflow change, call this helper from the
 post-merge delivery step so the metadata update lands automatically with the
 pipeline's normal commit/push path.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The delivery workflow lacked a deterministic post-merge step to update the iteration index status.
+
+Fix applied:
+
+- `08a8019`: documented the iteration-mark-merged post-merge step.
+
+Validation:
+
+- Historical delivery evidence: the post-merge status step documentation is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.

@@ -42,3 +42,22 @@ Do not blindly keep strong-consistency defaults added during the failed run. Ins
 - `dev check` passes.
 - Iteration 005 plan/index describe the actual delivered scope.
 - Handoff metadata is ready for review.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The failed iteration 005 run mixed useful application work with unrelated workflow and browser-harness changes, so the branch could not be merged safely as-is.
+
+Fix applied:
+
+- `8eda13a` / `aab6d3a`: salvaged the iteration 005 app substrate onto a clean branch, excluding unrelated workflow and browser automation changes.
+- `27062a0`: marked iteration 005 merged after the salvaged slice was delivered.
+
+Validation:
+
+- Historical delivery evidence: iteration 005 app substrate was committed and merged on `main`.
+
+Remaining follow-up:
+
+- None for this salvage note; browser Cucumber automation was tracked separately.

@@ -193,3 +193,21 @@ fabro validate .fabro/workflows/iteration-implementation/workflow.toml
 - Should we first implement the simpler contract-file design in the existing workflow, or prototype the child-workflow-per-task design?
 - Can Fabro expose a clean, deterministic way for script nodes to set context updates without an LLM routing node?
 - Should task contracts be committed as part of task evidence, or kept in `.fabro/tmp` only? Current preference: keep them uncommitted.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Task handoffs lacked a clear validation contract, allowing implementation/review expectations to drift.
+
+Fix applied:
+
+- `c1db31d`: documented and added the task contract validation workflow.
+
+Validation:
+
+- Historical delivery evidence: the task-contract workflow commit is present on `main`.
+
+Remaining follow-up:
+
+- None for this note.
