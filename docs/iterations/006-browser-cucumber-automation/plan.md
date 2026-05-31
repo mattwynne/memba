@@ -1,7 +1,7 @@
 # Browser Cucumber automation for member-facing acceptance
 
 Date: 2026-05-30
-Status: validated
+Status: implementing
 
 ## Goal
 
