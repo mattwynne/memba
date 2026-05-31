@@ -1,7 +1,7 @@
 # Routing and LiveView surface split
 
 Date: 2026-05-31
-Status: implementing
+Status: merged
 
 ## Goal
 
