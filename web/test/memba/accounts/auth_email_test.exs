@@ -51,6 +51,26 @@ defmodule Memba.Accounts.AuthEmailTest do
            }
   end
 
+  test "sends local auth email without requiring a Postmark server token" do
+    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
+
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.local",
+      message_stream: "development-auth"
+    )
+
+    assert :ok =
+             AuthEmail.deliver_magic_link(
+               "matt@memba.io",
+               "http://localhost:4000/auth/magic/token"
+             )
+
+    assert_received {:email, %Swoosh.Email{} = email}
+    assert email.from == {"", "auth@mail.memba.local"}
+    assert email.to == [{"", "matt@memba.io"}]
+    assert email.provider_options == %{message_stream: "development-auth"}
+  end
+
   test "does not hand an email to Swoosh when required auth email configuration is missing" do
     Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
     Application.put_env(:memba, AuthEmail, from: "auth@mail.memba.io")
@@ -62,8 +82,8 @@ defmodule Memba.Accounts.AuthEmailTest do
              )
 
     assert message =~ "Auth email Postmark delivery is enabled"
-    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
     assert message =~ "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
+    refute message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
 
     assert_no_email_sent()
   end
