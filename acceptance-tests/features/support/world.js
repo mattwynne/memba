@@ -29,6 +29,61 @@ class AcceptanceWorld {
 
 setWorldConstructor(AcceptanceWorld);
 
+const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
+const magicLinkSubject = "Sign in to Memba";
+
+async function signInStaff(world) {
+  await world.page.goto(`${world.baseUrl}/auth`);
+  await world.page.getByLabel("Email address").fill(staffEmail);
+  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
+
+  const magicLink = await waitForMagicLink(world);
+  await world.page.goto(magicLink);
+  await world.page.waitForURL((url) => url.pathname !== "/auth", { timeout: 10000 });
+}
+
+async function waitForMagicLink(world) {
+  const deadline = Date.now() + Number(process.env.ACCEPTANCE_PROJECTION_TIMEOUT_MS || 10000);
+  let lastError = null;
+
+  do {
+    try {
+      const response = await world.context.request.get(`${world.baseUrl}/dev/mailbox/json`);
+
+      if (response.status() !== 200) {
+        lastError = new Error(`GET /dev/mailbox/json returned HTTP ${response.status()}`);
+      } else {
+        const payload = await response.json();
+        const email = (payload.data || []).find(
+          (mailboxEmail) =>
+            mailboxEmail.subject === magicLinkSubject &&
+            mailboxEmail.to.some((recipient) => recipient.includes(staffEmail))
+        );
+        const magicLink = email && magicLinkFromTextBody(email.text_body);
+
+        if (magicLink) {
+          return magicLink;
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  } while (Date.now() <= deadline);
+
+  throw new Error(
+    `Timed out waiting for staff magic link email for ${staffEmail}. Last error: ${
+      lastError ? lastError.message : "(none)"
+    }`
+  );
+}
+
+function magicLinkFromTextBody(textBody) {
+  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
+  return match && match[0];
+}
+
 BeforeAll({ name: "Start Phoenix browser acceptance lifecycle", timeout: 360000 }, async function () {
   await lifecycle.start();
 });
@@ -57,6 +112,8 @@ Before(async function () {
       `[requestfailed] ${request.method()} ${request.url()} ${failure ? failure.errorText : ""}`
     );
   });
+
+  await signInStaff(this);
 });
 
 After(async function ({ result } = {}) {

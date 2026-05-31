@@ -52,7 +52,8 @@ function buildCommandEnvironment(config) {
     MIX_ENV: "test",
     PHX_SERVER: "true",
     PORT: String(config.phoenixPort),
-    MEMBA_POSTGRES_PORT: String(config.postgresPort)
+    MEMBA_POSTGRES_PORT: String(config.postgresPort),
+    MEMBA_ACCEPTANCE_LOCAL_EMAIL: "true"
   };
 }
 

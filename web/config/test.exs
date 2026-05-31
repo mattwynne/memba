@@ -49,8 +49,23 @@ config :memba, MembaWeb.Endpoint,
   secret_key_base: "+oZn9i13kWVdYNGOEgsHq8mRThfrIm6gsdUyl5gUMJXV8sHSGJ7m0sDaknZ7eOWQ",
   server: false
 
-# In test we don't send emails
-config :memba, Memba.Mailer, adapter: Swoosh.Adapters.Test
+# In ordinary ExUnit tests we don't send emails. Browser acceptance tests opt into
+# Swoosh's local adapter so they can inspect `/dev/mailbox` like a developer would.
+config :memba, dev_routes: true
+
+if System.get_env("MEMBA_ACCEPTANCE_LOCAL_EMAIL") == "true" do
+  config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Local
+
+  config :memba, Memba.Mailer,
+    adapter: Swoosh.Adapters.Local,
+    api_key: "acceptance-local-mailbox"
+
+  config :memba, Memba.Accounts.AuthEmail,
+    from: "auth@mail.memba.local",
+    message_stream: "acceptance-auth"
+else
+  config :memba, Memba.Mailer, adapter: Swoosh.Adapters.Test
+end
 
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false

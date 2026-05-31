@@ -3,6 +3,7 @@ const {
   addMembers,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
+  assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
   assertOperatorDeliveryReason,
@@ -68,6 +69,10 @@ Then("each addressed member should have a separate delivery record", async funct
 
 Then("each delivery should be sent through the email provider", async function () {
   await assertEachDeliverySentThroughEmailProvider(this);
+});
+
+Then("each addressed member should receive the email in the test mailbox", async function () {
+  await assertEachAddressedMemberReceivedEmailInTestMailbox(this);
 });
 
 Then(

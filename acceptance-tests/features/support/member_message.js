@@ -226,7 +226,9 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
 }
 
 async function visitClubsIndex(world) {
-  await browserInteraction("visit /clubs", () => world.page.goto(appUrl(world.baseUrl, "/clubs")));
+  await browserInteraction("visit /admin/clubs", () =>
+    world.page.goto(appUrl(world.baseUrl, "/admin/clubs"))
+  );
 }
 
 async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
@@ -236,7 +238,7 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs 
   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
 
   await browserInteraction(`visit club page for ${clubName}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`))
+    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`))
   );
   await waitForProjectedVisible(
     world,
@@ -253,7 +255,7 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
 
   await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`))
+    world.page.goto(appUrl(world.baseUrl, `/admin/messages/${message.messageId}`))
   );
   await waitForProjectedVisible(
     world,
@@ -264,8 +266,8 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
 }
 
 async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
-  await browserInteraction("visit /deliveries", () =>
-    world.page.goto(appUrl(world.baseUrl, "/deliveries"))
+  await browserInteraction("visit /admin/deliveries", () =>
+    world.page.goto(appUrl(world.baseUrl, "/admin/deliveries"))
   );
   await waitForProjectedVisible(
     world,
@@ -433,6 +435,8 @@ async function sendMessageToKootenayMembers(
   const sender = world.people[senderName];
   assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
 
+  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+
   await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Message sender").selectOption(sender.personId);
     await world.page.getByLabel("Message subject").fill(subject);
@@ -467,6 +471,7 @@ async function sendMessageToKootenayMembers(
     senderName,
     subject
   };
+  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
   world.lastMessageSubject = subject;
 
   await openMessage(world, subject, { expect });
@@ -598,6 +603,52 @@ async function assertEachDeliverySentThroughEmailProvider(
       "sent",
       `sent delivery status for ${recipientName}`,
       { expect }
+    );
+  }
+
+  return world;
+}
+
+async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
+  ensureState(world);
+
+  const subject = world.lastMessageSubject;
+  const message = world.messages[subject];
+  assert.ok(message, "Expected a message to have been sent before checking the mailbox");
+
+  const addressedMemberNames = world.addressedMemberNames || [];
+  assert.ok(
+    addressedMemberNames.length > 0,
+    "Expected addressed members to be asserted before checking the mailbox"
+  );
+
+  const previousEmails = world.mailboxEmailsBeforeSend || [];
+  const emails = await waitForMailboxEmails(
+    world,
+    previousEmails.length + addressedMemberNames.length,
+    `Swoosh test mailbox emails for ${JSON.stringify(subject)}`
+  );
+  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+
+  for (const recipientName of addressedMemberNames) {
+    const person = world.people[recipientName];
+    assert.ok(person, `Expected ${recipientName} to have been created`);
+
+    const matchingEmail = newEmails.find(
+      (email) =>
+        email.subject === subject &&
+        email.text_body === message.body &&
+        email.to.some((recipient) => recipient.includes(person.email))
+    );
+
+    assertFinalBrowserState(`test mailbox email for ${recipientName}`, () =>
+      assert.ok(
+        matchingEmail,
+        `Expected a mailbox email for ${recipientName} <${person.email}> with subject ${JSON.stringify(
+          subject
+        )}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+      )
     );
   }
 
@@ -869,6 +920,83 @@ async function deliveryForRecipient(
   };
 }
 
+async function testMailboxEmails(world) {
+  const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
+  if (!request || typeof request.get !== "function") {
+    return [];
+  }
+
+  let response;
+
+  try {
+    response = await request.get(appUrl(world.baseUrl, "/dev/mailbox/json"));
+  } catch (error) {
+    throw new Error(
+      `Swoosh mailbox inspection failed: GET /dev/mailbox/json request error.\nCause: ${errorMessage(
+        error
+      )}`,
+      { cause: error }
+    );
+  }
+
+  const status = response.status();
+
+  if (status !== 200) {
+    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
+
+    throw new Error(
+      `Swoosh mailbox inspection failed: expected HTTP 200 from GET /dev/mailbox/json, got HTTP ${status}.\n` +
+        `Response body: ${body}`
+    );
+  }
+
+  const payload = await response.json();
+  return payload.data || [];
+}
+
+async function waitForMailboxEmails(world, expectedCount, description) {
+  const timeoutMs = projectionTimeoutMs(world);
+  const deadline = Date.now() + timeoutMs;
+  let emails = [];
+  let lastError = null;
+
+  do {
+    try {
+      emails = await testMailboxEmails(world);
+
+      if (emails.length >= expectedCount) {
+        return emails;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    const remainingMs = deadline - Date.now();
+
+    if (remainingMs > 0) {
+      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
+    }
+  } while (Date.now() <= deadline);
+
+  throw new Error(
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for ${description}. ` +
+      `Expected at least ${expectedCount} emails; saw ${emails.length}.\n` +
+      `Last mailbox error: ${lastError ? errorMessage(lastError) : "(none)"}`
+  );
+}
+
+function mailboxMessageId(email) {
+  return email && email.headers && email.headers["Message-ID"];
+}
+
+function mailboxEmailSummary(email) {
+  return {
+    subject: email.subject,
+    to: email.to,
+    text_body: email.text_body
+  };
+}
+
 async function postPostmarkWebhook(world, payload) {
   const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
   assert.ok(
@@ -924,6 +1052,7 @@ module.exports = {
   addMembers,
   appUrl,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
+  assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachDeliverySentThroughEmailProvider,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
