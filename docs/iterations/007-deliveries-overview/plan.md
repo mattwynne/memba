@@ -28,7 +28,7 @@ Relevant context:
 - Remove `@todo-web` deferral from the operator scenarios when the browser acceptance path supports them.
 - Add a browser route at `/deliveries` using a LiveView such as `MembaWeb.DeliveriesLive.Index`.
 - Show a read-only table of operator delivery records across all messages.
-- Include enough columns for diagnosis: message subject/title, recipient name, recipient email/address, channel, detailed status, and reason.
+- Include enough columns for diagnosis: message subject/title, recipient name, recipient email/address, channel, detailed status, event timestamp, and reason.
 - Change the public Messaging operator-deliverability query shape toward the deliveries-overview model rather than adding an unrelated bolt-on API. The API should be options-shaped so later pagination/filtering can fit without another conceptual rename.
 - Implement only the unfiltered deliveries overview needed in this slice.
 - Update Playwright/Cucumber step definitions so `operator_email_deliverability.feature` passes through the browser acceptance harness by using `/deliveries`.
@@ -46,7 +46,9 @@ Relevant context:
 ## Acceptance Criteria
 
 - `/deliveries` exists and shows delivery rows from more than one message in one operator overview.
-- Each row includes message subject/title, recipient name, recipient email/address, channel, detailed status, and reason where present.
+- Each row includes message subject/title, recipient name, recipient email/address, channel, detailed status, event timestamp, and reason where present.
+- Delivery rows are ordered by event timestamp descending (newest first).
+- Each row exposes a stable browser-test selector using a `data-test-id` pattern based on a stable delivery identifier (for example, `delivery-row-<id>`).
 - Delayed, bounced, and spam complaint rows preserve the provider/channel reason text.
 - Opened deliveries are visible as `opened` after a delivered email is opened.
 - Delivered/opened rows do not show stale problem reasons.
@@ -77,7 +79,7 @@ None known. The intended technical shape is:
 
 - `/deliveries` is the operator overview route for delivery records across messages.
 - The query API is deliveries-overview oriented and options-shaped for later filtering/pagination.
-- This iteration may return an unpaginated list if that is the smallest working slice, but should order deterministically, preferably newest or most recently updated first.
+- This iteration may return an unpaginated list if that is the smallest working slice, and should order by event timestamp descending (newest first).
 - Pagination/infinite scroll is explicitly deferred, not half-implemented.
 
 ## New Capability
