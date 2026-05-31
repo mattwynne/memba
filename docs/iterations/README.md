@@ -13,7 +13,7 @@ green than before.
 | 003 | 2026-05-28 | merged | Messaging skeleton | [plan](003-messaging-skeleton/plan.md) |
 | 004 | 2026-05-28 | merged | Delivery statuses and views | [plan](004-delivery-status-and-views/plan.md) |
 | 005 | 2026-05-29 | merged | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
-| 006 | 2026-05-30 | ready-for-review | Browser Cucumber automation for member-facing acceptance | [plan](006-browser-cucumber-automation/plan.md) |
+| 006 | 2026-05-30 | merged | Browser Cucumber automation for member-facing acceptance | [plan](006-browser-cucumber-automation/plan.md) |
 | 007 | 2026-05-29 | validated | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |
 | 008 | 2026-05-30 | ready | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |
 
