@@ -1,5 +1,7 @@
 # Iterations
 
+See [roadmap.md](roadmap.md) for the current product sequencing after the routing and authentication foundations.
+
 The user-facing capability "member message deliverability" is delivered
 across iterations 001–004. Iterations 005 and later bring that behaviour into
 browser-facing surfaces. Each iteration is independently shippable: it leaves
