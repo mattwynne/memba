@@ -1,0 +1,148 @@
+diff --git a/docs/iterations/006-browser-cucumber-automation/inspection.md b/docs/iterations/006-browser-cucumber-automation/inspection.md
+new file mode 100644
+index 0000000..9bb0d0c
+--- /dev/null
++++ b/docs/iterations/006-browser-cucumber-automation/inspection.md
+@@ -0,0 +1,130 @@
++# Browser Cucumber inspection
++
++This notes the current Playwright/Cucumber state before implementation of the
++browser automation slices in iteration 006.
++
++## Shared feature inventory
++
++- `acceptance-tests/features/homepage.feature`
++  - 1 scenario.
++  - Browser steps already exist for both steps.
++- `acceptance-tests/features/member_message_deliverability.feature`
++  - 7 scenarios.
++  - No browser JavaScript step definitions currently cover its background,
++    message-send, delivery assertion, webhook/status, or receipt-status steps.
++- `acceptance-tests/features/operator_email_deliverability.feature`
++  - 3 scenarios.
++  - No browser JavaScript step definitions currently cover its background,
++    status-report, or operator assertion steps.
++  - It is not currently tagged `@todo-web`, so the later browser partition task
++    must address tagging/selection without weakening the domain runner.
++
++## Browser harness inventory
++
++- `acceptance-tests/package.json`
++  - `npm test` runs `cucumber-js`.
++  - `npm run test:headed` runs `HEADLESS=false cucumber-js`.
++- `acceptance-tests/cucumber.js`
++  - Runs all `features/**/*.feature`.
++  - Requires `features/support/**/*.js` and
++    `features/step_definitions/**/*.js`.
++  - Has no default tag expression yet, so `@todo-web` is not excluded.
++- `acceptance-tests/features/support/world.js`
++  - Creates a Playwright Chromium browser and page for each scenario.
++  - Uses `BASE_URL` or `http://localhost:4000`.
++  - Does not prepare the test database, start Phoenix, wait for HTTP readiness,
++    collect Phoenix logs, or distinguish startup/database/webhook/projection
++    diagnostics.
++- `acceptance-tests/features/step_definitions/homepage_steps.js`
++  - Implements:
++    - `When I visit the homepage`
++    - `Then I should see the Memba homepage`
++
++## Existing Phoenix/browser surface
++
++The prerequisite member-facing app surface is present:
++
++- Browser routes:
++  - `GET /`
++  - `LIVE /clubs`
++  - `LIVE /clubs/:club_id`
++  - `LIVE /messages/:message_id`
++- Webhook route:
++  - `POST /webhooks/postmark`
++- Stable UI affordances available to browser steps:
++  - Clubs index: `aria-label="Create a club"`, `Club name`,
++    `Create club`, `data-testid="club-row"`, `data-testid="club-link"`.
++  - Club show: `Create a person`, `Person name`, `Person email`,
++    `Add a member`, `Person to add as member`, `Send a club message`,
++    `Message sender`, `Message subject`, `Message body`,
++    `data-testid="person-row"`, `data-testid="member-row"`,
++    `data-testid="message-row"`, `data-testid="message-link"`.
++  - Message show: `data-testid="addressed-recipient"`,
++    `data-testid="delivery-record"`, `data-testid="delivery-status"`,
++    `data-testid="member-receipt"`, `data-testid="receipt-status"`,
++    recipient/delivery IDs exposed as data attributes.
++- Current message show renders projected deliveries/receipts at mount time only;
++  later status steps will need browser-level refresh/polling or another
++  observable wait strategy after webhook submission.
++
++## Browser step coverage gaps
++
++`cd acceptance-tests && npm test -- --dry-run` reports the current browser
++Cucumber coverage as:
++
++- 11 scenarios discovered.
++- 1 homepage scenario has matching step definitions and is skipped by dry-run.
++- 10 scenarios have undefined steps.
++- 92 total steps, 90 undefined and 2 skipped.
++
++Unique browser step groups still needed for member-facing coverage:
++
++- Membership setup:
++  - `Kootenay Mountaineering Club is a club`
++  - `Nelson Paddling Club is a club`
++  - `Alice, Bob, and Carol are people`
++  - `Pat is a person`
++  - `Alice, Bob, and Carol are members of Kootenay Mountaineering Club`
++  - `Pat is a member of Nelson Paddling Club`
++- Message creation:
++  - `{member} sends the message {subject} to Kootenay Mountaineering Club members`
++  - `{member} has sent the message {subject} to Kootenay Mountaineering Club members`
++- Message assertions:
++  - `the message should be addressed to Alice, Bob, and Carol`
++  - `the message should not be addressed to Pat`
++  - `each addressed member should have a separate delivery record`
++  - `each delivery should be sent through the email provider`
++  - `{member}'s receipt status for {subject} should be {status}`
++- Webhook/status interactions:
++  - `{member}'s email for {subject} is reported as delivered`
++  - `{member}'s email for {subject} has been reported as delivered`
++  - `{member}'s email for {subject} is reported as delayed because {reason}`
++  - `{member}'s email for {subject} is reported as bounced because {reason}`
++  - `{member}'s email for {subject} is reported as a spam complaint because {reason}`
++  - `{member} opens the email for {subject}`
++
++Operator-only gaps should remain outside the default browser run until the
++operator browser slice:
++
++- `operators should see {member}'s delivery for {subject} as {status}`
++- `operators should see {member}'s delivery reason {reason}`
++
++## Domain runner inventory
++
++- The Elixir/domain Cucumber configuration in `web/config/test.exs` points to
++  `../acceptance-tests/features/**/*.feature` and has no tag filter.
++- `web/test/features/cucumber_configuration_test.exs` explicitly exercises all
++  member message scenarios and all operator email deliverability scenarios.
++- Domain step definitions already cover the shared membership, messaging,
++  status, receipt, and operator steps in
++  `web/test/features/step_definitions/*.exs`.
++
++## ADR conformance
++
++- ADR 0003: the shared feature files remain abstract product specifications;
++  the browser gaps can be filled with JavaScript step definitions without
++  changing scenario language.
++- ADR 0010: the Elixir/domain path continues to read the shared feature files
++  from `acceptance-tests/features/**/*.feature`.
++- ADR 0013: PhoenixTest remains the domain/web-test helper choice inside the
++  Phoenix test suite; this inspection does not alter that architecture.
+diff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md
+index 2774114..b25779c 100644
+--- a/docs/iterations/006-browser-cucumber-automation/todo.md
++++ b/docs/iterations/006-browser-cucumber-automation/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.
++- [x] 001 Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.
+ - [ ] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
+ - [ ] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
+ - [ ] 004 Implement homepage browser steps against the real homepage route.
