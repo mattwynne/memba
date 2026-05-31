@@ -1,0 +1,87 @@
+diff --git a/docs/iterations/008-postmark-email-integration/inspection.md b/docs/iterations/008-postmark-email-integration/inspection.md
+new file mode 100644
+index 0000000..56022ea
+--- /dev/null
++++ b/docs/iterations/008-postmark-email-integration/inspection.md
+@@ -0,0 +1,69 @@
++# Current implementation inspection
++
++Selected todo: `001 Inspect the current delivery-provider port, message send flow, Swoosh configuration, and Postmark webhook correlation code.`
++
++## Delivery-provider port
++
++- `Memba.Messaging.DeliveryProvider.deliver/1` is the provider boundary.
++- Providers implement `deliver(Memba.Messaging.DeliveryRequest.t()) :: :ok | {:error, term()}`.
++- The provider module is read from `Application.get_env(:memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake)`.
++- `config/config.exs` explicitly defaults `:messaging_delivery_provider` to `Memba.Messaging.DeliveryProviders.Fake`.
++- `Memba.Messaging.DeliveryProviders.Fake` is an `Agent` supervised by `Memba.Application`; it records requests in call order and always returns `:ok`.
++
++## Delivery request shape and send flow
++
++- `Memba.Messaging.DeliveryRequest` currently carries:
++  - `message_id`
++  - `delivery_id`
++  - `recipient_id`
++  - `recipient_name`
++  - `recipient_address`
++  - `channel`
++  - `subject`
++  - `body`
++- It does **not** currently carry `club_id`.
++- `Memba.Messaging.Commands.SendMessage` and `Memba.Messaging.Events.MessageSent` both already carry `club_id`.
++- `Memba.Messaging.send_club_message/2`:
++  1. resolves active club members through the Membership public query API,
++  2. builds and dispatches a `SendMessage` command to `Memba.Messaging.App`,
++  3. synchronously calls `DeliveryProvider.deliver/1` once per resolved recipient after the command dispatch succeeds,
++  4. stops on the first provider error and returns that `{:error, reason}`.
++- Because provider delivery happens after command dispatch, a provider failure can currently leave the message and recipient delivery records persisted while causing `send_club_message/2` to return an error.
++
++## Swoosh and mailer configuration
++
++- `Memba.Mailer` already exists and uses `Swoosh.Mailer, otp_app: :memba`.
++- `config/config.exs` sets `Memba.Mailer` to `Swoosh.Adapters.Local`.
++- `config/test.exs` sets `Memba.Mailer` to `Swoosh.Adapters.Test`.
++- `config/dev.exs` and `config/test.exs` set `config :swoosh, :api_client, false`, appropriate for Local/Test adapters.
++- `config/runtime.exs` only contains Phoenix's generated production mailer guidance and does not configure Postmark.
++- The project already depends on `:swoosh` and `:req`.
++- The local Swoosh Postmark adapter source (`web/deps/swoosh/lib/swoosh/adapters/postmark.ex`) requires `:api_key` and supports Postmark provider options including `:metadata`, `:message_stream`, `:track_opens`, `:track_links`, and `:inline_css`.
++
++## Postmark webhook correlation
++
++- `MembaWeb.Router` routes `POST /webhooks/postmark` through the JSON API pipeline to `MembaWeb.PostmarkWebhookController.create/2`.
++- The controller maps Postmark-ish record types to existing Messaging status-report APIs:
++  - delivery/delivered -> `report_delivery_delivered/1`
++  - open/opened -> `report_delivery_opened/1`
++  - delay/delayed/transient bounce -> `report_delivery_delayed/1`
++  - bounce/bounced -> `report_delivery_bounced/1`
++  - spam/spam complaint -> `report_delivery_spam_complaint/1`
++- Correlation currently reads `message_id` and `delivery_id` from `Metadata` first, including `memba_message_id` and `memba_delivery_id` variants, with top-level fallbacks.
++- The webhook code does not currently read or require `club_id`; it correlates by message and delivery only.
++- Existing webhook controller tests cover metadata-based delivery/open/problem status updates and unsupported record type errors.
++
++## ADR constraints observed
++
++- ADR 0004 keeps message deliverability in a message aggregate identified by `message_id`.
++- ADR 0005 requires resolved recipients on the send command and channel-neutral delivery language.
++- ADR 0006 keeps member-facing statuses simplified while preserving operator detail.
++- ADR 0007 keeps Messaging dependent on Membership's public query API, not Membership storage.
++- ADR 0012 treats opened as an idempotent delivered-to-opened status.
++
++## Gaps for later todo items
++
++- No Postmark-backed delivery provider exists yet.
++- Provider selection is fixed to Fake unless application config is changed directly.
++- `DeliveryRequest` lacks `club_id`, which the iteration plan requires for Postmark metadata.
++- No real-send runtime configuration, Postmark credential checks, sender/reply-to settings, or Postmark documentation exist yet.
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index 1cb8b10..dbfd3f6 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the current delivery-provider port, message send flow, Swoosh configuration, and Postmark webhook correlation code.
++- [x] 001 Inspect the current delivery-provider port, message send flow, Swoosh configuration, and Postmark webhook correlation code.
+ - [ ] 002 Decide the smallest provider shape: likely `Memba.Messaging.DeliveryProviders.Postmark` implementing `Memba.Messaging.DeliveryProvider` and using `Memba.Mailer`/Swoosh.
+ - [ ] 003 Add configuration for selecting the Postmark provider only when explicitly configured, preserving the fake provider for tests and local defaults.
+ - [ ] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
