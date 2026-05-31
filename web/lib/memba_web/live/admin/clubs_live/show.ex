@@ -1,4 +1,4 @@
-defmodule MembaWeb.ClubsLive.Show do
+defmodule MembaWeb.Admin.ClubsLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Membership
@@ -128,7 +128,7 @@ defmodule MembaWeb.ClubsLive.Show do
       <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
         <.link
           id="back-to-clubs-link"
-          navigate={~p"/clubs"}
+          navigate={~p"/admin/clubs"}
           aria-label="Back to clubs"
           class="text-sm font-medium text-blue-700 hover:text-blue-900"
         >
@@ -317,7 +317,7 @@ defmodule MembaWeb.ClubsLive.Show do
               >
                 <.link
                   id={"message-link-#{message.message_id}"}
-                  navigate={~p"/messages/#{message.message_id}"}
+                  navigate={~p"/admin/messages/#{message.message_id}"}
                   data-testid="message-link"
                   aria-label={"Open message #{message.subject}"}
                   class="font-medium text-blue-700 hover:text-blue-900"

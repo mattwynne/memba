@@ -1,4 +1,4 @@
-defmodule MembaWeb.ClubsLive.Index do
+defmodule MembaWeb.Admin.ClubsLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Membership
@@ -109,7 +109,7 @@ defmodule MembaWeb.ClubsLive.Index do
               <div>
                 <.link
                   id={"club-link-#{club.club_id}"}
-                  navigate={~p"/clubs/#{club.club_id}"}
+                  navigate={~p"/admin/clubs/#{club.club_id}"}
                   data-testid="club-link"
                   aria-label={"Open club #{club.name}"}
                   class="font-medium text-blue-700 hover:text-blue-900"

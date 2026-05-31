@@ -226,7 +226,9 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
 }
 
 async function visitClubsIndex(world) {
-  await browserInteraction("visit /clubs", () => world.page.goto(appUrl(world.baseUrl, "/clubs")));
+  await browserInteraction("visit /admin/clubs", () =>
+    world.page.goto(appUrl(world.baseUrl, "/admin/clubs"))
+  );
 }
 
 async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
@@ -236,7 +238,7 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs 
   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
 
   await browserInteraction(`visit club page for ${clubName}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`))
+    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`))
   );
   await waitForProjectedVisible(
     world,
@@ -253,7 +255,7 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
 
   await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`))
+    world.page.goto(appUrl(world.baseUrl, `/admin/messages/${message.messageId}`))
   );
   await waitForProjectedVisible(
     world,
@@ -264,8 +266,8 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
 }
 
 async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
-  await browserInteraction("visit /deliveries", () =>
-    world.page.goto(appUrl(world.baseUrl, "/deliveries"))
+  await browserInteraction("visit /admin/deliveries", () =>
+    world.page.goto(appUrl(world.baseUrl, "/admin/deliveries"))
   );
   await waitForProjectedVisible(
     world,

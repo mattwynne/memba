@@ -6,6 +6,8 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
 
     assert response =~ "Keep every member in the loop."
+    assert response =~ ~s(href="/admin/clubs")
+    refute response =~ ~s(href="/clubs")
     assert response =~ "Red Donkey Technology Corp"
     assert response =~ "https://donkey.red"
   end
