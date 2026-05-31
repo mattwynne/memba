@@ -1,0 +1,109 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/todo.md b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+index 174b977..47df7c9 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/todo.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+@@ -5,6 +5,6 @@
+ - [x] 003 Update all internal verified routes and links:
+ - [x] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
+ - [x] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
+-- [ ] 006 Update controller and LiveView tests to assert the new paths.
++- [x] 006 Update controller and LiveView tests to assert the new paths.
+ - [ ] 007 Add route tests asserting old harness paths return 404 (not redirects).
+ - [ ] 008 Run `bin/dev check` and fix any route/module/test failures.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index a53ea5f..60819bd 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -16,6 +16,7 @@ defmodule MembaWeb.PageControllerTest do
+     html = LazyHTML.from_fragment(response)
+ 
+     assert html |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/admin/clubs']") |> Enum.any?()
++    assert html |> LazyHTML.query("main a[href='/admin/clubs']") |> Enum.any?()
+     assert html |> LazyHTML.query("a[href='/admin/clubs']") |> Enum.any?()
+     assert response =~ "Internal staff admin"
+     assert response =~ "Open internal staff admin"
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index c8b5673..cee959f 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -11,6 +11,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+   } do
+     conn
+     |> visit("/admin/clubs")
++    |> assert_path("/admin/clubs")
+     |> assert_has("#admin-layout[data-surface='admin']")
+     |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
+     |> assert_has("#clubs-index")
+@@ -25,8 +26,11 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     |> assert_has(
+       "a[data-testid='club-link'][aria-label='Open club Kootenay Mountaineering Club']"
+     )
++    |> assert_has("a[data-testid='club-link'][href^='/admin/clubs/']")
+     |> click_link("Kootenay Mountaineering Club")
++    |> assert_path("/admin/clubs/*")
+     |> assert_has("#back-to-clubs-link[aria-label='Back to clubs']")
++    |> assert_has("#back-to-clubs-link[href='/admin/clubs']")
+     |> assert_has("#new-person-form[aria-label='Create a person']")
+     |> assert_has("#person-name-input[aria-label='Person name']")
+     |> assert_has("#person-email-input[aria-label='Person email']")
+@@ -51,9 +55,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+       "#messages [data-testid='message-row'][data-message-subject='Trip planning night']"
+     )
+     |> assert_has("a[data-testid='message-link'][aria-label='Open message Trip planning night']")
++    |> assert_has("a[data-testid='message-link'][href^='/admin/messages/']")
+     |> click_link("Trip planning night")
++    |> assert_path("/admin/messages/*")
+     |> assert_has("#message-show")
+     |> assert_has("#back-to-club-link[aria-label='Back to club']")
++    |> assert_has("#back-to-club-link[href^='/admin/clubs/']")
+     |> assert_has("#addressed-recipients[aria-label='Addressed recipients']")
+     |> assert_has(
+       "#addressed-recipients [data-testid='addressed-recipient'][data-recipient-name='Alice']"
+@@ -75,9 +82,11 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+   } do
+     conn
+     |> visit("/admin/clubs")
++    |> assert_path("/admin/clubs")
+     |> assert_has("#clubs-index")
+     |> create_club("Kootenay Mountaineering Club")
+     |> click_link("Kootenay Mountaineering Club")
++    |> assert_path("/admin/clubs/*")
+     |> assert_has("#club-show", "Kootenay Mountaineering Club")
+     |> create_person("Alice")
+     |> create_person("Bob")
+@@ -88,6 +97,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     |> add_member("Carol")
+     |> send_club_message("Alice", "Trip planning night", "Bring route ideas.")
+     |> click_link("Trip planning night")
++    |> assert_path("/admin/messages/*")
+     |> assert_has("#message-show", "Trip planning night")
+     |> assert_addressed_recipient("Alice")
+     |> assert_addressed_recipient("Bob")
+@@ -110,6 +120,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+ 
+     conn
+     |> visit("/admin/messages/#{message_id}")
++    |> assert_path("/admin/messages/*")
+     |> assert_has("#message-show", "Trip planning night")
+     |> assert_member_receipt("Alice", "sent")
+ 
+@@ -154,6 +165,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+ 
+     conn
+     |> visit("/admin/messages/#{message_id}")
++    |> assert_path("/admin/messages/*")
+     |> assert_member_receipt("Alice", "sent")
+     |> assert_member_receipt("Bob", "delivered")
+     |> assert_member_receipt("Carol", "delivery problem")
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index 0fd601b..5f645f1 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -52,6 +52,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
+ 
+     conn
+     |> visit("/admin/deliveries")
++    |> assert_path("/admin/deliveries")
+     |> assert_has("#admin-layout[data-surface='admin']")
+     |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/deliveries']")
+     |> assert_has("#deliveries-overview")
