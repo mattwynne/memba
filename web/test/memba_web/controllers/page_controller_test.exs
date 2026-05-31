@@ -15,7 +15,10 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert html |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/admin/clubs']") |> Enum.any?()
+    assert html
+           |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/admin/clubs']")
+           |> Enum.any?()
+
     assert html |> LazyHTML.query("main a[href='/admin/clubs']") |> Enum.any?()
     assert html |> LazyHTML.query("a[href='/admin/clubs']") |> Enum.any?()
     assert response =~ "Internal staff admin"
