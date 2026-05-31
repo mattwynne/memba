@@ -63,13 +63,13 @@ A workflow that reports failure after accepting the implementation creates avoid
 
 Date: 2026-05-31
 
-Root cause: Review finalization used the implementation `base_sha..HEAD` diff to enforce a blanket `.feature` lock, so explicitly planned implementation feature-file changes were treated as forbidden review changes after the review had already accepted the implementation. The final artifact gate also had no explicit failure node, so a policy failure could continue into status finalization and produce an ambiguous "accepted but failed" run. The separate `python3` failure was an environment-contract gap for scripts that run outside `bin/dev`'s devenv shell.
+Root cause: Review finalization used the implementation `base_sha..HEAD` diff to enforce a blanket `.feature` lock, so explicitly planned implementation feature-file changes were treated as forbidden review changes after the review had already accepted the implementation. The final artifact gate also had no explicit failure node, so a policy failure could continue into status finalization and produce an ambiguous "accepted but failed" run. The separate `python3` failure was a sandbox image issue that has already been fixed.
 
 Fix applied:
 
 - `.fabro/workflows/iteration-review/scripts/final_artifact_gate.sh`: extracted the final artifact policy into a tested script. It now applies the implementation workflow's explicit plan-permission guard to implementation feature-file changes since `base_sha`, while separately rejecting any `.feature` changes made during review polish since `.fabro/tmp/review-start-sha.txt`.
 - `.fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh`: added regression coverage for planned implementation feature edits, missing plan permission, and forbidden review-polish feature edits.
-- `.fabro/workflows/iteration-review/workflow.fabro`: calls the extracted final artifact gate script, checks for bare `python3` during review preflight before later finalization scripts need it, and routes final artifact policy failures to an explicit accepted-but-final-artifact-failed terminal node instead of continuing toward status finalization.
+- `.fabro/workflows/iteration-review/workflow.fabro`: calls the extracted final artifact gate script and routes final artifact policy failures to an explicit accepted-but-final-artifact-failed terminal node instead of continuing toward status finalization.
 
 Validation:
 
