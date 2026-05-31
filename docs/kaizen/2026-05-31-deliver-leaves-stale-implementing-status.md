@@ -69,3 +69,28 @@ Failed preflight should be cheap and easy to retry. Leaving the iteration marked
 - Make `bin/dev fabro deliver` remember the previous status and restore it when Fabro exits before coding or before a durable implementation artifact exists.
 - Have WIP errors distinguish "another iteration is active" from "this same iteration is already marked active; use resume or reset lifecycle state".
 - Consolidate status mutation so `docs/iterations/README.md` and `plan.md` cannot drift silently.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: `bin/dev fabro deliver` committed and pushed the `implementing` lifecycle reservation before running Fabro, but it had no failure handler for the implementation workflow. If the implementation workflow failed before publishing anything to `main`, the reservation commit remained as stale WIP state. Status mutation was also only exposed through a private Python helper, encouraging duplicated status-management code in shell and workflow scripts.
+
+Fix applied:
+
+- `bin/dev`: added `bin/dev iteration status|mark|check-clear` as the public lifecycle interface over the existing status helper.
+- `bin/dev`: changed `fabro deliver` to use the public iteration commands for local status checks and WIP reservation.
+- `bin/dev`: added a guarded rollback path when the implementation workflow exits non-zero. It restores the previous status only if `origin/main` is still exactly the WIP reservation commit and the iteration is still marked `implementing`; if `origin/main` moved, it leaves state alone and asks for inspection.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: changed the WIP gate to use `dev iteration check-clear` rather than duplicating the table-parsing logic inline.
+
+Validation:
+
+- `bash -n bin/dev .fabro/workflows/scripts/iteration_status.py .fabro/workflows/iteration-implementation/workflow.fabro` — passed.
+- `MEMBA_DEVENV_SHELL=1 ./bin/dev iteration status docs/iterations/009-routing-and-liveview-surface-split/plan.md` — returned `validated`.
+- `MEMBA_DEVENV_SHELL=1 ./bin/dev iteration check-clear docs/iterations/010-shared-magic-link-auth/plan.md --allow-same-iteration` — passed while iteration 010 was marked `implementing`.
+- `PATH="$PWD/bin:$PATH" dev check` — passed, 132 tests, 0 failures. The first attempt failed because Hex was missing from `/tmp/home`; running `mix local.hex --force` in the devenv shell repaired the local tool cache before rerunning.
+
+Remaining follow-up:
+
+- Decide later whether status should continue to be duplicated in both the iteration index and individual plan files, or whether one should become derived from the other.
+- Consider adding a dedicated resume/reset command that makes same-iteration stale WIP recovery more explicit for operators.
