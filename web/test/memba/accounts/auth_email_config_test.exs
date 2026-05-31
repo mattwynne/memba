@@ -1,5 +1,5 @@
 defmodule Memba.Accounts.AuthEmailConfigTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Memba.Accounts.AuthEmailConfig
 
@@ -33,6 +33,22 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
     assert message =~ "MEMBA_AUTH_EMAIL_PROVIDER"
   end
 
+  test "reads local auth email settings from application config without requiring a Postmark token" do
+    with_application_env(Memba.Mailer, adapter: Swoosh.Adapters.Local)
+
+    with_application_env(Memba.Accounts.AuthEmail,
+      from: "auth@mail.memba.local",
+      message_stream: "development-auth"
+    )
+
+    assert {:ok,
+            %AuthEmailConfig{
+              server_token: nil,
+              from: "auth@mail.memba.local",
+              message_stream: "development-auth"
+            }} = AuthEmailConfig.from_application_env()
+  end
+
   test "selects Postmark auth email delivery only when explicitly configured" do
     assert AuthEmailConfig.provider_override(nil) == :default
     assert AuthEmailConfig.provider_override("") == :default
@@ -43,5 +59,18 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
     assert {:error, message} = AuthEmailConfig.provider_override("smtp")
     assert message =~ "Unsupported MEMBA_AUTH_EMAIL_PROVIDER"
     assert message =~ "postmark"
+  end
+
+  defp with_application_env(key, value) do
+    original_value = Application.get_env(:memba, key)
+    Application.put_env(:memba, key, value)
+
+    on_exit(fn ->
+      if is_nil(original_value) do
+        Application.delete_env(:memba, key)
+      else
+        Application.put_env(:memba, key, original_value)
+      end
+    end)
   end
 end

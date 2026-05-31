@@ -7,7 +7,7 @@ defmodule Memba.Accounts.AuthEmailConfig do
   sender, and dedicated auth message stream must all be configured.
   """
 
-  @enforce_keys [:server_token, :from, :message_stream]
+  @enforce_keys [:from, :message_stream]
   defstruct [:server_token, :from, :message_stream]
 
   @provider_env "MEMBA_AUTH_EMAIL_PROVIDER"
@@ -58,6 +58,7 @@ defmodule Memba.Accounts.AuthEmailConfig do
         @from_address_env => get_env.(@from_address_env),
         @message_stream_env => get_env.(@message_stream_env)
       },
+      required: postmark_config_keys(),
       source: :environment
     )
   end
@@ -85,6 +86,7 @@ defmodule Memba.Accounts.AuthEmailConfig do
         @from_address_env => Keyword.get(auth_email_config, :from),
         @message_stream_env => Keyword.get(auth_email_config, :message_stream)
       },
+      required: email_config_keys(),
       source: :application
     )
   end
@@ -105,9 +107,11 @@ defmodule Memba.Accounts.AuthEmailConfig do
         {key, normalize(value)}
       end)
 
+    required_config_keys = Keyword.fetch!(opts, :required)
+
     missing_required =
       normalized_values
-      |> Map.take(required_config_keys())
+      |> Map.take(required_config_keys)
       |> Enum.filter(fn {_key, value} -> is_nil(value) end)
       |> Enum.map(fn {key, _value} -> key end)
       |> Enum.sort()
@@ -116,13 +120,13 @@ defmodule Memba.Accounts.AuthEmailConfig do
       [] ->
         {:ok,
          %__MODULE__{
-           server_token: Map.fetch!(normalized_values, @server_token_env),
+           server_token: Map.get(normalized_values, @server_token_env),
            from: Map.fetch!(normalized_values, @from_address_env),
            message_stream: Map.fetch!(normalized_values, @message_stream_env)
          }}
 
       missing ->
-        {:error, missing_config_message(missing, opts[:source])}
+        {:error, missing_config_message(missing, required_config_keys, opts[:source])}
     end
   end
 
@@ -135,12 +139,13 @@ defmodule Memba.Accounts.AuthEmailConfig do
 
   defp normalize(_value), do: nil
 
-  defp required_config_keys, do: [@server_token_env, @from_address_env, @message_stream_env]
+  defp postmark_config_keys, do: [@server_token_env | email_config_keys()]
+  defp email_config_keys, do: [@from_address_env, @message_stream_env]
 
-  defp missing_config_message(missing, source) do
+  defp missing_config_message(missing, required_config_keys, source) do
     "Auth email Postmark delivery is enabled, but required #{source_label(source)} " <>
       "configuration is missing: #{Enum.join(missing, ", ")}. " <>
-      "Set #{@server_token_env}, #{@from_address_env}, and #{@message_stream_env}, or leave " <>
+      "Set #{Enum.join(required_config_keys, ", ")}, or leave " <>
       "#{@provider_env} unset to skip real auth email delivery."
   end
 
