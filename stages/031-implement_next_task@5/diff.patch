@@ -1,0 +1,67 @@
+diff --git a/docs/iterations/009-routing-and-liveview-surface-split/todo.md b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+index f555ef6..174b977 100644
+--- a/docs/iterations/009-routing-and-liveview-surface-split/todo.md
++++ b/docs/iterations/009-routing-and-liveview-surface-split/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Move or rename existing LiveView modules into an admin namespace:
+ - [x] 003 Update all internal verified routes and links:
+ - [x] 004 Add or adjust layout functions in `MembaWeb.Layouts`:
+-- [ ] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
++- [x] 005 Update the homepage links and labels so the primary operational link points to `/admin/clubs` if retained, or is presented as an internal/admin link rather than a public user journey.
+ - [ ] 006 Update controller and LiveView tests to assert the new paths.
+ - [ ] 007 Add route tests asserting old harness paths return 404 (not redirects).
+ - [ ] 008 Run `bin/dev check` and fix any route/module/test failures.
+diff --git a/web/lib/memba_web/controllers/page_html/home.html.heex b/web/lib/memba_web/controllers/page_html/home.html.heex
+index 1f0ff20..bad95e6 100644
+--- a/web/lib/memba_web/controllers/page_html/home.html.heex
++++ b/web/lib/memba_web/controllers/page_html/home.html.heex
+@@ -10,7 +10,7 @@
+     >
+       <a href="#how-it-works" class="transition hover:text-ink">How it works</a>
+       <a href="#features" class="transition hover:text-ink">Features</a>
+-      <a href={~p"/admin/clubs"} class="transition hover:text-ink">Staff admin</a>
++      <a href={~p"/admin/clubs"} class="transition hover:text-ink">Internal staff admin</a>
+       <a href={~p"/about"} class="transition hover:text-ink">About</a>
+     </nav>
+ 
+@@ -18,7 +18,7 @@
+       href={~p"/admin/clubs"}
+       class="rounded-full border border-sage-600 bg-sage-600 px-5 py-2.5 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+     >
+-      Staff admin
++      Internal staff admin
+     </a>
+   </header>
+ 
+@@ -48,7 +48,7 @@
+               href={~p"/admin/clubs"}
+               class="inline-flex items-center justify-center rounded-full bg-sage-600 px-7 py-4 text-base font-semibold text-cream shadow-lg shadow-sage-800/10 transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-xl"
+             >
+-              Open staff admin
++              Open internal staff admin
+             </a>
+             <a
+               href="#features"
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index a1b6eec..a53ea5f 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -10,6 +10,18 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "https://donkey.red"
+   end
+ 
++  test "GET / presents operational links as staff admin entry points", %{conn: conn} do
++    conn = get(conn, ~p"/")
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert html |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/admin/clubs']") |> Enum.any?()
++    assert html |> LazyHTML.query("a[href='/admin/clubs']") |> Enum.any?()
++    assert response =~ "Internal staff admin"
++    assert response =~ "Open internal staff admin"
++    refute response =~ ~s(href="/clubs")
++  end
++
+   test "GET /about", %{conn: conn} do
+     conn = get(conn, ~p"/about")
+     assert html_response(conn, 200) =~ "Membership software for clubs that run on trust."
