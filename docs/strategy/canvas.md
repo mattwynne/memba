@@ -84,6 +84,7 @@ This is the single canonical strategy canvas for Memba. It combines the Lean Can
   - [Smallest version of success we would still be proud of](#smallest-version-of-success-we-would-still-be-proud-of)
   - [Why now](#why-now)
   - [Statement of stance](#statement-of-stance)
+  - [White-label club websites](#white-label-club-websites)
   - [What Memba explicitly will not become](#what-memba-explicitly-will-not-become)
   - [Identity and form](#identity-and-form)
   - [Open questions / assumptions to test](#open-questions-assumptions-to-test)
@@ -343,12 +344,15 @@ The MVP should focus on the core admin loop: members, households, renewals, paym
 - Emergency contacts tied to the person and surfaced on activity rosters.
 - Clear distinction between lightweight checkbox consent and stronger e-signature options if legally required.
 
-#### 5. Privacy-aware member directory and private content
+#### 5. Club website, privacy-aware member directory, and private content
 
+- A hosted club website that can replace the fragile WordPress/static/custom site many clubs already maintain.
+- Public pages for the club's outward-facing presence.
+- Member-only pages and files.
 - Searchable member directory.
 - Member-controlled visibility for email, phone, address, and profile details.
-- Member-only pages and files.
 - Access tied directly to active membership status.
+- Club branding: logo upload, colors, and later custom domain support.
 
 #### 6. Volunteer-friendly admin and handoff tools
 
@@ -403,7 +407,7 @@ Memba should ship trust as product, not just marketing:
 - AT Protocol/federation.
 - Native mobile app.
 - Full forum/discussion product.
-- Full website builder.
+- Generic, open-ended website builder unrelated to club operations.
 - LMS/courses.
 - Deep donation management.
 - Marketplace/public discovery.
@@ -1070,13 +1074,27 @@ Concrete commitments that follow:
 - **The data belongs to the club.** Clean exports, Google Sheets sync as a first-class feature, a documented "leave anytime" promise.
 - **The next volunteer is a user, not an edge case.** Onboarding, audit trails, granular roles, and admin clarity are designed against the handoff scenario, not the power-user scenario.
 
+### White-label club websites
+
+Memba should become white-labelable enough that each club can use it as its own website, not merely as a back-office database behind an existing site. The product should get out of the club's way: to members and the public it should feel like the club's site, powered by Memba rather than branded as Memba.
+
+Implications:
+
+- **Multi-tenant club identity.** Each club needs its own web presence, initially likely on a Memba-hosted subdomain, with custom domains as a paid or advanced capability.
+- **Club branding.** Clubs should be able to upload a logo, set basic brand details, and get a sensible generated color scheme from the logo that admins can then tweak.
+- **Opinionated site builder, not Wix clone.** Memba should offer only the pages and blocks membership clubs need: home/about, join/renew, member-only content, directory, announcements, files, trips/activities, leadership/contact, and policy/waiver pages.
+- **Memba recedes.** The interface should be simpler than general-purpose builders because clubs are not trying to design arbitrary websites; they are trying to run a club and present it clearly.
+- **Access control as the differentiator.** The website layer is valuable because it is tied directly to membership status, roles, privacy settings, waivers, and activities.
+
+This changes the earlier “not a website builder” stance: Memba should not become a general Wix/Squarespace competitor, but it may become a focused Wix/Squarespace-style website product specifically for membership clubs.
+
 ### What Memba explicitly will not become
 
 - A general-purpose association management system for professional associations or trade bodies.
 - A creator-economy / community platform (Mighty Networks, Memberful adjacent).
 - A youth-sports league app (Spond, TeamSnap adjacent).
 - A booking, permitting, or commercial-trip system (FareHarbor adjacent).
-- A learning management system, donation CRM, or full-fat website builder.
+- A learning management system, donation CRM, or general-purpose full-fat website builder.
 - An AT Protocol or federation showcase. Federation may be useful infrastructure later; it is not the vision.
 
 Each of these is an adjacent business model that would be easy to drift into and corrosive to what makes Memba defensible — namely, fit to a specific institutional form.
@@ -1460,8 +1478,9 @@ Per §1a and §1c, every non-trivial capability needs a position, not a survey. 
 | Accessibility / WCAG | **Build** to AA from day one | Table stakes for clubs with grant funding | — |
 | AT Protocol / federation | **Defer** as research spike only | Not a moat today | Revisit only if a federation buyer surfaces |
 | Native mobile app | **Defer** | Not core | Revisit when trip-leaders ask in volume |
+| Club website and white-label tenant branding | **Build** narrowly | Differentiating when tied to membership/access control | Start simple; expand only for club-specific website needs |
 
-This list, generated from first principles per the template's warning against copying the source brief's discipline list, deliberately omits things that incumbents over-acquire (full website builder, LMS, donation engine, marketplace, branded mobile apps) — see §6 "Not acquiring."
+This list, generated from first principles per the template's warning against copying the source brief's discipline list, deliberately omits things that incumbents over-acquire (general-purpose website builder, LMS, donation engine, marketplace, branded mobile apps) — see §6 "Not acquiring."
 
 ### 3. Key activities
 
@@ -1506,7 +1525,7 @@ Per the template's quality bar §5.7 — the most important deliverable. Memba w
 
 - **AT Protocol / federation engineering** beyond a time-boxed research spike. Risk accepted: a federated competitor could emerge; mitigated by the assessment that no buyer evidence supports federation as a switching trigger (§Assumption 5).
 - **Native mobile app development**. Risk accepted: trip-leaders may want mobile; mitigated by responsive LiveView + push-as-email until evidence forces a revisit.
-- **Full forum/discussion product**, **LMS**, **website builder**, **donation engine**, **marketplace**. Risk accepted: clubs may stitch in other tools; that's preferred to scope-creep into incumbents' bloat.
+- **Full forum/discussion product**, **LMS**, **general-purpose website builder**, **donation engine**, **marketplace**. Risk accepted: clubs may stitch in other tools; that's preferred to scope-creep into incumbents' bloat. The exception is a narrow white-label club website surface where pages, branding, custom domains, and access control are directly tied to membership operations.
 - **In-house payments processing**. Risk accepted: Stripe rate hikes; mitigated by clean abstraction allowing GoCardless/PayPal addition.
 - **Enterprise sales motion** (large federations, multi-chapter umbrellas). Risk accepted: revenue ceiling at the small-club tier; mitigated by deliberate sequencing — federations are a *future* segment.
 - **Internationalisation/localisation** beyond English (with currency-agnostic billing). Risk accepted: EU/LATAM markets stay closed; revisit trigger is a credible federation lead from a non-English market.
@@ -1702,7 +1721,8 @@ This is a Porter-style activity-system trade-off list, not a feature list. The p
 | Branded mobile apps | See S5 | C | See S5 |
 | Donation management / fundraising | Adjacent to membership but a distinct product (Givebutter, etc.) | D | Pilot clubs report >20% revenue from donations and ask for integration |
 | Cabin / gear / fleet booking | Higher-ARPU sub-market (Rideau, Washington Canoe, UBC Sailing) but very different product | C | A specific large-club pilot makes it the wedge for that tier |
-| Full website builder | Wild Apricot/ClubExpress play this; we don't | B | Never — this is structural |
+| General-purpose website builder | Wild Apricot/ClubExpress play this; we don't | B | Never — this is structural |
+| White-label club website surface | Lets clubs replace fragile public/private sites without becoming Wix | B | Build only as opinionated club pages, branding, subdomains/custom domains, and membership-aware access control |
 | Forum / discussion product | Discourse exists; off-wedge | D | Member-to-member comms emerges as a top-3 retention driver |
 | Advanced email marketing | Mailchimp exists; we ship announcements, not campaigns | D | Email becomes the #1 cited pain in retention interviews |
 
@@ -1732,7 +1752,7 @@ These are axes where the strategy is **not yet committed** and a deliberate choi
 
 If a future Memba employee, advisor, or investor reads only one paragraph, it should be this:
 
-> Memba is the membership platform for volunteer-run outdoor and activity clubs. We model households as first-class. We price by active members and charge no payment surcharge. We optimise for the volunteer who inherits the job, not the paid administrator. We ship web-first, founder-supported, as a Phoenix monolith. We are not a horizontal AMS, a creator platform, a community network, a course platform, a website builder, or a public events marketplace — and we will turn down customers and features that would pull us toward any of those.
+> Memba is the membership platform for volunteer-run outdoor and activity clubs. We model households as first-class. We price by active members and charge no payment surcharge. We optimise for the volunteer who inherits the job, not the paid administrator. We ship web-first, founder-supported, as a Phoenix monolith. We may provide each club with a white-label website, but only as an opinionated club-specific surface for membership, content, announcements, and activities. We are not a horizontal AMS, a creator platform, a community network, a course platform, a general-purpose website builder, or a public events marketplace — and we will turn down customers and features that would pull us toward any of those.
 
 Each "not" in that paragraph is a refusal Wild Apricot, ClubExpress, Memberful, and Mighty Networks structurally cannot match without breaking their own strategy. That asymmetry — not feature parity — is the source of Memba's defensibility.
 
@@ -1760,12 +1780,12 @@ These are choices, not limits. Each protects the integrated strategy described i
 - **Risk:** Feature drift toward engagement KPIs that volunteer admins don't care about; brand confusion; competing against well-funded category leaders on their turf.
 - **Revisit when:** Never as the core; possibly as a thin integration if Discourse/Slack/forum bridges become a top-3 churn driver.
 
-#### 3. Won't be a WordPress / website builder replacement
+#### 3. Won't be a general-purpose WordPress / Wix / Squarespace replacement
 
-- **Boundary:** No full CMS, page builder, theme marketplace, or general-purpose website tooling. Member-only pages and a simple directory yes; arbitrary marketing-site authoring no.
-- **Reason:** CMS is a bottomless scope sink (lean canvas §8 "Cost drivers"). Most clubs already have a public website; what they lack is the *private* operational layer behind it.
+- **Boundary:** No full CMS, page builder, theme marketplace, or arbitrary marketing-site tooling. Yes to a focused club website surface: public club pages, member-only pages/files, directory, announcements, activities, logo, generated/tweakable colors, Memba-hosted subdomains, and later custom domains.
+- **Reason:** CMS is a bottomless scope sink (lean canvas §8 "Cost drivers"), but many clubs need Memba to become their simple website rather than another back-office tool behind a fragile site. The safe path is an opinionated club-site product, not a generic builder.
 - **Risk:** Becomes a maintenance and support tarpit; volunteer admins inherit a CMS they didn't ask for.
-- **Revisit when:** A clear "club homepage in a box" SKU is demanded by ≥30% of paying clubs and we can ship it without compromising the admin surface.
+- **Revisit when:** Clubs ask for arbitrary layout/theme/plugin features rather than membership-aware club pages; say no unless the feature clearly serves the core club operating model.
 
 #### 4. Won't run a public Meetup-style discovery network
 
@@ -2348,7 +2368,7 @@ At 50 clubs, estimated ARR might range from $35k to $100k depending on tier mix.
 
 ### Gross-margin risks and reduction levers
 
-The top margin risks are high-touch support, unpriced migrations, email deliverability incidents, waiver/legal escalation, household edge-case complexity, and scope creep into trips, courses, cabins, gear, donations, or full website building. Heylo already covers memberships, events, and paid waivers; competing by adding every adjacent feature would raise costs without preserving differentiation.
+The top margin risks are high-touch support, unpriced migrations, email deliverability incidents, waiver/legal escalation, household edge-case complexity, and scope creep into trips, courses, cabins, gear, donations, or general-purpose website building. Heylo already covers memberships, events, and paid waivers; competing by adding every adjacent feature would raise costs without preserving differentiation.
 
 Cost-reduction levers are clear: build household and import workflows carefully; cap concierge migration; charge for complex migration; use Postmark-like managed email before optimizing for raw SES cost; design self-serve exports from day one; keep payments pass-through; maintain a narrow outdoor-club ICP; defer native mobile and full community features; invest in docs and handoff mode; instrument support time by feature; and review actuals monthly against a driver-based model.
 
