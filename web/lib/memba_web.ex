@@ -86,6 +86,8 @@ defmodule MembaWeb do
       import Phoenix.HTML
       # Core UI components
       import MembaWeb.CoreComponents
+      # Memba brand: <.logo /> and <.sprig />
+      import MembaWeb.Brand
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS
