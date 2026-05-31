@@ -1,26 +1,43 @@
 defmodule MembaWeb.RouterTest do
-  use ExUnit.Case, async: true
+  use MembaWeb.ConnCase, async: true
 
-  describe "browser LiveView routes" do
-    test "routes /clubs through the browser pipeline to the clubs index LiveView" do
-      assert_live_route("/clubs", "/clubs", MembaWeb.ClubsLive.Index, %{})
+  @old_harness_paths [
+    "/clubs",
+    "/clubs/club-123",
+    "/deliveries",
+    "/messages/message-123"
+  ]
+
+  describe "staff admin LiveView routes" do
+    test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
+      assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
     end
 
-    test "routes /clubs/:club_id through the browser pipeline to the club show LiveView" do
-      assert_live_route("/clubs/club-123", "/clubs/:club_id", MembaWeb.ClubsLive.Show, %{
-        "club_id" => "club-123"
-      })
-    end
-
-    test "routes /deliveries through the browser pipeline to the deliveries index LiveView" do
-      assert_live_route("/deliveries", "/deliveries", MembaWeb.DeliveriesLive.Index, %{})
-    end
-
-    test "routes /messages/:message_id through the browser pipeline to the message show LiveView" do
+    test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
       assert_live_route(
-        "/messages/message-123",
-        "/messages/:message_id",
-        MembaWeb.MessagesLive.Show,
+        "/admin/clubs/club-123",
+        "/admin/clubs/:club_id",
+        MembaWeb.Admin.ClubsLive.Show,
+        %{
+          "club_id" => "club-123"
+        }
+      )
+    end
+
+    test "routes /admin/deliveries through the staff browser pipeline to the deliveries index LiveView" do
+      assert_live_route(
+        "/admin/deliveries",
+        "/admin/deliveries",
+        MembaWeb.Admin.DeliveriesLive.Index,
+        %{}
+      )
+    end
+
+    test "routes /admin/messages/:message_id through the staff browser pipeline to the message show LiveView" do
+      assert_live_route(
+        "/admin/messages/message-123",
+        "/admin/messages/:message_id",
+        MembaWeb.Admin.MessagesLive.Show,
         %{"message_id" => "message-123"}
       )
     end
@@ -44,9 +61,23 @@ defmodule MembaWeb.RouterTest do
     end
   end
 
+  describe "removed public harness routes" do
+    test "old harness paths return the normal 404 response without redirects", %{conn: conn} do
+      Enum.each(@old_harness_paths, fn path ->
+        conn =
+          conn
+          |> recycle()
+          |> get(path)
+
+        assert response(conn, 404) == "Not Found"
+        assert get_resp_header(conn, "location") == []
+      end)
+    end
+  end
+
   defp assert_live_route(path, route_pattern, live_view, path_params) do
     assert %{
-             pipe_through: [:browser],
+             pipe_through: [:staff_browser],
              phoenix_live_view: {^live_view, nil, _opts, _live_session},
              plug: Phoenix.LiveView.Plug,
              plug_opts: nil,

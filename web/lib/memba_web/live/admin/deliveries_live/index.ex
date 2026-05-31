@@ -1,4 +1,4 @@
-defmodule MembaWeb.DeliveriesLive.Index do
+defmodule MembaWeb.Admin.DeliveriesLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Messaging
@@ -16,7 +16,7 @@ defmodule MembaWeb.DeliveriesLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.admin flash={@flash}>
       <main id="deliveries-overview" class="mx-auto max-w-7xl space-y-6 p-6">
         <section class="space-y-2">
           <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
@@ -123,7 +123,7 @@ defmodule MembaWeb.DeliveriesLive.Index do
           </div>
         </section>
       </main>
-    </Layouts.app>
+    </Layouts.admin>
     """
   end
 
