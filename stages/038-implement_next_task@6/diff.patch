@@ -1,0 +1,537 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 34524b3..6d50464 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [x] 004 Extend `Memba.Membership` query API as needed:
+ - [x] 005 Add auth email delivery:
+-- [ ] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
++- [x] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
+ - [ ] 007 Add `/auth` UI and callback handling:
+ - [ ] 008 Update the home page:
+ - [ ] 009 Apply auth gates:
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index e94ebc9..663e5ff 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -1,9 +1,12 @@
+ defmodule MembaWeb.Router do
+   use MembaWeb, :router
+ 
++  import MembaWeb.UserAuth
++
+   pipeline :browser do
+     plug :accepts, ["html"]
+     plug :fetch_session
++    plug :fetch_current_identity
+     plug :fetch_live_flash
+     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
+     plug :protect_from_forgery
+@@ -13,6 +16,7 @@ defmodule MembaWeb.Router do
+   pipeline :staff_browser do
+     plug :accepts, ["html"]
+     plug :fetch_session
++    plug :fetch_current_identity
+     plug :fetch_live_flash
+     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
+     plug :protect_from_forgery
+diff --git a/web/lib/memba_web/user_auth.ex b/web/lib/memba_web/user_auth.ex
+new file mode 100644
+index 0000000..0bb0ab4
+--- /dev/null
++++ b/web/lib/memba_web/user_auth.ex
+@@ -0,0 +1,272 @@
++defmodule MembaWeb.UserAuth do
++  @moduledoc """
++  Browser authentication helpers for shared magic-link sign-in.
++
++  The session stores only the signed-in email address. Current identity data such
++  as staff status and active clubs is derived on each request from the Accounts
++  context so authorization uses current membership projections.
++  """
++
++  import Plug.Conn
++
++  alias Memba.Accounts
++
++  @identity_session_key "current_identity_email"
++  @return_to_session_key "identity_return_to"
++  @auth_path "/auth"
++
++  @doc """
++  Return the session key used to store the signed-in email address.
++  """
++  def identity_session_key, do: @identity_session_key
++
++  @doc """
++  Return the session key used to preserve the original authenticated return path.
++  """
++  def return_to_session_key, do: @return_to_session_key
++
++  @doc """
++  Renew the browser session and store the normalized signed-in email address.
++
++  Invalid or blank emails clear the signed-in session, matching the safe default
++  of treating the browser as unauthenticated.
++  """
++  def log_in_identity(conn, email) do
++    case Accounts.normalize_email(email) do
++      nil ->
++        log_out_identity(conn)
++
++      normalized_email ->
++        conn
++        |> renew_session()
++        |> put_session(@identity_session_key, normalized_email)
++    end
++  end
++
++  @doc """
++  Clear the browser session for sign out or invalid identity state.
++  """
++  def log_out_identity(conn) do
++    renew_session(conn)
++  end
++
++  @doc """
++  Fetch the current signed-in identity from the browser session.
++
++  Assigns are always present so controllers and templates can branch safely:
++
++    * `:current_identity` - `%{email:, staff?:, active_clubs:}` or `nil`
++    * `:current_identity_email` - normalized email or `nil`
++    * `:current_identity_staff?` - boolean staff authorization flag
++    * `:current_identity_clubs` - active club read models for the email
++  """
++  def fetch_current_identity(conn, _opts) do
++    conn
++    |> get_session(@identity_session_key)
++    |> current_identity_from_email()
++    |> then(&assign_current_identity(conn, &1))
++  end
++
++  @doc """
++  Require any signed-in identity for a browser request.
++
++  Unauthenticated GET requests are redirected to `/auth` and their current path,
++  including query string, is stored in the session for the future callback flow.
++  """
++  def require_authenticated_identity(conn, _opts) do
++    conn = ensure_current_identity(conn)
++
++    if conn.assigns.current_identity do
++      conn
++    else
++      redirect_to_auth(conn)
++    end
++  end
++
++  @doc """
++  Require the signed-in identity to be a Memba staff email.
++  """
++  def require_staff_identity(conn, _opts) do
++    conn = ensure_current_identity(conn)
++
++    cond do
++      is_nil(conn.assigns.current_identity) ->
++        redirect_to_auth(conn)
++
++      conn.assigns.current_identity.staff? ->
++        conn
++
++      true ->
++        forbidden(conn)
++    end
++  end
++
++  @doc """
++  Require the signed-in identity to be an active member of the requested club.
++
++  The club is read from the `club_id` query parameter. Missing, invalid, or
++  unauthorized club IDs are forbidden for signed-in identities.
++  """
++  def require_active_club_member(conn, _opts) do
++    conn = ensure_current_identity(conn)
++
++    if conn.assigns.current_identity do
++      conn = fetch_query_params(conn)
++      club_id = Map.get(conn.query_params, "club_id")
++
++      if Accounts.active_member_of_club?(club_id, conn.assigns.current_identity.email) do
++        conn
++      else
++        forbidden(conn)
++      end
++    else
++      redirect_to_auth(conn)
++    end
++  end
++
++  @doc """
++  LiveView mount hooks for current identity assignment and auth gates.
++  """
++  def on_mount(:mount_current_identity, _params, session, socket) do
++    {:cont, assign_current_identity(socket, current_identity_from_session(session))}
++  end
++
++  def on_mount(:require_authenticated_identity, _params, session, socket) do
++    socket = assign_current_identity(socket, current_identity_from_session(session))
++
++    if socket.assigns.current_identity do
++      {:cont, socket}
++    else
++      {:halt, Phoenix.LiveView.redirect(socket, to: @auth_path)}
++    end
++  end
++
++  def on_mount(:require_staff_identity, _params, session, socket) do
++    socket = assign_current_identity(socket, current_identity_from_session(session))
++
++    cond do
++      is_nil(socket.assigns.current_identity) ->
++        {:halt, Phoenix.LiveView.redirect(socket, to: @auth_path)}
++
++      socket.assigns.current_identity.staff? ->
++        {:cont, socket}
++
++      true ->
++        {:halt, forbidden_redirect(socket)}
++    end
++  end
++
++  def on_mount(:require_active_club_member, params, session, socket) do
++    socket = assign_current_identity(socket, current_identity_from_session(session))
++
++    cond do
++      is_nil(socket.assigns.current_identity) ->
++        {:halt, Phoenix.LiveView.redirect(socket, to: @auth_path)}
++
++      Accounts.active_member_of_club?(
++        Map.get(params, "club_id"),
++        socket.assigns.current_identity.email
++      ) ->
++        {:cont, socket}
++
++      true ->
++        {:halt, forbidden_redirect(socket)}
++    end
++  end
++
++  defp ensure_current_identity(conn) do
++    if Map.has_key?(conn.assigns, :current_identity) do
++      conn
++    else
++      fetch_current_identity(conn, [])
++    end
++  end
++
++  defp current_identity_from_session(session) when is_map(session) do
++    session
++    |> Map.get(@identity_session_key)
++    |> current_identity_from_email()
++  end
++
++  defp current_identity_from_email(email) do
++    case Accounts.normalize_email(email) do
++      nil ->
++        nil
++
++      normalized_email ->
++        %{
++          email: normalized_email,
++          staff?: Accounts.staff_email?(normalized_email),
++          active_clubs: Accounts.list_active_clubs_for_email(normalized_email)
++        }
++    end
++  end
++
++  defp assign_current_identity(%Plug.Conn{} = conn, identity) do
++    assign(conn, :current_identity, identity)
++    |> assign(:current_identity_email, identity_email(identity))
++    |> assign(:current_identity_staff?, identity_staff?(identity))
++    |> assign(:current_identity_clubs, identity_clubs(identity))
++  end
++
++  defp assign_current_identity(socket, identity) do
++    Phoenix.Component.assign(socket,
++      current_identity: identity,
++      current_identity_email: identity_email(identity),
++      current_identity_staff?: identity_staff?(identity),
++      current_identity_clubs: identity_clubs(identity)
++    )
++  end
++
++  defp identity_email(nil), do: nil
++  defp identity_email(identity), do: identity.email
++
++  defp identity_staff?(nil), do: false
++  defp identity_staff?(identity), do: identity.staff?
++
++  defp identity_clubs(nil), do: []
++  defp identity_clubs(identity), do: identity.active_clubs
++
++  defp redirect_to_auth(conn) do
++    conn
++    |> maybe_store_return_to()
++    |> Phoenix.Controller.redirect(to: @auth_path)
++    |> halt()
++  end
++
++  defp maybe_store_return_to(conn) do
++    if conn.method == "GET" do
++      put_session(conn, @return_to_session_key, current_return_path(conn))
++    else
++      conn
++    end
++  end
++
++  defp current_return_path(%Plug.Conn{request_path: request_path, query_string: ""}) do
++    request_path
++  end
++
++  defp current_return_path(%Plug.Conn{request_path: request_path, query_string: query_string}) do
++    request_path <> "?" <> query_string
++  end
++
++  defp forbidden(conn) do
++    conn
++    |> send_resp(:forbidden, "Forbidden")
++    |> halt()
++  end
++
++  defp forbidden_redirect(socket) do
++    socket
++    |> Phoenix.LiveView.put_flash(:error, "You are not authorized to access that page.")
++    |> Phoenix.LiveView.redirect(to: "/")
++  end
++
++  defp renew_session(conn) do
++    Plug.CSRFProtection.delete_csrf_token()
++
++    conn
++    |> configure_session(renew: true)
++    |> clear_session()
++  end
++end
+diff --git a/web/test/memba_web/user_auth_test.exs b/web/test/memba_web/user_auth_test.exs
+new file mode 100644
+index 0000000..01c7c6e
+--- /dev/null
++++ b/web/test/memba_web/user_auth_test.exs
+@@ -0,0 +1,215 @@
++defmodule MembaWeb.UserAuthTest do
++  use MembaWeb.ConnCase, async: false
++
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
++  alias Memba.Repo
++  alias MembaWeb.UserAuth
++
++  describe "fetch_current_identity/2" do
++    test "assigns no current identity when the session has no signed-in email", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{})
++        |> UserAuth.fetch_current_identity([])
++
++      assert conn.assigns.current_identity == nil
++      assert conn.assigns.current_identity_email == nil
++      assert conn.assigns.current_identity_staff? == false
++      assert conn.assigns.current_identity_clubs == []
++    end
++
++    test "normalizes the signed-in session email and assigns staff status", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => " Pat@Memba.IO "})
++        |> UserAuth.fetch_current_identity([])
++
++      assert conn.assigns.current_identity.email == "pat@memba.io"
++      assert conn.assigns.current_identity.staff? == true
++      assert conn.assigns.current_identity.active_clubs == []
++      assert conn.assigns.current_identity_email == "pat@memba.io"
++      assert conn.assigns.current_identity_staff? == true
++      assert conn.assigns.current_identity_clubs == []
++    end
++
++    test "assigns active clubs for a signed-in member email", %{conn: conn} do
++      club = create_active_member(email: "Alice@Example.COM", club_name: "Kootenay")
++
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => " alice@example.com "})
++        |> UserAuth.fetch_current_identity([])
++
++      assert conn.assigns.current_identity.email == "alice@example.com"
++      assert conn.assigns.current_identity.staff? == false
++
++      assert [%Club{club_id: club_id, name: "Kootenay"}] =
++               conn.assigns.current_identity.active_clubs
++
++      assert club_id == club.club_id
++      assert conn.assigns.current_identity_clubs == conn.assigns.current_identity.active_clubs
++    end
++  end
++
++  describe "session helpers" do
++    test "log_in_identity/2 renews the session and stores the normalized email", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"identity_return_to" => "/admin/clubs"})
++        |> UserAuth.log_in_identity(" Pat@Memba.IO ")
++
++      assert get_session(conn, "current_identity_email") == "pat@memba.io"
++      assert get_session(conn, "identity_return_to") == nil
++    end
++
++    test "log_out_identity/1 clears the signed-in identity session", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => "pat@memba.io"})
++        |> UserAuth.log_out_identity()
++
++      assert get_session(conn, "current_identity_email") == nil
++    end
++  end
++
++  describe "require_authenticated_identity/2" do
++    test "continues when a current identity is assigned", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => "pat@memba.io"})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_authenticated_identity([])
++
++      refute conn.halted
++    end
++
++    test "redirects unauthenticated requests to auth and stores a safe return path" do
++      conn =
++        build_conn(:get, "/admin/clubs?club_id=club-123")
++        |> init_test_session(%{})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_authenticated_identity([])
++
++      assert redirected_to(conn) == "/auth"
++      assert get_session(conn, "identity_return_to") == "/admin/clubs?club_id=club-123"
++      assert conn.halted
++    end
++  end
++
++  describe "require_staff_identity/2" do
++    test "continues for signed-in Memba staff", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => "pat@memba.io"})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_staff_identity([])
++
++      refute conn.halted
++    end
++
++    test "forbids signed-in non-staff identities", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => "alice@example.com"})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_staff_identity([])
++
++      assert response(conn, 403) == "Forbidden"
++      assert conn.halted
++    end
++
++    test "redirects unauthenticated requests to auth" do
++      conn =
++        build_conn(:get, "/admin/clubs")
++        |> init_test_session(%{})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_staff_identity([])
++
++      assert redirected_to(conn) == "/auth"
++      assert get_session(conn, "identity_return_to") == "/admin/clubs"
++      assert conn.halted
++    end
++  end
++
++  describe "require_active_club_member/2" do
++    test "continues for signed-in active members of the requested club", %{conn: conn} do
++      club = create_active_member(email: "alice@example.com")
++
++      conn =
++        %{conn | query_params: %{"club_id" => club.club_id}}
++        |> init_test_session(%{"current_identity_email" => "alice@example.com"})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_active_club_member([])
++
++      refute conn.halted
++    end
++
++    test "forbids signed-in identities that are not active members of the requested club", %{
++      conn: conn
++    } do
++      club = create_active_member(email: "alice@example.com")
++
++      conn =
++        %{conn | query_params: %{"club_id" => club.club_id}}
++        |> init_test_session(%{"current_identity_email" => "other@example.com"})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_active_club_member([])
++
++      assert response(conn, 403) == "Forbidden"
++      assert conn.halted
++    end
++
++    test "forbids signed-in identities when club_id is missing", %{conn: conn} do
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => "alice@example.com"})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_active_club_member([])
++
++      assert response(conn, 403) == "Forbidden"
++      assert conn.halted
++    end
++
++    test "redirects unauthenticated requests to auth and preserves the club_id return path" do
++      club_id = Ecto.UUID.generate()
++
++      conn =
++        build_conn(:get, "/member-area?club_id=#{club_id}")
++        |> init_test_session(%{})
++        |> UserAuth.fetch_current_identity([])
++        |> UserAuth.require_active_club_member([])
++
++      assert redirected_to(conn) == "/auth"
++      assert get_session(conn, "identity_return_to") == "/member-area?club_id=#{club_id}"
++      assert conn.halted
++    end
++  end
++
++  defp create_active_member(attrs) do
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    club =
++      Repo.insert!(%Club{
++        club_id: club_id,
++        name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
++      })
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: "Test Member",
++      email: Keyword.fetch!(attrs, :email)
++    })
++
++    Repo.insert!(%Membership{
++      membership_id: Ecto.UUID.generate(),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++
++    club
++  end
++end
