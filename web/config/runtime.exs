@@ -113,6 +113,7 @@ if config_env() == :prod do
     url: [host: host, port: 443, scheme: "https"],
     check_origin: ["//#{host}", "//*.#{host}"],
     http: [
+      port: String.to_integer(System.get_env("PORT", "4000")),
       # Enable IPv6 and bind on all interfaces.
       # Set it to  {0, 0, 0, 0, 0, 0, 0, 1} for local network only access.
       # See the documentation on https://hexdocs.pm/bandit/Bandit.html#t:options/0
