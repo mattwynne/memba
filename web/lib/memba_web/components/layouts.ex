@@ -72,7 +72,11 @@ defmodule MembaWeb.Layouts do
     <div id="admin-layout" data-surface="admin" class="min-h-screen bg-zinc-100 text-zinc-900">
       <header class="border-b border-zinc-200 bg-white px-4 shadow-sm sm:px-6 lg:px-8">
         <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <a href={~p"/admin/clubs"} class="inline-flex w-fit items-center gap-3" aria-label="Memba admin home">
+          <a
+            href={~p"/admin/clubs"}
+            class="inline-flex w-fit items-center gap-3"
+            aria-label="Memba admin home"
+          >
             <.logo />
             <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600">
               Admin
@@ -122,7 +126,10 @@ defmodule MembaWeb.Layouts do
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
   attr :club_name, :string, default: "Club", doc: "the club name shown in the site chrome"
-  attr :theme, :map, default: %{}, doc: "optional CSS color values keyed by the club-site theme names"
+
+  attr :theme, :map,
+    default: %{},
+    doc: "optional CSS color values keyed by the club-site theme names"
 
   attr :current_scope, :map,
     default: nil,
