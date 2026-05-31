@@ -1,0 +1,449 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index c0fff5c..01668c1 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Decide the smallest provider shape: likely `Memba.Messaging.DeliveryProviders.Postmark` implementing `Memba.Messaging.DeliveryProvider` and using `Memba.Mailer`/Swoosh.
+ - [x] 003 Add configuration for selecting the Postmark provider only when explicitly configured, preserving the fake provider for tests and local defaults.
+ - [x] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
+-- [ ] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
++- [x] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ - [ ] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+ - [ ] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+ - [ ] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
+diff --git a/web/config/runtime.exs b/web/config/runtime.exs
+index e8c042f..a78e56a 100644
+--- a/web/config/runtime.exs
++++ b/web/config/runtime.exs
+@@ -35,7 +35,14 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(
+       adapter: Swoosh.Adapters.Postmark,
+       api_key: postmark_config.server_token
+ 
+-    config :memba, Memba.Messaging.DeliveryProviders.Postmark, from: postmark_config.from
++    postmark_provider_config =
++      if postmark_config.reply_to do
++        [from: postmark_config.from, reply_to: postmark_config.reply_to]
++      else
++        [from: postmark_config.from]
++      end
++
++    config :memba, Memba.Messaging.DeliveryProviders.Postmark, postmark_provider_config
+     config :swoosh, :api_client, Swoosh.ApiClient.Req
+ 
+   delivery_provider ->
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index a010a0b..fb1c87a 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -413,6 +413,7 @@ defmodule Memba.Messaging do
+   defp delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
+     %DeliveryRequest{
+       message_id: command.message_id,
++      club_id: command.club_id,
+       delivery_id: recipient.delivery_id,
+       recipient_id: recipient.person_id,
+       recipient_name: recipient.name,
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark.ex b/web/lib/memba/messaging/delivery_providers/postmark.ex
+index d894495..201d5f4 100644
+--- a/web/lib/memba/messaging/delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/delivery_providers/postmark.ex
+@@ -2,11 +2,13 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
+   @moduledoc """
+   Postmark-backed delivery provider selected by explicit runtime configuration.
+ 
+-  Email construction and Swoosh delivery are implemented by later tasks in the
+-  Postmark integration iteration. Until then, selecting this provider fails
+-  visibly instead of silently falling back to fake delivery.
++  The provider builds a multipart Swoosh email and hands it to `Memba.Mailer`.
++  Recipient-specific delivery outcomes remain webhook-driven after Postmark
++  accepts the handoff.
+   """
+ 
++  import Swoosh.Email
++
+   alias Memba.Messaging.DeliveryProvider
+   alias Memba.Messaging.DeliveryRequest
+   alias Memba.Messaging.DeliveryProviders.PostmarkConfig
+@@ -14,13 +16,60 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
+   @behaviour DeliveryProvider
+ 
+   @impl DeliveryProvider
+-  def deliver(%DeliveryRequest{}) do
++  def deliver(%DeliveryRequest{channel: :email} = request) do
+     case PostmarkConfig.from_application_env() do
+-      {:ok, %PostmarkConfig{}} ->
+-        {:error, :postmark_delivery_not_implemented}
++      {:ok, %PostmarkConfig{} = config} ->
++        request
++        |> email(config)
++        |> Memba.Mailer.deliver()
++        |> normalize_delivery_result()
+ 
+       {:error, message} ->
+         {:error, {:postmark_configuration_error, message}}
+     end
+   end
++
++  def deliver(%DeliveryRequest{channel: channel}),
++    do: {:error, {:unsupported_delivery_channel, channel}}
++
++  defp email(%DeliveryRequest{} = request, %PostmarkConfig{} = config) do
++    new()
++    |> from(config.from)
++    |> maybe_reply_to(config.reply_to)
++    |> to({request.recipient_name, request.recipient_address})
++    |> subject(request.subject)
++    |> text_body(request.body)
++    |> html_body(html_body(request.body))
++    |> put_provider_option(:metadata, metadata(request))
++  end
++
++  defp maybe_reply_to(email, nil), do: email
++  defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
++
++  defp metadata(%DeliveryRequest{} = request) do
++    %{
++      "memba_message_id" => request.message_id,
++      "memba_delivery_id" => request.delivery_id,
++      "memba_club_id" => request.club_id
++    }
++  end
++
++  defp html_body(text) do
++    escaped_body =
++      text
++      |> String.split(~r/\r\n|\n|\r/, trim: false)
++      |> Enum.map(&html_escape_to_string/1)
++      |> Enum.join("<br>\n")
++
++    "<html><body><p>#{escaped_body}</p></body></html>"
++  end
++
++  defp html_escape_to_string(text) do
++    text
++    |> Phoenix.HTML.html_escape()
++    |> Phoenix.HTML.safe_to_string()
++  end
++
++  defp normalize_delivery_result({:ok, _result}), do: :ok
++  defp normalize_delivery_result({:error, _reason} = error), do: error
+ end
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark_config.ex b/web/lib/memba/messaging/delivery_providers/postmark_config.ex
+index ac72766..fa20590 100644
+--- a/web/lib/memba/messaging/delivery_providers/postmark_config.ex
++++ b/web/lib/memba/messaging/delivery_providers/postmark_config.ex
+@@ -4,18 +4,21 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
+ 
+   Real Postmark delivery is only enabled when explicitly selected. When it is
+   selected, the server token and sender/from address must be present so the
+-  failure mode is clear instead of silently falling back to fake delivery.
++  failure mode is clear instead of silently falling back to fake delivery. A
++  monitored reply-to address is optional but used when configured.
+   """
+ 
+   @enforce_keys [:server_token, :from]
+-  defstruct [:server_token, :from]
++  defstruct [:server_token, :from, :reply_to]
+ 
+   @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
+   @from_address_env "MEMBA_POSTMARK_FROM_ADDRESS"
++  @reply_to_address_env "MEMBA_POSTMARK_REPLY_TO_ADDRESS"
+ 
+   @type t :: %__MODULE__{
+           server_token: String.t(),
+-          from: String.t()
++          from: String.t(),
++          reply_to: String.t() | nil
+         }
+ 
+   @doc """
+@@ -25,7 +28,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
+     validate(
+       %{
+         @server_token_env => get_env.(@server_token_env),
+-        @from_address_env => get_env.(@from_address_env)
++        @from_address_env => get_env.(@from_address_env),
++        @reply_to_address_env => get_env.(@reply_to_address_env)
+       },
+       source: :environment
+     )
+@@ -51,7 +55,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
+     validate(
+       %{
+         @server_token_env => Keyword.get(mailer_config, :api_key),
+-        @from_address_env => Keyword.get(provider_config, :from)
++        @from_address_env => Keyword.get(provider_config, :from),
++        @reply_to_address_env => Keyword.get(provider_config, :reply_to)
+       },
+       source: :application
+     )
+@@ -73,18 +78,20 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
+         {key, normalize(value)}
+       end)
+ 
+-    missing =
++    missing_required =
+       normalized_values
++      |> Map.take(required_config_keys())
+       |> Enum.filter(fn {_key, value} -> is_nil(value) end)
+       |> Enum.map(fn {key, _value} -> key end)
+       |> Enum.sort()
+ 
+-    case missing do
++    case missing_required do
+       [] ->
+         {:ok,
+          %__MODULE__{
+            server_token: Map.fetch!(normalized_values, @server_token_env),
+-           from: Map.fetch!(normalized_values, @from_address_env)
++           from: Map.fetch!(normalized_values, @from_address_env),
++           reply_to: Map.fetch!(normalized_values, @reply_to_address_env)
+          }}
+ 
+       missing ->
+@@ -101,6 +108,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfig do
+ 
+   defp normalize(_value), do: nil
+ 
++  defp required_config_keys, do: [@server_token_env, @from_address_env]
++
+   defp missing_config_message(missing, source) do
+     "Postmark delivery provider is enabled, but required #{source_label(source)} " <>
+       "configuration is missing: #{Enum.join(missing, ", ")}. " <>
+diff --git a/web/lib/memba/messaging/delivery_request.ex b/web/lib/memba/messaging/delivery_request.ex
+index 958637c..027b259 100644
+--- a/web/lib/memba/messaging/delivery_request.ex
++++ b/web/lib/memba/messaging/delivery_request.ex
+@@ -4,10 +4,13 @@ defmodule Memba.Messaging.DeliveryRequest do
+ 
+   The first messaging slice sends email, but the request shape keeps the provider
+   boundary focused on deliveries rather than an email-specific domain concept.
++  It carries Memba's own message, delivery, and club identifiers so providers can
++  attach correlation metadata without querying domain state.
+   """
+ 
+   @enforce_keys [
+     :message_id,
++    :club_id,
+     :delivery_id,
+     :recipient_id,
+     :recipient_name,
+@@ -18,6 +21,7 @@ defmodule Memba.Messaging.DeliveryRequest do
+   ]
+   defstruct [
+     :message_id,
++    :club_id,
+     :delivery_id,
+     :recipient_id,
+     :recipient_name,
+@@ -29,6 +33,7 @@ defmodule Memba.Messaging.DeliveryRequest do
+ 
+   @type t :: %__MODULE__{
+           message_id: Ecto.UUID.t(),
++          club_id: Ecto.UUID.t(),
+           delivery_id: Ecto.UUID.t(),
+           recipient_id: Ecto.UUID.t(),
+           recipient_name: String.t(),
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index fabab96..64bb179 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -159,6 +159,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+     Enum.zip(deliveries, provider_deliveries)
+     |> Enum.each(fn {%RecipientDelivery{} = delivery, %DeliveryRequest{} = request} ->
+       assert request.message_id == delivery.message_id
++      assert request.club_id == context.sent_message.club_id
+       assert request.delivery_id == delivery.delivery_id
+       assert request.recipient_id == delivery.recipient_id
+       assert request.recipient_name == delivery.recipient_name
+diff --git a/web/test/memba/messaging/delivery_provider_test.exs b/web/test/memba/messaging/delivery_provider_test.exs
+index 6fcfbbe..0813dba 100644
+--- a/web/test/memba/messaging/delivery_provider_test.exs
++++ b/web/test/memba/messaging/delivery_provider_test.exs
+@@ -53,14 +53,14 @@ defmodule Memba.Messaging.DeliveryProviderTest do
+     Application.put_env(:memba, :messaging_delivery_provider, Postmark)
+ 
+     Application.put_env(:memba, Memba.Mailer,
+-      adapter: Swoosh.Adapters.Postmark,
++      adapter: Swoosh.Adapters.Test,
+       api_key: "server-token"
+     )
+ 
+     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+ 
+-    assert {:error, :postmark_delivery_not_implemented} =
+-             DeliveryProvider.deliver(delivery_request())
++    assert :ok = DeliveryProvider.deliver(delivery_request())
++    assert_received {:email, %Swoosh.Email{}}
+ 
+     assert Fake.deliveries() == []
+   end
+@@ -68,6 +68,7 @@ defmodule Memba.Messaging.DeliveryProviderTest do
+   defp delivery_request do
+     %DeliveryRequest{
+       message_id: Ecto.UUID.generate(),
++      club_id: Ecto.UUID.generate(),
+       delivery_id: Ecto.UUID.generate(),
+       recipient_id: Ecto.UUID.generate(),
+       recipient_name: "Alice",
+diff --git a/web/test/memba/messaging/delivery_providers/fake_test.exs b/web/test/memba/messaging/delivery_providers/fake_test.exs
+index e164381..3b492c2 100644
+--- a/web/test/memba/messaging/delivery_providers/fake_test.exs
++++ b/web/test/memba/messaging/delivery_providers/fake_test.exs
+@@ -23,6 +23,7 @@ defmodule Memba.Messaging.DeliveryProviders.FakeTest do
+   defp delivery_request(name) do
+     %DeliveryRequest{
+       message_id: Ecto.UUID.generate(),
++      club_id: Ecto.UUID.generate(),
+       delivery_id: Ecto.UUID.generate(),
+       recipient_id: Ecto.UUID.generate(),
+       recipient_name: name,
+diff --git a/web/test/memba/messaging/delivery_providers/postmark_config_test.exs b/web/test/memba/messaging/delivery_providers/postmark_config_test.exs
+index cd7de37..5487551 100644
+--- a/web/test/memba/messaging/delivery_providers/postmark_config_test.exs
++++ b/web/test/memba/messaging/delivery_providers/postmark_config_test.exs
+@@ -7,11 +7,13 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
+     assert {:ok,
+             %PostmarkConfig{
+               server_token: "server-token",
+-              from: "messages@mail.memba.io"
++              from: "messages@mail.memba.io",
++              reply_to: "help@memba.io"
+             }} =
+              PostmarkConfig.from_env(fn
+                "MEMBA_POSTMARK_SERVER_TOKEN" -> "  server-token  "
+                "MEMBA_POSTMARK_FROM_ADDRESS" -> " messages@mail.memba.io "
++               "MEMBA_POSTMARK_REPLY_TO_ADDRESS" -> " help@memba.io "
+              end)
+   end
+ 
+@@ -20,6 +22,7 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
+              PostmarkConfig.from_env(fn
+                "MEMBA_POSTMARK_SERVER_TOKEN" -> "  "
+                "MEMBA_POSTMARK_FROM_ADDRESS" -> nil
++               "MEMBA_POSTMARK_REPLY_TO_ADDRESS" -> "  "
+              end)
+ 
+     assert message =~ "Postmark delivery provider is enabled"
+@@ -34,6 +37,7 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkConfigTest do
+       PostmarkConfig.from_env!(fn
+         "MEMBA_POSTMARK_SERVER_TOKEN" -> "server-token"
+         "MEMBA_POSTMARK_FROM_ADDRESS" -> nil
++        "MEMBA_POSTMARK_REPLY_TO_ADDRESS" -> nil
+       end)
+     end
+   end
+diff --git a/web/test/memba/messaging/delivery_providers/postmark_test.exs b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+new file mode 100644
+index 0000000..f082af0
+--- /dev/null
++++ b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+@@ -0,0 +1,80 @@
++defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
++  use ExUnit.Case, async: false
++
++  alias Memba.Messaging.DeliveryProviders.Postmark
++  alias Memba.Messaging.DeliveryRequest
++
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_postmark_config = Application.get_env(:memba, Postmark)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(Postmark, original_postmark_config)
++    end)
++
++    :ok
++  end
++
++  test "builds and sends a multipart email with Postmark correlation metadata" do
++    Application.put_env(:memba, Postmark,
++      from: "messages@mail.memba.io",
++      reply_to: "help@memba.io"
++    )
++
++    request = delivery_request(body: "Hello <Alice> & Bob\nBring route ideas.")
++
++    assert :ok = Postmark.deliver(request)
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"", "messages@mail.memba.io"}
++    assert email.reply_to == {"", "help@memba.io"}
++    assert email.to == [{"Alice Adams", "alice@example.com"}]
++    assert email.subject == "Trip planning night"
++    assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."
++
++    assert email.html_body ==
++             "<html><body><p>Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas.</p></body></html>"
++
++    refute email.html_body =~ "<Alice>"
++
++    assert email.provider_options == %{
++             metadata: %{
++               "memba_message_id" => request.message_id,
++               "memba_delivery_id" => request.delivery_id,
++               "memba_club_id" => request.club_id
++             }
++           }
++  end
++
++  test "omits reply-to when no reply-to address is configured" do
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    assert :ok = Postmark.deliver(delivery_request())
++
++    assert_received {:email, %Swoosh.Email{reply_to: nil}}
++  end
++
++  defp delivery_request(overrides \\ []) do
++    %DeliveryRequest{
++      message_id: Keyword.get_lazy(overrides, :message_id, &Ecto.UUID.generate/0),
++      club_id: Keyword.get_lazy(overrides, :club_id, &Ecto.UUID.generate/0),
++      delivery_id: Keyword.get_lazy(overrides, :delivery_id, &Ecto.UUID.generate/0),
++      recipient_id: Keyword.get_lazy(overrides, :recipient_id, &Ecto.UUID.generate/0),
++      recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
++      recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
++      channel: Keyword.get(overrides, :channel, :email),
++      subject: Keyword.get(overrides, :subject, "Trip planning night"),
++      body: Keyword.get(overrides, :body, "Bring route ideas.")
++    }
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index b92b31a..991a396 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -93,6 +93,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert [
+              %DeliveryRequest{
+                message_id: ^message_id,
++               club_id: ^kootenay_club_id,
+                delivery_id: alice_delivery_id,
+                recipient_id: ^alice_id,
+                recipient_name: "Alice",
+@@ -103,6 +104,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+              },
+              %DeliveryRequest{
+                message_id: ^message_id,
++               club_id: ^kootenay_club_id,
+                delivery_id: bob_delivery_id,
+                recipient_id: ^bob_id,
+                recipient_name: "Bob",
+@@ -113,6 +115,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+              },
+              %DeliveryRequest{
+                message_id: ^message_id,
++               club_id: ^kootenay_club_id,
+                delivery_id: carol_delivery_id,
+                recipient_id: ^carol_id,
+                recipient_name: "Carol",
