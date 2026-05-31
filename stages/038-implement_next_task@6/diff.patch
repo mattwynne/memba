@@ -1,0 +1,48 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index 01668c1..476da21 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add configuration for selecting the Postmark provider only when explicitly configured, preserving the fake provider for tests and local defaults.
+ - [x] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
+ - [x] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+-- [ ] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
++- [x] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+ - [ ] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+ - [ ] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
+ - [ ] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark.ex b/web/lib/memba/messaging/delivery_providers/postmark.ex
+index 201d5f4..b2138ea 100644
+--- a/web/lib/memba/messaging/delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/delivery_providers/postmark.ex
+@@ -41,6 +41,7 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
+     |> text_body(request.body)
+     |> html_body(html_body(request.body))
+     |> put_provider_option(:metadata, metadata(request))
++    |> put_provider_option(:track_opens, true)
+   end
+ 
+   defp maybe_reply_to(email, nil), do: email
+diff --git a/web/test/memba/messaging/delivery_providers/postmark_test.exs b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+index f082af0..b7ff35b 100644
+--- a/web/test/memba/messaging/delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+@@ -21,7 +21,7 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
+     :ok
+   end
+ 
+-  test "builds and sends a multipart email with Postmark correlation metadata" do
++  test "builds and sends a multipart email with Postmark correlation metadata and open tracking" do
+     Application.put_env(:memba, Postmark,
+       from: "messages@mail.memba.io",
+       reply_to: "help@memba.io"
+@@ -49,7 +49,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
+                "memba_message_id" => request.message_id,
+                "memba_delivery_id" => request.delivery_id,
+                "memba_club_id" => request.club_id
+-             }
++             },
++             track_opens: true
+            }
+   end
+ 
