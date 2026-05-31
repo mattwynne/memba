@@ -54,6 +54,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
     |> visit("/deliveries")
     |> assert_has("#deliveries-overview")
     |> assert_has("#deliveries-table[aria-label='Delivery records']")
+    |> assert_has("[data-test-id^='delivery-row-']", count: 2)
     |> assert_delivery_row(first_recipient.delivery_id, [
       first_subject,
       first_recipient.name,
@@ -118,8 +119,13 @@ defmodule MembaWeb.DeliveriesLiveTest do
   defp assert_delivery_row(session, delivery_id, expected_texts) do
     row_selector = "[data-test-id='delivery-row-#{delivery_id}']"
 
-    Enum.reduce(expected_texts, session, fn expected_text, session ->
-      assert_has(session, row_selector, expected_text)
+    session
+    |> assert_has("#{row_selector} [data-test-id='delivery-event-at']")
+    |> assert_has("#{row_selector} [data-test-id='delivery-status']")
+    |> then(fn session ->
+      Enum.reduce(expected_texts, session, fn expected_text, session ->
+        assert_has(session, row_selector, expected_text)
+      end)
     end)
   end
 
