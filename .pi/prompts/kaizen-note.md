@@ -11,4 +11,4 @@ Context supplied with the command:
 $@
 ```
 
-If the context is enough, write the kaizen note. If important facts are missing, ask only for the missing facts needed to make the note accurate. Ask before committing the note.
+If the context is enough, write and commit the kaizen note. If important facts are missing, ask only for the missing facts needed to make the note accurate.
