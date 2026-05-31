@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-31T01:06:20.782667011Z",
-  "last_event_at": "2026-05-31T01:41:54.613544712Z",
+  "last_event_at": "2026-05-31T01:41:57.898006221Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -5522,9 +5522,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 880,
       "checkpoint": {
-        "timestamp": "2026-05-31T01:41:54.633647380Z",
+        "timestamp": "2026-05-31T01:41:57.693430789Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -5550,8 +5550,317 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.run_id": "01KSXS0DZVJYB6GS66TVG7H5VY",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.wip_gate": 0,
+          "failure_class": "",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean, so validation used recent checkpoint evidence.\n  - Recent checkpoint `00c5b79 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `002 Configure the browser Cucumber default command to exclude @todo-web, while leaving the Elixir/domain Cucumber runner unfiltered.`\n    - from `- [ ]` to `- [x]`.\n  - Current `todo.md` shows tasks 001–002 checked and 003–010 still unchecked.\n  - Task 002 was the first unchecked task after task 001.\n\n- Implementation artifacts found:\n  - `acceptance-tests/cucumber.js` now sets `tags: \"not @todo-web\"` on the default browser Cucumber profile.\n  - `acceptance-tests/package.json` adds `npm run test:config`.\n  - `acceptance-tests/test/cucumber_config.test.js` verifies:\n    - default browser Cucumber profile excludes `@todo-web`;\n    - shared feature path remains loaded.\n  - `web/test/features/cucumber_configuration_test.exs` verifies the Elixir/domain Cucumber config has no `:tags` filter and still includes `operator_email_deliverability.feature`.\n\n- Tests run/results found:\n  - Validator reran `cd acceptance-tests && npm run test:config`: passed, 2 tests.\n  - Validator reran `cd acceptance-tests && npm test -- --dry-run`: exited 0; undefined later browser steps remain as expected for later tasks.\n  - Validator reran `PATH=\"$PWD/bin:$PATH\" dev check`: passed, 109 tests, 0 failures.\n  - Repository remained clean after validation.\n\n- ADR/plan conformance notes:\n  - No `*.feature` files were modified in the implementation checkpoint.\n  - Work is scoped to the task: browser Cucumber default tag expression plus regression tests proving domain runner remains unfiltered.\n  - ADR 0003 respected: shared feature files remain the behavioural spec and were not duplicated or made browser-specific.\n  - ADR 0010 respected: Elixir Cucumber continues reading the shared feature files without a tag filter.\n  - ADR 0013 unaffected: PhoenixTest/web-test architecture was not altered.\n  - Later iteration goals, including actual operator browser exclusion once `@todo-web` tags are present, remain preserved in unchecked tasks.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "task_list_complete": false,
+          "task_valid": true,
+          "thread.task_gate.current_node": "sync_task_list",
+          "command.output": "blob://sha256/b714b6ac45fb8c35f7c701ae8c87efb86437ae97fc55c609867267831cd3a030",
+          "failure_signature": "",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.sync_task_list": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.task_gate": 0,
+          "last_stage": "implement_next_task",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "thread.sync_task_list.current_node": "all_tasks_done",
+          "graph.max_node_visits": "300",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.thread_id": "all_tasks_done",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.`\n\n2. **Changes made**\n   - Added `acceptance-tests/features/support/lifecycle.js`:\n     - selects runtime ports;\n     - ensures Postgres via `bin/dev up`;\n     - resets/prepares the test database and event store;\n     - starts Phoenix with `MIX_ENV=test`, `PHX_SERVER=true`, and a dynamic `PORT`;\n     - polls HTTP readiness before scenarios run;\n     - captures command/Phoenix log tails;\n     - terminates Phoenix and managed Postgres services on teardown.\n   - Updated `acceptance-tests/features/support/world.js`:\n     - added Cucumber `BeforeAll`/`AfterAll` lifecycle hooks;\n     - keeps browser context isolation per scenario;\n     - captures browser console, page errors, request failures, screenshots, and Phoenix log tails on scenario failure.\n   - Added `acceptance-tests/test/lifecycle.test.js`:\n     - verifies lifecycle ordering for Postgres, DB setup, Phoenix startup, readiness, and teardown;\n     - verifies non-dev-shell commands run through `devenv` on the selected Postgres port;\n     - verifies Phoenix readiness timeout diagnostics.\n   - No `.feature` files were edited.\n\n3. **Focused validation**\n   - `cd acceptance-tests && npm run test:config`\n     - Passed: 5 tests, 0 failures.\n   - `cd acceptance-tests && npm test -- --dry-run`\n     - Exited 0.\n     - Still reports undefined future browser steps, as expected for later unchecked tasks.\n   - `cd acceptance-tests && npx cucumber-js --name \"Visiting the homepage\"`\n     - Lifecycle exercised DB setup and Phoenix startup/readiness.\n     - Failed at browser launch because this sandbox is missing the Playwright Chromium executable:\n       - `browserType.launch: Executable doesn't exist ...`\n     - This is an environment/browser-install issue, not a lifecycle startup failure.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: 109 tests, 0 failures.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.`\n   - To:\n     - `- [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0003: kept shared `.feature` files as the behavioral contract; added only whole-application/browser harness plumbing.\n   - ADR 0010: did not alter Elixir/domain Cucumber discovery or filtering.\n   - ADR 0013: did not replace or disturb PhoenixTest-based web test architecture.\n   - No new HTTP client dependency was introduced.",
+          "task_list_needs_human": false,
+          "task_retry_available": false,
+          "graph.default_fidelity": "summary:high",
           "current_node": "implement_next_task",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.resume_gate": 0,
+          "last_response": "1. **Selected todo line**\n   - `003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down ",
+          "internal.node_visit_count": 3,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.work_dir": "/workspace/memba",
+          "graph.rankdir": "LR",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.implement_next_task": 0
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/edf4304e9363ae78ff1ce79a3ef7dd56c1fa793915c9d848429723cb72d7b819"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168308,
+              "active_time_ms": 168308
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b714b6ac45fb8c35f7c701ae8c87efb86437ae97fc55c609867267831cd3a030"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 210,
+              "active_time_ms": 210
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.`\n\n2. **Changes made**\n   - Added `acceptance-tests/features/support/lifecycle.js`:\n     - selects runtime ports;\n     - ensures Postgres via `bin/dev up`;\n     - resets/prepares the test database and event store;\n     - starts Phoenix with `MIX_ENV=test`, `PHX_SERVER=true`, and a dynamic `PORT`;\n     - polls HTTP readiness before scenarios run;\n     - captures command/Phoenix log tails;\n     - terminates Phoenix and managed Postgres services on teardown.\n   - Updated `acceptance-tests/features/support/world.js`:\n     - added Cucumber `BeforeAll`/`AfterAll` lifecycle hooks;\n     - keeps browser context isolation per scenario;\n     - captures browser console, page errors, request failures, screenshots, and Phoenix log tails on scenario failure.\n   - Added `acceptance-tests/test/lifecycle.test.js`:\n     - verifies lifecycle ordering for Postgres, DB setup, Phoenix startup, readiness, and teardown;\n     - verifies non-dev-shell commands run through `devenv` on the selected Postgres port;\n     - verifies Phoenix readiness timeout diagnostics.\n   - No `.feature` files were edited.\n\n3. **Focused validation**\n   - `cd acceptance-tests && npm run test:config`\n     - Passed: 5 tests, 0 failures.\n   - `cd acceptance-tests && npm test -- --dry-run`\n     - Exited 0.\n     - Still reports undefined future browser steps, as expected for later unchecked tasks.\n   - `cd acceptance-tests && npx cucumber-js --name \"Visiting the homepage\"`\n     - Lifecycle exercised DB setup and Phoenix startup/readiness.\n     - Failed at browser launch because this sandbox is missing the Playwright Chromium executable:\n       - `browserType.launch: Executable doesn't exist ...`\n     - This is an environment/browser-install issue, not a lifecycle startup failure.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: 109 tests, 0 failures.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.`\n   - To:\n     - `- [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0003: kept shared `.feature` files as the behavioral contract; added only whole-application/browser harness plumbing.\n   - ADR 0010: did not alter Elixir/domain Cucumber discovery or filtering.\n   - ADR 0013: did not replace or disturb PhoenixTest-based web test architecture.\n   - No new HTTP client dependency was introduced.",
+              "last_response": "1. **Selected todo line**\n   - `003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down "
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 756649,
+                    "output_tokens": 9580,
+                    "reasoning_tokens": 11931,
+                    "cache_read_tokens": 2571776,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5714463
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 650812,
+              "tool_time_ms": 185665,
+              "active_time_ms": 836477
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/639d200c373bd3ae6d7c2c0d2d7b2a6d94fd00b6d832bb5ab099e3f59a631e61"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 283,
+              "active_time_ms": 283
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean, so validation used recent checkpoint evidence.\n  - Recent checkpoint `00c5b79 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `002 Configure the browser Cucumber default command to exclude @todo-web, while leaving the Elixir/domain Cucumber runner unfiltered.`\n    - from `- [ ]` to `- [x]`.\n  - Current `todo.md` shows tasks 001–002 checked and 003–010 still unchecked.\n  - Task 002 was the first unchecked task after task 001.\n\n- Implementation artifacts found:\n  - `acceptance-tests/cucumber.js` now sets `tags: \"not @todo-web\"` on the default browser Cucumber profile.\n  - `acceptance-tests/package.json` adds `npm run test:config`.\n  - `acceptance-tests/test/cucumber_config.test.js` verifies:\n    - default browser Cucumber profile excludes `@todo-web`;\n    - shared feature path remains loaded.\n  - `web/test/features/cucumber_configuration_test.exs` verifies the Elixir/domain Cucumber config has no `:tags` filter and still includes `operator_email_deliverability.feature`.\n\n- Tests run/results found:\n  - Validator reran `cd acceptance-tests && npm run test:config`: passed, 2 tests.\n  - Validator reran `cd acceptance-tests && npm test -- --dry-run`: exited 0; undefined later browser steps remain as expected for later tasks.\n  - Validator reran `PATH=\"$PWD/bin:$PATH\" dev check`: passed, 109 tests, 0 failures.\n  - Repository remained clean after validation.\n\n- ADR/plan conformance notes:\n  - No `*.feature` files were modified in the implementation checkpoint.\n  - Work is scoped to the task: browser Cucumber default tag expression plus regression tests proving domain runner remains unfiltered.\n  - ADR 0003 respected: shared feature files remain the behavioural spec and were not duplicated or made browser-specific.\n  - ADR 0010 respected: Elixir Cucumber continues reading the shared feature files without a tag filter.\n  - ADR 0013 unaffected: PhoenixTest/web-test architecture was not altered.\n  - Later iteration goals, including actual operator browser exclusion once `@todo-web` tags are present, remain preserved in unchecked tasks.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean, so validation used recent checkpoint evidence.\n  - Recent checkpoint `00c5b79 fabro(...): imp",
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 214022,
+                    "output_tokens": 2188,
+                    "reasoning_tokens": 2835,
+                    "cache_read_tokens": 234496,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1338048
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 258213,
+              "tool_time_ms": 47192,
+              "active_time_ms": 305405
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "task_list_complete": false,
+              "task_list_needs_human": false,
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9794,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 118,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 53350
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 5670,
+              "tool_time_ms": 0,
+              "active_time_ms": 5670
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a88eac2d4ec4f93b543599a36833c38bce4ee1a87921dafa13af064af61204fd"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) iteration_dir=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\niteration_slug=${iteration_dir##*/}\niteration_number=${iteration_slug%%-*}\ntrim() {\n  local s=\"$1\"\n  s=\"${s#\"${s%%[![:space:]]*}\"}\"\n  s=\"${s%\"${s##*[![:space:]]}\"}\"\n  printf '%s' \"$s\"\n}\nactive=\"\"\nwhile IFS='|' read -r _ number date status title plan rest; do\n  case \"$plan\" in *'[plan]'*) ;; *) continue ;; esac\n  number=$(trim \"$number\")\n  status=$(trim \"$status\")\n  title=$(trim \"$title\")\n  plan=$(trim \"$plan\")\n  if [ \"$number\" != \"$iteration_number\" ]; then\n    case \"$status\" in\n      implementing|ready-for-review|in-review|reviewing|finalizing)\n        active=\"${active}- ${number} ${title} (${status}) ${plan}\\n\"\n        ;;\n    esac\n  fi\ndone < docs/iterations/README.md\nif [ -n \"$active\" ]; then\n  echo 'Implementation WIP limit is occupied by active iteration(s):' >&2\n  printf '%b' \"$active\" >&2\n  echo 'Plan validation may run in parallel, but starting another implementation is blocked until the active iteration is merged or otherwise resolved.' >&2\n  exit 1\nfi\necho 'Implementation WIP slot is clear.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 231,
+              "active_time_ms": 231
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0c5532f6b26061b497df4436798287714686692d5230134c3b5bf4ed11609d8a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 177,
+              "active_time_ms": 177
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/feb5fbe99e0f0808bccb2fab304ce4bdf5d77071099eca34a0d0615206f84144"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170,
+              "active_time_ms": 170
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "85a4a03c944c766f0b4927ff73cd5d20874e7e1d",
+        "node_visits": {
+          "start": 1,
+          "resume_gate": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "validate_task": 2,
+          "sync_task_list": 3,
+          "task_gate": 2,
+          "all_tasks_done": 3,
+          "wip_gate": 1,
+          "implement_next_task": 3,
+          "pre_validate_snapshot": 2
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/acceptance-tests/features/support/lifecycle.js b/acceptance-tests/features/support/lifecycle.js\nnew file mode 100644\nindex 0000000..6557d90\n--- /dev/null\n+++ b/acceptance-tests/features/support/lifecycle.js\n@@ -0,0 +1,447 @@\n+const { spawn } = require(\"node:child_process\");\n+const http = require(\"node:http\");\n+const https = require(\"node:https\");\n+const net = require(\"node:net\");\n+const path = require(\"node:path\");\n+\n+const repoRoot = path.resolve(__dirname, \"../../..\");\n+const binDevPath = path.join(repoRoot, \"bin\", \"dev\");\n+const binMixPath = path.join(repoRoot, \"bin\", \"mix\");\n+\n+const databaseSetupSteps = [\n+  { label: \"drop existing test database\", mixArgs: [\"ecto.drop\", \"--quiet\"] },\n+  { label: \"create test database\", mixArgs: [\"ecto.create\", \"--quiet\"] },\n+  { label: \"create event store\", mixArgs: [\"event_store.create\", \"--quiet\"] },\n+  { label: \"migrate test database\", mixArgs: [\"ecto.migrate\", \"--quiet\"] },\n+  { label: \"initialize event store\", mixArgs: [\"event_store.init\", \"--quiet\"] }\n+];\n+\n+class LogBuffer {\n+  constructor(limit = 30000) {\n+    this.limit = limit;\n+    this.value = \"\";\n+  }\n+\n+  append(source, chunk) {\n+    const text = String(chunk);\n+    if (text.length === 0) {\n+      return;\n+    }\n+\n+    const prefixed = text\n+      .split(/\\r?\\n/)\n+      .map((line) => (line.length > 0 ? `[${source}] ${line}` : `[${source}]`))\n+      .join(\"\\n\");\n+\n+    this.value = `${this.value}${prefixed}\\n`;\n+\n+    if (this.value.length > this.limit) {\n+      this.value = this.value.slice(this.value.length - this.limit);\n+    }\n+  }\n+\n+  tail() {\n+    return this.value.trimEnd();\n+  }\n+}\n+\n+function buildCommandEnvironment(config) {\n+  return {\n+    ...config.env,\n+    MIX_ENV: \"test\",\n+    PHX_SERVER: \"true\",\n+    PORT: String(config.phoenixPort),\n+    MEMBA_POSTGRES_PORT: String(config.postgresPort)\n+  };\n+}\n+\n+function buildDevCommand(config, subcommand) {\n+  return {\n+    command: config.binDevPath,\n+    args: [subcommand],\n+    cwd: config.repoRoot,\n+    env: buildCommandEnvironment(config)\n+  };\n+}\n+\n+function buildMixCommand(config, mixArgs) {\n+  const env = buildCommandEnvironment(config);\n+\n+  if (config.inDevShell) {\n+    return {\n+      command: config.binMixPath,\n+      args: mixArgs,\n+      cwd: config.repoRoot,\n+      env\n+    };\n+  }\n+\n+  return {\n+    command: \"devenv\",\n+    args: [\n+      \"shell\",\n+      \"-O\",\n+      \"services.postgres.port:int\",\n+      String(config.postgresPort),\n+      \"--\",\n+      config.binMixPath,\n+      ...mixArgs\n+    ],\n+    cwd: config.repoRoot,\n+    env\n+  };\n+}\n+\n+function buildPhoenixCommand(config) {\n+  return buildMixCommand(config, [\"phx.server\"]);\n+}\n+\n+async function findFreePort() {\n+  return new Promise((resolve, reject) => {\n+    const server = net.createServer();\n+    server.unref();\n+    server.once(\"error\", reject);\n+    server.listen(0, \"127.0.0.1\", () => {\n+      const address = server.address();\n+      const port = address.port;\n+      server.close(() => resolve(port));\n+    });\n+  });\n+}\n+\n+function parseBoolean(value) {\n+  return value === \"1\" || value === \"true\" || value === \"yes\";\n+}\n+\n+async function buildLifecycleConfig(env = process.env, portFinder = findFreePort) {\n+  const phoenixPort = env.ACCEPTANCE_PORT || env.PORT || (await portFinder());\n+  let postgresPort = env.MEMBA_POSTGRES_PORT || env.PGPORT || (await portFinder());\n+\n+  if (String(postgresPort) === String(phoenixPort)) {\n+    postgresPort = await portFinder();\n+  }\n+\n+  const baseUrl = env.BASE_URL || `http://127.0.0.1:${phoenixPort}`;\n+\n+  return {\n+    env,\n+    repoRoot,\n+    binDevPath,\n+    binMixPath,\n+    baseUrl,\n+    phoenixPort,\n+    postgresPort,\n+    inDevShell: env.MEMBA_DEVENV_SHELL === \"1\",\n+    skipAppStart: parseBoolean(env.ACCEPTANCE_SKIP_APP_START),\n+    tearDownPostgres:\n+      !parseBoolean(env.ACCEPTANCE_KEEP_POSTGRES) &&\n+      (parseBoolean(env.ACCEPTANCE_MANAGE_POSTGRES) || env.MEMBA_DEVENV_SHELL !== \"1\"),\n+    commandTimeoutMs: Number(env.ACCEPTANCE_COMMAND_TIMEOUT_MS || 120000),\n+    httpReadyTimeoutMs: Number(env.ACCEPTANCE_HTTP_READY_TIMEOUT_MS || 60000),\n+    shutdownTimeoutMs: Number(env.ACCEPTANCE_SHUTDOWN_TIMEOUT_MS || 60000)\n+  };\n+}\n+\n+function commandLine(spec) {\n+  return [spec.command, ...spec.args].join(\" \");\n+}\n+\n+function killProcessGroup(child, signal) {\n+  if (!child || !child.pid) {\n+    return;\n+  }\n+\n+  try {\n+    if (process.platform === \"win32\") {\n+      child.kill(signal);\n+    } else {\n+      process.kill(-child.pid, signal);\n+    }\n+  } catch (_error) {\n+    // The process may already have exited.\n+  }\n+}\n+\n+function runCommand(spec, { label, timeoutMs, logBuffer }) {\n+  return new Promise((resolve, reject) => {\n+    const child = spawn(spec.command, spec.args, {\n+      cwd: spec.cwd,\n+      env: spec.env,\n+      detached: process.platform !== \"win32\",\n+      stdio: [\"ignore\", \"pipe\", \"pipe\"]\n+    });\n+    let stdout = \"\";\n+    let stderr = \"\";\n+    let timedOut = false;\n+\n+    let killTimeout = null;\n+\n+    const timeout = setTimeout(() => {\n+      timedOut = true;\n+      killProcessGroup(child, \"SIGTERM\");\n+      killTimeout = setTimeout(() => {\n+        killProcessGroup(child, \"SIGKILL\");\n+      }, 5000);\n+    }, timeoutMs);\n+\n+    child.stdout.on(\"data\", (chunk) => {\n+      stdout += chunk;\n+      logBuffer.append(label, chunk);\n+    });\n+\n+    child.stderr.on(\"data\", (chunk) => {\n+      stderr += chunk;\n+      logBuffer.append(label, chunk);\n+    });\n+\n+    child.once(\"error\", (error) => {\n+      clearTimeout(timeout);\n+      clearTimeout(killTimeout);\n+      reject(\n+        new Error(\n+          `${label} failed to start.\\nCommand: ${commandLine(spec)}\\nError: ${error.message}`\n+        )\n+      );\n+    });\n+\n+    child.once(\"close\", (code, signal) => {\n+      clearTimeout(timeout);\n+      clearTimeout(killTimeout);\n+\n+      if (code === 0) {\n+        resolve({ stdout, stderr });\n+        return;\n+      }\n+\n+      const reason = timedOut\n+        ? `timed out after ${timeoutMs}ms`\n+        : `exited with code ${code}${signal ? ` and signal ${signal}` : \"\"}`;\n+\n+      reject(\n+        new Error(\n+          `${label} failed: ${reason}.\\nCommand: ${commandLine(spec)}\\nRecent output:\\n${\n+            logBuffer.tail() || \"(no output captured)\"\n+          }`\n+        )\n+      );\n+    });\n+  });\n+}\n+\n+function startManagedProcess(spec, { label, logBuffer, shutdownTimeoutMs }) {\n+  const child = spawn(spec.command, spec.args, {\n+    cwd: spec.cwd,\n+    env: spec.env,\n+    detached: process.platform !== \"win32\",\n+    stdio: [\"ignore\", \"pipe\", \"pipe\"]\n+  });\n+\n+  let exitStatus = null;\n+\n+  child.stdout.on(\"data\", (chunk) => logBuffer.append(label, chunk));\n+  child.stderr.on(\"data\", (chunk) => logBuffer.append(label, chunk));\n+  child.once(\"error\", (error) => {\n+    exitStatus = { error };\n+    logBuffer.append(label, `failed to start: ${error.message}`);\n+  });\n+\n+  const exited = new Promise((resolve) => {\n+    child.once(\"exit\", (code, signal) => {\n+      exitStatus = { code, signal };\n+      resolve(exitStatus);\n+    });\n+  });\n+\n+  return {\n+    command: commandLine(spec),\n+    exitStatus: () => exitStatus,\n+    async stop() {\n+      if (exitStatus) {\n+        return;\n+      }\n+\n+      killProcessGroup(child, \"SIGTERM\");\n+\n+      const stopped = await Promise.race([\n+        exited.then(() => true),\n+        new Promise((resolve) => setTimeout(() => resolve(false), shutdownTimeoutMs))\n+      ]);\n+\n+      if (!stopped) {\n+        killProcessGroup(child, \"SIGKILL\");\n+        await exited;\n+      }\n+    }\n+  };\n+}\n+\n+function checkHttpReady(url, requestTimeoutMs = 2000) {\n+  return new Promise((resolve, reject) => {\n+    const parsed = new URL(url);\n+    const client = parsed.protocol === \"https:\" ? https : http;\n+    const request = client.get(parsed, (response) => {\n+      response.resume();\n+      resolve({ statusCode: response.statusCode });\n+    });\n+\n+    request.setTimeout(requestTimeoutMs, () => {\n+      request.destroy(new Error(`HTTP readiness request timed out after ${requestTimeoutMs}ms`));\n+    });\n+\n+    request.once(\"error\", reject);\n+  });\n+}\n+\n+function delay(ms) {\n+  return new Promise((resolve) => setTimeout(resolve, ms));\n+}\n+\n+function createBrowserAcceptanceLifecycle(options = {}) {\n+  const env = options.env || process.env;\n+  const logBuffer = options.logBuffer || new LogBuffer();\n+  const processRunner = options.processRunner || {\n+    run: runCommand,\n+    start: startManagedProcess\n+  };\n+  const portFinder = options.portFinder || findFreePort;\n+  const httpReady = options.httpReady || checkHttpReady;\n+  const wait = options.delay || delay;\n+\n+  let config = null;\n+  let phoenixProcess = null;\n+\n+  async function ensureConfig() {\n+    if (!config) {\n+      config = await buildLifecycleConfig(env, portFinder);\n+    }\n+\n+    return config;\n+  }\n+\n+  async function stopPhoenix() {\n+    if (!phoenixProcess) {\n+      return;\n+    }\n+\n+    await phoenixProcess.stop();\n+    phoenixProcess = null;\n+  }\n+\n+  async function tearDownPostgres() {\n+    const currentConfig = await ensureConfig();\n+\n+    if (!currentConfig.tearDownPostgres) {\n+      return;\n+    }\n+\n+    await processRunner.run(buildDevCommand(currentConfig, \"down\"), {\n+      label: \"Postgres teardown\",\n+      timeoutMs: currentConfig.shutdownTimeoutMs,\n+      logBuffer\n+    });\n+  }\n+\n+  async function waitForPhoenixReadiness(currentConfig) {\n+    const deadline = Date.now() + currentConfig.httpReadyTimeoutMs;\n+    let lastError = null;\n+\n+    while (Date.now() <= deadline) {\n+      const exitStatus = phoenixProcess && phoenixProcess.exitStatus();\n+\n+      if (exitStatus) {\n+        throw new Error(\n+          `Phoenix startup/readiness failed: server exited before ${currentConfig.baseUrl} became ready.\\n` +\n+            `Exit status: ${JSON.stringify(exitStatus)}\\nRecent output:\\n${\n+              logBuffer.tail() || \"(no output captured)\"\n+            }`\n+        );\n+      }\n+\n+      try {\n+        const response = await httpReady(currentConfig.baseUrl);\n+\n+        if (response.statusCode && response.statusCode < 500) {\n+          return;\n+        }\n+\n+        lastError = new Error(`HTTP ${response.statusCode}`);\n+      } catch (error) {\n+        lastError = error;\n+      }\n+\n+      await wait(250);\n+    }\n+\n+    throw new Error(\n+      `Phoenix startup/readiness failed: timed out after ${currentConfig.httpReadyTimeoutMs}ms waiting for ` +\n+        `${currentConfig.baseUrl}.\\nLast readiness error: ${\n+          lastError ? lastError.message : \"(none)\"\n+        }\\nRecent output:\\n${logBuffer.tail() || \"(no output captured)\"}`\n+    );\n+  }\n+\n+  return {\n+    get baseUrl() {\n+      return config ? config.baseUrl : env.BASE_URL || \"http://127.0.0.1:4000\";\n+    },\n+\n+    getLogTail() {\n+      return logBuffer.tail();\n+    },\n+\n+    async start() {\n+      const currentConfig = await ensureConfig();\n+\n+      if (currentConfig.skipAppStart) {\n+        logBuffer.append(\"lifecycle\", `Using external browser acceptance app at ${currentConfig.baseUrl}`);\n+        return;\n+      }\n+\n+      try {\n+        await processRunner.run(buildDevCommand(currentConfig, \"up\"), {\n+          label: \"Postgres readiness\",\n+          timeoutMs: currentConfig.commandTimeoutMs,\n+          logBuffer\n+        });\n+\n+        for (const step of databaseSetupSteps) {\n+          await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {\n+            label: `Database setup: ${step.label}`,\n+            timeoutMs: currentConfig.commandTimeoutMs,\n+            logBuffer\n+          });\n+        }\n+\n+        phoenixProcess = await processRunner.start(buildPhoenixCommand(currentConfig), {\n+          label: \"Phoenix server\",\n+          logBuffer,\n+          shutdownTimeoutMs: currentConfig.shutdownTimeoutMs\n+        });\n+\n+        await waitForPhoenixReadiness(currentConfig);\n+      } catch (error) {\n+        await stopPhoenix();\n+        await tearDownPostgres().catch((teardownError) => {\n+          logBuffer.append(\"Postgres teardown\", teardownError.message);\n+        });\n+        throw error;\n+      }\n+    },\n+\n+    async stop() {\n+      await stopPhoenix();\n+      await tearDownPostgres();\n+    }\n+  };\n+}\n+\n+module.exports = {\n+  LogBuffer,\n+  buildDevCommand,\n+  buildLifecycleConfig,\n+  buildMixCommand,\n+  buildPhoenixCommand,\n+  createBrowserAcceptanceLifecycle,\n+  databaseSetupSteps,\n+  findFreePort\n+};\ndiff --git a/acceptance-tests/features/support/world.js b/acceptance-tests/features/support/world.js\nindex a2861cb..1a0bec0 100644\n--- a/acceptance-tests/features/support/world.js\n+++ b/acceptance-tests/features/support/world.js\n@@ -1,20 +1,87 @@\n-const { setWorldConstructor, Before, After } = require(\"@cucumber/cucumber\");\n+const { setWorldConstructor, BeforeAll, AfterAll, Before, After, Status } = require(\"@cucumber/cucumber\");\n const { chromium } = require(\"playwright\");\n+const { createBrowserAcceptanceLifecycle } = require(\"./lifecycle\");\n+\n+const lifecycle = createBrowserAcceptanceLifecycle();\n \n class AcceptanceWorld {\n-  constructor() {\n-    this.baseUrl = process.env.BASE_URL || \"http://localhost:4000\";\n+  constructor({ attach, log, parameters } = {}) {\n+    this.attach = attach;\n+    this.log = log;\n+    this.parameters = parameters;\n+    this.baseUrl = lifecycle.baseUrl;\n+    this.browserLogs = [];\n   }\n }\n \n setWorldConstructor(AcceptanceWorld);\n \n+BeforeAll({ name: \"Start Phoenix browser acceptance lifecycle\", timeout: 180000 }, async function () {\n+  await lifecycle.start();\n+});\n+\n+AfterAll({ name: \"Stop Phoenix browser acceptance lifecycle\", timeout: 120000 }, async function () {\n+  await lifecycle.stop();\n+});\n+\n Before(async function () {\n+  this.baseUrl = lifecycle.baseUrl;\n   this.browser = await chromium.launch({ headless: process.env.HEADLESS !== \"false\" });\n-  this.page = await this.browser.newPage();\n+  this.context = await this.browser.newContext();\n+  this.page = await this.context.newPage();\n+\n+  this.page.on(\"console\", (message) => {\n+    this.browserLogs.push(`[console:${message.type()}] ${message.text()}`);\n+  });\n+\n+  this.page.on(\"pageerror\", (error) => {\n+    this.browserLogs.push(`[pageerror] ${error.stack || error.message}`);\n+  });\n+\n+  this.page.on(\"requestfailed\", (request) => {\n+    const failure = request.failure();\n+    this.browserLogs.push(\n+      `[requestfailed] ${request.method()} ${request.url()} ${failure ? failure.errorText : \"\"}`\n+    );\n+  });\n });\n \n-After(async function () {\n+After(async function ({ result } = {}) {\n+  const failed = result && result.status === Status.FAILED;\n+\n+  if (failed && this.attach) {\n+    if (this.browserLogs.length > 0) {\n+      await this.attach(this.browserLogs.join(\"\\n\"), {\n+        mediaType: \"text/plain\",\n+        fileName: \"browser.log\"\n+      });\n+    }\n+\n+    const appLogTail = lifecycle.getLogTail();\n+\n+    if (appLogTail.length > 0) {\n+      await this.attach(appLogTail, {\n+        mediaType: \"text/plain\",\n+        fileName: \"phoenix.log\"\n+      });\n+    }\n+\n+    if (this.page) {\n+      try {\n+        await this.attach(await this.page.screenshot({ fullPage: true }), {\n+          mediaType: \"image/png\",\n+          fileName: \"failure.png\"\n+        });\n+      } catch (error) {\n+        await this.attach(`Unable to capture browser screenshot: ${error.message}`);\n+      }\n+    }\n+  }\n+\n+  if (this.context) {\n+    await this.context.close();\n+  }\n+\n   if (this.browser) {\n     await this.browser.close();\n   }\ndiff --git a/acceptance-tests/test/lifecycle.test.js b/acceptance-tests/test/lifecycle.test.js\nnew file mode 100644\nindex 0000000..52954d5\n--- /dev/null\n+++ b/acceptance-tests/test/lifecycle.test.js\n@@ -0,0 +1,109 @@\n+const assert = require(\"node:assert/strict\");\n+const path = require(\"node:path\");\n+const test = require(\"node:test\");\n+\n+const {\n+  buildLifecycleConfig,\n+  buildMixCommand,\n+  createBrowserAcceptanceLifecycle,\n+  databaseSetupSteps\n+} = require(\"../features/support/lifecycle\");\n+\n+function testEnv(overrides = {}) {\n+  return {\n+    PATH: process.env.PATH,\n+    ACCEPTANCE_PORT: \"4444\",\n+    MEMBA_POSTGRES_PORT: \"15555\",\n+    ...overrides\n+  };\n+}\n+\n+test(\"lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in a dev shell\", async () => {\n+  const calls = [];\n+  const env = testEnv({ MEMBA_DEVENV_SHELL: \"1\" });\n+  const lifecycle = createBrowserAcceptanceLifecycle({\n+    env,\n+    processRunner: {\n+      async run(spec, { label }) {\n+        calls.push({ type: \"run\", label, spec });\n+      },\n+      async start(spec, { label }) {\n+        calls.push({ type: \"start\", label, spec });\n+\n+        return {\n+          exitStatus: () => null,\n+          async stop() {\n+            calls.push({ type: \"stop\", label });\n+          }\n+        };\n+      }\n+    },\n+    async httpReady(url) {\n+      calls.push({ type: \"httpReady\", url });\n+      return { statusCode: 200 };\n+    }\n+  });\n+\n+  await lifecycle.start();\n+  await lifecycle.stop();\n+\n+  assert.equal(lifecycle.baseUrl, \"http://127.0.0.1:4444\");\n+  assert.deepEqual(\n+    calls.map((call) => `${call.type}:${call.label || call.url}`),\n+    [\n+      \"run:Postgres readiness\",\n+      ...databaseSetupSteps.map((step) => `run:Database setup: ${step.label}`),\n+      \"start:Phoenix server\",\n+      \"httpReady:http://127.0.0.1:4444\",\n+      \"stop:Phoenix server\"\n+    ]\n+  );\n+});\n+\n+test(\"non-dev-shell mix commands run through devenv on the selected Postgres port\", async () => {\n+  const config = await buildLifecycleConfig(testEnv());\n+  const command = buildMixCommand(config, [\"ecto.create\", \"--quiet\"]);\n+\n+  assert.equal(command.command, \"devenv\");\n+  assert.deepEqual(command.args.slice(0, 6), [\n+    \"shell\",\n+    \"-O\",\n+    \"services.postgres.port:int\",\n+    \"15555\",\n+    \"--\",\n+    path.resolve(__dirname, \"../../bin/mix\")\n+  ]);\n+  assert.deepEqual(command.args.slice(6), [\"ecto.create\", \"--quiet\"]);\n+  assert.equal(command.env.MIX_ENV, \"test\");\n+  assert.equal(command.env.PHX_SERVER, \"true\");\n+  assert.equal(command.env.PORT, \"4444\");\n+  assert.equal(command.env.MEMBA_POSTGRES_PORT, \"15555\");\n+});\n+\n+test(\"readiness timeout reports Phoenix startup/readiness diagnostics\", async () => {\n+  const env = testEnv({\n+    MEMBA_DEVENV_SHELL: \"1\",\n+    ACCEPTANCE_HTTP_READY_TIMEOUT_MS: \"0\"\n+  });\n+  const lifecycle = createBrowserAcceptanceLifecycle({\n+    env,\n+    processRunner: {\n+      async run() {},\n+      async start() {\n+        return {\n+          exitStatus: () => null,\n+          async stop() {}\n+        };\n+      }\n+    },\n+    async httpReady() {\n+      throw new Error(\"connection refused\");\n+    },\n+    async delay() {}\n+  });\n+\n+  await assert.rejects(\n+    () => lifecycle.start(),\n+    /Phoenix startup\\/readiness failed: timed out after 0ms/\n+  );\n+});\ndiff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md\nindex fa8cd7c..4be1f56 100644\n--- a/docs/iterations/006-browser-cucumber-automation/todo.md\n+++ b/docs/iterations/006-browser-cucumber-automation/todo.md\n@@ -2,7 +2,7 @@\n \n - [x] 001 Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.\n - [x] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.\n-- [ ] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.\n+- [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.\n - [ ] 004 Implement homepage browser steps against the real homepage route.\n - [ ] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.\n - [ ] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.\n",
+        "summary": {
+          "files_changed": 9,
+          "additions": 791,
+          "deletions": 5
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-31T01:41:57.904627228Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.implement_next_task": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.pre_validate_snapshot.current_node": "validate_task",
@@ -5579,7 +5888,7 @@
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "task_list_complete": false,
           "internal.retry_count.wip_gate": 0,
-          "command.output": "blob://sha256/b714b6ac45fb8c35f7c701ae8c87efb86437ae97fc55c609867267831cd3a030",
+          "command.output": "blob://sha256/f517c5cb4fc767093c552d04b1703e2cee15f65f6cf0ae09477cacd8cddbee01",
           "graph.rankdir": "LR",
           "graph.default_fidelity": "summary:high",
           "thread.start.current_node": "read_plan",
@@ -5587,7 +5896,7 @@
           "last_stage": "implement_next_task",
           "internal.retry_count.start": 0,
           "thread.all_tasks_done.current_node": "implement_next_task",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.task_gate": 0,
           "internal.retry_count.all_tasks_done": 0,
@@ -5695,15 +6004,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/0c5532f6b26061b497df4436798287714686692d5230134c3b5bf4ed11609d8a"
+              "command.output": "blob://sha256/f517c5cb4fc767093c552d04b1703e2cee15f65f6cf0ae09477cacd8cddbee01"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 177,
-              "active_time_ms": 177
+              "tool_time_ms": 167,
+              "active_time_ms": 167
             }
           },
           "wip_gate": {
@@ -5804,7 +6113,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "start": 1,
           "wip_gate": 1,
@@ -5814,7 +6123,7 @@
           "implement_next_task": 3,
           "resume_gate": 1,
           "validate_task": 2,
-          "pre_validate_snapshot": 2,
+          "pre_validate_snapshot": 3,
           "preflight_sandbox": 1,
           "all_tasks_done": 3
         }
@@ -6466,6 +6775,44 @@
         "model_id": "gpt-5.5"
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@3": {
+      "first_event_seq": 883,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/f517c5cb4fc767093c552d04b1703e2cee15f65f6cf0ae09477cacd8cddbee01",
+        "exit_code": 0,
+        "duration_ms": 167,
+        "termination": "exited",
+        "output_bytes": 598,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 598,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-05-31T01:41:57.718500758Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "read_plan@1": {
       "first_event_seq": 25,
@@ -7398,7 +7745,12 @@
       "first_event_seq": 644,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-05-31T01:41:54.626333093Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -7412,13 +7764,20 @@
       "output": null,
       "started_at": "2026-05-31T01:27:57.550262462Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 837074,
+        "inference_time_ms": 650812,
+        "tool_time_ms": 185665,
+        "active_time_ms": 836477
+      },
       "usage": {
         "input_tokens": 756649,
         "output_tokens": 9580,
         "total_tokens": 3349936,
         "reasoning_tokens": 11931,
         "cache_read_tokens": 2571776,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5714463
       },
       "model": {
         "provider": "openai",
@@ -7592,7 +7951,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     }
   }
 }
