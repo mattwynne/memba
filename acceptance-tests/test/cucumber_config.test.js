@@ -13,23 +13,20 @@ test("default browser Cucumber profile still loads the shared feature suite", ()
   assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
 });
 
-test("default browser Cucumber profile selects only web-backed shared features", () => {
+test("default browser Cucumber profile selects all web-backed shared features", () => {
   const selectedFeatureNames = browserSelectedFeatureNames();
 
   assert.deepEqual(selectedFeatureNames, [
     "homepage.feature",
-    "member_message_deliverability.feature"
+    "member_message_deliverability.feature",
+    "operator_email_deliverability.feature"
   ]);
 });
 
-test("operator deliverability remains deferred from the browser run by todo-web tag only", () => {
+test("operator deliverability is no longer deferred from the browser run", () => {
   const skippedFeatures = browserSkippedFeatures();
 
-  assert.deepEqual(
-    skippedFeatures.map((feature) => feature.name),
-    ["operator_email_deliverability.feature"]
-  );
-  assert.deepEqual(skippedFeatures[0].tags, ["@todo-web"]);
+  assert.deepEqual(skippedFeatures, []);
 });
 
 function browserSelectedFeatureNames() {

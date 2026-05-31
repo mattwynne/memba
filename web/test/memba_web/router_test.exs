@@ -12,6 +12,10 @@ defmodule MembaWeb.RouterTest do
       })
     end
 
+    test "routes /deliveries through the browser pipeline to the deliveries index LiveView" do
+      assert_live_route("/deliveries", "/deliveries", MembaWeb.DeliveriesLive.Index, %{})
+    end
+
     test "routes /messages/:message_id through the browser pipeline to the message show LiveView" do
       assert_live_route(
         "/messages/message-123",
