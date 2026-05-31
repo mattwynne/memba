@@ -1,0 +1,486 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index e8c4a75..34524b3 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add persistence for authentication:
+ - [x] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [x] 004 Extend `Memba.Membership` query API as needed:
+-- [ ] 005 Add auth email delivery:
++- [x] 005 Add auth email delivery:
+ - [ ] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
+ - [ ] 007 Add `/auth` UI and callback handling:
+ - [ ] 008 Update the home page:
+diff --git a/web/config/runtime.exs b/web/config/runtime.exs
+index a49a181..2a650b2 100644
+--- a/web/config/runtime.exs
++++ b/web/config/runtime.exs
+@@ -49,6 +49,26 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(
+     config :memba, :messaging_delivery_provider, delivery_provider
+ end
+ 
++case Memba.Accounts.AuthEmailConfig.provider_override!(
++       System.get_env("MEMBA_AUTH_EMAIL_PROVIDER")
++     ) do
++  :default ->
++    :ok
++
++  :postmark ->
++    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!()
++
++    config :memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Postmark,
++      api_key: auth_email_config.server_token
++
++    config :memba, Memba.Accounts.AuthEmail,
++      from: auth_email_config.from,
++      message_stream: auth_email_config.message_stream
++
++    config :swoosh, :api_client, Swoosh.ApiClient.Req
++end
++
+ config :memba, MembaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+ 
+ if config_env() == :prod do
+diff --git a/web/lib/memba/accounts/auth_email.ex b/web/lib/memba/accounts/auth_email.ex
+new file mode 100644
+index 0000000..6563ef3
+--- /dev/null
++++ b/web/lib/memba/accounts/auth_email.ex
+@@ -0,0 +1,107 @@
++defmodule Memba.Accounts.AuthEmail do
++  @moduledoc """
++  Magic-link authentication email delivery.
++
++  Builds concise text and HTML magic-link emails, assigns the configured
++  Postmark message stream, and hands delivery to `Memba.Mailer`.
++  """
++
++  import Swoosh.Email
++
++  alias Memba.Accounts
++  alias Memba.Accounts.AuthEmailConfig
++
++  @subject "Sign in to Memba"
++
++  @doc """
++  Deliver a magic-link sign-in email to a normalized recipient address.
++  """
++  def deliver_magic_link(email, callback_url) do
++    with {:ok, recipient_email} <- normalize_recipient_email(email),
++         {:ok, callback_url} <- normalize_callback_url(callback_url),
++         {:ok, %AuthEmailConfig{} = config} <- auth_email_config() do
++      recipient_email
++      |> magic_link_email(callback_url, config)
++      |> deliver_email()
++    end
++  end
++
++  defp normalize_recipient_email(email) do
++    case Accounts.normalize_email(email) do
++      nil -> {:error, :invalid_email}
++      normalized_email -> {:ok, normalized_email}
++    end
++  end
++
++  defp normalize_callback_url(callback_url) when is_binary(callback_url) do
++    case String.trim(callback_url) do
++      "" -> {:error, :invalid_callback_url}
++      normalized_url -> {:ok, normalized_url}
++    end
++  end
++
++  defp normalize_callback_url(_callback_url), do: {:error, :invalid_callback_url}
++
++  defp auth_email_config do
++    case AuthEmailConfig.from_application_env() do
++      {:ok, config} -> {:ok, config}
++      {:error, message} -> {:error, {:auth_email_configuration_error, message}}
++    end
++  end
++
++  defp magic_link_email(recipient_email, callback_url, %AuthEmailConfig{} = config) do
++    new()
++    |> from(config.from)
++    |> to(recipient_email)
++    |> subject(@subject)
++    |> text_body(text_body(callback_url))
++    |> html_body(html_body(callback_url))
++    |> put_provider_option(:message_stream, config.message_stream)
++  end
++
++  defp text_body(callback_url) do
++    """
++    Use this link to sign in to Memba:
++
++    #{callback_url}
++
++    This link expires in 15 minutes. If you did not request it, you can ignore this email.
++    """
++  end
++
++  defp html_body(callback_url) do
++    escaped_url = html_escape_to_string(callback_url)
++
++    """
++    <html><body>
++    <p>Use this link to sign in to Memba:</p>
++    <p><a href="#{escaped_url}">Sign in to Memba</a></p>
++    <p>This link expires in 15 minutes. If you did not request it, you can ignore this email.</p>
++    </body></html>
++    """
++  end
++
++  defp html_escape_to_string(text) do
++    text
++    |> Phoenix.HTML.html_escape()
++    |> Phoenix.HTML.safe_to_string()
++  end
++
++  defp deliver_email(email) do
++    email
++    |> Memba.Mailer.deliver()
++    |> normalize_delivery_result()
++  rescue
++    exception ->
++      {:error,
++       {:auth_email_delivery_exception, exception.__struct__, Exception.message(exception)}}
++  end
++
++  defp normalize_delivery_result({:ok, _result}), do: :ok
++
++  defp normalize_delivery_result({:error, reason}),
++    do: {:error, {:auth_email_delivery_error, reason}}
++
++  defp normalize_delivery_result(result),
++    do: {:error, {:auth_email_delivery_error, {:unexpected_delivery_result, result}}}
++end
+diff --git a/web/lib/memba/accounts/auth_email_config.ex b/web/lib/memba/accounts/auth_email_config.ex
+new file mode 100644
+index 0000000..2c75d02
+--- /dev/null
++++ b/web/lib/memba/accounts/auth_email_config.ex
+@@ -0,0 +1,154 @@
++defmodule Memba.Accounts.AuthEmailConfig do
++  @moduledoc """
++  Runtime configuration for shared magic-link auth emails.
++
++  Auth email delivery is enabled explicitly with `MEMBA_AUTH_EMAIL_PROVIDER`.
++  When Postmark delivery is enabled, the shared Postmark server token, auth
++  sender, and dedicated auth message stream must all be configured.
++  """
++
++  @enforce_keys [:server_token, :from, :message_stream]
++  defstruct [:server_token, :from, :message_stream]
++
++  @provider_env "MEMBA_AUTH_EMAIL_PROVIDER"
++  @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
++  @from_address_env "MEMBA_AUTH_EMAIL_FROM_ADDRESS"
++  @message_stream_env "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
++
++  @type t :: %__MODULE__{
++          server_token: String.t(),
++          from: String.t(),
++          message_stream: String.t()
++        }
++
++  @doc """
++  Decide whether auth email delivery has been explicitly enabled.
++  """
++  def provider_override(value)
++
++  def provider_override(value) when is_binary(value) do
++    case value |> String.trim() |> String.downcase() do
++      "" -> :default
++      "postmark" -> {:ok, :postmark}
++      provider -> {:error, unsupported_provider_message(provider)}
++    end
++  end
++
++  def provider_override(nil), do: :default
++  def provider_override(value), do: {:error, unsupported_provider_message(value)}
++
++  @doc """
++  Decide whether auth email delivery has been enabled, or raise on bad input.
++  """
++  def provider_override!(value) do
++    case provider_override(value) do
++      {:ok, provider} -> provider
++      :default -> :default
++      {:error, message} -> raise ArgumentError, message
++    end
++  end
++
++  @doc """
++  Read and validate required auth email Postmark settings from environment.
++  """
++  def from_env(get_env \\ &System.get_env/1) when is_function(get_env, 1) do
++    validate(
++      %{
++        @server_token_env => get_env.(@server_token_env),
++        @from_address_env => get_env.(@from_address_env),
++        @message_stream_env => get_env.(@message_stream_env)
++      },
++      source: :environment
++    )
++  end
++
++  @doc """
++  Read and validate required auth email Postmark settings from environment or raise.
++  """
++  def from_env!(get_env \\ &System.get_env/1) when is_function(get_env, 1) do
++    case from_env(get_env) do
++      {:ok, config} -> config
++      {:error, message} -> raise ArgumentError, message
++    end
++  end
++
++  @doc """
++  Read and validate required auth email Postmark settings from application config.
++  """
++  def from_application_env do
++    mailer_config = Application.get_env(:memba, Memba.Mailer, [])
++    auth_email_config = Application.get_env(:memba, Memba.Accounts.AuthEmail, [])
++
++    validate(
++      %{
++        @server_token_env => Keyword.get(mailer_config, :api_key),
++        @from_address_env => Keyword.get(auth_email_config, :from),
++        @message_stream_env => Keyword.get(auth_email_config, :message_stream)
++      },
++      source: :application
++    )
++  end
++
++  @doc """
++  Read and validate required auth email Postmark settings from application config or raise.
++  """
++  def from_application_env! do
++    case from_application_env() do
++      {:ok, config} -> config
++      {:error, message} -> raise ArgumentError, message
++    end
++  end
++
++  defp validate(values, opts) do
++    normalized_values =
++      Map.new(values, fn {key, value} ->
++        {key, normalize(value)}
++      end)
++
++    missing_required =
++      normalized_values
++      |> Map.take(required_config_keys())
++      |> Enum.filter(fn {_key, value} -> is_nil(value) end)
++      |> Enum.map(fn {key, _value} -> key end)
++      |> Enum.sort()
++
++    case missing_required do
++      [] ->
++        {:ok,
++         %__MODULE__{
++           server_token: Map.fetch!(normalized_values, @server_token_env),
++           from: Map.fetch!(normalized_values, @from_address_env),
++           message_stream: Map.fetch!(normalized_values, @message_stream_env)
++         }}
++
++      missing ->
++        {:error, missing_config_message(missing, opts[:source])}
++    end
++  end
++
++  defp normalize(value) when is_binary(value) do
++    case String.trim(value) do
++      "" -> nil
++      value -> value
++    end
++  end
++
++  defp normalize(_value), do: nil
++
++  defp required_config_keys, do: [@server_token_env, @from_address_env, @message_stream_env]
++
++  defp missing_config_message(missing, source) do
++    "Auth email Postmark delivery is enabled, but required #{source_label(source)} " <>
++      "configuration is missing: #{Enum.join(missing, ", ")}. " <>
++      "Set #{@server_token_env}, #{@from_address_env}, and #{@message_stream_env}, or leave " <>
++      "#{@provider_env} unset to skip real auth email delivery."
++  end
++
++  defp source_label(:application), do: "application"
++  defp source_label(:environment), do: "environment"
++
++  defp unsupported_provider_message(provider) do
++    "Unsupported #{@provider_env}=#{inspect(provider)}. Set #{@provider_env}=postmark " <>
++      "to enable real auth email delivery, or leave it unset."
++  end
++end
+diff --git a/web/test/memba/accounts/auth_email_config_test.exs b/web/test/memba/accounts/auth_email_config_test.exs
+new file mode 100644
+index 0000000..b396ecc
+--- /dev/null
++++ b/web/test/memba/accounts/auth_email_config_test.exs
+@@ -0,0 +1,47 @@
++defmodule Memba.Accounts.AuthEmailConfigTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Accounts.AuthEmailConfig
++
++  test "reads required auth email Postmark settings from environment" do
++    assert {:ok,
++            %AuthEmailConfig{
++              server_token: "server-token",
++              from: "auth@mail.memba.io",
++              message_stream: "outbound-authentication"
++            }} =
++             AuthEmailConfig.from_env(fn
++               "MEMBA_POSTMARK_SERVER_TOKEN" -> "  server-token  "
++               "MEMBA_AUTH_EMAIL_FROM_ADDRESS" -> " auth@mail.memba.io "
++               "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" -> " outbound-authentication "
++             end)
++  end
++
++  test "reports missing required auth email Postmark settings clearly" do
++    assert {:error, message} =
++             AuthEmailConfig.from_env(fn
++               "MEMBA_POSTMARK_SERVER_TOKEN" -> "  "
++               "MEMBA_AUTH_EMAIL_FROM_ADDRESS" -> nil
++               "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" -> ""
++             end)
++
++    assert message =~ "Auth email Postmark delivery is enabled"
++    assert message =~ "required environment configuration is missing"
++    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
++    assert message =~ "MEMBA_AUTH_EMAIL_FROM_ADDRESS"
++    assert message =~ "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
++    assert message =~ "MEMBA_AUTH_EMAIL_PROVIDER"
++  end
++
++  test "selects Postmark auth email delivery only when explicitly configured" do
++    assert AuthEmailConfig.provider_override(nil) == :default
++    assert AuthEmailConfig.provider_override("") == :default
++    assert AuthEmailConfig.provider_override("   ") == :default
++    assert AuthEmailConfig.provider_override("postmark") == {:ok, :postmark}
++    assert AuthEmailConfig.provider_override("POSTMARK") == {:ok, :postmark}
++
++    assert {:error, message} = AuthEmailConfig.provider_override("smtp")
++    assert message =~ "Unsupported MEMBA_AUTH_EMAIL_PROVIDER"
++    assert message =~ "postmark"
++  end
++end
+diff --git a/web/test/memba/accounts/auth_email_test.exs b/web/test/memba/accounts/auth_email_test.exs
+new file mode 100644
+index 0000000..a2f9331
+--- /dev/null
++++ b/web/test/memba/accounts/auth_email_test.exs
+@@ -0,0 +1,110 @@
++defmodule Memba.Accounts.AuthEmailTest do
++  use ExUnit.Case, async: false
++
++  import Swoosh.TestAssertions
++
++  alias Memba.Accounts.AuthEmail
++
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_auth_email_config = Application.get_env(:memba, AuthEmail)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(AuthEmail, original_auth_email_config)
++    end)
++
++    :ok
++  end
++
++  test "builds and sends a Postmark-streamed magic-link email" do
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++
++    callback_url = "https://app.memba.io/auth/magic/token-123?return_to=%2Fadmin"
++
++    assert :ok = AuthEmail.deliver_magic_link(" ALICE@EXAMPLE.COM ", callback_url)
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"", "auth@mail.memba.io"}
++    assert email.to == [{"", "alice@example.com"}]
++    assert email.subject == "Sign in to Memba"
++
++    assert email.text_body =~ "Use this link to sign in to Memba:"
++    assert email.text_body =~ callback_url
++    assert email.text_body =~ "This link expires in 15 minutes."
++
++    assert email.html_body =~ "Sign in to Memba"
++    assert email.html_body =~ "https://app.memba.io/auth/magic/token-123?return_to=%2Fadmin"
++    assert email.html_body =~ "This link expires in 15 minutes."
++
++    assert email.provider_options == %{
++             message_stream: "outbound-authentication"
++           }
++  end
++
++  test "does not hand an email to Swoosh when required auth email configuration is missing" do
++    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
++    Application.put_env(:memba, AuthEmail, from: "auth@mail.memba.io")
++
++    assert {:error, {:auth_email_configuration_error, message}} =
++             AuthEmail.deliver_magic_link(
++               "alice@example.com",
++               "https://app.memba.io/auth/magic/token"
++             )
++
++    assert message =~ "Auth email Postmark delivery is enabled"
++    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
++    assert message =~ "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
++
++    assert_no_email_sent()
++  end
++
++  test "returns a visible auth email delivery error when Swoosh reports an API failure" do
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Memba.TestSupport.FailingSwooshAdapter,
++      api_key: "server-token",
++      test_owner: self(),
++      test_delivery_result: {:error, {401, %{"Message" => "Invalid server token"}}}
++    )
++
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++
++    assert {:error, {:auth_email_delivery_error, {401, %{"Message" => "Invalid server token"}}}} =
++             AuthEmail.deliver_magic_link(
++               "alice@example.com",
++               "https://app.memba.io/auth/magic/token"
++             )
++
++    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
++  end
++
++  test "rejects invalid delivery inputs before Swoosh handoff" do
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++
++    assert {:error, :invalid_email} =
++             AuthEmail.deliver_magic_link("  ", "https://app.memba.io/auth/magic/token")
++
++    assert {:error, :invalid_callback_url} =
++             AuthEmail.deliver_magic_link("alice@example.com", "  ")
++
++    assert_no_email_sent()
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end

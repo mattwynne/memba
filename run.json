@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-31T18:31:38.985438839Z",
-  "last_event_at": "2026-05-31T19:17:19.732618907Z",
+  "last_event_at": "2026-05-31T19:17:23.109514888Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -9274,9 +9274,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1424,
       "checkpoint": {
-        "timestamp": "2026-05-31T19:17:19.751702310Z",
+        "timestamp": "2026-05-31T19:17:23.097229559Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -9314,13 +9314,334 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.validate_task": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.validate_task.current_node": "task_gate",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 005 Add auth email delivery:`\n\n2. **Changes made**\n   - Added `Memba.Accounts.AuthEmail`\n     - Builds concise pla",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "graph.max_node_visits": "300",
+          "internal.retry_count.read_plan": 0,
+          "outcome": "succeeded",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean (`git status --short` empty).\n  - Recent checkpoint history shows `ec3e111 pre_validate_snapshot` on HEAD and recent implement checkpoint `4a15859 implement_next_task`.\n  - `4a15859` changed exactly one ordinary todo line:\n    - `004 Extend Memba.Membership query API as needed:` from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks 001–003 checked and task 004 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba/membership.ex` now exposes:\n    - `list_active_clubs_for_member_email/1`\n    - `active_member_of_club_by_email?/2`\n  - The new queries normalize email input, compare projected person email case-insensitively, enforce active memberships, handle invalid/blank input safely, and order club results stably.\n  - `web/lib/memba/accounts.ex` now delegates club listing and membership-by-email checks to the public `Memba.Membership` API instead of composing them itself.\n\n- Tests run/results found:\n  - Added focused coverage in `web/test/memba/membership/query_test.exs` for:\n    - active clubs by normalized member email,\n    - excluding inactive/other memberships,\n    - blank/nil/unknown email handling,\n    - active membership checks by club/email and invalid IDs.\n  - Updated `web/test/memba/membership/no_crud_spike_test.exs` to allow the new public query APIs while preserving no-CRUD constraints.\n  - I ran `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" dev check`; it passed:\n    - `151 tests, 0 failures`.\n  - Working tree remained clean afterward.\n\n- ADR/plan conformance notes:\n  - Matches implementation plan task 004: extending `Memba.Membership` query API for active clubs by email and active membership by club/email.\n  - Keeps query ownership inside the Membership context, consistent with ADR 0007.\n  - Uses normal Phoenix/Ecto/PostgreSQL projection queries, consistent with ADR 0001, ADR 0008, and ADR 0009.\n  - No acceptance `.feature` files or `acceptance-tests/` files were changed.\n  - The task is a small, independently useful checkpoint with code and test evidence.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "graph.default_fidelity": "summary:high",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "internal.node_visit_count": 5,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 005 Add auth email delivery:`\n\n2. **Changes made**\n   - Added `Memba.Accounts.AuthEmail`\n     - Builds concise plain-text and HTML magic-link emails.\n     - Normalizes recipient emails.\n     - Includes the provided `/auth/...` callback URL in both text and HTML bodies.\n     - Sends through `Memba.Mailer`.\n     - Adds Postmark `:message_stream` via Swoosh provider options.\n     - Returns clear delivery/configuration errors without handing malformed requests to Swoosh.\n   - Added `Memba.Accounts.AuthEmailConfig`\n     - Supports explicit real auth email enablement with `MEMBA_AUTH_EMAIL_PROVIDER=postmark`.\n     - Requires:\n       - `MEMBA_POSTMARK_SERVER_TOKEN`\n       - `MEMBA_AUTH_EMAIL_FROM_ADDRESS`\n       - `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`\n     - Provides clear missing/unsupported configuration errors.\n   - Updated `web/config/runtime.exs`\n     - When auth email Postmark delivery is explicitly enabled, configures `Memba.Mailer` with `Swoosh.Adapters.Postmark`.\n     - Configures auth email sender and dedicated message stream.\n     - Uses `Swoosh.ApiClient.Req`.\n   - Added focused tests:\n     - Auth email construction and Swoosh handoff.\n     - Postmark message stream provider option.\n     - Callback URL inclusion.\n     - Missing config failure before Swoosh handoff.\n     - Swoosh/API delivery error surfacing.\n     - Invalid input rejection.\n     - Auth email provider/env config parsing.\n\n3. **Validation commands run**\n   - Red TDD check:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/accounts/auth_email_config_test.exs test/memba/accounts/auth_email_test.exs`\n     - Failed as expected before implementation with missing `Memba.Accounts.AuthEmailConfig`.\n   - Focused tests:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/accounts/auth_email_config_test.exs test/memba/accounts/auth_email_test.exs`\n     - Passed: `7 tests, 0 failures`.\n   - Formatting:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix format --check-formatted`\n     - Passed.\n   - Full project check:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `158 tests, 0 failures`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 005 Add auth email delivery:`\n   - To:\n     - `- [x] 005 Add auth email delivery:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: stays within the Phoenix application and existing Swoosh mailer setup.\n   - ADR 0007: auth email delivery is isolated in the Accounts/auth boundary and does not couple Messaging to Membership storage or mutate membership state.\n   - ADR 0008 / ADR 0009: no EventStore, Commanded, or projection persistence changes.\n   - ADR 0013 / plan constraint: no acceptance `.feature` files or acceptance-test files changed.\n   - Project rules: used Swoosh with `Swoosh.ApiClient.Req` for Postmark delivery; did not introduce HTTPoison, Tesla, `:httpc`, or direct Postmark HTTP code.",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.task_gate.current_node": "sync_task_list",
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "task_list_needs_human": false,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.start": 0,
+          "last_stage": "implement_next_task",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.wip_gate": 0,
+          "task_list_complete": false,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "task_retry_available": false,
+          "command.output": "blob://sha256/37e577485a1e2984876f5c878dbc331b114224d13f6c6e8a326b187e13c494a4",
+          "graph.rankdir": "LR",
+          "internal.retry_count.task_gate": 0,
           "current_node": "implement_next_task",
+          "failure_class": "",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.thread_id": "all_tasks_done",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "internal.run_id": "01KSZMT5JYWHAESZ8T584WZT2E",
+          "task_valid": true
+        },
+        "node_outcomes": {
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ba0ca33bcf88d54b3fa8031629a4ac690880fcf180bc8a21a72f674a1e4de1cd"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 295,
+              "active_time_ms": 295
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "task_retry_available": false,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean (`git status --short` empty).\n  - Recent checkpoint history shows `ec3e111 pre_validate_snapsh",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean (`git status --short` empty).\n  - Recent checkpoint history shows `ec3e111 pre_validate_snapshot` on HEAD and recent implement checkpoint `4a15859 implement_next_task`.\n  - `4a15859` changed exactly one ordinary todo line:\n    - `004 Extend Memba.Membership query API as needed:` from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks 001–003 checked and task 004 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba/membership.ex` now exposes:\n    - `list_active_clubs_for_member_email/1`\n    - `active_member_of_club_by_email?/2`\n  - The new queries normalize email input, compare projected person email case-insensitively, enforce active memberships, handle invalid/blank input safely, and order club results stably.\n  - `web/lib/memba/accounts.ex` now delegates club listing and membership-by-email checks to the public `Memba.Membership` API instead of composing them itself.\n\n- Tests run/results found:\n  - Added focused coverage in `web/test/memba/membership/query_test.exs` for:\n    - active clubs by normalized member email,\n    - excluding inactive/other memberships,\n    - blank/nil/unknown email handling,\n    - active membership checks by club/email and invalid IDs.\n  - Updated `web/test/memba/membership/no_crud_spike_test.exs` to allow the new public query APIs while preserving no-CRUD constraints.\n  - I ran `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" dev check`; it passed:\n    - `151 tests, 0 failures`.\n  - Working tree remained clean afterward.\n\n- ADR/plan conformance notes:\n  - Matches implementation plan task 004: extending `Memba.Membership` query API for active clubs by email and active membership by club/email.\n  - Keeps query ownership inside the Membership context, consistent with ADR 0007.\n  - Uses normal Phoenix/Ecto/PostgreSQL projection queries, consistent with ADR 0001, ADR 0008, and ADR 0009.\n  - No acceptance `.feature` files or `acceptance-tests/` files were changed.\n  - The task is a small, independently useful checkpoint with code and test evidence.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 177274,
+                    "output_tokens": 1827,
+                    "reasoning_tokens": 877,
+                    "cache_read_tokens": 131072,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1033026
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 69635,
+              "tool_time_ms": 54849,
+              "active_time_ms": 124484
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/009c61f2f29ca19a9dc0c2b6c2e3deadc75317f026d2884b9594936260f58557"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 189,
+              "active_time_ms": 189
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 005 Add auth email delivery:`\n\n2. **Changes made**\n   - Added `Memba.Accounts.AuthEmail`\n     - Builds concise plain-text and HTML magic-link emails.\n     - Normalizes recipient emails.\n     - Includes the provided `/auth/...` callback URL in both text and HTML bodies.\n     - Sends through `Memba.Mailer`.\n     - Adds Postmark `:message_stream` via Swoosh provider options.\n     - Returns clear delivery/configuration errors without handing malformed requests to Swoosh.\n   - Added `Memba.Accounts.AuthEmailConfig`\n     - Supports explicit real auth email enablement with `MEMBA_AUTH_EMAIL_PROVIDER=postmark`.\n     - Requires:\n       - `MEMBA_POSTMARK_SERVER_TOKEN`\n       - `MEMBA_AUTH_EMAIL_FROM_ADDRESS`\n       - `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`\n     - Provides clear missing/unsupported configuration errors.\n   - Updated `web/config/runtime.exs`\n     - When auth email Postmark delivery is explicitly enabled, configures `Memba.Mailer` with `Swoosh.Adapters.Postmark`.\n     - Configures auth email sender and dedicated message stream.\n     - Uses `Swoosh.ApiClient.Req`.\n   - Added focused tests:\n     - Auth email construction and Swoosh handoff.\n     - Postmark message stream provider option.\n     - Callback URL inclusion.\n     - Missing config failure before Swoosh handoff.\n     - Swoosh/API delivery error surfacing.\n     - Invalid input rejection.\n     - Auth email provider/env config parsing.\n\n3. **Validation commands run**\n   - Red TDD check:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/accounts/auth_email_config_test.exs test/memba/accounts/auth_email_test.exs`\n     - Failed as expected before implementation with missing `Memba.Accounts.AuthEmailConfig`.\n   - Focused tests:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/accounts/auth_email_config_test.exs test/memba/accounts/auth_email_test.exs`\n     - Passed: `7 tests, 0 failures`.\n   - Formatting:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix format --check-formatted`\n     - Passed.\n   - Full project check:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `158 tests, 0 failures`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 005 Add auth email delivery:`\n   - To:\n     - `- [x] 005 Add auth email delivery:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: stays within the Phoenix application and existing Swoosh mailer setup.\n   - ADR 0007: auth email delivery is isolated in the Accounts/auth boundary and does not couple Messaging to Membership storage or mutate membership state.\n   - ADR 0008 / ADR 0009: no EventStore, Commanded, or projection persistence changes.\n   - ADR 0013 / plan constraint: no acceptance `.feature` files or acceptance-test files changed.\n   - Project rules: used Swoosh with `Swoosh.ApiClient.Req` for Postmark delivery; did not introduce HTTPoison, Tesla, `:httpc`, or direct Postmark HTTP code.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 005 Add auth email delivery:`\n\n2. **Changes made**\n   - Added `Memba.Accounts.AuthEmail`\n     - Builds concise pla"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 720070,
+                    "output_tokens": 8938,
+                    "reasoning_tokens": 7104,
+                    "cache_read_tokens": 1712128,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4937674
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 380142,
+              "tool_time_ms": 109905,
+              "active_time_ms": 490047
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/37e577485a1e2984876f5c878dbc331b114224d13f6c6e8a326b187e13c494a4"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 193,
+              "active_time_ms": 193
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1373ecc5b6132edb68bc61cf9552308af939f18615d52a3a9b7229a40699f64c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 15324,
+              "active_time_ms": 15324
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_list_complete": false,
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false,
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 15453,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 105,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 81255
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 5367,
+              "tool_time_ms": 0,
+              "active_time_ms": 5367
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a80c246f7b7436ca91c92f8d240a1e75a065ed16e65f19bcae8fdc96bbd6ec5a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 176,
+              "active_time_ms": 176
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cb9b0d0e3d8a13c629fcd9a177920c75192063ec46dc575977df578870ce1cda"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167679,
+              "active_time_ms": 167679
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "f657ab1bd0241e31eb623d1561312f8c70c27ea8",
+        "node_visits": {
+          "wip_gate": 1,
+          "implement_next_task": 5,
+          "resume_gate": 1,
+          "start": 1,
+          "task_gate": 4,
+          "all_tasks_done": 5,
+          "read_plan": 1,
+          "validate_task": 4,
+          "pre_validate_snapshot": 4,
+          "preflight_sandbox": 1,
+          "sync_task_list": 5
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md\nindex e8c4a75..34524b3 100644\n--- a/docs/iterations/010-shared-magic-link-auth/todo.md\n+++ b/docs/iterations/010-shared-magic-link-auth/todo.md\n@@ -4,7 +4,7 @@\n - [x] 002 Add persistence for authentication:\n - [x] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:\n - [x] 004 Extend `Memba.Membership` query API as needed:\n-- [ ] 005 Add auth email delivery:\n+- [x] 005 Add auth email delivery:\n - [ ] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:\n - [ ] 007 Add `/auth` UI and callback handling:\n - [ ] 008 Update the home page:\ndiff --git a/web/config/runtime.exs b/web/config/runtime.exs\nindex a49a181..2a650b2 100644\n--- a/web/config/runtime.exs\n+++ b/web/config/runtime.exs\n@@ -49,6 +49,26 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(\n     config :memba, :messaging_delivery_provider, delivery_provider\n end\n \n+case Memba.Accounts.AuthEmailConfig.provider_override!(\n+       System.get_env(\"MEMBA_AUTH_EMAIL_PROVIDER\")\n+     ) do\n+  :default ->\n+    :ok\n+\n+  :postmark ->\n+    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!()\n+\n+    config :memba, Memba.Mailer,\n+      adapter: Swoosh.Adapters.Postmark,\n+      api_key: auth_email_config.server_token\n+\n+    config :memba, Memba.Accounts.AuthEmail,\n+      from: auth_email_config.from,\n+      message_stream: auth_email_config.message_stream\n+\n+    config :swoosh, :api_client, Swoosh.ApiClient.Req\n+end\n+\n config :memba, MembaWeb.Endpoint, http: [port: String.to_integer(System.get_env(\"PORT\", \"4000\"))]\n \n if config_env() == :prod do\ndiff --git a/web/lib/memba/accounts/auth_email.ex b/web/lib/memba/accounts/auth_email.ex\nnew file mode 100644\nindex 0000000..6563ef3\n--- /dev/null\n+++ b/web/lib/memba/accounts/auth_email.ex\n@@ -0,0 +1,107 @@\n+defmodule Memba.Accounts.AuthEmail do\n+  @moduledoc \"\"\"\n+  Magic-link authentication email delivery.\n+\n+  Builds concise text and HTML magic-link emails, assigns the configured\n+  Postmark message stream, and hands delivery to `Memba.Mailer`.\n+  \"\"\"\n+\n+  import Swoosh.Email\n+\n+  alias Memba.Accounts\n+  alias Memba.Accounts.AuthEmailConfig\n+\n+  @subject \"Sign in to Memba\"\n+\n+  @doc \"\"\"\n+  Deliver a magic-link sign-in email to a normalized recipient address.\n+  \"\"\"\n+  def deliver_magic_link(email, callback_url) do\n+    with {:ok, recipient_email} <- normalize_recipient_email(email),\n+         {:ok, callback_url} <- normalize_callback_url(callback_url),\n+         {:ok, %AuthEmailConfig{} = config} <- auth_email_config() do\n+      recipient_email\n+      |> magic_link_email(callback_url, config)\n+      |> deliver_email()\n+    end\n+  end\n+\n+  defp normalize_recipient_email(email) do\n+    case Accounts.normalize_email(email) do\n+      nil -> {:error, :invalid_email}\n+      normalized_email -> {:ok, normalized_email}\n+    end\n+  end\n+\n+  defp normalize_callback_url(callback_url) when is_binary(callback_url) do\n+    case String.trim(callback_url) do\n+      \"\" -> {:error, :invalid_callback_url}\n+      normalized_url -> {:ok, normalized_url}\n+    end\n+  end\n+\n+  defp normalize_callback_url(_callback_url), do: {:error, :invalid_callback_url}\n+\n+  defp auth_email_config do\n+    case AuthEmailConfig.from_application_env() do\n+      {:ok, config} -> {:ok, config}\n+      {:error, message} -> {:error, {:auth_email_configuration_error, message}}\n+    end\n+  end\n+\n+  defp magic_link_email(recipient_email, callback_url, %AuthEmailConfig{} = config) do\n+    new()\n+    |> from(config.from)\n+    |> to(recipient_email)\n+    |> subject(@subject)\n+    |> text_body(text_body(callback_url))\n+    |> html_body(html_body(callback_url))\n+    |> put_provider_option(:message_stream, config.message_stream)\n+  end\n+\n+  defp text_body(callback_url) do\n+    \"\"\"\n+    Use this link to sign in to Memba:\n+\n+    #{callback_url}\n+\n+    This link expires in 15 minutes. If you did not request it, you can ignore this email.\n+    \"\"\"\n+  end\n+\n+  defp html_body(callback_url) do\n+    escaped_url = html_escape_to_string(callback_url)\n+\n+    \"\"\"\n+    <html><body>\n+    <p>Use this link to sign in to Memba:</p>\n+    <p><a href=\"#{escaped_url}\">Sign in to Memba</a></p>\n+    <p>This link expires in 15 minutes. If you did not request it, you can ignore this email.</p>\n+    </body></html>\n+    \"\"\"\n+  end\n+\n+  defp html_escape_to_string(text) do\n+    text\n+    |> Phoenix.HTML.html_escape()\n+    |> Phoenix.HTML.safe_to_string()\n+  end\n+\n+  defp deliver_email(email) do\n+    email\n+    |> Memba.Mailer.deliver()\n+    |> normalize_delivery_result()\n+  rescue\n+    exception ->\n+      {:error,\n+       {:auth_email_delivery_exception, exception.__struct__, Exception.message(exception)}}\n+  end\n+\n+  defp normalize_delivery_result({:ok, _result}), do: :ok\n+\n+  defp normalize_delivery_result({:error, reason}),\n+    do: {:error, {:auth_email_delivery_error, reason}}\n+\n+  defp normalize_delivery_result(result),\n+    do: {:error, {:auth_email_delivery_error, {:unexpected_delivery_result, result}}}\n+end\ndiff --git a/web/lib/memba/accounts/auth_email_config.ex b/web/lib/memba/accounts/auth_email_config.ex\nnew file mode 100644\nindex 0000000..2c75d02\n--- /dev/null\n+++ b/web/lib/memba/accounts/auth_email_config.ex\n@@ -0,0 +1,154 @@\n+defmodule Memba.Accounts.AuthEmailConfig do\n+  @moduledoc \"\"\"\n+  Runtime configuration for shared magic-link auth emails.\n+\n+  Auth email delivery is enabled explicitly with `MEMBA_AUTH_EMAIL_PROVIDER`.\n+  When Postmark delivery is enabled, the shared Postmark server token, auth\n+  sender, and dedicated auth message stream must all be configured.\n+  \"\"\"\n+\n+  @enforce_keys [:server_token, :from, :message_stream]\n+  defstruct [:server_token, :from, :message_stream]\n+\n+  @provider_env \"MEMBA_AUTH_EMAIL_PROVIDER\"\n+  @server_token_env \"MEMBA_POSTMARK_SERVER_TOKEN\"\n+  @from_address_env \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\"\n+  @message_stream_env \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\"\n+\n+  @type t :: %__MODULE__{\n+          server_token: String.t(),\n+          from: String.t(),\n+          message_stream: String.t()\n+        }\n+\n+  @doc \"\"\"\n+  Decide whether auth email delivery has been explicitly enabled.\n+  \"\"\"\n+  def provider_override(value)\n+\n+  def provider_override(value) when is_binary(value) do\n+    case value |> String.trim() |> String.downcase() do\n+      \"\" -> :default\n+      \"postmark\" -> {:ok, :postmark}\n+      provider -> {:error, unsupported_provider_message(provider)}\n+    end\n+  end\n+\n+  def provider_override(nil), do: :default\n+  def provider_override(value), do: {:error, unsupported_provider_message(value)}\n+\n+  @doc \"\"\"\n+  Decide whether auth email delivery has been enabled, or raise on bad input.\n+  \"\"\"\n+  def provider_override!(value) do\n+    case provider_override(value) do\n+      {:ok, provider} -> provider\n+      :default -> :default\n+      {:error, message} -> raise ArgumentError, message\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Read and validate required auth email Postmark settings from environment.\n+  \"\"\"\n+  def from_env(get_env \\\\ &System.get_env/1) when is_function(get_env, 1) do\n+    validate(\n+      %{\n+        @server_token_env => get_env.(@server_token_env),\n+        @from_address_env => get_env.(@from_address_env),\n+        @message_stream_env => get_env.(@message_stream_env)\n+      },\n+      source: :environment\n+    )\n+  end\n+\n+  @doc \"\"\"\n+  Read and validate required auth email Postmark settings from environment or raise.\n+  \"\"\"\n+  def from_env!(get_env \\\\ &System.get_env/1) when is_function(get_env, 1) do\n+    case from_env(get_env) do\n+      {:ok, config} -> config\n+      {:error, message} -> raise ArgumentError, message\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Read and validate required auth email Postmark settings from application config.\n+  \"\"\"\n+  def from_application_env do\n+    mailer_config = Application.get_env(:memba, Memba.Mailer, [])\n+    auth_email_config = Application.get_env(:memba, Memba.Accounts.AuthEmail, [])\n+\n+    validate(\n+      %{\n+        @server_token_env => Keyword.get(mailer_config, :api_key),\n+        @from_address_env => Keyword.get(auth_email_config, :from),\n+        @message_stream_env => Keyword.get(auth_email_config, :message_stream)\n+      },\n+      source: :application\n+    )\n+  end\n+\n+  @doc \"\"\"\n+  Read and validate required auth email Postmark settings from application config or raise.\n+  \"\"\"\n+  def from_application_env! do\n+    case from_application_env() do\n+      {:ok, config} -> config\n+      {:error, message} -> raise ArgumentError, message\n+    end\n+  end\n+\n+  defp validate(values, opts) do\n+    normalized_values =\n+      Map.new(values, fn {key, value} ->\n+        {key, normalize(value)}\n+      end)\n+\n+    missing_required =\n+      normalized_values\n+      |> Map.take(required_config_keys())\n+      |> Enum.filter(fn {_key, value} -> is_nil(value) end)\n+      |> Enum.map(fn {key, _value} -> key end)\n+      |> Enum.sort()\n+\n+    case missing_required do\n+      [] ->\n+        {:ok,\n+         %__MODULE__{\n+           server_token: Map.fetch!(normalized_values, @server_token_env),\n+           from: Map.fetch!(normalized_values, @from_address_env),\n+           message_stream: Map.fetch!(normalized_values, @message_stream_env)\n+         }}\n+\n+      missing ->\n+        {:error, missing_config_message(missing, opts[:source])}\n+    end\n+  end\n+\n+  defp normalize(value) when is_binary(value) do\n+    case String.trim(value) do\n+      \"\" -> nil\n+      value -> value\n+    end\n+  end\n+\n+  defp normalize(_value), do: nil\n+\n+  defp required_config_keys, do: [@server_token_env, @from_address_env, @message_stream_env]\n+\n+  defp missing_config_message(missing, source) do\n+    \"Auth email Postmark delivery is enabled, but required #{source_label(source)} \" <>\n+      \"configuration is missing: #{Enum.join(missing, \", \")}. \" <>\n+      \"Set #{@server_token_env}, #{@from_address_env}, and #{@message_stream_env}, or leave \" <>\n+      \"#{@provider_env} unset to skip real auth email delivery.\"\n+  end\n+\n+  defp source_label(:application), do: \"application\"\n+  defp source_label(:environment), do: \"environment\"\n+\n+  defp unsupported_provider_message(provider) do\n+    \"Unsupported #{@provider_env}=#{inspect(provider)}. Set #{@provider_env}=postmark \" <>\n+      \"to enable real auth email delivery, or leave it unset.\"\n+  end\n+end\ndiff --git a/web/test/memba/accounts/auth_email_config_test.exs b/web/test/memba/accounts/auth_email_config_test.exs\nnew file mode 100644\nindex 0000000..b396ecc\n--- /dev/null\n+++ b/web/test/memba/accounts/auth_email_config_test.exs\n@@ -0,0 +1,47 @@\n+defmodule Memba.Accounts.AuthEmailConfigTest do\n+  use ExUnit.Case, async: true\n+\n+  alias Memba.Accounts.AuthEmailConfig\n+\n+  test \"reads required auth email Postmark settings from environment\" do\n+    assert {:ok,\n+            %AuthEmailConfig{\n+              server_token: \"server-token\",\n+              from: \"auth@mail.memba.io\",\n+              message_stream: \"outbound-authentication\"\n+            }} =\n+             AuthEmailConfig.from_env(fn\n+               \"MEMBA_POSTMARK_SERVER_TOKEN\" -> \"  server-token  \"\n+               \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\" -> \" auth@mail.memba.io \"\n+               \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\" -> \" outbound-authentication \"\n+             end)\n+  end\n+\n+  test \"reports missing required auth email Postmark settings clearly\" do\n+    assert {:error, message} =\n+             AuthEmailConfig.from_env(fn\n+               \"MEMBA_POSTMARK_SERVER_TOKEN\" -> \"  \"\n+               \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\" -> nil\n+               \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\" -> \"\"\n+             end)\n+\n+    assert message =~ \"Auth email Postmark delivery is enabled\"\n+    assert message =~ \"required environment configuration is missing\"\n+    assert message =~ \"MEMBA_POSTMARK_SERVER_TOKEN\"\n+    assert message =~ \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\"\n+    assert message =~ \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\"\n+    assert message =~ \"MEMBA_AUTH_EMAIL_PROVIDER\"\n+  end\n+\n+  test \"selects Postmark auth email delivery only when explicitly configured\" do\n+    assert AuthEmailConfig.provider_override(nil) == :default\n+    assert AuthEmailConfig.provider_override(\"\") == :default\n+    assert AuthEmailConfig.provider_override(\"   \") == :default\n+    assert AuthEmailConfig.provider_override(\"postmark\") == {:ok, :postmark}\n+    assert AuthEmailConfig.provider_override(\"POSTMARK\") == {:ok, :postmark}\n+\n+    assert {:error, message} = AuthEmailConfig.provider_override(\"smtp\")\n+    assert message =~ \"Unsupported MEMBA_AUTH_EMAIL_PROVIDER\"\n+    assert message =~ \"postmark\"\n+  end\n+end\ndiff --git a/web/test/memba/accounts/auth_email_test.exs b/web/test/memba/accounts/auth_email_test.exs\nnew file mode 100644\nindex 0000000..a2f9331\n--- /dev/null\n+++ b/web/test/memba/accounts/auth_email_test.exs\n@@ -0,0 +1,110 @@\n+defmodule Memba.Accounts.AuthEmailTest do\n+  use ExUnit.Case, async: false\n+\n+  import Swoosh.TestAssertions\n+\n+  alias Memba.Accounts.AuthEmail\n+\n+  setup do\n+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n+    original_auth_email_config = Application.get_env(:memba, AuthEmail)\n+\n+    Application.put_env(:memba, Memba.Mailer,\n+      adapter: Swoosh.Adapters.Test,\n+      api_key: \"server-token\"\n+    )\n+\n+    on_exit(fn ->\n+      restore_env(Memba.Mailer, original_mailer_config)\n+      restore_env(AuthEmail, original_auth_email_config)\n+    end)\n+\n+    :ok\n+  end\n+\n+  test \"builds and sends a Postmark-streamed magic-link email\" do\n+    Application.put_env(:memba, AuthEmail,\n+      from: \"auth@mail.memba.io\",\n+      message_stream: \"outbound-authentication\"\n+    )\n+\n+    callback_url = \"https://app.memba.io/auth/magic/token-123?return_to=%2Fadmin\"\n+\n+    assert :ok = AuthEmail.deliver_magic_link(\" ALICE@EXAMPLE.COM \", callback_url)\n+\n+    assert_received {:email, %Swoosh.Email{} = email}\n+\n+    assert email.from == {\"\", \"auth@mail.memba.io\"}\n+    assert email.to == [{\"\", \"alice@example.com\"}]\n+    assert email.subject == \"Sign in to Memba\"\n+\n+    assert email.text_body =~ \"Use this link to sign in to Memba:\"\n+    assert email.text_body =~ callback_url\n+    assert email.text_body =~ \"This link expires in 15 minutes.\"\n+\n+    assert email.html_body =~ \"Sign in to Memba\"\n+    assert email.html_body =~ \"https://app.memba.io/auth/magic/token-123?return_to=%2Fadmin\"\n+    assert email.html_body =~ \"This link expires in 15 minutes.\"\n+\n+    assert email.provider_options == %{\n+             message_stream: \"outbound-authentication\"\n+           }\n+  end\n+\n+  test \"does not hand an email to Swoosh when required auth email configuration is missing\" do\n+    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)\n+    Application.put_env(:memba, AuthEmail, from: \"auth@mail.memba.io\")\n+\n+    assert {:error, {:auth_email_configuration_error, message}} =\n+             AuthEmail.deliver_magic_link(\n+               \"alice@example.com\",\n+               \"https://app.memba.io/auth/magic/token\"\n+             )\n+\n+    assert message =~ \"Auth email Postmark delivery is enabled\"\n+    assert message =~ \"MEMBA_POSTMARK_SERVER_TOKEN\"\n+    assert message =~ \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\"\n+\n+    assert_no_email_sent()\n+  end\n+\n+  test \"returns a visible auth email delivery error when Swoosh reports an API failure\" do\n+    Application.put_env(:memba, Memba.Mailer,\n+      adapter: Memba.TestSupport.FailingSwooshAdapter,\n+      api_key: \"server-token\",\n+      test_owner: self(),\n+      test_delivery_result: {:error, {401, %{\"Message\" => \"Invalid server token\"}}}\n+    )\n+\n+    Application.put_env(:memba, AuthEmail,\n+      from: \"auth@mail.memba.io\",\n+      message_stream: \"outbound-authentication\"\n+    )\n+\n+    assert {:error, {:auth_email_delivery_error, {401, %{\"Message\" => \"Invalid server token\"}}}} =\n+             AuthEmail.deliver_magic_link(\n+               \"alice@example.com\",\n+               \"https://app.memba.io/auth/magic/token\"\n+             )\n+\n+    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}\n+  end\n+\n+  test \"rejects invalid delivery inputs before Swoosh handoff\" do\n+    Application.put_env(:memba, AuthEmail,\n+      from: \"auth@mail.memba.io\",\n+      message_stream: \"outbound-authentication\"\n+    )\n+\n+    assert {:error, :invalid_email} =\n+             AuthEmail.deliver_magic_link(\"  \", \"https://app.memba.io/auth/magic/token\")\n+\n+    assert {:error, :invalid_callback_url} =\n+             AuthEmail.deliver_magic_link(\"alice@example.com\", \"  \")\n+\n+    assert_no_email_sent()\n+  end\n+\n+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)\n+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)\n+end\n",
+        "summary": {
+          "files_changed": 16,
+          "additions": 1178,
+          "deletions": 1
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-31T19:17:23.319495540Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.node_visit_count": 5,
+          "current_node": "pre_validate_snapshot",
           "thread.validate_task.current_node": "task_gate",
           "task_valid": true,
           "thread.sync_task_list.current_node": "all_tasks_done",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "graph.max_node_visits": "300",
           "last_stage": "implement_next_task",
           "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 005 Add auth email delivery:`\n\n2. **Changes made**\n   - Added `Memba.Accounts.AuthEmail`\n     - Builds concise pla",
@@ -9332,7 +9653,7 @@
           "thread.preflight_sandbox.current_node": "resume_gate",
           "internal.retry_count.sync_task_list": 0,
           "task_list_needs_human": false,
-          "command.output": "blob://sha256/37e577485a1e2984876f5c878dbc331b114224d13f6c6e8a326b187e13c494a4",
+          "command.output": "blob://sha256/938a6fab564b5dd2789d5fb914b9d91372d65d68a99aadbe05c1cd4db37d350f",
           "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 005 Add auth email delivery:`\n\n2. **Changes made**\n   - Added `Memba.Accounts.AuthEmail`\n     - Builds concise plain-text and HTML magic-link emails.\n     - Normalizes recipient emails.\n     - Includes the provided `/auth/...` callback URL in both text and HTML bodies.\n     - Sends through `Memba.Mailer`.\n     - Adds Postmark `:message_stream` via Swoosh provider options.\n     - Returns clear delivery/configuration errors without handing malformed requests to Swoosh.\n   - Added `Memba.Accounts.AuthEmailConfig`\n     - Supports explicit real auth email enablement with `MEMBA_AUTH_EMAIL_PROVIDER=postmark`.\n     - Requires:\n       - `MEMBA_POSTMARK_SERVER_TOKEN`\n       - `MEMBA_AUTH_EMAIL_FROM_ADDRESS`\n       - `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`\n     - Provides clear missing/unsupported configuration errors.\n   - Updated `web/config/runtime.exs`\n     - When auth email Postmark delivery is explicitly enabled, configures `Memba.Mailer` with `Swoosh.Adapters.Postmark`.\n     - Configures auth email sender and dedicated message stream.\n     - Uses `Swoosh.ApiClient.Req`.\n   - Added focused tests:\n     - Auth email construction and Swoosh handoff.\n     - Postmark message stream provider option.\n     - Callback URL inclusion.\n     - Missing config failure before Swoosh handoff.\n     - Swoosh/API delivery error surfacing.\n     - Invalid input rejection.\n     - Auth email provider/env config parsing.\n\n3. **Validation commands run**\n   - Red TDD check:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/accounts/auth_email_config_test.exs test/memba/accounts/auth_email_test.exs`\n     - Failed as expected before implementation with missing `Memba.Accounts.AuthEmailConfig`.\n   - Focused tests:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/accounts/auth_email_config_test.exs test/memba/accounts/auth_email_test.exs`\n     - Passed: `7 tests, 0 failures`.\n   - Formatting:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" devenv shell -- mix format --check-formatted`\n     - Passed.\n   - Full project check:\n     - `env -u MEMBA_DEVENV_SHELL PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `158 tests, 0 failures`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 005 Add auth email delivery:`\n   - To:\n     - `- [x] 005 Add auth email delivery:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: stays within the Phoenix application and existing Swoosh mailer setup.\n   - ADR 0007: auth email delivery is isolated in the Accounts/auth boundary and does not couple Messaging to Membership storage or mutate membership state.\n   - ADR 0008 / ADR 0009: no EventStore, Commanded, or projection persistence changes.\n   - ADR 0013 / plan constraint: no acceptance `.feature` files or acceptance-test files changed.\n   - Project rules: used Swoosh with `Swoosh.ApiClient.Req` for Postmark delivery; did not introduce HTTPoison, Tesla, `:httpc`, or direct Postmark HTTP code.",
           "internal.retry_count.resume_gate": 0,
           "internal.retry_count.all_tasks_done": 0,
@@ -9556,19 +9877,19 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/009c61f2f29ca19a9dc0c2b6c2e3deadc75317f026d2884b9594936260f58557"
+              "command.output": "blob://sha256/938a6fab564b5dd2789d5fb914b9d91372d65d68a99aadbe05c1cd4db37d350f"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 189,
-              "active_time_ms": 189
+              "tool_time_ms": 198,
+              "active_time_ms": 198
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "all_tasks_done": 5,
           "start": 1,
@@ -9578,7 +9899,7 @@
           "sync_task_list": 5,
           "wip_gate": 1,
           "validate_task": 4,
-          "pre_validate_snapshot": 4,
+          "pre_validate_snapshot": 5,
           "task_gate": 4,
           "implement_next_task": 5
         }
@@ -10602,7 +10923,12 @@
       "first_event_seq": 1220,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-05-31T19:17:19.749705304Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -10616,13 +10942,20 @@
       "output": null,
       "started_at": "2026-05-31T19:09:09.131921428Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 490617,
+        "inference_time_ms": 380142,
+        "tool_time_ms": 109905,
+        "active_time_ms": 490047
+      },
       "usage": {
         "input_tokens": 720070,
         "output_tokens": 8938,
         "total_tokens": 2448240,
         "reasoning_tokens": 7104,
         "cache_read_tokens": 1712128,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 4937674
       },
       "model": {
         "provider": "openai",
@@ -10796,7 +11129,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@1": {
       "first_event_seq": 223,
@@ -12233,6 +12566,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@5": {
+      "first_event_seq": 1427,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/010-shared-magic-link-auth/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-31T19:17:23.108658693Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "all_tasks_done@3": {
       "first_event_seq": 595,
