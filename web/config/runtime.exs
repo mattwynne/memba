@@ -76,9 +76,15 @@ if config_env() == :prod do
     # pool_count: 4,
     socket_options: maybe_ipv6
 
+  event_store_database_url =
+    database_url
+    |> URI.parse()
+    |> Map.put(:query, nil)
+    |> URI.to_string()
+
   event_store_config = [
     serializer: Commanded.Serialization.JsonSerializer,
-    url: database_url,
+    url: event_store_database_url,
     schema: "event_store",
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10"),
     socket_options: maybe_ipv6
