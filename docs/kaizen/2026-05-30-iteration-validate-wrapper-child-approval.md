@@ -66,3 +66,26 @@ The same child-run approval path may also affect full `iteration-start`, where f
 - Why did a child with `execution.approval = auto` still enter `approval_required` when started by a worker parent?
 - Should `bin/dev iteration-validate-plan` bypass `iteration-deliver` and call `.fabro/workflows/plan-validation/workflow.toml --auto-approve` directly?
 - Does `iteration-start` need a different user-controlled approval strategy for implementation and review children?
+
+## Resolution
+
+Date: 2026-05-30
+
+Root cause: The validate-only helper routed a standalone validation task through the `iteration-deliver` parent workflow. That parent starts `plan-validation` as a worker-created child run, and the observed Fabro approval path can still put that child in `approval_required` even when the child spec says `execution.approval = auto`. Because Fabro rejects worker approval for that gate, the parent cannot guarantee unattended validation. The direct user-controlled CLI path with `--auto-approve` does not hit that child approval boundary.
+
+Fix applied:
+
+- `bin/dev`: changed `iteration-validate-plan` to call `.fabro/workflows/plan-validation/workflow.toml` directly with `--auto-approve`, removing the unnecessary `iteration-deliver` orchestration layer for validate-only work.
+- `.fabro/workflows/README.md`: updated the documented equivalence so `bin/dev iteration-validate-plan` points to the direct `plan-validation` command instead of `iteration-deliver -I mode=validate_only`.
+- `docs/kaizen/2026-05-30-iteration-validate-wrapper-child-approval.md`: recorded this resolution while preserving the original observation.
+
+Validation:
+
+- `bash -n bin/dev` — passed.
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml` — passed with existing goal-gate retry warnings.
+- `fabro validate .fabro/workflows/iteration-deliver/workflow.toml` — passed.
+- `dev check` — passed, including 108 ExUnit tests.
+
+Remaining follow-up:
+
+- The validate-only helper is fixed locally. The underlying Fabro child-run approval behaviour remains relevant for full `iteration-start`, which still uses `iteration-deliver` to reserve WIP and orchestrate implementation/review children.

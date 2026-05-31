@@ -6,14 +6,14 @@ Fabro iteration work normally flows through `iteration-deliver`, a lightweight p
 2. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
 3. `iteration-review` reviews the merged implementation diff from the parent-captured pre-implementation `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, and pushes any green polish as a separate `review polish: iteration NNN` commit to `main`.
 
-Plan validation can run ahead of implementation, even while another iteration is active:
+Plan validation can run ahead of implementation, even while another iteration is active. This uses the standalone validation workflow directly so no implementation WIP slot is checked or reserved:
 
 ```bash
 bin/dev iteration-validate-plan docs/iterations/NNN-topic/plan.md
 # equivalent to:
-fabro run .fabro/workflows/iteration-deliver/workflow.toml \
+fabro run .fabro/workflows/plan-validation/workflow.toml \
   -I plan_path=docs/iterations/NNN-topic/plan.md \
-  -I mode=validate_only
+  --auto-approve
 ```
 
 Starting implementation remains single-piece-flow. `iteration-deliver` checks and reserves the implementation WIP slot by marking the selected iteration `implementing` before it starts the implementation child. It refuses to start while another iteration is `implementing`, `ready-for-review`, `in-review`, `reviewing`, or `finalizing`.
