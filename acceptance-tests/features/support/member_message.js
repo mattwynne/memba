@@ -4,6 +4,8 @@ const { expect: playwrightExpect } = require("@playwright/test");
 
 const kootenayClubName = "Kootenay Mountaineering Club";
 const nelsonClubName = "Nelson Paddling Club";
+const defaultProjectionPollIntervalMs = 250;
+const defaultProjectionTimeoutMs = 10000;
 
 function appUrl(baseUrl, path) {
   return new URL(path, `${baseUrl}/`).toString();
@@ -109,6 +111,82 @@ async function rowAttributeValues(rows, attributeName) {
   );
 }
 
+function numericWaitConfig(world, worldKey, envKey, defaultValue) {
+  const configuredValue =
+    world && world[worldKey] !== undefined ? world[worldKey] : process.env[envKey];
+  const parsedValue = Number(configuredValue);
+
+  return Number.isFinite(parsedValue) && parsedValue >= 0 ? parsedValue : defaultValue;
+}
+
+function projectionTimeoutMs(world) {
+  return numericWaitConfig(
+    world,
+    "projectionTimeoutMs",
+    "ACCEPTANCE_PROJECTION_TIMEOUT_MS",
+    defaultProjectionTimeoutMs
+  );
+}
+
+function projectionPollIntervalMs(world) {
+  return numericWaitConfig(
+    world,
+    "projectionPollIntervalMs",
+    "ACCEPTANCE_PROJECTION_POLL_INTERVAL_MS",
+    defaultProjectionPollIntervalMs
+  );
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withProjectionWait(description, assertion) {
+  try {
+    return await assertion();
+  } catch (error) {
+    throw new Error(
+      `Timed out waiting for projected browser UI: ${description}.\n` +
+        `Last assertion error: ${error.message}`
+    );
+  }
+}
+
+async function waitForProjectedCount(
+  world,
+  locator,
+  expectedCount,
+  description,
+  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
+) {
+  await withProjectionWait(description, () =>
+    expect(locator, description).toHaveCount(expectedCount, { timeout: timeoutMs })
+  );
+}
+
+async function waitForProjectedText(
+  world,
+  locator,
+  expectedText,
+  description,
+  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
+) {
+  await withProjectionWait(description, () =>
+    expect(locator, description).toHaveText(expectedText, { timeout: timeoutMs })
+  );
+}
+
+async function waitForProjectedVisible(
+  world,
+  locator,
+  description,
+  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
+) {
+  await withProjectionWait(description, () =>
+    expect(locator, description).toBeVisible({ timeout: timeoutMs })
+  );
+}
+
 async function newRowAttributeValue(rows, attributeName, previousValues, description) {
   const currentValues = await rowAttributeValues(rows, attributeName);
   const newValues = currentValues.filter((value) => !previousValues.includes(value));
@@ -126,24 +204,34 @@ async function visitClubsIndex(world) {
   await world.page.goto(appUrl(world.baseUrl, "/clubs"));
 }
 
-async function openClub(world, clubName, { expect = playwrightExpect } = {}) {
+async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
   ensureState(world);
 
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
 
   await world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`));
-  await expect(world.page.getByRole("heading", { name: clubName })).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: clubName }),
+    `club heading for ${clubName}`,
+    { expect, timeoutMs }
+  );
 }
 
-async function openMessage(world, subject, { expect = playwrightExpect } = {}) {
+async function openMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
   ensureState(world);
 
   const message = world.messages[subject];
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
 
   await world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`));
-  await expect(world.page.getByRole("heading", { name: subject })).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: subject }),
+    `message heading for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
 }
 
 async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
@@ -156,7 +244,13 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
 
   await world.page.getByLabel("Club name").fill(clubName);
   await world.page.getByRole("button", { name: "Create club" }).click();
-  await expect(clubRows).toHaveCount(previousClubIds.length + 1);
+  await waitForProjectedCount(
+    world,
+    clubRows,
+    previousClubIds.length + 1,
+    `new club row for ${clubName}`,
+    { expect }
+  );
 
   const clubId = await newRowAttributeValue(
     clubRows,
@@ -164,7 +258,12 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
     previousClubIds,
     `club row for ${clubName}`
   );
-  await expect(rowByData(world.page, "club-row", "data-club-id", clubId)).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "club-row", "data-club-id", clubId),
+    `projected club row ${clubId}`,
+    { expect }
+  );
 
   world.clubs[clubName] = { clubId, name: clubName };
 
@@ -191,7 +290,13 @@ async function createPersonOnCurrentClubPage(world, name, { expect = playwrightE
   await world.page.getByLabel("Person name").fill(name);
   await world.page.getByLabel("Person email").fill(email);
   await world.page.getByRole("button", { name: "Create person" }).click();
-  await expect(personRows).toHaveCount(previousPersonIds.length + 1);
+  await waitForProjectedCount(
+    world,
+    personRows,
+    previousPersonIds.length + 1,
+    `new person row for ${name}`,
+    { expect }
+  );
 
   const personId = await newRowAttributeValue(
     personRows,
@@ -199,7 +304,12 @@ async function createPersonOnCurrentClubPage(world, name, { expect = playwrightE
     previousPersonIds,
     `person row for ${name}`
   );
-  await expect(rowByData(world.page, "person-row", "data-person-id", personId)).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "person-row", "data-person-id", personId),
+    `projected person row ${personId}`,
+    { expect }
+  );
 
   world.people[name] = { email, name, personId };
 }
@@ -230,7 +340,13 @@ async function addMemberOnCurrentClubPage(
 
   await world.page.getByLabel("Person to add as member").selectOption(person.personId);
   await world.page.getByRole("button", { name: "Add member" }).click();
-  await expect(memberRows).toHaveCount(previousMemberIds.length + 1);
+  await waitForProjectedCount(
+    world,
+    memberRows,
+    previousMemberIds.length + 1,
+    `new member row for ${personName} in ${clubName}`,
+    { expect }
+  );
 
   const memberId = await newRowAttributeValue(
     memberRows,
@@ -238,7 +354,12 @@ async function addMemberOnCurrentClubPage(
     previousMemberIds,
     `member row for ${personName} in ${clubName}`
   );
-  await expect(rowByData(world.page, "member-row", "data-member-id", memberId)).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "member-row", "data-member-id", memberId),
+    `projected member row ${memberId}`,
+    { expect }
+  );
 
   world.memberships[`${clubName}:${personName}`] = {
     clubName,
@@ -269,7 +390,13 @@ async function sendMessageToKootenayMembers(
   await world.page.getByLabel("Message subject").fill(subject);
   await world.page.getByLabel("Message body").fill(body);
   await world.page.getByRole("button", { name: "Send club message" }).click();
-  await expect(messageRows).toHaveCount(previousMessageIds.length + 1);
+  await waitForProjectedCount(
+    world,
+    messageRows,
+    previousMessageIds.length + 1,
+    `new message row for ${JSON.stringify(subject)}`,
+    { expect }
+  );
 
   const messageId = await newRowAttributeValue(
     messageRows,
@@ -277,7 +404,12 @@ async function sendMessageToKootenayMembers(
     previousMessageIds,
     `message row for ${subject}`
   );
-  await expect(rowByData(world.page, "message-row", "data-message-id", messageId)).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "message-row", "data-message-id", messageId),
+    `projected message row ${messageId}`,
+    { expect }
+  );
 
   world.messages[subject] = {
     body,
@@ -301,7 +433,13 @@ async function assertLastMessageAddressedTo(
   await openMessage(world, world.lastMessageSubject, { expect });
 
   const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
-  await expect(rows).toHaveCount(expectedNames.length);
+  await waitForProjectedCount(
+    world,
+    rows,
+    expectedNames.length,
+    `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,
+    { expect }
+  );
 
   const actualNames = await rowDatasetValues(rows, "recipientName");
   assert.deepEqual(actualNames, expectedNames);
@@ -346,7 +484,13 @@ async function assertEachAddressedMemberHasSeparateDeliveryRecord(
   );
 
   const rows = allRows(world.page, "delivery-records", "delivery-record");
-  await expect(rows).toHaveCount(expectedIds.length);
+  await waitForProjectedCount(
+    world,
+    rows,
+    expectedIds.length,
+    `delivery records for ${JSON.stringify(world.lastMessageSubject)}`,
+    { expect }
+  );
 
   const recipientIds = await rowDatasetValues(rows, "recipientId");
   const deliveryIds = await rowDatasetValues(rows, "deliveryId");
@@ -384,8 +528,19 @@ async function assertEachDeliverySentThroughEmailProvider(
 
   for (const recipientName of deliveryNames) {
     const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
-    await expect(row.getByText(/^email$/)).toBeVisible();
-    await expect(row.locator("[data-testid=\"delivery-status\"]")).toHaveText("sent");
+    await waitForProjectedVisible(
+      world,
+      row.getByText(/^email$/),
+      `email channel for ${recipientName}'s delivery`,
+      { expect }
+    );
+    await waitForProjectedText(
+      world,
+      row.locator("[data-testid=\"delivery-status\"]"),
+      "sent",
+      `sent delivery status for ${recipientName}`,
+      { expect }
+    );
   }
 
   return world;
@@ -395,10 +550,91 @@ async function assertReceiptStatus(world, recipientName, subject, expectedStatus
   await openMessage(world, subject, { expect });
 
   const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
-  await expect(row).toBeVisible();
-  await expect(row.locator("[data-testid=\"receipt-status\"]")).toHaveText(expectedStatus);
+  await waitForProjectedVisible(
+    world,
+    row,
+    `${recipientName}'s receipt row for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+  await waitForProjectedText(
+    world,
+    row.locator("[data-testid=\"receipt-status\"]"),
+    expectedStatus,
+    `${recipientName}'s receipt status for ${JSON.stringify(subject)}`,
+    { expect }
+  );
 
   return world;
+}
+
+function memberReceiptStatusForEventType(eventType) {
+  switch (eventType) {
+    case "delivered":
+      return "delivered";
+
+    case "opened":
+      return "opened";
+
+    case "delayed":
+    case "bounced":
+    case "spam_complaint":
+      return "delivery problem";
+
+    default:
+      throw new Error(`Unsupported browser receipt projection status event: ${eventType}`);
+  }
+}
+
+async function waitForProjectedReceiptStatus(
+  world,
+  recipientName,
+  subject,
+  expectedStatus,
+  { expect = playwrightExpect } = {}
+) {
+  const timeoutMs = projectionTimeoutMs(world);
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+
+  do {
+    const assertionTimeoutMs = Math.max(1, Math.min(1000, deadline - Date.now()));
+
+    try {
+      await openMessage(world, subject, { expect, timeoutMs: assertionTimeoutMs });
+
+      const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
+      await waitForProjectedVisible(
+        world,
+        row,
+        `${recipientName}'s projected receipt row for ${JSON.stringify(subject)}`,
+        { expect, timeoutMs: assertionTimeoutMs }
+      );
+      await waitForProjectedText(
+        world,
+        row.locator("[data-testid=\"receipt-status\"]"),
+        expectedStatus,
+        `${recipientName}'s projected receipt status for ${JSON.stringify(subject)}`,
+        { expect, timeoutMs: assertionTimeoutMs }
+      );
+
+      return world;
+    } catch (error) {
+      lastError = error;
+    }
+
+    const remainingMs = deadline - Date.now();
+
+    if (remainingMs > 0) {
+      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
+    }
+  } while (Date.now() <= deadline);
+
+  throw new Error(
+    `Timed out after ${timeoutMs}ms waiting for projected receipt status: ` +
+      `${recipientName}'s receipt for ${JSON.stringify(subject)} should become ${JSON.stringify(
+        expectedStatus
+      )}.\nLast projection error: ${lastError ? lastError.message : "(none)"}`
+  );
 }
 
 async function reportRecipientEmailStatus(
@@ -420,6 +656,13 @@ async function reportRecipientEmailStatus(
   });
 
   await postPostmarkWebhook(world, payload);
+  await waitForProjectedReceiptStatus(
+    world,
+    recipientName,
+    subject,
+    memberReceiptStatusForEventType(eventType),
+    { expect }
+  );
 
   const key = `${subject}:${recipientName}`;
   world.reportedDeliveryStatuses[key] = {
@@ -450,7 +693,12 @@ async function deliveryForRecipient(
   await openMessage(world, subject, { expect });
 
   const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
-  await expect(row).toBeVisible();
+  await waitForProjectedVisible(
+    world,
+    row,
+    `${recipientName}'s delivery record for ${JSON.stringify(subject)}`,
+    { expect }
+  );
 
   const deliveryId = await row.getAttribute("data-delivery-id");
   assert.ok(
@@ -531,9 +779,12 @@ module.exports = {
   emailFor,
   ensureState,
   kootenayClubName,
+  memberReceiptStatusForEventType,
   nelsonClubName,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
+  projectionPollIntervalMs,
+  projectionTimeoutMs,
   reportRecipientEmailStatus,
   rowAttributeValues,
   openClub,

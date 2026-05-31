@@ -15,8 +15,11 @@ const {
   deliveryForRecipient,
   emailFor,
   kootenayClubName,
+  memberReceiptStatusForEventType,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
+  projectionPollIntervalMs,
+  projectionTimeoutMs,
   reportRecipientEmailStatus,
   sendMessageToKootenayMembers
 } = require("../features/support/member_message");
@@ -42,7 +45,7 @@ class FakeLocator {
 
   last() {
     const rows = this.currentRows();
-    const row = rows[rows.length - 1];
+    const row = rows[rows.length - 1] || { attrs: {}, text: undefined };
 
     return new FakeLocator(this.page, `${this.selector} >> last`, {
       attrs: row.attrs,
@@ -244,14 +247,38 @@ function rowWithAttrs(attrs) {
 
 function fakeExpect(expectations) {
   return (target) => ({
-    async toBeVisible() {
-      expectations.push(["visible", target.selector || target]);
+    async toBeVisible(options) {
+      expectations.push(["visible", target.selector || target, options]);
     },
-    async toHaveCount(count) {
-      expectations.push(["count", target.selector, count]);
+    async toHaveCount(count, options) {
+      expectations.push(["count", target.selector, count, options]);
     },
-    async toHaveText(text) {
-      expectations.push(["text", target.selector, text]);
+    async toHaveText(text, options) {
+      expectations.push(["text", target.selector, text, options]);
+    }
+  });
+}
+
+function flakyReceiptTextExpect(expectations, failuresBeforeSuccess) {
+  let receiptTextAttempts = 0;
+
+  return (target) => ({
+    async toBeVisible(options) {
+      expectations.push(["visible", target.selector || target, options]);
+    },
+    async toHaveCount(count, options) {
+      expectations.push(["count", target.selector, count, options]);
+    },
+    async toHaveText(text, options) {
+      expectations.push(["text", target.selector, text, options]);
+
+      if (String(target.selector).includes('data-testid="receipt-status"')) {
+        receiptTextAttempts += 1;
+
+        if (receiptTextAttempts <= failuresBeforeSuccess) {
+          throw new Error(`projection not ready on attempt ${receiptTextAttempts}`);
+        }
+      }
     }
   });
 }
@@ -295,6 +322,34 @@ test("creating a club drives /clubs and stores the generated club id from the UI
     name: kootenayClubName
   });
   assert.deepEqual(expectations.map((expectation) => expectation[0]), ["count", "visible"]);
+});
+
+test("browser command projection waits use bounded Playwright assertion timeouts", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.projectionTimeoutMs = 1234;
+
+  assert.equal(projectionTimeoutMs(world), 1234);
+
+  await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
+
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "count" &&
+        expectation[1].includes('data-testid="club-row"') &&
+        expectation[3].timeout === 1234
+    )
+  );
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "visible" &&
+        expectation[1].includes('data-testid="club-row"') &&
+        expectation[2].timeout === 1234
+    )
+  );
 });
 
 test("creating people and members uses accessible form labels and keeps browser ids in scenario state", async () => {
@@ -498,6 +553,12 @@ test("Postmark webhook payloads map member-facing status events onto the app end
       RecordType: "SpamComplaint"
     }
   );
+
+  assert.equal(memberReceiptStatusForEventType("delivered"), "delivered");
+  assert.equal(memberReceiptStatusForEventType("opened"), "opened");
+  assert.equal(memberReceiptStatusForEventType("delayed"), "delivery problem");
+  assert.equal(memberReceiptStatusForEventType("bounced"), "delivery problem");
+  assert.equal(memberReceiptStatusForEventType("spam_complaint"), "delivery problem");
 });
 
 test("reporting a recipient email status posts to POST /webhooks/postmark using browser-visible ids", async () => {
@@ -539,6 +600,47 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using 
   });
   assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
   assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+});
+
+test("reporting a recipient email status polls the browser-visible receipt projection", async () => {
+  const page = new FakePage();
+  page.rows.deliveryRecords.push({
+    attrs: {
+      "data-delivery-id": "delivery-bob",
+      "data-recipient-id": "person-bob",
+      "data-recipient-name": "Bob"
+    },
+    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
+  });
+  page.rows.memberReceipts.push({
+    attrs: { "data-recipient-name": "Bob", receiptStatus: "delivered" },
+    dataset: { recipientName: "Bob" }
+  });
+  const request = new FakeRequestContext();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.projectionPollIntervalMs = 0;
+  world.projectionTimeoutMs = 1000;
+  world.request = request;
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
+
+  assert.equal(projectionPollIntervalMs(world), 0);
+
+  await reportRecipientEmailStatus(world, "Bob", "Trip planning night", "delivered", {
+    expect: flakyReceiptTextExpect(expectations, 2)
+  });
+
+  const receiptTextAssertions = expectations.filter(
+    (expectation) =>
+      expectation[0] === "text" && expectation[1].includes('data-testid="receipt-status"')
+  );
+
+  assert.equal(request.posts.length, 1);
+  assert.equal(receiptTextAssertions.length, 3);
+  assert.ok(
+    receiptTextAssertions.every((expectation) => expectation[3].timeout > 0 && expectation[3].timeout <= 1000)
+  );
 });
 
 test("Postmark webhook submission failures report the endpoint and response details", async () => {

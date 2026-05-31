@@ -6,7 +6,7 @@
 - [x] 004 Implement homepage browser steps against the real homepage route.
 - [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
 - [x] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
-- [ ] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
+- [x] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
 - [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.
 - [ ] 009 Verify that `operator_email_deliverability.feature` is excluded only from the browser run and remains covered by the domain runner.
 - [ ] 010 Run `npm test` in `acceptance-tests/` and `dev check`, fixing harness/step issues until both pass.
