@@ -100,6 +100,7 @@ in
     tailwindcss_4
     fontconfig
     esbuild
+    flyctl
   ];
 
   languages.elixir.enable = true;
@@ -165,6 +166,7 @@ in
     tailwindcss_4
     fontconfig
     esbuild
+    flyctl
               which
               (hiPrio fabroDevenv)
               (hiPrio fabroGit)

@@ -93,6 +93,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [
              %DeliveryRequest{
                message_id: ^message_id,
+               club_id: ^kootenay_club_id,
                delivery_id: alice_delivery_id,
                recipient_id: ^alice_id,
                recipient_name: "Alice",
@@ -103,6 +104,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              },
              %DeliveryRequest{
                message_id: ^message_id,
+               club_id: ^kootenay_club_id,
                delivery_id: bob_delivery_id,
                recipient_id: ^bob_id,
                recipient_name: "Bob",
@@ -113,6 +115,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
              },
              %DeliveryRequest{
                message_id: ^message_id,
+               club_id: ^kootenay_club_id,
                delivery_id: carol_delivery_id,
                recipient_id: ^carol_id,
                recipient_name: "Carol",

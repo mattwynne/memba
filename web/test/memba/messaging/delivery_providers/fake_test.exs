@@ -23,6 +23,7 @@ defmodule Memba.Messaging.DeliveryProviders.FakeTest do
   defp delivery_request(name) do
     %DeliveryRequest{
       message_id: Ecto.UUID.generate(),
+      club_id: Ecto.UUID.generate(),
       delivery_id: Ecto.UUID.generate(),
       recipient_id: Ecto.UUID.generate(),
       recipient_name: name,

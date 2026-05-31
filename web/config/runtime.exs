@@ -22,6 +22,42 @@ end
 
 config :memba, MembaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
+postmark_server_token = System.get_env("POSTMARK_SERVER_TOKEN")
+
+delivery_provider =
+  System.get_env("MEMBA_DELIVERY_PROVIDER") ||
+    if(config_env() == :prod, do: "postmark", else: "fake")
+
+case delivery_provider do
+  "postmark" ->
+    if is_nil(postmark_server_token) or postmark_server_token == "" do
+      raise "POSTMARK_SERVER_TOKEN is required when MEMBA_DELIVERY_PROVIDER=postmark"
+    end
+
+    config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Postmark
+
+    config :memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Postmark,
+      api_key: postmark_server_token
+
+    config :memba, Memba.Messaging.DeliveryProviders.Postmark,
+      from:
+        {System.get_env("MEMBA_EMAIL_FROM_NAME") || "Memba",
+         System.get_env("MEMBA_EMAIL_FROM_ADDRESS") || "messages@mail.memba.io"},
+      reply_to:
+        {System.get_env("MEMBA_EMAIL_REPLY_TO_NAME") || "Matt Wynne",
+         System.get_env("MEMBA_EMAIL_REPLY_TO_ADDRESS") || "matt@mattwynne.net"},
+      message_stream: System.get_env("POSTMARK_MESSAGE_STREAM") || "outbound-member-broadcasts",
+      track_opens: System.get_env("POSTMARK_TRACK_OPENS", "true") in ~w(true 1 yes),
+      track_links: System.get_env("POSTMARK_TRACK_LINKS") || "None"
+
+  "fake" ->
+    :ok
+
+  other ->
+    raise "Unsupported MEMBA_DELIVERY_PROVIDER=#{inspect(other)}; expected fake or postmark"
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
