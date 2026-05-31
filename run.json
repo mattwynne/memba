@@ -1118,7 +1118,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-31T05:28:10.879394931Z",
-  "last_event_at": "2026-05-31T05:36:04.532261225Z",
+  "last_event_at": "2026-05-31T05:36:07.706121611Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1529,9 +1529,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 96,
       "checkpoint": {
-        "timestamp": "2026-05-31T05:36:04.594254469Z",
+        "timestamp": "2026-05-31T05:36:07.620833092Z",
         "current_node": "review_fork",
         "completed_nodes": [
           "start",
@@ -1543,12 +1543,161 @@
         ],
         "node_retries": {},
         "context_values": {
+          "outcome": "succeeded",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "575da6b3a6728ba0e5ce51b407fe8187a8d03152"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "6f9d12fcea6e5f589576cf0c85f9b34127177d44"
+            },
+            {
+              "id": "gemini_review",
+              "status": "succeeded",
+              "head_sha": "93d6cefe888d934cfa409a974fc0ae89febb6079"
+            }
+          ],
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.start.current_node": "read_plan",
+          "failure_signature": "",
+          "parallel.branch_count": 3,
+          "current_node": "review_fork",
+          "internal.retry_count.review_fork": 0,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.start": 0,
+          "command.output": "blob://sha256/6d10b36a458aa76a097404c8e9665e26a2d14e0ab4aac09c079d310f4b7b9ba4",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.dev_check": 0,
+          "graph.max_node_visits": "160",
+          "failure_class": "",
+          "internal.fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.run_id": "01KSY7ZSD15X0ZS9PWQ0H74VKY",
+          "internal.thread_id": "collect_implementation_evidence",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "graph.default_fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba"
+        },
+        "node_outcomes": {
+          "review_fork": {
+            "status": "succeeded",
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6d10b36a458aa76a097404c8e9665e26a2d14e0ab4aac09c079d310f4b7b9ba4"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='afb4188dcc5ddfe88d0753add1ec35c8738231d4'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 176,
+              "active_time_ms": 176
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4b3a3640f11672a3adf6090f26a119ba0555a11f6273467aa7efc976915f1d52"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168235,
+              "active_time_ms": 168235
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c3145b9e204d24e9aa78d81d9125cf672c67383d60ad58ead1ca3266959904a5"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 48740,
+              "active_time_ms": 48740
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5a9b66462205801d8fa745f0d1eb328a0076e3c8492baf47cab6aef013f119af"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 320,
+              "active_time_ms": 320
+            }
+          }
+        },
+        "next_node_id": "review_merge",
+        "git_commit_sha": "64cd651af07ae84c0f544b91c67babbcc79d67bc",
+        "node_visits": {
+          "dev_check": 1,
+          "start": 1,
+          "collect_implementation_evidence": 1,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "review_fork": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-31T05:36:07.723471233Z",
+        "current_node": "review_merge",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge"
+        ],
+        "node_retries": {},
+        "context_values": {
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "thread.preflight_sandbox.current_node": "dev_check",
           "graph.rankdir": "LR",
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.dev_check": 0,
           "thread.dev_check.current_node": "collect_implementation_evidence",
+          "parallel.fan_in.best_head_sha": "575da6b3a6728ba0e5ce51b407fe8187a8d03152",
           "thread.collect_implementation_evidence.current_node": "review_fork",
           "thread.read_plan.current_node": "preflight_sandbox",
           "internal.node_visit_count": 1,
@@ -1578,9 +1727,13 @@
           ],
           "internal.retry_count.read_plan": 0,
           "failure_signature": "",
+          "parallel.fan_in.best_id": "claude_review",
           "internal.retry_count.preflight_sandbox": 0,
-          "internal.thread_id": "collect_implementation_evidence",
-          "current_node": "review_fork",
+          "thread.review_fork.current_node": "review_merge",
+          "parallel.fan_in.best_outcome": "succeeded",
+          "internal.thread_id": "review_fork",
+          "current_node": "review_merge",
+          "internal.retry_count.review_merge": 0,
           "internal.retry_count.collect_implementation_evidence": 0,
           "command.output": "blob://sha256/6d10b36a458aa76a097404c8e9665e26a2d14e0ab4aac09c079d310f4b7b9ba4",
           "graph.max_node_visits": "160",
@@ -1603,6 +1756,24 @@
               "active_time_ms": 176
             }
           },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4b3a3640f11672a3adf6090f26a119ba0555a11f6273467aa7efc976915f1d52"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168235,
+              "active_time_ms": 168235
+            }
+          },
           "read_plan": {
             "status": "succeeded",
             "context_updates": {
@@ -1616,10 +1787,6 @@
               "tool_time_ms": 320,
               "active_time_ms": 320
             }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
           },
           "dev_check": {
             "status": "succeeded",
@@ -1641,29 +1808,32 @@
             "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
             "usage": null
           },
-          "preflight_sandbox": {
+          "review_merge": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/4b3a3640f11672a3adf6090f26a119ba0555a11f6273467aa7efc976915f1d52"
+              "parallel.fan_in.best_head_sha": "575da6b3a6728ba0e5ce51b407fe8187a8d03152",
+              "parallel.fan_in.best_id": "claude_review",
+              "parallel.fan_in.best_outcome": "succeeded"
             },
-            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "notes": "Selected best candidate: claude_review",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 168235,
-              "active_time_ms": 168235
+              "tool_time_ms": 0,
+              "active_time_ms": 0
             }
           }
         },
-        "next_node_id": "review_merge",
+        "next_node_id": "synthesize_review",
         "node_visits": {
           "review_fork": 1,
           "read_plan": 1,
           "start": 1,
           "preflight_sandbox": 1,
           "collect_implementation_evidence": 1,
-          "dev_check": 1
+          "dev_check": 1,
+          "review_merge": 1
         }
       },
       "diff": {}
@@ -1693,7 +1863,12 @@
       "first_event_seq": 65,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+        "failure_reason": null,
+        "timestamp": "2026-05-31T05:36:04.593779252Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1703,10 +1878,32 @@
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
-      "parallel_results": null,
+      "parallel_results": [
+        {
+          "id": "claude_review",
+          "status": "succeeded",
+          "head_sha": "575da6b3a6728ba0e5ce51b407fe8187a8d03152"
+        },
+        {
+          "id": "codex_review",
+          "status": "succeeded",
+          "head_sha": "6f9d12fcea6e5f589576cf0c85f9b34127177d44"
+        },
+        {
+          "id": "gemini_review",
+          "status": "succeeded",
+          "head_sha": "93d6cefe888d934cfa409a974fc0ae89febb6079"
+        }
+      ],
       "output": null,
       "started_at": "2026-05-31T05:32:02.491479091Z",
       "handler": "parallel",
+      "timing": {
+        "wall_time_ms": 242102,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
       "usage": {
         "input_tokens": 5693,
         "output_tokens": 12919,
@@ -1720,7 +1917,41 @@
         "provider": "anthropic",
         "model_id": "claude-sonnet-4-5"
       },
-      "state": "running"
+      "state": "succeeded"
+    },
+    "review_merge@1": {
+      "first_event_seq": 99,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Selected best candidate: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-05-31T05:36:07.706121611Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-31T05:36:07.640089977Z",
+      "handler": "parallel.fan_in",
+      "timing": {
+        "wall_time_ms": 66,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
     },
     "collect_implementation_evidence@1": {
       "first_event_seq": 55,
