@@ -34,7 +34,9 @@ devenv container run fabro-dev
 
 Fabro expects common tools such as `git` to be available on `PATH` inside the generated container. The default `devenv` container root supplies a `/bin` with shell/coreutils, but packages in the top-level `packages` list are not automatically linked into `/bin`.
 
-In this project, we make Git available to Fabro by adding an explicit container layer. `/bin/git` in the Fabro image is a wrapper that adds two sandbox-init accommodations before delegating to the real Git binary:
+In this project, we make bare-shell workflow tools available to Fabro by adding an explicit container layer. This includes `python3`, which iteration finalization scripts invoke directly, outside `bin/dev`'s `devenv shell` boundary.
+
+`/bin/git` in the Fabro image is a wrapper that adds two sandbox-init accommodations before delegating to the real Git binary:
 
 - it adds `--quiet` to `git clone`, because Fabro currently treats any stderr from the pre-shell clone step as a clone failure, while ordinary `git clone` writes `Cloning into ...` to stderr even when it succeeds;
 - it strips embedded credentials from GitHub HTTPS clone URLs, allowing public repository clones to succeed even if Fabro's GitHub App token path is unavailable or misconfigured.
@@ -120,7 +122,7 @@ A subtle trap: putting the same `pkgs.buildEnv` directly in `containers."fabro-d
 After rebuilding/loading the image on Fabro, verify with:
 
 ```sh
-docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
+docker run --rm --entrypoint /bin/sh mattwynne/memba-fabro-dev:latest -lc 'command -v git && git --version && command -v python3 && python3 --version && test -r "$SSL_CERT_FILE" && mkdir -p /repos/test /workspace/test'
 ```
 
 Expected shape:
@@ -128,4 +130,6 @@ Expected shape:
 ```sh
 /bin/git
 git version ...
+/bin/python3
+Python ...
 ```

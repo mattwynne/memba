@@ -97,6 +97,7 @@ in
     devenv
     git
     nodejs_22
+    python3
     tailwindcss_4
     fontconfig
     esbuild
@@ -163,10 +164,11 @@ in
               gnugrep
               gnused
               nodejs_22
-    tailwindcss_4
-    fontconfig
-    esbuild
-    flyctl
+              python3
+              tailwindcss_4
+              fontconfig
+              esbuild
+              flyctl
               which
               (hiPrio fabroDevenv)
               (hiPrio fabroGit)
