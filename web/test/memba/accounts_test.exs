@@ -1,0 +1,160 @@
+defmodule Memba.AccountsTest do
+  use Memba.EventSourcedCase, async: false
+
+  alias Memba.Accounts
+  alias Memba.Accounts.MagicToken
+  alias Memba.Membership
+  alias Memba.Repo
+
+  describe "email identity helpers" do
+    test "normalizes email addresses for authentication lookups" do
+      assert Accounts.normalize_email(" Alice@Example.COM ") == "alice@example.com"
+      assert Accounts.normalize_email("\nPAT@MEMBA.IO\t") == "pat@memba.io"
+      assert Accounts.normalize_email("   ") == nil
+      assert Accounts.normalize_email(nil) == nil
+    end
+
+    test "identifies staff by exact memba.io email domain" do
+      assert Accounts.staff_email?(" Pat@Memba.IO ")
+
+      refute Accounts.staff_email?("pat@example.com")
+      refute Accounts.staff_email?("pat@staff.memba.io")
+      refute Accounts.staff_email?("@memba.io")
+      refute Accounts.staff_email?(nil)
+    end
+  end
+
+  describe "request_magic_link/2" do
+    test "creates a single-use expiring hashed token for staff email addresses" do
+      now = ~U[2026-05-31 12:00:00.000000Z]
+
+      assert {:ok, %{email: "pat@memba.io", token: token, expires_at: expires_at}} =
+               Accounts.request_magic_link(" Pat@Memba.IO ", now: now)
+
+      assert is_binary(token)
+      assert byte_size(token) >= 32
+      assert expires_at == DateTime.add(now, 15 * 60, :second)
+
+      assert %MagicToken{
+               email: "pat@memba.io",
+               token_hash: token_hash,
+               expires_at: ^expires_at,
+               consumed_at: nil
+             } = Repo.one(MagicToken)
+
+      assert token_hash == Accounts.hash_magic_token(token)
+      refute token_hash == token
+    end
+
+    test "creates tokens for active member emails and no token for unknown emails" do
+      now = ~U[2026-05-31 12:00:00.000000Z]
+      create_active_member(club_name: "Kootenay Mountaineering Club", email: "alice@example.com")
+
+      assert {:ok, %{email: "alice@example.com"}} =
+               Accounts.request_magic_link(" ALICE@EXAMPLE.COM ", now: now)
+
+      assert {:ok, nil} = Accounts.request_magic_link("unknown@example.com", now: now)
+
+      assert ["alice@example.com"] =
+               MagicToken
+               |> select([magic_token], magic_token.email)
+               |> Repo.all()
+    end
+  end
+
+  describe "consume_magic_token/2" do
+    test "consumes a valid token once and stores the consumption timestamp" do
+      requested_at = ~U[2026-05-31 12:00:00.000000Z]
+      consumed_at = ~U[2026-05-31 12:05:00.000000Z]
+
+      assert {:ok, %{token: token}} =
+               Accounts.request_magic_link("pat@memba.io", now: requested_at)
+
+      assert {:ok, %{email: "pat@memba.io"}} =
+               Accounts.consume_magic_token(token, now: consumed_at)
+
+      assert %MagicToken{consumed_at: ^consumed_at} = Repo.one(MagicToken)
+      assert {:error, :consumed} = Accounts.consume_magic_token(token, now: consumed_at)
+    end
+
+    test "rejects unknown and expired tokens without consuming rows" do
+      requested_at = ~U[2026-05-31 12:00:00.000000Z]
+      expired_at = ~U[2026-05-31 12:16:00.000000Z]
+
+      assert {:error, :not_found} = Accounts.consume_magic_token("unknown", now: requested_at)
+
+      assert {:ok, %{token: token}} =
+               Accounts.request_magic_link("pat@memba.io", now: requested_at)
+
+      assert {:error, :expired} = Accounts.consume_magic_token(token, now: expired_at)
+      assert %MagicToken{consumed_at: nil} = Repo.one(MagicToken)
+    end
+  end
+
+  describe "membership-backed identity helpers" do
+    test "lists active clubs for a normalized email address" do
+      kootenay =
+        create_active_member(
+          club_name: "Kootenay Mountaineering Club",
+          email: "alice@example.com"
+        )
+
+      nelson = create_active_member(club_name: "Nelson Cycling Club", email: "Alice@Example.COM")
+      _other = create_active_member(club_name: "Other Club", email: "other@example.com")
+
+      assert [
+               %{club_id: kootenay_id, name: "Kootenay Mountaineering Club"},
+               %{club_id: nelson_id, name: "Nelson Cycling Club"}
+             ] = Accounts.list_active_clubs_for_email(" ALICE@EXAMPLE.COM ")
+
+      assert kootenay_id == kootenay.club_id
+      assert nelson_id == nelson.club_id
+      assert Accounts.list_active_clubs_for_email("unknown@example.com") == []
+      assert Accounts.list_active_clubs_for_email(nil) == []
+    end
+
+    test "checks active club membership by club id and email address" do
+      club =
+        create_active_member(
+          club_name: "Kootenay Mountaineering Club",
+          email: "alice@example.com"
+        )
+
+      assert Accounts.active_member_of_club?(club.club_id, " ALICE@EXAMPLE.COM ")
+
+      refute Accounts.active_member_of_club?(club.club_id, "other@example.com")
+      refute Accounts.active_member_of_club?(Ecto.UUID.generate(), "alice@example.com")
+      refute Accounts.active_member_of_club?("not-a-uuid", "alice@example.com")
+      refute Accounts.active_member_of_club?(club.club_id, nil)
+    end
+  end
+
+  defp create_active_member(attrs) do
+    club_id = Ecto.UUID.generate()
+    person_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: Keyword.fetch!(attrs, :club_name)},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: "Test Member",
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{membership_id: Ecto.UUID.generate(), club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
+
+    %{club_id: club_id, person_id: person_id}
+  end
+end
