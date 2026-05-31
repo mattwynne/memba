@@ -24,8 +24,8 @@ Use the prior context from this workflow run:
 - If ADR rework has already been attempted and the violation remains, route to HUMAN_INPUT.
 - If a plan/ADR conflict exists, route to HUMAN_INPUT.
 - Treat automated tests/dev check as the behavioural feedback loop. Review-stage automatic fixes should be refactoring/maintainability/convention fixes after the suite is green, not new feature work.
-- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, ADR-coherence, or low-risk test-quality issues that an agent can resolve without changing product behaviour or feature files.
-- Do not request edits to acceptance feature files (`*.feature`). If reviewers believe feature files or acceptance criteria are wrong, route to human input.
+- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, ADR-coherence, or low-risk test-quality issues that an agent can resolve without changing product behaviour or feature files beyond explicit plan permission.
+- Do not request edits to acceptance feature files (`*.feature`) unless the plan's `## Allowed acceptance feature changes` section names the exact file and allowed kind of change. If reviewers believe other feature files or acceptance criteria are wrong, route to human input.
 - Require human input for unresolved business decisions, ambiguous acceptance criteria, behavioural gaps, missing acceptance coverage that cannot be fixed safely as a test-only improvement, architectural choices outside the plan, or repeated/large failures.
 
 ## Explicit plan requirements
@@ -88,7 +88,7 @@ Concrete, bounded instructions for automatic fixes. Include:
 
 - Issue list with stable IDs.
 - Required changes (files, modules, tests, conventions).
-- Constraints (no feature files, no new behaviour, refactoring only).
+- Constraints (no feature files beyond explicit plan permission, no new behaviour, refactoring only).
 - Acceptance test for each fix.
 
 ### Manual follow-ups (if any)

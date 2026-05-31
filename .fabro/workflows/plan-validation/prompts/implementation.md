@@ -12,6 +12,7 @@ Check:
 4. Are testing and validation steps included at the right level?
 5. Are any technical decisions still unresolved or hidden behind vague wording?
 6. Does the plan respect this repository's known conventions where applicable?
+7. If implementation requires edits to shared acceptance `.feature` files, does the plan explicitly permit them in a `## Allowed acceptance feature changes` section naming each exact file and allowed kind of change? Feature files are otherwise locked.
 
 Return a concise Markdown report with:
 

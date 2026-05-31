@@ -11,6 +11,7 @@ Check:
 3. Can a reviewer use them to decide objectively whether the work is done?
 4. Are user-visible behaviours specified precisely enough?
 5. Are any product, policy, copy, workflow, or domain decisions still unresolved?
+6. If the plan expects edits to shared acceptance `.feature` files, does it include a `## Allowed acceptance feature changes` section naming each exact file, the allowed kind of change, the reason, and how coverage is preserved or intentionally changed? Feature files are locked unless this explicit permission exists.
 
 Return a concise Markdown report with:
 

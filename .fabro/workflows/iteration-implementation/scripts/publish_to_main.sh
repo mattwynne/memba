@@ -26,11 +26,7 @@ if [ -z "$changed_paths" ] && [ -z "$status" ]; then
   exit 1
 fi
 
-if printf '%s\n' "$changed_paths" | grep -E '\.feature$'; then
-  echo 'Refusing to publish implementation: locked acceptance feature files changed.' >&2
-  printf '%s\n' "$changed_paths" | grep -E '\.feature$' >&2
-  exit 1
-fi
+python3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py "$PLAN_PATH" "$base_sha"
 
 iteration_dir=${PLAN_PATH%/plan.md}
 iteration_slug=$(basename "$iteration_dir")

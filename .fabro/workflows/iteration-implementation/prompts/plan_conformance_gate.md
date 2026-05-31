@@ -28,7 +28,7 @@ Acceptance rules:
 - Never downgrade explicit plan requirements to optional implementation strategy unless routing to HUMAN_INPUT with a clear question about scope reduction.
 - If the same plan gap appears to have recurred after plan rework, prefer HUMAN_INPUT over repeated repair loops.
 - If a requirement is blocked, ambiguous, contradictory, or needs a product/architecture decision, route to HUMAN_INPUT.
-- Treat locked acceptance feature files as immutable inputs; any repair requiring feature-file changes needs HUMAN_INPUT.
+- Treat acceptance feature files as locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. Any implementation feature-file edit must stay within that explicit permission and preserve/validate the coverage promised by the plan; any other repair requiring feature-file changes needs HUMAN_INPUT.
 
 Report format:
 

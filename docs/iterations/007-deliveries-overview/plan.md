@@ -61,6 +61,10 @@ Relevant context:
 
 None known.
 
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/operator_email_deliverability.feature`: update the operator scenarios from message-scoped operator-view language to deliveries-overview language, and remove `@todo-web` tags when the browser acceptance path supports them. Coverage is preserved because the browser acceptance suite must now run and pass these scenarios, and the Elixir/domain acceptance path used by `dev check` still runs the shared scenarios.
+
 ## Implementation Plan
 
 1. Update the operator feature language around the rule "Operators monitor detailed delivery records across messages", keeping scenarios BRIEF and focused on cross-message visibility, reason preservation, and opened status.
