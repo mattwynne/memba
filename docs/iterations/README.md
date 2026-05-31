@@ -16,6 +16,7 @@ green than before.
 | 006 | 2026-05-30 | merged | Browser Cucumber automation for member-facing acceptance | [plan](006-browser-cucumber-automation/plan.md) |
 | 007 | 2026-05-29 | merged | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |
 | 008 | 2026-05-30 | implementing | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |
+| 009 | 2026-05-31 | ready | Routing and LiveView surface split | [plan](009-routing-and-liveview-surface-split/plan.md) |
 
 Status notes:
 
