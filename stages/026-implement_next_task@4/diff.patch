@@ -1,0 +1,147 @@
+diff --git a/acceptance-tests/features/step_definitions/homepage_steps.js b/acceptance-tests/features/step_definitions/homepage_steps.js
+index 4fbf919..b6bea27 100644
+--- a/acceptance-tests/features/step_definitions/homepage_steps.js
++++ b/acceptance-tests/features/step_definitions/homepage_steps.js
+@@ -1,10 +1,13 @@
+ const { When, Then } = require("@cucumber/cucumber");
+-const { expect } = require("@playwright/test");
++const {
++  assertMembaHomepage,
++  visitHomepage
++} = require("../support/homepage");
+ 
+ When("I visit the homepage", async function () {
+-  await this.page.goto(this.baseUrl);
++  await visitHomepage(this);
+ });
+ 
+ Then("I should see the Memba homepage", async function () {
+-  await expect(this.page).toHaveTitle(/Memba/);
++  await assertMembaHomepage(this);
+ });
+diff --git a/acceptance-tests/features/support/homepage.js b/acceptance-tests/features/support/homepage.js
+new file mode 100644
+index 0000000..34ae540
+--- /dev/null
++++ b/acceptance-tests/features/support/homepage.js
+@@ -0,0 +1,33 @@
++const { expect: playwrightExpect } = require("@playwright/test");
++
++function escapeRegExp(value) {
++  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++}
++
++function homepageUrl(baseUrl) {
++  return new URL("/", `${baseUrl}/`).toString();
++}
++
++function homepageUrlPattern(baseUrl) {
++  const withoutTrailingSlash = homepageUrl(baseUrl).replace(/\/$/, "");
++
++  return new RegExp(`^${escapeRegExp(withoutTrailingSlash)}/?$`);
++}
++
++async function visitHomepage({ baseUrl, page }) {
++  await page.goto(homepageUrl(baseUrl));
++}
++
++async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpect } = {}) {
++  await expect(page).toHaveURL(homepageUrlPattern(baseUrl));
++  await expect(page).toHaveTitle(/Memba/);
++  await expect(page.getByRole("heading", { name: "Phoenix Framework" })).toBeVisible();
++  await expect(page.getByRole("link", { name: "Guides & Docs" })).toBeVisible();
++}
++
++module.exports = {
++  assertMembaHomepage,
++  homepageUrl,
++  homepageUrlPattern,
++  visitHomepage
++};
+diff --git a/acceptance-tests/test/homepage_steps.test.js b/acceptance-tests/test/homepage_steps.test.js
+new file mode 100644
+index 0000000..9ccfac6
+--- /dev/null
++++ b/acceptance-tests/test/homepage_steps.test.js
+@@ -0,0 +1,68 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const {
++  assertMembaHomepage,
++  homepageUrl,
++  visitHomepage
++} = require("../features/support/homepage");
++
++test("homepage URL points at the real root route", () => {
++  assert.equal(homepageUrl("http://127.0.0.1:4444"), "http://127.0.0.1:4444/");
++  assert.equal(homepageUrl("http://127.0.0.1:4444/"), "http://127.0.0.1:4444/");
++});
++
++test("homepage visit step drives the browser to the real homepage route", async () => {
++  const visited = [];
++  const world = {
++    baseUrl: "http://127.0.0.1:4444",
++    page: {
++      async goto(url) {
++        visited.push(url);
++      }
++    }
++  };
++
++  await visitHomepage(world);
++
++  assert.deepEqual(visited, ["http://127.0.0.1:4444/"]);
++});
++
++test("homepage assertion step checks browser-visible homepage content", async () => {
++  const expectations = [];
++  const page = {
++    getByRole(role, options) {
++      return { role, options };
++    }
++  };
++  const expect = (target) => ({
++    async toHaveURL(expected) {
++      expectations.push({ target, matcher: "toHaveURL", expected });
++    },
++    async toHaveTitle(expected) {
++      expectations.push({ target, matcher: "toHaveTitle", expected });
++    },
++    async toBeVisible() {
++      expectations.push({ target, matcher: "toBeVisible" });
++    }
++  });
++
++  await assertMembaHomepage({ baseUrl: "http://127.0.0.1:4444", page }, { expect });
++
++  assert.equal(expectations[0].matcher, "toHaveURL");
++  assert.ok(expectations[0].expected.test("http://127.0.0.1:4444/"));
++  assert.equal(expectations[0].expected.test("http://127.0.0.1:4444/clubs"), false);
++
++  assert.equal(expectations[1].matcher, "toHaveTitle");
++  assert.match("Memba · Phoenix Framework", expectations[1].expected);
++
++  assert.deepEqual(
++    expectations
++      .filter((expectation) => expectation.matcher === "toBeVisible")
++      .map((expectation) => expectation.target),
++    [
++      { role: "heading", options: { name: "Phoenix Framework" } },
++      { role: "link", options: { name: "Guides & Docs" } }
++    ]
++  );
++});
+diff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md
+index 4be1f56..43f55f2 100644
+--- a/docs/iterations/006-browser-cucumber-automation/todo.md
++++ b/docs/iterations/006-browser-cucumber-automation/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.
+ - [x] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
+ - [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
+-- [ ] 004 Implement homepage browser steps against the real homepage route.
++- [x] 004 Implement homepage browser steps against the real homepage route.
+ - [ ] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
+ - [ ] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
+ - [ ] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
