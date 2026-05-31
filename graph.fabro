@@ -1,0 +1,222 @@
+digraph IterationReview {
+    graph [
+        goal="Review the completed plan-conforming implementation of {{ inputs.plan_path }} for code polish, ADR conformance, and code-health signals",
+        default_fidelity="summary:high",
+        max_node_visits=160,
+        model_stylesheet="
+            * { model: gpt-5.5; reasoning_effort: high; }
+            #read_plan { reasoning_effort: low; }
+            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }
+            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }
+            #codex_review { model: gpt-5.5; reasoning_effort: high; }
+            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }
+            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }
+            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }
+            #record_code_health { model: gpt-5.5; reasoning_effort: high; }
+            #final_summary { reasoning_effort: low; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    read_plan [
+        label="Read Iteration Plan",
+        shape=parallelogram,
+        script="PLAN_PATH='{{ inputs.plan_path }}'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\""
+    ]
+
+    read_failed [
+        label="Fail: Plan Missing",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
+    ]
+
+    preflight_sandbox [
+        label="Preflight Review Sandbox",
+        shape=parallelogram,
+        script="set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        timeout="600s"
+    ]
+
+    preflight_failed [
+        label="Fail: Sandbox Preflight",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review failed before review: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
+    ]
+
+    dev_check [
+        label="Run Dev Check",
+        shape=parallelogram,
+        script="PATH=\"$PWD/bin:$PATH\" dev ci",
+        timeout="1800s"
+    ]
+
+    fix_dev_check [
+        label="Fix Dev Check Failures",
+        prompt="@prompts/fix_dev_check.md",
+        timeout="2400s",
+        max_visits=3
+    ]
+
+    collect_implementation_evidence [
+        label="Collect Implementation Evidence",
+        shape=parallelogram,
+        script="set -eu\nbase_sha='{{ inputs.base_sha }}'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+        timeout="120s"
+    ]
+
+    collect_evidence_failed [
+        label="Fail: Evidence Collection",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review failed before gates: implementation evidence could not be collected. Check base_sha visibility, then retry via bin/dev fabro review.' >&2\nexit 1"
+    ]
+
+    review_fork [label="Independent Implementation Reviews", shape=component, join_policy="wait_all", max_parallel=3]
+    claude_review [
+        label="Claude Review",
+        shape=tab,
+        prompt="@prompts/review.md"
+    ]
+    codex_review [
+        label="Codex/GPT Review",
+        shape=tab,
+        prompt="@prompts/review.md"
+    ]
+    gemini_review [
+        label="Gemini Review",
+        shape=tab,
+        prompt="@prompts/review.md"
+    ]
+    review_merge [label="Merge Reviews", shape=tripleoctagon]
+    synthesize_review [
+        label="Synthesize Review",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/synthesize_review.md"
+    ]
+    review_gate [shape=diamond, label="Implementation accepted?"]
+    snapshot_before_review_repair [
+        label="Snapshot Before Review Repair",
+        shape=parallelogram,
+        script="set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\""
+    ]
+    apply_review_fixes [
+        label="Apply Review Fixes",
+        prompt="@prompts/apply_review_fixes.md",
+        timeout="2400s",
+        max_visits=3
+    ]
+    verify_review_repair [
+        label="Verify Review Repair",
+        shape=parallelogram,
+        script="set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+    ]
+    not_ready [
+        label="Fail: Needs Human Review",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review failed: reviewers found blocking issues that require human input or exceeded the automatic repair budget.' >&2\nexit 1"
+    ]
+
+    record_code_health [
+        label="Record Code Health Findings",
+        shape=tab,
+        prompt="@prompts/record_code_health.md"
+    ]
+
+    final_artifact_gate [
+        label="Final Artifact Gate",
+        shape=parallelogram,
+        script="bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh '{{ inputs.plan_path }}' '{{ inputs.base_sha }}'"
+    ]
+
+    publish_polish_to_main [
+        label="Publish Review Polish to Main",
+        shape=parallelogram,
+        script="bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh '{{ inputs.plan_path }}'",
+        timeout="300s"
+    ]
+
+    final_artifact_failed [
+        label="Fail: Final Artifact Gate",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review accepted the implementation, but final artifact policy failed. Check feature-file plan permissions and review-polish diffs, then rerun review.' >&2\nexit 1"
+    ]
+
+    publish_failed [
+        label="Fail: Publish Review Polish",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review accepted the implementation, but could not publish green review polish to main. Check push credentials, branch protection, and whether origin/main moved with conflicts.' >&2\nexit 1"
+    ]
+
+    finalize_iteration_status [
+        label="Finalize Iteration Status",
+        shape=parallelogram,
+        script="bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh '{{ inputs.plan_path }}'",
+        timeout="300s"
+    ]
+
+    finalize_failed [
+        label="Fail: Finalize Iteration Status",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.' >&2\nexit 1"
+    ]
+
+    final_summary [
+        label="Final Summary",
+        shape=tab,
+        prompt="@prompts/final_summary.md"
+    ]
+
+    start -> read_plan
+    read_plan -> preflight_sandbox [condition="outcome=succeeded"]
+    read_plan -> read_failed
+    read_failed -> exit
+
+    preflight_sandbox -> dev_check [condition="outcome=succeeded"]
+    preflight_sandbox -> preflight_failed
+    preflight_failed -> exit
+
+    dev_check -> collect_implementation_evidence [label="Dev check passed", condition="outcome=succeeded"]
+    dev_check -> fix_dev_check [label="Fix failures"]
+    fix_dev_check -> dev_check
+    collect_implementation_evidence -> review_fork [condition="outcome=succeeded"]
+    collect_implementation_evidence -> collect_evidence_failed
+    collect_evidence_failed -> exit
+
+    review_fork -> claude_review
+    review_fork -> codex_review
+    review_fork -> gemini_review
+    claude_review -> review_merge
+    codex_review -> review_merge
+    gemini_review -> review_merge
+    review_merge -> synthesize_review
+    synthesize_review -> review_gate
+    review_gate -> record_code_health [label="Accepted", condition="context.implementation_accepted=true"]
+    review_gate -> snapshot_before_review_repair [label="Fix", condition="context.review_fixes_available=true"]
+    review_gate -> not_ready [label="Needs human input"]
+    snapshot_before_review_repair -> apply_review_fixes
+    apply_review_fixes -> verify_review_repair
+    verify_review_repair -> dev_check
+
+    record_code_health -> final_artifact_gate
+    final_artifact_gate -> publish_polish_to_main [condition="outcome=succeeded"]
+    final_artifact_gate -> final_artifact_failed
+    final_artifact_failed -> exit
+    publish_polish_to_main -> finalize_iteration_status [condition="outcome=succeeded"]
+    publish_polish_to_main -> publish_failed
+    publish_failed -> exit
+    finalize_iteration_status -> final_summary [condition="outcome=succeeded"]
+    finalize_iteration_status -> finalize_failed
+    finalize_failed -> exit
+    final_summary -> exit
+    not_ready -> exit
+}
