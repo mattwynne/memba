@@ -232,6 +232,26 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  List operator-facing delivery records for the deliveries overview.
+
+  Results include message subject and event timestamp fields populated from the
+  messaging projections and are ordered newest event first. Pass
+  `message_id: message_id` to narrow the overview to one projected message.
+  Invalid options return an empty list.
+  """
+  def list_operator_deliveries(opts \\ []) do
+    if is_list(opts) do
+      with {:ok, query} <- operator_deliveries_query(opts) do
+        Repo.all(query)
+      else
+        :error -> []
+      end
+    else
+      []
+    end
+  end
+
+  @doc """
   List operator deliverability records for a projected message.
 
   Invalid or missing message IDs return an empty list. Results are ordered by
@@ -249,6 +269,31 @@ defmodule Memba.Messaging do
       |> Repo.all()
     else
       :error -> []
+    end
+  end
+
+  defp operator_deliveries_query(opts) do
+    query =
+      from deliverability in OperatorDeliverabilityProjection,
+        join: message in MessageProjection,
+        on: message.message_id == deliverability.message_id,
+        order_by: [desc: deliverability.updated_at, desc: deliverability.delivery_id],
+        select_merge: %{
+          message_subject: message.subject,
+          event_at: deliverability.updated_at
+        }
+
+    case Keyword.fetch(opts, :message_id) do
+      {:ok, message_id} ->
+        with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+          {:ok,
+           where(query, [deliverability, _message], deliverability.message_id == ^message_id)}
+        else
+          :error -> :error
+        end
+
+      :error ->
+        {:ok, query}
     end
   end
 
