@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Update `web/lib/memba_web/router.ex`:
+- [x] 001 Update `web/lib/memba_web/router.ex`:
 - [ ] 002 Move or rename existing LiveView modules into an admin namespace:
 - [ ] 003 Update all internal verified routes and links:
 - [ ] 004 Add or adjust layout functions in `MembaWeb.Layouts`:

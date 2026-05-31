@@ -29,7 +29,7 @@ defmodule MembaWeb.MessagesLive.Show do
           <section class="space-y-2">
             <.link
               id="back-to-club-link"
-              navigate={~p"/clubs/#{@message.club_id}"}
+              navigate={~p"/admin/clubs/#{@message.club_id}"}
               aria-label="Back to club"
               class="text-sm font-medium text-blue-700 hover:text-blue-900"
             >
