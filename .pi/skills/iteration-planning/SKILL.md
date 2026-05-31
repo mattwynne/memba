@@ -20,8 +20,8 @@ Create a task for each item and complete them in order:
 1. **Explore project context** — read relevant project docs, current plans, ADRs, recent commits, and code only as needed to understand the iteration.
 2. **Interview Matt** — ask clarifying questions one at a time about goal, scope, acceptance criteria, business decisions, implementation shape, and validation.
 3. **Size and slice** — decide whether the work is one shippable slice or several. If it is more than one, split it into separate iteration plans before going further (see Sizing and Slicing).
-4. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
-5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration. If those feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
+4. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
+5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include an `Iteration Type` section and an `Acceptance Scenarios / Feature Files` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. If feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
 6. **Publish planning artifacts** — before committing, verify the checkout is not left red by planning-only acceptance changes; run `dev check` when practical, or at least the targeted test/configuration checks that would discover the changed feature files. If a planning feature is expected to fail until implementation, confirm it is tagged `@wip` and excluded by the relevant test command/configuration. Then commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any workflow/skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
 7. **Hand off delivery** — do not launch delivery automatically. Report the exact command Matt should run:
    ```bash
@@ -55,15 +55,26 @@ digraph iteration_planning {
 }
 ```
 
-## Supplementary BDD Skills
+## BDD Scenario Heuristics
 
-When an iteration changes acceptance tests or introduces non-obvious user/domain behaviour, consider using the project-local `bdd-discovery` and `bdd-formulation` skills during planning.
+Do not treat BDD as optional polish for behaviour-facing work. Make an explicit BDD decision during planning and write it into `## Acceptance Scenarios / Feature Files`.
 
-Use `bdd-discovery` before writing Gherkin when the behaviour, rules, examples, questions, or slice boundaries need collaborative exploration.
+Default to drafting or updating Gherkin when any of these are true:
+
+- The iteration changes who can do what, when, or under which policy.
+- The behaviour is visible to a customer, member, club operator, staff user, or support/operator persona.
+- The plan contains business rules, permissions, lifecycle states, eligibility, routing, notification, pricing, privacy, or safety/trust implications.
+- The examples would help Matt spot a misunderstanding before implementation.
+- The behaviour needs edge-case examples to explain it clearly, such as unknown/expired/duplicate/unauthorised/error cases.
+- Future agents or collaborators would benefit from stakeholder-readable executable documentation.
+
+Use `bdd-discovery` before writing Gherkin when the rules, examples, vocabulary, questions, or slice boundaries are not yet obvious. Signals include multiple actors, several rules in one idea, policy exceptions, uncertainty about expected outcomes, or examples that reveal the iteration may need slicing.
 
 Use `bdd-formulation` when drafting or reviewing Gherkin scenarios so feature files remain domain modelling artifacts rather than test scripts.
 
-Do not force these skills for purely technical, obvious, or infrastructure-only iterations where acceptance scenarios would add little value.
+It is usually reasonable not to add Gherkin when the iteration is purely technical or operational and has no new user-observable rule: refactoring, dependency updates, internal performance work, logging/observability, CI/tooling, bug fixes where an existing scenario already states the intended behaviour, or implementation plumbing for a previously formulated scenario.
+
+When deciding not to add or change feature files for a behaviour-facing iteration, write a short rationale in the plan. A good rationale names the existing scenario that already covers the rule, or explains why the behaviour is too internal/obvious for a useful stakeholder example. `Covered by ExUnit/controller tests` is not sufficient by itself for business-facing behaviour.
 
 ## Interview Guidance
 
@@ -133,6 +144,14 @@ Status: draft | ready | needs-revision
 
 ### Out of scope
 
+## Iteration Type
+
+Behaviour-facing or technical/engineering. For behaviour-facing iterations, identify the user-observable rule or policy changed. For technical iterations, state why there is no new user-observable behaviour.
+
+## Acceptance Scenarios / Feature Files
+
+State the BDD decision: `Required`, `Useful but not required`, or `Not useful for this slice`. For behaviour-facing iterations, name the shared Cucumber feature file(s) and scenarios that will express the business rules, or state why Gherkin would not add useful stakeholder-readable examples for this slice. For technical iterations, write `Not applicable` and the reason. If implementation is allowed to edit `.feature` files, also include a separate `## Allowed acceptance feature changes` section naming each exact file, the allowed kind of change, the reason, and how coverage is preserved or intentionally changed.
+
 ## Acceptance Criteria
 
 ## Open Business Decisions
@@ -162,7 +181,9 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Determine the next number by inspecting existing `docs/iterations/NNN-*` folders; start at `001` if none exist.
 - Save the plan as `plan.md` inside that folder.
 - Put supporting planning artifacts for the same iteration in the same folder, such as `manual-demo-script.md` or `validation-notes.md`.
-- Draft or update shared Cucumber feature files/scenarios when they clarify the iteration's domain behaviour. Consider using `bdd-discovery` first if the rules/examples are unclear, and `bdd-formulation` when writing or reviewing the Gherkin. Keep scenarios abstract from test infrastructure: no CSS selectors, route names, button-click choreography, database setup, or adapter configuration.
+- Classify the iteration in the plan as behaviour-facing or technical/engineering. For behaviour-facing iterations, fill in `## Acceptance Scenarios / Feature Files` with a BDD decision of `Required`, `Useful but not required`, or `Not useful for this slice`, plus either the feature file(s)/scenario summaries that express the business rules or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples. Do not rely on low-level ExUnit/controller tests as a substitute for this BDD decision.
+- Apply the BDD scenario heuristics above before deciding. If two or more “default to Gherkin” signals apply, draft scenarios unless Matt explicitly decides otherwise.
+- Draft or update shared Cucumber feature files/scenarios when they clarify the iteration's domain behaviour. Use `bdd-discovery` first if the rules/examples are unclear, and `bdd-formulation` when writing or reviewing the Gherkin. Keep scenarios abstract from test infrastructure: no CSS selectors, route names, button-click choreography, database setup, or adapter configuration.
 - Preserve a green mainline while planning. Existing executable scenarios should keep passing. If planning deliberately rewrites or adds scenarios that describe future behaviour and would fail before implementation catches up, tag each affected scenario with `@wip`; if every scenario in a changed feature is future-facing, a feature-level `@wip` is acceptable. Prefer scenario-level tags when only part of a feature is unfinished. Do not leave untagged future-facing scenarios that make `dev check` fail.
 - When feature files/scenarios are created or changed, show Matt the feature file path, which scenarios are `@wip`, and a concise summary of the scenarios, and explicitly ask him to review the language/examples before treating the plan as final.
 - Before publishing, run `dev check` when practical. If it is too slow, run the targeted checks that discover/execute the changed acceptance feature files. If the check fails because a future-facing scenario is unimplemented, add or narrow `@wip` tags rather than editing step definitions or app code. If the project does not currently exclude `@wip`, stop and report that the planning change would make the build red instead of committing it.

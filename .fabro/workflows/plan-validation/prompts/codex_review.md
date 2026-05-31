@@ -14,9 +14,11 @@ Review the plan against these readiness questions:
    - Could the iteration be any smaller while still useful?
    - Are non-goals and boundaries clear?
 
-3. Acceptance criteria and business decisions
+3. Acceptance criteria, BDD scenario decision, and business decisions
    - Are acceptance criteria concrete, clear, complete, and objectively testable?
    - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?
+   - Does the plan classify the iteration as behaviour-facing or technical/engineering?
+   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?
    - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?
 
 4. Implementation plan and technical decisions

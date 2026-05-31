@@ -20,6 +20,8 @@ A plan is NOT READY if any of these are true:
 - The goal is materially ambiguous.
 - The scope is too broad or lacks a smallest useful slice.
 - Acceptance criteria are not concrete/testable enough.
+- The plan does not classify the iteration as behaviour-facing or technical/engineering.
+- A behaviour-facing or domain-policy plan lacks an `## Acceptance Scenarios / Feature Files` section with either named shared Cucumber feature file(s)/scenarios or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples.
 - Important business decisions remain open.
 - Implementation steps require major technical choices that are not made.
 - The expected new capability or success validation is unclear.

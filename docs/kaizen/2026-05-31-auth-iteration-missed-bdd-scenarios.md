@@ -92,3 +92,27 @@ If this pattern repeats, future iterations may accumulate technical tests while 
 - Update plan validation to ask: "Is this behaviour-facing? If yes, where are the Gherkin scenarios or the explicit reason for not adding them?"
 - Teach the iteration-planning skill to classify each iteration as behaviour-facing or technical, then make BDD formulation a required decision for behaviour-facing work.
 - Teach review to flag behaviour-facing implementation evidence that says `No acceptance .feature changes detected.` unless the plan explicitly justified that outcome.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Planning and plan validation asked agents to consider BDD scenarios, but there was no required, visible BDD decision in the plan format. A behaviour-facing plan could list lower-level automated tests, omit feature scenarios, and still pass validation because reviewers had no hard readiness check for either named Gherkin scenarios or an explicit no-Gherkin rationale.
+
+Fix applied:
+
+- `.pi/skills/iteration-planning/SKILL.md`: added required `Iteration Type` and `Acceptance Scenarios / Feature Files` plan sections; behaviour-facing iterations must now name feature files/scenarios or explain why Gherkin is not useful, and planning must present that decision to Matt. Added stronger BDD heuristics so the planner defaults to Gherkin for business rules, permissions, lifecycle states, policy, safety/trust implications, edge-case-heavy behaviour, and examples that would help Matt catch misunderstandings.
+- `.fabro/workflows/plan-validation/prompts/{review,gemini_review,claude_review,codex_review}.md`: added independent-review checks for iteration classification and the behaviour-facing BDD scenario decision.
+- `.fabro/workflows/plan-validation/prompts/acceptance.md`: added the same acceptance-readiness check and made the returned report call out the BDD scenario decision explicitly.
+- `.fabro/workflows/plan-validation/prompts/synthesize.md` and `.fabro/workflows/plan-validation/prompts/recheck.md`: added missing iteration classification or missing behaviour-facing BDD decision to the fail-closed readiness standard.
+- `.fabro/workflows/plan-validation/test/fixtures/unanimous-pass/plan.md`: updated the passing fixture to model the new required sections and explicit allowed feature-file change.
+
+Validation:
+
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed; existing goal-gate retry warnings only.
+- `bash .fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
+- `bash .fabro/workflows/iteration-review/scripts/test_final_artifact_gate.sh` — passed.
+
+Remaining follow-up:
+
+- Review-stage prompts still primarily treat feature files as locked post-implementation; if Matt wants an additional late warning for behaviour-facing implementations with no feature-file diff, add a separate evidence check after the new planning-time guard has had a chance to run.
