@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { randomUUID } = require("node:crypto");
 const { expect: playwrightExpect } = require("@playwright/test");
 
 const kootenayClubName = "Kootenay Mountaineering Club";
@@ -24,12 +25,64 @@ function emailFor(name) {
   return `${normalizedName}@example.test`;
 }
 
+function postmarkPayloadForStatus({
+  deliveryId,
+  eventType,
+  messageId,
+  reason,
+  recipientEmail
+}) {
+  const payload = {
+    MessageID: randomUUID(),
+    Metadata: {
+      delivery_id: deliveryId,
+      message_id: messageId
+    },
+    Recipient: recipientEmail
+  };
+
+  switch (eventType) {
+    case "delivered":
+      return { ...payload, RecordType: "Delivery" };
+
+    case "opened":
+      return { ...payload, RecordType: "Open" };
+
+    case "delayed":
+      return {
+        ...payload,
+        Details: reason,
+        RecordType: "Bounce",
+        Type: "Transient"
+      };
+
+    case "bounced":
+      return {
+        ...payload,
+        Description: reason,
+        RecordType: "Bounce",
+        Type: "HardBounce"
+      };
+
+    case "spam_complaint":
+      return {
+        ...payload,
+        Details: reason,
+        RecordType: "SpamComplaint"
+      };
+
+    default:
+      throw new Error(`Unsupported browser Postmark status event: ${eventType}`);
+  }
+}
+
 function ensureState(world) {
   world.clubs = world.clubs || {};
   world.people = world.people || {};
   world.memberships = world.memberships || {};
   world.messages = world.messages || {};
   world.deliveries = world.deliveries || {};
+  world.reportedDeliveryStatuses = world.reportedDeliveryStatuses || {};
 
   return world;
 }
@@ -348,6 +401,109 @@ async function assertReceiptStatus(world, recipientName, subject, expectedStatus
   return world;
 }
 
+async function reportRecipientEmailStatus(
+  world,
+  recipientName,
+  subject,
+  eventType,
+  { expect = playwrightExpect, reason } = {}
+) {
+  ensureState(world);
+
+  const delivery = await deliveryForRecipient(world, recipientName, subject, { expect });
+  const payload = postmarkPayloadForStatus({
+    deliveryId: delivery.deliveryId,
+    eventType,
+    messageId: delivery.messageId,
+    reason,
+    recipientEmail: delivery.recipientEmail
+  });
+
+  await postPostmarkWebhook(world, payload);
+
+  const key = `${subject}:${recipientName}`;
+  world.reportedDeliveryStatuses[key] = {
+    eventType,
+    payload,
+    reason,
+    recipientName,
+    subject
+  };
+
+  return world;
+}
+
+async function deliveryForRecipient(
+  world,
+  recipientName,
+  subject,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+
+  const recipient = world.people[recipientName];
+  assert.ok(recipient, `Expected ${recipientName} to have been created`);
+
+  await openMessage(world, subject, { expect });
+
+  const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
+  await expect(row).toBeVisible();
+
+  const deliveryId = await row.getAttribute("data-delivery-id");
+  assert.ok(
+    deliveryId,
+    `Expected delivery record for ${recipientName} and ${JSON.stringify(subject)} to expose data-delivery-id`
+  );
+
+  const recipientId = await row.getAttribute("data-recipient-id");
+
+  world.deliveries[subject] = world.deliveries[subject] || {};
+  world.deliveries[subject][recipientName] = {
+    deliveryId,
+    recipientEmail: recipient.email,
+    recipientId,
+    recipientName
+  };
+
+  return {
+    deliveryId,
+    messageId: message.messageId,
+    recipientEmail: recipient.email,
+    recipientId,
+    recipientName
+  };
+}
+
+async function postPostmarkWebhook(world, payload) {
+  const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
+  assert.ok(
+    request && typeof request.post === "function",
+    "Expected Playwright request context to be available for Postmark webhook submission"
+  );
+
+  const response = await request.post(appUrl(world.baseUrl, "/webhooks/postmark"), {
+    data: payload,
+    headers: {
+      "content-type": "application/json"
+    }
+  });
+  const status = response.status();
+
+  if (status !== 202) {
+    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
+
+    throw new Error(
+      `Postmark webhook submission failed: expected HTTP 202 from POST /webhooks/postmark, got HTTP ${status}.\n` +
+        `Payload: ${JSON.stringify(payload)}\nResponse body: ${body}`
+    );
+  }
+
+  return response;
+}
+
 async function rowDatasetValues(rows, datasetName) {
   return rows.evaluateAll((elements, key) => elements.map((element) => element.dataset[key]), datasetName);
 }
@@ -371,10 +527,14 @@ module.exports = {
   createClub,
   createPeople,
   cssString,
+  deliveryForRecipient,
   emailFor,
   ensureState,
   kootenayClubName,
   nelsonClubName,
+  postmarkPayloadForStatus,
+  postPostmarkWebhook,
+  reportRecipientEmailStatus,
   rowAttributeValues,
   openClub,
   openMessage,

@@ -10,6 +10,7 @@ const {
   createPeople,
   kootenayClubName,
   nelsonClubName,
+  reportRecipientEmailStatus,
   sendMessageToKootenayMembers
 } = require("../support/member_message");
 
@@ -73,3 +74,42 @@ Then(
     await assertReceiptStatus(this, recipientName, subject, expectedStatus);
   }
 );
+
+When(
+  "{word}'s email for {string} is reported as delivered",
+  async function (recipientName, subject) {
+    await reportRecipientEmailStatus(this, recipientName, subject, "delivered");
+  }
+);
+
+Given(
+  "{word}'s email for {string} has been reported as delivered",
+  async function (recipientName, subject) {
+    await reportRecipientEmailStatus(this, recipientName, subject, "delivered");
+  }
+);
+
+When(
+  "{word}'s email for {string} is reported as delayed because {string}",
+  async function (recipientName, subject, reason) {
+    await reportRecipientEmailStatus(this, recipientName, subject, "delayed", { reason });
+  }
+);
+
+When(
+  "{word}'s email for {string} is reported as bounced because {string}",
+  async function (recipientName, subject, reason) {
+    await reportRecipientEmailStatus(this, recipientName, subject, "bounced", { reason });
+  }
+);
+
+When(
+  "{word}'s email for {string} is reported as a spam complaint because {string}",
+  async function (recipientName, subject, reason) {
+    await reportRecipientEmailStatus(this, recipientName, subject, "spam_complaint", { reason });
+  }
+);
+
+When("{word} opens the email for {string}", async function (recipientName, subject) {
+  await reportRecipientEmailStatus(this, recipientName, subject, "opened");
+});

@@ -5,7 +5,7 @@
 - [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
 - [x] 004 Implement homepage browser steps against the real homepage route.
 - [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
-- [ ] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
+- [x] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
 - [ ] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
 - [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.
 - [ ] 009 Verify that `operator_email_deliverability.feature` is excluded only from the browser run and remains covered by the domain runner.

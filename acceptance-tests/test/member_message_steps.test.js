@@ -12,8 +12,12 @@ const {
   createClub,
   createPeople,
   cssString,
+  deliveryForRecipient,
   emailFor,
   kootenayClubName,
+  postmarkPayloadForStatus,
+  postPostmarkWebhook,
+  reportRecipientEmailStatus,
   sendMessageToKootenayMembers
 } = require("../features/support/member_message");
 
@@ -165,6 +169,34 @@ class FakePage {
         "data-message-subject": subject
       }));
     }
+  }
+}
+
+class FakeResponse {
+  constructor(status, body = "") {
+    this.responseStatus = status;
+    this.body = body;
+  }
+
+  status() {
+    return this.responseStatus;
+  }
+
+  async text() {
+    return typeof this.body === "string" ? this.body : JSON.stringify(this.body);
+  }
+}
+
+class FakeRequestContext {
+  constructor(response = new FakeResponse(202, { status: "accepted" })) {
+    this.posts = [];
+    this.response = response;
+  }
+
+  async post(url, options) {
+    this.posts.push({ options, url });
+
+    return this.response;
   }
 }
 
@@ -389,3 +421,169 @@ test("message assertions read addressed recipients, delivery records, email chan
   });
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
 });
+
+test("Postmark webhook payloads map member-facing status events onto the app endpoint shape", () => {
+  const base = {
+    deliveryId: "delivery-bob",
+    messageId: "message-1",
+    recipientEmail: "bob@example.test"
+  };
+
+  assert.deepEqual(
+    redactGeneratedMessageId(postmarkPayloadForStatus({ ...base, eventType: "delivered" })),
+    {
+      MessageID: "<generated>",
+      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+      Recipient: "bob@example.test",
+      RecordType: "Delivery"
+    }
+  );
+
+  assert.deepEqual(redactGeneratedMessageId(postmarkPayloadForStatus({ ...base, eventType: "opened" })), {
+    MessageID: "<generated>",
+    Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+    Recipient: "bob@example.test",
+    RecordType: "Open"
+  });
+
+  assert.deepEqual(
+    redactGeneratedMessageId(
+      postmarkPayloadForStatus({
+        ...base,
+        eventType: "delayed",
+        reason: "recipient server is temporarily unavailable"
+      })
+    ),
+    {
+      Details: "recipient server is temporarily unavailable",
+      MessageID: "<generated>",
+      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+      Recipient: "bob@example.test",
+      RecordType: "Bounce",
+      Type: "Transient"
+    }
+  );
+
+  assert.deepEqual(
+    redactGeneratedMessageId(
+      postmarkPayloadForStatus({
+        ...base,
+        eventType: "bounced",
+        reason: "mailbox does not exist"
+      })
+    ),
+    {
+      Description: "mailbox does not exist",
+      MessageID: "<generated>",
+      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+      Recipient: "bob@example.test",
+      RecordType: "Bounce",
+      Type: "HardBounce"
+    }
+  );
+
+  assert.deepEqual(
+    redactGeneratedMessageId(
+      postmarkPayloadForStatus({
+        ...base,
+        eventType: "spam_complaint",
+        reason: "recipient marked the message as spam"
+      })
+    ),
+    {
+      Details: "recipient marked the message as spam",
+      MessageID: "<generated>",
+      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+      Recipient: "bob@example.test",
+      RecordType: "SpamComplaint"
+    }
+  );
+});
+
+test("reporting a recipient email status posts to POST /webhooks/postmark using browser-visible ids", async () => {
+  const page = new FakePage();
+  page.rows.deliveryRecords.push({
+    attrs: {
+      "data-delivery-id": "delivery-bob",
+      "data-recipient-id": "person-bob",
+      "data-recipient-name": "Bob"
+    },
+    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
+  });
+  const request = new FakeRequestContext();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.request = request;
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
+
+  await reportRecipientEmailStatus(world, "Bob", "Trip planning night", "delivered", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(request.posts.map((post) => post.url), [
+    "http://127.0.0.1:4444/webhooks/postmark"
+  ]);
+  assert.deepEqual(redactGeneratedMessageId(request.posts[0].options.data), {
+    MessageID: "<generated>",
+    Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
+    Recipient: "bob@example.test",
+    RecordType: "Delivery"
+  });
+  assert.equal(request.posts[0].options.headers["content-type"], "application/json");
+  assert.deepEqual(world.deliveries["Trip planning night"].Bob, {
+    deliveryId: "delivery-bob",
+    recipientEmail: "bob@example.test",
+    recipientId: "person-bob",
+    recipientName: "Bob"
+  });
+  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
+  assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+});
+
+test("Postmark webhook submission failures report the endpoint and response details", async () => {
+  const request = new FakeRequestContext(new FakeResponse(422, { errors: { detail: "Unsupported" } }));
+  const world = {
+    baseUrl: "http://127.0.0.1:4444",
+    request
+  };
+
+  await assert.rejects(
+    () => postPostmarkWebhook(world, { RecordType: "SubscriptionChange" }),
+    /Postmark webhook submission failed: expected HTTP 202 from POST \/webhooks\/postmark, got HTTP 422/
+  );
+});
+
+test("delivery lookup reads the delivery id needed for webhook metadata from the message UI", async () => {
+  const page = new FakePage();
+  page.rows.deliveryRecords.push({
+    attrs: {
+      "data-delivery-id": "delivery-bob",
+      "data-recipient-id": "person-bob",
+      "data-recipient-name": "Bob"
+    },
+    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
+  });
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
+
+  assert.deepEqual(
+    await deliveryForRecipient(world, "Bob", "Trip planning night", { expect: fakeExpect(expectations) }),
+    {
+      deliveryId: "delivery-bob",
+      messageId: "message-1",
+      recipientEmail: "bob@example.test",
+      recipientId: "person-bob",
+      recipientName: "Bob"
+    }
+  );
+});
+
+function redactGeneratedMessageId(payload) {
+  return {
+    ...payload,
+    MessageID: "<generated>"
+  };
+}
