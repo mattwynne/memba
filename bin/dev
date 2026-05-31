@@ -164,6 +164,52 @@ acceptance() {
   (cd "$repo_root/acceptance-tests" && npm test -- "$@")
 }
 
+# @cmd Manage iteration lifecycle status
+# @arg command![status|mark|check-clear] Helper command
+# @arg args~ Arguments for the helper command
+iteration() {
+  local command_name="${1:-}"
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+
+  case "$command_name" in
+    status)
+      local plan_path="${1:-}"
+      if [ -z "$plan_path" ]; then
+        echo "Usage: $0 iteration status <plan_path>" >&2
+        exit 2
+      fi
+      _fabro_plan_status "$plan_path"
+      ;;
+    mark)
+      _iteration_status_tool mark "$@"
+      ;;
+    check-clear)
+      _iteration_status_tool check-clear "$@"
+      ;;
+    -h|--help|"")
+      cat >&2 <<EOF
+Usage: $0 iteration <command> [args]
+
+Commands:
+  status <plan_path>
+  mark <plan_path> <status> [--check-clear-first]
+  check-clear <plan_path> [--allow-same-iteration]
+EOF
+      ;;
+    *)
+      echo "Unknown iteration helper command: $command_name" >&2
+      echo "Run '$0 iteration --help' for usage." >&2
+      exit 2
+      ;;
+  esac
+}
+
+_iteration_status_tool() {
+  (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py "$@")
+}
+
 # @cmd Run Fabro workflow helpers
 # @arg command![validate-plan|deliver|review|clean-branches] Helper command
 # @arg args~ Arguments for the helper command
@@ -274,6 +320,39 @@ _fabro_wait_for_wip_slot() {
   done
 }
 
+_fabro_restore_status_after_failed_implementation() {
+  local plan_path="$1"
+  local previous_status="$2"
+  local status_commit_sha="$3"
+  local iteration_number="$4"
+
+  echo "Implementation workflow failed; checking whether the WIP reservation can be rolled back..." >&2
+  git -C "$repo_root" fetch origin >/dev/null
+  local remote_sha
+  remote_sha=$(git -C "$repo_root" rev-parse origin/main^{commit})
+  if [ "$remote_sha" != "$status_commit_sha" ]; then
+    echo "Not rolling back iteration status because origin/main moved from $status_commit_sha to $remote_sha." >&2
+    echo "Inspect the run before changing lifecycle state manually." >&2
+    return 0
+  fi
+
+  git -C "$repo_root" pull --ff-only origin main >/dev/null
+  local current_status
+  current_status=$(_fabro_plan_status "$plan_path")
+  if [ "$current_status" != "implementing" ]; then
+    echo "Not rolling back iteration status because current status is '$current_status', not 'implementing'." >&2
+    return 0
+  fi
+
+  echo "Restoring iteration ${iteration_number} status to '$previous_status' after failed implementation launch." >&2
+  "$0" iteration mark "$plan_path" "$previous_status"
+  git -C "$repo_root" add -- "$plan_path" docs/iterations/README.md
+  if ! git -C "$repo_root" diff --cached --quiet; then
+    git -C "$repo_root" commit -m "iteration ${iteration_number}: restore ${previous_status} after failed implementation"
+    git -C "$repo_root" push origin HEAD:main
+  fi
+}
+
 _fabro_deliver() {
   local plan_path="${1:-}"
   if [ "$plan_path" = "-h" ] || [ "$plan_path" = "--help" ]; then
@@ -366,12 +445,14 @@ _fabro_deliver() {
     _fabro_wait_for_wip_slot "$plan_path" "$poll_interval"
     git -C "$repo_root" pull --ff-only origin main
   else
-    (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path" --allow-same-iteration)
+    "$0" iteration check-clear "$plan_path" --allow-same-iteration
   fi
 
+  local previous_plan_status="$plan_status"
+
   echo "== Reserving implementation WIP slot =="
-  (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path" --allow-same-iteration)
-  (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py mark "$plan_path" implementing --check-clear-first)
+  "$0" iteration check-clear "$plan_path" --allow-same-iteration
+  "$0" iteration mark "$plan_path" implementing --check-clear-first
 
   local iteration_number
   iteration_number=$(_fabro_iteration_number "$plan_path")
@@ -389,9 +470,12 @@ _fabro_deliver() {
   echo "Review base SHA: $base_sha"
 
   echo "== Running implementation workflow =="
-  (cd "$repo_root" && command fabro run .fabro/workflows/iteration-implementation/workflow.toml \
+  if ! (cd "$repo_root" && command fabro run .fabro/workflows/iteration-implementation/workflow.toml \
     -I plan_path="$plan_path" \
-    --auto-approve)
+    --auto-approve); then
+    _fabro_restore_status_after_failed_implementation "$plan_path" "$previous_plan_status" "$base_sha" "$iteration_number"
+    exit 1
+  fi
 
   echo "== Running review workflow =="
   git -C "$repo_root" fetch origin
