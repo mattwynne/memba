@@ -75,8 +75,8 @@ Root cause: The validate-only helper routed a standalone validation task through
 
 Fix applied:
 
-- `bin/dev`: changed `iteration-validate-plan` to call `.fabro/workflows/plan-validation/workflow.toml` directly with `--auto-approve`, removing the unnecessary `iteration-deliver` orchestration layer for validate-only work.
-- `.fabro/workflows/README.md`: updated the documented equivalence so `bin/dev iteration-validate-plan` points to the direct `plan-validation` command instead of `iteration-deliver -I mode=validate_only`.
+- `bin/dev`: changed the validate-plan helper to call `.fabro/workflows/plan-validation/workflow.toml` directly with `--auto-approve`, removing the unnecessary `iteration-deliver` orchestration layer for validate-only work. The helper now lives at `bin/dev fabro validate-plan`.
+- `.fabro/workflows/README.md`: updated the documented equivalence so `bin/dev fabro validate-plan` points to the direct `plan-validation` command instead of `iteration-deliver -I mode=validate_only`.
 - `docs/kaizen/2026-05-30-iteration-validate-wrapper-child-approval.md`: recorded this resolution while preserving the original observation.
 
 Validation:
@@ -88,4 +88,4 @@ Validation:
 
 Remaining follow-up:
 
-- The validate-only helper is fixed locally. The underlying Fabro child-run approval behaviour remains relevant for full `iteration-start`, which still uses `iteration-deliver` to reserve WIP and orchestrate implementation/review children.
+- The validate-only helper is fixed locally. The underlying Fabro child-run approval behaviour remains relevant for full `bin/dev fabro start`, which still uses `iteration-deliver` to reserve WIP and orchestrate implementation/review children.

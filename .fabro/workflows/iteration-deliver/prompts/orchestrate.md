@@ -82,7 +82,7 @@ Detailed flow:
 7. Finalize status metadata:
    - Run `git fetch origin main`.
    - Make sure this parent checkout is on top of current `origin/main` before editing docs. If needed, fast-forward or rebase the parent checkout onto `origin/main`; do not merge.
-   - Run `bin/dev iteration-mark-merged-style {{ inputs.plan_path }}`.
+   - Run `bin/dev fabro mark-merged-style {{ inputs.plan_path }}`.
    - Commit only `docs/iterations/README.md`, the plan file, and the iteration folder's `implementation.md` if they changed.
    - Commit message: `docs: mark iteration <NNN> merged`
    - Push to `origin HEAD:main`.

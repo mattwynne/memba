@@ -9,7 +9,7 @@ Fabro iteration work normally flows through `iteration-deliver`, a lightweight p
 Plan validation can run ahead of implementation, even while another iteration is active. This uses the standalone validation workflow directly so no implementation WIP slot is checked or reserved:
 
 ```bash
-bin/dev iteration-validate-plan docs/iterations/NNN-topic/plan.md
+bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
 # equivalent to:
 fabro run .fabro/workflows/plan-validation/workflow.toml \
   -I plan_path=docs/iterations/NNN-topic/plan.md \
@@ -21,7 +21,7 @@ Starting implementation remains single-piece-flow. `iteration-deliver` checks an
 Typical delivery command once the implementation slot is clear:
 
 ```bash
-bin/dev iteration-start docs/iterations/NNN-topic/plan.md
+bin/dev fabro start docs/iterations/NNN-topic/plan.md
 # equivalent to:
 fabro run .fabro/workflows/iteration-deliver/workflow.toml \
   -I plan_path=docs/iterations/NNN-topic/plan.md \
@@ -34,7 +34,7 @@ Manual split-phase escape hatches remain available:
 fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
 .fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
 fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md
-bin/dev iteration-review main docs/iterations/NNN-topic/plan.md <base-sha>
+bin/dev fabro review main docs/iterations/NNN-topic/plan.md <base-sha>
 ```
 
 Neither implementation nor review opens a pull request. Their `workflow.toml` files should not contain a `[run.pull_request]` block.

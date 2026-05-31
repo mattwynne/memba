@@ -34,7 +34,7 @@ Required fields:
 
 Optional but recommended:
 
-- `Base sha:` — concrete base commit SHA for deterministic review diffs. If absent, `bin/dev iteration-review` resolves it locally from `Base ref:`.
+- `Base sha:` — concrete base commit SHA for deterministic review diffs. If absent, `bin/dev fabro review` resolves it locally from `Base ref:`.
 - `Pull request:` — GitHub PR URL for human traceability.
 - `Status:` — `ready-for-review`, `reviewing`, `reviewed`, or similar.
 
@@ -60,16 +60,16 @@ Optional but recommended:
    - If branch still cannot be determined, stop and ask Matt for the branch/ref. Offer to record it in `implementation.md`.
 
 4. **Verify the review command exists**
-   - Ensure `bin/dev` exists and supports `iteration-review`:
+   - Ensure `bin/dev` exists and supports `fabro review`:
      ```bash
-     bin/dev iteration-review --help
+     bin/dev fabro --help
      ```
    - Ensure `.fabro/workflows/iteration-review/workflow.toml` exists.
 
 5. **Run the review workflow**
    - Run:
      ```bash
-     bin/dev iteration-review <branch> <plan-path> <base-ref-or-base-sha>
+     bin/dev fabro review <branch> <plan-path> <base-ref-or-base-sha>
      ```
    - Capture the Fabro run ID and web UI URL if printed.
    - Do not manually switch branches.
@@ -82,7 +82,7 @@ Optional but recommended:
 7. **After merge, mark the iteration merged**
    - Once the implementation branch is confirmed merged into `origin/main`, update iteration status metadata with:
      ```bash
-     bin/dev iteration-mark-merged <plan-path> <branch> origin/main
+     bin/dev fabro mark-merged <plan-path> <branch> origin/main
      ```
    - This command refuses to edit docs unless the branch commit is an ancestor of `origin/main`.
    - Commit the resulting updates to `docs/iterations/README.md`, `<iteration-folder>/plan.md`, and `<iteration-folder>/implementation.md` if they are not already part of the merge.
@@ -92,7 +92,7 @@ Optional but recommended:
 For iteration 001 at the time this skill was introduced:
 
 ```bash
-bin/dev iteration-review \
+bin/dev fabro review \
   pr/event-sourced-foundation \
   docs/iterations/001-event-sourced-foundation/plan.md \
   origin/main
@@ -107,7 +107,7 @@ When starting a review, report:
 - Implementation branch/ref.
 - Base ref and base sha, if known.
 - Pull request URL, if known.
-- Exact `bin/dev iteration-review ...` command.
+- Exact `bin/dev fabro review ...` command.
 
 When the run completes, report:
 
