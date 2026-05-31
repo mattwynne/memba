@@ -1,0 +1,880 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+new file mode 100644
+index 0000000..e73f01e
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -0,0 +1,75 @@
++const { Given, When, Then } = require("@cucumber/cucumber");
++const {
++  addMembers,
++  assertEachAddressedMemberHasSeparateDeliveryRecord,
++  assertEachDeliverySentThroughEmailProvider,
++  assertLastMessageAddressedTo,
++  assertLastMessageNotAddressedTo,
++  assertReceiptStatus,
++  createClub,
++  createPeople,
++  kootenayClubName,
++  nelsonClubName,
++  sendMessageToKootenayMembers
++} = require("../support/member_message");
++
++Given("Kootenay Mountaineering Club is a club", async function () {
++  await createClub(this, kootenayClubName);
++});
++
++Given("Nelson Paddling Club is a club", async function () {
++  await createClub(this, nelsonClubName);
++});
++
++Given("Alice, Bob, and Carol are people", async function () {
++  await createPeople(this, ["Alice", "Bob", "Carol"]);
++});
++
++Given("Pat is a person", async function () {
++  await createPeople(this, ["Pat"]);
++});
++
++Given("Alice, Bob, and Carol are members of Kootenay Mountaineering Club", async function () {
++  await addMembers(this, ["Alice", "Bob", "Carol"], kootenayClubName);
++});
++
++Given("Pat is a member of Nelson Paddling Club", async function () {
++  await addMembers(this, ["Pat"], nelsonClubName);
++});
++
++When(
++  "{word} sends the message {string} to Kootenay Mountaineering Club members",
++  async function (senderName, subject) {
++    await sendMessageToKootenayMembers(this, senderName, subject);
++  }
++);
++
++Given(
++  "{word} has sent the message {string} to Kootenay Mountaineering Club members",
++  async function (senderName, subject) {
++    await sendMessageToKootenayMembers(this, senderName, subject);
++  }
++);
++
++Then("the message should be addressed to Alice, Bob, and Carol", async function () {
++  await assertLastMessageAddressedTo(this, ["Alice", "Bob", "Carol"]);
++});
++
++Then("the message should not be addressed to {word}", async function (personName) {
++  await assertLastMessageNotAddressedTo(this, personName);
++});
++
++Then("each addressed member should have a separate delivery record", async function () {
++  await assertEachAddressedMemberHasSeparateDeliveryRecord(this);
++});
++
++Then("each delivery should be sent through the email provider", async function () {
++  await assertEachDeliverySentThroughEmailProvider(this);
++});
++
++Then(
++  "{word}'s receipt status for {string} should be {string}",
++  async function (recipientName, subject, expectedStatus) {
++    await assertReceiptStatus(this, recipientName, subject, expectedStatus);
++  }
++);
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+new file mode 100644
+index 0000000..40a09f0
+--- /dev/null
++++ b/acceptance-tests/features/support/member_message.js
+@@ -0,0 +1,383 @@
++const assert = require("node:assert/strict");
++const { expect: playwrightExpect } = require("@playwright/test");
++
++const kootenayClubName = "Kootenay Mountaineering Club";
++const nelsonClubName = "Nelson Paddling Club";
++
++function appUrl(baseUrl, path) {
++  return new URL(path, `${baseUrl}/`).toString();
++}
++
++function cssString(value) {
++  return `"${String(value)
++    .replace(/\\/g, "\\\\")
++    .replace(/"/g, '\\"')
++    .replace(/\n/g, "\\a ")}"`;
++}
++
++function emailFor(name) {
++  const normalizedName = name
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, ".")
++    .replace(/^\.+|\.+$/g, "");
++
++  return `${normalizedName}@example.test`;
++}
++
++function ensureState(world) {
++  world.clubs = world.clubs || {};
++  world.people = world.people || {};
++  world.memberships = world.memberships || {};
++  world.messages = world.messages || {};
++  world.deliveries = world.deliveries || {};
++
++  return world;
++}
++
++function rowByData(page, testId, dataName, value) {
++  return page
++    .locator(`[data-testid=${cssString(testId)}][${dataName}=${cssString(value)}]`)
++    .last();
++}
++
++function rowsByData(page, testId, dataName, value) {
++  return page.locator(`[data-testid=${cssString(testId)}][${dataName}=${cssString(value)}]`);
++}
++
++function allRows(page, containerId, testId) {
++  return page.locator(`#${containerId} [data-testid=${cssString(testId)}]`);
++}
++
++async function rowAttributeValues(rows, attributeName) {
++  return rows.evaluateAll(
++    (elements, attr) =>
++      elements.map((element) => element.getAttribute(attr)).filter((value) => value),
++    attributeName
++  );
++}
++
++async function newRowAttributeValue(rows, attributeName, previousValues, description) {
++  const currentValues = await rowAttributeValues(rows, attributeName);
++  const newValues = currentValues.filter((value) => !previousValues.includes(value));
++
++  assert.equal(
++    newValues.length,
++    1,
++    `Expected exactly one new ${description}; previous=${previousValues.join(", ")} current=${currentValues.join(", ")}`
++  );
++
++  return newValues[0];
++}
++
++async function visitClubsIndex(world) {
++  await world.page.goto(appUrl(world.baseUrl, "/clubs"));
++}
++
++async function openClub(world, clubName, { expect = playwrightExpect } = {}) {
++  ensureState(world);
++
++  const club = world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to have been created before opening it`);
++
++  await world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`));
++  await expect(world.page.getByRole("heading", { name: clubName })).toBeVisible();
++}
++
++async function openMessage(world, subject, { expect = playwrightExpect } = {}) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
++
++  await world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`));
++  await expect(world.page.getByRole("heading", { name: subject })).toBeVisible();
++}
++
++async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
++  ensureState(world);
++
++  await visitClubsIndex(world);
++
++  const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
++  const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
++
++  await world.page.getByLabel("Club name").fill(clubName);
++  await world.page.getByRole("button", { name: "Create club" }).click();
++  await expect(clubRows).toHaveCount(previousClubIds.length + 1);
++
++  const clubId = await newRowAttributeValue(
++    clubRows,
++    "data-club-id",
++    previousClubIds,
++    `club row for ${clubName}`
++  );
++  await expect(rowByData(world.page, "club-row", "data-club-id", clubId)).toBeVisible();
++
++  world.clubs[clubName] = { clubId, name: clubName };
++
++  return world;
++}
++
++async function createPeople(world, names, { expect = playwrightExpect } = {}) {
++  ensureState(world);
++
++  await openClub(world, kootenayClubName, { expect });
++
++  for (const name of names) {
++    await createPersonOnCurrentClubPage(world, name, { expect });
++  }
++
++  return world;
++}
++
++async function createPersonOnCurrentClubPage(world, name, { expect = playwrightExpect } = {}) {
++  const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
++  const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
++  const email = emailFor(name);
++
++  await world.page.getByLabel("Person name").fill(name);
++  await world.page.getByLabel("Person email").fill(email);
++  await world.page.getByRole("button", { name: "Create person" }).click();
++  await expect(personRows).toHaveCount(previousPersonIds.length + 1);
++
++  const personId = await newRowAttributeValue(
++    personRows,
++    "data-person-id",
++    previousPersonIds,
++    `person row for ${name}`
++  );
++  await expect(rowByData(world.page, "person-row", "data-person-id", personId)).toBeVisible();
++
++  world.people[name] = { email, name, personId };
++}
++
++async function addMembers(world, personNames, clubName, { expect = playwrightExpect } = {}) {
++  ensureState(world);
++
++  await openClub(world, clubName, { expect });
++
++  for (const personName of personNames) {
++    await addMemberOnCurrentClubPage(world, personName, clubName, { expect });
++  }
++
++  return world;
++}
++
++async function addMemberOnCurrentClubPage(
++  world,
++  personName,
++  clubName,
++  { expect = playwrightExpect } = {}
++) {
++  const person = world.people[personName];
++  assert.ok(person, `Expected ${personName} to have been created before adding them as a member`);
++
++  const memberRows = rowsByData(world.page, "member-row", "data-member-name", personName);
++  const previousMemberIds = await rowAttributeValues(memberRows, "data-member-id");
++
++  await world.page.getByLabel("Person to add as member").selectOption(person.personId);
++  await world.page.getByRole("button", { name: "Add member" }).click();
++  await expect(memberRows).toHaveCount(previousMemberIds.length + 1);
++
++  const memberId = await newRowAttributeValue(
++    memberRows,
++    "data-member-id",
++    previousMemberIds,
++    `member row for ${personName} in ${clubName}`
++  );
++  await expect(rowByData(world.page, "member-row", "data-member-id", memberId)).toBeVisible();
++
++  world.memberships[`${clubName}:${personName}`] = {
++    clubName,
++    memberId,
++    personName
++  };
++}
++
++async function sendMessageToKootenayMembers(
++  world,
++  senderName,
++  subject,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const body = `${subject} details.`;
++
++  await openClub(world, kootenayClubName, { expect });
++
++  const messageRows = rowsByData(world.page, "message-row", "data-message-subject", subject);
++  const previousMessageIds = await rowAttributeValues(messageRows, "data-message-id");
++
++  const sender = world.people[senderName];
++  assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
++
++  await world.page.getByLabel("Message sender").selectOption(sender.personId);
++  await world.page.getByLabel("Message subject").fill(subject);
++  await world.page.getByLabel("Message body").fill(body);
++  await world.page.getByRole("button", { name: "Send club message" }).click();
++  await expect(messageRows).toHaveCount(previousMessageIds.length + 1);
++
++  const messageId = await newRowAttributeValue(
++    messageRows,
++    "data-message-id",
++    previousMessageIds,
++    `message row for ${subject}`
++  );
++  await expect(rowByData(world.page, "message-row", "data-message-id", messageId)).toBeVisible();
++
++  world.messages[subject] = {
++    body,
++    clubId: world.clubs[kootenayClubName].clubId,
++    messageId,
++    senderName,
++    subject
++  };
++  world.lastMessageSubject = subject;
++
++  await openMessage(world, subject, { expect });
++
++  return world;
++}
++
++async function assertLastMessageAddressedTo(
++  world,
++  expectedNames,
++  { expect = playwrightExpect } = {}
++) {
++  await openMessage(world, world.lastMessageSubject, { expect });
++
++  const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
++  await expect(rows).toHaveCount(expectedNames.length);
++
++  const actualNames = await rowDatasetValues(rows, "recipientName");
++  assert.deepEqual(actualNames, expectedNames);
++
++  world.addressedMemberNames = expectedNames;
++  world.addressedMemberIds = expectedNames.map((name) => {
++    const person = world.people[name];
++    assert.ok(person, `Expected ${name} to have been created`);
++    return person.personId;
++  });
++
++  return world;
++}
++
++async function assertLastMessageNotAddressedTo(
++  world,
++  excludedName,
++  { expect = playwrightExpect } = {}
++) {
++  await openMessage(world, world.lastMessageSubject, { expect });
++
++  const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
++  const actualNames = await rowDatasetValues(rows, "recipientName");
++  assert.ok(
++    !actualNames.includes(excludedName),
++    `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
++  );
++
++  return world;
++}
++
++async function assertEachAddressedMemberHasSeparateDeliveryRecord(
++  world,
++  { expect = playwrightExpect } = {}
++) {
++  await openMessage(world, world.lastMessageSubject, { expect });
++
++  const expectedIds = world.addressedMemberIds || [];
++  assert.ok(
++    expectedIds.length > 0,
++    "Expected addressed members to be asserted before checking delivery records"
++  );
++
++  const rows = allRows(world.page, "delivery-records", "delivery-record");
++  await expect(rows).toHaveCount(expectedIds.length);
++
++  const recipientIds = await rowDatasetValues(rows, "recipientId");
++  const deliveryIds = await rowDatasetValues(rows, "deliveryId");
++  const recipientNames = await rowDatasetValues(rows, "recipientName");
++
++  assert.deepEqual(recipientIds, expectedIds);
++  assertUnique(deliveryIds, "delivery IDs");
++  assertUnique(recipientIds, "recipient IDs");
++
++  const subject = world.lastMessageSubject;
++  world.deliveries[subject] = {};
++
++  recipientNames.forEach((recipientName, index) => {
++    world.deliveries[subject][recipientName] = {
++      deliveryId: deliveryIds[index],
++      recipientId: recipientIds[index],
++      recipientName
++    };
++  });
++
++  return world;
++}
++
++async function assertEachDeliverySentThroughEmailProvider(
++  world,
++  { expect = playwrightExpect } = {}
++) {
++  await openMessage(world, world.lastMessageSubject, { expect });
++
++  const deliveryNames = Object.keys(world.deliveries[world.lastMessageSubject] || {});
++  assert.ok(
++    deliveryNames.length > 0,
++    "Expected delivery records to be asserted before checking email-provider delivery"
++  );
++
++  for (const recipientName of deliveryNames) {
++    const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
++    await expect(row.getByText(/^email$/)).toBeVisible();
++    await expect(row.locator("[data-testid=\"delivery-status\"]")).toHaveText("sent");
++  }
++
++  return world;
++}
++
++async function assertReceiptStatus(world, recipientName, subject, expectedStatus, { expect = playwrightExpect } = {}) {
++  await openMessage(world, subject, { expect });
++
++  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
++  await expect(row).toBeVisible();
++  await expect(row.locator("[data-testid=\"receipt-status\"]")).toHaveText(expectedStatus);
++
++  return world;
++}
++
++async function rowDatasetValues(rows, datasetName) {
++  return rows.evaluateAll((elements, key) => elements.map((element) => element.dataset[key]), datasetName);
++}
++
++function assertUnique(values, label) {
++  assert.deepEqual(
++    [...new Set(values)],
++    values,
++    `Expected ${label} to be unique; saw ${values.join(", ")}`
++  );
++}
++
++module.exports = {
++  addMembers,
++  appUrl,
++  assertEachAddressedMemberHasSeparateDeliveryRecord,
++  assertEachDeliverySentThroughEmailProvider,
++  assertLastMessageAddressedTo,
++  assertLastMessageNotAddressedTo,
++  assertReceiptStatus,
++  createClub,
++  createPeople,
++  cssString,
++  emailFor,
++  ensureState,
++  kootenayClubName,
++  nelsonClubName,
++  rowAttributeValues,
++  openClub,
++  openMessage,
++  sendMessageToKootenayMembers,
++  visitClubsIndex
++};
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+new file mode 100644
+index 0000000..5bf4273
+--- /dev/null
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -0,0 +1,391 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const {
++  addMembers,
++  appUrl,
++  assertEachAddressedMemberHasSeparateDeliveryRecord,
++  assertEachDeliverySentThroughEmailProvider,
++  assertLastMessageAddressedTo,
++  assertLastMessageNotAddressedTo,
++  assertReceiptStatus,
++  createClub,
++  createPeople,
++  cssString,
++  emailFor,
++  kootenayClubName,
++  sendMessageToKootenayMembers
++} = require("../features/support/member_message");
++
++class FakeLocator {
++  constructor(page, selector, options = {}) {
++    this.page = page;
++    this.selector = selector;
++    this.kind = options.kind || "locator";
++    this.value = options.value;
++    this.attrs = options.attrs || {};
++    this.text = options.text;
++    this.rows = options.rows || null;
++  }
++
++  currentRows() {
++    return this.rows || rowsForSelector(this.page.rows, this.selector);
++  }
++
++  async count() {
++    return this.currentRows().length;
++  }
++
++  last() {
++    const rows = this.currentRows();
++    const row = rows[rows.length - 1];
++
++    return new FakeLocator(this.page, `${this.selector} >> last`, {
++      attrs: row.attrs,
++      kind: "row",
++      text: row.text
++    });
++  }
++
++  locator(selector) {
++    return new FakeLocator(this.page, `${this.selector} ${selector}`, {
++      kind: "child",
++      value: selector,
++      text: this.attrs.deliveryStatus || this.attrs.receiptStatus
++    });
++  }
++
++  getByText(text) {
++    return new FakeLocator(this.page, `${this.selector} text=${text}`, {
++      kind: "text",
++      value: text
++    });
++  }
++
++  async getAttribute(attributeName) {
++    return this.attrs[attributeName];
++  }
++
++  async evaluateAll(callback, key) {
++    const elements = this.currentRows().map((row) => ({
++      dataset: row.dataset,
++      getAttribute(attributeName) {
++        return row.attrs ? row.attrs[attributeName] : undefined;
++      }
++    }));
++
++    return callback(elements, key);
++  }
++}
++
++class FakePage {
++  constructor() {
++    this.actions = [];
++    this.fields = {};
++    this.rows = {
++      clubs: [],
++      people: [],
++      members: [],
++      messages: [],
++      addressedRecipients: [],
++      deliveryRecords: [],
++      memberReceipts: []
++    };
++  }
++
++  async goto(url) {
++    this.actions.push(["goto", url]);
++  }
++
++  getByLabel(name) {
++    return {
++      fill: async (value) => {
++        this.fields[name] = value;
++        this.actions.push(["fill", name, value]);
++      },
++      selectOption: async (value) => {
++        this.fields[name] = value;
++        this.actions.push(["select", name, value]);
++      }
++    };
++  }
++
++  getByRole(role, options) {
++    return {
++      role,
++      options,
++      click: async () => {
++        this.actions.push(["click", role, options]);
++        this.applyClickSideEffect(options.name);
++      }
++    };
++  }
++
++  locator(selector) {
++    return new FakeLocator(this, selector);
++  }
++
++  applyClickSideEffect(name) {
++    if (name === "Create club") {
++      const clubName = this.fields["Club name"];
++      const clubId = idFor("club", clubName, this.rows.clubs.length + 1);
++      this.rows.clubs.push(rowWithAttrs({
++        "data-club-id": clubId,
++        "data-club-name": clubName
++      }));
++    }
++
++    if (name === "Create person") {
++      const personName = this.fields["Person name"];
++      const personId = idFor("person", personName, this.rows.people.length + 1);
++      this.rows.people.push(rowWithAttrs({
++        "data-person-id": personId,
++        "data-person-name": personName
++      }));
++    }
++
++    if (name === "Add member") {
++      const personId = this.fields["Person to add as member"];
++      const personRow = this.rows.people.find((row) => row.attrs["data-person-id"] === personId);
++      const personName = personRow.attrs["data-person-name"];
++      const memberId = idFor("member", personName, this.rows.members.length + 1);
++
++      this.rows.members.push(rowWithAttrs({
++        "data-member-id": memberId,
++        "data-member-name": personName
++      }));
++    }
++
++    if (name === "Send club message") {
++      const subject = this.fields["Message subject"];
++      const messageId = idFor("message", subject, this.rows.messages.length + 1);
++
++      this.rows.messages.push(rowWithAttrs({
++        "data-message-id": messageId,
++        "data-message-subject": subject
++      }));
++    }
++  }
++}
++
++function rowsForSelector(rows, selector) {
++  if (selector.includes('data-testid="club-row"')) return filterRows(rows.clubs, selector);
++  if (selector.includes('data-testid="person-row"')) return filterRows(rows.people, selector);
++  if (selector.includes('data-testid="member-row"')) return filterRows(rows.members, selector);
++  if (selector.includes('data-testid="message-row"')) return filterRows(rows.messages, selector);
++  if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
++  if (selector.includes("#delivery-records")) return rows.deliveryRecords;
++  if (selector.includes("#member-receipts")) return rows.memberReceipts;
++  if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
++  if (selector.includes('data-testid="member-receipt"')) return filterRows(rows.memberReceipts, selector);
++
++  return [];
++}
++
++function filterRows(rows, selector) {
++  return rows.filter((row) => {
++    for (const [attributeName, value] of Object.entries(row.attrs || {})) {
++      if (selector.includes(`[${attributeName}=`) && !selector.includes(`[${attributeName}="${value}"]`)) {
++        return false;
++      }
++    }
++
++    return true;
++  });
++}
++
++function idFor(prefix, value, count) {
++  return `${prefix}-${String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${count}`;
++}
++
++function rowWithAttrs(attrs) {
++  const dataset = {};
++
++  for (const [name, value] of Object.entries(attrs)) {
++    if (name.startsWith("data-")) {
++      dataset[name.slice(5).replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase())] = value;
++    }
++  }
++
++  return { attrs, dataset };
++}
++
++function fakeExpect(expectations) {
++  return (target) => ({
++    async toBeVisible() {
++      expectations.push(["visible", target.selector || target]);
++    },
++    async toHaveCount(count) {
++      expectations.push(["count", target.selector, count]);
++    },
++    async toHaveText(text) {
++      expectations.push(["text", target.selector, text]);
++    }
++  });
++}
++
++function worldWithPage(page = new FakePage()) {
++  return {
++    baseUrl: "http://127.0.0.1:4444",
++    page
++  };
++}
++
++test("member-message route URL and generated emails match the browser app surface", () => {
++  assert.equal(appUrl("http://127.0.0.1:4444", "/clubs"), "http://127.0.0.1:4444/clubs");
++  assert.equal(
++    appUrl("http://127.0.0.1:4444/", "/messages/message-1"),
++    "http://127.0.0.1:4444/messages/message-1"
++  );
++  assert.equal(emailFor("Alice"), "alice@example.test");
++  assert.equal(emailFor("Kootenay Mountaineering Club"), "kootenay.mountaineering.club@example.test");
++  assert.equal(cssString('Bob "The Sender"'), '"Bob \\"The Sender\\""');
++});
++
++test("creating a club drives /clubs and stores the generated club id from the UI", async () => {
++  const page = new FakePage();
++  page.rows.clubs.push(rowWithAttrs({
++    "data-club-id": "club-existing-1",
++    "data-club-name": kootenayClubName
++  }));
++  const expectations = [];
++  const world = worldWithPage(page);
++
++  await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
++
++  assert.deepEqual(page.actions, [
++    ["goto", "http://127.0.0.1:4444/clubs"],
++    ["fill", "Club name", kootenayClubName],
++    ["click", "button", { name: "Create club" }]
++  ]);
++  assert.deepEqual(world.clubs[kootenayClubName], {
++    clubId: "club-kootenay-mountaineering-club-2",
++    name: kootenayClubName
++  });
++  assert.deepEqual(expectations.map((expectation) => expectation[0]), ["count", "visible"]);
++});
++
++test("creating people and members uses accessible form labels and keeps browser ids in scenario state", async () => {
++  const page = new FakePage();
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++
++  await createPeople(world, ["Alice", "Bob"], { expect: fakeExpect(expectations) });
++  await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
++
++  assert.deepEqual(world.people.Alice, {
++    email: "alice@example.test",
++    name: "Alice",
++    personId: "person-alice-1"
++  });
++  assert.deepEqual(world.memberships[`${kootenayClubName}:Bob`], {
++    clubName: kootenayClubName,
++    memberId: "member-bob-2",
++    personName: "Bob"
++  });
++  assert.ok(
++    page.actions.some(
++      (action) =>
++        action[0] === "select" &&
++        action[1] === "Person to add as member" &&
++        action[2] === "person-alice-1"
++    )
++  );
++});
++
++test("sending a Kootenay member message drives the club form and opens the real message route", async () => {
++  const page = new FakePage();
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.people = { Alice: { personId: "person-alice-1" } };
++
++  await sendMessageToKootenayMembers(world, "Alice", "Trip planning night", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.deepEqual(world.messages["Trip planning night"], {
++    body: "Trip planning night details.",
++    clubId: "club-1",
++    messageId: "message-trip-planning-night-1",
++    senderName: "Alice",
++    subject: "Trip planning night"
++  });
++  assert.deepEqual(page.actions.slice(-5), [
++    ["select", "Message sender", "person-alice-1"],
++    ["fill", "Message subject", "Trip planning night"],
++    ["fill", "Message body", "Trip planning night details."],
++    ["click", "button", { name: "Send club message" }],
++    ["goto", "http://127.0.0.1:4444/messages/message-trip-planning-night-1"]
++  ]);
++});
++
++test("message assertions read addressed recipients, delivery records, email channel, and receipts from UI rows", async () => {
++  const page = new FakePage();
++  page.rows.addressedRecipients.push(
++    { dataset: { recipientName: "Alice", recipientId: "person-alice" } },
++    { dataset: { recipientName: "Bob", recipientId: "person-bob" } },
++    { dataset: { recipientName: "Carol", recipientId: "person-carol" } }
++  );
++  page.rows.deliveryRecords.push(
++    {
++      attrs: {
++        "data-delivery-id": "delivery-alice",
++        "data-recipient-id": "person-alice",
++        "data-recipient-name": "Alice",
++        deliveryStatus: "sent"
++      },
++      dataset: { deliveryId: "delivery-alice", recipientId: "person-alice", recipientName: "Alice" }
++    },
++    {
++      attrs: {
++        "data-delivery-id": "delivery-bob",
++        "data-recipient-id": "person-bob",
++        "data-recipient-name": "Bob",
++        deliveryStatus: "sent"
++      },
++      dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
++    },
++    {
++      attrs: {
++        "data-delivery-id": "delivery-carol",
++        "data-recipient-id": "person-carol",
++        "data-recipient-name": "Carol",
++        deliveryStatus: "sent"
++      },
++      dataset: { deliveryId: "delivery-carol", recipientId: "person-carol", recipientName: "Carol" }
++    }
++  );
++  page.rows.memberReceipts.push({
++    attrs: { "data-recipient-name": "Bob", receiptStatus: "sent" },
++    dataset: { recipientName: "Bob" }
++  });
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.lastMessageSubject = "Trip planning night";
++  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
++  world.people = {
++    Alice: { personId: "person-alice" },
++    Bob: { personId: "person-bob" },
++    Carol: { personId: "person-carol" },
++    Pat: { personId: "person-pat" }
++  };
++
++  await assertLastMessageAddressedTo(world, ["Alice", "Bob", "Carol"], {
++    expect: fakeExpect(expectations)
++  });
++  await assertLastMessageNotAddressedTo(world, "Pat", { expect: fakeExpect(expectations) });
++  await assertEachAddressedMemberHasSeparateDeliveryRecord(world, { expect: fakeExpect(expectations) });
++  await assertEachDeliverySentThroughEmailProvider(world, { expect: fakeExpect(expectations) });
++  await assertReceiptStatus(world, "Bob", "Trip planning night", "sent", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.deepEqual(world.deliveries["Trip planning night"].Bob, {
++    deliveryId: "delivery-bob",
++    recipientId: "person-bob",
++    recipientName: "Bob"
++  });
++  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
++});
+diff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md
+index 43f55f2..4020db2 100644
+--- a/docs/iterations/006-browser-cucumber-automation/todo.md
++++ b/docs/iterations/006-browser-cucumber-automation/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
+ - [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
+ - [x] 004 Implement homepage browser steps against the real homepage route.
+-- [ ] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
++- [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
+ - [ ] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
+ - [ ] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
+ - [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.
