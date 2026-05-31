@@ -1,0 +1,55 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index cfb63b4..d615e5a 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ - [x] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+ - [x] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+-- [ ] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
++- [x] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
+ - [ ] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
+ - [ ] 010 Update documentation for enabling Postmark, configuring environment variables, configuring the Postmark webhook URL, and choosing a monitored Memba-controlled sending subdomain.
+ - [ ] 011 Run the existing browser/domain acceptance suites and `dev check`, fixing regressions without weakening fake-provider determinism.
+diff --git a/web/test/memba/messaging/delivery_providers/postmark_test.exs b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+index 9c9886a..9a79aed 100644
+--- a/web/test/memba/messaging/delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+@@ -1,6 +1,8 @@
+ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
+   use ExUnit.Case, async: false
+ 
++  import Swoosh.TestAssertions
++
+   alias Memba.Messaging.DeliveryProviders.Postmark
+   alias Memba.Messaging.DeliveryRequest
+ 
+@@ -62,6 +64,28 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
+     assert_received {:email, %Swoosh.Email{reply_to: nil}}
+   end
+ 
++  test "does not hand an email to Swoosh when required Postmark configuration is missing" do
++    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    assert {:error, {:postmark_configuration_error, message}} =
++             Postmark.deliver(delivery_request())
++
++    assert message =~ "Postmark delivery provider is enabled"
++    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
++
++    assert_no_email_sent()
++  end
++
++  test "does not hand unsupported delivery channels to Swoosh" do
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    assert {:error, {:unsupported_delivery_channel, :sms}} =
++             Postmark.deliver(delivery_request(channel: :sms))
++
++    assert_no_email_sent()
++  end
++
+   test "returns a visible Postmark delivery error when Swoosh reports an API failure" do
+     Application.put_env(:memba, Memba.Mailer,
+       adapter: Memba.TestSupport.FailingSwooshAdapter,
