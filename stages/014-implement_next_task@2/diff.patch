@@ -1,0 +1,73 @@
+diff --git a/acceptance-tests/cucumber.js b/acceptance-tests/cucumber.js
+index ba9f840..cc93106 100644
+--- a/acceptance-tests/cucumber.js
++++ b/acceptance-tests/cucumber.js
+@@ -2,6 +2,7 @@ module.exports = {
+   default: {
+     paths: ["features/**/*.feature"],
+     require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
++    tags: "not @todo-web",
+     format: ["progress"],
+     publishQuiet: true
+   }
+diff --git a/acceptance-tests/package.json b/acceptance-tests/package.json
+index 632bf12..af71d3a 100644
+--- a/acceptance-tests/package.json
++++ b/acceptance-tests/package.json
+@@ -5,6 +5,7 @@
+   "type": "commonjs",
+   "scripts": {
+     "test": "cucumber-js",
++    "test:config": "node --test test/*.test.js",
+     "test:headed": "HEADLESS=false cucumber-js"
+   },
+   "devDependencies": {
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+new file mode 100644
+index 0000000..b41caec
+--- /dev/null
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -0,0 +1,12 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const cucumberConfig = require("../cucumber");
++
++test("default browser Cucumber profile excludes todo-web scenarios", () => {
++  assert.equal(cucumberConfig.default.tags, "not @todo-web");
++});
++
++test("default browser Cucumber profile still loads the shared feature suite", () => {
++  assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
++});
+diff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md
+index b25779c..fa8cd7c 100644
+--- a/docs/iterations/006-browser-cucumber-automation/todo.md
++++ b/docs/iterations/006-browser-cucumber-automation/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.
+-- [ ] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
++- [x] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
+ - [ ] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
+ - [ ] 004 Implement homepage browser steps against the real homepage route.
+ - [ ] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index c025f51..3060752 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -202,6 +202,13 @@ defmodule Memba.CucumberConfigurationTest do
+     end)
+   end
+ 
++  test "domain Cucumber configuration does not filter todo-web shared scenarios" do
++    refute Application.get_env(:cucumber, :tags)
++
++    assert configured_feature_paths()
++           |> feature_file_named!("operator_email_deliverability.feature")
++  end
++
+   test "all member message deliverability scenarios pass through Cucumber runtime" do
+     %Discovery.DiscoveryResult{} = discovery = discover_steps()
+ 
