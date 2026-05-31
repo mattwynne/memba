@@ -2,8 +2,15 @@ defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
   def home(conn, _params) do
+    page_title =
+      if conn.assigns.current_identity do
+        "My clubs"
+      else
+        "Membership made calm"
+      end
+
     conn
-    |> assign(:page_title, "Membership made calm")
+    |> assign(:page_title, page_title)
     |> render(:home)
   end
 

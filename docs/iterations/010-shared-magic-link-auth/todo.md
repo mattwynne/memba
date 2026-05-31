@@ -7,7 +7,7 @@
 - [x] 005 Add auth email delivery:
 - [x] 006 Add web auth helpers/plugs, likely `MembaWeb.UserAuth`, to:
 - [x] 007 Add `/auth` UI and callback handling:
-- [ ] 008 Update the home page:
+- [x] 008 Update the home page:
 - [ ] 009 Apply auth gates:
 - [ ] 010 Add focused tests:
 - [ ] 011 Update operational documentation for auth Postmark environment variables and the required message stream.
