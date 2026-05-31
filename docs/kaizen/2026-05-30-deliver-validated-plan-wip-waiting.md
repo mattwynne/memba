@@ -40,3 +40,26 @@ Without explicit validated-plan and WIP-wait behaviour, operators may waste time
 - What poll interval is appropriate by default?
 - Should the polling loop watch only `origin/main`, or also report local divergence before starting the final status transition?
 - How should the command report the active iteration while waiting?
+
+## Resolution
+
+Date: 2026-05-30
+
+Root cause: `bin/dev fabro deliver` treated validation and implementation reservation as one linear sequence: it always re-ran validation before checking WIP, and had no explicit waiting mode for the single implementation slot. That ignored the lifecycle meaning of `validated` and left operators to manually retry delivery at the right time.
+
+Fix applied:
+
+- `bin/dev`: delivery now reads the plan status, skips validation for `validated` plans, validates only `ready` plans, rejects other statuses, and waits by default for the implementation WIP slot to clear before marking the iteration `implementing`.
+- `bin/dev`: added `--no-wait` for fail-fast WIP checks and `--poll-interval seconds` for the default wait loop.
+- `bin/dev`: the wait loop polls `origin/main:docs/iterations/README.md`, reports active iterations, and only mutates local files after the slot is clear.
+- `.fabro/workflows/README.md`: documented validated-plan reuse, WIP waiting, `--no-wait`, and poll interval behaviour.
+
+Validation:
+
+- `bash -n bin/dev` — passed.
+- `bin/dev fabro deliver --help` — passed after adding top-level deliver help handling.
+- `bin/dev fabro deliver docs/iterations/007-deliveries-overview/plan.md --no-wait` — clean-worktree fail-fast smoke passed after commit; it skipped validation for the already validated plan and reported iteration 006 occupying the WIP slot.
+
+Remaining follow-up:
+
+- None known.

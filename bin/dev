@@ -179,7 +179,7 @@ Usage: $0 fabro <command> [args]
 
 Commands:
   validate-plan <plan_path>
-  deliver <plan_path>
+  deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
   review <branch> <plan_path> [base_ref_or_base_sha]
   clean-branches [--force]
 EOF
@@ -220,10 +220,87 @@ _fabro_validate_plan() {
     --auto-approve)
 }
 
+_fabro_plan_status() {
+  local plan_path="$1"
+  awk -F': *' '/^Status:/ {print tolower($2); exit}' "$repo_root/$plan_path"
+}
+
+_fabro_remote_wip_status() {
+  local plan_path="$1"
+  git -C "$repo_root" show origin/main:docs/iterations/README.md | python3 -c '
+import re
+import sys
+from pathlib import Path
+
+plan_path = Path(sys.argv[1])
+exclude = plan_path.parent.name.split("-", 1)[0]
+active_statuses = {"implementing", "ready-for-review", "in-review", "reviewing", "finalizing"}
+active = []
+for line in sys.stdin:
+    if not line.startswith("|") or "[plan](" not in line:
+        continue
+    cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    if len(cells) < 5 or cells[0] in {"---", "#"}:
+        continue
+    status = cells[2].lower()
+    if status not in active_statuses or cells[0] == exclude:
+        continue
+    match = re.search(r"\[plan\]\(([^)]+)\)", cells[4])
+    path = f"docs/iterations/{match.group(1)}" if match else ""
+    active.append(f"- {cells[0]} {cells[3]} ({cells[2]}) {path}")
+if active:
+    print("Implementation WIP limit is occupied by active iteration(s):")
+    print("\n".join(active))
+    raise SystemExit(1)
+print("Implementation WIP slot is clear on origin/main.")
+' "$plan_path"
+}
+
+_fabro_wait_for_wip_slot() {
+  local plan_path="$1"
+  local poll_interval="$2"
+  while true; do
+    git -C "$repo_root" fetch origin >/dev/null
+    if _fabro_remote_wip_status "$plan_path"; then
+      return 0
+    fi
+    echo "Waiting ${poll_interval}s for implementation WIP slot to clear..."
+    sleep "$poll_interval"
+  done
+}
+
 _fabro_deliver() {
   local plan_path="${1:-}"
+  if [ "$plan_path" = "-h" ] || [ "$plan_path" = "--help" ]; then
+    echo "Usage: $0 fabro deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]" >&2
+    exit 0
+  fi
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+  local wait_for_wip=1
+  local poll_interval=60
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --wait) wait_for_wip=1; shift ;;
+      --no-wait) wait_for_wip=0; shift ;;
+      --poll-interval)
+        poll_interval="${2:-}"
+        if ! [[ "$poll_interval" =~ ^[0-9]+$ ]] || [ "$poll_interval" -lt 1 ]; then
+          echo "--poll-interval must be a positive integer number of seconds" >&2
+          exit 2
+        fi
+        shift 2
+        ;;
+      -h|--help|"")
+        echo "Usage: $0 fabro deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]" >&2
+        exit 0
+        ;;
+      *) echo "Unknown deliver option: $1" >&2; exit 2 ;;
+    esac
+  done
   if [ -z "$plan_path" ]; then
-    echo "Usage: $0 fabro deliver <plan_path>" >&2
+    echo "Usage: $0 fabro deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]" >&2
     exit 2
   fi
   case "$plan_path" in
@@ -253,8 +330,39 @@ _fabro_deliver() {
     exit 1
   fi
 
-  echo "== Validating iteration plan =="
-  _fabro_validate_plan "$plan_path"
+  local plan_status
+  plan_status=$(_fabro_plan_status "$plan_path")
+  case "$plan_status" in
+    validated)
+      echo "== Plan already validated; skipping validation =="
+      ;;
+    ready)
+      echo "== Validating iteration plan =="
+      _fabro_validate_plan "$plan_path"
+      git -C "$repo_root" pull --ff-only origin main
+      plan_status=$(_fabro_plan_status "$plan_path")
+      if [ "$plan_status" != "validated" ]; then
+        echo "Plan validation completed, but $plan_path is now '$plan_status' rather than 'validated'." >&2
+        exit 1
+      fi
+      ;;
+    "")
+      echo "Plan status not found in $plan_path" >&2
+      exit 1
+      ;;
+    *)
+      echo "Plan must be ready or validated before delivery; current status is: $plan_status" >&2
+      exit 1
+      ;;
+  esac
+
+  echo "== Waiting for implementation WIP slot =="
+  if [ "$wait_for_wip" -eq 1 ]; then
+    _fabro_wait_for_wip_slot "$plan_path" "$poll_interval"
+    git -C "$repo_root" pull --ff-only origin main
+  else
+    (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path" --allow-same-iteration)
+  fi
 
   echo "== Reserving implementation WIP slot =="
   (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path" --allow-same-iteration)
