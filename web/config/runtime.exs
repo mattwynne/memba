@@ -20,6 +20,16 @@ if System.get_env("PHX_SERVER") do
   config :memba, MembaWeb.Endpoint, server: true
 end
 
+case Memba.Messaging.DeliveryProviderConfig.provider_override!(
+       System.get_env("MEMBA_MESSAGING_DELIVERY_PROVIDER")
+     ) do
+  :default ->
+    :ok
+
+  delivery_provider ->
+    config :memba, :messaging_delivery_provider, delivery_provider
+end
+
 config :memba, MembaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
 if config_env() == :prod do
