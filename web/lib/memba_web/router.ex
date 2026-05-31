@@ -1,9 +1,12 @@
 defmodule MembaWeb.Router do
   use MembaWeb, :router
 
+  import MembaWeb.UserAuth
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
+    plug :fetch_current_identity
     plug :fetch_live_flash
     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
     plug :protect_from_forgery
@@ -13,6 +16,7 @@ defmodule MembaWeb.Router do
   pipeline :staff_browser do
     plug :accepts, ["html"]
     plug :fetch_session
+    plug :fetch_current_identity
     plug :fetch_live_flash
     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
     plug :protect_from_forgery
