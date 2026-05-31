@@ -30,8 +30,6 @@ devenv container run fabro-dev
 
 `devenv container run` first copies the Nix-built image into the local Docker daemon, then starts it. If all you need is to refresh Docker's local image, it is still the practical command to use.
 
-CI publishes `ghcr.io/mattwynne/memba-fabro-dev:latest` and a commit-tagged image for every push to `main`. Delivery helpers pass the commit tag into Fabro workflows as `sandbox_image_tag`, so runs use an immutable image reference instead of relying on Docker to refresh a cached `:latest` tag.
-
 ## Packaging tools for Fabro
 
 Fabro expects common tools such as `git` to be available on `PATH` inside the generated container. The default `devenv` container root supplies a `/bin` with shell/coreutils, but packages in the top-level `packages` list are not automatically linked into `/bin`.
