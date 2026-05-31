@@ -59,8 +59,7 @@ devenv_with_postgres_port() {
   fi
 }
 
-# @cmd Start development services
-up() {
+start_services() {
   if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
     return
   fi
@@ -80,6 +79,13 @@ up() {
   fi
 }
 
+# @cmd Start Postgres and the Phoenix web app
+up() {
+  start_services
+  trap down EXIT
+  (cd "$repo_root/web" && mix phx.server)
+}
+
 # @cmd Stop development services
 down() {
   devenv_with_postgres_port processes down || true
@@ -91,19 +97,14 @@ precommit() {
 
 # @cmd Run the standard local quality gate with required services
 ci() {
-  up
+  start_services
   trap down EXIT
   precommit
 }
 
-# @cmd Start the Phoenix web app
-web() {
-  (cd web && mix phx.server)
-}
-
 # @cmd Run the standard local quality gate
 check() {
-  up
+  start_services
   trap down EXIT
   precommit
 }
@@ -144,7 +145,7 @@ sandbox_check() {
     rm -f "$probe"
   done
 
-  up
+  start_services
   trap down EXIT
 
   echo "Starting test dependency compile smoke test..."
