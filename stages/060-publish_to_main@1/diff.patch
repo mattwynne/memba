@@ -1,0 +1,300 @@
+diff --git a/.fabro/workflows/README.md b/.fabro/workflows/README.md
+index 8769a2e..48eead0 100644
+--- a/.fabro/workflows/README.md
++++ b/.fabro/workflows/README.md
+@@ -9,7 +9,7 @@ bin/dev fabro deliver docs/iterations/NNN-topic/plan.md [--wait|--no-wait] [--po
+ The helper runs the real workflows directly from the CLI, so approval stays at the user-run command boundary instead of inside worker-created child runs:
+ 
+ 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
+-2. `bin/dev` waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the slot is clear, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
++2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
+ 3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
+ 4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and marks the iteration `merged` after a successful review.
+ 
+@@ -32,12 +32,13 @@ fabro run .fabro/workflows/plan-validation/workflow.toml \
+   --auto-approve
+ ```
+ 
+-Starting implementation remains single-piece-flow. `bin/dev fabro deliver` waits by default while another iteration is `implementing`, `ready-for-review`, `in-review`, `reviewing`, or `finalizing`; with `--no-wait` it refuses immediately instead.
++Starting implementation remains ordered single-piece-flow. `bin/dev fabro deliver` refuses to start iteration N until earlier-numbered iterations are `merged`. It also waits by default while another iteration is `implementing`, `ready-for-review`, `in-review`, `reviewing`, or `finalizing`; with `--no-wait` it refuses immediately instead.
+ 
+ Manual split-phase escape hatches remain available:
+ 
+ ```bash
+ fabro run .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
++.fabro/workflows/scripts/iteration_status.py check-predecessors docs/iterations/NNN-topic/plan.md
+ .fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/NNN-topic/plan.md
+ fabro run .fabro/workflows/iteration-implementation/workflow.toml -I plan_path=docs/iterations/NNN-topic/plan.md --auto-approve
+ bin/dev fabro review <branch> docs/iterations/NNN-topic/plan.md <base-sha>
+diff --git a/.fabro/workflows/iteration-implementation/workflow.fabro b/.fabro/workflows/iteration-implementation/workflow.fabro
+index 674bbc7..01d8a0e 100644
+--- a/.fabro/workflows/iteration-implementation/workflow.fabro
++++ b/.fabro/workflows/iteration-implementation/workflow.fabro
+@@ -37,7 +37,7 @@ digraph IterationImplementation {
+     wip_gate [
+         label="Check Implementation WIP Slot",
+         shape=parallelogram,
+-        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
++        script="set -eu\nPLAN_PATH='{{ inputs.plan_path }}'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+         timeout="120s"
+     ]
+ 
+@@ -45,7 +45,7 @@ digraph IterationImplementation {
+         label="Fail: Implementation WIP Occupied",
+         shape=parallelogram,
+         goal_gate=true,
+-        script="echo 'Iteration implementation failed before coding: another iteration already occupies the implementation WIP slot. Plan validation may run in parallel, but implementation must remain single-piece-flow.' >&2\nexit 1"
++        script="echo 'Iteration implementation failed before coding: iteration ordering or WIP checks did not pass. Plan validation may run in parallel, but implementation must wait until earlier iterations are merged and no other iteration occupies the WIP slot.' >&2\nexit 1"
+     ]
+ 
+     preflight_sandbox [
+diff --git a/.fabro/workflows/scripts/iteration_status.py b/.fabro/workflows/scripts/iteration_status.py
+index f093fc3..afd5582 100755
+--- a/.fabro/workflows/scripts/iteration_status.py
++++ b/.fabro/workflows/scripts/iteration_status.py
+@@ -18,6 +18,8 @@ ACTIVE_STATUSES = {
+     "finalizing",
+ }
+ 
++MERGED_STATUS = "merged"
++
+ 
+ @dataclass(frozen=True)
+ class IterationRow:
+@@ -74,6 +76,23 @@ def active_rows(rows: list[IterationRow], exclude_number: str | None = None) ->
+     ]
+ 
+ 
++def predecessor_rows_not_merged(rows: list[IterationRow], selected_number: str) -> list[IterationRow]:
++    try:
++        selected = int(selected_number)
++    except ValueError:
++        raise SystemExit(f"Iteration number must be numeric: {selected_number}") from None
++
++    blockers: list[IterationRow] = []
++    for row in rows:
++        try:
++            number = int(row.number)
++        except ValueError:
++            continue
++        if number < selected and row.status.strip().lower() != MERGED_STATUS:
++            blockers.append(row)
++    return blockers
++
++
+ def replace_plan_status(plan_path: Path, status: str) -> None:
+     if not plan_path.exists():
+         raise SystemExit(f"Plan not found: {plan_path}")
+@@ -126,6 +145,27 @@ def cmd_check_clear(args: argparse.Namespace) -> int:
+     return 0
+ 
+ 
++def cmd_check_predecessors(args: argparse.Namespace) -> int:
++    plan_path = Path(args.plan_path)
++    _, rows = parse_index()
++    selected_number = iteration_number_from_plan(plan_path)
++    blockers = predecessor_rows_not_merged(rows, selected_number)
++    if blockers:
++        print("Iteration delivery is blocked by earlier iteration(s) that are not merged:", file=sys.stderr)
++        for row in blockers:
++            print(
++                f"- {row.number} {row.title} ({row.status}) {row.plan_path}",
++                file=sys.stderr,
++            )
++        print(
++            "Deliver earlier iterations first, or add an explicit workflow-supported override if this iteration is intentionally independent.",
++            file=sys.stderr,
++        )
++        return 1
++    print("Earlier iterations are merged.")
++    return 0
++
++
+ def cmd_mark(args: argparse.Namespace) -> int:
+     plan_path = Path(args.plan_path)
+     if args.check_clear_first:
+@@ -153,6 +193,13 @@ def build_parser() -> argparse.ArgumentParser:
+     check.add_argument("--allow-same-iteration", action="store_true")
+     check.set_defaults(func=cmd_check_clear)
+ 
++    predecessors = sub.add_parser(
++        "check-predecessors",
++        help="fail if earlier-numbered iterations have not been merged",
++    )
++    predecessors.add_argument("plan_path")
++    predecessors.set_defaults(func=cmd_check_predecessors)
++
+     mark = sub.add_parser("mark", help="mark an iteration plan and index row with a lifecycle status")
+     mark.add_argument("plan_path")
+     mark.add_argument("status")
+diff --git a/bin/dev b/bin/dev
+index 9a41658..efab485 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -165,7 +165,7 @@ acceptance() {
+ }
+ 
+ # @cmd Manage iteration lifecycle status
+-# @arg command![status|mark|check-clear] Helper command
++# @arg command![status|mark|check-clear|check-predecessors] Helper command
+ # @arg args~ Arguments for the helper command
+ iteration() {
+   local command_name="${1:-}"
+@@ -188,6 +188,9 @@ iteration() {
+     check-clear)
+       _iteration_status_tool check-clear "$@"
+       ;;
++    check-predecessors)
++      _iteration_status_tool check-predecessors "$@"
++      ;;
+     -h|--help|"")
+       cat >&2 <<EOF
+ Usage: $0 iteration <command> [args]
+@@ -196,6 +199,7 @@ Commands:
+   status <plan_path>
+   mark <plan_path> <status> [--check-clear-first]
+   check-clear <plan_path> [--allow-same-iteration]
++  check-predecessors <plan_path>
+ EOF
+       ;;
+     *)
+@@ -414,6 +418,8 @@ _fabro_deliver() {
+     exit 1
+   fi
+ 
++  git -C "$repo_root" pull --ff-only origin main
++
+   local plan_status
+   plan_status=$(_fabro_plan_status "$plan_path")
+   case "$plan_status" in
+@@ -440,6 +446,9 @@ _fabro_deliver() {
+       ;;
+   esac
+ 
++  echo "== Checking predecessor iterations =="
++  "$0" iteration check-predecessors "$plan_path"
++
+   echo "== Waiting for implementation WIP slot =="
+   if [ "$wait_for_wip" -eq 1 ]; then
+     _fabro_wait_for_wip_slot "$plan_path" "$poll_interval"
+diff --git a/docs/kaizen/2026-05-31-deliver-allows-out-of-order-iterations.md b/docs/kaizen/2026-05-31-deliver-allows-out-of-order-iterations.md
+new file mode 100644
+index 0000000..64acc8c
+--- /dev/null
++++ b/docs/kaizen/2026-05-31-deliver-allows-out-of-order-iterations.md
+@@ -0,0 +1,115 @@
++# Problem: deliver allows iterations to start out of order
++
++Date: 2026-05-31
++
++## Context
++
++We were preparing to deliver `docs/iterations/010-shared-magic-link-auth/plan.md` after it had been validated. Iteration 010 assumes the route/admin surface split from `docs/iterations/009-routing-and-liveview-surface-split/plan.md` already exists.
++
++The command path was:
++
++```text
++bin/dev fabro deliver docs/iterations/010-shared-magic-link-auth/plan.md
++```
++
++The delivery helper marked iteration 010 as `implementing` and started Fabro implementation run `01KSZC62M7H741DK0T18PM1JNF`.
++
++## Expected standard
++
++Iterations are numbered and sequenced so later slices can rely on earlier slices being delivered. Starting implementation should protect that sequencing, not just the single implementation WIP slot.
++
++A later iteration should not start implementation while an earlier iteration is still only `validated`, unless the workflow has an explicit way to declare and approve that the iterations are independent or intentionally reordered.
++
++## What happened
++
++Iteration 010 was allowed to start while iteration 009 was still `validated`, not `merged`.
++
++The 010 implementation run then discovered the missing prerequisite itself. Its generated `docs/iterations/010-shared-magic-link-auth/route-inspection.md` recorded:
++
++- there was no `/admin` scope,
++- no `:staff_browser` pipeline,
++- no `MembaWeb.Admin.*` LiveView namespace,
++- and the current harness routes were still exposed at public paths.
++
++That meant 010 had begun absorbing prerequisite 009 work instead of building on a completed 009 foundation.
++
++We interrupted and removed the 010 run, restored 010 to `validated`, and then started delivery for 009 first:
++
++```text
++fabro rm --force 01KSZC62M7H7
++bin/dev iteration mark docs/iterations/010-shared-magic-link-auth/plan.md validated
++bin/dev fabro deliver docs/iterations/009-routing-and-liveview-surface-split/plan.md
++```
++
++Relevant commits:
++
++- `cdeaf6a` — `iteration 010: mark implementing`
++- `6098636` — `iteration 010: restore validated before 009 delivery`
++- `298f874` — `iteration 009: mark implementing`
++
++## Impact
++
++This wasted implementation effort and created sequencing confusion. If it had continued, iteration 010 could have published a mixed implementation containing both route-split work and magic-link auth work, making review harder and weakening the iteration boundary.
++
++It also risked hiding the real cause: the code was not wrong because 010's implementation was intrinsically bad; it was wrong because the prerequisite iteration had not been delivered.
++
++## What allowed it to happen
++
++`bin/dev fabro deliver` checks only that:
++
++- the selected plan is `ready` or `validated`, and
++- the implementation WIP slot is clear of active statuses such as `implementing`, `ready-for-review`, `reviewing`, or `finalizing`.
++
++It does not check whether earlier-numbered iterations are already `merged` before allowing a later-numbered iteration to reserve the WIP slot.
++
++Plan validation can run ahead of implementation by design, but the same lifecycle model does not distinguish "validated and ready to deliver now" from "validated but waiting for an earlier dependency to merge".
++
++## Observations
++
++- `docs/iterations/README.md` showed iteration 009 as `validated` and iteration 010 as `validated` before 010 delivery began.
++- The WIP slot was technically clear because no iteration was active, so the delivery helper allowed 010 to start.
++- Iteration 010's own plan text depended on the post-009 route structure: it refers to protecting `/admin/*` and assumes the admin route/module split exists.
++- The abnormality became visible only after implementation had started and inspected the codebase.
++- Recovery required operator judgement: identify the prerequisite gap, stop the 010 run, restore 010 status, and manually start 009.
++
++## Why this matters
++
++Iteration boundaries are meant to keep each slice independently reviewable and shippable. If later slices can start before earlier dependent slices are merged, the workflow can accidentally create large mixed-scope changes and make automated review, rollback, and learning less reliable.
++
++## Open questions
++
++- Should numbered iterations be strictly delivered in order by default?
++- If out-of-order delivery is sometimes valid, where should an explicit dependency or independence declaration live?
++- Should `validated` be split into separate states for "validated but blocked by predecessor" and "validated and deliverable now"?
++
++## Possible prevention ideas
++
++- Add a delivery preflight that refuses to start iteration N when any lower-numbered iteration is not `merged`, unless an explicit override/dependency declaration allows it.
++- Teach plan validation or iteration planning to record dependencies between iterations when a plan assumes another slice's output.
++- Make the refusal message name the earlier blocking iteration and show the command to deliver it first.
++
++## Resolution
++
++Date: 2026-05-31
++
++Root cause: the delivery lifecycle guarded only the selected plan status and the active implementation WIP slot. It allowed any `ready` or `validated` iteration to reserve implementation when no active iteration was present, even if earlier-numbered iterations were still unmerged prerequisites.
++
++Fix applied:
++
++- `.fabro/workflows/scripts/iteration_status.py`: added `check-predecessors`, which fails when any earlier-numbered iteration in `docs/iterations/README.md` is not `merged` and prints the blocking iteration paths.
++- `bin/dev`: exposed `bin/dev iteration check-predecessors`, pulls `origin/main` before delivery status checks, and runs the predecessor check before waiting for/reserving the implementation WIP slot.
++- `.fabro/workflows/iteration-implementation/workflow.fabro`: added the same predecessor check to the direct implementation WIP gate so manual implementation runs cannot bypass ordered delivery.
++- `.fabro/workflows/README.md`: documented ordered single-piece-flow and updated the manual implementation escape-hatch commands.
++
++Validation:
++
++- `python3 -m py_compile .fabro/workflows/scripts/iteration_status.py` — passed.
++- `bash -n bin/dev` — passed.
++- `MEMBA_DEVENV_SHELL=1 ./bin/dev iteration check-predecessors docs/iterations/009-routing-and-liveview-surface-split/plan.md` — passed while 001–008 were merged.
++- `MEMBA_DEVENV_SHELL=1 ./bin/dev iteration check-predecessors docs/iterations/010-shared-magic-link-auth/plan.md` — failed as expected while 009 was `implementing`, naming 009 as the blocker.
++- `fabro validate .fabro/workflows/iteration-implementation/workflow.fabro` — passed with existing goal-gate warnings.
++- `PATH="$PWD/bin:$PATH" dev check` — passed, 132 tests, 0 failures.
++
++Remaining follow-up:
++
++- If out-of-order delivery becomes necessary, add an explicit dependency/override mechanism rather than weakening the default ordered guard.
