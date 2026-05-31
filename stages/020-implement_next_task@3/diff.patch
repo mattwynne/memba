@@ -1,0 +1,148 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 50fd8e7..6f13cbc 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the post-iteration-009 route structure and admin pipeline.
+ - [x] 001a Reconcile the missing post-iteration-009 admin route structure before auth gates: move the existing harness LiveViews under `/admin/*`, introduce a `:staff_browser` seam, update links/tests, and preserve `POST /webhooks/postmark`.
+-- [ ] 002 Add persistence for authentication:
++- [x] 002 Add persistence for authentication:
+ - [ ] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [ ] 004 Extend `Memba.Membership` query API as needed:
+ - [ ] 005 Add auth email delivery:
+diff --git a/web/lib/memba/accounts/magic_token.ex b/web/lib/memba/accounts/magic_token.ex
+new file mode 100644
+index 0000000..af04d14
+--- /dev/null
++++ b/web/lib/memba/accounts/magic_token.ex
+@@ -0,0 +1,21 @@
++defmodule Memba.Accounts.MagicToken do
++  @moduledoc """
++  Persistence schema for one-time email magic-link authentication tokens.
++
++  Only the token hash is stored. The raw token is generated and shown to the
++  user once by the Accounts context, then discarded.
++  """
++
++  use Ecto.Schema
++
++  @derive {Inspect, except: [:token_hash]}
++  @primary_key {:magic_token_id, :binary_id, autogenerate: true}
++  schema "accounts_magic_tokens" do
++    field :email, :string
++    field :token_hash, :binary
++    field :expires_at, :utc_datetime_usec
++    field :consumed_at, :utc_datetime_usec
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/priv/repo/migrations/20260531162834_create_accounts_magic_tokens.exs b/web/priv/repo/migrations/20260531162834_create_accounts_magic_tokens.exs
+new file mode 100644
+index 0000000..02d7e8d
+--- /dev/null
++++ b/web/priv/repo/migrations/20260531162834_create_accounts_magic_tokens.exs
+@@ -0,0 +1,19 @@
++defmodule Memba.Repo.Migrations.CreateAccountsMagicTokens do
++  use Ecto.Migration
++
++  def change do
++    create table(:accounts_magic_tokens, primary_key: false) do
++      add :magic_token_id, :uuid, primary_key: true
++      add :email, :text, null: false
++      add :token_hash, :binary, null: false
++      add :expires_at, :utc_datetime_usec, null: false
++      add :consumed_at, :utc_datetime_usec
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create unique_index(:accounts_magic_tokens, [:token_hash])
++    create index(:accounts_magic_tokens, [:email])
++    create index(:accounts_magic_tokens, [:expires_at])
++  end
++end
+diff --git a/web/test/memba/accounts/magic_token_persistence_test.exs b/web/test/memba/accounts/magic_token_persistence_test.exs
+new file mode 100644
+index 0000000..4bbffc9
+--- /dev/null
++++ b/web/test/memba/accounts/magic_token_persistence_test.exs
+@@ -0,0 +1,77 @@
++defmodule Memba.Accounts.MagicTokenPersistenceTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Accounts.MagicToken
++
++  describe "accounts_magic_tokens persistence" do
++    test "persists a hashed magic token with expiry and optional consumption timestamp" do
++      expires_at = DateTime.add(DateTime.utc_now(), 15, :minute)
++      consumed_at = DateTime.utc_now()
++      token_hash = :crypto.hash(:sha256, "opaque token")
++
++      token =
++        Repo.insert!(%MagicToken{
++          email: "member@example.com",
++          token_hash: token_hash,
++          expires_at: expires_at,
++          consumed_at: consumed_at
++        })
++
++      assert token.magic_token_id
++      assert token.email == "member@example.com"
++      assert token.token_hash == token_hash
++      assert DateTime.compare(token.expires_at, expires_at) == :eq
++      assert DateTime.compare(token.consumed_at, consumed_at) == :eq
++      assert token.inserted_at
++      assert token.updated_at
++    end
++
++    test "stores token hashes uniquely and has no plaintext token field" do
++      fields = MagicToken.__schema__(:fields)
++
++      assert :token_hash in fields
++      refute :token in fields
++
++      token_hash = :crypto.hash(:sha256, "single use token")
++      expires_at = DateTime.add(DateTime.utc_now(), 15, :minute)
++
++      Repo.insert!(%MagicToken{
++        email: "first@example.com",
++        token_hash: token_hash,
++        expires_at: expires_at
++      })
++
++      assert_raise Ecto.ConstraintError, fn ->
++        Repo.insert!(%MagicToken{
++          email: "second@example.com",
++          token_hash: token_hash,
++          expires_at: expires_at
++        })
++      end
++    end
++
++    for {field, column} <- [
++          {:email, "email"},
++          {:token_hash, "token_hash"},
++          {:expires_at, "expires_at"}
++        ] do
++      test "requires #{column}" do
++        attrs = Map.delete(valid_magic_token_attrs(), unquote(field))
++
++        assert_raise Postgrex.Error, ~r/null value in column "#{unquote(column)}"/, fn ->
++          MagicToken
++          |> struct!(attrs)
++          |> Repo.insert!()
++        end
++      end
++    end
++  end
++
++  defp valid_magic_token_attrs do
++    %{
++      email: "member@example.com",
++      token_hash: :crypto.hash(:sha256, "required fields"),
++      expires_at: DateTime.add(DateTime.utc_now(), 15, :minute)
++    }
++  end
++end
