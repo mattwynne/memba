@@ -1,0 +1,222 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index 00e84f7..5f241a7 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the current delivery-provider port, message send flow, Swoosh configuration, and Postmark webhook correlation code.
+ - [x] 002 Decide the smallest provider shape: likely `Memba.Messaging.DeliveryProviders.Postmark` implementing `Memba.Messaging.DeliveryProvider` and using `Memba.Mailer`/Swoosh.
+-- [ ] 003 Add configuration for selecting the Postmark provider only when explicitly configured, preserving the fake provider for tests and local defaults.
++- [x] 003 Add configuration for selecting the Postmark provider only when explicitly configured, preserving the fake provider for tests and local defaults.
+ - [ ] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
+ - [ ] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ - [ ] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+diff --git a/web/config/runtime.exs b/web/config/runtime.exs
+index eed876d..1058e74 100644
+--- a/web/config/runtime.exs
++++ b/web/config/runtime.exs
+@@ -20,6 +20,16 @@ if System.get_env("PHX_SERVER") do
+   config :memba, MembaWeb.Endpoint, server: true
+ end
+ 
++case Memba.Messaging.DeliveryProviderConfig.provider_override!(
++       System.get_env("MEMBA_MESSAGING_DELIVERY_PROVIDER")
++     ) do
++  :default ->
++    :ok
++
++  delivery_provider ->
++    config :memba, :messaging_delivery_provider, delivery_provider
++end
++
+ config :memba, MembaWeb.Endpoint, http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+ 
+ if config_env() == :prod do
+diff --git a/web/lib/memba/messaging/delivery_provider_config.ex b/web/lib/memba/messaging/delivery_provider_config.ex
+new file mode 100644
+index 0000000..0d02084
+--- /dev/null
++++ b/web/lib/memba/messaging/delivery_provider_config.ex
+@@ -0,0 +1,59 @@
++defmodule Memba.Messaging.DeliveryProviderConfig do
++  @moduledoc """
++  Runtime configuration helpers for selecting the messaging delivery provider.
++
++  Real delivery providers are selected only when a deployment explicitly opts in.
++  Leaving the environment variable unset preserves the application default, which
++  is the fake provider in local development and tests.
++  """
++
++  alias Memba.Messaging.DeliveryProviders.Fake
++  alias Memba.Messaging.DeliveryProviders.Postmark
++
++  @provider_env "MEMBA_MESSAGING_DELIVERY_PROVIDER"
++  @providers %{
++    "fake" => Fake,
++    "postmark" => Postmark
++  }
++
++  @doc """
++  Resolve an optional delivery-provider environment value.
++
++  Returns `:default` when no explicit provider was configured, so existing
++  application configuration remains in force.
++  """
++  def provider_override(nil), do: :default
++
++  def provider_override(value) when is_binary(value) do
++    provider_name = value |> String.trim() |> String.downcase()
++
++    case provider_name do
++      "" ->
++        :default
++
++      provider_name ->
++        case Map.fetch(@providers, provider_name) do
++          {:ok, provider} -> {:ok, provider}
++          :error -> {:error, unsupported_provider_message(value)}
++        end
++    end
++  end
++
++  @doc """
++  Resolve an optional delivery-provider environment value or raise clearly.
++  """
++  def provider_override!(value) do
++    case provider_override(value) do
++      :default -> :default
++      {:ok, provider} -> provider
++      {:error, message} -> raise ArgumentError, message
++    end
++  end
++
++  defp unsupported_provider_message(value) do
++    supported = @providers |> Map.keys() |> Enum.sort() |> Enum.join(", ")
++
++    "Unsupported #{@provider_env}=#{inspect(value)}. " <>
++      "Supported values are: #{supported}."
++  end
++end
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark.ex b/web/lib/memba/messaging/delivery_providers/postmark.ex
+new file mode 100644
+index 0000000..a9736cc
+--- /dev/null
++++ b/web/lib/memba/messaging/delivery_providers/postmark.ex
+@@ -0,0 +1,19 @@
++defmodule Memba.Messaging.DeliveryProviders.Postmark do
++  @moduledoc """
++  Postmark-backed delivery provider selected by explicit runtime configuration.
++
++  Email construction and Swoosh delivery are implemented by later tasks in the
++  Postmark integration iteration. Until then, selecting this provider fails
++  visibly instead of silently falling back to fake delivery.
++  """
++
++  alias Memba.Messaging.DeliveryProvider
++  alias Memba.Messaging.DeliveryRequest
++
++  @behaviour DeliveryProvider
++
++  @impl DeliveryProvider
++  def deliver(%DeliveryRequest{}) do
++    {:error, :postmark_delivery_not_configured}
++  end
++end
+diff --git a/web/test/memba/messaging/delivery_provider_config_test.exs b/web/test/memba/messaging/delivery_provider_config_test.exs
+new file mode 100644
+index 0000000..55588a9
+--- /dev/null
++++ b/web/test/memba/messaging/delivery_provider_config_test.exs
+@@ -0,0 +1,29 @@
++defmodule Memba.Messaging.DeliveryProviderConfigTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.DeliveryProviderConfig
++  alias Memba.Messaging.DeliveryProviders.Fake
++  alias Memba.Messaging.DeliveryProviders.Postmark
++
++  test "does not override the configured provider when no explicit provider is named" do
++    assert DeliveryProviderConfig.provider_override(nil) == :default
++    assert DeliveryProviderConfig.provider_override("") == :default
++    assert DeliveryProviderConfig.provider_override("   ") == :default
++  end
++
++  test "selects the fake provider only when explicitly named" do
++    assert DeliveryProviderConfig.provider_override("fake") == {:ok, Fake}
++  end
++
++  test "selects the Postmark provider only when explicitly named" do
++    assert DeliveryProviderConfig.provider_override("postmark") == {:ok, Postmark}
++  end
++
++  test "rejects unknown provider names" do
++    assert {:error, message} = DeliveryProviderConfig.provider_override("smtp")
++
++    assert message =~ "Unsupported MEMBA_MESSAGING_DELIVERY_PROVIDER"
++    assert message =~ "fake"
++    assert message =~ "postmark"
++  end
++end
+diff --git a/web/test/memba/messaging/delivery_provider_test.exs b/web/test/memba/messaging/delivery_provider_test.exs
+new file mode 100644
+index 0000000..21002b5
+--- /dev/null
++++ b/web/test/memba/messaging/delivery_provider_test.exs
+@@ -0,0 +1,57 @@
++defmodule Memba.Messaging.DeliveryProviderTest do
++  use ExUnit.Case, async: false
++
++  alias Memba.Messaging.DeliveryProvider
++  alias Memba.Messaging.DeliveryProviders.Fake
++  alias Memba.Messaging.DeliveryProviders.Postmark
++  alias Memba.Messaging.DeliveryRequest
++
++  setup do
++    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
++
++    Fake.reset()
++
++    on_exit(fn ->
++      if is_nil(original_provider) do
++        Application.delete_env(:memba, :messaging_delivery_provider)
++      else
++        Application.put_env(:memba, :messaging_delivery_provider, original_provider)
++      end
++
++      Fake.reset()
++    end)
++
++    :ok
++  end
++
++  test "defaults to the fake provider for deterministic tests and local development" do
++    Application.delete_env(:memba, :messaging_delivery_provider)
++
++    request = delivery_request()
++
++    assert :ok = DeliveryProvider.deliver(request)
++    assert Fake.deliveries() == [request]
++  end
++
++  test "uses the explicitly configured Postmark provider instead of silently using fake" do
++    Application.put_env(:memba, :messaging_delivery_provider, Postmark)
++
++    request = delivery_request()
++
++    assert {:error, :postmark_delivery_not_configured} = DeliveryProvider.deliver(request)
++    assert Fake.deliveries() == []
++  end
++
++  defp delivery_request do
++    %DeliveryRequest{
++      message_id: Ecto.UUID.generate(),
++      delivery_id: Ecto.UUID.generate(),
++      recipient_id: Ecto.UUID.generate(),
++      recipient_name: "Alice",
++      recipient_address: "alice@example.com",
++      channel: :email,
++      subject: "Trail day",
++      body: "Meet at 9am."
++    }
++  end
++end
