@@ -1,0 +1,382 @@
+diff --git a/acceptance-tests/features/support/lifecycle.js b/acceptance-tests/features/support/lifecycle.js
+index 6557d90..e7334d7 100644
+--- a/acceptance-tests/features/support/lifecycle.js
++++ b/acceptance-tests/features/support/lifecycle.js
+@@ -405,11 +405,17 @@ function createBrowserAcceptanceLifecycle(options = {}) {
+         });
+ 
+         for (const step of databaseSetupSteps) {
+-          await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {
+-            label: `Database setup: ${step.label}`,
+-            timeoutMs: currentConfig.commandTimeoutMs,
+-            logBuffer
+-          });
++          try {
++            await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {
++              label: `Database setup: ${step.label}`,
++              timeoutMs: currentConfig.commandTimeoutMs,
++              logBuffer
++            });
++          } catch (error) {
++            throw new Error(`Database setup failed while ${step.label}.\nCause: ${error.message}`, {
++              cause: error
++            });
++          }
+         }
+ 
+         phoenixProcess = await processRunner.start(buildPhoenixCommand(currentConfig), {
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index fe088e4..59dbb05 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -141,13 +141,38 @@ function delay(ms) {
+   return new Promise((resolve) => setTimeout(resolve, ms));
+ }
+ 
++function errorMessage(error) {
++  return error && error.message ? error.message : String(error);
++}
++
++async function browserInteraction(description, action) {
++  try {
++    return await action();
++  } catch (error) {
++    throw new Error(`Browser interaction failed: ${description}.\nCause: ${errorMessage(error)}`, {
++      cause: error
++    });
++  }
++}
++
++function assertFinalBrowserState(description, assertion) {
++  try {
++    return assertion();
++  } catch (error) {
++    throw new Error(`Assertion mismatch: ${description}.\nCause: ${errorMessage(error)}`, {
++      cause: error
++    });
++  }
++}
++
+ async function withProjectionWait(description, assertion) {
+   try {
+     return await assertion();
+   } catch (error) {
+     throw new Error(
+-      `Timed out waiting for projected browser UI: ${description}.\n` +
+-        `Last assertion error: ${error.message}`
++      `Projection timing timeout: timed out waiting for projected browser UI: ${description}.\n` +
++        `Last assertion error: ${errorMessage(error)}`,
++      { cause: error }
+     );
+   }
+ }
+@@ -201,7 +226,7 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
+ }
+ 
+ async function visitClubsIndex(world) {
+-  await world.page.goto(appUrl(world.baseUrl, "/clubs"));
++  await browserInteraction("visit /clubs", () => world.page.goto(appUrl(world.baseUrl, "/clubs")));
+ }
+ 
+ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
+@@ -210,7 +235,9 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs
+   const club = world.clubs[clubName];
+   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
+ 
+-  await world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`));
++  await browserInteraction(`visit club page for ${clubName}`, () =>
++    world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`))
++  );
+   await waitForProjectedVisible(
+     world,
+     world.page.getByRole("heading", { name: clubName }),
+@@ -225,7 +252,9 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
+   const message = world.messages[subject];
+   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+ 
+-  await world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`));
++  await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>
++    world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`))
++  );
+   await waitForProjectedVisible(
+     world,
+     world.page.getByRole("heading", { name: subject }),
+@@ -242,8 +271,10 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
+   const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
+   const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
+ 
+-  await world.page.getByLabel("Club name").fill(clubName);
+-  await world.page.getByRole("button", { name: "Create club" }).click();
++  await browserInteraction(`submit club creation form for ${clubName}`, async () => {
++    await world.page.getByLabel("Club name").fill(clubName);
++    await world.page.getByRole("button", { name: "Create club" }).click();
++  });
+   await waitForProjectedCount(
+     world,
+     clubRows,
+@@ -287,9 +318,11 @@ async function createPersonOnCurrentClubPage(world, name, { expect = playwrightE
+   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
+   const email = emailFor(name);
+ 
+-  await world.page.getByLabel("Person name").fill(name);
+-  await world.page.getByLabel("Person email").fill(email);
+-  await world.page.getByRole("button", { name: "Create person" }).click();
++  await browserInteraction(`submit person creation form for ${name}`, async () => {
++    await world.page.getByLabel("Person name").fill(name);
++    await world.page.getByLabel("Person email").fill(email);
++    await world.page.getByRole("button", { name: "Create person" }).click();
++  });
+   await waitForProjectedCount(
+     world,
+     personRows,
+@@ -338,8 +371,10 @@ async function addMemberOnCurrentClubPage(
+   const memberRows = rowsByData(world.page, "member-row", "data-member-name", personName);
+   const previousMemberIds = await rowAttributeValues(memberRows, "data-member-id");
+ 
+-  await world.page.getByLabel("Person to add as member").selectOption(person.personId);
+-  await world.page.getByRole("button", { name: "Add member" }).click();
++  await browserInteraction(`submit add-member form for ${personName} in ${clubName}`, async () => {
++    await world.page.getByLabel("Person to add as member").selectOption(person.personId);
++    await world.page.getByRole("button", { name: "Add member" }).click();
++  });
+   await waitForProjectedCount(
+     world,
+     memberRows,
+@@ -386,10 +421,12 @@ async function sendMessageToKootenayMembers(
+   const sender = world.people[senderName];
+   assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
+ 
+-  await world.page.getByLabel("Message sender").selectOption(sender.personId);
+-  await world.page.getByLabel("Message subject").fill(subject);
+-  await world.page.getByLabel("Message body").fill(body);
+-  await world.page.getByRole("button", { name: "Send club message" }).click();
++  await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {
++    await world.page.getByLabel("Message sender").selectOption(sender.personId);
++    await world.page.getByLabel("Message subject").fill(subject);
++    await world.page.getByLabel("Message body").fill(body);
++    await world.page.getByRole("button", { name: "Send club message" }).click();
++  });
+   await waitForProjectedCount(
+     world,
+     messageRows,
+@@ -442,7 +479,10 @@ async function assertLastMessageAddressedTo(
+   );
+ 
+   const actualNames = await rowDatasetValues(rows, "recipientName");
+-  assert.deepEqual(actualNames, expectedNames);
++  assertFinalBrowserState(
++    `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,
++    () => assert.deepEqual(actualNames, expectedNames)
++  );
+ 
+   world.addressedMemberNames = expectedNames;
+   world.addressedMemberIds = expectedNames.map((name) => {
+@@ -463,9 +503,13 @@ async function assertLastMessageNotAddressedTo(
+ 
+   const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
+   const actualNames = await rowDatasetValues(rows, "recipientName");
+-  assert.ok(
+-    !actualNames.includes(excludedName),
+-    `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
++  assertFinalBrowserState(
++    `addressed recipients should not include ${excludedName}`,
++    () =>
++      assert.ok(
++        !actualNames.includes(excludedName),
++        `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
++      )
+   );
+ 
+   return world;
+@@ -496,7 +540,9 @@ async function assertEachAddressedMemberHasSeparateDeliveryRecord(
+   const deliveryIds = await rowDatasetValues(rows, "deliveryId");
+   const recipientNames = await rowDatasetValues(rows, "recipientName");
+ 
+-  assert.deepEqual(recipientIds, expectedIds);
++  assertFinalBrowserState(`delivery recipient IDs for ${JSON.stringify(world.lastMessageSubject)}`, () =>
++    assert.deepEqual(recipientIds, expectedIds)
++  );
+   assertUnique(deliveryIds, "delivery IDs");
+   assertUnique(recipientIds, "recipient IDs");
+ 
+@@ -630,10 +676,10 @@ async function waitForProjectedReceiptStatus(
+   } while (Date.now() <= deadline);
+ 
+   throw new Error(
+-    `Timed out after ${timeoutMs}ms waiting for projected receipt status: ` +
++    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for projected receipt status: ` +
+       `${recipientName}'s receipt for ${JSON.stringify(subject)} should become ${JSON.stringify(
+         expectedStatus
+-      )}.\nLast projection error: ${lastError ? lastError.message : "(none)"}`
++      )}.\nLast projection error: ${lastError ? errorMessage(lastError) : "(none)"}`
+   );
+ }
+ 
+@@ -732,12 +778,22 @@ async function postPostmarkWebhook(world, payload) {
+     "Expected Playwright request context to be available for Postmark webhook submission"
+   );
+ 
+-  const response = await request.post(appUrl(world.baseUrl, "/webhooks/postmark"), {
+-    data: payload,
+-    headers: {
+-      "content-type": "application/json"
+-    }
+-  });
++  let response;
++
++  try {
++    response = await request.post(appUrl(world.baseUrl, "/webhooks/postmark"), {
++      data: payload,
++      headers: {
++        "content-type": "application/json"
++      }
++    });
++  } catch (error) {
++    throw new Error(
++      `Postmark webhook submission failed: POST /webhooks/postmark request error.\n` +
++        `Payload: ${JSON.stringify(payload)}\nCause: ${errorMessage(error)}`,
++      { cause: error }
++    );
++  }
+   const status = response.status();
+ 
+   if (status !== 202) {
+@@ -757,10 +813,12 @@ async function rowDatasetValues(rows, datasetName) {
+ }
+ 
+ function assertUnique(values, label) {
+-  assert.deepEqual(
+-    [...new Set(values)],
+-    values,
+-    `Expected ${label} to be unique; saw ${values.join(", ")}`
++  assertFinalBrowserState(`${label} should be unique`, () =>
++    assert.deepEqual(
++      [...new Set(values)],
++      values,
++      `Expected ${label} to be unique; saw ${values.join(", ")}`
++    )
+   );
+ }
+ 
+diff --git a/acceptance-tests/test/lifecycle.test.js b/acceptance-tests/test/lifecycle.test.js
+index 52954d5..43a3d92 100644
+--- a/acceptance-tests/test/lifecycle.test.js
++++ b/acceptance-tests/test/lifecycle.test.js
+@@ -107,3 +107,28 @@ test("readiness timeout reports Phoenix startup/readiness diagnostics", async ()
+     /Phoenix startup\/readiness failed: timed out after 0ms/
+   );
+ });
++
++test("database setup failures report database setup diagnostics", async () => {
++  const env = testEnv({ MEMBA_DEVENV_SHELL: "1" });
++  const lifecycle = createBrowserAcceptanceLifecycle({
++    env,
++    processRunner: {
++      async run(_spec, { label }) {
++        if (label === "Database setup: migrate test database") {
++          throw new Error("migration failed");
++        }
++      },
++      async start() {
++        throw new Error("Phoenix should not start after database setup failure");
++      }
++    },
++    async httpReady() {
++      return { statusCode: 200 };
++    }
++  });
++
++  await assert.rejects(
++    () => lifecycle.start(),
++    /Database setup failed while migrate test database\.\nCause: migration failed/
++  );
++});
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index cff7932..c73de5b 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -352,6 +352,20 @@ test("browser command projection waits use bounded Playwright assertion timeouts
+   );
+ });
+ 
++test("browser interaction failures are reported separately from projection waits", async () => {
++  const page = new FakePage();
++  page.goto = async (url) => {
++    page.actions.push(["goto", url]);
++    throw new Error("browser context closed");
++  };
++  const world = worldWithPage(page);
++
++  await assert.rejects(
++    () => createClub(world, kootenayClubName, { expect: fakeExpect([]) }),
++    /Browser interaction failed: visit \/clubs\.\nCause: browser context closed/
++  );
++});
++
+ test("creating people and members uses accessible form labels and keeps browser ids in scenario state", async () => {
+   const page = new FakePage();
+   const expectations = [];
+@@ -477,6 +491,29 @@ test("message assertions read addressed recipients, delivery records, email chan
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+ });
+ 
++test("final assertion mismatches are reported separately from projection timing", async () => {
++  const page = new FakePage();
++  page.rows.addressedRecipients.push(
++    { dataset: { recipientName: "Alice", recipientId: "person-alice" } },
++    { dataset: { recipientName: "Bob", recipientId: "person-bob" } }
++  );
++  const world = worldWithPage(page);
++  world.lastMessageSubject = "Trip planning night";
++  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
++  world.people = {
++    Alice: { personId: "person-alice" },
++    Bob: { personId: "person-bob" }
++  };
++
++  await assert.rejects(
++    () =>
++      assertLastMessageAddressedTo(world, ["Alice", "Carol"], {
++        expect: fakeExpect([])
++      }),
++    /Assertion mismatch: addressed recipients for "Trip planning night"\.\nCause:/
++  );
++});
++
+ test("Postmark webhook payloads map member-facing status events onto the app endpoint shape", () => {
+   const base = {
+     deliveryId: "delivery-bob",
+@@ -656,6 +693,21 @@ test("Postmark webhook submission failures report the endpoint and response deta
+   );
+ });
+ 
++test("projection timing failures are reported separately from final assertion mismatches", async () => {
++  const page = new FakePage();
++  const world = worldWithPage(page);
++  world.projectionTimeoutMs = 1;
++  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
++
++  await assert.rejects(
++    () =>
++      assertReceiptStatus(world, "Bob", "Trip planning night", "delivered", {
++        expect: flakyReceiptTextExpect([], 100)
++      }),
++    /Projection timing timeout: timed out waiting for projected browser UI:/
++  );
++});
++
+ test("delivery lookup reads the delivery id needed for webhook metadata from the message UI", async () => {
+   const page = new FakePage();
+   page.rows.deliveryRecords.push({
+diff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md
+index 7eca8ef..6e96df7 100644
+--- a/docs/iterations/006-browser-cucumber-automation/todo.md
++++ b/docs/iterations/006-browser-cucumber-automation/todo.md
+@@ -7,6 +7,6 @@
+ - [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
+ - [x] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
+ - [x] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
+-- [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.
++- [x] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.
+ - [ ] 009 Verify that `operator_email_deliverability.feature` is excluded only from the browser run and remains covered by the domain runner.
+ - [ ] 010 Run `npm test` in `acceptance-tests/` and `dev check`, fixing harness/step issues until both pass.

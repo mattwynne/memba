@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-05-31T01:06:20.782667011Z",
-  "last_event_at": "2026-05-31T02:38:02.893103888Z",
+  "last_event_at": "2026-05-31T02:38:22.004684730Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -15080,9 +15080,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2702,
       "checkpoint": {
-        "timestamp": "2026-05-31T02:38:18.747249702Z",
+        "timestamp": "2026-05-31T02:38:21.960249141Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -15137,8 +15137,363 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "graph.default_fidelity": "summary:high",
+          "internal.fidelity": "summary:high",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.reset_task_attempt.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
           "thread.sync_task_list.current_node": "all_tasks_done",
+          "thread.task_gate.current_node": "sync_task_list",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout w",
+          "outcome": "succeeded",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "last_stage": "implement_next_task",
+          "internal.retry_count.reset_task_attempt": 0,
+          "internal.retry_count.task_gate": 0,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found**\n  - Working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent implementation checkpoint `fe3a307` changed exactly one todo line:\n    - `007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state showed tasks `001`–`006` checked and `007` as the first unchecked task.\n\n- **Implementation artifacts found**\n  - `acceptance-tests/features/support/member_message.js`\n    - Added configurable projection wait settings via `ACCEPTANCE_PROJECTION_TIMEOUT_MS`, `ACCEPTANCE_PROJECTION_POLL_INTERVAL_MS`, and world overrides.\n    - Added bounded Playwright assertion helpers for projected count/text/visibility.\n    - Applied projection waits to club, person, member, message, addressed-recipient, delivery, and receipt UI assertions.\n    - Added polling after Postmark webhook submission until browser-visible member receipt status reaches the expected projected state.\n    - Added member-facing webhook event/status mapping.\n  - `acceptance-tests/test/member_message_steps.test.js`\n    - Added/updated tests proving bounded assertion timeouts are used.\n    - Added test proving webhook status reporting polls the browser-visible receipt projection.\n    - Added checks for event-to-member-receipt-status mapping.\n  - No acceptance feature files were changed in the implementation checkpoint.\n\n- **Tests run/results found**\n  - Reran focused validation: `cd acceptance-tests && npm run test:config` — **19 passed, 0 failed**.\n  - Implementation summary also reports:\n    - Cucumber dry-run for delivered scenario passed with no undefined steps.\n    - `PATH=\"$PWD/bin:$PATH\" dev check` passed with **109 tests, 0 failures**.\n    - Focused real browser run was blocked by missing local Playwright Chromium executable.\n\n- **ADR/plan conformance notes**\n  - Fits task `007`: adds bounded, browser-visible projection waits instead of fixed sleeps or assuming webhook response implies projected UI readiness.\n  - Preserves shared `.feature` files, consistent with ADR 0003 and ADR 0010.\n  - Does not alter aggregate boundaries or production consistency semantics, consistent with ADR 0004 and ADR 0009.\n  - Preserves accepted member-facing receipt vocabulary, consistent with ADR 0006 and ADR 0012.\n  - Task is small and independently checkpointed with concrete code and test evidence.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.wip_gate": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.`\n\n2. **Changes made**\n   - Updated `acceptance-tests/features/support/lifecycle.js`\n     - Wraps database setup command failures with a distinct `Database setup failed while ...` diagnostic.\n     - Leaves existing Phoenix startup/readiness diagnostics intact and separate.\n   - Updated `acceptance-tests/features/support/member_message.js`\n     - Added browser interaction diagnostics: `Browser interaction failed: ...`\n     - Added final assertion mismatch diagnostics: `Assertion mismatch: ...`\n     - Renamed projection wait failures to a distinct `Projection timing timeout: ...`\n     - Added request-transport handling for Postmark webhook submission failures while preserving HTTP status/body diagnostics.\n   - Updated tests:\n     - `acceptance-tests/test/lifecycle.test.js`\n       - Added coverage for database setup failure diagnostics.\n     - `acceptance-tests/test/member_message_steps.test.js`\n       - Added coverage for browser interaction diagnostics.\n       - Added coverage for final assertion mismatch diagnostics.\n       - Added coverage for projection timing diagnostics.\n\n3. **Focused validation**\n   - `cd acceptance-tests && npm run test:config`\n     - Passed: `23` tests, `0` failures.\n   - `cd acceptance-tests && npm test -- --dry-run --name \"A delivered message is shown as delivered\"`\n     - Passed dry run: scenario matched, no undefined steps.\n   - `git diff --check`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `109` tests, `0` failures.\n\n4. **Exact todo check-off**\n   - Changed:\n     - `- [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.`\n   - To:\n     - `- [x] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0003 / 0010: Shared `.feature` files were not changed; this only improves browser-layer harness/step diagnostics.\n   - ADR 0009: Projection consistency remains harness-level waiting/diagnostics only; no production consistency semantics changed.\n   - ADR 0006 / 0012: Member-facing delivery status vocabulary and opened semantics were not changed.\n   - Domain acceptance path and product behavior remain untouched.",
+          "failure_signature": "",
+          "command.output": "blob://sha256/7e864d86263457bc2538d5c2e80a920c49d509413a99b567571d9af4513dd22b",
+          "internal.node_visit_count": 8,
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.sync_task_list": 0,
           "current_node": "implement_next_task",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.read_plan": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.validate_task.current_node": "task_gate",
+          "failure_class": "",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "graph.max_node_visits": "300",
+          "graph.rankdir": "LR",
+          "internal.retry_count.implement_next_task": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.run_id": "01KSXS0DZVJYB6GS66TVG7H5VY",
+          "task_list_complete": false,
+          "internal.thread_id": "all_tasks_done",
+          "task_list_needs_human": false,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "task_retry_available": false,
+          "task_valid": true
+        },
+        "node_outcomes": {
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 26780,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 46,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 136120
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 2410,
+              "tool_time_ms": 0,
+              "active_time_ms": 2410
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c14e8e9c54347a77d887577d3a38c8f8babfc11f13cb68516f9dfb1cc416a3c7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 213,
+              "active_time_ms": 213
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/639d200c373bd3ae6d7c2c0d2d7b2a6d94fd00b6d832bb5ab099e3f59a631e61"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 283,
+              "active_time_ms": 283
+            }
+          },
+          "reset_task_attempt": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/123a9b1f0bcf1b4cbc2bb54980d0522b879bc0e7284f950bc3208ed0dd4f8a74"
+            },
+            "notes": "Script completed: set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 305,
+              "active_time_ms": 305
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found**\n  - Working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent implementation checkpoint `fe3a307` changed exactly one todo line:\n    - `007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state showed tasks `001`–`006` checked and `007` as the first unchecked task.\n\n- **Implementation artifacts found**\n  - `acceptance-tests/features/support/member_message.js`\n    - Added configurable projection wait settings via `ACCEPTANCE_PROJECTION_TIMEOUT_MS`, `ACCEPTANCE_PROJECTION_POLL_INTERVAL_MS`, and world overrides.\n    - Added bounded Playwright assertion helpers for projected count/text/visibility.\n    - Applied projection waits to club, person, member, message, addressed-recipient, delivery, and receipt UI assertions.\n    - Added polling after Postmark webhook submission until browser-visible member receipt status reaches the expected projected state.\n    - Added member-facing webhook event/status mapping.\n  - `acceptance-tests/test/member_message_steps.test.js`\n    - Added/updated tests proving bounded assertion timeouts are used.\n    - Added test proving webhook status reporting polls the browser-visible receipt projection.\n    - Added checks for event-to-member-receipt-status mapping.\n  - No acceptance feature files were changed in the implementation checkpoint.\n\n- **Tests run/results found**\n  - Reran focused validation: `cd acceptance-tests && npm run test:config` — **19 passed, 0 failed**.\n  - Implementation summary also reports:\n    - Cucumber dry-run for delivered scenario passed with no undefined steps.\n    - `PATH=\"$PWD/bin:$PATH\" dev check` passed with **109 tests, 0 failures**.\n    - Focused real browser run was blocked by missing local Playwright Chromium executable.\n\n- **ADR/plan conformance notes**\n  - Fits task `007`: adds bounded, browser-visible projection waits instead of fixed sleeps or assuming webhook response implies projected UI readiness.\n  - Preserves shared `.feature` files, consistent with ADR 0003 and ADR 0010.\n  - Does not alter aggregate boundaries or production consistency semantics, consistent with ADR 0004 and ADR 0009.\n  - Preserves accepted member-facing receipt vocabulary, consistent with ADR 0006 and ADR 0012.\n  - Task is small and independently checkpointed with concrete code and test evidence.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found**\n  - Working tree has no ordinary diff; only untracked `.fabro/tmp/`.\n  - Recent implementation checkpoint `fe3a307` c",
+              "task_valid": true,
+              "task_retry_available": false
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 450819,
+                    "output_tokens": 2182,
+                    "reasoning_tokens": 1072,
+                    "cache_read_tokens": 422912,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2563171
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 114114,
+              "tool_time_ms": 4298,
+              "active_time_ms": 118412
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.`\n\n2. **Changes made**\n   - Updated `acceptance-tests/features/support/lifecycle.js`\n     - Wraps database setup command failures with a distinct `Database setup failed while ...` diagnostic.\n     - Leaves existing Phoenix startup/readiness diagnostics intact and separate.\n   - Updated `acceptance-tests/features/support/member_message.js`\n     - Added browser interaction diagnostics: `Browser interaction failed: ...`\n     - Added final assertion mismatch diagnostics: `Assertion mismatch: ...`\n     - Renamed projection wait failures to a distinct `Projection timing timeout: ...`\n     - Added request-transport handling for Postmark webhook submission failures while preserving HTTP status/body diagnostics.\n   - Updated tests:\n     - `acceptance-tests/test/lifecycle.test.js`\n       - Added coverage for database setup failure diagnostics.\n     - `acceptance-tests/test/member_message_steps.test.js`\n       - Added coverage for browser interaction diagnostics.\n       - Added coverage for final assertion mismatch diagnostics.\n       - Added coverage for projection timing diagnostics.\n\n3. **Focused validation**\n   - `cd acceptance-tests && npm run test:config`\n     - Passed: `23` tests, `0` failures.\n   - `cd acceptance-tests && npm test -- --dry-run --name \"A delivered message is shown as delivered\"`\n     - Passed dry run: scenario matched, no undefined steps.\n   - `git diff --check`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `109` tests, `0` failures.\n\n4. **Exact todo check-off**\n   - Changed:\n     - `- [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.`\n   - To:\n     - `- [x] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0003 / 0010: Shared `.feature` files were not changed; this only improves browser-layer harness/step diagnostics.\n   - ADR 0009: Projection consistency remains harness-level waiting/diagnostics only; no production consistency semantics changed.\n   - ADR 0006 / 0012: Member-facing delivery status vocabulary and opened semantics were not changed.\n   - Domain acceptance path and product behavior remain untouched.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout w",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 804198,
+                    "output_tokens": 6248,
+                    "reasoning_tokens": 2998,
+                    "cache_read_tokens": 2119680,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5358210
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 280330,
+              "tool_time_ms": 54326,
+              "active_time_ms": 334656
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/edf4304e9363ae78ff1ce79a3ef7dd56c1fa793915c9d848429723cb72d7b819"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168308,
+              "active_time_ms": 168308
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/feb5fbe99e0f0808bccb2fab304ce4bdf5d77071099eca34a0d0615206f84144"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170,
+              "active_time_ms": 170
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7e864d86263457bc2538d5c2e80a920c49d509413a99b567571d9af4513dd22b"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 209,
+              "active_time_ms": 209
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a88eac2d4ec4f93b543599a36833c38bce4ee1a87921dafa13af064af61204fd"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) iteration_dir=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\niteration_slug=${iteration_dir##*/}\niteration_number=${iteration_slug%%-*}\ntrim() {\n  local s=\"$1\"\n  s=\"${s#\"${s%%[![:space:]]*}\"}\"\n  s=\"${s%\"${s##*[![:space:]]}\"}\"\n  printf '%s' \"$s\"\n}\nactive=\"\"\nwhile IFS='|' read -r _ number date status title plan rest; do\n  case \"$plan\" in *'[plan]'*) ;; *) continue ;; esac\n  number=$(trim \"$number\")\n  status=$(trim \"$status\")\n  title=$(trim \"$title\")\n  plan=$(trim \"$plan\")\n  if [ \"$number\" != \"$iteration_number\" ]; then\n    case \"$status\" in\n      implementing|ready-for-review|in-review|reviewing|finalizing)\n        active=\"${active}- ${number} ${title} (${status}) ${plan}\\n\"\n        ;;\n    esac\n  fi\ndone < docs/iterations/README.md\nif [ -n \"$active\" ]; then\n  echo 'Implementation WIP limit is occupied by active iteration(s):' >&2\n  printf '%b' \"$active\" >&2\n  echo 'Plan validation may run in parallel, but starting another implementation is blocked until the active iteration is merged or otherwise resolved.' >&2\n  exit 1\nfi\necho 'Implementation WIP slot is clear.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 231,
+              "active_time_ms": 231
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "2e27cb7f350f84d9d7792611663c00f473065a9e",
+        "node_visits": {
+          "start": 1,
+          "reset_task_attempt": 1,
+          "task_gate": 7,
+          "validate_task": 7,
+          "wip_gate": 1,
+          "read_plan": 1,
+          "sync_task_list": 7,
+          "all_tasks_done": 7,
+          "preflight_sandbox": 1,
+          "implement_next_task": 8,
+          "pre_validate_snapshot": 7,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/acceptance-tests/features/support/lifecycle.js b/acceptance-tests/features/support/lifecycle.js\nindex 6557d90..e7334d7 100644\n--- a/acceptance-tests/features/support/lifecycle.js\n+++ b/acceptance-tests/features/support/lifecycle.js\n@@ -405,11 +405,17 @@ function createBrowserAcceptanceLifecycle(options = {}) {\n         });\n \n         for (const step of databaseSetupSteps) {\n-          await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {\n-            label: `Database setup: ${step.label}`,\n-            timeoutMs: currentConfig.commandTimeoutMs,\n-            logBuffer\n-          });\n+          try {\n+            await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {\n+              label: `Database setup: ${step.label}`,\n+              timeoutMs: currentConfig.commandTimeoutMs,\n+              logBuffer\n+            });\n+          } catch (error) {\n+            throw new Error(`Database setup failed while ${step.label}.\\nCause: ${error.message}`, {\n+              cause: error\n+            });\n+          }\n         }\n \n         phoenixProcess = await processRunner.start(buildPhoenixCommand(currentConfig), {\ndiff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js\nindex fe088e4..59dbb05 100644\n--- a/acceptance-tests/features/support/member_message.js\n+++ b/acceptance-tests/features/support/member_message.js\n@@ -141,13 +141,38 @@ function delay(ms) {\n   return new Promise((resolve) => setTimeout(resolve, ms));\n }\n \n+function errorMessage(error) {\n+  return error && error.message ? error.message : String(error);\n+}\n+\n+async function browserInteraction(description, action) {\n+  try {\n+    return await action();\n+  } catch (error) {\n+    throw new Error(`Browser interaction failed: ${description}.\\nCause: ${errorMessage(error)}`, {\n+      cause: error\n+    });\n+  }\n+}\n+\n+function assertFinalBrowserState(description, assertion) {\n+  try {\n+    return assertion();\n+  } catch (error) {\n+    throw new Error(`Assertion mismatch: ${description}.\\nCause: ${errorMessage(error)}`, {\n+      cause: error\n+    });\n+  }\n+}\n+\n async function withProjectionWait(description, assertion) {\n   try {\n     return await assertion();\n   } catch (error) {\n     throw new Error(\n-      `Timed out waiting for projected browser UI: ${description}.\\n` +\n-        `Last assertion error: ${error.message}`\n+      `Projection timing timeout: timed out waiting for projected browser UI: ${description}.\\n` +\n+        `Last assertion error: ${errorMessage(error)}`,\n+      { cause: error }\n     );\n   }\n }\n@@ -201,7 +226,7 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip\n }\n \n async function visitClubsIndex(world) {\n-  await world.page.goto(appUrl(world.baseUrl, \"/clubs\"));\n+  await browserInteraction(\"visit /clubs\", () => world.page.goto(appUrl(world.baseUrl, \"/clubs\")));\n }\n \n async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {\n@@ -210,7 +235,9 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs\n   const club = world.clubs[clubName];\n   assert.ok(club, `Expected ${clubName} to have been created before opening it`);\n \n-  await world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`));\n+  await browserInteraction(`visit club page for ${clubName}`, () =>\n+    world.page.goto(appUrl(world.baseUrl, `/clubs/${club.clubId}`))\n+  );\n   await waitForProjectedVisible(\n     world,\n     world.page.getByRole(\"heading\", { name: clubName }),\n@@ -225,7 +252,9 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM\n   const message = world.messages[subject];\n   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);\n \n-  await world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`));\n+  await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>\n+    world.page.goto(appUrl(world.baseUrl, `/messages/${message.messageId}`))\n+  );\n   await waitForProjectedVisible(\n     world,\n     world.page.getByRole(\"heading\", { name: subject }),\n@@ -242,8 +271,10 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {\n   const clubRows = rowsByData(world.page, \"club-row\", \"data-club-name\", clubName);\n   const previousClubIds = await rowAttributeValues(clubRows, \"data-club-id\");\n \n-  await world.page.getByLabel(\"Club name\").fill(clubName);\n-  await world.page.getByRole(\"button\", { name: \"Create club\" }).click();\n+  await browserInteraction(`submit club creation form for ${clubName}`, async () => {\n+    await world.page.getByLabel(\"Club name\").fill(clubName);\n+    await world.page.getByRole(\"button\", { name: \"Create club\" }).click();\n+  });\n   await waitForProjectedCount(\n     world,\n     clubRows,\n@@ -287,9 +318,11 @@ async function createPersonOnCurrentClubPage(world, name, { expect = playwrightE\n   const previousPersonIds = await rowAttributeValues(personRows, \"data-person-id\");\n   const email = emailFor(name);\n \n-  await world.page.getByLabel(\"Person name\").fill(name);\n-  await world.page.getByLabel(\"Person email\").fill(email);\n-  await world.page.getByRole(\"button\", { name: \"Create person\" }).click();\n+  await browserInteraction(`submit person creation form for ${name}`, async () => {\n+    await world.page.getByLabel(\"Person name\").fill(name);\n+    await world.page.getByLabel(\"Person email\").fill(email);\n+    await world.page.getByRole(\"button\", { name: \"Create person\" }).click();\n+  });\n   await waitForProjectedCount(\n     world,\n     personRows,\n@@ -338,8 +371,10 @@ async function addMemberOnCurrentClubPage(\n   const memberRows = rowsByData(world.page, \"member-row\", \"data-member-name\", personName);\n   const previousMemberIds = await rowAttributeValues(memberRows, \"data-member-id\");\n \n-  await world.page.getByLabel(\"Person to add as member\").selectOption(person.personId);\n-  await world.page.getByRole(\"button\", { name: \"Add member\" }).click();\n+  await browserInteraction(`submit add-member form for ${personName} in ${clubName}`, async () => {\n+    await world.page.getByLabel(\"Person to add as member\").selectOption(person.personId);\n+    await world.page.getByRole(\"button\", { name: \"Add member\" }).click();\n+  });\n   await waitForProjectedCount(\n     world,\n     memberRows,\n@@ -386,10 +421,12 @@ async function sendMessageToKootenayMembers(\n   const sender = world.people[senderName];\n   assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);\n \n-  await world.page.getByLabel(\"Message sender\").selectOption(sender.personId);\n-  await world.page.getByLabel(\"Message subject\").fill(subject);\n-  await world.page.getByLabel(\"Message body\").fill(body);\n-  await world.page.getByRole(\"button\", { name: \"Send club message\" }).click();\n+  await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {\n+    await world.page.getByLabel(\"Message sender\").selectOption(sender.personId);\n+    await world.page.getByLabel(\"Message subject\").fill(subject);\n+    await world.page.getByLabel(\"Message body\").fill(body);\n+    await world.page.getByRole(\"button\", { name: \"Send club message\" }).click();\n+  });\n   await waitForProjectedCount(\n     world,\n     messageRows,\n@@ -442,7 +479,10 @@ async function assertLastMessageAddressedTo(\n   );\n \n   const actualNames = await rowDatasetValues(rows, \"recipientName\");\n-  assert.deepEqual(actualNames, expectedNames);\n+  assertFinalBrowserState(\n+    `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,\n+    () => assert.deepEqual(actualNames, expectedNames)\n+  );\n \n   world.addressedMemberNames = expectedNames;\n   world.addressedMemberIds = expectedNames.map((name) => {\n@@ -463,9 +503,13 @@ async function assertLastMessageNotAddressedTo(\n \n   const rows = allRows(world.page, \"addressed-recipients\", \"addressed-recipient\");\n   const actualNames = await rowDatasetValues(rows, \"recipientName\");\n-  assert.ok(\n-    !actualNames.includes(excludedName),\n-    `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(\", \")}`\n+  assertFinalBrowserState(\n+    `addressed recipients should not include ${excludedName}`,\n+    () =>\n+      assert.ok(\n+        !actualNames.includes(excludedName),\n+        `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(\", \")}`\n+      )\n   );\n \n   return world;\n@@ -496,7 +540,9 @@ async function assertEachAddressedMemberHasSeparateDeliveryRecord(\n   const deliveryIds = await rowDatasetValues(rows, \"deliveryId\");\n   const recipientNames = await rowDatasetValues(rows, \"recipientName\");\n \n-  assert.deepEqual(recipientIds, expectedIds);\n+  assertFinalBrowserState(`delivery recipient IDs for ${JSON.stringify(world.lastMessageSubject)}`, () =>\n+    assert.deepEqual(recipientIds, expectedIds)\n+  );\n   assertUnique(deliveryIds, \"delivery IDs\");\n   assertUnique(recipientIds, \"recipient IDs\");\n \n@@ -630,10 +676,10 @@ async function waitForProjectedReceiptStatus(\n   } while (Date.now() <= deadline);\n \n   throw new Error(\n-    `Timed out after ${timeoutMs}ms waiting for projected receipt status: ` +\n+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for projected receipt status: ` +\n       `${recipientName}'s receipt for ${JSON.stringify(subject)} should become ${JSON.stringify(\n         expectedStatus\n-      )}.\\nLast projection error: ${lastError ? lastError.message : \"(none)\"}`\n+      )}.\\nLast projection error: ${lastError ? errorMessage(lastError) : \"(none)\"}`\n   );\n }\n \n@@ -732,12 +778,22 @@ async function postPostmarkWebhook(world, payload) {\n     \"Expected Playwright request context to be available for Postmark webhook submission\"\n   );\n \n-  const response = await request.post(appUrl(world.baseUrl, \"/webhooks/postmark\"), {\n-    data: payload,\n-    headers: {\n-      \"content-type\": \"application/json\"\n-    }\n-  });\n+  let response;\n+\n+  try {\n+    response = await request.post(appUrl(world.baseUrl, \"/webhooks/postmark\"), {\n+      data: payload,\n+      headers: {\n+        \"content-type\": \"application/json\"\n+      }\n+    });\n+  } catch (error) {\n+    throw new Error(\n+      `Postmark webhook submission failed: POST /webhooks/postmark request error.\\n` +\n+        `Payload: ${JSON.stringify(payload)}\\nCause: ${errorMessage(error)}`,\n+      { cause: error }\n+    );\n+  }\n   const status = response.status();\n \n   if (status !== 202) {\n@@ -757,10 +813,12 @@ async function rowDatasetValues(rows, datasetName) {\n }\n \n function assertUnique(values, label) {\n-  assert.deepEqual(\n-    [...new Set(values)],\n-    values,\n-    `Expected ${label} to be unique; saw ${values.join(\", \")}`\n+  assertFinalBrowserState(`${label} should be unique`, () =>\n+    assert.deepEqual(\n+      [...new Set(values)],\n+      values,\n+      `Expected ${label} to be unique; saw ${values.join(\", \")}`\n+    )\n   );\n }\n \ndiff --git a/acceptance-tests/test/lifecycle.test.js b/acceptance-tests/test/lifecycle.test.js\nindex 52954d5..43a3d92 100644\n--- a/acceptance-tests/test/lifecycle.test.js\n+++ b/acceptance-tests/test/lifecycle.test.js\n@@ -107,3 +107,28 @@ test(\"readiness timeout reports Phoenix startup/readiness diagnostics\", async ()\n     /Phoenix startup\\/readiness failed: timed out after 0ms/\n   );\n });\n+\n+test(\"database setup failures report database setup diagnostics\", async () => {\n+  const env = testEnv({ MEMBA_DEVENV_SHELL: \"1\" });\n+  const lifecycle = createBrowserAcceptanceLifecycle({\n+    env,\n+    processRunner: {\n+      async run(_spec, { label }) {\n+        if (label === \"Database setup: migrate test database\") {\n+          throw new Error(\"migration failed\");\n+        }\n+      },\n+      async start() {\n+        throw new Error(\"Phoenix should not start after database setup failure\");\n+      }\n+    },\n+    async httpReady() {\n+      return { statusCode: 200 };\n+    }\n+  });\n+\n+  await assert.rejects(\n+    () => lifecycle.start(),\n+    /Database setup failed while migrate test database\\.\\nCause: migration failed/\n+  );\n+});\ndiff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js\nindex cff7932..c73de5b 100644\n--- a/acceptance-tests/test/member_message_steps.test.js\n+++ b/acceptance-tests/test/member_message_steps.test.js\n@@ -352,6 +352,20 @@ test(\"browser command projection waits use bounded Playwright assertion timeouts\n   );\n });\n \n+test(\"browser interaction failures are reported separately from projection waits\", async () => {\n+  const page = new FakePage();\n+  page.goto = async (url) => {\n+    page.actions.push([\"goto\", url]);\n+    throw new Error(\"browser context closed\");\n+  };\n+  const world = worldWithPage(page);\n+\n+  await assert.rejects(\n+    () => createClub(world, kootenayClubName, { expect: fakeExpect([]) }),\n+    /Browser interaction failed: visit \\/clubs\\.\\nCause: browser context closed/\n+  );\n+});\n+\n test(\"creating people and members uses accessible form labels and keeps browser ids in scenario state\", async () => {\n   const page = new FakePage();\n   const expectations = [];\n@@ -477,6 +491,29 @@ test(\"message assertions read addressed recipients, delivery records, email chan\n   assert.ok(expectations.some((expectation) => expectation[0] === \"text\" && expectation[2] === \"sent\"));\n });\n \n+test(\"final assertion mismatches are reported separately from projection timing\", async () => {\n+  const page = new FakePage();\n+  page.rows.addressedRecipients.push(\n+    { dataset: { recipientName: \"Alice\", recipientId: \"person-alice\" } },\n+    { dataset: { recipientName: \"Bob\", recipientId: \"person-bob\" } }\n+  );\n+  const world = worldWithPage(page);\n+  world.lastMessageSubject = \"Trip planning night\";\n+  world.messages = { \"Trip planning night\": { messageId: \"message-1\", subject: \"Trip planning night\" } };\n+  world.people = {\n+    Alice: { personId: \"person-alice\" },\n+    Bob: { personId: \"person-bob\" }\n+  };\n+\n+  await assert.rejects(\n+    () =>\n+      assertLastMessageAddressedTo(world, [\"Alice\", \"Carol\"], {\n+        expect: fakeExpect([])\n+      }),\n+    /Assertion mismatch: addressed recipients for \"Trip planning night\"\\.\\nCause:/\n+  );\n+});\n+\n test(\"Postmark webhook payloads map member-facing status events onto the app endpoint shape\", () => {\n   const base = {\n     deliveryId: \"delivery-bob\",\n@@ -656,6 +693,21 @@ test(\"Postmark webhook submission failures report the endpoint and response deta\n   );\n });\n \n+test(\"projection timing failures are reported separately from final assertion mismatches\", async () => {\n+  const page = new FakePage();\n+  const world = worldWithPage(page);\n+  world.projectionTimeoutMs = 1;\n+  world.messages = { \"Trip planning night\": { messageId: \"message-1\", subject: \"Trip planning night\" } };\n+\n+  await assert.rejects(\n+    () =>\n+      assertReceiptStatus(world, \"Bob\", \"Trip planning night\", \"delivered\", {\n+        expect: flakyReceiptTextExpect([], 100)\n+      }),\n+    /Projection timing timeout: timed out waiting for projected browser UI:/\n+  );\n+});\n+\n test(\"delivery lookup reads the delivery id needed for webhook metadata from the message UI\", async () => {\n   const page = new FakePage();\n   page.rows.deliveryRecords.push({\ndiff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md\nindex 7eca8ef..6e96df7 100644\n--- a/docs/iterations/006-browser-cucumber-automation/todo.md\n+++ b/docs/iterations/006-browser-cucumber-automation/todo.md\n@@ -7,6 +7,6 @@\n - [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.\n - [x] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.\n - [x] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.\n-- [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.\n+- [x] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.\n - [ ] 009 Verify that `operator_email_deliverability.feature` is excluded only from the browser run and remains covered by the domain runner.\n - [ ] 010 Run `npm test` in `acceptance-tests/` and `dev check`, fixing harness/step issues until both pass.\n",
+        "summary": {
+          "files_changed": 15,
+          "additions": 2639,
+          "deletions": 8
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-05-31T02:38:22.232956802Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.implement_next_task": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.pre_validate_snapshot.current_node": "validate_task",
@@ -15167,7 +15522,7 @@
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "task_list_complete": false,
           "internal.retry_count.wip_gate": 0,
-          "command.output": "blob://sha256/7e864d86263457bc2538d5c2e80a920c49d509413a99b567571d9af4513dd22b",
+          "command.output": "blob://sha256/931fbbe298c2202c30483e136fad210c35e0ff605ca33846dbcb94ba1ab176d2",
           "graph.rankdir": "LR",
           "graph.default_fidelity": "summary:high",
           "thread.start.current_node": "read_plan",
@@ -15175,7 +15530,7 @@
           "last_stage": "implement_next_task",
           "internal.retry_count.start": 0,
           "thread.all_tasks_done.current_node": "implement_next_task",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.task_gate": 0,
           "internal.retry_count.all_tasks_done": 0,
@@ -15298,15 +15653,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/c14e8e9c54347a77d887577d3a38c8f8babfc11f13cb68516f9dfb1cc416a3c7"
+              "command.output": "blob://sha256/931fbbe298c2202c30483e136fad210c35e0ff605ca33846dbcb94ba1ab176d2"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 213,
-              "active_time_ms": 213
+              "tool_time_ms": 208,
+              "active_time_ms": 208
             }
           },
           "wip_gate": {
@@ -15407,7 +15762,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "start": 1,
           "wip_gate": 1,
@@ -15418,7 +15773,7 @@
           "reset_task_attempt": 1,
           "resume_gate": 1,
           "validate_task": 7,
-          "pre_validate_snapshot": 7,
+          "pre_validate_snapshot": 8,
           "preflight_sandbox": 1,
           "all_tasks_done": 7
         }
@@ -17402,7 +17757,12 @@
       "first_event_seq": 2510,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-05-31T02:38:18.743962109Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -17416,13 +17776,20 @@
       "output": null,
       "started_at": "2026-05-31T02:32:43.466468296Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 335277,
+        "inference_time_ms": 280330,
+        "tool_time_ms": 54326,
+        "active_time_ms": 334656
+      },
       "usage": {
-        "input_tokens": 792102,
-        "output_tokens": 5682,
-        "total_tokens": 2840395,
-        "reasoning_tokens": 2803,
-        "cache_read_tokens": 2039808,
-        "cache_write_tokens": 0
+        "input_tokens": 804198,
+        "output_tokens": 6248,
+        "total_tokens": 2933124,
+        "reasoning_tokens": 2998,
+        "cache_read_tokens": 2119680,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5358210
       },
       "model": {
         "provider": "openai",
@@ -17597,42 +17964,42 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 91817,
-        "usage_percent": 33.75625,
+        "input_tokens": 91968,
+        "usage_percent": 33.811764705882354,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-05-31T02:38:02.890004160Z",
-        "event_seq": 2689,
+        "generated_at": "2026-05-31T02:38:18.735600446Z",
+        "event_seq": 2697,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1046,
-            "usage_percent": 0.3845588235294118
+            "tokens": 1042,
+            "usage_percent": 0.3830882352941177
           },
           {
             "category": "tools",
-            "tokens": 1485,
-            "usage_percent": 0.5459558823529411
+            "tokens": 1478,
+            "usage_percent": 0.5433823529411764
           },
           {
             "category": "memory",
-            "tokens": 277,
-            "usage_percent": 0.10183823529411765
+            "tokens": 276,
+            "usage_percent": 0.10147058823529412
           },
           {
             "category": "conversation",
-            "tokens": 89002,
-            "usage_percent": 32.72132352941176
+            "tokens": 89166,
+            "usage_percent": 32.78161764705882
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "pre_validate_snapshot@5": {
       "first_event_seq": 1576,
@@ -18950,6 +19317,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@8": {
+      "first_event_seq": 2705,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/006-browser-cucumber-automation/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-05-31T02:38:22.003316831Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "wip_gate@1": {
       "first_event_seq": 35,
