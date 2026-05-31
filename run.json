@@ -1,0 +1,285 @@
+{
+  "title": "Validate, implement, review, and mark one ready iteration as delivered",
+  "spec": {
+    "run_id": "01KSXTEYJN86JZ6TQR8SJZNV1M",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Validate, implement, review, and mark one ready iteration as delivered"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "plan_path": "docs/iterations/007-deliveries-overview/plan.md",
+          "mode": "validate_only"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.5",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "default",
+          "provider": "docker",
+          "image": {
+            "ref": "buildpack-deps:noble",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 2,
+            "memory": "4GB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": true,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "IterationDeliver",
+      "nodes": {
+        "start": {
+          "id": "start",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Start"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "orchestrate": {
+          "id": "orchestrate",
+          "attrs": {
+            "output_retries": {
+              "Integer": 2
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 7200,
+                "nanos": 0
+              }
+            },
+            "prompt": {
+              "String": "You are the lightweight delivery orchestrator for one Memba iteration.\n\nInput:\n\n- plan_path: `docs/iterations/007-deliveries-overview/plan.md`\n- mode: `validate_only`\n\nYour job is to run the existing workflows as Fabro child runs, without changing their internals. Supported modes:\n\n- `deliver` (default): validate, reserve the single implementation WIP slot, implement, review, and finalize.\n- `validate_only`: validate the plan and stop before reserving the implementation WIP slot or starting implementation.\n\nUse the Fabro run-management tools exposed to this agent (`fabro_run_create`, `fabro_run_gather`, `fabro_run_get`, `fabro_run_events`, and `fabro_run_interact` if approval is required). Do not implement or review code in this parent run. The child runs do that work in their own sandboxes.\n\nImportant contracts:\n\n- Create each child with `auto_approve: true`, `start: true`, and labels including `orchestrator: iteration-deliver` and `stage: <stage-name>`.\n- Pass child inputs with the object-form run create option `input`, as raw `KEY=VALUE` strings, equivalent to repeated CLI `-I` flags. Use these workflow paths:\n  - `.fabro/workflows/plan-validation/workflow.toml`\n  - `.fabro/workflows/iteration-implementation/workflow.toml`\n  - `.fabro/workflows/iteration-review/workflow.toml`\n- If a child still enters `pending` with `approval_required`, approve it with `fabro_run_interact` action `approve`; this parent run exists to deliver unattended.\n- Wait for each child to reach a terminal state before deciding the next stage.\n- Never create the implementation child unless validation succeeds and `mode` is `deliver`.\n- Never create the review child unless implementation succeeds.\n- Review is post-merge and non-blocking: if the review child fails, delivery is still delivered-with-review-notes after surfacing the failure.\n\nImplementation WIP limit:\n\n- Plan validation may run while another iteration is implementing/reviewing.\n- Implementation must be single-piece-flow. Before starting implementation, run:\n  - `.fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/007-deliveries-overview/plan.md`\n- If that command fails, stop with stage `implementation:wip-blocked`, status `stopped`. Report the active iteration(s) from the script output. Do not start implementation.\n- Immediately before creating the implementation child, reserve the implementation slot by running:\n  - `.fabro/workflows/scripts/iteration_status.py mark docs/iterations/007-deliveries-overview/plan.md implementing --check-clear-first`\n- Commit only `docs/iterations/README.md` and `docs/iterations/007-deliveries-overview/plan.md` if they changed, with message `docs: mark iteration <NNN> implementing`, then push `origin HEAD:main`.\n- If the implementation child fails, leave the iteration marked `implementing`; this intentionally keeps the WIP slot occupied until Matt resumes, fixes, or explicitly reclassifies the iteration.\n\nDetailed flow:\n\n1. Preflight the plan path locally with shell/read tools:\n   - Confirm `docs/iterations/007-deliveries-overview/plan.md` exists and ends in `/plan.md`.\n   - Confirm `validate_only` is either `deliver` or `validate_only`; treat an empty value as `deliver`.\n   - Confirm `git status --short` is clean enough to avoid mixing local edits into status commits. If dirty, stop at `finalize:failed` unless the dirt is only Fabro runtime noise.\n\n2. Create and gather the validation child:\n   - workflow: `.fabro/workflows/plan-validation/workflow.toml`\n   - input: `[\"plan_path=docs/iterations/007-deliveries-overview/plan.md\"]`\n   - labels: `stage=plan-validation`\n   - If it succeeds, validation verdict is READY/VALIDATED; continue according to mode.\n   - If it fails because the plan is not ready, stop with stage `validation:not-ready`, status `stopped`, and include blocker text. Use `fabro_run_events` and/or `fabro_run_get` to extract the most useful blocker text from the child, especially Opus synthesis/recheck and the final failure reason.\n   - If it fails for any other reason, stop with stage `validation:failed`.\n\n3. If mode is `validate_only`, stop successfully now:\n   - Do not check or reserve implementation WIP.\n   - Do not create implementation or review child runs.\n   - Report stage `validation:validated`, status `validated`, validation child run ID/URL, and a follow-up command to start delivery when the implementation slot is clear.\n\n4. Reserve implementation WIP and capture `base_sha`:\n   - Run `.fabro/workflows/scripts/iteration_status.py check-clear docs/iterations/007-deliveries-overview/plan.md` and stop with `implementation:wip-blocked` if it fails.\n   - Run `git fetch origin main`.\n   - Make sure this parent checkout is on top of current `origin/main` before editing docs. If needed, fast-forward or rebase the parent checkout onto `origin/main`; do not merge.\n   - Run `.fabro/workflows/scripts/iteration_status.py mark docs/iterations/007-deliveries-overview/plan.md implementing --check-clear-first`.\n   - Commit only `docs/iterations/README.md` and `docs/iterations/007-deliveries-overview/plan.md` if they changed; push to `origin HEAD:main`.\n   - Run `git fetch origin main`.\n   - Run `git rev-parse origin/main^{commit}`.\n   - Record this exact SHA in your final JSON as `base_sha`.\n\n5. Create and gather the implementation child:\n   - workflow: `.fabro/workflows/iteration-implementation/workflow.toml`\n   - input: `[\"plan_path=docs/iterations/007-deliveries-overview/plan.md\"]`\n   - labels: `stage=iteration-implementation`\n   - If it fails, stop with stage `implementation:failed` and do not run review.\n   - If it succeeds, fetch `origin/main` so the parent sees the implementation commit now on main.\n\n6. Create and gather the review child:\n   - workflow: `.fabro/workflows/iteration-review/workflow.toml`\n   - input: `[\"plan_path=docs/iterations/007-deliveries-overview/plan.md\", \"base_sha=<captured base_sha>\"]`\n   - labels: `stage=iteration-review`\n   - If review fails, record review notes but continue to finalize. The final stage should be `delivered:with-review-notes` unless finalize fails.\n\n7. Finalize status metadata:\n   - Run `git fetch origin main`.\n   - Make sure this parent checkout is on top of current `origin/main` before editing docs. If needed, fast-forward or rebase the parent checkout onto `origin/main`; do not merge.\n   - Run `bin/dev iteration-mark-merged-style docs/iterations/007-deliveries-overview/plan.md`.\n   - Commit only `docs/iterations/README.md`, the plan file, and the iteration folder's `implementation.md` if they changed.\n   - Commit message: `docs: mark iteration <NNN> merged`\n   - Push to `origin HEAD:main`.\n   - If no status files changed because they already say merged, treat finalize as successful.\n\nFinal response:\n\nReturn a concise Markdown report followed by one final routing JSON object. The JSON must be the last thing in the response and must include `context_updates` with these keys: `deliver_stage`, `deliver_status`, `plan_path`, `base_sha` when available, `children`, `blockers`, and `summary`.\n\nUse these status rules:\n\n- Validation not ready: `{\"outcome\":\"failed\",\"failure_reason\":\"validation:not-ready\",\"context_updates\":{\"deliver_stage\":\"validation:not-ready\",\"deliver_status\":\"stopped\",...}}`\n- Validation workflow/tool failure: `{\"outcome\":\"failed\",\"failure_reason\":\"validation:failed\",\"context_updates\":{\"deliver_stage\":\"validation:failed\",\"deliver_status\":\"stopped\",...}}`\n- Validate-only success: `{\"outcome\":\"succeeded\",\"context_updates\":{\"deliver_stage\":\"validation:validated\",\"deliver_status\":\"validated\",...}}`\n- Implementation WIP occupied: `{\"outcome\":\"failed\",\"failure_reason\":\"implementation:wip-blocked\",\"context_updates\":{\"deliver_stage\":\"implementation:wip-blocked\",\"deliver_status\":\"stopped\",...}}`\n- Implementation failure: `{\"outcome\":\"failed\",\"failure_reason\":\"implementation:failed\",\"context_updates\":{\"deliver_stage\":\"implementation:failed\",\"deliver_status\":\"stopped\",...}}`\n- Review failed but implementation landed and finalize succeeded: `{\"outcome\":\"succeeded\",\"context_updates\":{\"deliver_stage\":\"delivered:with-review-notes\",\"deliver_status\":\"delivered\",...}}`\n- Everything clean: `{\"outcome\":\"succeeded\",\"context_updates\":{\"deliver_stage\":\"delivered:clean\",\"deliver_status\":\"delivered\",...}}`\n- Finalize failed after implementation/review: `{\"outcome\":\"failed\",\"failure_reason\":\"finalize:failed\",\"context_updates\":{\"deliver_stage\":\"finalize:failed\",\"deliver_status\":\"stopped\",...}}`\n\nAlways include child run IDs/URLs when available, the validation verdict, the captured `base_sha` when available, and a summary suitable for the planning skill or Matt to read."
+            },
+            "shape": {
+              "String": "box"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Orchestrate Child Runs"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "label": {
+              "String": "Exit"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "orchestrate",
+          "attrs": {}
+        },
+        {
+          "from": "orchestrate",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "model_stylesheet": {
+          "String": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #orchestrate { reasoning_effort: high; }\n        "
+        },
+        "goal": {
+          "String": "Validate, implement, review, and mark one ready iteration as delivered"
+        },
+        "rankdir": {
+          "String": "LR"
+        }
+      }
+    },
+    "graph_source": "digraph IterationDeliver {\n    graph [\n        goal=\"Deliver or validate-only the iteration plan at {{ inputs.plan_path }} by orchestrating child runs while enforcing the implementation WIP limit\",\n        default_fidelity=\"summary:high\",\n        model_stylesheet=\"\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #orchestrate { reasoning_effort: high; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    orchestrate [\n        label=\"Orchestrate Child Runs\",\n        shape=box,\n        output_schema=\"routing\",\n        output_retries=2,\n        prompt=\"@prompts/orchestrate.md\",\n        timeout=\"7200s\"\n    ]\n\n    start -> orchestrate -> exit\n}\n",
+    "workflow_slug": "iteration-deliver",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.245.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "4ea6099a5e06b8188604bb66cca0cb164226826894cfcba8759a96ed163af738",
+    "definition_blob": "9afbe53694340e3a431f4ff2b56cb0b47868f529bceb3620a5e5b1a158272e04",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "7cf5866e780416a51392bec7fcd3b1c107c28af4",
+      "dirty": "clean",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KSXTEYJN86JZ6TQR8SJZNV1M",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-05-31T01:30:34.027988345Z",
+  "last_event_at": "2026-05-31T01:30:36.703743540Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "buildpack-deps:noble",
+    "runtime": {
+      "id": "e69aa5d0fb09446c521f821f54ec8478b941dbadf2312fb47be04650936cb547",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
