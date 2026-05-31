@@ -54,3 +54,24 @@ Retry command after server-side Docker disk space is recovered:
 ```bash
 bin/dev iteration-review review/003-messaging-skeleton docs/iterations/003-messaging-skeleton/plan.md 75c1d673cb9ee6c4247f605ac12fb32a62da884c
 ```
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The original review attempts failed before review work began because the Fabro server-side Docker sandbox filesystem could not complete the repository checkout. The immediate blocker cleared operationally; this note records an incident rather than a remaining repository fix.
+
+Fix applied:
+
+- No repository code change was needed for this specific incident after the server-side sandbox could clone the repository again.
+- Later review work for iteration 003 progressed past sandbox initialization, and iteration 003 was subsequently marked merged in commit `e635796`.
+
+Validation:
+
+- Read-only status check found later review run evidence at commit `50ad66c` showing `preflight_sandbox` succeeded after these failed attempts.
+- Read-only status check confirmed `docs/iterations/003-messaging-skeleton/implementation.md` and `docs/iterations/README.md` record iteration 003 as merged.
+
+Remaining follow-up:
+
+- If Docker disk observability or automatic pruning is still desired, track it as a separate operational kaizen note.
+
