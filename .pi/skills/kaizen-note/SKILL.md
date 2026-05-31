@@ -7,7 +7,20 @@ description: Offer to capture and, when accepted, write a docs/kaizen observatio
 
 Use this skill when a conversation or run reveals an imperfection in the machinery we use to create the product: Fabro workflows, Pi skills/prompts, planning/review/implementation handoffs, sandboxing, checkpoints, CI/dev scripts, model routing, observability, recovery, or other delivery pipeline/factory friction.
 
-The purpose is to preserve factual observations for later improvement. Do not turn the note into a speculative solution plan unless Matt asks.
+The purpose is defect prevention: do not just patch around the immediate problem; capture what allowed it to happen so we can remove the cause and keep it from coming back.
+
+A kaizen note is not the fix. It is a timely observation that preserves the evidence a later fix will need: what we expected, what actually happened, what made the failure possible, and what kind of guardrail might have caught or prevented it. Keep the note factual. Do not turn it into a solution plan unless Matt asks.
+
+## How to Think While Capturing
+
+Treat delivery-machinery friction as a weakness in the work system, not a personal mistake. Ask:
+
+- What should have made this impossible, obvious, or easy to recover from?
+- What current workflow, prompt, script, checklist, validation gate, or handoff failed to protect us?
+- Did the problem appear where it was caused, or only later after more work had piled on top?
+- Did we get a clear signal that something was wrong, or did the system hide or blur the abnormality?
+- Would continuing without stopping spread confusion, waste effort, or make the evidence harder to recover?
+- What evidence will a later `kaizen-fix` need to find and fix the cause rather than the symptom?
 
 ## Trigger Habit
 
@@ -43,10 +56,13 @@ Usually not candidates:
    - `git status --short --branch`;
    - relevant workflow, skill, prompt, script, or docs paths;
    - Fabro run IDs, events, logs, URLs, commands, or failure text when available.
-3. Choose a concise slug and create:
+3. Identify the suspected system weakness without over-investigating:
+   - What kind of protection was missing or weak? Examples: guardrail, validation, error message, default, documentation, checklist, handoff, recovery path, observability, or ownership boundary.
+   - How urgent is it? Examples: minor friction, repeated friction, blocked work, quality risk, or customer risk.
+4. Choose a concise slug and create:
    - `docs/kaizen/YYYY-MM-DD-short-observation-slug.md`
-4. Keep the note factual and diagnostic.
-5. Commit the note once written. Do not include unrelated working-tree changes.
+5. Keep the note factual and diagnostic.
+6. Commit the note once written. Do not include unrelated working-tree changes.
 
 ## Note Template
 
@@ -59,9 +75,21 @@ Date: YYYY-MM-DD
 
 What were we trying to do? Include the workflow/skill/script/iteration/plan path/run ID/URL when relevant.
 
+## Expected standard
+
+What workflow, command, prompt, script, or handoff did we expect to work? Link the current standard work when known.
+
 ## What happened
 
-What friction, failure, ambiguity, or waste did we observe? Include exact commands, statuses, and failure text when useful.
+What friction, failure, ambiguity, abnormality, or waste did we observe? Include exact commands, statuses, and failure text when useful.
+
+## Impact
+
+How severe was it? Did it merely slow us down, repeat, block progress, threaten quality, or risk customer-facing impact?
+
+## What allowed it to happen
+
+What system weakness appears to have let the problem through? For example: missing guardrail, weak validation, confusing command, unclear error, flaky or slow feedback, unclear docs, manual step, brittle dependency, missing checklist, poor observability, or weak handoff.
 
 ## Observations
 
@@ -76,6 +104,10 @@ What risk or waste does this create for future delivery?
 ## Open questions
 
 - Unknowns to investigate later.
+
+## Possible prevention ideas
+
+- Optional, only when obvious from the evidence: guardrails, preflight checks, clearer errors, safer defaults, templates, scripts, tests, prompt changes, documentation changes, or other changes that could make recurrence impossible, obvious, or easy to recover from.
 ```
 
 Use additional headings when the evidence calls for them, but prefer a short useful note over a comprehensive report.
@@ -85,5 +117,5 @@ Use additional headings when the evidence calls for them, but prefer a short use
 - Write in plain language.
 - Be specific about file paths, commands, run IDs, branches, statuses, and exact errors.
 - Separate observed facts from hypotheses.
-- If you include possible improvements, put them under a clearly labelled heading such as `## Possible improvement`, and keep them secondary to the observation.
+- If you include possible improvements, put them under a clearly labelled heading such as `## Possible prevention ideas`, and keep them secondary to the observation.
 - Do not edit application code while recording the note.
