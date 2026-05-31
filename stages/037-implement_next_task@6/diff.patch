@@ -1,0 +1,490 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index e73f01e..c1641fd 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -10,6 +10,7 @@ const {
+   createPeople,
+   kootenayClubName,
+   nelsonClubName,
++  reportRecipientEmailStatus,
+   sendMessageToKootenayMembers
+ } = require("../support/member_message");
+ 
+@@ -73,3 +74,42 @@ Then(
+     await assertReceiptStatus(this, recipientName, subject, expectedStatus);
+   }
+ );
++
++When(
++  "{word}'s email for {string} is reported as delivered",
++  async function (recipientName, subject) {
++    await reportRecipientEmailStatus(this, recipientName, subject, "delivered");
++  }
++);
++
++Given(
++  "{word}'s email for {string} has been reported as delivered",
++  async function (recipientName, subject) {
++    await reportRecipientEmailStatus(this, recipientName, subject, "delivered");
++  }
++);
++
++When(
++  "{word}'s email for {string} is reported as delayed because {string}",
++  async function (recipientName, subject, reason) {
++    await reportRecipientEmailStatus(this, recipientName, subject, "delayed", { reason });
++  }
++);
++
++When(
++  "{word}'s email for {string} is reported as bounced because {string}",
++  async function (recipientName, subject, reason) {
++    await reportRecipientEmailStatus(this, recipientName, subject, "bounced", { reason });
++  }
++);
++
++When(
++  "{word}'s email for {string} is reported as a spam complaint because {string}",
++  async function (recipientName, subject, reason) {
++    await reportRecipientEmailStatus(this, recipientName, subject, "spam_complaint", { reason });
++  }
++);
++
++When("{word} opens the email for {string}", async function (recipientName, subject) {
++  await reportRecipientEmailStatus(this, recipientName, subject, "opened");
++});
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 40a09f0..1fef5a5 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1,4 +1,5 @@
+ const assert = require("node:assert/strict");
++const { randomUUID } = require("node:crypto");
+ const { expect: playwrightExpect } = require("@playwright/test");
+ 
+ const kootenayClubName = "Kootenay Mountaineering Club";
+@@ -24,12 +25,64 @@ function emailFor(name) {
+   return `${normalizedName}@example.test`;
+ }
+ 
++function postmarkPayloadForStatus({
++  deliveryId,
++  eventType,
++  messageId,
++  reason,
++  recipientEmail
++}) {
++  const payload = {
++    MessageID: randomUUID(),
++    Metadata: {
++      delivery_id: deliveryId,
++      message_id: messageId
++    },
++    Recipient: recipientEmail
++  };
++
++  switch (eventType) {
++    case "delivered":
++      return { ...payload, RecordType: "Delivery" };
++
++    case "opened":
++      return { ...payload, RecordType: "Open" };
++
++    case "delayed":
++      return {
++        ...payload,
++        Details: reason,
++        RecordType: "Bounce",
++        Type: "Transient"
++      };
++
++    case "bounced":
++      return {
++        ...payload,
++        Description: reason,
++        RecordType: "Bounce",
++        Type: "HardBounce"
++      };
++
++    case "spam_complaint":
++      return {
++        ...payload,
++        Details: reason,
++        RecordType: "SpamComplaint"
++      };
++
++    default:
++      throw new Error(`Unsupported browser Postmark status event: ${eventType}`);
++  }
++}
++
+ function ensureState(world) {
+   world.clubs = world.clubs || {};
+   world.people = world.people || {};
+   world.memberships = world.memberships || {};
+   world.messages = world.messages || {};
+   world.deliveries = world.deliveries || {};
++  world.reportedDeliveryStatuses = world.reportedDeliveryStatuses || {};
+ 
+   return world;
+ }
+@@ -348,6 +401,109 @@ async function assertReceiptStatus(world, recipientName, subject, expectedStatus
+   return world;
+ }
+ 
++async function reportRecipientEmailStatus(
++  world,
++  recipientName,
++  subject,
++  eventType,
++  { expect = playwrightExpect, reason } = {}
++) {
++  ensureState(world);
++
++  const delivery = await deliveryForRecipient(world, recipientName, subject, { expect });
++  const payload = postmarkPayloadForStatus({
++    deliveryId: delivery.deliveryId,
++    eventType,
++    messageId: delivery.messageId,
++    reason,
++    recipientEmail: delivery.recipientEmail
++  });
++
++  await postPostmarkWebhook(world, payload);
++
++  const key = `${subject}:${recipientName}`;
++  world.reportedDeliveryStatuses[key] = {
++    eventType,
++    payload,
++    reason,
++    recipientName,
++    subject
++  };
++
++  return world;
++}
++
++async function deliveryForRecipient(
++  world,
++  recipientName,
++  subject,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
++
++  const recipient = world.people[recipientName];
++  assert.ok(recipient, `Expected ${recipientName} to have been created`);
++
++  await openMessage(world, subject, { expect });
++
++  const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
++  await expect(row).toBeVisible();
++
++  const deliveryId = await row.getAttribute("data-delivery-id");
++  assert.ok(
++    deliveryId,
++    `Expected delivery record for ${recipientName} and ${JSON.stringify(subject)} to expose data-delivery-id`
++  );
++
++  const recipientId = await row.getAttribute("data-recipient-id");
++
++  world.deliveries[subject] = world.deliveries[subject] || {};
++  world.deliveries[subject][recipientName] = {
++    deliveryId,
++    recipientEmail: recipient.email,
++    recipientId,
++    recipientName
++  };
++
++  return {
++    deliveryId,
++    messageId: message.messageId,
++    recipientEmail: recipient.email,
++    recipientId,
++    recipientName
++  };
++}
++
++async function postPostmarkWebhook(world, payload) {
++  const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
++  assert.ok(
++    request && typeof request.post === "function",
++    "Expected Playwright request context to be available for Postmark webhook submission"
++  );
++
++  const response = await request.post(appUrl(world.baseUrl, "/webhooks/postmark"), {
++    data: payload,
++    headers: {
++      "content-type": "application/json"
++    }
++  });
++  const status = response.status();
++
++  if (status !== 202) {
++    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
++
++    throw new Error(
++      `Postmark webhook submission failed: expected HTTP 202 from POST /webhooks/postmark, got HTTP ${status}.\n` +
++        `Payload: ${JSON.stringify(payload)}\nResponse body: ${body}`
++    );
++  }
++
++  return response;
++}
++
+ async function rowDatasetValues(rows, datasetName) {
+   return rows.evaluateAll((elements, key) => elements.map((element) => element.dataset[key]), datasetName);
+ }
+@@ -371,10 +527,14 @@ module.exports = {
+   createClub,
+   createPeople,
+   cssString,
++  deliveryForRecipient,
+   emailFor,
+   ensureState,
+   kootenayClubName,
+   nelsonClubName,
++  postmarkPayloadForStatus,
++  postPostmarkWebhook,
++  reportRecipientEmailStatus,
+   rowAttributeValues,
+   openClub,
+   openMessage,
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 5bf4273..34525b4 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -12,8 +12,12 @@ const {
+   createClub,
+   createPeople,
+   cssString,
++  deliveryForRecipient,
+   emailFor,
+   kootenayClubName,
++  postmarkPayloadForStatus,
++  postPostmarkWebhook,
++  reportRecipientEmailStatus,
+   sendMessageToKootenayMembers
+ } = require("../features/support/member_message");
+ 
+@@ -168,6 +172,34 @@ class FakePage {
+   }
+ }
+ 
++class FakeResponse {
++  constructor(status, body = "") {
++    this.responseStatus = status;
++    this.body = body;
++  }
++
++  status() {
++    return this.responseStatus;
++  }
++
++  async text() {
++    return typeof this.body === "string" ? this.body : JSON.stringify(this.body);
++  }
++}
++
++class FakeRequestContext {
++  constructor(response = new FakeResponse(202, { status: "accepted" })) {
++    this.posts = [];
++    this.response = response;
++  }
++
++  async post(url, options) {
++    this.posts.push({ options, url });
++
++    return this.response;
++  }
++}
++
+ function rowsForSelector(rows, selector) {
+   if (selector.includes('data-testid="club-row"')) return filterRows(rows.clubs, selector);
+   if (selector.includes('data-testid="person-row"')) return filterRows(rows.people, selector);
+@@ -389,3 +421,169 @@ test("message assertions read addressed recipients, delivery records, email chan
+   });
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+ });
++
++test("Postmark webhook payloads map member-facing status events onto the app endpoint shape", () => {
++  const base = {
++    deliveryId: "delivery-bob",
++    messageId: "message-1",
++    recipientEmail: "bob@example.test"
++  };
++
++  assert.deepEqual(
++    redactGeneratedMessageId(postmarkPayloadForStatus({ ...base, eventType: "delivered" })),
++    {
++      MessageID: "<generated>",
++      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
++      Recipient: "bob@example.test",
++      RecordType: "Delivery"
++    }
++  );
++
++  assert.deepEqual(redactGeneratedMessageId(postmarkPayloadForStatus({ ...base, eventType: "opened" })), {
++    MessageID: "<generated>",
++    Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
++    Recipient: "bob@example.test",
++    RecordType: "Open"
++  });
++
++  assert.deepEqual(
++    redactGeneratedMessageId(
++      postmarkPayloadForStatus({
++        ...base,
++        eventType: "delayed",
++        reason: "recipient server is temporarily unavailable"
++      })
++    ),
++    {
++      Details: "recipient server is temporarily unavailable",
++      MessageID: "<generated>",
++      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
++      Recipient: "bob@example.test",
++      RecordType: "Bounce",
++      Type: "Transient"
++    }
++  );
++
++  assert.deepEqual(
++    redactGeneratedMessageId(
++      postmarkPayloadForStatus({
++        ...base,
++        eventType: "bounced",
++        reason: "mailbox does not exist"
++      })
++    ),
++    {
++      Description: "mailbox does not exist",
++      MessageID: "<generated>",
++      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
++      Recipient: "bob@example.test",
++      RecordType: "Bounce",
++      Type: "HardBounce"
++    }
++  );
++
++  assert.deepEqual(
++    redactGeneratedMessageId(
++      postmarkPayloadForStatus({
++        ...base,
++        eventType: "spam_complaint",
++        reason: "recipient marked the message as spam"
++      })
++    ),
++    {
++      Details: "recipient marked the message as spam",
++      MessageID: "<generated>",
++      Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
++      Recipient: "bob@example.test",
++      RecordType: "SpamComplaint"
++    }
++  );
++});
++
++test("reporting a recipient email status posts to POST /webhooks/postmark using browser-visible ids", async () => {
++  const page = new FakePage();
++  page.rows.deliveryRecords.push({
++    attrs: {
++      "data-delivery-id": "delivery-bob",
++      "data-recipient-id": "person-bob",
++      "data-recipient-name": "Bob"
++    },
++    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
++  });
++  const request = new FakeRequestContext();
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.request = request;
++  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
++  world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
++
++  await reportRecipientEmailStatus(world, "Bob", "Trip planning night", "delivered", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.deepEqual(request.posts.map((post) => post.url), [
++    "http://127.0.0.1:4444/webhooks/postmark"
++  ]);
++  assert.deepEqual(redactGeneratedMessageId(request.posts[0].options.data), {
++    MessageID: "<generated>",
++    Metadata: { delivery_id: "delivery-bob", message_id: "message-1" },
++    Recipient: "bob@example.test",
++    RecordType: "Delivery"
++  });
++  assert.equal(request.posts[0].options.headers["content-type"], "application/json");
++  assert.deepEqual(world.deliveries["Trip planning night"].Bob, {
++    deliveryId: "delivery-bob",
++    recipientEmail: "bob@example.test",
++    recipientId: "person-bob",
++    recipientName: "Bob"
++  });
++  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
++  assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
++});
++
++test("Postmark webhook submission failures report the endpoint and response details", async () => {
++  const request = new FakeRequestContext(new FakeResponse(422, { errors: { detail: "Unsupported" } }));
++  const world = {
++    baseUrl: "http://127.0.0.1:4444",
++    request
++  };
++
++  await assert.rejects(
++    () => postPostmarkWebhook(world, { RecordType: "SubscriptionChange" }),
++    /Postmark webhook submission failed: expected HTTP 202 from POST \/webhooks\/postmark, got HTTP 422/
++  );
++});
++
++test("delivery lookup reads the delivery id needed for webhook metadata from the message UI", async () => {
++  const page = new FakePage();
++  page.rows.deliveryRecords.push({
++    attrs: {
++      "data-delivery-id": "delivery-bob",
++      "data-recipient-id": "person-bob",
++      "data-recipient-name": "Bob"
++    },
++    dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
++  });
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
++  world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
++
++  assert.deepEqual(
++    await deliveryForRecipient(world, "Bob", "Trip planning night", { expect: fakeExpect(expectations) }),
++    {
++      deliveryId: "delivery-bob",
++      messageId: "message-1",
++      recipientEmail: "bob@example.test",
++      recipientId: "person-bob",
++      recipientName: "Bob"
++    }
++  );
++});
++
++function redactGeneratedMessageId(payload) {
++  return {
++    ...payload,
++    MessageID: "<generated>"
++  };
++}
+diff --git a/docs/iterations/006-browser-cucumber-automation/todo.md b/docs/iterations/006-browser-cucumber-automation/todo.md
+index 4020db2..19cbd28 100644
+--- a/docs/iterations/006-browser-cucumber-automation/todo.md
++++ b/docs/iterations/006-browser-cucumber-automation/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
+ - [x] 004 Implement homepage browser steps against the real homepage route.
+ - [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
+-- [ ] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
++- [x] 006 Implement webhook/status browser steps by sending Postmark-style HTTP requests to `POST /webhooks/postmark`.
+ - [ ] 007 Add bounded polling/waiting around browser-visible projections after commands and webhook posts. Prefer Playwright assertions such as `expect(...).toHaveText`, `expect.poll`, or equivalent Cucumber helper retries over fixed sleeps.
+ - [ ] 008 Make diagnostics actionable: separate errors for Phoenix readiness, database setup, webhook HTTP failures, timeout waiting for projected UI state, and final assertion mismatches.
+ - [ ] 009 Verify that `operator_email_deliverability.feature` is excluded only from the browser run and remains covered by the domain runner.
