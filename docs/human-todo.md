@@ -3,6 +3,8 @@
 ## Postmark setup for iteration 008
 
 Before or during Postmark email integration, Matt needs to set up the following outside the codebase.
+See [`postmark-email.md`](postmark-email.md) for the exact runtime configuration
+and webhook details.
 
 ### Postmark account
 
@@ -35,11 +37,10 @@ Before or during Postmark email integration, Matt needs to set up the following 
 ### Deployment configuration
 
 - Provide deployment secrets/config for:
-  - Postmark server token
-  - configured From address
-  - configured Reply-To address
-  - delivery provider selection for real Postmark sending
-  - any Postmark message stream or open-tracking option required by the implementation
+  - `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`
+  - `MEMBA_POSTMARK_SERVER_TOKEN`
+  - `MEMBA_POSTMARK_FROM_ADDRESS`
+  - `MEMBA_POSTMARK_REPLY_TO_ADDRESS`
 - Keep local/test environments on fake delivery unless explicitly opting into real Postmark sending.
 
 ### Manual smoke test
