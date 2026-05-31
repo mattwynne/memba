@@ -158,44 +158,71 @@ acceptance() {
   (cd "$repo_root/acceptance-tests" && npm test -- "$@")
 }
 
-# @cmd Validate a future iteration plan without starting implementation
-# @arg plan_path! Iteration plan path, e.g. docs/iterations/006-deliveries-overview/plan.md
-iteration_validate_plan() {
+# @cmd Run Fabro workflow helpers
+# @arg command![validate-plan|start|mark-merged|mark-merged-style|review] Helper command
+# @arg args~ Arguments for the helper command
+fabro() {
+  local command_name="${1:-}"
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+
+  case "$command_name" in
+    validate-plan) _fabro_validate_plan "$@" ;;
+    start) _fabro_start "$@" ;;
+    mark-merged) _fabro_mark_merged "$@" ;;
+    mark-merged-style) _fabro_mark_merged_style "$@" ;;
+    review) _fabro_review "$@" ;;
+    -h|--help|"")
+      cat >&2 <<EOF
+Usage: $0 fabro <command> [args]
+
+Commands:
+  validate-plan <plan_path>
+  start <plan_path>
+  mark-merged <plan_path> [branch] [main_ref]
+  mark-merged-style <plan_path>
+  review <branch> <plan_path> [base_ref_or_base_sha]
+EOF
+      ;;
+    *)
+      echo "Unknown Fabro helper command: $command_name" >&2
+      echo "Run '$0 fabro --help' for usage." >&2
+      exit 2
+      ;;
+  esac
+}
+
+_fabro_validate_plan() {
   local plan_path="${1:-}"
   if [ -z "$plan_path" ]; then
-    echo "Usage: $0 iteration-validate-plan <plan_path>" >&2
+    echo "Usage: $0 fabro validate-plan <plan_path>" >&2
     exit 2
   fi
-  (cd "$repo_root" && fabro run .fabro/workflows/plan-validation/workflow.toml \
+  (cd "$repo_root" && command fabro run .fabro/workflows/plan-validation/workflow.toml \
     -I plan_path="$plan_path" \
     --auto-approve)
 }
 
-# @cmd Start delivery for a validated/ready iteration when the implementation WIP slot is clear
-# @arg plan_path! Iteration plan path, e.g. docs/iterations/006-deliveries-overview/plan.md
-iteration_start() {
+_fabro_start() {
   local plan_path="${1:-}"
   if [ -z "$plan_path" ]; then
-    echo "Usage: $0 iteration-start <plan_path>" >&2
+    echo "Usage: $0 fabro start <plan_path>" >&2
     exit 2
   fi
   (cd "$repo_root" && .fabro/workflows/scripts/iteration_status.py check-clear "$plan_path")
-  (cd "$repo_root" && fabro run .fabro/workflows/iteration-deliver/workflow.toml \
+  (cd "$repo_root" && command fabro run .fabro/workflows/iteration-deliver/workflow.toml \
     -I plan_path="$plan_path" \
     -I mode=deliver)
 }
 
-# @cmd Mark an iteration as merged after its implementation branch has landed on main
-# @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
-# @arg branch Branch/ref that was merged; defaults to Branch: from implementation.md
-# @arg main_ref=origin/main Main ref that should contain the implementation
-iteration_mark_merged() {
+_fabro_mark_merged() {
   local plan_path="${1:-}"
   local branch="${2:-}"
   local main_ref="${3:-origin/main}"
 
   if [ -z "$plan_path" ]; then
-    echo "Usage: $0 iteration-mark-merged <plan_path> [branch] [main_ref]" >&2
+    echo "Usage: $0 fabro mark-merged <plan_path> [branch] [main_ref]" >&2
     exit 2
   fi
 
@@ -285,13 +312,11 @@ PY
   echo "- $implementation_path"
 }
 
-# @cmd Mark an iteration as merged after deliver lands implementation/review on main
-# @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
-iteration_mark_merged_style() {
+_fabro_mark_merged_style() {
   local plan_path="${1:-}"
 
   if [ -z "$plan_path" ]; then
-    echo "Usage: $0 iteration-mark-merged-style <plan_path>" >&2
+    echo "Usage: $0 fabro mark-merged-style <plan_path>" >&2
     exit 2
   fi
 
@@ -355,21 +380,17 @@ PY
   echo "- $implementation_path"
 }
 
-# @cmd Review an implementation branch in an isolated worktree
-# @arg branch! Branch/ref to review, e.g. pr/event-sourced-foundation
-# @arg plan_path! Iteration plan path, e.g. docs/iterations/001-event-sourced-foundation/plan.md
-# @arg base_ref_or_base_sha= Base ref or resolved base SHA for the implementation diff; defaults to HEAD~1 of the reviewed branch
-iteration_review() {
+_fabro_review() {
   local branch="${1:-}"
   local plan_path="${2:-}"
   local base_ref_or_base_sha="${3:-}"
 
   if [ -z "$branch" ] || [ -z "$plan_path" ]; then
-    echo "Usage: $0 iteration-review <branch> <plan_path> [base_ref_or_base_sha]" >&2
+    echo "Usage: $0 fabro review <branch> <plan_path> [base_ref_or_base_sha]" >&2
     exit 2
   fi
 
-  if ! command -v fabro >/dev/null 2>&1; then
+  if ! type -P fabro >/dev/null 2>&1; then
     echo "Missing required tool: fabro" >&2
     exit 1
   fi
@@ -392,7 +413,7 @@ iteration_review() {
     review_branch="$branch"
     ref="$review_branch"
   elif git -C "$repo_root" rev-parse --verify --quiet "${branch}^{commit}" >/dev/null; then
-    echo "Resolved $branch as a commit, tag, or detached ref, but iteration-review needs a remote branch Fabro can clone." >&2
+    echo "Resolved $branch as a commit, tag, or detached ref, but fabro review needs a remote branch Fabro can clone." >&2
     echo "Create and push a review branch first, then retry: git branch <branch-name> $branch && git push -u origin <branch-name>" >&2
     exit 1
   else
@@ -406,7 +427,7 @@ iteration_review() {
       branch_worktree=$(git -C "$repo_root" branch --format='%(worktreepath)' --list "$review_branch")
       if [ -n "$branch_worktree" ]; then
         echo "Local review branch is already checked out: $review_branch at $branch_worktree" >&2
-        echo "Run iteration-review with that branch name, or remove the existing worktree before reviewing the remote ref." >&2
+        echo "Run '$0 fabro review' with that branch name, or remove the existing worktree before reviewing the remote ref." >&2
         exit 1
       fi
       git -C "$repo_root" branch --set-upstream-to="origin/$remote_branch" "$review_branch" >/dev/null 2>&1 || true
@@ -472,7 +493,7 @@ iteration_review() {
   echo "Review base sha: $base_sha"
   (
     cd "$worktree"
-    fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \
+    command fabro run "$repo_root/.fabro/workflows/iteration-review/workflow.toml" \
       -I "plan_path=$plan_path" \
       -I "base_sha=$base_sha"
   )
