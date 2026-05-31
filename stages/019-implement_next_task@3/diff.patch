@@ -1,0 +1,230 @@
+diff --git a/docs/iterations/007-deliveries-overview/todo.md b/docs/iterations/007-deliveries-overview/todo.md
+index 0baaa2d..25ed1b4 100644
+--- a/docs/iterations/007-deliveries-overview/todo.md
++++ b/docs/iterations/007-deliveries-overview/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Update the operator feature language around the rule "Operators monitor detailed delivery records across messages", keeping scenarios BRIEF and focused on cross-message visibility, reason preservation, and opened status.
+ - [x] 002 Write failing PhoenixTest coverage for `/deliveries`, including records from more than one message and problem reason text.
+-- [ ] 003 Reshape the public Messaging operator-deliverability query toward a deliveries-overview API, for example an options-shaped list function. Preserve any existing message-scoped needs through options or a compatibility wrapper only if still required by current code.
++- [x] 003 Reshape the public Messaging operator-deliverability query toward a deliveries-overview API, for example an options-shaped list function. Preserve any existing message-scoped needs through options or a compatibility wrapper only if still required by current code.
+ - [ ] 004 Add the `/deliveries` LiveView route under the browser pipeline.
+ - [ ] 005 Build the deliveries LiveView as a simple read-only table with stable accessible labels or IDs for browser acceptance.
+ - [ ] 006 Update browser Cucumber step definitions for `operator_email_deliverability.feature` so operator assertions inspect `/deliveries`.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 5e0e2d9..a010a0b 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -231,6 +231,26 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  List operator-facing delivery records for the deliveries overview.
++
++  Results include message subject and event timestamp fields populated from the
++  messaging projections and are ordered newest event first. Pass
++  `message_id: message_id` to narrow the overview to one projected message.
++  Invalid options return an empty list.
++  """
++  def list_operator_deliveries(opts \\ []) do
++    if is_list(opts) do
++      with {:ok, query} <- operator_deliveries_query(opts) do
++        Repo.all(query)
++      else
++        :error -> []
++      end
++    else
++      []
++    end
++  end
++
+   @doc """
+   List operator deliverability records for a projected message.
+ 
+@@ -252,6 +272,31 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp operator_deliveries_query(opts) do
++    query =
++      from deliverability in OperatorDeliverabilityProjection,
++        join: message in MessageProjection,
++        on: message.message_id == deliverability.message_id,
++        order_by: [desc: deliverability.updated_at, desc: deliverability.delivery_id],
++        select_merge: %{
++          message_subject: message.subject,
++          event_at: deliverability.updated_at
++        }
++
++    case Keyword.fetch(opts, :message_id) do
++      {:ok, message_id} ->
++        with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
++          {:ok,
++           where(query, [deliverability, _message], deliverability.message_id == ^message_id)}
++        else
++          :error -> :error
++        end
++
++      :error ->
++        {:ok, query}
++    end
++  end
++
+   defp dispatch_command(command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> {:ok, :ok}
+diff --git a/web/lib/memba/messaging/projections/operator_deliverability.ex b/web/lib/memba/messaging/projections/operator_deliverability.ex
+index 27b59e8..1fd46ac 100644
+--- a/web/lib/memba/messaging/projections/operator_deliverability.ex
++++ b/web/lib/memba/messaging/projections/operator_deliverability.ex
+@@ -17,6 +17,8 @@ defmodule Memba.Messaging.Projections.OperatorDeliverability do
+     field :channel, :string
+     field :status, :string
+     field :reason, :string
++    field :message_subject, :string, virtual: true
++    field :event_at, :utc_datetime_usec, virtual: true
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 9f406a8..e3d6dab 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -14,6 +14,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def get_operator_deliverability("
+     assert source =~ "def list_recipient_deliveries("
+     assert source =~ "def list_member_receipts("
++    assert source =~ "def list_operator_deliveries("
+     assert source =~ "def list_operator_deliverabilities("
+ 
+     list_functions =
+@@ -25,6 +26,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+              "list_messages_for_club",
+              "list_recipient_deliveries",
+              "list_member_receipts",
++             "list_operator_deliveries",
+              "list_operator_deliverabilities"
+            ]
+ 
+diff --git a/web/test/memba/messaging/operator_deliverability_projection_test.exs b/web/test/memba/messaging/operator_deliverability_projection_test.exs
+index bda303f..8e0eae9 100644
+--- a/web/test/memba/messaging/operator_deliverability_projection_test.exs
++++ b/web/test/memba/messaging/operator_deliverability_projection_test.exs
+@@ -167,6 +167,76 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
+            } = Messaging.get_operator_deliverability(message_id, bob.person_id)
+   end
+ 
++  test "operator delivery overview query lists deliveries across messages newest event first" do
++    %{message_id: first_message_id, recipients: [alice]} =
++      send_message_with_recipients(["Alice"], subject: "Spring snowpack update")
++
++    %{message_id: second_message_id, recipients: [bob]} =
++      send_message_with_recipients(["Bob"], subject: "Trail work party")
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryDelayed{
++                 message_id: first_message_id,
++                 delivery_id: alice.delivery_id,
++                 reason: "recipient server is temporarily unavailable"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReportDeliveryBounced{
++                 message_id: second_message_id,
++                 delivery_id: bob.delivery_id,
++                 reason: "mailbox does not exist"
++               },
++               consistency: :strong
++             )
++
++    older_event_at = ~U[2026-05-29 10:00:00.000000Z]
++    newer_event_at = ~U[2026-05-29 11:00:00.000000Z]
++
++    set_delivery_event_at(alice.delivery_id, older_event_at)
++    set_delivery_event_at(bob.delivery_id, newer_event_at)
++
++    assert [
++             %OperatorDeliverabilityProjection{
++               delivery_id: bob_delivery_id,
++               message_id: ^second_message_id,
++               message_subject: "Trail work party",
++               recipient_name: "Bob",
++               recipient_address: "bob@example.test",
++               channel: "email",
++               status: "bounced",
++               reason: "mailbox does not exist",
++               event_at: ^newer_event_at
++             },
++             %OperatorDeliverabilityProjection{
++               delivery_id: alice_delivery_id,
++               message_id: ^first_message_id,
++               message_subject: "Spring snowpack update",
++               recipient_name: "Alice",
++               recipient_address: "alice@example.test",
++               channel: "email",
++               status: "delayed",
++               reason: "recipient server is temporarily unavailable",
++               event_at: ^older_event_at
++             }
++           ] = Messaging.list_operator_deliveries()
++
++    assert bob_delivery_id == bob.delivery_id
++    assert alice_delivery_id == alice.delivery_id
++
++    assert [
++             %OperatorDeliverabilityProjection{
++               delivery_id: ^alice_delivery_id,
++               message_subject: "Spring snowpack update",
++               event_at: ^older_event_at
++             }
++           ] = Messaging.list_operator_deliveries(message_id: first_message_id)
++  end
++
+   test "operator deliverability queries return empty results for missing or invalid IDs" do
+     assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate()))
+     assert is_nil(Messaging.get_operator_deliverability(nil))
+@@ -182,9 +252,16 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
+     assert Messaging.list_operator_deliverabilities(Ecto.UUID.generate()) == []
+     assert Messaging.list_operator_deliverabilities(nil) == []
+     assert Messaging.list_operator_deliverabilities("not-a-uuid") == []
++
++    assert Messaging.list_operator_deliveries(message_id: Ecto.UUID.generate()) == []
++    assert Messaging.list_operator_deliveries(message_id: nil) == []
++    assert Messaging.list_operator_deliveries(message_id: "not-a-uuid") == []
++    assert Messaging.list_operator_deliveries(nil) == []
+   end
+ 
+-  defp send_message_with_recipients(names) do
++  defp send_message_with_recipients(names, opts \\ []) do
++    subject = Keyword.get(opts, :subject, "Trip planning night")
++
+     [sender | _rest] =
+       recipients =
+       Enum.map(names, fn name ->
+@@ -204,7 +281,7 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
+                  message_id: message_id,
+                  club_id: Ecto.UUID.generate(),
+                  sender_id: sender.person_id,
+-                 subject: "Trip planning night",
++                 subject: subject,
+                  body: "Bring route ideas.",
+                  recipients: recipients
+                },
+@@ -214,6 +291,12 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
+     %{message_id: message_id, recipients: recipients}
+   end
+ 
++  defp set_delivery_event_at(delivery_id, event_at) do
++    OperatorDeliverabilityProjection
++    |> where([deliverability], deliverability.delivery_id == ^delivery_id)
++    |> Repo.update_all(set: [updated_at: event_at])
++  end
++
+   defp email_for(name) do
+     normalized_name =
+       name
