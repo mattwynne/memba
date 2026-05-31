@@ -1,0 +1,73 @@
+diff --git a/docs/iterations/007-deliveries-overview/todo.md b/docs/iterations/007-deliveries-overview/todo.md
+index 25ed1b4..ecea550 100644
+--- a/docs/iterations/007-deliveries-overview/todo.md
++++ b/docs/iterations/007-deliveries-overview/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Update the operator feature language around the rule "Operators monitor detailed delivery records across messages", keeping scenarios BRIEF and focused on cross-message visibility, reason preservation, and opened status.
+ - [x] 002 Write failing PhoenixTest coverage for `/deliveries`, including records from more than one message and problem reason text.
+ - [x] 003 Reshape the public Messaging operator-deliverability query toward a deliveries-overview API, for example an options-shaped list function. Preserve any existing message-scoped needs through options or a compatibility wrapper only if still required by current code.
+-- [ ] 004 Add the `/deliveries` LiveView route under the browser pipeline.
++- [x] 004 Add the `/deliveries` LiveView route under the browser pipeline.
+ - [ ] 005 Build the deliveries LiveView as a simple read-only table with stable accessible labels or IDs for browser acceptance.
+ - [ ] 006 Update browser Cucumber step definitions for `operator_email_deliverability.feature` so operator assertions inspect `/deliveries`.
+ - [ ] 007 Remove `@todo-web` tags from operator scenarios once they are browser-backed.
+diff --git a/web/lib/memba_web/live/deliveries_live/index.ex b/web/lib/memba_web/live/deliveries_live/index.ex
+new file mode 100644
+index 0000000..29acf6d
+--- /dev/null
++++ b/web/lib/memba_web/live/deliveries_live/index.ex
+@@ -0,0 +1,27 @@
++defmodule MembaWeb.DeliveriesLive.Index do
++  use MembaWeb, :live_view
++
++  @impl Phoenix.LiveView
++  def mount(_params, _session, socket) do
++    {:ok, socket}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.app flash={@flash}>
++      <main id="deliveries-route" class="mx-auto max-w-6xl space-y-6 p-6">
++        <section class="space-y-2">
++          <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
++            Operator overview
++          </p>
++          <h1 class="text-3xl font-bold tracking-tight text-zinc-900">Deliveries</h1>
++          <p class="text-zinc-600">
++            Delivery records will appear here as the overview table is implemented.
++          </p>
++        </section>
++      </main>
++    </Layouts.app>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 08df238..ed3280f 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -21,6 +21,7 @@ defmodule MembaWeb.Router do
+ 
+     live "/clubs", ClubsLive.Index
+     live "/clubs/:club_id", ClubsLive.Show
++    live "/deliveries", DeliveriesLive.Index
+     live "/messages/:message_id", MessagesLive.Show
+   end
+ 
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 437114f..0241f8f 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -12,6 +12,10 @@ defmodule MembaWeb.RouterTest do
+       })
+     end
+ 
++    test "routes /deliveries through the browser pipeline to the deliveries index LiveView" do
++      assert_live_route("/deliveries", "/deliveries", MembaWeb.DeliveriesLive.Index, %{})
++    end
++
+     test "routes /messages/:message_id through the browser pipeline to the message show LiveView" do
+       assert_live_route(
+         "/messages/message-123",
