@@ -1,5 +1,12 @@
 defmodule MembaWeb.RouterTest do
-  use ExUnit.Case, async: true
+  use MembaWeb.ConnCase, async: true
+
+  @old_harness_paths [
+    "/clubs",
+    "/clubs/club-123",
+    "/deliveries",
+    "/messages/message-123"
+  ]
 
   describe "staff admin LiveView routes" do
     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
@@ -51,6 +58,20 @@ defmodule MembaWeb.RouterTest do
                  "/webhooks/postmark",
                  "localhost"
                )
+    end
+  end
+
+  describe "removed public harness routes" do
+    test "old harness paths return the normal 404 response without redirects", %{conn: conn} do
+      Enum.each(@old_harness_paths, fn path ->
+        conn =
+          conn
+          |> recycle()
+          |> get(path)
+
+        assert response(conn, 404) == "Not Found"
+        assert get_resp_header(conn, "location") == []
+      end)
     end
   end
 
