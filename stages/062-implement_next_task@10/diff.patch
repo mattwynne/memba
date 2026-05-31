@@ -1,0 +1,95 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index 63da9dd..76f64bf 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -9,6 +9,6 @@
+ - [x] 007 Add `/auth` UI and callback handling:
+ - [x] 008 Update the home page:
+ - [x] 009 Apply auth gates:
+-- [ ] 010 Add focused tests:
++- [x] 010 Add focused tests:
+ - [ ] 011 Update operational documentation for auth Postmark environment variables and the required message stream.
+ - [ ] 012 Run `bin/dev check` and fix regressions.
+diff --git a/web/test/memba_web/auth_gates_test.exs b/web/test/memba_web/auth_gates_test.exs
+index 910970a..69638f2 100644
+--- a/web/test/memba_web/auth_gates_test.exs
++++ b/web/test/memba_web/auth_gates_test.exs
+@@ -48,7 +48,9 @@ defmodule MembaWeb.AuthGatesTest do
+       assert get_session(conn, UserAuth.return_to_session_key()) == "/?club_id=#{club_id}"
+     end
+ 
+-    test "forbid signed-in browsers without active membership in the requested club", %{conn: conn} do
++    test "forbid signed-in browsers without active membership in the requested club", %{
++      conn: conn
++    } do
+       club = create_active_member(email: "alice@example.com")
+ 
+       conn =
+@@ -59,6 +61,19 @@ defmodule MembaWeb.AuthGatesTest do
+       assert response(conn, 403) == "Forbidden"
+     end
+ 
++    test "forbid signed-in browsers with only inactive membership in the requested club", %{
++      conn: conn
++    } do
++      club = create_active_member(email: "alice@example.com", active: false)
++
++      conn =
++        conn
++        |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++        |> get(~p"/?#{[club_id: club.club_id]}")
++
++      assert response(conn, 403) == "Forbidden"
++    end
++
+     test "allow signed-in active members of the requested club", %{conn: conn} do
+       club = create_active_member(email: "alice@example.com")
+ 
+@@ -91,7 +106,7 @@ defmodule MembaWeb.AuthGatesTest do
+       membership_id: Ecto.UUID.generate(),
+       club_id: club_id,
+       person_id: person_id,
+-      active: true
++      active: Keyword.get(attrs, :active, true)
+     })
+ 
+     club
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index a6d109b..306318d 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -122,6 +122,34 @@ defmodule MembaWeb.AuthControllerTest do
+       assert flash(conn, :error) == "That sign-in link is invalid or has expired."
+       assert get_session(conn, UserAuth.identity_session_key()) == nil
+     end
++
++    test "rejects expired tokens without signing in", %{conn: conn} do
++      requested_at = ~U[2000-01-01 12:00:00.000000Z]
++      expired_at = DateTime.add(requested_at, 16 * 60, :second)
++
++      assert {:ok, %{token: token}} =
++               Accounts.request_magic_link("pat@memba.io", now: requested_at)
++
++      conn = get(conn, ~p"/auth/magic/#{token}")
++
++      assert redirected_to(conn) == ~p"/auth"
++      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
++      assert get_session(conn, UserAuth.identity_session_key()) == nil
++      assert [%MagicToken{consumed_at: nil}] = Repo.all(MagicToken)
++      assert {:error, :expired} = Accounts.consume_magic_token(token, now: expired_at)
++    end
++
++    test "rejects already-consumed tokens without signing in", %{conn: conn} do
++      assert {:ok, %{token: token}} = Accounts.request_magic_link("pat@memba.io")
++      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_magic_token(token)
++
++      conn = get(conn, ~p"/auth/magic/#{token}")
++
++      assert redirected_to(conn) == ~p"/auth"
++      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
++      assert get_session(conn, UserAuth.identity_session_key()) == nil
++      assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
++    end
+   end
+ 
+   describe "DELETE /auth" do
