@@ -15,9 +15,11 @@ green than before.
 | 005 | 2026-05-29 | merged | App substrate for browser-facing member behaviour | [plan](005-browser-acceptance-harness/plan.md) |
 | 006 | 2026-05-30 | implementing | Browser Cucumber automation for member-facing acceptance | [plan](006-browser-cucumber-automation/plan.md) |
 | 007 | 2026-05-29 | validated | Deliveries overview for operator deliverability | [plan](007-deliveries-overview/plan.md) |
+| 008 | 2026-05-30 | draft | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |
 
 Status notes:
 
+- `draft` means a captured plan still needs human review before validation or implementation.
 - `ready` means a human-approved plan is waiting for validation or implementation.
 - `validated` means plan validation has passed; it may wait while another iteration is active.
 - `implementing`, `ready-for-review`, `in-review`, `reviewing`, and `finalizing` occupy the single implementation WIP slot.
