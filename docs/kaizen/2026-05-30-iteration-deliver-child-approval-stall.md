@@ -75,3 +75,26 @@ For future iterations, this risks losing the single-piece-flow delivery path and
 - Should parent workflows be allowed to approve their own child runs, or should child runs be created in a state that cannot require user approval?
 - Should `iteration-deliver` detect `approval_required` immediately and fail with an explicit recoverable status instead of waiting for the watchdog?
 - What is the safe retry procedure after this state: approve the pending child and resume the parent, or start a fresh deliver run?
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The `iteration-deliver` parent workflow created child Fabro runs that could enter `approval_required`; worker agents could not approve those child runs, so the parent stalled until the watchdog failed it.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-deliver/`: removed the parent/child-run delivery workflow.
+- `.pi/skills/iteration-deliver/SKILL.md`: removed the project-local skill that launched the stalled parent workflow.
+- `bin/dev`: delivery now runs validation, implementation, and review directly from the user-controlled CLI boundary with `bin/dev fabro deliver ...`, keeping approval at the user-run command boundary.
+- Commit `3f1d466`: simplified Fabro delivery orchestration and deleted the workflow path that produced this approval stall.
+
+Validation:
+
+- Read-only status check confirmed current `HEAD` no longer contains `.fabro/workflows/iteration-deliver` or `.pi/skills/iteration-deliver`.
+- Read-only status check confirmed `.fabro/workflows/README.md` and `bin/dev` describe/directly run the replacement delivery flow.
+
+Remaining follow-up:
+
+- None for this note.
+

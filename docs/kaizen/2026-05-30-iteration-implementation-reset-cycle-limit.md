@@ -98,3 +98,25 @@ The consistency/projection synchronization question belongs primarily in the sal
 3. When the task gate routes to reset, include the validation decision and retry brief in the terminal failure summary if the run later hits the reset limit.
 4. Preserve discarded attempts as inspectable artifacts and print their paths in the final failure output.
 5. Add a guardrail to prevent stale failed run branches from being merged wholesale into `main`; require path-scoped salvage when `origin/main..run-branch` includes unrelated workflow/planning changes.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The failed iteration-005 run exhausted the implementation workflow's reset-task visit limit after substantial work had already been checkpointed. The immediate delivery problem was recovered by abandoning the unsafe failed run branch as a merge target and salvaging a narrower app-substrate slice.
+
+Fix applied:
+
+- `docs/iterations/005-browser-acceptance-harness/plan.md`: narrowed the delivered slice to the app substrate and marked the browser Cucumber automation work as deferred.
+- `docs/iterations/README.md`: recorded iteration 005 as merged after the salvage path.
+- Commits `8eda13a` and `27062a0`: salvaged and merged the iteration-005 app substrate instead of resuming or merging the failed run branch wholesale.
+
+Validation:
+
+- Read-only status check confirmed `docs/iterations/005-browser-acceptance-harness/plan.md` is `Status: merged` and `docs/iterations/README.md` marks iteration `005` as `merged`.
+- Read-only status check confirmed the failed run branch still contains unrelated workflow/planning changes and should remain historical evidence rather than a resume target.
+
+Remaining follow-up:
+
+- Reset-budget semantics and terminal failure diagnostics remain useful workflow improvements, but they should be tracked as separate focused kaizen notes if still needed.
+

@@ -39,3 +39,25 @@ Retry command after updating the review branch to include the review workflow fi
 ```bash
 bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
 ```
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: The failing review run used a stale review branch whose workflow script still wrote `.fabro/tmp/` to `.git/info/exclude`, even though `main` already contained the review workflow fix. Fabro checkpointing then failed after `publish_polish_to_main`.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: commit `c4fdb16` removed the stale `.git/info/exclude` write and excluded `.fabro/tmp` explicitly while staging.
+- The review branch was advanced/retried from workflow code containing `c4fdb16`.
+- Commits `0d2576a` and `f00ae0d`: completed review polish for iteration 004 and marked the iteration merged.
+
+Validation:
+
+- Read-only status check confirmed the failing run branch still had the old script, while current `HEAD` contains the `c4fdb16` fix.
+- Read-only status check confirmed a later retry reached `final_artifact_gate (succeeded)` and iteration 004 is marked `merged` in `docs/iterations/README.md`.
+
+Remaining follow-up:
+
+- None for this note.
+

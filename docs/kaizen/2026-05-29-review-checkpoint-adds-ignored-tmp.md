@@ -42,3 +42,25 @@ Retry command after applying the workflow metadata fix:
 ```bash
 bin/dev iteration-review review/004-delivery-status-and-views docs/iterations/004-delivery-status-and-views/plan.md d5361cf805a61a320973bf536c7d75678f16fc76
 ```
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: Review preflight wrote `.fabro/tmp/` to `.git/info/exclude` and then created a file under `.fabro/tmp`; Fabro's checkpoint attempted to add the ignored path and Git rejected it.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-review/workflow.fabro`: commit `c4fdb16` changed preflight to clean/create `.fabro/tmp` without mutating `.git/info/exclude`.
+- `.fabro/workflows/iteration-review/workflow.toml`: commit `c4fdb16` expanded checkpoint excludes to cover both `.fabro/tmp` and `.fabro/tmp/**`.
+- `.fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh`: commit `c4fdb16` removed the `.git/info/exclude` write and stages changes with explicit pathspec exclusions for `.fabro/tmp`.
+
+Validation:
+
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml` — read-only status check reported validation OK, with only existing goal-gate retry warnings.
+- Read-only status check confirmed `rg "git/info/exclude" .fabro/workflows/iteration-review` finds no matches in current review workflow files.
+
+Remaining follow-up:
+
+- None for this note.
+
