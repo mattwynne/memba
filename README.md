@@ -7,15 +7,11 @@ This repository is a monorepo:
 
 ## Development environment
 
-Use devenv from the repository root:
+Use the development helper from the repository root:
 
-* Run `devenv shell mix setup` to install and set up the Phoenix app.
-* Run `devenv shell mix phx.server` to start the Phoenix endpoint.
-* Run `devenv shell acceptance-test` to run the acceptance tests against `http://localhost:4000`.
-
-You can also work directly inside each folder:
-
-* `cd web && mix phx.server`
-* `cd acceptance-tests && npm test`
+* Run `./bin/mix setup` to install and set up the Phoenix app.
+* Run `./bin/dev up` to start Postgres and the Phoenix endpoint.
+* Run `./bin/dev acceptance` to run the acceptance tests against `http://localhost:4000`.
+* Run `./bin/dev down` to stop development services after interrupting the app.
 
 Now you can visit [`localhost:4000`](http://localhost:4000) from your browser.
