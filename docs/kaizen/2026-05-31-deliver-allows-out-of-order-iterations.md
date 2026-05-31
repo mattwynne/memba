@@ -87,3 +87,29 @@ Iteration boundaries are meant to keep each slice independently reviewable and s
 - Add a delivery preflight that refuses to start iteration N when any lower-numbered iteration is not `merged`, unless an explicit override/dependency declaration allows it.
 - Teach plan validation or iteration planning to record dependencies between iterations when a plan assumes another slice's output.
 - Make the refusal message name the earlier blocking iteration and show the command to deliver it first.
+
+## Resolution
+
+Date: 2026-05-31
+
+Root cause: the delivery lifecycle guarded only the selected plan status and the active implementation WIP slot. It allowed any `ready` or `validated` iteration to reserve implementation when no active iteration was present, even if earlier-numbered iterations were still unmerged prerequisites.
+
+Fix applied:
+
+- `.fabro/workflows/scripts/iteration_status.py`: added `check-predecessors`, which fails when any earlier-numbered iteration in `docs/iterations/README.md` is not `merged` and prints the blocking iteration paths.
+- `bin/dev`: exposed `bin/dev iteration check-predecessors`, pulls `origin/main` before delivery status checks, and runs the predecessor check before waiting for/reserving the implementation WIP slot.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: added the same predecessor check to the direct implementation WIP gate so manual implementation runs cannot bypass ordered delivery.
+- `.fabro/workflows/README.md`: documented ordered single-piece-flow and updated the manual implementation escape-hatch commands.
+
+Validation:
+
+- `python3 -m py_compile .fabro/workflows/scripts/iteration_status.py` — passed.
+- `bash -n bin/dev` — passed.
+- `MEMBA_DEVENV_SHELL=1 ./bin/dev iteration check-predecessors docs/iterations/009-routing-and-liveview-surface-split/plan.md` — passed while 001–008 were merged.
+- `MEMBA_DEVENV_SHELL=1 ./bin/dev iteration check-predecessors docs/iterations/010-shared-magic-link-auth/plan.md` — failed as expected while 009 was `implementing`, naming 009 as the blocker.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.fabro` — passed with existing goal-gate warnings.
+- `PATH="$PWD/bin:$PATH" dev check` — passed, 132 tests, 0 failures.
+
+Remaining follow-up:
+
+- If out-of-order delivery becomes necessary, add an explicit dependency/override mechanism rather than weakening the default ordered guard.

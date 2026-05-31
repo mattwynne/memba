@@ -18,6 +18,8 @@ ACTIVE_STATUSES = {
     "finalizing",
 }
 
+MERGED_STATUS = "merged"
+
 
 @dataclass(frozen=True)
 class IterationRow:
@@ -74,6 +76,23 @@ def active_rows(rows: list[IterationRow], exclude_number: str | None = None) -> 
     ]
 
 
+def predecessor_rows_not_merged(rows: list[IterationRow], selected_number: str) -> list[IterationRow]:
+    try:
+        selected = int(selected_number)
+    except ValueError:
+        raise SystemExit(f"Iteration number must be numeric: {selected_number}") from None
+
+    blockers: list[IterationRow] = []
+    for row in rows:
+        try:
+            number = int(row.number)
+        except ValueError:
+            continue
+        if number < selected and row.status.strip().lower() != MERGED_STATUS:
+            blockers.append(row)
+    return blockers
+
+
 def replace_plan_status(plan_path: Path, status: str) -> None:
     if not plan_path.exists():
         raise SystemExit(f"Plan not found: {plan_path}")
@@ -126,6 +145,27 @@ def cmd_check_clear(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check_predecessors(args: argparse.Namespace) -> int:
+    plan_path = Path(args.plan_path)
+    _, rows = parse_index()
+    selected_number = iteration_number_from_plan(plan_path)
+    blockers = predecessor_rows_not_merged(rows, selected_number)
+    if blockers:
+        print("Iteration delivery is blocked by earlier iteration(s) that are not merged:", file=sys.stderr)
+        for row in blockers:
+            print(
+                f"- {row.number} {row.title} ({row.status}) {row.plan_path}",
+                file=sys.stderr,
+            )
+        print(
+            "Deliver earlier iterations first, or add an explicit workflow-supported override if this iteration is intentionally independent.",
+            file=sys.stderr,
+        )
+        return 1
+    print("Earlier iterations are merged.")
+    return 0
+
+
 def cmd_mark(args: argparse.Namespace) -> int:
     plan_path = Path(args.plan_path)
     if args.check_clear_first:
@@ -152,6 +192,13 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("plan_path")
     check.add_argument("--allow-same-iteration", action="store_true")
     check.set_defaults(func=cmd_check_clear)
+
+    predecessors = sub.add_parser(
+        "check-predecessors",
+        help="fail if earlier-numbered iterations have not been merged",
+    )
+    predecessors.add_argument("plan_path")
+    predecessors.set_defaults(func=cmd_check_predecessors)
 
     mark = sub.add_parser("mark", help="mark an iteration plan and index row with a lifecycle status")
     mark.add_argument("plan_path")
