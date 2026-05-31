@@ -8,6 +8,8 @@ defmodule Memba.Messaging.DeliveryProviderTest do
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_delivery_provider)
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_postmark_config = Application.get_env(:memba, Postmark)
 
     Fake.reset()
 
@@ -18,6 +20,8 @@ defmodule Memba.Messaging.DeliveryProviderTest do
         Application.put_env(:memba, :messaging_delivery_provider, original_provider)
       end
 
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(Postmark, original_postmark_config)
       Fake.reset()
     end)
 
@@ -38,7 +42,26 @@ defmodule Memba.Messaging.DeliveryProviderTest do
 
     request = delivery_request()
 
-    assert {:error, :postmark_delivery_not_configured} = DeliveryProvider.deliver(request)
+    assert {:error, {:postmark_configuration_error, message}} = DeliveryProvider.deliver(request)
+    assert message =~ "Postmark delivery provider is enabled"
+    assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
+    assert message =~ "MEMBA_POSTMARK_FROM_ADDRESS"
+    assert Fake.deliveries() == []
+  end
+
+  test "validates required Postmark config before later email delivery work" do
+    Application.put_env(:memba, :messaging_delivery_provider, Postmark)
+
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Postmark,
+      api_key: "server-token"
+    )
+
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    assert {:error, :postmark_delivery_not_implemented} =
+             DeliveryProvider.deliver(delivery_request())
+
     assert Fake.deliveries() == []
   end
 
@@ -54,4 +77,7 @@ defmodule Memba.Messaging.DeliveryProviderTest do
       body: "Meet at 9am."
     }
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end

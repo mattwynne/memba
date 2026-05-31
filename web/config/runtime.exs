@@ -26,6 +26,18 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(
   :default ->
     :ok
 
+  Memba.Messaging.DeliveryProviders.Postmark = delivery_provider ->
+    postmark_config = Memba.Messaging.DeliveryProviders.PostmarkConfig.from_env!()
+
+    config :memba, :messaging_delivery_provider, delivery_provider
+
+    config :memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Postmark,
+      api_key: postmark_config.server_token
+
+    config :memba, Memba.Messaging.DeliveryProviders.Postmark, from: postmark_config.from
+    config :swoosh, :api_client, Swoosh.ApiClient.Req
+
   delivery_provider ->
     config :memba, :messaging_delivery_provider, delivery_provider
 end

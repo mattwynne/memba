@@ -9,11 +9,18 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
 
   alias Memba.Messaging.DeliveryProvider
   alias Memba.Messaging.DeliveryRequest
+  alias Memba.Messaging.DeliveryProviders.PostmarkConfig
 
   @behaviour DeliveryProvider
 
   @impl DeliveryProvider
   def deliver(%DeliveryRequest{}) do
-    {:error, :postmark_delivery_not_configured}
+    case PostmarkConfig.from_application_env() do
+      {:ok, %PostmarkConfig{}} ->
+        {:error, :postmark_delivery_not_implemented}
+
+      {:error, message} ->
+        {:error, {:postmark_configuration_error, message}}
+    end
   end
 end
