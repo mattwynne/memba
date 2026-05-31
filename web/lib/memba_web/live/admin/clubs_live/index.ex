@@ -1,4 +1,4 @@
-defmodule MembaWeb.ClubsLive.Index do
+defmodule MembaWeb.Admin.ClubsLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Membership
@@ -48,7 +48,7 @@ defmodule MembaWeb.ClubsLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.admin flash={@flash}>
       <main id="clubs-index" class="mx-auto max-w-5xl space-y-8 p-6">
         <section class="space-y-2">
           <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
@@ -109,7 +109,7 @@ defmodule MembaWeb.ClubsLive.Index do
               <div>
                 <.link
                   id={"club-link-#{club.club_id}"}
-                  navigate={~p"/clubs/#{club.club_id}"}
+                  navigate={~p"/admin/clubs/#{club.club_id}"}
                   data-testid="club-link"
                   aria-label={"Open club #{club.name}"}
                   class="font-medium text-blue-700 hover:text-blue-900"
@@ -122,7 +122,7 @@ defmodule MembaWeb.ClubsLive.Index do
           </div>
         </section>
       </main>
-    </Layouts.app>
+    </Layouts.admin>
     """
   end
 

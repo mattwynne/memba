@@ -10,6 +10,15 @@ defmodule MembaWeb.Router do
     plug :put_secure_browser_headers
   end
 
+  pipeline :staff_browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {MembaWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
   end
@@ -21,6 +30,10 @@ defmodule MembaWeb.Router do
     get "/about", PageController, :about
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
+  end
+
+  scope "/admin", MembaWeb.Admin do
+    pipe_through :staff_browser
 
     live "/clubs", ClubsLive.Index
     live "/clubs/:club_id", ClubsLive.Show

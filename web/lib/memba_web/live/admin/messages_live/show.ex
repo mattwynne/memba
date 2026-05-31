@@ -1,4 +1,4 @@
-defmodule MembaWeb.MessagesLive.Show do
+defmodule MembaWeb.Admin.MessagesLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Messaging
@@ -23,13 +23,13 @@ defmodule MembaWeb.MessagesLive.Show do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.admin flash={@flash}>
       <main id="message-show" class="mx-auto max-w-6xl space-y-8 p-6">
         <%= if @message do %>
           <section class="space-y-2">
             <.link
               id="back-to-club-link"
-              navigate={~p"/clubs/#{@message.club_id}"}
+              navigate={~p"/admin/clubs/#{@message.club_id}"}
               aria-label="Back to club"
               class="text-sm font-medium text-blue-700 hover:text-blue-900"
             >
@@ -145,7 +145,7 @@ defmodule MembaWeb.MessagesLive.Show do
           </section>
         <% end %>
       </main>
-    </Layouts.app>
+    </Layouts.admin>
     """
   end
 end

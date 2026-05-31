@@ -10,7 +10,10 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     conn: conn
   } do
     conn
-    |> visit("/clubs")
+    |> visit("/admin/clubs")
+    |> assert_path("/admin/clubs")
+    |> assert_has("#admin-layout[data-surface='admin']")
+    |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
     |> assert_has("#clubs-index")
     |> assert_has("#new-club-form[aria-label='Create a club']")
     |> assert_has("#club-name-input[aria-label='Club name']")
@@ -23,8 +26,11 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has(
       "a[data-testid='club-link'][aria-label='Open club Kootenay Mountaineering Club']"
     )
+    |> assert_has("a[data-testid='club-link'][href^='/admin/clubs/']")
     |> click_link("Kootenay Mountaineering Club")
+    |> assert_path("/admin/clubs/*")
     |> assert_has("#back-to-clubs-link[aria-label='Back to clubs']")
+    |> assert_has("#back-to-clubs-link[href='/admin/clubs']")
     |> assert_has("#new-person-form[aria-label='Create a person']")
     |> assert_has("#person-name-input[aria-label='Person name']")
     |> assert_has("#person-email-input[aria-label='Person email']")
@@ -49,9 +55,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
       "#messages [data-testid='message-row'][data-message-subject='Trip planning night']"
     )
     |> assert_has("a[data-testid='message-link'][aria-label='Open message Trip planning night']")
+    |> assert_has("a[data-testid='message-link'][href^='/admin/messages/']")
     |> click_link("Trip planning night")
+    |> assert_path("/admin/messages/*")
     |> assert_has("#message-show")
     |> assert_has("#back-to-club-link[aria-label='Back to club']")
+    |> assert_has("#back-to-club-link[href^='/admin/clubs/']")
     |> assert_has("#addressed-recipients[aria-label='Addressed recipients']")
     |> assert_has(
       "#addressed-recipients [data-testid='addressed-recipient'][data-recipient-name='Alice']"
@@ -72,10 +81,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     conn: conn
   } do
     conn
-    |> visit("/clubs")
+    |> visit("/admin/clubs")
+    |> assert_path("/admin/clubs")
     |> assert_has("#clubs-index")
     |> create_club("Kootenay Mountaineering Club")
     |> click_link("Kootenay Mountaineering Club")
+    |> assert_path("/admin/clubs/*")
     |> assert_has("#club-show", "Kootenay Mountaineering Club")
     |> create_person("Alice")
     |> create_person("Bob")
@@ -86,6 +97,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> add_member("Carol")
     |> send_club_message("Alice", "Trip planning night", "Bring route ideas.")
     |> click_link("Trip planning night")
+    |> assert_path("/admin/messages/*")
     |> assert_has("#message-show", "Trip planning night")
     |> assert_addressed_recipient("Alice")
     |> assert_addressed_recipient("Bob")
@@ -107,7 +119,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     delivery_ids_by_name = Map.new(recipients, &{&1.name, &1.delivery_id})
 
     conn
-    |> visit("/messages/#{message_id}")
+    |> visit("/admin/messages/#{message_id}")
+    |> assert_path("/admin/messages/*")
     |> assert_has("#message-show", "Trip planning night")
     |> assert_member_receipt("Alice", "sent")
 
@@ -151,7 +164,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
              })
 
     conn
-    |> visit("/messages/#{message_id}")
+    |> visit("/admin/messages/#{message_id}")
+    |> assert_path("/admin/messages/*")
     |> assert_member_receipt("Alice", "sent")
     |> assert_member_receipt("Bob", "delivered")
     |> assert_member_receipt("Carol", "delivery problem")
