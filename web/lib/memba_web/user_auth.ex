@@ -125,6 +125,23 @@ defmodule MembaWeb.UserAuth do
   end
 
   @doc """
+  Require active club membership only when a route carries a `club_id` query
+  parameter.
+
+  Public routes that also act as temporary club/member entry points can use this
+  plug without blocking ordinary public requests that do not select a club.
+  """
+  def require_active_club_member_if_club_id_present(conn, _opts) do
+    conn = fetch_query_params(conn)
+
+    if Map.has_key?(conn.query_params, "club_id") do
+      require_active_club_member(conn, [])
+    else
+      conn
+    end
+  end
+
+  @doc """
   LiveView mount hooks for current identity assignment and auth gates.
   """
   def on_mount(:mount_current_identity, _params, session, socket) do

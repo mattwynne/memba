@@ -51,6 +51,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
              )
 
     conn
+    |> sign_in_staff()
     |> visit("/admin/deliveries")
     |> assert_path("/admin/deliveries")
     |> assert_has("#admin-layout[data-surface='admin']")
