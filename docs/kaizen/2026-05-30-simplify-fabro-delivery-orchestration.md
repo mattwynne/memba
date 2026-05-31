@@ -182,3 +182,34 @@ bin/dev fabro review
 - Should `bin/dev fabro deliver` run each workflow in the foreground, or should it use `--detach` plus `fabro attach`/`fabro wait` for better run ID handling?
 - Should a failed review leave status as `implementing`, or should delivery introduce a distinct status such as `review-failed`?
 - Should `bin/dev fabro review` also finalize `merged` when run manually, or only when invoked by `deliver`?
+
+## Resolution
+
+Date: 2026-05-30
+
+Root cause: The delivery path used a Fabro parent workflow as an orchestration layer for deterministic child workflow launches. That moved approval into worker-created child runs, where Fabro can still require user approval and then rejects worker approval. The extra skills and public status-only commands duplicated that brittle orchestration boundary.
+
+Fix applied:
+
+- `bin/dev`: replaced `fabro start`, `fabro mark-merged`, and `fabro mark-merged-style` with `fabro deliver`; delivery now validates, reserves the WIP slot, commits/pushes `implementing`, captures `origin/main` as `base_sha`, runs implementation directly with `--auto-approve`, and launches review directly with `--auto-approve`.
+- `.fabro/workflows/iteration-deliver/`: removed the parent workflow and its orchestration prompt.
+- `.fabro/workflows/iteration-review/workflow.fabro`: added a final successful status-finalization step after review publish/no-op.
+- `.fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh`: added merged-status finalization for the plan, iteration index, and implementation record when present.
+- `.fabro/workflows/README.md`: documented the direct CLI orchestration contract and canonical commands.
+- `.pi/skills/iteration-planning/SKILL.md`: changed planning to publish artifacts and hand off `bin/dev fabro deliver <plan_path>` instead of launching delivery itself.
+- `.pi/skills/iteration-deliver/`, `.pi/skills/iteration-implementation/`, `.pi/skills/iteration-review/`: removed retired wrapper skills.
+
+Validation:
+
+- `bash -n bin/dev` — passed.
+- `bin/dev fabro --help` — passed; help lists `validate-plan`, `deliver`, and `review`.
+- `bin/dev fabro deliver` — passed argument-validation smoke; exits with usage and code 2.
+- `bin/dev fabro review` — passed argument-validation smoke; exits with usage and code 2.
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml` — passed with existing goal-gate warnings.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — passed with existing goal-gate warnings.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml` — passed with existing goal-gate warnings.
+- `dev check` — passed; 108 tests, 0 failures.
+
+Remaining follow-up:
+
+- Consider whether temporary pushed review branches created when reviewing `origin/main` should be cleaned up automatically after successful review.
