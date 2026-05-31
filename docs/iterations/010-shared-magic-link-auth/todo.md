@@ -11,4 +11,4 @@
 - [x] 009 Apply auth gates:
 - [x] 010 Add focused tests:
 - [x] 011 Update operational documentation for auth Postmark environment variables and the required message stream.
-- [ ] 012 Run `bin/dev check` and fix regressions.
+- [x] 012 Run `bin/dev check` and fix regressions.
