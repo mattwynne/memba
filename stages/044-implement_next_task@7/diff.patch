@@ -1,0 +1,208 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index 476da21..cfb63b4 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Add required configuration for Postmark server token and sender/from address, with clear error reporting when real sending is enabled but configuration is incomplete.
+ - [x] 005 Build the outbound email from `DeliveryRequest`, including recipient, configured sender/from, configured reply-to, subject, text body, minimal safe HTML body, and Postmark metadata/custom fields for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ - [x] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+-- [ ] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
++- [x] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+ - [ ] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
+ - [ ] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
+ - [ ] 010 Update documentation for enabling Postmark, configuring environment variables, configuring the Postmark webhook URL, and choosing a monitored Memba-controlled sending subdomain.
+diff --git a/web/lib/memba/messaging/delivery_providers/postmark.ex b/web/lib/memba/messaging/delivery_providers/postmark.ex
+index b2138ea..2403624 100644
+--- a/web/lib/memba/messaging/delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/delivery_providers/postmark.ex
+@@ -21,8 +21,7 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
+       {:ok, %PostmarkConfig{} = config} ->
+         request
+         |> email(config)
+-        |> Memba.Mailer.deliver()
+-        |> normalize_delivery_result()
++        |> deliver_email()
+ 
+       {:error, message} ->
+         {:error, {:postmark_configuration_error, message}}
+@@ -71,6 +70,20 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
+     |> Phoenix.HTML.safe_to_string()
+   end
+ 
++  defp deliver_email(email) do
++    email
++    |> Memba.Mailer.deliver()
++    |> normalize_delivery_result()
++  rescue
++    exception ->
++      {:error, {:postmark_delivery_exception, exception.__struct__, Exception.message(exception)}}
++  end
++
+   defp normalize_delivery_result({:ok, _result}), do: :ok
+-  defp normalize_delivery_result({:error, _reason} = error), do: error
++
++  defp normalize_delivery_result({:error, reason}),
++    do: {:error, {:postmark_delivery_error, reason}}
++
++  defp normalize_delivery_result(result),
++    do: {:error, {:postmark_delivery_error, {:unexpected_delivery_result, result}}}
+ end
+diff --git a/web/test/memba/messaging/delivery_providers/postmark_test.exs b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+index b7ff35b..9c9886a 100644
+--- a/web/test/memba/messaging/delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/delivery_providers/postmark_test.exs
+@@ -62,6 +62,38 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
+     assert_received {:email, %Swoosh.Email{reply_to: nil}}
+   end
+ 
++  test "returns a visible Postmark delivery error when Swoosh reports an API failure" do
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Memba.TestSupport.FailingSwooshAdapter,
++      api_key: "server-token",
++      test_owner: self(),
++      test_delivery_result: {:error, {401, %{"Message" => "Invalid server token"}}}
++    )
++
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    assert {:error, {:postmark_delivery_error, {401, %{"Message" => "Invalid server token"}}}} =
++             Postmark.deliver(delivery_request())
++
++    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
++  end
++
++  test "returns a visible Postmark delivery exception when Swoosh configuration raises" do
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Memba.TestSupport.FailingSwooshAdapter,
++      api_key: "server-token",
++      test_validate_config_error: "missing Postmark API client",
++      test_delivery_result: {:ok, %{id: "not-sent"}}
++    )
++
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    assert {:error, {:postmark_delivery_exception, ArgumentError, "missing Postmark API client"}} =
++             Postmark.deliver(delivery_request())
++
++    refute_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
++  end
++
+   defp delivery_request(overrides \\ []) do
+     %DeliveryRequest{
+       message_id: Keyword.get_lazy(overrides, :message_id, &Ecto.UUID.generate/0),
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 991a396..981b81a 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -7,12 +7,25 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Messaging
+   alias Memba.Messaging.DeliveryProviders.Fake
++  alias Memba.Messaging.DeliveryProviders.Postmark
+   alias Memba.Messaging.DeliveryRequest
+   alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Events.RecipientDeliveryCreated
+ 
+   setup do
++    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_postmark_config = Application.get_env(:memba, Postmark)
++
+     Fake.reset()
++
++    on_exit(fn ->
++      restore_env(:messaging_delivery_provider, original_provider)
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(Postmark, original_postmark_config)
++      Fake.reset()
++    end)
++
+     :ok
+   end
+ 
+@@ -146,6 +159,43 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert Fake.deliveries() == []
+   end
+ 
++  test "surfaces Postmark handoff failures without treating them as recipient outcomes" do
++    Application.put_env(:memba, :messaging_delivery_provider, Postmark)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Memba.TestSupport.FailingSwooshAdapter,
++      api_key: "server-token",
++      test_owner: self(),
++      test_delivery_result: {:error, :timeout}
++    )
++
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    club_id = Ecto.UUID.generate()
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    add_member(club_id, alice.person_id)
++
++    message_id = Ecto.UUID.generate()
++
++    assert {:error, {:postmark_delivery_error, :timeout}} =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas."
++               },
++               consistency: :strong
++             )
++
++    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
++    assert Fake.deliveries() == []
++
++    assert Messaging.get_member_receipt(message_id, alice.person_id).receipt_status == "sent"
++    assert Messaging.get_operator_deliverability(message_id, alice.person_id).status == "sent"
++  end
++
+   defp create_person(attrs) do
+     person = %{
+       person_id: Ecto.UUID.generate(),
+@@ -177,4 +227,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+                consistency: :strong
+              )
+   end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
+diff --git a/web/test/support/failing_swoosh_adapter.ex b/web/test/support/failing_swoosh_adapter.ex
+new file mode 100644
+index 0000000..e333682
+--- /dev/null
++++ b/web/test/support/failing_swoosh_adapter.ex
+@@ -0,0 +1,28 @@
++defmodule Memba.TestSupport.FailingSwooshAdapter do
++  @moduledoc false
++
++  @behaviour Swoosh.Adapter
++
++  @impl Swoosh.Adapter
++  def validate_config(config) do
++    case Keyword.get(config, :test_validate_config_error) do
++      nil -> :ok
++      message -> raise ArgumentError, message
++    end
++  end
++
++  @impl Swoosh.Adapter
++  def validate_dependency, do: :ok
++
++  @impl Swoosh.Adapter
++  def deliver(email, config) do
++    if owner = Keyword.get(config, :test_owner) do
++      send(owner, {:failing_swoosh_adapter_deliver, email})
++    end
++
++    case Keyword.fetch!(config, :test_delivery_result) do
++      {:raise, message} -> raise ArgumentError, message
++      result -> result
++    end
++  end
++end
