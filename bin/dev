@@ -160,7 +160,7 @@ acceptance() {
 }
 
 # @cmd Run Fabro workflow helpers
-# @arg command![validate-plan|deliver|review] Helper command
+# @arg command![validate-plan|deliver|review|clean-branches] Helper command
 # @arg args~ Arguments for the helper command
 fabro() {
   local command_name="${1:-}"
@@ -172,6 +172,7 @@ fabro() {
     validate-plan) _fabro_validate_plan "$@" ;;
     deliver) _fabro_deliver "$@" ;;
     review) _fabro_review "$@" ;;
+    clean-branches) _fabro_clean_branches "$@" ;;
     -h|--help|"")
       cat >&2 <<EOF
 Usage: $0 fabro <command> [args]
@@ -180,6 +181,7 @@ Commands:
   validate-plan <plan_path>
   deliver <plan_path>
   review <branch> <plan_path> [base_ref_or_base_sha]
+  clean-branches [--force]
 EOF
       ;;
     *)
@@ -326,7 +328,7 @@ _fabro_review() {
       local branch_worktree
       branch_worktree=$(git -C "$repo_root" branch --format='%(worktreepath)' --list "$review_branch")
       if [ -n "$branch_worktree" ]; then
-        review_branch="review/${remote_branch//\//-}-$(date +%Y%m%d%H%M%S)"
+        review_branch="review/tmp/${remote_branch//\//-}-$(date +%Y%m%d%H%M%S)"
         ref="$review_branch"
         git -C "$repo_root" branch "$review_branch" "origin/$remote_branch"
         git -C "$repo_root" push -u origin "$review_branch"
@@ -400,6 +402,87 @@ _fabro_review() {
       -I "base_sha=$base_sha" \
       --auto-approve
   )
+}
+
+_fabro_is_review_cleanup_candidate() {
+  local name="$1"
+  case "$name" in
+    review/tmp/*) return 0 ;;
+    review/main-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_fabro_clean_branches() {
+  local force=0
+  case "${1:-}" in
+    --force) force=1 ;;
+    -h|--help)
+      echo "Usage: $0 fabro clean-branches [--force]" >&2
+      echo "Dry-runs cleanup of safe temporary review branches unless --force is passed." >&2
+      exit 0
+      ;;
+    "") ;;
+    *) echo "Usage: $0 fabro clean-branches [--force]" >&2; exit 2 ;;
+  esac
+
+  git -C "$repo_root" fetch origin --prune
+
+  local main_ref="origin/main"
+  if ! git -C "$repo_root" rev-parse --verify --quiet "$main_ref^{commit}" >/dev/null; then
+    echo "Could not resolve $main_ref; refusing to clean review branches." >&2
+    exit 1
+  fi
+
+  local current_branch
+  current_branch=$(git -C "$repo_root" branch --show-current || true)
+
+  local cleaned=0 skipped=0
+  echo "Scanning temporary review branches..."
+  if [ "$force" -eq 0 ]; then
+    echo "Dry run. Pass --force to delete the branches listed as safe."
+  fi
+
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    local branch_name="${ref#refs/remotes/origin/}"
+    _fabro_is_review_cleanup_candidate "$branch_name" || continue
+
+    local remote_ref="origin/$branch_name"
+    if ! git -C "$repo_root" merge-base --is-ancestor "$remote_ref" "$main_ref"; then
+      echo "skip remote $remote_ref: tip is not an ancestor of $main_ref"
+      skipped=$((skipped + 1))
+      continue
+    fi
+
+    local local_worktree=""
+    if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch_name"; then
+      local_worktree=$(git -C "$repo_root" branch --format='%(worktreepath)' --list "$branch_name")
+    fi
+    if [ -n "$local_worktree" ]; then
+      echo "skip $branch_name: checked out at $local_worktree"
+      skipped=$((skipped + 1))
+      continue
+    fi
+    if [ "$current_branch" = "$branch_name" ]; then
+      echo "skip $branch_name: current branch"
+      skipped=$((skipped + 1))
+      continue
+    fi
+
+    if [ "$force" -eq 1 ]; then
+      git -C "$repo_root" push origin --delete "$branch_name"
+      if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch_name"; then
+        git -C "$repo_root" branch -D "$branch_name"
+      fi
+      echo "deleted $branch_name"
+    else
+      echo "would delete $branch_name"
+    fi
+    cleaned=$((cleaned + 1))
+  done < <(git -C "$repo_root" for-each-ref --format='%(refname)' refs/remotes/origin/review)
+
+  echo "Temporary review branch cleanup candidates: $cleaned; skipped: $skipped."
 }
 
 eval "$(argc --argc-eval "$0" "$@")"
