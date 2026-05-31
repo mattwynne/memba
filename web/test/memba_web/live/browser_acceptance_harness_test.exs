@@ -10,6 +10,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     conn: conn
   } do
     conn
+    |> sign_in_staff()
     |> visit("/admin/clubs")
     |> assert_path("/admin/clubs")
     |> assert_has("#admin-layout[data-surface='admin']")
@@ -81,6 +82,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     conn: conn
   } do
     conn
+    |> sign_in_staff()
     |> visit("/admin/clubs")
     |> assert_path("/admin/clubs")
     |> assert_has("#clubs-index")
@@ -119,6 +121,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     delivery_ids_by_name = Map.new(recipients, &{&1.name, &1.delivery_id})
 
     conn
+    |> sign_in_staff()
     |> visit("/admin/messages/#{message_id}")
     |> assert_path("/admin/messages/*")
     |> assert_has("#message-show", "Trip planning night")
@@ -164,6 +167,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
              })
 
     conn
+    |> sign_in_staff()
     |> visit("/admin/messages/#{message_id}")
     |> assert_path("/admin/messages/*")
     |> assert_member_receipt("Alice", "sent")

@@ -4,7 +4,9 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
 
@@ -75,6 +77,85 @@ defmodule Memba.Membership.QueryTest do
       refute Membership.active_member_of_club?("not-a-uuid", alice.person_id)
       refute Membership.active_member_of_club?(kootenay_club_id, "not-a-uuid")
     end
+  end
+
+  describe "list_active_clubs_for_member_email/1" do
+    test "returns active clubs for a member email and excludes inactive or other memberships" do
+      kootenay = create_club("Kootenay Mountaineering Club")
+      nelson = create_club("Nelson Cycling Club")
+      other_club = create_club("Other Club")
+      inactive_club_id = Ecto.UUID.generate()
+
+      alice = create_person(name: "Alice", email: "alice@example.com")
+      uppercase_alice = create_person(name: "Alice Upper", email: "Alice@Example.COM")
+      other_person = create_person(name: "Other", email: "other@example.com")
+
+      add_member(kootenay.club_id, alice.person_id)
+      add_member(nelson.club_id, uppercase_alice.person_id)
+      add_member(other_club.club_id, other_person.person_id)
+
+      Repo.insert!(%ClubProjection{
+        club_id: inactive_club_id,
+        name: "Inactive Club"
+      })
+
+      Repo.insert!(%MembershipProjection{
+        membership_id: Ecto.UUID.generate(),
+        club_id: inactive_club_id,
+        person_id: alice.person_id,
+        active: false
+      })
+
+      assert [
+               %ClubProjection{club_id: kootenay_id, name: "Kootenay Mountaineering Club"},
+               %ClubProjection{club_id: nelson_id, name: "Nelson Cycling Club"}
+             ] = Membership.list_active_clubs_for_member_email(" ALICE@EXAMPLE.COM ")
+
+      assert kootenay_id == kootenay.club_id
+      assert nelson_id == nelson.club_id
+    end
+
+    test "returns an empty list for blank, nil, or unknown email addresses" do
+      assert Membership.list_active_clubs_for_member_email("unknown@example.com") == []
+      assert Membership.list_active_clubs_for_member_email("   ") == []
+      assert Membership.list_active_clubs_for_member_email(nil) == []
+    end
+  end
+
+  describe "active_member_of_club_by_email?/2" do
+    test "returns true only when a normalized email has an active membership in the club" do
+      club = create_club("Kootenay Mountaineering Club")
+      other_club = create_club("Other Club")
+      alice = create_person(name: "Alice", email: "Alice@Example.COM")
+      other_person = create_person(name: "Other", email: "other@example.com")
+
+      add_member(club.club_id, alice.person_id)
+      add_member(other_club.club_id, other_person.person_id)
+
+      assert Membership.active_member_of_club_by_email?(club.club_id, " alice@example.com ")
+
+      refute Membership.active_member_of_club_by_email?(club.club_id, "other@example.com")
+      refute Membership.active_member_of_club_by_email?(other_club.club_id, "alice@example.com")
+      refute Membership.active_member_of_club_by_email?(Ecto.UUID.generate(), "alice@example.com")
+      refute Membership.active_member_of_club_by_email?("not-a-uuid", "alice@example.com")
+      refute Membership.active_member_of_club_by_email?(club.club_id, "   ")
+      refute Membership.active_member_of_club_by_email?(club.club_id, nil)
+    end
+  end
+
+  defp create_club(name) do
+    club = %{club_id: Ecto.UUID.generate(), name: name}
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club.club_id,
+                 name: club.name
+               },
+               consistency: :strong
+             )
+
+    club
   end
 
   defp create_person(attrs) do

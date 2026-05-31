@@ -31,6 +31,12 @@ defmodule MembaWeb.FeatureCase do
     assert_eventually(assertion, deadline, interval)
   end
 
+  def sign_in_staff(conn, email \\ "pat@memba.io") do
+    Plug.Test.init_test_session(conn, %{
+      MembaWeb.UserAuth.identity_session_key() => email
+    })
+  end
+
   defp assert_eventually(assertion, deadline, interval) do
     assertion.()
   rescue
