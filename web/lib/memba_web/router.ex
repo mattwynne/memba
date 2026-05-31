@@ -21,6 +21,7 @@ defmodule MembaWeb.Router do
 
     live "/clubs", ClubsLive.Index
     live "/clubs/:club_id", ClubsLive.Show
+    live "/deliveries", DeliveriesLive.Index
     live "/messages/:message_id", MessagesLive.Show
   end
 

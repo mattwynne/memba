@@ -8,6 +8,8 @@ const {
   assertEachDeliverySentThroughEmailProvider,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertOperatorDeliveryReason,
+  assertOperatorDeliveryStatus,
   assertReceiptStatus,
   createClub,
   createPeople,
@@ -55,10 +57,15 @@ class FakeLocator {
   }
 
   locator(selector) {
+    const childText =
+      selector.includes('data-test-id="delivery-reason"')
+        ? this.attrs.deliveryReason
+        : this.attrs.deliveryStatus || this.attrs.receiptStatus;
+
     return new FakeLocator(this.page, `${this.selector} ${selector}`, {
       kind: "child",
       value: selector,
-      text: this.attrs.deliveryStatus || this.attrs.receiptStatus
+      text: childText
     });
   }
 
@@ -96,6 +103,7 @@ class FakePage {
       messages: [],
       addressedRecipients: [],
       deliveryRecords: [],
+      operatorDeliveries: [],
       memberReceipts: []
     };
   }
@@ -212,6 +220,9 @@ function rowsForSelector(rows, selector) {
   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
   if (selector.includes("#member-receipts")) return rows.memberReceipts;
   if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
+  if (selector.includes('data-test-id^="delivery-row-"')) {
+    return filterRows(rows.operatorDeliveries, selector);
+  }
   if (selector.includes('data-testid="member-receipt"')) return filterRows(rows.memberReceipts, selector);
 
   return [];
@@ -497,6 +508,69 @@ test("message assertions read addressed recipients, delivery records, email chan
     recipientName: "Bob"
   });
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+});
+
+test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
+  const page = new FakePage();
+  page.rows.operatorDeliveries.push(
+    rowWithAttrs({
+      "data-test-id": "delivery-row-delivery-other",
+      "data-message-id": "message-2",
+      "data-recipient-id": "person-bob",
+      "data-recipient-name": "Bob",
+      deliveryReason: "mailbox does not exist",
+      deliveryStatus: "bounced"
+    }),
+    rowWithAttrs({
+      "data-test-id": "delivery-row-delivery-bob",
+      "data-message-id": "message-1",
+      "data-recipient-id": "person-bob",
+      "data-recipient-name": "Bob",
+      deliveryReason: "recipient server is temporarily unavailable",
+      deliveryStatus: "delayed"
+    })
+  );
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.messages = {
+    "Avalanche bulletin": { messageId: "message-2", subject: "Avalanche bulletin" },
+    "Trip planning night": { messageId: "message-1", subject: "Trip planning night" }
+  };
+  world.people = { Bob: { personId: "person-bob" } };
+
+  await assertOperatorDeliveryStatus(world, "Bob", "Trip planning night", "delayed", {
+    expect: fakeExpect(expectations)
+  });
+  await assertOperatorDeliveryReason(world, "Bob", "recipient server is temporarily unavailable", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(
+    page.actions.filter((action) => action[0] === "goto").map((action) => action[1]),
+    ["http://127.0.0.1:4444/deliveries", "http://127.0.0.1:4444/deliveries"]
+  );
+  assert.deepEqual(world.currentOperatorDelivery, {
+    recipientName: "Bob",
+    subject: "Trip planning night"
+  });
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "text" &&
+        expectation[1].includes('data-message-id="message-1"') &&
+        expectation[1].includes('data-test-id="delivery-status"') &&
+        expectation[2] === "delayed"
+    )
+  );
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "text" &&
+        expectation[1].includes('data-message-id="message-1"') &&
+        expectation[1].includes('data-test-id="delivery-reason"') &&
+        expectation[2] === "recipient server is temporarily unavailable"
+    )
+  );
 });
 
 test("final assertion mismatches are reported separately from projection timing", async () => {

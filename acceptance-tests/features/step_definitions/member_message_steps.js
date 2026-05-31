@@ -5,6 +5,8 @@ const {
   assertEachDeliverySentThroughEmailProvider,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertOperatorDeliveryReason,
+  assertOperatorDeliveryStatus,
   assertReceiptStatus,
   createClub,
   createPeople,
@@ -113,3 +115,17 @@ When(
 When("{word} opens the email for {string}", async function (recipientName, subject) {
   await reportRecipientEmailStatus(this, recipientName, subject, "opened");
 });
+
+Then(
+  "operators should see {word}'s delivery for {string} as {string}",
+  async function (recipientName, subject, expectedStatus) {
+    await assertOperatorDeliveryStatus(this, recipientName, subject, expectedStatus);
+  }
+);
+
+Then(
+  "operators should see {word}'s delivery reason {string}",
+  async function (recipientName, expectedReason) {
+    await assertOperatorDeliveryReason(this, recipientName, expectedReason);
+  }
+);

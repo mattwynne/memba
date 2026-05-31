@@ -263,6 +263,18 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
   );
 }
 
+async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
+  await browserInteraction("visit /deliveries", () =>
+    world.page.goto(appUrl(world.baseUrl, "/deliveries"))
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: "Deliveries" }),
+    "deliveries overview heading",
+    { expect, timeoutMs }
+  );
+}
+
 async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
   ensureState(world);
 
@@ -613,6 +625,92 @@ async function assertReceiptStatus(world, recipientName, subject, expectedStatus
   return world;
 }
 
+async function assertOperatorDeliveryStatus(
+  world,
+  recipientName,
+  subject,
+  expectedStatus,
+  { expect = playwrightExpect } = {}
+) {
+  await openDeliveriesOverview(world, { expect });
+
+  const row = operatorDeliveryRow(world, recipientName, subject);
+  await waitForProjectedVisible(
+    world,
+    row,
+    `${recipientName}'s operator delivery row for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+  await waitForProjectedText(
+    world,
+    row.locator("[data-test-id=\"delivery-status\"]"),
+    expectedStatus,
+    `${recipientName}'s operator delivery status for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  world.currentOperatorDelivery = { recipientName, subject };
+
+  return world;
+}
+
+async function assertOperatorDeliveryReason(
+  world,
+  recipientName,
+  expectedReason,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const currentDelivery = world.currentOperatorDelivery;
+  assert.ok(
+    currentDelivery,
+    "Expected an operator delivery status assertion before checking its reason"
+  );
+  assert.equal(
+    currentDelivery.recipientName,
+    recipientName,
+    `Expected current operator delivery to belong to ${recipientName}`
+  );
+
+  await openDeliveriesOverview(world, { expect });
+
+  const row = operatorDeliveryRow(world, recipientName, currentDelivery.subject);
+  await waitForProjectedVisible(
+    world,
+    row,
+    `${recipientName}'s operator delivery row for ${JSON.stringify(currentDelivery.subject)}`,
+    { expect }
+  );
+  await waitForProjectedText(
+    world,
+    row.locator("[data-test-id=\"delivery-reason\"]"),
+    expectedReason,
+    `${recipientName}'s operator delivery reason for ${JSON.stringify(currentDelivery.subject)}`,
+    { expect }
+  );
+
+  return world;
+}
+
+function operatorDeliveryRow(world, recipientName, subject) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+
+  const recipient = world.people[recipientName];
+  assert.ok(recipient, `Expected ${recipientName} to have been created`);
+
+  return world.page
+    .locator(
+      `[data-test-id^="delivery-row-"][data-message-id=${cssString(
+        message.messageId
+      )}][data-recipient-id=${cssString(recipient.personId)}]`
+    )
+    .last();
+}
+
 function memberReceiptStatusForEventType(eventType) {
   switch (eventType) {
     case "delivered":
@@ -829,6 +927,8 @@ module.exports = {
   assertEachDeliverySentThroughEmailProvider,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertOperatorDeliveryReason,
+  assertOperatorDeliveryStatus,
   assertReceiptStatus,
   createClub,
   createPeople,
@@ -845,6 +945,7 @@ module.exports = {
   projectionTimeoutMs,
   reportRecipientEmailStatus,
   rowAttributeValues,
+  openDeliveriesOverview,
   openClub,
   openMessage,
   sendMessageToKootenayMembers,

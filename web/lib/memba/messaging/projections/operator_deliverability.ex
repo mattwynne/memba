@@ -17,6 +17,8 @@ defmodule Memba.Messaging.Projections.OperatorDeliverability do
     field :channel, :string
     field :status, :string
     field :reason, :string
+    field :message_subject, :string, virtual: true
+    field :event_at, :utc_datetime_usec, virtual: true
 
     timestamps(type: :utc_datetime_usec)
   end

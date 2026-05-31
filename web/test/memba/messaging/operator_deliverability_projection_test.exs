@@ -167,6 +167,76 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
            } = Messaging.get_operator_deliverability(message_id, bob.person_id)
   end
 
+  test "operator delivery overview query lists deliveries across messages newest event first" do
+    %{message_id: first_message_id, recipients: [alice]} =
+      send_message_with_recipients(["Alice"], subject: "Spring snowpack update")
+
+    %{message_id: second_message_id, recipients: [bob]} =
+      send_message_with_recipients(["Bob"], subject: "Trail work party")
+
+    assert :ok =
+             App.dispatch(
+               %ReportDeliveryDelayed{
+                 message_id: first_message_id,
+                 delivery_id: alice.delivery_id,
+                 reason: "recipient server is temporarily unavailable"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %ReportDeliveryBounced{
+                 message_id: second_message_id,
+                 delivery_id: bob.delivery_id,
+                 reason: "mailbox does not exist"
+               },
+               consistency: :strong
+             )
+
+    older_event_at = ~U[2026-05-29 10:00:00.000000Z]
+    newer_event_at = ~U[2026-05-29 11:00:00.000000Z]
+
+    set_delivery_event_at(alice.delivery_id, older_event_at)
+    set_delivery_event_at(bob.delivery_id, newer_event_at)
+
+    assert [
+             %OperatorDeliverabilityProjection{
+               delivery_id: bob_delivery_id,
+               message_id: ^second_message_id,
+               message_subject: "Trail work party",
+               recipient_name: "Bob",
+               recipient_address: "bob@example.test",
+               channel: "email",
+               status: "bounced",
+               reason: "mailbox does not exist",
+               event_at: ^newer_event_at
+             },
+             %OperatorDeliverabilityProjection{
+               delivery_id: alice_delivery_id,
+               message_id: ^first_message_id,
+               message_subject: "Spring snowpack update",
+               recipient_name: "Alice",
+               recipient_address: "alice@example.test",
+               channel: "email",
+               status: "delayed",
+               reason: "recipient server is temporarily unavailable",
+               event_at: ^older_event_at
+             }
+           ] = Messaging.list_operator_deliveries()
+
+    assert bob_delivery_id == bob.delivery_id
+    assert alice_delivery_id == alice.delivery_id
+
+    assert [
+             %OperatorDeliverabilityProjection{
+               delivery_id: ^alice_delivery_id,
+               message_subject: "Spring snowpack update",
+               event_at: ^older_event_at
+             }
+           ] = Messaging.list_operator_deliveries(message_id: first_message_id)
+  end
+
   test "operator deliverability queries return empty results for missing or invalid IDs" do
     assert is_nil(Messaging.get_operator_deliverability(Ecto.UUID.generate()))
     assert is_nil(Messaging.get_operator_deliverability(nil))
@@ -182,9 +252,16 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
     assert Messaging.list_operator_deliverabilities(Ecto.UUID.generate()) == []
     assert Messaging.list_operator_deliverabilities(nil) == []
     assert Messaging.list_operator_deliverabilities("not-a-uuid") == []
+
+    assert Messaging.list_operator_deliveries(message_id: Ecto.UUID.generate()) == []
+    assert Messaging.list_operator_deliveries(message_id: nil) == []
+    assert Messaging.list_operator_deliveries(message_id: "not-a-uuid") == []
+    assert Messaging.list_operator_deliveries(nil) == []
   end
 
-  defp send_message_with_recipients(names) do
+  defp send_message_with_recipients(names, opts \\ []) do
+    subject = Keyword.get(opts, :subject, "Trip planning night")
+
     [sender | _rest] =
       recipients =
       Enum.map(names, fn name ->
@@ -204,7 +281,7 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
                  message_id: message_id,
                  club_id: Ecto.UUID.generate(),
                  sender_id: sender.person_id,
-                 subject: "Trip planning night",
+                 subject: subject,
                  body: "Bring route ideas.",
                  recipients: recipients
                },
@@ -212,6 +289,12 @@ defmodule Memba.Messaging.OperatorDeliverabilityProjectionTest do
              )
 
     %{message_id: message_id, recipients: recipients}
+  end
+
+  defp set_delivery_event_at(delivery_id, event_at) do
+    OperatorDeliverabilityProjection
+    |> where([deliverability], deliverability.delivery_id == ^delivery_id)
+    |> Repo.update_all(set: [updated_at: event_at])
   end
 
   defp email_for(name) do
