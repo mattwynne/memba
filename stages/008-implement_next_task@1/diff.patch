@@ -1,0 +1,48 @@
+diff --git a/docs/iterations/010-shared-magic-link-auth/route-inspection.md b/docs/iterations/010-shared-magic-link-auth/route-inspection.md
+new file mode 100644
+index 0000000..893f62a
+--- /dev/null
++++ b/docs/iterations/010-shared-magic-link-auth/route-inspection.md
+@@ -0,0 +1,29 @@
++# Route/admin inspection
++
++Selected todo: `001 Inspect the post-iteration-009 route structure and admin pipeline.`
++
++## Findings
++
++- Current Phoenix routes still expose the browser harness at public paths:
++  - `GET /clubs` -> `MembaWeb.ClubsLive.Index`
++  - `GET /clubs/:club_id` -> `MembaWeb.ClubsLive.Show`
++  - `GET /deliveries` -> `MembaWeb.DeliveriesLive.Index`
++  - `GET /messages/:message_id` -> `MembaWeb.MessagesLive.Show`
++- There is no `/admin` scope, no `:staff_browser` pipeline, and no `MembaWeb.Admin.*` LiveView namespace in the current codebase.
++- The public controller routes are `GET /`, `/about`, `/terms`, and `/privacy` through the `:browser` pipeline.
++- `POST /webhooks/postmark` remains routed through the `:api` pipeline to `MembaWeb.PostmarkWebhookController.create/2`.
++- The dev-only dashboard/mailbox routes are conditionally mounted under `/dev` when `:dev_routes` is enabled.
++
++## Implication for iteration 010
++
++Iteration 010 assumes the iteration-009 route split already exists so auth gates can protect `/admin/*`. On this branch that prerequisite is absent. Before implementing staff authorization or `/admin/*` gates, the existing harness routes need to be reconciled into an admin surface with a `:staff_browser` seam while preserving the Postmark webhook route.
++
++## Evidence inspected
++
++- `web/lib/memba_web/router.ex`
++- `web/lib/memba_web/live/clubs_live/index.ex`
++- `web/lib/memba_web/live/clubs_live/show.ex`
++- `web/lib/memba_web/live/deliveries_live/index.ex`
++- `web/lib/memba_web/live/messages_live/show.ex`
++- `web/test/memba_web/router_test.exs`
++- `mix phx.routes`
+diff --git a/docs/iterations/010-shared-magic-link-auth/todo.md b/docs/iterations/010-shared-magic-link-auth/todo.md
+index f5405c3..523e5ad 100644
+--- a/docs/iterations/010-shared-magic-link-auth/todo.md
++++ b/docs/iterations/010-shared-magic-link-auth/todo.md
+@@ -1,6 +1,7 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the post-iteration-009 route structure and admin pipeline.
++- [x] 001 Inspect the post-iteration-009 route structure and admin pipeline.
++- [ ] 001a Reconcile the missing post-iteration-009 admin route structure before auth gates: move the existing harness LiveViews under `/admin/*`, introduce a `:staff_browser` seam, update links/tests, and preserve `POST /webhooks/postmark`.
+ - [ ] 002 Add persistence for authentication:
+ - [ ] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
+ - [ ] 004 Extend `Memba.Membership` query API as needed:
