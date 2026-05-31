@@ -212,6 +212,7 @@ in
     export ELIXIR_ERL_OPTIONS="''${ELIXIR_ERL_OPTIONS:-+fnu}"
     mkdir -p "$HOME" "$MIX_HOME" "$HEX_HOME"
     export PATH="$PWD/bin:$PATH"
+    export MEMBA_DEVENV_SHELL=1
 
     mix() {
       (cd web && command mix "$@")
