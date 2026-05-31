@@ -62,6 +62,38 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
     assert_received {:email, %Swoosh.Email{reply_to: nil}}
   end
 
+  test "returns a visible Postmark delivery error when Swoosh reports an API failure" do
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Memba.TestSupport.FailingSwooshAdapter,
+      api_key: "server-token",
+      test_owner: self(),
+      test_delivery_result: {:error, {401, %{"Message" => "Invalid server token"}}}
+    )
+
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    assert {:error, {:postmark_delivery_error, {401, %{"Message" => "Invalid server token"}}}} =
+             Postmark.deliver(delivery_request())
+
+    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
+  end
+
+  test "returns a visible Postmark delivery exception when Swoosh configuration raises" do
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Memba.TestSupport.FailingSwooshAdapter,
+      api_key: "server-token",
+      test_validate_config_error: "missing Postmark API client",
+      test_delivery_result: {:ok, %{id: "not-sent"}}
+    )
+
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    assert {:error, {:postmark_delivery_exception, ArgumentError, "missing Postmark API client"}} =
+             Postmark.deliver(delivery_request())
+
+    refute_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
+  end
+
   defp delivery_request(overrides \\ []) do
     %DeliveryRequest{
       message_id: Keyword.get_lazy(overrides, :message_id, &Ecto.UUID.generate/0),

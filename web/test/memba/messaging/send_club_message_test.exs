@@ -7,12 +7,25 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Messaging
   alias Memba.Messaging.DeliveryProviders.Fake
+  alias Memba.Messaging.DeliveryProviders.Postmark
   alias Memba.Messaging.DeliveryRequest
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.RecipientDeliveryCreated
 
   setup do
+    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_postmark_config = Application.get_env(:memba, Postmark)
+
     Fake.reset()
+
+    on_exit(fn ->
+      restore_env(:messaging_delivery_provider, original_provider)
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(Postmark, original_postmark_config)
+      Fake.reset()
+    end)
+
     :ok
   end
 
@@ -146,6 +159,43 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert Fake.deliveries() == []
   end
 
+  test "surfaces Postmark handoff failures without treating them as recipient outcomes" do
+    Application.put_env(:memba, :messaging_delivery_provider, Postmark)
+
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Memba.TestSupport.FailingSwooshAdapter,
+      api_key: "server-token",
+      test_owner: self(),
+      test_delivery_result: {:error, :timeout}
+    )
+
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    club_id = Ecto.UUID.generate()
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+
+    message_id = Ecto.UUID.generate()
+
+    assert {:error, {:postmark_delivery_error, :timeout}} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               },
+               consistency: :strong
+             )
+
+    assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
+    assert Fake.deliveries() == []
+
+    assert Messaging.get_member_receipt(message_id, alice.person_id).receipt_status == "sent"
+    assert Messaging.get_operator_deliverability(message_id, alice.person_id).status == "sent"
+  end
+
   defp create_person(attrs) do
     person = %{
       person_id: Ecto.UUID.generate(),
@@ -177,4 +227,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                consistency: :strong
              )
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end

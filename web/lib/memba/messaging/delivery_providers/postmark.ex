@@ -21,8 +21,7 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
       {:ok, %PostmarkConfig{} = config} ->
         request
         |> email(config)
-        |> Memba.Mailer.deliver()
-        |> normalize_delivery_result()
+        |> deliver_email()
 
       {:error, message} ->
         {:error, {:postmark_configuration_error, message}}
@@ -71,6 +70,20 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
     |> Phoenix.HTML.safe_to_string()
   end
 
+  defp deliver_email(email) do
+    email
+    |> Memba.Mailer.deliver()
+    |> normalize_delivery_result()
+  rescue
+    exception ->
+      {:error, {:postmark_delivery_exception, exception.__struct__, Exception.message(exception)}}
+  end
+
   defp normalize_delivery_result({:ok, _result}), do: :ok
-  defp normalize_delivery_result({:error, _reason} = error), do: error
+
+  defp normalize_delivery_result({:error, reason}),
+    do: {:error, {:postmark_delivery_error, reason}}
+
+  defp normalize_delivery_result(result),
+    do: {:error, {:postmark_delivery_error, {:unexpected_delivery_result, result}}}
 end
