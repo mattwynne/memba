@@ -82,5 +82,11 @@ defmodule MembaWeb.Router do
       live_dashboard "/dashboard", metrics: MembaWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
     end
+
+    scope "/dev/test-support", MembaWeb do
+      pipe_through :api
+
+      post "/auth-links/expire", DevTestSupportController, :expire_auth_link
+    end
   end
 end

@@ -141,6 +141,85 @@ defmodule Memba.CucumberConfigurationTest do
      ]}
   ]
 
+  @authentication_scenarios [
+    {"A club member signs in and sees their club",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 8},
+       {"When", "Alice requests a sign-in link for their email address", 9},
+       {"Then", "Alice should receive a sign-in link", 10},
+       {"When", "Alice follows the sign-in link", 11},
+       {"Then", "Alice should be signed in", 12},
+       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 13}
+     ]},
+    {"A club member with memberships in two clubs sees both clubs",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 16},
+       {"And", "Alice is a member of Nelson Paddling Club", 17},
+       {"When", "Alice requests a sign-in link for their email address", 18},
+       {"Then", "Alice should receive a sign-in link", 19},
+       {"When", "Alice follows the sign-in link", 20},
+       {"Then", "Alice should be signed in", 21},
+       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 22},
+       {"And", "Alice should see Nelson Paddling Club in their clubs", 23}
+     ]},
+    {"New Memba staff sign themselves up",
+     [
+       {"Given", "Pat is not a member of any club", 28},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 29},
+       {"Then", "Pat should receive a sign-in link", 30},
+       {"When", "Pat follows the sign-in link", 31},
+       {"Then", "Pat should be signed in as Memba staff", 32},
+       {"And", "Pat should be on the staff-only homepage", 33}
+     ]},
+    {"Memba staff who are also club members can use both kinds of access",
+     [
+       {"Given", "Pat is a member of Kootenay Mountaineering Club", 36},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 37},
+       {"Then", "Pat should receive a sign-in link", 38},
+       {"When", "Pat follows the sign-in link", 39},
+       {"Then", "Pat should be signed in as Memba staff", 40},
+       {"And", "Pat should be on the staff-only homepage", 41},
+       {"And", "Pat should be able to see Kootenay Mountaineering Club in their clubs", 42}
+     ]},
+    {"Unknown person requests a sign-in link",
+     [
+       {"Given", "Robin is not a member of any club", 47},
+       {"When", "Robin requests a sign-in link for their email address", 48},
+       {"Then", "Robin should not receive a sign-in link", 49}
+     ]},
+    {"Reusing a sign-in link",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 54},
+       {"And", "Alice has received a sign-in link for their email address", 55},
+       {"And", "Alice has already followed the sign-in link", 56},
+       {"When", "Alice follows the same sign-in link again", 57},
+       {"Then", "Alice should not be signed in", 58}
+     ]},
+    {"Following an expired sign-in link",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 63},
+       {"And", "Alice has received a sign-in link for their email address", 64},
+       {"And", "the sign-in link has expired", 65},
+       {"When", "Alice follows the sign-in link", 66},
+       {"Then", "Alice should not be signed in", 67}
+     ]},
+    {"Following a link that Memba did not issue",
+     [
+       {"When", "Robin follows a sign-in link that Memba did not issue", 72},
+       {"Then", "Robin should not be signed in", 73}
+     ]},
+    {"Staff signs in after trying to open the staff-only area",
+     [
+       {"Given", "Pat is not a member of any club", 78},
+       {"And", "Pat has tried to open the staff-only area", 79},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 80},
+       {"Then", "Pat should receive a sign-in link", 81},
+       {"When", "Pat follows the sign-in link", 82},
+       {"Then", "Pat should be signed in as Memba staff", 83},
+       {"And", "Pat should be on the staff-only homepage", 84}
+     ]}
+  ]
+
   @required_membership_background_steps [
     "Kootenay Mountaineering Club is a club",
     "Nelson Paddling Club is a club",
@@ -158,6 +237,35 @@ defmodule Memba.CucumberConfigurationTest do
   @required_operator_scenario_steps for {_scenario_name, steps} <- @operator_scenarios,
                                         {_keyword, text, _line} <- steps,
                                         do: text
+
+  @required_authentication_scenario_steps for {_scenario_name, steps} <-
+                                                @authentication_scenarios,
+                                              {_keyword, text, _line} <- steps,
+                                              do: text
+
+  @required_authentication_step_patterns [
+    "{word} is a member of Kootenay Mountaineering Club",
+    "Alice is a member of Nelson Paddling Club",
+    "{word} is not a member of any club",
+    "{word} requests a sign-in link for their email address",
+    "{word} requests a sign-in link for {string}",
+    "{word} should receive a sign-in link",
+    "{word} should not receive a sign-in link",
+    "{word} follows the sign-in link",
+    "{word} follows the same sign-in link again",
+    "{word} follows a sign-in link that Memba did not issue",
+    "{word} has received a sign-in link for their email address",
+    "{word} has already followed the sign-in link",
+    "the sign-in link has expired",
+    "{word} has tried to open the staff-only area",
+    "{word} should be signed in",
+    "{word} should be signed in as Memba staff",
+    "{word} should not be signed in",
+    "{word} should be on the staff-only homepage",
+    "{word} should see Kootenay Mountaineering Club in their clubs",
+    "{word} should see Nelson Paddling Club in their clubs",
+    "{word} should be able to see Kootenay Mountaineering Club in their clubs"
+  ]
 
   @required_messaging_step_patterns [
     "{word} sends the message {string} to Kootenay Mountaineering Club members",
@@ -187,7 +295,8 @@ defmodule Memba.CucumberConfigurationTest do
       shared_feature_paths,
       Enum.uniq(
         @required_membership_background_steps ++
-          @required_member_message_scenario_steps ++ @required_operator_scenario_steps
+          @required_member_message_scenario_steps ++
+          @required_operator_scenario_steps ++ @required_authentication_scenario_steps
       )
     )
 
@@ -198,6 +307,10 @@ defmodule Memba.CucumberConfigurationTest do
     end)
 
     Enum.each(@required_messaging_step_patterns, fn step_pattern ->
+      assert Map.has_key?(discovery.step_registry, step_pattern)
+    end)
+
+    Enum.each(@required_authentication_step_patterns, fn step_pattern ->
       assert Map.has_key?(discovery.step_registry, step_pattern)
     end)
   end
@@ -266,6 +379,20 @@ defmodule Memba.CucumberConfigurationTest do
 
       operator_context
       |> Map.put(:scenario_name, scenario_name)
+      |> execute_steps(scenario_steps, discovery.step_registry)
+    end)
+  end
+
+  test "all authentication scenarios pass through Cucumber runtime" do
+    %Discovery.DiscoveryResult{} = discovery = discover_steps()
+
+    authentication_feature_file =
+      configured_feature_paths()
+      |> feature_file_named!("authentication.feature")
+
+    Enum.each(@authentication_scenarios, fn {scenario_name, scenario_steps} ->
+      authentication_feature_file
+      |> base_cucumber_context(scenario_name)
       |> execute_steps(scenario_steps, discovery.step_registry)
     end)
   end

@@ -54,15 +54,15 @@ test("homepage assertion step checks browser-visible homepage content", async ()
   assert.equal(expectations[0].expected.test("http://127.0.0.1:4444/clubs"), false);
 
   assert.equal(expectations[1].matcher, "toHaveTitle");
-  assert.match("Memba · Phoenix Framework", expectations[1].expected);
+  assert.match("Memba", expectations[1].expected);
 
   assert.deepEqual(
     expectations
       .filter((expectation) => expectation.matcher === "toBeVisible")
       .map((expectation) => expectation.target),
     [
-      { role: "heading", options: { name: "Phoenix Framework" } },
-      { role: "link", options: { name: "Guides & Docs" } }
+      { role: "heading", options: { name: "Keep every member in the loop." } },
+      { role: "link", options: { name: "Sign In" } }
     ]
   );
 });

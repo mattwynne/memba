@@ -327,10 +327,18 @@ async function createPeople(world, names, { expect = playwrightExpect } = {}) {
   return world;
 }
 
-async function createPersonOnCurrentClubPage(world, name, { expect = playwrightExpect } = {}) {
+async function createPerson(world, name, clubName = kootenayClubName, { email, expect = playwrightExpect } = {}) {
+  ensureState(world);
+
+  await openClub(world, clubName, { expect });
+  await createPersonOnCurrentClubPage(world, name, { email, expect });
+
+  return world;
+}
+
+async function createPersonOnCurrentClubPage(world, name, { email = emailFor(name), expect = playwrightExpect } = {}) {
   const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
-  const email = emailFor(name);
 
   await browserInteraction(`submit person creation form for ${name}`, async () => {
     await world.page.getByLabel("Person name").fill(name);
@@ -1061,6 +1069,7 @@ module.exports = {
   assertReceiptStatus,
   createClub,
   createPeople,
+  createPerson,
   cssString,
   deliveryForRecipient,
   emailFor,
@@ -1078,5 +1087,7 @@ module.exports = {
   openClub,
   openMessage,
   sendMessageToKootenayMembers,
-  visitClubsIndex
+  testMailboxEmails,
+  visitClubsIndex,
+  waitForMailboxEmails
 };

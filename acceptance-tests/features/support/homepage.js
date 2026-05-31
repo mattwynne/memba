@@ -21,8 +21,9 @@ async function visitHomepage({ baseUrl, page }) {
 async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpect } = {}) {
   await expect(page).toHaveURL(homepageUrlPattern(baseUrl));
   await expect(page).toHaveTitle(/Memba/);
-  await expect(page.getByRole("heading", { name: "Phoenix Framework" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Guides & Docs" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Keep every member in the loop." })).toBeVisible();
+  const signInLink = page.getByRole("link", { name: "Sign In" });
+  await expect(signInLink.first ? signInLink.first() : signInLink).toBeVisible();
 }
 
 module.exports = {
