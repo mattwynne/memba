@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect the post-iteration-009 route structure and admin pipeline.
+- [x] 001 Inspect the post-iteration-009 route structure and admin pipeline.
 - [ ] 002 Add persistence for authentication:
 - [ ] 003 Add an authentication context, likely `Memba.Accounts` or `Memba.Identity`, with functions to:
 - [ ] 004 Extend `Memba.Membership` query API as needed:
