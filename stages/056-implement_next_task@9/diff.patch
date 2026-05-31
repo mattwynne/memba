@@ -1,0 +1,275 @@
+diff --git a/docs/iterations/008-postmark-email-integration/todo.md b/docs/iterations/008-postmark-email-integration/todo.md
+index d615e5a..96771e6 100644
+--- a/docs/iterations/008-postmark-email-integration/todo.md
++++ b/docs/iterations/008-postmark-email-integration/todo.md
+@@ -8,6 +8,6 @@
+ - [x] 006 Enable universal Postmark open tracking for member-message emails through the supported Swoosh/Postmark mechanism.
+ - [x] 007 Ensure transport/auth/configuration/API failures from Postmark fail the send command hard and visibly, while preserving webhook-driven delivery outcomes for recipient-specific status changes.
+ - [x] 008 Add focused tests for the Postmark provider using Swoosh test facilities or a test adapter so no real email is sent.
+-- [ ] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
++- [x] 009 Exercise realistic Postmark webhook payloads that contain the outbound metadata and confirm they update the existing delivery records.
+ - [ ] 010 Update documentation for enabling Postmark, configuring environment variables, configuring the Postmark webhook URL, and choosing a monitored Memba-controlled sending subdomain.
+ - [ ] 011 Run the existing browser/domain acceptance suites and `dev check`, fixing regressions without weakening fake-provider determinism.
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index 17d1a48..72eb579 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -8,38 +8,23 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+ 
+   import Plug.Conn
+ 
+-  test "maps Postmark delivery and open events to member receipt status reports", %{conn: conn} do
+-    %{message_id: message_id, recipients: [bob]} = send_message_to(["Bob"])
++  test "maps realistic Postmark delivery and open events with outbound metadata", %{conn: conn} do
++    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+ 
+     conn =
+-      post_postmark_event(conn, %{
+-        "RecordType" => "Delivery",
+-        "MessageID" => Ecto.UUID.generate(),
+-        "Recipient" => bob.email,
+-        "Metadata" => %{
+-          "message_id" => message_id,
+-          "delivery_id" => bob.delivery_id
+-        }
+-      })
++      post_postmark_event(conn, realistic_postmark_payload(:delivered, message, bob))
+ 
+     assert %{"status" => "accepted"} = json_response(conn, 202)
+ 
+     assert_eventually(fn ->
+       assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "delivered"
++      assert Messaging.get_operator_deliverability(bob.delivery_id).status == "delivered"
+     end)
+ 
+     conn =
+       conn
+       |> recycle()
+-      |> post_postmark_event(%{
+-        "RecordType" => "Open",
+-        "MessageID" => Ecto.UUID.generate(),
+-        "Recipient" => bob.email,
+-        "Metadata" => %{
+-          "message_id" => message_id,
+-          "delivery_id" => bob.delivery_id
+-        }
+-      })
++      |> post_postmark_event(realistic_postmark_payload(:opened, message, bob))
+ 
+     assert %{"status" => "accepted"} = json_response(conn, 202)
+ 
+@@ -49,20 +34,19 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     end)
+   end
+ 
+-  test "maps Postmark delayed, bounced, and spam complaint events with reasons", %{conn: conn} do
++  test "maps realistic Postmark delayed, bounced, and spam complaint events with reasons", %{
++    conn: conn
++  } do
+     %{message_id: message_id, recipients: [bob, carol, dana]} =
+-      send_message_to(["Bob", "Carol", "Dana"])
++      message = send_message_to(["Bob", "Carol", "Dana"])
+ 
+     conn =
+-      post_postmark_event(conn, %{
+-        "RecordType" => "Bounce",
+-        "Type" => "Transient",
+-        "Details" => "recipient server is temporarily unavailable",
+-        "Metadata" => %{
+-          "message_id" => message_id,
+-          "delivery_id" => bob.delivery_id
+-        }
+-      })
++      post_postmark_event(
++        conn,
++        realistic_postmark_payload(:delayed, message, bob,
++          reason: "recipient server is temporarily unavailable"
++        )
++      )
+ 
+     assert %{"status" => "accepted"} = json_response(conn, 202)
+ 
+@@ -74,20 +58,16 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+ 
+       assert Messaging.get_operator_deliverability(message_id, bob.person_id).reason ==
+                "recipient server is temporarily unavailable"
++
++      assert Messaging.get_operator_deliverability(bob.delivery_id).status == "delayed"
+     end)
+ 
+     conn =
+       conn
+       |> recycle()
+-      |> post_postmark_event(%{
+-        "RecordType" => "Bounce",
+-        "Type" => "HardBounce",
+-        "Description" => "mailbox does not exist",
+-        "Metadata" => %{
+-          "message_id" => message_id,
+-          "delivery_id" => carol.delivery_id
+-        }
+-      })
++      |> post_postmark_event(
++        realistic_postmark_payload(:bounced, message, carol, reason: "mailbox does not exist")
++      )
+ 
+     assert %{"status" => "accepted"} = json_response(conn, 202)
+ 
+@@ -100,19 +80,18 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+ 
+       assert Messaging.get_operator_deliverability(message_id, carol.person_id).reason ==
+                "mailbox does not exist"
++
++      assert Messaging.get_operator_deliverability(carol.delivery_id).status == "bounced"
+     end)
+ 
+     conn =
+       conn
+       |> recycle()
+-      |> post_postmark_event(%{
+-        "RecordType" => "SpamComplaint",
+-        "Details" => "recipient marked the message as spam",
+-        "Metadata" => %{
+-          "message_id" => message_id,
+-          "delivery_id" => dana.delivery_id
+-        }
+-      })
++      |> post_postmark_event(
++        realistic_postmark_payload(:spam_complaint, message, dana,
++          reason: "recipient marked the message as spam"
++        )
++      )
+ 
+     assert %{"status" => "accepted"} = json_response(conn, 202)
+ 
+@@ -125,6 +104,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+ 
+       assert Messaging.get_operator_deliverability(message_id, dana.person_id).reason ==
+                "recipient marked the message as spam"
++
++      assert Messaging.get_operator_deliverability(dana.delivery_id).status == "spam complaint"
+     end)
+   end
+ 
+@@ -161,12 +142,13 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+       end)
+ 
+     message_id = Ecto.UUID.generate()
++    club_id = Ecto.UUID.generate()
+ 
+     assert :ok =
+              MessagingApp.dispatch(
+                %SendMessage{
+                  message_id: message_id,
+-                 club_id: Ecto.UUID.generate(),
++                 club_id: club_id,
+                  sender_id: sender.person_id,
+                  subject: "Trip planning night",
+                  body: "Bring route ideas.",
+@@ -175,7 +157,105 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+                consistency: :strong
+              )
+ 
+-    %{message_id: message_id, recipients: recipients}
++    %{club_id: club_id, message_id: message_id, recipients: recipients}
++  end
++
++  defp realistic_postmark_payload(event_type, message, recipient, opts \\ []) do
++    base =
++      %{
++        "MessageID" => Ecto.UUID.generate(),
++        "MessageStream" => "outbound",
++        "Metadata" => %{
++          "memba_club_id" => message.club_id,
++          "memba_delivery_id" => recipient.delivery_id,
++          "memba_message_id" => message.message_id
++        },
++        "Recipient" => recipient.email,
++        "ServerID" => 12_345,
++        "Tag" => "member-message"
++      }
++
++    Map.merge(base, realistic_postmark_event_fields(event_type, recipient, opts))
++  end
++
++  defp realistic_postmark_event_fields(:delivered, _recipient, _opts) do
++    %{
++      "DeliveredAt" => "2026-05-30T19:12:34Z",
++      "Details" => "smtp; 250 2.0.0 Ok: queued as 12345",
++      "RecordType" => "Delivery"
++    }
++  end
++
++  defp realistic_postmark_event_fields(:opened, _recipient, _opts) do
++    %{
++      "Client" => %{"Company" => "Apple", "Family" => "Apple Mail", "Name" => "Apple Mail"},
++      "FirstOpen" => true,
++      "Geo" => %{
++        "City" => "Nelson",
++        "CountryISOCode" => "CA",
++        "CountryName" => "Canada",
++        "Region" => "British Columbia"
++      },
++      "OS" => %{"Company" => "Apple", "Family" => "iOS", "Name" => "iOS"},
++      "Platform" => "Mobile",
++      "ReadSeconds" => 7,
++      "ReceivedAt" => "2026-05-30T19:13:45Z",
++      "RecordType" => "Open",
++      "UserAgent" => "Mozilla/5.0"
++    }
++  end
++
++  defp realistic_postmark_event_fields(:delayed, recipient, opts) do
++    bounce_fields(recipient, opts,
++      description: "Temporary delivery issue",
++      name: "Delivery delayed",
++      type: "Transient",
++      type_code: 4
++    )
++  end
++
++  defp realistic_postmark_event_fields(:bounced, recipient, opts) do
++    bounce_fields(recipient, opts,
++      description: Keyword.fetch!(opts, :reason),
++      name: "Hard bounce",
++      type: "HardBounce",
++      type_code: 1
++    )
++  end
++
++  defp realistic_postmark_event_fields(:spam_complaint, recipient, opts) do
++    %{
++      "BouncedAt" => "2026-05-30T19:14:56Z",
++      "Description" => "The recipient marked this message as spam.",
++      "Details" => Keyword.fetch!(opts, :reason),
++      "Email" => recipient.email,
++      "From" => "messages@mail.memba.io",
++      "ID" => 3_456_789,
++      "Name" => "Spam notification",
++      "RecordType" => "SpamComplaint",
++      "Subject" => "Trip planning night",
++      "Type" => "SpamNotification",
++      "TypeCode" => 512
++    }
++  end
++
++  defp bounce_fields(recipient, opts, event_opts) do
++    %{
++      "BouncedAt" => "2026-05-30T19:14:56Z",
++      "CanActivate" => false,
++      "Description" => Keyword.fetch!(event_opts, :description),
++      "Details" => Keyword.fetch!(opts, :reason),
++      "DumpAvailable" => false,
++      "Email" => recipient.email,
++      "From" => "messages@mail.memba.io",
++      "ID" => 2_345_678,
++      "Inactive" => true,
++      "Name" => Keyword.fetch!(event_opts, :name),
++      "RecordType" => "Bounce",
++      "Subject" => "Trip planning night",
++      "Type" => Keyword.fetch!(event_opts, :type),
++      "TypeCode" => Keyword.fetch!(event_opts, :type_code)
++    }
+   end
+ 
+   defp email_for(name) do
