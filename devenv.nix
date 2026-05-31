@@ -97,6 +97,9 @@ in
     devenv
     git
     nodejs_22
+    tailwindcss_4
+    fontconfig
+    esbuild
   ];
 
   languages.elixir.enable = true;
@@ -113,6 +116,10 @@ in
     HOME = "/tmp/home";
     MIX_HOME = "/tmp/home/.mix";
     HEX_HOME = "/tmp/home/.hex";
+    FONTCONFIG_PATH = "${pkgs.fontconfig.out}/etc/fonts";
+    FONTCONFIG_FILE = "${pkgs.fontconfig.out}/etc/fonts/fonts.conf";
+    MIX_TAILWIND_PATH = "${pkgs.tailwindcss_4}/bin/tailwindcss";
+    MIX_ESBUILD_PATH = "${pkgs.esbuild}/bin/esbuild";
   };
 
   scripts.mix.exec = ''
@@ -155,6 +162,9 @@ in
               gnugrep
               gnused
               nodejs_22
+    tailwindcss_4
+    fontconfig
+    esbuild
               which
               (hiPrio fabroDevenv)
               (hiPrio fabroGit)

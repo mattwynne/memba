@@ -14,15 +14,20 @@ repo_connection_config =
     [hostname: pg_host]
   end
 
+repo_pool_config =
+  if System.get_env("PHX_SERVER") == "true" do
+    [pool_size: System.schedulers_online() * 2]
+  else
+    [pool: Ecto.Adapters.SQL.Sandbox, pool_size: System.schedulers_online() * 2]
+  end
+
 config :memba,
        Memba.Repo,
        [
          username: System.get_env("PGUSER") || System.get_env("USER"),
          port: String.to_integer(System.get_env("PGPORT") || "5432"),
-         database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}",
-         pool: Ecto.Adapters.SQL.Sandbox,
-         pool_size: System.schedulers_online() * 2
-       ] ++ repo_connection_config
+         database: "memba_test#{System.get_env("MIX_TEST_PARTITION")}"
+       ] ++ repo_pool_config ++ repo_connection_config
 
 event_store_config =
   [

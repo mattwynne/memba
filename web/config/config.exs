@@ -64,7 +64,8 @@ config :memba, Memba.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure esbuild (the version is required)
 config :esbuild,
-  version: "0.25.4",
+  version: "0.27.2",
+  path: System.get_env("MIX_ESBUILD_PATH"),
   memba: [
     args:
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
@@ -74,7 +75,8 @@ config :esbuild,
 
 # Configure tailwind (the version is required)
 config :tailwind,
-  version: "4.1.12",
+  version: "4.2.4",
+  path: System.get_env("MIX_TAILWIND_PATH"),
   memba: [
     args: ~w(
       --input=assets/css/app.css
