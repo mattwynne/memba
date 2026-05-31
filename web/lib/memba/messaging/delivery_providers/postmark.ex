@@ -41,6 +41,7 @@ defmodule Memba.Messaging.DeliveryProviders.Postmark do
     |> text_body(request.body)
     |> html_body(html_body(request.body))
     |> put_provider_option(:metadata, metadata(request))
+    |> put_provider_option(:track_opens, true)
   end
 
   defp maybe_reply_to(email, nil), do: email

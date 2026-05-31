@@ -21,7 +21,7 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
     :ok
   end
 
-  test "builds and sends a multipart email with Postmark correlation metadata" do
+  test "builds and sends a multipart email with Postmark correlation metadata and open tracking" do
     Application.put_env(:memba, Postmark,
       from: "messages@mail.memba.io",
       reply_to: "help@memba.io"
@@ -49,7 +49,8 @@ defmodule Memba.Messaging.DeliveryProviders.PostmarkTest do
                "memba_message_id" => request.message_id,
                "memba_delivery_id" => request.delivery_id,
                "memba_club_id" => request.club_id
-             }
+             },
+             track_opens: true
            }
   end
 
