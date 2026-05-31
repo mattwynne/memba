@@ -1,0 +1,391 @@
+const assert = require("node:assert/strict");
+const test = require("node:test");
+
+const {
+  addMembers,
+  appUrl,
+  assertEachAddressedMemberHasSeparateDeliveryRecord,
+  assertEachDeliverySentThroughEmailProvider,
+  assertLastMessageAddressedTo,
+  assertLastMessageNotAddressedTo,
+  assertReceiptStatus,
+  createClub,
+  createPeople,
+  cssString,
+  emailFor,
+  kootenayClubName,
+  sendMessageToKootenayMembers
+} = require("../features/support/member_message");
+
+class FakeLocator {
+  constructor(page, selector, options = {}) {
+    this.page = page;
+    this.selector = selector;
+    this.kind = options.kind || "locator";
+    this.value = options.value;
+    this.attrs = options.attrs || {};
+    this.text = options.text;
+    this.rows = options.rows || null;
+  }
+
+  currentRows() {
+    return this.rows || rowsForSelector(this.page.rows, this.selector);
+  }
+
+  async count() {
+    return this.currentRows().length;
+  }
+
+  last() {
+    const rows = this.currentRows();
+    const row = rows[rows.length - 1];
+
+    return new FakeLocator(this.page, `${this.selector} >> last`, {
+      attrs: row.attrs,
+      kind: "row",
+      text: row.text
+    });
+  }
+
+  locator(selector) {
+    return new FakeLocator(this.page, `${this.selector} ${selector}`, {
+      kind: "child",
+      value: selector,
+      text: this.attrs.deliveryStatus || this.attrs.receiptStatus
+    });
+  }
+
+  getByText(text) {
+    return new FakeLocator(this.page, `${this.selector} text=${text}`, {
+      kind: "text",
+      value: text
+    });
+  }
+
+  async getAttribute(attributeName) {
+    return this.attrs[attributeName];
+  }
+
+  async evaluateAll(callback, key) {
+    const elements = this.currentRows().map((row) => ({
+      dataset: row.dataset,
+      getAttribute(attributeName) {
+        return row.attrs ? row.attrs[attributeName] : undefined;
+      }
+    }));
+
+    return callback(elements, key);
+  }
+}
+
+class FakePage {
+  constructor() {
+    this.actions = [];
+    this.fields = {};
+    this.rows = {
+      clubs: [],
+      people: [],
+      members: [],
+      messages: [],
+      addressedRecipients: [],
+      deliveryRecords: [],
+      memberReceipts: []
+    };
+  }
+
+  async goto(url) {
+    this.actions.push(["goto", url]);
+  }
+
+  getByLabel(name) {
+    return {
+      fill: async (value) => {
+        this.fields[name] = value;
+        this.actions.push(["fill", name, value]);
+      },
+      selectOption: async (value) => {
+        this.fields[name] = value;
+        this.actions.push(["select", name, value]);
+      }
+    };
+  }
+
+  getByRole(role, options) {
+    return {
+      role,
+      options,
+      click: async () => {
+        this.actions.push(["click", role, options]);
+        this.applyClickSideEffect(options.name);
+      }
+    };
+  }
+
+  locator(selector) {
+    return new FakeLocator(this, selector);
+  }
+
+  applyClickSideEffect(name) {
+    if (name === "Create club") {
+      const clubName = this.fields["Club name"];
+      const clubId = idFor("club", clubName, this.rows.clubs.length + 1);
+      this.rows.clubs.push(rowWithAttrs({
+        "data-club-id": clubId,
+        "data-club-name": clubName
+      }));
+    }
+
+    if (name === "Create person") {
+      const personName = this.fields["Person name"];
+      const personId = idFor("person", personName, this.rows.people.length + 1);
+      this.rows.people.push(rowWithAttrs({
+        "data-person-id": personId,
+        "data-person-name": personName
+      }));
+    }
+
+    if (name === "Add member") {
+      const personId = this.fields["Person to add as member"];
+      const personRow = this.rows.people.find((row) => row.attrs["data-person-id"] === personId);
+      const personName = personRow.attrs["data-person-name"];
+      const memberId = idFor("member", personName, this.rows.members.length + 1);
+
+      this.rows.members.push(rowWithAttrs({
+        "data-member-id": memberId,
+        "data-member-name": personName
+      }));
+    }
+
+    if (name === "Send club message") {
+      const subject = this.fields["Message subject"];
+      const messageId = idFor("message", subject, this.rows.messages.length + 1);
+
+      this.rows.messages.push(rowWithAttrs({
+        "data-message-id": messageId,
+        "data-message-subject": subject
+      }));
+    }
+  }
+}
+
+function rowsForSelector(rows, selector) {
+  if (selector.includes('data-testid="club-row"')) return filterRows(rows.clubs, selector);
+  if (selector.includes('data-testid="person-row"')) return filterRows(rows.people, selector);
+  if (selector.includes('data-testid="member-row"')) return filterRows(rows.members, selector);
+  if (selector.includes('data-testid="message-row"')) return filterRows(rows.messages, selector);
+  if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
+  if (selector.includes("#delivery-records")) return rows.deliveryRecords;
+  if (selector.includes("#member-receipts")) return rows.memberReceipts;
+  if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
+  if (selector.includes('data-testid="member-receipt"')) return filterRows(rows.memberReceipts, selector);
+
+  return [];
+}
+
+function filterRows(rows, selector) {
+  return rows.filter((row) => {
+    for (const [attributeName, value] of Object.entries(row.attrs || {})) {
+      if (selector.includes(`[${attributeName}=`) && !selector.includes(`[${attributeName}="${value}"]`)) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+function idFor(prefix, value, count) {
+  return `${prefix}-${String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${count}`;
+}
+
+function rowWithAttrs(attrs) {
+  const dataset = {};
+
+  for (const [name, value] of Object.entries(attrs)) {
+    if (name.startsWith("data-")) {
+      dataset[name.slice(5).replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase())] = value;
+    }
+  }
+
+  return { attrs, dataset };
+}
+
+function fakeExpect(expectations) {
+  return (target) => ({
+    async toBeVisible() {
+      expectations.push(["visible", target.selector || target]);
+    },
+    async toHaveCount(count) {
+      expectations.push(["count", target.selector, count]);
+    },
+    async toHaveText(text) {
+      expectations.push(["text", target.selector, text]);
+    }
+  });
+}
+
+function worldWithPage(page = new FakePage()) {
+  return {
+    baseUrl: "http://127.0.0.1:4444",
+    page
+  };
+}
+
+test("member-message route URL and generated emails match the browser app surface", () => {
+  assert.equal(appUrl("http://127.0.0.1:4444", "/clubs"), "http://127.0.0.1:4444/clubs");
+  assert.equal(
+    appUrl("http://127.0.0.1:4444/", "/messages/message-1"),
+    "http://127.0.0.1:4444/messages/message-1"
+  );
+  assert.equal(emailFor("Alice"), "alice@example.test");
+  assert.equal(emailFor("Kootenay Mountaineering Club"), "kootenay.mountaineering.club@example.test");
+  assert.equal(cssString('Bob "The Sender"'), '"Bob \\"The Sender\\""');
+});
+
+test("creating a club drives /clubs and stores the generated club id from the UI", async () => {
+  const page = new FakePage();
+  page.rows.clubs.push(rowWithAttrs({
+    "data-club-id": "club-existing-1",
+    "data-club-name": kootenayClubName
+  }));
+  const expectations = [];
+  const world = worldWithPage(page);
+
+  await createClub(world, kootenayClubName, { expect: fakeExpect(expectations) });
+
+  assert.deepEqual(page.actions, [
+    ["goto", "http://127.0.0.1:4444/clubs"],
+    ["fill", "Club name", kootenayClubName],
+    ["click", "button", { name: "Create club" }]
+  ]);
+  assert.deepEqual(world.clubs[kootenayClubName], {
+    clubId: "club-kootenay-mountaineering-club-2",
+    name: kootenayClubName
+  });
+  assert.deepEqual(expectations.map((expectation) => expectation[0]), ["count", "visible"]);
+});
+
+test("creating people and members uses accessible form labels and keeps browser ids in scenario state", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+
+  await createPeople(world, ["Alice", "Bob"], { expect: fakeExpect(expectations) });
+  await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
+
+  assert.deepEqual(world.people.Alice, {
+    email: "alice@example.test",
+    name: "Alice",
+    personId: "person-alice-1"
+  });
+  assert.deepEqual(world.memberships[`${kootenayClubName}:Bob`], {
+    clubName: kootenayClubName,
+    memberId: "member-bob-2",
+    personName: "Bob"
+  });
+  assert.ok(
+    page.actions.some(
+      (action) =>
+        action[0] === "select" &&
+        action[1] === "Person to add as member" &&
+        action[2] === "person-alice-1"
+    )
+  );
+});
+
+test("sending a Kootenay member message drives the club form and opens the real message route", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.people = { Alice: { personId: "person-alice-1" } };
+
+  await sendMessageToKootenayMembers(world, "Alice", "Trip planning night", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(world.messages["Trip planning night"], {
+    body: "Trip planning night details.",
+    clubId: "club-1",
+    messageId: "message-trip-planning-night-1",
+    senderName: "Alice",
+    subject: "Trip planning night"
+  });
+  assert.deepEqual(page.actions.slice(-5), [
+    ["select", "Message sender", "person-alice-1"],
+    ["fill", "Message subject", "Trip planning night"],
+    ["fill", "Message body", "Trip planning night details."],
+    ["click", "button", { name: "Send club message" }],
+    ["goto", "http://127.0.0.1:4444/messages/message-trip-planning-night-1"]
+  ]);
+});
+
+test("message assertions read addressed recipients, delivery records, email channel, and receipts from UI rows", async () => {
+  const page = new FakePage();
+  page.rows.addressedRecipients.push(
+    { dataset: { recipientName: "Alice", recipientId: "person-alice" } },
+    { dataset: { recipientName: "Bob", recipientId: "person-bob" } },
+    { dataset: { recipientName: "Carol", recipientId: "person-carol" } }
+  );
+  page.rows.deliveryRecords.push(
+    {
+      attrs: {
+        "data-delivery-id": "delivery-alice",
+        "data-recipient-id": "person-alice",
+        "data-recipient-name": "Alice",
+        deliveryStatus: "sent"
+      },
+      dataset: { deliveryId: "delivery-alice", recipientId: "person-alice", recipientName: "Alice" }
+    },
+    {
+      attrs: {
+        "data-delivery-id": "delivery-bob",
+        "data-recipient-id": "person-bob",
+        "data-recipient-name": "Bob",
+        deliveryStatus: "sent"
+      },
+      dataset: { deliveryId: "delivery-bob", recipientId: "person-bob", recipientName: "Bob" }
+    },
+    {
+      attrs: {
+        "data-delivery-id": "delivery-carol",
+        "data-recipient-id": "person-carol",
+        "data-recipient-name": "Carol",
+        deliveryStatus: "sent"
+      },
+      dataset: { deliveryId: "delivery-carol", recipientId: "person-carol", recipientName: "Carol" }
+    }
+  );
+  page.rows.memberReceipts.push({
+    attrs: { "data-recipient-name": "Bob", receiptStatus: "sent" },
+    dataset: { recipientName: "Bob" }
+  });
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.lastMessageSubject = "Trip planning night";
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = {
+    Alice: { personId: "person-alice" },
+    Bob: { personId: "person-bob" },
+    Carol: { personId: "person-carol" },
+    Pat: { personId: "person-pat" }
+  };
+
+  await assertLastMessageAddressedTo(world, ["Alice", "Bob", "Carol"], {
+    expect: fakeExpect(expectations)
+  });
+  await assertLastMessageNotAddressedTo(world, "Pat", { expect: fakeExpect(expectations) });
+  await assertEachAddressedMemberHasSeparateDeliveryRecord(world, { expect: fakeExpect(expectations) });
+  await assertEachDeliverySentThroughEmailProvider(world, { expect: fakeExpect(expectations) });
+  await assertReceiptStatus(world, "Bob", "Trip planning night", "sent", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(world.deliveries["Trip planning night"].Bob, {
+    deliveryId: "delivery-bob",
+    recipientId: "person-bob",
+    recipientName: "Bob"
+  });
+  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+});
