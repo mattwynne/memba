@@ -1,7 +1,7 @@
 # Shared magic-link authentication
 
 Date: 2026-05-31
-Status: validated
+Status: implementing
 
 ## Goal
 
