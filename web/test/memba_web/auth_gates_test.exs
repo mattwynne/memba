@@ -82,7 +82,10 @@ defmodule MembaWeb.AuthGatesTest do
         |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
-      assert html_response(conn, 200) =~ "My clubs"
+      response = html_response(conn, 200)
+
+      assert response =~ "Welcome to your club space."
+      assert response =~ club.name
     end
   end
 
