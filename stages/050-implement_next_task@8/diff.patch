@@ -1,0 +1,75 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index b52612f..b3edbff 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Build a receipt presentation model for the LiveView:
+ - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+ - [x] 007 Add LiveView state for collapsed groups:
+-- [ ] 008 Preserve the existing stable DOM/test attributes for recipient rows.
++- [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+ - [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+ - [ ] 010 Add focused LiveView/ConnCase tests covering:
+ - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 500d29a..6765ca4 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -238,6 +238,57 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute has_element?(view, opened_recipient)
+   end
+ 
++  test "expanded recipient rows preserve stable browser-test attributes", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      receipt_status: "delivered"
++    )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    view
++    |> element("#member-receipt-group-toggle-delivered")
++    |> render_click()
++
++    assert has_element?(
++             view,
++             "#member-receipts-delivered " <>
++               "#member-receipt-#{bob.person_id}" <>
++               "[data-testid='member-receipt']" <>
++               "[data-recipient-id='#{bob.person_id}']" <>
++               "[data-recipient-name='Bob Builder']" <>
++               "[data-receipt-status='delivered']",
++             "Bob Builder"
++           )
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
+     person_id = Ecto.UUID.generate()
