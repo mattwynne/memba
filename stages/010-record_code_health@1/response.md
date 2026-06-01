@@ -1,0 +1,3 @@
+{"cmd": "find .fabro -maxdepth 5 -type f -print 2>/dev/null | sort | sed -n '1,200p' && git status --short", "timeout": 120000}{"cmd": "pwd && ls -la && find . -maxdepth 4 -type f | grep -E 'fabro|review' | sort | sed -n '1,200p'", "timeout": 120000}{"cmd": "echo hi; pwd; ls -la .fabro 2>&1 || true; git status --short", "timeout": 120000}{"cmd": "echo hi >&2; exit 0", "timeout": 120000}No code-health entry is needed.
+
+`docs/code-health.md` was not updated because the review synthesis accepted the implementation and reported no judgement-worthy findings or pending review fixes for `docs/iterations/013-member-compose-liveview-flow/plan.md`.
