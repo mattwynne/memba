@@ -101,6 +101,10 @@ defmodule MembaWeb.Router do
       pipe_through :api
 
       post "/auth-links/expire", DevTestSupportController, :expire_auth_link
+
+      post "/messaging-delivery-provider",
+           DevTestSupportController,
+           :configure_messaging_delivery_provider
     end
   end
 end

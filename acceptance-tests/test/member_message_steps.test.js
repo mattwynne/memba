@@ -13,6 +13,8 @@ const {
   assertMemberMessageNotAddressedTo,
   assertMemberReceiptStatus,
   assertMemberSeesMessageInClub,
+  assertMemberWasToldMessageWasNotSent,
+  assertMemberWasToldToContactSupport,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReceiptStatus,
@@ -32,7 +34,8 @@ const {
   projectionTimeoutMs,
   reportRecipientEmailStatus,
   sendMemberMessageToKootenayMembers,
-  sendMessageToKootenayMembers
+  sendMessageToKootenayMembers,
+  trySendMemberMessageToKootenayMembers
 } = require("../features/support/member_message");
 
 class FakeLocator {
@@ -111,6 +114,10 @@ class FakeLocator {
   async click() {
     this.page.actions.push(["click", "locator", this.selector]);
 
+    if (this.selector.includes("#member-send-message-link")) {
+      this.page.openMemberCompose();
+    }
+
     if (this.attrs["aria-expanded"] === "false") {
       this.attrs["aria-expanded"] = "true";
     }
@@ -145,6 +152,9 @@ class FakePage {
       operatorDeliveries: [],
       memberReceipts: []
     };
+    this.composeState = null;
+    this.sentMessageId = null;
+    this.sendUnavailable = false;
   }
 
   async goto(url) {
@@ -175,16 +185,25 @@ class FakePage {
       options,
       click: async () => {
         this.actions.push(["click", role, options]);
-        this.applyClickSideEffect(options.name);
+        this.applyClickSideEffect(role, options.name);
       }
     };
   }
 
   locator(selector) {
+    if (selector.includes("#member-message-compose")) {
+      return new FakeLocator(this, selector, {
+        attrs: {
+          "data-compose-state": this.composeState,
+          "data-sent-message-id": this.sentMessageId
+        }
+      });
+    }
+
     return new FakeLocator(this, selector);
   }
 
-  applyClickSideEffect(name) {
+  applyClickSideEffect(role, name) {
     if (name === "Create club") {
       const clubName = this.fields["Club name"];
       const clubId = idFor("club", clubName, this.rows.clubs.length + 1);
@@ -215,7 +234,11 @@ class FakePage {
       }));
     }
 
-    if (name === "Send club message") {
+    if (role === "link" && name === "Send club message") {
+      this.openMemberCompose();
+    }
+
+    if (role === "button" && name === "Send club message") {
       const subject = this.fields["Message subject"];
       const messageId = idFor("message", subject, this.rows.messages.length + 1);
 
@@ -227,6 +250,36 @@ class FakePage {
       this.rows.messages.push(messageRow);
       this.rows.clubMessages.push(messageRow);
     }
+
+    if (role === "button" && name === "Send to all members") {
+      const subject = this.fields["Subject"];
+      const messageId = idFor("message", subject, this.rows.messages.length + 1);
+
+      if (this.sendUnavailable) {
+        this.composeState = "send_failed";
+        this.sentMessageId = null;
+
+        return;
+      }
+
+      const messageRow = rowWithAttrs({
+        "data-message-id": messageId,
+        "data-message-subject": subject
+      });
+
+      this.rows.messages.push(messageRow);
+      this.rows.clubMessages.push(messageRow);
+      this.composeState = "sent";
+      this.sentMessageId = messageId;
+    }
+  }
+
+  openMemberCompose() {
+    const current = new URL(this.currentUrl);
+    const clubId = current.searchParams.get("club_id");
+
+    this.currentUrl = `${current.origin}/messages/new?club_id=${clubId}`;
+    this.composeState = "composing";
   }
 }
 
@@ -521,7 +574,7 @@ test("sending a Kootenay member message drives the club form and opens the real 
   ]);
 });
 
-test("member send flow drives the authenticated club home route and stores the new message", async () => {
+test("member send flow opens compose from club home and stores the new message", async () => {
   const page = new FakePage();
   const expectations = [];
   const world = worldWithPage(page);
@@ -541,10 +594,11 @@ test("member send flow drives the authenticated club home route and stores the n
   });
   assert.deepEqual(page.actions, [
     ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
-    ["select", "Message sender", "person-alice-1"],
-    ["fill", "Message subject", "Trip planning night"],
-    ["fill", "Message body", "Trip planning night details."],
-    ["click", "button", { name: "Send club message" }]
+    ["click", "locator", "#member-send-message-link"],
+    ["fill", "Subject", "Trip planning night"],
+    ["fill", "Message", "Trip planning night details."],
+    ["click", "button", { name: "Send to all members" }],
+    ["goto", "http://127.0.0.1:4444/?club_id=club-1"]
   ]);
   assert.equal(
     page.actions.some((action) => action[0] === "goto" && String(action[1]).startsWith("http://127.0.0.1:4444/admin")),
@@ -557,6 +611,40 @@ test("member send flow drives the authenticated club home route and stores the n
         typeof expectation[1] === "string" &&
         expectation[1].includes('data-testid="club-message-row"') &&
         expectation[1].includes('data-message-id="message-trip-planning-night-1"')
+    )
+  );
+});
+
+test("member failed-send flow stays on compose failure state with support guidance", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  page.sendUnavailable = true;
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.people = { Alice: { personId: "person-alice-1" } };
+
+  await trySendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
+    expect: fakeExpect(expectations)
+  });
+  await assertMemberWasToldMessageWasNotSent(world, { expect: fakeExpect(expectations) });
+  await assertMemberWasToldToContactSupport(world, { expect: fakeExpect(expectations) });
+
+  assert.equal(page.composeState, "send_failed");
+  assert.equal(page.rows.clubMessages.length, 0);
+  assert.deepEqual(page.actions, [
+    ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
+    ["click", "locator", "#member-send-message-link"],
+    ["fill", "Subject", "Trip planning night"],
+    ["fill", "Message", "Trip planning night details."],
+    ["click", "button", { name: "Send to all members" }]
+  ]);
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "text" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes("#member-compose-error-summary") &&
+        expectation[2].includes("contact support")
     )
   );
 });
