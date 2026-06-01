@@ -1,0 +1,735 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index 810fe44..f74f6c4 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -11,18 +11,27 @@ const {
+   assertMemberMessageNotAddressedTo,
+   assertMemberReceiptStatus,
+   assertMemberSeesMessageInClub,
++  assertMemberWasToldMessageWasNotSent,
++  assertMemberWasToldToContactSupport,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   createClub,
+   createPeople,
+   kootenayClubName,
++  makeClubMessageSendingUnavailable,
+   nelsonClubName,
+   openMemberMessage,
+   reportRecipientEmailStatus,
+   sendMemberMessageToKootenayMembers,
+-  sendMessageToKootenayMembers
++  sendMessageToKootenayMembers,
++  trySendMemberMessageToKootenayMembers
+ } = require("../support/member_message");
+-const { withMemberHarness, withStaffHarness } = require("../support/member_harness");
++const {
++  memberBrowserAction,
++  signInMember,
++  withMemberHarness,
++  withStaffHarness
++} = require("../support/member_harness");
+ 
+ Given("Kootenay Mountaineering Club is a club", async function () {
+   await withStaffHarness(this, (staff) => createClub(staff, kootenayClubName));
+@@ -65,6 +74,20 @@ When(
+   }
+ );
+ 
++Given("club message sending is unavailable", async function () {
++  await makeClubMessageSendingUnavailable(this);
++});
++
++When(
++  "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
++  async function (senderName, subject) {
++    await signInMember(this, senderName);
++    await memberBrowserAction(this, `failed member message send for ${senderName}`, () =>
++      trySendMemberMessageToKootenayMembers(this, senderName, subject)
++    );
++  }
++);
++
+ Given(
+   "{word} has sent the message {string} to Kootenay Mountaineering Club members",
+   async function (senderName, subject) {
+@@ -72,6 +95,18 @@ Given(
+   }
+ );
+ 
++Then("{word} should be told the message was not sent", async function (viewerName) {
++  await memberBrowserAction(this, `not-sent failure notice for ${viewerName}`, () =>
++    assertMemberWasToldMessageWasNotSent(this)
++  );
++});
++
++Then("{word} should be told to contact support", async function (viewerName) {
++  await memberBrowserAction(this, `support failure notice for ${viewerName}`, () =>
++    assertMemberWasToldToContactSupport(this)
++  );
++});
++
+ Then(
+   "{word} should see the message {string} in Kootenay Mountaineering Club",
+   async function (viewerName, subject) {
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index c8dad99..c76e41c 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -373,6 +373,25 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect,
+   );
+ }
+ 
++async function openMemberComposeFromClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
++  await openMemberClubHome(world, clubName, { expect, timeoutMs });
++
++  const composeLink = world.page.locator("#member-send-message-link");
++  await waitForProjectedVisible(world, composeLink, `member compose link for ${clubName}`, {
++    expect,
++    timeoutMs
++  });
++
++  await browserInteraction(`open member compose flow for ${clubName}`, () => composeLink.click());
++
++  await waitForProjectedVisible(
++    world,
++    world.page.locator("#member-message-compose[data-compose-state=\"composing\"]"),
++    `member compose form for ${clubName}`,
++    { expect, timeoutMs }
++  );
++}
++
+ async function openMemberMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
+   ensureState(world);
+ 
+@@ -560,35 +579,27 @@ async function sendMemberMessageToKootenayMembers(
+   ensureState(world);
+ 
+   const body = `${subject} details.`;
+-  const sender = world.people[senderName];
+-  assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
+-
+-  await openMemberClubHome(world, kootenayClubName, { expect });
+ 
+-  const messageRows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
+-  const previousMessageIds = await rowAttributeValues(messageRows, "data-message-id");
+   const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+ 
+-  await browserInteraction(`submit member message form for ${JSON.stringify(subject)}`, async () => {
+-    await world.page.getByLabel("Message sender").selectOption(sender.personId);
+-    await world.page.getByLabel("Message subject").fill(subject);
+-    await world.page.getByLabel("Message body").fill(body);
+-    await world.page.getByRole("button", { name: "Send club message" }).click();
++  await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
++
++  await browserInteraction(`submit member compose form for ${JSON.stringify(subject)}`, async () => {
++    await world.page.getByLabel("Subject").fill(subject);
++    await world.page.getByLabel("Message").fill(body);
++    await world.page.getByRole("button", { name: "Send to all members" }).click();
+   });
+-  await waitForProjectedCount(
+-    world,
+-    messageRows,
+-    previousMessageIds.length + 1,
+-    `new member club message row for ${JSON.stringify(subject)}`,
+-    { expect }
+-  );
+ 
+-  const messageId = await newRowAttributeValue(
+-    messageRows,
+-    "data-message-id",
+-    previousMessageIds,
+-    `member club message row for ${subject}`
+-  );
++  const sentState = world.page.locator("#member-message-compose[data-compose-state=\"sent\"]");
++  await waitForProjectedVisible(world, sentState, `member compose success for ${JSON.stringify(subject)}`, {
++    expect
++  });
++
++  const messageId = await sentState.getAttribute("data-sent-message-id");
++  assert.ok(messageId, `Expected compose success state to expose a message id for ${JSON.stringify(subject)}`);
++
++  await openMemberClubHome(world, kootenayClubName, { expect });
++
+   await waitForProjectedVisible(
+     world,
+     rowByData(world.page, "club-message-row", "data-message-id", messageId),
+@@ -609,6 +620,117 @@ async function sendMemberMessageToKootenayMembers(
+   return world;
+ }
+ 
++async function trySendMemberMessageToKootenayMembers(
++  world,
++  _senderName,
++  subject,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const body = `${subject} details.`;
++
++  await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
++
++  await browserInteraction(`submit unavailable member compose form for ${JSON.stringify(subject)}`, async () => {
++    await world.page.getByLabel("Subject").fill(subject);
++    await world.page.getByLabel("Message").fill(body);
++    await world.page.getByRole("button", { name: "Send to all members" }).click();
++  });
++
++  await waitForProjectedVisible(
++    world,
++    world.page.locator("#member-message-compose[data-compose-state=\"send_failed\"]"),
++    `member compose send failure for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++
++  world.failedMessageSubject = subject;
++
++  return world;
++}
++
++async function configureMessagingDeliveryProvider(world, provider) {
++  const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
++  assert.ok(
++    request && typeof request.post === "function",
++    "Expected Playwright request context to be available for acceptance test support configuration"
++  );
++
++  let response;
++
++  try {
++    response = await request.post(appUrl(world.baseUrl, "/dev/test-support/messaging-delivery-provider"), {
++      data: { provider },
++      headers: {
++        "content-type": "application/json"
++      }
++    });
++  } catch (error) {
++    throw new Error(
++      `Acceptance test support configuration failed: POST /dev/test-support/messaging-delivery-provider request error.\n` +
++        `Provider: ${provider}\nCause: ${errorMessage(error)}`,
++      { cause: error }
++    );
++  }
++
++  const status = response.status();
++
++  if (status !== 204) {
++    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
++
++    throw new Error(
++      `Acceptance test support configuration failed: expected HTTP 204 from ` +
++        `POST /dev/test-support/messaging-delivery-provider, got HTTP ${status}.\n` +
++        `Provider: ${provider}\nResponse body: ${body}`
++    );
++  }
++
++  return world;
++}
++
++async function makeClubMessageSendingUnavailable(world) {
++  await configureMessagingDeliveryProvider(world, "unavailable");
++  world.clubMessageSendingWasConfigured = true;
++
++  return world;
++}
++
++async function restoreClubMessageSending(world) {
++  if (!world.clubMessageSendingWasConfigured) {
++    return world;
++  }
++
++  await configureMessagingDeliveryProvider(world, "local");
++  world.clubMessageSendingWasConfigured = false;
++
++  return world;
++}
++
++async function assertMemberWasToldMessageWasNotSent(world, { expect = playwrightExpect } = {}) {
++  await waitForProjectedText(
++    world,
++    world.page.locator("#member-compose-error-summary"),
++    "Your message was not sent to anyone. Please contact support so we can investigate before you try again.",
++    "member compose failure not-sent copy",
++    { expect }
++  );
++
++  return world;
++}
++
++async function assertMemberWasToldToContactSupport(world, { expect = playwrightExpect } = {}) {
++  await waitForProjectedText(
++    world,
++    world.page.locator("#member-compose-error-summary"),
++    "Your message was not sent to anyone. Please contact support so we can investigate before you try again.",
++    "member compose failure support copy",
++    { expect }
++  );
++
++  return world;
++}
++
+ async function sendMessageToKootenayMembers(
+   world,
+   senderName,
+@@ -1447,6 +1569,8 @@ module.exports = {
+   assertMemberMessageNotAddressedTo,
+   assertMemberReceiptStatus,
+   assertMemberSeesMessageInClub,
++  assertMemberWasToldMessageWasNotSent,
++  assertMemberWasToldToContactSupport,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+@@ -1458,9 +1582,11 @@ module.exports = {
+   emailFor,
+   ensureState,
+   kootenayClubName,
++  makeClubMessageSendingUnavailable,
+   memberReceiptIconForLabel,
+   memberReceiptStatusForEventType,
+   nelsonClubName,
++  openMemberComposeFromClubHome,
+   openMemberClubHome,
+   openMemberMessage,
+   postmarkPayloadForStatus,
+@@ -1472,9 +1598,11 @@ module.exports = {
+   openDeliveriesOverview,
+   openClub,
+   openMessage,
++  restoreClubMessageSending,
+   sendMemberMessageToKootenayMembers,
+   sendMessageToKootenayMembers,
+   testMailboxEmails,
++  trySendMemberMessageToKootenayMembers,
+   visitClubsIndex,
+   waitForMailboxEmails
+ };
+diff --git a/acceptance-tests/features/support/world.js b/acceptance-tests/features/support/world.js
+index 1fed8fd..98d4b05 100644
+--- a/acceptance-tests/features/support/world.js
++++ b/acceptance-tests/features/support/world.js
+@@ -10,6 +10,7 @@ const {
+ const { chromium } = require("playwright");
+ const { configureBrowserEnvironment } = require("./browser_environment");
+ const { createBrowserAcceptanceLifecycle } = require("./lifecycle");
++const { restoreClubMessageSending } = require("./member_message");
+ 
+ const lifecycle = createBrowserAcceptanceLifecycle();
+ const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
+@@ -61,6 +62,8 @@ Before(async function ({ pickle } = {}) {
+ });
+ 
+ After(async function ({ result } = {}) {
++  await restoreClubMessageSending(this);
++
+   const failed = result && result.status === Status.FAILED;
+ 
+   if (failed && this.attach) {
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 2023396..40dd67a 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -13,6 +13,8 @@ const {
+   assertMemberMessageNotAddressedTo,
+   assertMemberReceiptStatus,
+   assertMemberSeesMessageInClub,
++  assertMemberWasToldMessageWasNotSent,
++  assertMemberWasToldToContactSupport,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+@@ -32,7 +34,8 @@ const {
+   projectionTimeoutMs,
+   reportRecipientEmailStatus,
+   sendMemberMessageToKootenayMembers,
+-  sendMessageToKootenayMembers
++  sendMessageToKootenayMembers,
++  trySendMemberMessageToKootenayMembers
+ } = require("../features/support/member_message");
+ 
+ class FakeLocator {
+@@ -111,6 +114,10 @@ class FakeLocator {
+   async click() {
+     this.page.actions.push(["click", "locator", this.selector]);
+ 
++    if (this.selector.includes("#member-send-message-link")) {
++      this.page.openMemberCompose();
++    }
++
+     if (this.attrs["aria-expanded"] === "false") {
+       this.attrs["aria-expanded"] = "true";
+     }
+@@ -145,6 +152,9 @@ class FakePage {
+       operatorDeliveries: [],
+       memberReceipts: []
+     };
++    this.composeState = null;
++    this.sentMessageId = null;
++    this.sendUnavailable = false;
+   }
+ 
+   async goto(url) {
+@@ -175,16 +185,25 @@ class FakePage {
+       options,
+       click: async () => {
+         this.actions.push(["click", role, options]);
+-        this.applyClickSideEffect(options.name);
++        this.applyClickSideEffect(role, options.name);
+       }
+     };
+   }
+ 
+   locator(selector) {
++    if (selector.includes("#member-message-compose")) {
++      return new FakeLocator(this, selector, {
++        attrs: {
++          "data-compose-state": this.composeState,
++          "data-sent-message-id": this.sentMessageId
++        }
++      });
++    }
++
+     return new FakeLocator(this, selector);
+   }
+ 
+-  applyClickSideEffect(name) {
++  applyClickSideEffect(role, name) {
+     if (name === "Create club") {
+       const clubName = this.fields["Club name"];
+       const clubId = idFor("club", clubName, this.rows.clubs.length + 1);
+@@ -215,7 +234,11 @@ class FakePage {
+       }));
+     }
+ 
+-    if (name === "Send club message") {
++    if (role === "link" && name === "Send club message") {
++      this.openMemberCompose();
++    }
++
++    if (role === "button" && name === "Send club message") {
+       const subject = this.fields["Message subject"];
+       const messageId = idFor("message", subject, this.rows.messages.length + 1);
+ 
+@@ -227,6 +250,36 @@ class FakePage {
+       this.rows.messages.push(messageRow);
+       this.rows.clubMessages.push(messageRow);
+     }
++
++    if (role === "button" && name === "Send to all members") {
++      const subject = this.fields["Subject"];
++      const messageId = idFor("message", subject, this.rows.messages.length + 1);
++
++      if (this.sendUnavailable) {
++        this.composeState = "send_failed";
++        this.sentMessageId = null;
++
++        return;
++      }
++
++      const messageRow = rowWithAttrs({
++        "data-message-id": messageId,
++        "data-message-subject": subject
++      });
++
++      this.rows.messages.push(messageRow);
++      this.rows.clubMessages.push(messageRow);
++      this.composeState = "sent";
++      this.sentMessageId = messageId;
++    }
++  }
++
++  openMemberCompose() {
++    const current = new URL(this.currentUrl);
++    const clubId = current.searchParams.get("club_id");
++
++    this.currentUrl = `${current.origin}/messages/new?club_id=${clubId}`;
++    this.composeState = "composing";
+   }
+ }
+ 
+@@ -521,7 +574,7 @@ test("sending a Kootenay member message drives the club form and opens the real
+   ]);
+ });
+ 
+-test("member send flow drives the authenticated club home route and stores the new message", async () => {
++test("member send flow opens compose from club home and stores the new message", async () => {
+   const page = new FakePage();
+   const expectations = [];
+   const world = worldWithPage(page);
+@@ -541,10 +594,11 @@ test("member send flow drives the authenticated club home route and stores the n
+   });
+   assert.deepEqual(page.actions, [
+     ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
+-    ["select", "Message sender", "person-alice-1"],
+-    ["fill", "Message subject", "Trip planning night"],
+-    ["fill", "Message body", "Trip planning night details."],
+-    ["click", "button", { name: "Send club message" }]
++    ["click", "locator", "#member-send-message-link"],
++    ["fill", "Subject", "Trip planning night"],
++    ["fill", "Message", "Trip planning night details."],
++    ["click", "button", { name: "Send to all members" }],
++    ["goto", "http://127.0.0.1:4444/?club_id=club-1"]
+   ]);
+   assert.equal(
+     page.actions.some((action) => action[0] === "goto" && String(action[1]).startsWith("http://127.0.0.1:4444/admin")),
+@@ -561,6 +615,40 @@ test("member send flow drives the authenticated club home route and stores the n
+   );
+ });
+ 
++test("member failed-send flow stays on compose failure state with support guidance", async () => {
++  const page = new FakePage();
++  const expectations = [];
++  const world = worldWithPage(page);
++  page.sendUnavailable = true;
++  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.people = { Alice: { personId: "person-alice-1" } };
++
++  await trySendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
++    expect: fakeExpect(expectations)
++  });
++  await assertMemberWasToldMessageWasNotSent(world, { expect: fakeExpect(expectations) });
++  await assertMemberWasToldToContactSupport(world, { expect: fakeExpect(expectations) });
++
++  assert.equal(page.composeState, "send_failed");
++  assert.equal(page.rows.clubMessages.length, 0);
++  assert.deepEqual(page.actions, [
++    ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
++    ["click", "locator", "#member-send-message-link"],
++    ["fill", "Subject", "Trip planning night"],
++    ["fill", "Message", "Trip planning night details."],
++    ["click", "button", { name: "Send to all members" }]
++  ]);
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "text" &&
++        typeof expectation[1] === "string" &&
++        expectation[1].includes("#member-compose-error-summary") &&
++        expectation[2].includes("contact support")
++    )
++  );
++});
++
+ test("member club home opening waits on the stable member home container", async () => {
+   const page = new FakePage();
+   const expectations = [];
+diff --git a/docs/iterations/013-member-compose-liveview-flow/todo.md b/docs/iterations/013-member-compose-liveview-flow/todo.md
+index 54d30ad..d0bce7c 100644
+--- a/docs/iterations/013-member-compose-liveview-flow/todo.md
++++ b/docs/iterations/013-member-compose-liveview-flow/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Render success state based on `ComposeSuccess`, adding the required “Send another message” action.
+ - [x] 008 Render failure state based on `ComposeError`, adjusted to say nothing was sent and contact support; include Try again and Back to club home actions.
+ - [x] 009 Add or update LiveView/Phoenix tests for:
+-- [ ] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
++- [x] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
+ - [ ] 011 Remove `@wip` from the new failure scenario once implemented and passing.
+ - [ ] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
+ - [ ] 013 Run the targeted browser Cucumber feature and `dev check`.
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index c7a7371..02daa80 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -9,6 +9,12 @@ defmodule MembaWeb.DevTestSupportController do
+   alias Memba.Accounts.MagicToken
+   alias Memba.Repo
+ 
++  @messaging_delivery_providers %{
++    "fake" => Memba.Messaging.DeliveryProviders.Fake,
++    "local" => Memba.Messaging.DeliveryProviders.Local,
++    "unavailable" => Memba.Messaging.DeliveryProviders.Unavailable
++  }
++
+   def expire_auth_link(conn, %{"email" => email}) do
+     normalized_email = Accounts.normalize_email(email)
+     expired_at = DateTime.add(DateTime.utc_now(:microsecond), -60, :second)
+@@ -30,4 +36,18 @@ defmodule MembaWeb.DevTestSupportController do
+ 
+     send_resp(conn, :no_content, "")
+   end
++
++  def configure_messaging_delivery_provider(conn, %{"provider" => provider_name}) do
++    with {:ok, provider} <- Map.fetch(@messaging_delivery_providers, provider_name),
++         true <- Code.ensure_loaded?(provider) do
++      Application.put_env(:memba, :messaging_delivery_provider, provider)
++
++      send_resp(conn, :no_content, "")
++    else
++      _unknown_or_unavailable ->
++        conn
++        |> put_status(:not_found)
++        |> json(%{error: "unknown messaging delivery provider"})
++    end
++  end
+ end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 705f1ce..b861ddf 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -101,6 +101,10 @@ defmodule MembaWeb.Router do
+       pipe_through :api
+ 
+       post "/auth-links/expire", DevTestSupportController, :expire_auth_link
++
++      post "/messaging-delivery-provider",
++           DevTestSupportController,
++           :configure_messaging_delivery_provider
+     end
+   end
+ end
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 6c20fdd..32499b7 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -12,6 +12,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+   alias Memba.Messaging.Commands.ReportDeliveryOpened
+   alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+   alias Memba.Messaging.DeliveryProviders.Fake
++  alias Memba.Messaging.DeliveryProviders.Unavailable
+   alias Memba.Messaging.DeliveryRequest
+   alias Memba.Messaging.Projections.RecipientDelivery
+ 
+@@ -29,6 +30,30 @@ defmodule Memba.Cucumber.MessagingSteps do
+     send_message_to_kootenay_members(context, sender_name, subject)
+   end
+ 
++  step "club message sending is unavailable", context do
++    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
++    Application.put_env(:memba, :messaging_delivery_provider, Unavailable)
++
++    Map.put(context, :messaging_delivery_provider_before_unavailable, original_provider)
++  end
++
++  step "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
++       %{args: [sender_name, subject]} = context do
++    try_send_message_to_kootenay_members(context, sender_name, subject)
++  end
++
++  step "{word} should be told the message was not sent", %{args: [_viewer_name]} = context do
++    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
++
++    context
++  end
++
++  step "{word} should be told to contact support", %{args: [_viewer_name]} = context do
++    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
++
++    context
++  end
++
+   step "{word} email for {string} is reported as delivered",
+        %{args: [recipient_name, subject]} = context do
+     report_delivery_status(context, recipient_name, subject, :delivered)
+@@ -278,6 +303,41 @@ defmodule Memba.Cucumber.MessagingSteps do
+     })
+   end
+ 
++  defp try_send_message_to_kootenay_members(context, sender_name, subject) do
++    message_id = Ecto.UUID.generate()
++    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
++    sender_id = fetch_from_context!(context, :people, sender_name)
++    body = "#{subject} details."
++
++    result =
++      try do
++        Messaging.send_club_message(
++          %{
++            message_id: message_id,
++            club_id: club_id,
++            sender_id: sender_id,
++            subject: subject,
++            body: body
++          },
++          consistency: :strong
++        )
++      after
++        context
++        |> Map.get(:messaging_delivery_provider_before_unavailable, :missing)
++        |> restore_messaging_delivery_provider()
++      end
++
++    context
++    |> Map.put(:failed_send_result, result)
++    |> Map.put(:failed_send_message, %{
++      message_id: message_id,
++      club_id: club_id,
++      sender_id: sender_id,
++      subject: subject,
++      body: body
++    })
++  end
++
+   defp report_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
+     recipient_name = normalize_person_name(recipient_name)
+     message = fetch_from_context!(context, :messages, subject)
+@@ -436,4 +496,12 @@ defmodule Memba.Cucumber.MessagingSteps do
+   defp assert_unique(values) do
+     assert Enum.uniq(values) == values
+   end
++
++  defp restore_messaging_delivery_provider(:missing), do: :ok
++
++  defp restore_messaging_delivery_provider(nil),
++    do: Application.delete_env(:memba, :messaging_delivery_provider)
++
++  defp restore_messaging_delivery_provider(provider),
++    do: Application.put_env(:memba, :messaging_delivery_provider, provider)
+ end
+diff --git a/web/test/memba_web/controllers/dev_test_support_controller_test.exs b/web/test/memba_web/controllers/dev_test_support_controller_test.exs
+new file mode 100644
+index 0000000..2bc2cde
+--- /dev/null
++++ b/web/test/memba_web/controllers/dev_test_support_controller_test.exs
+@@ -0,0 +1,51 @@
++defmodule MembaWeb.DevTestSupportControllerTest do
++  use MembaWeb.ConnCase, async: false
++
++  alias Memba.Messaging.DeliveryProviders.Local
++  alias Memba.Messaging.DeliveryProviders.Unavailable
++
++  setup do
++    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
++
++    on_exit(fn ->
++      restore_env(:messaging_delivery_provider, original_provider)
++    end)
++
++    :ok
++  end
++
++  test "POST /dev/test-support/messaging-delivery-provider switches provider for acceptance support",
++       %{conn: conn} do
++    conn =
++      post(conn, ~p"/dev/test-support/messaging-delivery-provider", %{
++        "provider" => "unavailable"
++      })
++
++    assert response(conn, 204) == ""
++    assert Application.get_env(:memba, :messaging_delivery_provider) == Unavailable
++
++    conn =
++      build_conn()
++      |> PhoenixTest.put_endpoint(MembaWeb.Endpoint)
++      |> post(~p"/dev/test-support/messaging-delivery-provider", %{"provider" => "local"})
++
++    assert response(conn, 204) == ""
++    assert Application.get_env(:memba, :messaging_delivery_provider) == Local
++  end
++
++  test "POST /dev/test-support/messaging-delivery-provider rejects unknown provider names",
++       %{conn: conn} do
++    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
++
++    conn =
++      post(conn, ~p"/dev/test-support/messaging-delivery-provider", %{
++        "provider" => "postmark"
++      })
++
++    assert json_response(conn, 404) == %{"error" => "unknown messaging delivery provider"}
++    assert Application.get_env(:memba, :messaging_delivery_provider) == original_provider
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
