@@ -40,3 +40,12 @@ Feature: Member message deliverability
       Then Bob should see Alice's receipt status for "Trip planning night" as "Sending"
       And Bob should see Bob's receipt status for "Trip planning night" as "Delivered"
       And Bob should see Carol's receipt status for "Trip planning night" as "Delivery problem"
+
+  Rule: Members are told when a club message is not sent
+
+    @wip
+    Scenario: Alice is told a failed message was not sent
+      Given club message sending is unavailable
+      When Alice tries to send the message "Trip planning night" to Kootenay Mountaineering Club members
+      Then Alice should be told the message was not sent
+      And Alice should be told to contact support
