@@ -46,7 +46,9 @@ defmodule MembaWeb.Router do
   scope "/", MembaWeb do
     pipe_through [:browser, :club_member_required]
 
-    get "/messages/:message_id", PageController, :show_message
+    live_session :club_member, on_mount: [{MembaWeb.UserAuth, :mount_current_identity}] do
+      live "/messages/:message_id", MemberMessageLive.Show, :show
+    end
   end
 
   scope "/", MembaWeb do
