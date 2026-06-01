@@ -1,0 +1,148 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/inspection.md b/docs/iterations/012-member-receipt-detail-liveview-polish/inspection.md
+new file mode 100644
+index 0000000..c5512d4
+--- /dev/null
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/inspection.md
+@@ -0,0 +1,130 @@
++# Inspection: current member message detail surface
++
++Task 001 inspected the current member message route, controller rendering, auth gates,
++and test coverage before converting the page to LiveView.
++
++## Route and auth pipeline
++
++- `web/lib/memba_web/router.ex`
++  - `GET /messages/:message_id` is currently routed inside `scope "/", MembaWeb`.
++  - It uses `pipe_through [:browser, :club_member_required]`.
++  - The route target is `MembaWeb.PageController.show_message/2`.
++- `:browser` assigns current identity data via `MembaWeb.UserAuth.fetch_current_identity/2`.
++- `:club_member_required` calls `MembaWeb.UserAuth.require_active_club_member/2`.
++  - It reads `club_id` from the query string.
++  - Unauthenticated visitors are redirected to `/auth` and the full return path,
++    including query string, is stored in the session.
++  - Signed-in identities without active membership for `club_id` receive
++    `403 Forbidden`.
++
++## Controller loading and authorization
++
++- `web/lib/memba_web/controllers/page_controller.ex`
++  - `show_message/2` only matches when both `"club_id"` and `"message_id"` are
++    present.
++  - It casts `club_id` with `Ecto.UUID.cast/1`; invalid `club_id` returns
++    `403 Forbidden`.
++  - It finds the selected active club from `conn.assigns.current_identity_clubs`.
++    A missing selected club returns `403 Forbidden`.
++  - It loads the message with `Memba.Messaging.get_message/1`.
++  - Missing messages or messages whose `message.club_id` differs from the
++    selected `club_id` render the existing `404` page.
++  - Successful requests assign:
++    - `:page_title`
++    - `:selected_club`
++    - `:message`
++    - `:sender_name`
++    - `:member_receipts`
++    - `:member_receipt_count`
++    - `:member_receipt_groups`
++  - Receipt rows are loaded with `Messaging.list_member_receipts/1` and mapped
++    through `MembaWeb.MemberReceiptPresentation.present_receipt/1`.
++  - Current grouping order is `opened`, `delivered`, `sent`,
++    `delivery problem`; empty groups are rejected.
++
++## Current template and stable selectors
++
++- `web/lib/memba_web/controllers/page_html/message.html.heex`
++  - Uses `<Layouts.club_site>` with selected club name and current identity.
++  - Root element:
++    - `#member-message-detail`
++    - `data-club-id`
++    - `data-message-id`
++  - Navigation:
++    - `#back-to-club-home-link`
++    - `href="/?club_id=..."`
++  - Receipt summary:
++    - `#member-receipts-summary`
++    - `data-receipt-count`
++  - Receipt groups:
++    - `data-testid="member-receipt-group"`
++    - `data-receipt-status`
++    - group count at `data-testid="receipt-group-count"`
++  - Receipt rows:
++    - `data-testid="member-receipt"`
++    - `data-recipient-id`
++    - `data-recipient-name`
++    - `data-receipt-status`
++  - Status elements:
++    - `data-testid="receipt-status"`
++    - `data-receipt-status`
++    - icon element with `data-testid="receipt-status-icon"` and
++      `data-icon-name`.
++  - The member template does not render delivery IDs, provider addresses,
++    provider channel names, provider reasons, or admin links.
++
++## Receipt presentation helper
++
++- `web/lib/memba_web/member_receipt_presentation.ex`
++  - Maps internal status values to member labels and Heroicons:
++    - `sent` → `Sending`, `hero-clock`
++    - `delivered` → `Delivered`, `hero-check-circle`
++    - `delivery problem` → `Delivery problem`, `hero-exclamation-triangle`
++    - `opened` → `Opened`, `hero-envelope-open`
++  - Blank or missing statuses fall back to `sent`.
++  - Unknown statuses are humanized with `hero-question-mark-circle`.
++
++## Existing automated coverage
++
++- `web/test/memba_web/router_test.exs`
++  - Asserts `GET /messages/:message_id` currently routes through
++    `[:browser, :club_member_required]` to `PageController.show_message/2`.
++- `web/test/memba_web/controllers/page_controller_test.exs`
++  - Covers active member access to `GET /messages/:message_id?club_id=...`.
++  - Covers unauthenticated redirect to `/auth` with preserved return path.
++  - Covers signed-in users outside the requested club receiving `403 Forbidden`.
++  - Covers message/club mismatch rendering `404`.
++  - Asserts the stable message, receipt group, receipt row, and status icon
++    selectors listed above.
++  - Asserts member pages do not expose operator-only fields.
++- `web/test/memba_web/controllers/member_message_detail_test.exs`
++  - Adds coverage for inactive members receiving `403 Forbidden`.
++  - Adds coverage for selected-club/message ownership mismatch returning `404`.
++  - Covers all four member-facing receipt statuses and icons.
++  - Reasserts operator-only details stay off the member page.
++- `web/test/memba_web/member_receipt_presentation_test.exs`
++  - Covers the status presentation helper.
++- `web/test/memba_web/live/browser_acceptance_harness_test.exs`
++  - Covers stable receipt selectors through feature-style browser helpers.
++- `acceptance-tests/features/member_message_deliverability.feature`
++  - Existing feature text covers member-visible receipt statuses and remains
++    locked for this iteration.
++- `acceptance-tests/features/support/member_message.js`
++  - Current support locates member rows by `data-testid="member-receipt"` and
++    `data-recipient-name`.
++  - Later collapse-by-default work will need this support to expand the relevant
++    visible receipt group before asserting row content.
++
++## LiveView conversion notes for later tasks
++
++- The member route must preserve the public URL shape:
++  `GET /messages/:message_id?club_id=<club_id>`.
++- The LiveView route should remain in the existing member scope or an equivalent
++  `live_session` that preserves the `:browser` and active-club-member gate.
++- Controller-era failure behaviours to preserve:
++  - unauthenticated GET redirects to `/auth` and stores the full return path;
++  - non-members/inactive members receive `403 Forbidden`;
++  - invalid or unauthorized `club_id` receives `403 Forbidden`;
++  - missing messages or selected-club/message mismatches render `404`.
++- Existing stable row attributes must be preserved after rows become
++  expand/collapse controlled.
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index 5a2e22f..d4d279e 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
++- [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+ - [ ] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+ - [ ] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+ - [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
