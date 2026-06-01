@@ -1,7 +1,7 @@
 # Member-facing message behaviour
 
 Date: 2026-06-01
-Status: validated for implementation
+Status: validated
 
 ## Goal
 
