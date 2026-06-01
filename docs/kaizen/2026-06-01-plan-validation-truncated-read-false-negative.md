@@ -87,3 +87,31 @@ Longer, well-structured plans can fail validation because the workflow cannot re
 - Teach synthesis to classify reviewer blockers such as “first N lines omitted” or “output truncated” as a workflow evidence failure, not a plan-content failure.
 - Add a validation fixture with a long ready plan to prove the workflow can validate plans whose full text exceeds a single comfortable output chunk.
 - Prevent `codex_update` from changing `Status:` to `validated`; reserve that state transition for `publish_ready.sh` after the final ready gate succeeds.
+
+## Resolution
+
+Date: 2026-06-01
+
+Root cause: Fabro's prompt context formatter omitted the beginning of a long command-stage output (`(152 lines omitted)`) before reviewer stages saw it. The plan-validation workflow used one large `sed` output as its evidence source, so reviewers could not distinguish hidden evidence from missing plan content and correctly failed closed on the visible context.
+
+Fix applied:
+
+- `.fabro/workflows/plan-validation/scripts/print_plan_chunk.sh`: added a deterministic helper that prints a bounded plan chunk with `PLAN_CHUNK_LINES` markers and fails if the plan exceeds the workflow's current chunk coverage.
+- `.fabro/workflows/plan-validation/workflow.fabro`: replaced single large `read_plan` / `read_updated_plan` stages with six 60-line read stages for original and updated plans, covering up to 360 lines while keeping each command output below the truncation threshold observed in the failed run.
+- `.fabro/workflows/plan-validation/prompts/gemini_review.md`, `.fabro/workflows/plan-validation/prompts/claude_review.md`, and `.fabro/workflows/plan-validation/prompts/codex_review.md`: told reviewers to use the chunked read stages and to report missing chunks as workflow-evidence gaps rather than as absent plan sections.
+- `.fabro/workflows/plan-validation/prompts/goal.md`, `.fabro/workflows/plan-validation/prompts/scope.md`, `.fabro/workflows/plan-validation/prompts/acceptance.md`, `.fabro/workflows/plan-validation/prompts/implementation.md`, `.fabro/workflows/plan-validation/prompts/outcome.md`, and `.fabro/workflows/plan-validation/prompts/review.md`: updated older/unused plan-validation prompts to refer to chunked plan reads so they do not reintroduce the same assumption if used again.
+- `.fabro/workflows/plan-validation/prompts/recheck.md`: updated recheck instructions to refer to chunked updated-plan stages.
+- `.fabro/workflows/plan-validation/prompts/apply_fixes.md`: forbade Codex from changing `Status:` to `validated`; that state transition remains the responsibility of `publish_ready.sh` after the final ready gate succeeds.
+- `.fabro/workflows/plan-validation/test.sh`: added the new script and directly relevant prompts/scripts to the tracked-and-pushed input guard.
+
+Validation:
+
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed. It still reports the existing warnings that `read_failed` and `not_ready` goal gates have no retry target.
+- `.fabro/workflows/plan-validation/scripts/print_plan_chunk.sh docs/iterations/015-club-slugs/plan.md 1 60 360 test | wc -c` — 3906 bytes.
+- `.fabro/workflows/plan-validation/scripts/print_plan_chunk.sh docs/iterations/015-club-slugs/plan.md 61 120 360 test | wc -c` — 3705 bytes.
+- All six configured chunks for `docs/iterations/015-club-slugs/plan.md` emitted bounded outputs; the largest was 3906 bytes.
+
+Remaining follow-up:
+
+- Consider adding a non-LLM/static test fixture for long ready plans, so chunk coverage and prompt evidence can be checked without running the full model-based eval suite.
+- The workflow still has existing goal-gate retry-target warnings; this fix did not address those broader orchestration warnings.

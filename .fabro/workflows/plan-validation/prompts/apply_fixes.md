@@ -19,6 +19,7 @@ Rules:
 4. Do not add speculative answers to open questions.
 5. Do not edit app code or unrelated files.
 6. If an Opus instruction cannot be applied without making a judgment call, leave the plan unchanged for that point and report that it needs Matt.
+7. Do not change the plan `Status:` to `validated`. Only the deterministic `publish_ready` stage may mark a plan validated after the final ready gate succeeds.
 
 Good edits include tightening wording, reorganizing existing content, converting already-stated expectations into objective acceptance criteria, making clearly implied boundaries explicit, and removing obvious duplication or contradiction.
 

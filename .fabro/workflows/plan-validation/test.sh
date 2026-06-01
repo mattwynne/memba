@@ -14,6 +14,10 @@ VISIBLE_PATHS=(
   ".fabro/workflows/plan-validation/prompts/gemini_review.md"
   ".fabro/workflows/plan-validation/prompts/claude_review.md"
   ".fabro/workflows/plan-validation/prompts/codex_review.md"
+  ".fabro/workflows/plan-validation/prompts/apply_fixes.md"
+  ".fabro/workflows/plan-validation/prompts/recheck.md"
+  ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh"
+  ".fabro/workflows/plan-validation/scripts/publish_ready.sh"
   "$PASS_PLAN"
   "$FAIL_PLAN"
 )

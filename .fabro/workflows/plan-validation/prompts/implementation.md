@@ -1,6 +1,6 @@
 You are validating an iteration plan before implementation.
 
-Use the plan text from the preceding `Read Iteration Plan` stage.
+Use the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers.
 
 Assess the implementation plan and unresolved technical decisions. Judge whether an engineer could start confidently without inventing architecture, data model, UX flow, or integration behaviour mid-implementation.
 
