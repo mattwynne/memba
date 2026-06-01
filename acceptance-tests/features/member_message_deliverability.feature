@@ -43,7 +43,6 @@ Feature: Member message deliverability
 
   Rule: Members are told when a club message is not sent
 
-    @wip
     Scenario: Alice is told a failed message was not sent
       Given club message sending is unavailable
       When Alice tries to send the message "Trip planning night" to Kootenay Mountaineering Club members

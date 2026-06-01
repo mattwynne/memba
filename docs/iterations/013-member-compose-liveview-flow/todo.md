@@ -1,0 +1,15 @@
+# Implementation TODO
+
+- [x] 001 Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
+- [x] 002 Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
+- [x] 003 In the LiveView mount path:
+- [x] 004 Replace the club-home inline compose section with a CTA card/link to the new compose route. Preserve stable IDs or update tests/helpers deliberately.
+- [x] 005 Move sending behaviour into the LiveView submit event or a small shared service function:
+- [x] 006 Render compose form based on `compose.jsx`:
+- [x] 007 Render success state based on `ComposeSuccess`, adding the required “Send another message” action.
+- [x] 008 Render failure state based on `ComposeError`, adjusted to say nothing was sent and contact support; include Try again and Back to club home actions.
+- [x] 009 Add or update LiveView/Phoenix tests for:
+- [x] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
+- [x] 011 Remove `@wip` from the new failure scenario once implemented and passing.
+- [x] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
+- [x] 013 Run the targeted browser Cucumber feature and `dev check`.

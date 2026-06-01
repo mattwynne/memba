@@ -66,6 +66,15 @@ defmodule Memba.CucumberConfigurationTest do
        {"And",
         "Bob should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
         42}
+     ]},
+    {"Alice is told a failed message was not sent",
+     [
+       {"Given", "club message sending is unavailable", 47},
+       {"When",
+        "Alice tries to send the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        48},
+       {"Then", "Alice should be told the message was not sent", 49},
+       {"And", "Alice should be told to contact support", 50}
      ]}
   ]
 
@@ -304,6 +313,10 @@ defmodule Memba.CucumberConfigurationTest do
   @required_messaging_step_patterns [
     "{word} sends the message {string} to Kootenay Mountaineering Club members",
     "{word} has sent the message {string} to Kootenay Mountaineering Club members",
+    "club message sending is unavailable",
+    "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
+    "{word} should be told the message was not sent",
+    "{word} should be told to contact support",
     "{word} email for {string} is reported as delivered",
     "{word} email for {string} has been reported as delivered",
     "{word} email for {string} is reported as delayed because {string}",
