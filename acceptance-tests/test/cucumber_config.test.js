@@ -13,21 +13,25 @@ test("default browser Cucumber profile still loads the shared feature suite", ()
   assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
 });
 
-test("default browser Cucumber profile selects all web-backed shared features", () => {
+test("default browser Cucumber profile selects all non-deferred web-backed shared features", () => {
   const selectedFeatureNames = browserSelectedFeatureNames();
 
   assert.deepEqual(selectedFeatureNames, [
     "authentication.feature",
     "homepage.feature",
-    "member_message_deliverability.feature",
     "operator_email_deliverability.feature"
   ]);
 });
 
-test("operator deliverability is no longer deferred from the browser run", () => {
+test("only explicitly deferred features are skipped from the browser run", () => {
   const skippedFeatures = browserSkippedFeatures();
 
-  assert.deepEqual(skippedFeatures, []);
+  assert.deepEqual(skippedFeatures, [
+    {
+      name: "member_message_deliverability.feature",
+      tags: ["@wip"]
+    }
+  ]);
 });
 
 function browserSelectedFeatureNames() {

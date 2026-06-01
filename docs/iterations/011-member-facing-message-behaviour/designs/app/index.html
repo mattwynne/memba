@@ -1,0 +1,159 @@
+<!-- @screen-label "Member app" -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Memba — Kootenay Mountaineering Club</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="../brand/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <link rel="stylesheet" href="extra.css">
+</head>
+<body data-screen-label="Member app">
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script src="data.js"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="Icon.jsx"></script>
+  <script type="text/babel" src="AppShell.jsx"></script>
+  <script type="text/babel" src="HomeView.jsx"></script>
+  <script type="text/babel" src="TripsView.jsx"></script>
+  <script type="text/babel" src="TripDetail.jsx"></script>
+  <script type="text/babel" src="ProposeTrip.jsx"></script>
+  <script type="text/babel" src="DirectoryView.jsx"></script>
+  <script type="text/babel" src="MessagesView.jsx"></script>
+  <script type="text/babel" src="ProfileView.jsx"></script>
+
+  <script type="text/babel">
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "density": "regular",
+      "showCommittee": true
+    }/*EDITMODE-END*/;
+
+    function useDeviceScale(ref) {
+      React.useEffect(() => {
+        const fit = () => {
+          if (!ref.current) return;
+          const m = 56;
+          const s = Math.min((window.innerWidth - m) / 1224, (window.innerHeight - m) / 864, 1);
+          ref.current.style.transform = `scale(${s})`;
+        };
+        fit();
+        window.addEventListener("resize", fit);
+        return () => window.removeEventListener("resize", fit);
+      }, []);
+    }
+
+    function App() {
+      const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+      ME.committee = t.showCommittee;
+
+      const params = new URLSearchParams(location.search);
+      const bare = params.has("bare");
+      const forcedStyle = params.get("style");
+
+      const [view, setView] = React.useState(() => params.get("view") || localStorage.getItem("memba.view") || "home");
+      const [trips, setTrips] = React.useState(TRIPS);
+      const [openTrip, setOpenTrip] = React.useState(null);
+      const [propose, setPropose] = React.useState(false);
+      const [member, setMember] = React.useState(null);
+      const [compose, setCompose] = React.useState(null); // {presetMember} or {} 
+      const [delivery, setDelivery] = React.useState(null);
+      const [messages] = React.useState(MESSAGES);
+      const [toast, setToast] = React.useState(null);
+      const scaler = React.useRef(null);
+      useDeviceScale(scaler);
+
+      React.useEffect(() => { if (!bare) localStorage.setItem("memba.view", view); }, [view]);
+      const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+      const onSignup = (trip, joining) => {
+        setTrips(prev => prev.map(tr => {
+          if (tr.id !== trip.id) return tr;
+          const roster = joining ? [...new Set([...tr.roster, ME.id])] : tr.roster.filter(id => id !== ME.id);
+          return { ...tr, roster, attending: roster.length };
+        }));
+        setOpenTrip(null);
+        const full = (trip.capacity - trip.attending) <= 0 && joining;
+        flash(joining ? (full ? `You're on the waitlist for ${trip.title}.` : `Added to ${trip.title}.`) : `Taken off ${trip.title}.`);
+      };
+
+      const onPropose = (f) => {
+        const d = new Date(f.date + "T00:00");
+        const when = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) + ", " + f.time;
+        const trip = {
+          id: Date.now(), month: d.toLocaleString("en", { month: "short" }), day: d.getDate(), year: d.getFullYear(),
+          title: f.title, when, leader: f.leader, duration: "—", grade: f.grade, dist: "TBC",
+          summary: f.summary, detail: f.summary, attending: 1, capacity: Number(f.capacity) || 8, roster: [ME.id],
+        };
+        setTrips(prev => [trip, ...prev].sort((a, b) => new Date(a.year, 0, 0).getTime()));
+        setPropose(false);
+        flash(`"${f.title}" added to the programme.`);
+      };
+
+      const onSend = (opt) => {
+        setCompose(null);
+        flash(opt.id === "all" ? "Sent to all members." : opt.id === "trip" ? "Sent to the trip roster." : `Sent to ${opt.label}.`);
+      };
+
+      // keep the open trip object in sync with edits
+      const liveOpenTrip = openTrip ? trips.find(tr => tr.id === openTrip.id) || openTrip : null;
+
+      const densityAttr = bare ? "regular" : t.density;
+      const appInner = (
+        <div className="app" data-density={densityAttr}>
+          <AppShell view={view} setView={setView} />
+          <main className="content">
+            {view === "home"      && <HomeView setView={setView} openTrip={setOpenTrip} openCompose={() => setCompose({})} />}
+            {view === "trips"     && <TripsView trips={trips} onOpen={setOpenTrip} onPropose={() => setPropose(true)} />}
+            {view === "directory" && <DirectoryView members={MEMBERS} onOpen={setMember} />}
+            {view === "messages"  && <MessagesView messages={messages} onCompose={() => setCompose({})} onDelivery={setDelivery} />}
+            {view === "profile"   && <ProfileView />}
+          </main>
+
+          <TripDetail trip={liveOpenTrip} onClose={() => setOpenTrip(null)} onSignup={onSignup} />
+          <ProposeTrip open={propose} onClose={() => setPropose(false)} onSubmit={onPropose} />
+          <MemberDetail member={member} onClose={() => setMember(null)} onMessage={(m) => { setMember(null); setCompose({ presetMember: m }); }} />
+          <ComposeSheet open={!!compose} presetMember={compose && compose.presetMember} onClose={() => setCompose(null)} onSend={onSend} />
+          <DeliverySheet message={delivery} onClose={() => setDelivery(null)} />
+
+          {toast && <div className="toast"><span className="toast__dot"></span>{toast}</div>}
+        </div>
+      );
+
+      if (bare) return <div className="bare-screen">{appInner}</div>;
+
+      return (
+        <>
+          <div className="stage">
+            <div className="scaler" ref={scaler}>
+              <div className="ipad">
+                <span className="ipad__cam"></span>
+                <div className="ipad__screen">
+                  {appInner}
+                </div>
+              </div>
+            </div>
+            <div className="stage__hint"><span>Kootenay Mountaineering Club — member view · iPad</span></div>
+          </div>
+
+          <TweaksPanel title="Tweaks">
+            <TweakSection label="Layout" />
+            <TweakRadio label="Density" value={t.density}
+              options={["cozy", "regular", "airy"]}
+              onChange={(v) => setTweak("density", v)} />
+            <TweakSection label="Role" />
+            <TweakToggle label="Committee tools" value={t.showCommittee}
+              onChange={(v) => setTweak("showCommittee", v)} />
+          </TweaksPanel>
+        </>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

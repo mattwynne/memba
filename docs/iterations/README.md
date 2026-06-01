@@ -20,6 +20,7 @@ green than before.
 | 008 | 2026-05-30 | merged | Postmark email integration for outbound member messages | [plan](008-postmark-email-integration/plan.md) |
 | 009 | 2026-05-31 | merged | Routing and LiveView surface split | [plan](009-routing-and-liveview-surface-split/plan.md) |
 | 010 | 2026-05-31 | merged | Shared magic-link authentication | [plan](010-shared-magic-link-auth/plan.md) |
+| 011 | 2026-06-01 | ready | Member-facing message behaviour | [plan](011-member-facing-message-behaviour/plan.md) |
 
 Status notes:
 
@@ -30,5 +31,5 @@ Status notes:
 
 Shared acceptance feature files used across these iterations:
 
-- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature)
+- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (`@wip` for iteration 011 planning until the member-facing browser slice is implemented)
 - [`operator_email_deliverability.feature`](../../acceptance-tests/features/operator_email_deliverability.feature) (iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
