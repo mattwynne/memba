@@ -1,0 +1,345 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index 8f4af78..b52612f 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+ - [x] 005 Build a receipt presentation model for the LiveView:
+ - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+-- [ ] 007 Add LiveView state for collapsed groups:
++- [x] 007 Add LiveView state for collapsed groups:
+ - [ ] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+ - [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+ - [ ] 010 Add focused LiveView/ConnCase tests covering:
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 6ff5c7a..3c738cb 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -26,6 +26,12 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp receipt_recipient_initial(_name), do: "?"
+ 
++  defp receipt_group_expanded?(%MapSet{} = expanded_groups, status) when is_binary(status) do
++    MapSet.member?(expanded_groups, status)
++  end
++
++  defp receipt_group_expanded?(_expanded_groups, _status), do: false
++
+   defp receipt_status_bg_class("opened"), do: "bg-emerald-500"
+   defp receipt_status_bg_class("delivered"), do: "bg-sky-500"
+   defp receipt_status_bg_class("sent"), do: "bg-slate-400"
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 85a318d..78714a1 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -123,34 +123,56 @@
+           data-receipt-status={group.status}
+           class="overflow-hidden rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] shadow-sm"
+         >
+-          <header class="flex items-center gap-3 px-5 py-4 transition duration-200 hover:bg-[var(--club-site-bg)]">
+-            <span class={[
+-              "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
+-              receipt_status_tint_class(group.status)
+-            ]}>
+-              <.icon name={group.status_icon} class="size-5" />
+-            </span>
+-            <div class="min-w-0 flex-1">
+-              <h3 class="font-semibold text-[var(--club-site-ink)]">{group.status_label}</h3>
+-              <p class="mt-0.5 text-sm text-[var(--club-site-muted)]">{group.description}</p>
+-            </div>
+-            <div class="flex items-center gap-3">
+-              <span
+-                data-testid="receipt-group-count"
+-                class="font-mono text-sm font-semibold text-[var(--club-site-ink)]"
+-              >
+-                {group.count}
+-              </span>
+-              <span
+-                data-testid="receipt-group-percentage"
+-                class="font-mono text-xs font-semibold text-[var(--club-site-muted)]"
+-              >
+-                {group.percentage}%
++          <header>
++            <button
++              type="button"
++              id={"member-receipt-group-toggle-#{receipt_status_slug(group.status)}"}
++              phx-click="toggle_receipt_group"
++              phx-value-status={group.status}
++              aria-expanded={
++                to_string(receipt_group_expanded?(@expanded_receipt_groups, group.status))
++              }
++              aria-controls={"member-receipts-#{receipt_status_slug(group.status)}"}
++              class="flex w-full items-center gap-3 px-5 py-4 text-left transition duration-200 hover:bg-[var(--club-site-bg)]"
++            >
++              <span class={[
++                "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
++                receipt_status_tint_class(group.status)
++              ]}>
++                <.icon name={group.status_icon} class="size-5" />
+               </span>
+-            </div>
++              <div class="min-w-0 flex-1">
++                <h3 class="font-semibold text-[var(--club-site-ink)]">{group.status_label}</h3>
++                <p class="mt-0.5 text-sm text-[var(--club-site-muted)]">{group.description}</p>
++              </div>
++              <div class="flex items-center gap-3">
++                <span
++                  data-testid="receipt-group-count"
++                  class="font-mono text-sm font-semibold text-[var(--club-site-ink)]"
++                >
++                  {group.count}
++                </span>
++                <span
++                  data-testid="receipt-group-percentage"
++                  class="font-mono text-xs font-semibold text-[var(--club-site-muted)]"
++                >
++                  {group.percentage}%
++                </span>
++                <.icon
++                  name={
++                    if(receipt_group_expanded?(@expanded_receipt_groups, group.status),
++                      do: "hero-chevron-up",
++                      else: "hero-chevron-down"
++                    )
++                  }
++                  class="size-4 text-[var(--club-site-muted)]"
++                />
++              </div>
++            </button>
+           </header>
+ 
+           <div
++            :if={receipt_group_expanded?(@expanded_receipt_groups, group.status)}
+             id={"member-receipts-#{receipt_status_slug(group.status)}"}
+             class="divide-y divide-[var(--club-site-line)] border-t border-[var(--club-site-line)] px-5 py-1"
+           >
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+index 6c2453f..5e793d3 100644
+--- a/web/lib/memba_web/live/member_message_live/show.ex
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -19,7 +19,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
+         {:ok,
+          socket
+          |> assign(:route_params, params)
+-         |> assign(detail_assigns)}
++         |> assign(detail_assigns)
++         |> assign(:expanded_receipt_groups, MapSet.new())}
+ 
+       {:error, :forbidden} ->
+         forbidden!(socket)
+@@ -37,6 +38,13 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_event("toggle_receipt_group", %{"status" => status}, socket) do
++    expanded_receipt_groups = toggle_receipt_group(socket, status)
++
++    {:noreply, assign(socket, :expanded_receipt_groups, expanded_receipt_groups)}
++  end
++
+   @impl Phoenix.LiveView
+   def render(%{message: _message} = assigns) do
+     MembaWeb.PageHTML.message(assigns)
+@@ -69,6 +77,19 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     """
+   end
+ 
++  defp toggle_receipt_group(socket, status) do
++    expanded_receipt_groups =
++      socket.assigns
++      |> Map.get(:expanded_receipt_groups, MapSet.new())
++      |> MapSet.new()
++
++    if MapSet.member?(expanded_receipt_groups, status) do
++      MapSet.delete(expanded_receipt_groups, status)
++    else
++      MapSet.put(expanded_receipt_groups, status)
++    end
++  end
++
+   defp ensure_identity_assigns(socket) do
+     socket
+     |> assign_new(:current_identity, fn -> nil end)
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 7df2ae8..5d2aaf6 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -156,21 +156,24 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+       Enum.each(receipt_cases, fn {member, status, label, icon} ->
+         group_selector = "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
++        status_slug = String.replace(status, " ", "-")
+ 
+         assert_selector_exists(html, group_selector)
+-        assert_text_in(html, "#{group_selector} h3", label)
+-        assert_exact_text(html, "#{group_selector} [data-testid='receipt-group-count']", "1")
+-
+-        receipt_selector =
+-          "[data-testid='member-receipt'][data-recipient-name='#{member.name}'][data-receipt-status='#{status}']"
+-
+-        assert_selector_exists(html, receipt_selector)
+-        assert_text_in(html, "#{receipt_selector} [data-testid='receipt-status']", label)
+ 
+         assert_selector_exists(
+           html,
+-          "#{receipt_selector} [data-testid='receipt-status-icon'][data-icon-name='#{icon}']"
++          "#{group_selector} #member-receipt-group-toggle-#{status_slug}[aria-expanded='false']"
+         )
++
++        assert_text_in(html, "#{group_selector} h3", label)
++        assert_exact_text(html, "#{group_selector} [data-testid='receipt-group-count']", "1")
++        assert_selector_exists(html, "#{group_selector} .#{icon}")
++
++        refute html
++               |> LazyHTML.query(
++                 "[data-testid='member-receipt'][data-recipient-name='#{member.name}'][data-receipt-status='#{status}']"
++               )
++               |> Enum.any?()
+       end)
+     end
+ 
+@@ -230,7 +233,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+       assert_text_in(
+         html,
+-        "[data-testid='member-receipt'][data-recipient-name='Bob Builder'] [data-testid='receipt-status']",
++        "[data-testid='member-receipt-group'][data-receipt-status='delivery problem'] h3",
+         "Delivery problem"
+       )
+ 
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 8dc4d13..dfa3891 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -291,32 +291,20 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.text() =~ "1"
+ 
+     assert html
+-           |> LazyHTML.query(
+-             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'][data-receipt-status='sent'] [data-testid='receipt-status']"
+-           )
+-           |> LazyHTML.text() =~ "Sending"
+-
+-    assert html
+-           |> LazyHTML.query(
+-             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'][data-receipt-status='delivered'] [data-testid='receipt-status']"
+-           )
+-           |> LazyHTML.text() =~ "Delivered"
+-
+-    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
+-    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
++           |> LazyHTML.query("#member-receipt-group-toggle-sent[aria-expanded='false']")
++           |> Enum.any?()
+ 
+     assert html
+-           |> LazyHTML.query(
+-             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'] [data-testid='receipt-status-icon'][data-icon-name='hero-clock']"
+-           )
++           |> LazyHTML.query("#member-receipt-group-toggle-delivered[aria-expanded='false']")
+            |> Enum.any?()
+ 
+-    assert html
+-           |> LazyHTML.query(
+-             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'] [data-testid='receipt-status-icon'][data-icon-name='hero-check-circle']"
+-           )
++    refute html
++           |> LazyHTML.query("[data-testid='member-receipt']")
+            |> Enum.any?()
+ 
++    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
++    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
++
+     refute response =~ alice_receipt.delivery_id
+     refute response =~ bob_receipt.delivery_id
+     refute response =~ "bob-private@example.invalid"
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index a388421..500d29a 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -159,6 +159,85 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+            )
+   end
+ 
++  test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Clark",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      receipt_status: "opened"
++    )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: carol.person_id,
++      recipient_name: "Carol Clark",
++      receipt_status: "delivered"
++    )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    opened_toggle = "#member-receipt-group-toggle-opened"
++    opened_rows = "#member-receipts-opened"
++
++    opened_recipient =
++      "#{opened_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
++
++    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
++    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
++    refute has_element?(view, opened_rows)
++    refute has_element?(view, opened_recipient)
++
++    view
++    |> element(opened_toggle)
++    |> render_click()
++
++    assert has_element?(view, "#{opened_toggle}[aria-expanded='true']")
++    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
++    assert has_element?(view, opened_rows)
++    assert has_element?(view, opened_recipient, "Bob Builder")
++
++    view
++    |> element(opened_toggle)
++    |> render_click()
++
++    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
++    refute has_element?(view, opened_rows)
++    refute has_element?(view, opened_recipient)
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
+     person_id = Ecto.UUID.generate()
