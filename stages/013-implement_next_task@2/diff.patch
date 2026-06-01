@@ -1,0 +1,178 @@
+diff --git a/docs/iterations/013-member-compose-liveview-flow/todo.md b/docs/iterations/013-member-compose-liveview-flow/todo.md
+index 00f05d3..fe6e95a 100644
+--- a/docs/iterations/013-member-compose-liveview-flow/todo.md
++++ b/docs/iterations/013-member-compose-liveview-flow/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
+-- [ ] 002 Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
++- [x] 002 Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
+ - [ ] 003 In the LiveView mount path:
+ - [ ] 004 Replace the club-home inline compose section with a CTA card/link to the new compose route. Preserve stable IDs or update tests/helpers deliberately.
+ - [ ] 005 Move sending behaviour into the LiveView submit event or a small shared service function:
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+new file mode 100644
+index 0000000..6d7b55d
+--- /dev/null
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -0,0 +1,51 @@
++defmodule MembaWeb.MemberMessageLive.New do
++  @moduledoc """
++  LiveView entry point for the member-facing club message compose flow.
++
++  The router references this module as `MemberMessageLive.New` from the
++  `scope "/", MembaWeb` block, matching the existing member message LiveView
++  namespace without duplicating the `MembaWeb` prefix.
++  """
++  use MembaWeb, :live_view
++
++  @impl Phoenix.LiveView
++  def mount(params, _session, socket) when is_map(params) do
++    {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, params)}
++  end
++
++  def mount(_params, _session, socket) do
++    {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.club_site flash={@flash} current_identity={@current_identity}>
++      <div
++        id="member-message-compose"
++        data-live-view="member-message-compose"
++        data-club-id={Map.get(@route_params, "club_id")}
++        class="space-y-8"
++      >
++        <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
++          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++            New message
++          </p>
++          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++            Send a club message
++          </h1>
++          <p class="mt-4 max-w-2xl leading-7 text-[var(--club-site-muted)]">
++            This LiveView surface is ready for the focused member compose flow.
++          </p>
++        </section>
++      </div>
++    </Layouts.club_site>
++    """
++  end
++
++  defp ensure_identity_assigns(socket) do
++    socket
++    |> assign_new(:current_identity, fn -> nil end)
++    |> assign_new(:current_identity_clubs, fn -> [] end)
++  end
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index f3824fa..705f1ce 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -47,6 +47,7 @@ defmodule MembaWeb.Router do
+     pipe_through [:browser, :club_member_required]
+ 
+     live_session :club_member, on_mount: [{MembaWeb.UserAuth, :mount_current_identity}] do
++      live "/messages/new", MemberMessageLive.New, :new
+       live "/messages/:message_id", MemberMessageLive.Show, :show
+     end
+   end
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+new file mode 100644
+index 0000000..7576d99
+--- /dev/null
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -0,0 +1,62 @@
++defmodule MembaWeb.MemberMessageLive.NewTest do
++  use MembaWeb.ConnCase, async: true
++
++  import Phoenix.LiveViewTest
++
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
++  alias Memba.Repo
++  alias MembaWeb.UserAuth
++
++  test "renders a member message compose LiveView shell in the club site layout", %{conn: conn} do
++    {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberMessageLive.New)
++
++    assert has_element?(view, "#club-site-layout[data-surface='club-site']")
++    assert has_element?(view, "#member-message-compose[data-live-view='member-message-compose']")
++  end
++
++  test "routed GET keeps the compose URL shape and passes club_id to the LiveView", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/new?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-message-compose[data-club-id='#{alice.club_id}'][data-live-view='member-message-compose']"
++           )
++  end
++
++  defp create_active_member(attrs) do
++    club_id = Ecto.UUID.generate()
++    person_id = Ecto.UUID.generate()
++
++    Repo.insert!(%Club{
++      club_id: club_id,
++      name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
++    })
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: Keyword.fetch!(attrs, :name),
++      email: Keyword.fetch!(attrs, :email)
++    })
++
++    Repo.insert!(%Membership{
++      membership_id: Ecto.UUID.generate(),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++
++    %{club_id: club_id, person_id: person_id}
++  end
++end
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 3bd32b7..1d52009 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -61,6 +61,23 @@ defmodule MembaWeb.RouterTest do
+   end
+ 
+   describe "member message routes" do
++    test "routes /messages/new through the required club member pipeline to the compose LiveView" do
++      assert %{
++               path_params: %{},
++               pipe_through: [:browser, :club_member_required],
++               phoenix_live_view: {MembaWeb.MemberMessageLive.New, :new, _opts, _live_session},
++               plug: Phoenix.LiveView.Plug,
++               plug_opts: :new,
++               route: "/messages/new"
++             } =
++               Phoenix.Router.route_info(
++                 MembaWeb.Router,
++                 "GET",
++                 "/messages/new",
++                 "localhost"
++               )
++    end
++
+     test "routes /messages/:message_id through the required club member pipeline to the member message LiveView" do
+       assert %{
+                path_params: %{"message_id" => "message-123"},
