@@ -4,6 +4,7 @@ defmodule MembaWeb.PageController do
   alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Messaging
+  alias MembaWeb.MemberReceiptPresentation
 
   @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
 
@@ -96,7 +97,11 @@ defmodule MembaWeb.PageController do
             not_found(conn)
 
           true ->
-            receipts = Messaging.list_member_receipts(message.message_id)
+            receipts =
+              message.message_id
+              |> Messaging.list_member_receipts()
+              |> Enum.map(&MemberReceiptPresentation.present_receipt/1)
+
             sender = Membership.get_person(message.sender_id)
 
             conn
@@ -178,27 +183,24 @@ defmodule MembaWeb.PageController do
   defp sender_name(_sender), do: "Club member"
 
   defp member_receipt_groups(receipts) do
-    receipts_by_status = Enum.group_by(receipts, &member_receipt_status/1)
+    receipts_by_status = Enum.group_by(receipts, & &1.status)
     extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
 
     (@member_receipt_status_order ++ Enum.sort(extra_statuses))
     |> Enum.map(fn status ->
       status_receipts = Map.get(receipts_by_status, status, [])
+      presentation = MemberReceiptPresentation.present_status(status)
 
       %{
         status: status,
+        status_label: presentation.label,
+        status_icon: presentation.icon,
         count: Enum.count(status_receipts),
         receipts: status_receipts
       }
     end)
     |> Enum.reject(&(&1.count == 0))
   end
-
-  defp member_receipt_status(%{receipt_status: status}) when is_binary(status) and status != "" do
-    status
-  end
-
-  defp member_receipt_status(_receipt), do: "sent"
 
   defp current_member_for_identity(_members, nil), do: nil
 

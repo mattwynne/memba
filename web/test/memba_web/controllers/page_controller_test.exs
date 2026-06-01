@@ -294,13 +294,28 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query(
              "[data-testid='member-receipt'][data-recipient-name='Alice Adams'][data-receipt-status='sent'] [data-testid='receipt-status']"
            )
-           |> LazyHTML.text() =~ "sent"
+           |> LazyHTML.text() =~ "Sending"
 
     assert html
            |> LazyHTML.query(
              "[data-testid='member-receipt'][data-recipient-name='Bob Builder'][data-receipt-status='delivered'] [data-testid='receipt-status']"
            )
-           |> LazyHTML.text() =~ "delivered"
+           |> LazyHTML.text() =~ "Delivered"
+
+    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
+    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'] [data-testid='receipt-status-icon'][data-icon-name='hero-clock']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'] [data-testid='receipt-status-icon'][data-icon-name='hero-check-circle']"
+           )
+           |> Enum.any?()
 
     refute response =~ alice_receipt.delivery_id
     refute response =~ bob_receipt.delivery_id
