@@ -1,0 +1,206 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index 93372f2..d961030 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -9,5 +9,5 @@
+ - [x] 007 Add LiveView state for collapsed groups:
+ - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+ - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+-- [ ] 010 Add focused LiveView/ConnCase tests covering:
++- [x] 010 Add focused LiveView/ConnCase tests covering:
+ - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 6765ca4..9cabf6c 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   alias Memba.Membership.Projections.Person
+   alias Memba.Messaging.Projections.MemberReceipt
+   alias Memba.Messaging.Projections.Message
++  alias Memba.Messaging.Projections.OperatorDeliverability
+   alias Memba.Repo
+   alias MembaWeb.UserAuth
+ 
+@@ -238,6 +239,74 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     refute has_element?(view, opened_recipient)
+   end
+ 
++  test "zero-count statuses render in the summary only and not as empty groups", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: alice.person_id,
++      recipient_name: "Alice Adams",
++      receipt_status: "opened"
++    )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status']" <>
++               "[data-receipt-status='opened']" <>
++               "[data-receipt-count='1']" <>
++               "[data-receipt-percentage='100']",
++             "Opened"
++           )
++
++    for {status, label} <- [
++          {"delivered", "Delivered"},
++          {"sent", "Sending"},
++          {"delivery problem", "Delivery problem"}
++        ] do
++      assert has_element?(
++               view,
++               "[data-testid='member-receipt-summary-status']" <>
++                 "[data-receipt-status='#{status}']" <>
++                 "[data-receipt-count='0']" <>
++                 "[data-receipt-percentage='0']",
++               label
++             )
++
++      status_slug = String.replace(status, " ", "-")
++
++      refute has_element?(
++               view,
++               "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
++             )
++
++      refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
++    end
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-group'][data-receipt-status='opened'] " <>
++               "#member-receipt-group-toggle-opened[aria-expanded='false']",
++             "100%"
++           )
++  end
++
+   test "expanded recipient rows preserve stable browser-test attributes", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -289,6 +358,81 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+            )
+   end
+ 
++  test "expanded member receipt rows do not expose operator-only delivery fields", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Provider details stay private"
++      )
++
++    delivery_id = Ecto.UUID.generate()
++    provider_reason = "Postmark webhook reported SpamComplaint from mx.example.invalid"
++
++    create_member_receipt(
++      delivery_id: delivery_id,
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      receipt_status: "delivery problem"
++    )
++
++    create_operator_deliverability(
++      delivery_id: delivery_id,
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      recipient_address: "bob-private@example.invalid",
++      channel: "postmark-email",
++      status: "spam complaint",
++      reason: provider_reason
++    )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    html =
++      view
++      |> element("#member-receipt-group-toggle-delivery-problem")
++      |> render_click()
++
++    assert has_element?(
++             view,
++             "#member-receipts-delivery-problem " <>
++               "[data-testid='member-receipt']" <>
++               "[data-recipient-name='Bob Builder']" <>
++               "[data-receipt-status='delivery problem']",
++             "Delivery problem"
++           )
++
++    refute html =~ delivery_id
++    refute html =~ "bob-private@example.invalid"
++    refute html =~ "postmark-email"
++    refute html =~ "spam complaint"
++    refute html =~ provider_reason
++    refute html =~ "Postmark webhook"
++    refute html =~ "Provider reason"
++    refute html =~ "Delivery records"
++    refute html =~ ~s(href="/admin/)
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
+     person_id = Ecto.UUID.generate()
+@@ -331,11 +475,24 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+   defp create_member_receipt(attrs) do
+     Repo.insert!(%MemberReceipt{
+-      delivery_id: Ecto.UUID.generate(),
++      delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
+       message_id: Keyword.fetch!(attrs, :message_id),
+       recipient_id: Keyword.fetch!(attrs, :recipient_id),
+       recipient_name: Keyword.fetch!(attrs, :recipient_name),
+       receipt_status: Keyword.fetch!(attrs, :receipt_status)
+     })
+   end
++
++  defp create_operator_deliverability(attrs) do
++    Repo.insert!(%OperatorDeliverability{
++      delivery_id: Keyword.fetch!(attrs, :delivery_id),
++      message_id: Keyword.fetch!(attrs, :message_id),
++      recipient_id: Keyword.fetch!(attrs, :recipient_id),
++      recipient_name: Keyword.fetch!(attrs, :recipient_name),
++      recipient_address: Keyword.fetch!(attrs, :recipient_address),
++      channel: Keyword.fetch!(attrs, :channel),
++      status: Keyword.fetch!(attrs, :status),
++      reason: Keyword.fetch!(attrs, :reason)
++    })
++  end
+ end
