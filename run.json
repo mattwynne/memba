@@ -1208,7 +1208,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-01T12:42:50.207786778Z",
-  "last_event_at": "2026-06-01T12:46:56.731707917Z",
+  "last_event_at": "2026-06-01T12:50:31.732828900Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1500,9 +1500,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 62,
       "checkpoint": {
-        "timestamp": "2026-06-01T12:46:56.735617528Z",
+        "timestamp": "2026-06-01T12:47:00.157834370Z",
         "current_node": "collect_implementation_evidence",
         "completed_nodes": [
           "start",
@@ -1513,29 +1513,169 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.retry_count.dev_check": 0,
-          "internal.node_visit_count": 1,
-          "outcome": "succeeded",
-          "current_node": "collect_implementation_evidence",
-          "internal.retry_count.collect_implementation_evidence": 0,
+          "failure_signature": "",
+          "internal.thread_id": "dev_check",
+          "command.output": "blob://sha256/279996717c1243b19915d40b7d69d79dbe0f338319bb54982921c21118b4bfe2",
+          "graph.rankdir": "LR",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.start.current_node": "read_plan",
+          "thread.preflight_sandbox.current_node": "dev_check",
           "internal.retry_count.start": 0,
+          "graph.max_node_visits": "160",
+          "outcome": "succeeded",
+          "failure_class": "",
           "internal.fidelity": "summary:high",
-          "internal.run_id": "01KT1K8F46M1BXTJ1GQWD4WZ2F",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.read_plan": 0,
           "graph.default_fidelity": "summary:high",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.node_visit_count": 1,
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.run_id": "01KT1K8F46M1BXTJ1GQWD4WZ2F",
+          "current_node": "collect_implementation_evidence"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/13a026e0d18532c07fb82b0c4f27efff7a81f5ec28b5f36e3794112be9a9e511"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 65043,
+              "active_time_ms": 65043
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/279996717c1243b19915d40b7d69d79dbe0f338319bb54982921c21118b4bfe2"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='c711ffddc40963a0cb752847b35b5442ec8d16a7'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1214,
+              "active_time_ms": 1214
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a6c7b3a5c3eba87c1961511183db4d309a78a4619e7c09905c9c57fafc8a7f33"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/013-member-compose-liveview-flow/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 203,
+              "active_time_ms": 203
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b04e6bc216ae5ced8d443129ac3bee474ddb2ed5930e980832c4091793adc4da"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167537,
+              "active_time_ms": 167537
+            }
+          }
+        },
+        "next_node_id": "review_fork",
+        "git_commit_sha": "833480f11783d2eb7917183d063a4f527a260d78",
+        "node_visits": {
+          "start": 1,
+          "preflight_sandbox": 1,
+          "dev_check": 1,
+          "collect_implementation_evidence": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-01T12:50:31.801996547Z",
+        "current_node": "review_fork",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "outcome": "succeeded",
+          "internal.fidelity": "summary:high",
           "graph.max_node_visits": "160",
           "failure_class": "",
           "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.dev_check": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "813b580842bdda7758639185323416d3e3e16da7"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "eab5cea1ac79e252306a00c7650e68564676c922"
+            },
+            {
+              "id": "gemini_review",
+              "status": "succeeded",
+              "head_sha": "53e05ba586658b33d13cdc7eee30e6df8bb48e59"
+            }
+          ],
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 1,
+          "current_node": "review_fork",
+          "parallel.branch_count": 3,
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01KT1K8F46M1BXTJ1GQWD4WZ2F",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.review_fork": 0,
           "failure_signature": "",
           "graph.rankdir": "LR",
           "thread.start.current_node": "read_plan",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "internal.thread_id": "dev_check",
+          "internal.thread_id": "collect_implementation_evidence",
           "command.output": "blob://sha256/279996717c1243b19915d40b7d69d79dbe0f338319bb54982921c21118b4bfe2",
-          "internal.work_dir": "/workspace/memba",
           "internal.retry_count.read_plan": 0,
-          "internal.retry_count.preflight_sandbox": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.read_plan.current_node": "preflight_sandbox"
         },
         "node_outcomes": {
@@ -1598,14 +1738,21 @@
               "tool_time_ms": 1214,
               "active_time_ms": 1214
             }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
           }
         },
-        "next_node_id": "review_fork",
+        "next_node_id": "review_merge",
         "node_visits": {
           "preflight_sandbox": 1,
           "start": 1,
           "read_plan": 1,
           "dev_check": 1,
+          "review_fork": 1,
           "collect_implementation_evidence": 1
         }
       },
@@ -1816,7 +1963,12 @@
       "first_event_seq": 55,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nbase_sha='c711ffddc40963a0cb752847b35b5442ec8d16a7'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+        "failure_reason": null,
+        "timestamp": "2026-06-01T12:46:56.732149249Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -1840,6 +1992,12 @@
       "termination": "exited",
       "started_at": "2026-06-01T12:46:55.511535521Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 1220,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1214,
+        "active_time_ms": 1214
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1847,6 +2005,39 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "review_fork@1": {
+      "first_event_seq": 65,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-01T12:47:00.168536331Z",
+      "handler": "parallel",
+      "usage": {
+        "input_tokens": 5435,
+        "output_tokens": 11732,
+        "total_tokens": 17167,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 192285
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
       },
       "state": "running"
     }
