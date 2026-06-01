@@ -60,6 +60,28 @@ defmodule MembaWeb.PageControllerTest do
     refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
   end
 
+  test "GET / with a member club_id opens that club's member page", %{conn: conn} do
+    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+
+    conn =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/?#{[club_id: club.club_id]}")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Alpine Club"
+    assert response =~ "Welcome to your club space."
+    assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+
+    refute response =~ "My clubs"
+  end
+
   test "GET / shows an Admin link for signed-in Memba staff", %{conn: conn} do
     conn =
       conn

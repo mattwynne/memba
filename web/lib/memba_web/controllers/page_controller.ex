@@ -1,6 +1,24 @@
 defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
+  def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
+      when not is_nil(identity) do
+    selected_club =
+      Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
+
+    if selected_club do
+      conn
+      |> assign(:page_title, selected_club.name)
+      |> assign(:selected_club, selected_club)
+      |> render(:club)
+    else
+      conn
+      |> put_status(:not_found)
+      |> put_view(html: MembaWeb.ErrorHTML)
+      |> render(:"404")
+    end
+  end
+
   def home(conn, _params) do
     page_title =
       if conn.assigns.current_identity do
