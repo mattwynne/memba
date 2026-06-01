@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
+- [x] 001 Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
 - [ ] 002 Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
 - [ ] 003 In the LiveView mount path:
 - [ ] 004 Replace the club-home inline compose section with a CTA card/link to the new compose route. Preserve stable IDs or update tests/helpers deliberately.
