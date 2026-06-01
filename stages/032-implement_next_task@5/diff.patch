@@ -1,0 +1,524 @@
+diff --git a/docs/iterations/011-member-facing-message-behaviour/todo.md b/docs/iterations/011-member-facing-message-behaviour/todo.md
+index 8843850..111ac7c 100644
+--- a/docs/iterations/011-member-facing-message-behaviour/todo.md
++++ b/docs/iterations/011-member-facing-message-behaviour/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add member acceptance support:
+ - [x] 003 Update member step definitions so:
+ - [x] 004 Build/refine member club home at `GET /?club_id=<club_id>`:
+-- [ ] 005 Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
++- [x] 005 Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
+ - [ ] 006 Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
+ - [ ] 007 Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
+ - [ ] 008 Add focused tests for member route authorization, message-club ownership checks, status label/icon mapping, and no operator-only fields on member pages.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index c131144..be33f63 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -5,6 +5,8 @@ defmodule MembaWeb.PageController do
+   alias Memba.Membership
+   alias Memba.Messaging
+ 
++  @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
++
+   def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
+       when not is_nil(identity) do
+     render_club_home(conn, club_id)
+@@ -80,6 +82,39 @@ defmodule MembaWeb.PageController do
+     end
+   end
+ 
++  def show_message(conn, %{"club_id" => club_id, "message_id" => message_id}) do
++    case Ecto.UUID.cast(club_id) do
++      {:ok, club_id} ->
++        selected_club = selected_club(conn, club_id)
++        message = Messaging.get_message(message_id)
++
++        cond do
++          is_nil(selected_club) ->
++            forbidden(conn)
++
++          is_nil(message) or message.club_id != club_id ->
++            not_found(conn)
++
++          true ->
++            receipts = Messaging.list_member_receipts(message.message_id)
++            sender = Membership.get_person(message.sender_id)
++
++            conn
++            |> assign(:page_title, message.subject)
++            |> assign(:selected_club, selected_club)
++            |> assign(:message, message)
++            |> assign(:sender_name, sender_name(sender))
++            |> assign(:member_receipts, receipts)
++            |> assign(:member_receipt_count, Enum.count(receipts))
++            |> assign(:member_receipt_groups, member_receipt_groups(receipts))
++            |> render(:message)
++        end
++
++      :error ->
++        forbidden(conn)
++    end
++  end
++
+   def about(conn, _params) do
+     conn
+     |> assign(:page_title, "About")
+@@ -139,6 +174,32 @@ defmodule MembaWeb.PageController do
+     Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
+   end
+ 
++  defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
++  defp sender_name(_sender), do: "Club member"
++
++  defp member_receipt_groups(receipts) do
++    receipts_by_status = Enum.group_by(receipts, &member_receipt_status/1)
++    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
++
++    (@member_receipt_status_order ++ Enum.sort(extra_statuses))
++    |> Enum.map(fn status ->
++      status_receipts = Map.get(receipts_by_status, status, [])
++
++      %{
++        status: status,
++        count: Enum.count(status_receipts),
++        receipts: status_receipts
++      }
++    end)
++    |> Enum.reject(&(&1.count == 0))
++  end
++
++  defp member_receipt_status(%{receipt_status: status}) when is_binary(status) and status != "" do
++    status
++  end
++
++  defp member_receipt_status(_receipt), do: "sent"
++
+   defp current_member_for_identity(_members, nil), do: nil
+ 
+   defp current_member_for_identity(members, identity) do
+@@ -180,5 +241,11 @@ defmodule MembaWeb.PageController do
+     |> render(:"404")
+   end
+ 
++  defp forbidden(conn) do
++    conn
++    |> send_resp(:forbidden, "Forbidden")
++    |> halt()
++  end
++
+   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
+ end
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+new file mode 100644
+index 0000000..1b5427b
+--- /dev/null
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -0,0 +1,115 @@
++<Layouts.club_site
++  flash={@flash}
++  club_name={@selected_club.name}
++  current_identity={@current_identity}
++>
++  <div
++    id="member-message-detail"
++    data-club-id={@selected_club.club_id}
++    data-message-id={@message.message_id}
++    class="space-y-8"
++  >
++    <a
++      id="back-to-club-home-link"
++      href={~p"/?#{[club_id: @selected_club.club_id]}"}
++      class="inline-flex items-center gap-2 text-sm font-semibold text-[var(--club-site-accent)] transition hover:text-[var(--club-site-ink)]"
++    >
++      <.icon name="hero-arrow-left" class="size-4" /> Club home
++    </a>
++
++    <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
++      <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++        Club message
++      </p>
++      <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++        {@message.subject}
++      </h1>
++      <p id="member-message-meta" class="mt-4 text-sm font-medium text-[var(--club-site-muted)]">
++        From <span class="text-[var(--club-site-ink)]">{@sender_name}</span>
++        · to <span class="text-[var(--club-site-ink)]">{@member_receipt_count}</span>
++        member{if(@member_receipt_count == 1, do: "", else: "s")}
++      </p>
++      <p
++        id="member-message-body"
++        class="mt-8 whitespace-pre-wrap rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-6 leading-7 text-[var(--club-site-ink)]"
++      >
++        {@message.body}
++      </p>
++    </section>
++
++    <section
++      id="member-receipts-section"
++      class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
++    >
++      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
++        <div>
++          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++            Receipts
++          </p>
++          <h2 class="mt-2 flex items-center gap-2 text-2xl font-semibold text-[var(--club-site-ink)]">
++            <.icon name="hero-users" class="size-5" /> Everyone addressed
++          </h2>
++        </div>
++        <p
++          id="member-receipts-summary"
++          data-receipt-count={@member_receipt_count}
++          class="rounded-full border border-[var(--club-site-line)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
++        >
++          {@member_receipt_count} member{if(@member_receipt_count == 1, do: "", else: "s")}
++        </p>
++      </div>
++
++      <div id="member-receipts" class="mt-6 space-y-4">
++        <p
++          :if={@member_receipts == []}
++          id="member-receipts-empty"
++          class="rounded-2xl border border-dashed border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-5 text-sm text-[var(--club-site-muted)]"
++        >
++          No addressed members are projected for this message yet.
++        </p>
++
++        <section
++          :for={group <- @member_receipt_groups}
++          id={"member-receipt-group-#{String.replace(group.status, " ", "-")}"}
++          data-testid="member-receipt-group"
++          data-receipt-status={group.status}
++          class="overflow-hidden rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)]"
++        >
++          <header class="flex items-center justify-between gap-4 border-b border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-4">
++            <h3 class="font-semibold text-[var(--club-site-ink)]">{group.status}</h3>
++            <span
++              data-testid="receipt-group-count"
++              class="rounded-full bg-[var(--club-site-bg)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
++            >
++              {group.count}
++            </span>
++          </header>
++
++          <div
++            id={"member-receipts-#{String.replace(group.status, " ", "-")}"}
++            class="divide-y divide-[var(--club-site-line)]"
++          >
++            <div
++              :for={receipt <- group.receipts}
++              id={"member-receipt-#{receipt.recipient_id}"}
++              data-testid="member-receipt"
++              data-recipient-id={receipt.recipient_id}
++              data-recipient-name={receipt.recipient_name}
++              data-receipt-status={receipt.receipt_status}
++              class="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
++            >
++              <p class="font-semibold text-[var(--club-site-ink)]">{receipt.recipient_name}</p>
++              <p
++                data-testid="receipt-status"
++                data-receipt-status={receipt.receipt_status}
++                class="rounded-full bg-[var(--club-site-paper)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)] ring-1 ring-[var(--club-site-line)]"
++              >
++                {receipt.receipt_status}
++              </p>
++            </div>
++          </div>
++        </section>
++      </div>
++    </section>
++  </div>
++</Layouts.club_site>
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 6296e8c..2c8b197 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -28,6 +28,10 @@ defmodule MembaWeb.Router do
+     plug :require_active_club_member_if_club_id_present
+   end
+ 
++  pipeline :club_member_required do
++    plug :require_active_club_member
++  end
++
+   pipeline :api do
+     plug :accepts, ["json"]
+   end
+@@ -39,6 +43,12 @@ defmodule MembaWeb.Router do
+     post "/", PageController, :send_message
+   end
+ 
++  scope "/", MembaWeb do
++    pipe_through [:browser, :club_member_required]
++
++    get "/messages/:message_id", PageController, :show_message
++  end
++
+   scope "/", MembaWeb do
+     pipe_through :browser
+ 
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 075bb99..31787ab 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -4,7 +4,9 @@ defmodule MembaWeb.PageControllerTest do
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Person
++  alias Memba.Messaging.Projections.MemberReceipt
+   alias Memba.Messaging.Projections.Message
++  alias Memba.Messaging.Projections.OperatorDeliverability
+   alias Memba.Repo
+   alias MembaWeb.UserAuth
+ 
+@@ -197,6 +199,182 @@ defmodule MembaWeb.PageControllerTest do
+     refute response =~ "My clubs"
+   end
+ 
++  test "GET /messages/:message_id shows member message detail to active club members", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    alice_receipt =
++      create_member_receipt(
++        message_id: message.message_id,
++        recipient_id: alice.person_id,
++        recipient_name: "Alice Adams",
++        receipt_status: "sent"
++      )
++
++    bob_receipt =
++      create_member_receipt(
++        message_id: message.message_id,
++        recipient_id: bob.person_id,
++        recipient_name: "Bob Builder",
++        receipt_status: "delivered"
++      )
++
++    create_operator_deliverability(
++      delivery_id: bob_receipt.delivery_id,
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      recipient_address: "bob-private@example.invalid",
++      status: "bounced",
++      reason: "mailbox does not exist"
++    )
++
++    conn =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Trip planning night"
++    assert response =~ "Bring your maps."
++    assert response =~ "From"
++    assert response =~ "Alice Adams"
++
++    assert html
++           |> LazyHTML.query(
++             "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
++           )
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("#member-receipts-summary[data-receipt-count='2']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='member-receipt-group'][data-receipt-status='sent'] [data-testid='receipt-group-count']"
++           )
++           |> LazyHTML.text() =~ "1"
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] [data-testid='receipt-group-count']"
++           )
++           |> LazyHTML.text() =~ "1"
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'][data-receipt-status='sent'] [data-testid='receipt-status']"
++           )
++           |> LazyHTML.text() =~ "sent"
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'][data-receipt-status='delivered'] [data-testid='receipt-status']"
++           )
++           |> LazyHTML.text() =~ "delivered"
++
++    refute response =~ alice_receipt.delivery_id
++    refute response =~ bob_receipt.delivery_id
++    refute response =~ "bob-private@example.invalid"
++    refute response =~ "mailbox does not exist"
++    refute response =~ "bounced"
++  end
++
++  test "GET /messages/:message_id redirects unauthenticated visitors and preserves return path",
++       %{
++         conn: conn
++       } do
++    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
++
++    message =
++      create_message(club_id: club.club_id, sender_id: club.person_id, subject: "Members only")
++
++    return_path = ~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}"
++
++    conn = get(conn, return_path)
++
++    assert redirected_to(conn) == ~p"/auth"
++    assert get_session(conn, UserAuth.return_to_session_key()) == return_path
++  end
++
++  test "GET /messages/:message_id forbids signed-in users outside the requested club", %{
++    conn: conn
++  } do
++    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
++    _other_club = create_active_member(email: "pat@example.com", club_name: "Paddling Club")
++
++    message =
++      create_message(
++        club_id: club.club_id,
++        sender_id: club.person_id,
++        subject: "Members only",
++        body: "Private club message"
++      )
++
++    conn =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "pat@example.com"})
++      |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
++
++    assert response(conn, 403) == "Forbidden"
++    refute conn.resp_body =~ "Members only"
++    refute conn.resp_body =~ "Private club message"
++  end
++
++  test "GET /messages/:message_id returns not found when message belongs to a different club", %{
++    conn: conn
++  } do
++    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
++    other_club = create_club(name: "Paddling Club")
++
++    message =
++      create_message(
++        club_id: other_club.club_id,
++        sender_id: club.person_id,
++        subject: "Wrong club",
++        body: "This should stay hidden"
++      )
++
++    conn =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
++
++    response = html_response(conn, 404)
++
++    refute response =~ "Wrong club"
++    refute response =~ "This should stay hidden"
++  end
++
+   test "GET / shows an Admin link for signed-in Memba staff", %{conn: conn} do
+     conn =
+       conn
+@@ -297,4 +475,27 @@ defmodule MembaWeb.PageControllerTest do
+       body: Keyword.get(attrs, :body, "Message body")
+     })
+   end
++
++  defp create_member_receipt(attrs) do
++    Repo.insert!(%MemberReceipt{
++      delivery_id: Ecto.UUID.generate(),
++      message_id: Keyword.fetch!(attrs, :message_id),
++      recipient_id: Keyword.fetch!(attrs, :recipient_id),
++      recipient_name: Keyword.fetch!(attrs, :recipient_name),
++      receipt_status: Keyword.fetch!(attrs, :receipt_status)
++    })
++  end
++
++  defp create_operator_deliverability(attrs) do
++    Repo.insert!(%OperatorDeliverability{
++      delivery_id: Keyword.fetch!(attrs, :delivery_id),
++      message_id: Keyword.fetch!(attrs, :message_id),
++      recipient_id: Keyword.fetch!(attrs, :recipient_id),
++      recipient_name: Keyword.fetch!(attrs, :recipient_name),
++      recipient_address: Keyword.fetch!(attrs, :recipient_address),
++      channel: Keyword.get(attrs, :channel, "email"),
++      status: Keyword.fetch!(attrs, :status),
++      reason: Keyword.fetch!(attrs, :reason)
++    })
++  end
+ end
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 6e46392..abb3c41 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -4,8 +4,7 @@ defmodule MembaWeb.RouterTest do
+   @old_harness_paths [
+     "/clubs",
+     "/clubs/club-123",
+-    "/deliveries",
+-    "/messages/message-123"
++    "/deliveries"
+   ]
+ 
+   describe "staff admin LiveView routes" do
+@@ -61,6 +60,24 @@ defmodule MembaWeb.RouterTest do
+     end
+   end
+ 
++  describe "member message routes" do
++    test "routes /messages/:message_id through the required club member pipeline" do
++      assert %{
++               path_params: %{"message_id" => "message-123"},
++               pipe_through: [:browser, :club_member_required],
++               plug: MembaWeb.PageController,
++               plug_opts: :show_message,
++               route: "/messages/:message_id"
++             } =
++               Phoenix.Router.route_info(
++                 MembaWeb.Router,
++                 "GET",
++                 "/messages/message-123",
++                 "localhost"
++               )
++    end
++  end
++
+   describe "removed public harness routes" do
+     test "old harness paths return the normal 404 response without redirects", %{conn: conn} do
+       Enum.each(@old_harness_paths, fn path ->
