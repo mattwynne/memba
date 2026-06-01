@@ -1,0 +1,381 @@
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/todo.md b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+index 0d3c604..3c4331e 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/todo.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
+ - [x] 002 Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
+-- [ ] 003 Introduce `MembaWeb.MemberDashboardLive`, rendered for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`. Keep the existing `GET /` controller route as a small dispatcher/public page: logged-out visitors continue through the public/marketing rendering, while signed-in active club members with `club_id` get the LiveView-backed dashboard for the same URL. Do not add a separate user-visible dashboard URL in this slice.
++- [x] 003 Introduce `MembaWeb.MemberDashboardLive`, rendered for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`. Keep the existing `GET /` controller route as a small dispatcher/public page: logged-out visitors continue through the public/marketing rendering, while signed-in active club members with `club_id` get the LiveView-backed dashboard for the same URL. Do not add a separate user-visible dashboard URL in this slice.
+ - [ ] 004 Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
+ - [ ] 005 Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
+ - [ ] 006 Render the dashboard toward `dashboard.jsx`:
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index dd76c13..b144fa8 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -1,13 +1,17 @@
+ defmodule MembaWeb.PageController do
+   use MembaWeb, :controller
+ 
+-  alias Memba.Accounts
+   alias Memba.Membership
+-  alias Memba.Messaging
++  alias MembaWeb.UserAuth
+ 
+   def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
+       when not is_nil(identity) do
+-    render_club_home(conn, club_id)
++    Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
++      session: %{
++        "club_id" => club_id,
++        UserAuth.identity_session_key() => identity.email
++      }
++    )
+   end
+ 
+   def home(conn, %{"club_id" => club_id}) do
+@@ -53,65 +57,6 @@ defmodule MembaWeb.PageController do
+     |> render(:privacy)
+   end
+ 
+-  defp render_club_home(conn, club_id) do
+-    case selected_club(conn, club_id) do
+-      nil ->
+-        not_found(conn)
+-
+-      selected_club ->
+-        members =
+-          club_id
+-          |> Membership.list_active_members_of_club()
+-          |> Enum.map(&with_member_initials/1)
+-
+-        messages =
+-          club_id
+-          |> Messaging.list_messages_for_club()
+-          |> Enum.reverse()
+-
+-        current_member = current_member_for_identity(members, conn.assigns.current_identity)
+-
+-        conn
+-        |> assign(:page_title, selected_club.name)
+-        |> assign(:selected_club, selected_club)
+-        |> assign(:members, members)
+-        |> assign(:active_member_count, Enum.count(members))
+-        |> assign(:current_member, current_member)
+-        |> assign(:member_names_by_id, Map.new(members, &{&1.id, &1.name}))
+-        |> assign(:messages, messages)
+-        |> render(:club)
+-    end
+-  end
+-
+-  defp selected_club(conn, club_id) do
+-    Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
+-  end
+-
+-  defp current_member_for_identity(_members, nil), do: nil
+-
+-  defp current_member_for_identity(members, identity) do
+-    identity_email = Accounts.normalize_email(identity.email)
+-
+-    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+-  end
+-
+-  defp with_member_initials(member) do
+-    Map.put(member, :initials, initials(member.name))
+-  end
+-
+-  defp initials(name) when is_binary(name) do
+-    name
+-    |> String.split(~r/\s+/, trim: true)
+-    |> Enum.take(2)
+-    |> Enum.map_join("", fn <<first::utf8, _rest::binary>> -> String.upcase(<<first::utf8>>) end)
+-    |> case do
+-      "" -> "?"
+-      value -> value
+-    end
+-  end
+-
+-  defp initials(_name), do: "?"
+-
+   defp not_found(conn) do
+     conn
+     |> put_status(:not_found)
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index bb28bae..dd3373c 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -6,6 +6,7 @@
+   <div class="space-y-8">
+     <section
+       id="member-club-home"
++      data-live-view="member-dashboard"
+       data-club-id={@selected_club.club_id}
+       class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+     >
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+new file mode 100644
+index 0000000..e59237e
+--- /dev/null
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -0,0 +1,130 @@
++defmodule MembaWeb.MemberDashboardLive do
++  @moduledoc """
++  LiveView-backed member dashboard for signed-in club home requests.
++
++  The public URL remains `GET /?club_id=<club_id>`; the controller keeps the
++  logged-out/public dispatch boundary and renders this LiveView for signed-in
++  active members.
++  """
++  use MembaWeb, :live_view
++
++  alias Memba.Accounts
++  alias Memba.Membership
++  alias Memba.Messaging
++  alias MembaWeb.UserAuth
++
++  @impl Phoenix.LiveView
++  def mount(_params, session, socket) do
++    club_id = Map.get(session, "club_id")
++    current_identity = current_identity_from_session(session)
++    current_identity_clubs = identity_clubs(current_identity)
++
++    socket = assign_current_identity(socket, current_identity, current_identity_clubs)
++
++    case dashboard_context(club_id, current_identity, current_identity_clubs) do
++      {:ok, dashboard_assigns} ->
++        {:ok, assign(socket, dashboard_assigns)}
++
++      {:error, :forbidden} ->
++        forbidden!()
++    end
++  end
++
++  @impl Phoenix.LiveView
++  def render(%{selected_club: _selected_club} = assigns) do
++    MembaWeb.PageHTML.club(assigns)
++  end
++
++  defp dashboard_context(club_id, current_identity, current_identity_clubs) do
++    with selected_club when not is_nil(selected_club) <-
++           selected_club(current_identity_clubs, club_id),
++         members <-
++           club_id
++           |> Membership.list_active_members_of_club()
++           |> Enum.map(&with_initials/1),
++         current_member when not is_nil(current_member) <-
++           current_member_for_identity(members, current_identity) do
++      messages =
++        club_id
++        |> Messaging.list_messages_for_club()
++        |> Enum.reverse()
++
++      {:ok,
++       %{
++         page_title: selected_club.name,
++         selected_club: selected_club,
++         members: members,
++         active_member_count: Enum.count(members),
++         current_member: current_member,
++         member_names_by_id: Map.new(members, &{&1.id, &1.name}),
++         messages: messages
++       }}
++    else
++      _missing_or_unauthorized -> {:error, :forbidden}
++    end
++  end
++
++  defp selected_club(current_identity_clubs, club_id) do
++    Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
++  end
++
++  defp current_member_for_identity(_members, nil), do: nil
++
++  defp current_member_for_identity(members, identity) do
++    identity_email = Accounts.normalize_email(identity.email)
++
++    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
++  end
++
++  defp current_identity_from_session(session) do
++    session
++    |> Map.get(UserAuth.identity_session_key())
++    |> Accounts.normalize_email()
++    |> case do
++      nil ->
++        nil
++
++      email ->
++        %{
++          email: email,
++          staff?: Accounts.staff_email?(email),
++          active_clubs: Accounts.list_active_clubs_for_email(email)
++        }
++    end
++  end
++
++  defp assign_current_identity(socket, identity, current_identity_clubs) do
++    assign(socket,
++      current_identity: identity,
++      current_identity_email: identity_email(identity),
++      current_identity_staff?: identity_staff?(identity),
++      current_identity_clubs: current_identity_clubs
++    )
++  end
++
++  defp identity_email(nil), do: nil
++  defp identity_email(identity), do: identity.email
++
++  defp identity_staff?(nil), do: false
++  defp identity_staff?(identity), do: identity.staff?
++
++  defp identity_clubs(nil), do: []
++  defp identity_clubs(identity), do: identity.active_clubs
++
++  defp with_initials(member), do: Map.put(member, :initials, initials(member.name))
++
++  defp initials(name) when is_binary(name) do
++    name
++    |> String.split(~r/\s+/, trim: true)
++    |> Enum.take(2)
++    |> Enum.map_join("", fn <<first::utf8, _rest::binary>> -> String.upcase(<<first::utf8>>) end)
++    |> case do
++      "" -> "?"
++      value -> value
++    end
++  end
++
++  defp initials(_name), do: "?"
++
++  defp forbidden!, do: raise(MembaWeb.ForbiddenError)
++end
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+new file mode 100644
+index 0000000..c1b3a04
+--- /dev/null
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -0,0 +1,123 @@
++defmodule MembaWeb.MemberDashboardLiveTest do
++  use MembaWeb.ConnCase, async: true
++
++  import Phoenix.LiveViewTest
++
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
++  alias Memba.Messaging.Projections.Message
++  alias Memba.Repo
++  alias MembaWeb.UserAuth
++
++  test "routed club home renders signed-in active members through the dashboard LiveView", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(club_id: alice.club_id, sender_id: bob.person_id, subject: "Trip night")
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-club-home[data-live-view='member-dashboard'][data-club-id='#{alice.club_id}']"
++           )
++
++    assert has_element?(view, "#club-site-current-identity", "Signed in as alice@example.com")
++    assert has_element?(view, "#member-message-#{message.message_id}")
++    assert has_element?(view, "#club-member-#{alice.person_id}")
++    assert has_element?(view, "#club-member-#{bob.person_id}")
++  end
++
++  test "logged-out club home still renders the public club marketing experience", %{conn: conn} do
++    club = create_club(name: "Alpine Club")
++
++    conn = get(conn, ~p"/?club_id=#{club.club_id}")
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert html
++           |> LazyHTML.query("#club-marketing-page[data-club-id='#{club.club_id}']")
++           |> Enum.any?()
++
++    refute html
++           |> LazyHTML.query("#member-club-home[data-live-view='member-dashboard']")
++           |> Enum.any?()
++  end
++
++  test "signed-in identities outside the selected club are still forbidden", %{conn: conn} do
++    alice = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
++
++    conn =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "pat@example.com"})
++      |> get(~p"/?club_id=#{alice.club_id}")
++
++    assert response(conn, 403) == "Forbidden"
++  end
++
++  defp create_club(attrs) do
++    Repo.insert!(%Club{
++      club_id: Ecto.UUID.generate(),
++      name: Keyword.fetch!(attrs, :name)
++    })
++  end
++
++  defp create_active_member(attrs) do
++    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
++    person_id = Ecto.UUID.generate()
++    club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
++
++    Repo.get(Club, club_id) ||
++      Repo.insert!(%Club{
++        club_id: club_id,
++        name: club_name
++      })
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: Keyword.get(attrs, :name, "Test Member"),
++      email: Keyword.fetch!(attrs, :email)
++    })
++
++    Repo.insert!(%Membership{
++      membership_id: Ecto.UUID.generate(),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++
++    %{
++      club_id: club_id,
++      person_id: person_id
++    }
++  end
++
++  defp create_message(attrs) do
++    Repo.insert!(%Message{
++      message_id: Ecto.UUID.generate(),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      sender_id: Keyword.fetch!(attrs, :sender_id),
++      subject: Keyword.fetch!(attrs, :subject),
++      body: Keyword.get(attrs, :body, "Message body")
++    })
++  end
++end
