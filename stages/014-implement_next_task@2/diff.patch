@@ -1,0 +1,84 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index d4d279e..14fb140 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+-- [ ] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
++- [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+ - [ ] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+ - [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+ - [ ] 005 Build a receipt presentation model for the LiveView:
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+new file mode 100644
+index 0000000..7c32ccf
+--- /dev/null
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -0,0 +1,47 @@
++defmodule MembaWeb.MemberMessageLive.Show do
++  @moduledoc """
++  LiveView entry point for the member-facing message detail page.
++
++  The router can reference this module as `MemberMessageLive.Show` from the
++  existing `scope "/", MembaWeb` block, avoiding a duplicated `MembaWeb`
++  namespace prefix when the member message route is moved from the controller.
++  """
++  use MembaWeb, :live_view
++
++  @impl Phoenix.LiveView
++  def mount(params, _session, socket) when is_map(params) do
++    {:ok, assign(socket, :route_params, params)}
++  end
++
++  def mount(_params, _session, socket) do
++    {:ok, assign(socket, :route_params, %{})}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.club_site flash={@flash}>
++      <div
++        id="member-message-detail"
++        data-live-view="member-message-detail"
++        data-club-id={Map.get(@route_params, "club_id")}
++        data-message-id={Map.get(@route_params, "message_id")}
++        class="space-y-8"
++      >
++        <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
++          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++            Club message
++          </p>
++          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++            Member message detail
++          </h1>
++          <p class="mt-4 max-w-2xl leading-7 text-[var(--club-site-muted)]">
++            This LiveView surface is ready for the existing member message route to load and
++            render the selected club message.
++          </p>
++        </section>
++      </div>
++    </Layouts.club_site>
++    """
++  end
++end
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+new file mode 100644
+index 0000000..445cae9
+--- /dev/null
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -0,0 +1,12 @@
++defmodule MembaWeb.MemberMessageLive.ShowTest do
++  use MembaWeb.ConnCase, async: true
++
++  import Phoenix.LiveViewTest
++
++  test "renders a member message detail LiveView shell in the club site layout", %{conn: conn} do
++    {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberMessageLive.Show)
++
++    assert has_element?(view, "#club-site-layout[data-surface='club-site']")
++    assert has_element?(view, "#member-message-detail[data-live-view='member-message-detail']")
++  end
++end
