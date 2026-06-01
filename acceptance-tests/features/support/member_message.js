@@ -103,6 +103,40 @@ function allRows(page, containerId, testId) {
   return page.locator(`#${containerId} [data-testid=${cssString(testId)}]`);
 }
 
+async function expandCollapsedMemberReceiptGroups(
+  world,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const collapsedToggles = world.page.locator(
+      '[id^="member-receipt-group-toggle-"][aria-expanded="false"]'
+    );
+    const collapsedCount = await collapsedToggles.count();
+
+    if (collapsedCount === 0) {
+      return;
+    }
+
+    const toggle = collapsedToggles.first();
+    const toggleId = await toggle.getAttribute("id");
+
+    await browserInteraction("expand collapsed member receipt group", () => toggle.click());
+
+    if (toggleId) {
+      await waitForProjectedVisible(
+        world,
+        world.page.locator(`[id=${cssString(toggleId)}][aria-expanded="true"]`),
+        `expanded member receipt group ${toggleId}`,
+        { expect, timeoutMs }
+      );
+    }
+  }
+
+  throw new Error("Expected no more than four member receipt groups to require expansion");
+}
+
 function clubHomePath(clubId) {
   return `/?club_id=${encodeURIComponent(clubId)}`;
 }
@@ -194,6 +228,49 @@ async function waitForProjectedCount(
 ) {
   await withProjectionWait(description, () =>
     expect(locator, description).toHaveCount(expectedCount, { timeout: timeoutMs })
+  );
+}
+
+async function waitForExpandedMemberReceiptCount(
+  world,
+  locator,
+  expectedCount,
+  description,
+  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = null;
+
+  do {
+    const assertionTimeoutMs = Math.max(1, Math.min(1000, deadline - Date.now()));
+
+    try {
+      await expandCollapsedMemberReceiptGroups(world, {
+        expect,
+        timeoutMs: assertionTimeoutMs
+      });
+      await waitForProjectedCount(world, locator, expectedCount, description, {
+        expect,
+        timeoutMs: assertionTimeoutMs
+      });
+
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+
+    const remainingMs = deadline - Date.now();
+
+    if (remainingMs > 0) {
+      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
+    }
+  } while (Date.now() <= deadline);
+
+  throw new Error(
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for expanded member receipt rows: ` +
+      `${description} should have count ${expectedCount}.\nLast projection error: ${
+        lastError ? errorMessage(lastError) : "(none)"
+      }`
   );
 }
 
@@ -614,9 +691,10 @@ async function assertMemberMessageAddressedTo(
   { expect = playwrightExpect } = {}
 ) {
   await openMemberMessage(world, subject, { expect });
+  await expandCollapsedMemberReceiptGroups(world, { expect });
 
   const rows = allRows(world.page, "member-receipts", "member-receipt");
-  await waitForProjectedCount(
+  await waitForExpandedMemberReceiptCount(
     world,
     rows,
     expectedNames.length,
@@ -646,6 +724,7 @@ async function assertMemberMessageNotAddressedTo(
   { expect = playwrightExpect } = {}
 ) {
   await openMemberMessage(world, subject, { expect });
+  await expandCollapsedMemberReceiptGroups(world, { expect });
 
   const rows = allRows(world.page, "member-receipts", "member-receipt");
   const actualNames = await rowDatasetValues(rows, "recipientName");
@@ -850,6 +929,7 @@ async function assertEveryAddressedMemberReceiptStatus(
   );
 
   await openMemberMessage(world, subject, { expect });
+  await expandCollapsedMemberReceiptGroups(world, { expect });
 
   for (const recipientName of addressedMemberNames) {
     await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
@@ -866,6 +946,7 @@ async function assertMemberReceiptStatus(
   { expect = playwrightExpect } = {}
 ) {
   await openMemberMessage(world, subject, { expect });
+  await expandCollapsedMemberReceiptGroups(world, { expect });
   await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
 
   return world;

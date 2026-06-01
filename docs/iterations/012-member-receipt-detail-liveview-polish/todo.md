@@ -8,6 +8,6 @@
 - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
 - [x] 007 Add LiveView state for collapsed groups:
 - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
-- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
 - [ ] 010 Add focused LiveView/ConnCase tests covering:
 - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
