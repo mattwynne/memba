@@ -156,21 +156,24 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       Enum.each(receipt_cases, fn {member, status, label, icon} ->
         group_selector = "[data-testid='member-receipt-group'][data-receipt-status='#{status}']"
+        status_slug = String.replace(status, " ", "-")
 
         assert_selector_exists(html, group_selector)
-        assert_text_in(html, "#{group_selector} h3", label)
-        assert_exact_text(html, "#{group_selector} [data-testid='receipt-group-count']", "1")
-
-        receipt_selector =
-          "[data-testid='member-receipt'][data-recipient-name='#{member.name}'][data-receipt-status='#{status}']"
-
-        assert_selector_exists(html, receipt_selector)
-        assert_text_in(html, "#{receipt_selector} [data-testid='receipt-status']", label)
 
         assert_selector_exists(
           html,
-          "#{receipt_selector} [data-testid='receipt-status-icon'][data-icon-name='#{icon}']"
+          "#{group_selector} #member-receipt-group-toggle-#{status_slug}[aria-expanded='false']"
         )
+
+        assert_text_in(html, "#{group_selector} h3", label)
+        assert_exact_text(html, "#{group_selector} [data-testid='receipt-group-count']", "1")
+        assert_selector_exists(html, "#{group_selector} .#{icon}")
+
+        refute html
+               |> LazyHTML.query(
+                 "[data-testid='member-receipt'][data-recipient-name='#{member.name}'][data-receipt-status='#{status}']"
+               )
+               |> Enum.any?()
       end)
     end
 
@@ -230,7 +233,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       assert_text_in(
         html,
-        "[data-testid='member-receipt'][data-recipient-name='Bob Builder'] [data-testid='receipt-status']",
+        "[data-testid='member-receipt-group'][data-receipt-status='delivery problem'] h3",
         "Delivery problem"
       )
 

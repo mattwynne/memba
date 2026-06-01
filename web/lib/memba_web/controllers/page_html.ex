@@ -26,6 +26,12 @@ defmodule MembaWeb.PageHTML do
 
   defp receipt_recipient_initial(_name), do: "?"
 
+  defp receipt_group_expanded?(%MapSet{} = expanded_groups, status) when is_binary(status) do
+    MapSet.member?(expanded_groups, status)
+  end
+
+  defp receipt_group_expanded?(_expanded_groups, _status), do: false
+
   defp receipt_status_bg_class("opened"), do: "bg-emerald-500"
   defp receipt_status_bg_class("delivered"), do: "bg-sky-500"
   defp receipt_status_bg_class("sent"), do: "bg-slate-400"

@@ -159,6 +159,85 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            )
   end
 
+  test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Clark",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      receipt_status: "opened"
+    )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: carol.person_id,
+      recipient_name: "Carol Clark",
+      receipt_status: "delivered"
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+
+    opened_toggle = "#member-receipt-group-toggle-opened"
+    opened_rows = "#member-receipts-opened"
+
+    opened_recipient =
+      "#{opened_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
+
+    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
+    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
+    refute has_element?(view, opened_rows)
+    refute has_element?(view, opened_recipient)
+
+    view
+    |> element(opened_toggle)
+    |> render_click()
+
+    assert has_element?(view, "#{opened_toggle}[aria-expanded='true']")
+    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
+    assert has_element?(view, opened_rows)
+    assert has_element?(view, opened_recipient, "Bob Builder")
+
+    view
+    |> element(opened_toggle)
+    |> render_click()
+
+    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
+    refute has_element?(view, opened_rows)
+    refute has_element?(view, opened_recipient)
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
     person_id = Ecto.UUID.generate()

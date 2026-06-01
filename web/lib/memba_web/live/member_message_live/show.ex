@@ -19,7 +19,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
         {:ok,
          socket
          |> assign(:route_params, params)
-         |> assign(detail_assigns)}
+         |> assign(detail_assigns)
+         |> assign(:expanded_receipt_groups, MapSet.new())}
 
       {:error, :forbidden} ->
         forbidden!(socket)
@@ -35,6 +36,13 @@ defmodule MembaWeb.MemberMessageLive.Show do
 
   def mount(_params, _session, socket) do
     {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("toggle_receipt_group", %{"status" => status}, socket) do
+    expanded_receipt_groups = toggle_receipt_group(socket, status)
+
+    {:noreply, assign(socket, :expanded_receipt_groups, expanded_receipt_groups)}
   end
 
   @impl Phoenix.LiveView
@@ -67,6 +75,19 @@ defmodule MembaWeb.MemberMessageLive.Show do
       </div>
     </Layouts.club_site>
     """
+  end
+
+  defp toggle_receipt_group(socket, status) do
+    expanded_receipt_groups =
+      socket.assigns
+      |> Map.get(:expanded_receipt_groups, MapSet.new())
+      |> MapSet.new()
+
+    if MapSet.member?(expanded_receipt_groups, status) do
+      MapSet.delete(expanded_receipt_groups, status)
+    else
+      MapSet.put(expanded_receipt_groups, status)
+    end
   end
 
   defp ensure_identity_assigns(socket) do
