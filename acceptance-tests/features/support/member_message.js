@@ -109,7 +109,9 @@ async function expandCollapsedMemberReceiptGroups(
 ) {
   ensureState(world);
 
-  for (let attempt = 0; attempt < 4; attempt += 1) {
+  const maxVisibleReceiptGroups = 4;
+
+  for (let expandedCount = 0; expandedCount <= maxVisibleReceiptGroups; expandedCount += 1) {
     const collapsedToggles = world.page.locator(
       '[id^="member-receipt-group-toggle-"][aria-expanded="false"]'
     );
@@ -117,6 +119,10 @@ async function expandCollapsedMemberReceiptGroups(
 
     if (collapsedCount === 0) {
       return;
+    }
+
+    if (expandedCount === maxVisibleReceiptGroups) {
+      break;
     }
 
     const toggle = collapsedToggles.first();

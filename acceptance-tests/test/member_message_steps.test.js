@@ -804,6 +804,54 @@ test("member receipt assertions expand collapsed visible groups before inspectin
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
 });
 
+test("member receipt assertions can expand all four visible receipt groups", async () => {
+  const page = new FakePage();
+  page.rows.memberReceiptGroupToggles.push(
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-opened",
+      "aria-expanded": "false"
+    }),
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-delivered",
+      "aria-expanded": "false"
+    }),
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-sent",
+      "aria-expanded": "false"
+    }),
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-delivery-problem",
+      "aria-expanded": "false"
+    })
+  );
+  page.rows.memberReceipts.push(
+    rowWithAttrs({
+      "data-recipient-name": "Bob",
+      receiptIconName: "hero-check-circle",
+      receiptStatusLabel: "Delivered"
+    })
+  );
+  const world = worldWithPage(page);
+  world.messages = {
+    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
+  };
+  world.people = { Bob: { personId: "person-bob" } };
+
+  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
+    expect: fakeExpect([])
+  });
+
+  assert.deepEqual(
+    page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
+    ["true", "true", "true", "true"]
+  );
+  assert.equal(
+    page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
+      .length,
+    4
+  );
+});
+
 test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
   const page = new FakePage();
   page.rows.operatorDeliveries.push(

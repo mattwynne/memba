@@ -10,4 +10,4 @@
 - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
 - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
 - [x] 010 Add focused LiveView/ConnCase tests covering:
-- [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+- [x] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
