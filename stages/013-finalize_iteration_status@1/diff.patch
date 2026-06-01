@@ -1,0 +1,150 @@
+diff --git a/docs/iterations/013-member-compose-liveview-flow/todo.md b/docs/iterations/013-member-compose-liveview-flow/todo.md
+index ffa549b..cc7746d 100644
+--- a/docs/iterations/013-member-compose-liveview-flow/todo.md
++++ b/docs/iterations/013-member-compose-liveview-flow/todo.md
+@@ -1,5 +1,6 @@
+ # Implementation TODO
+ 
++<<<<<<< HEAD
+ - [x] 001 Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
+ - [x] 002 Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
+ - [x] 003 In the LiveView mount path:
+@@ -13,3 +14,18 @@
+ - [x] 011 Remove `@wip` from the new failure scenario once implemented and passing.
+ - [x] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
+ - [x] 013 Run the targeted browser Cucumber feature and `dev check`.
++=======
++- [ ] 001 Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
++- [ ] 002 Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
++- [ ] 003 In the LiveView mount path:
++- [ ] 004 Replace the club-home inline compose section with a CTA card/link to the new compose route. Preserve stable IDs or update tests/helpers deliberately.
++- [ ] 005 Move sending behaviour into the LiveView submit event or a small shared service function:
++- [ ] 006 Render compose form based on `compose.jsx`:
++- [ ] 007 Render success state based on `ComposeSuccess`, adding the required “Send another message” action.
++- [ ] 008 Render failure state based on `ComposeError`, adjusted to say nothing was sent and contact support; include Try again and Back to club home actions.
++- [ ] 009 Add or update LiveView/Phoenix tests for:
++- [ ] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
++- [ ] 011 Remove `@wip` from the new failure scenario once implemented and passing.
++- [ ] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
++- [ ] 013 Run the targeted browser Cucumber feature and `dev check`.
++>>>>>>> f9653be (fabro(01KT1AXYNBZVQQVFSVTDCJ3GV3): sync_task_list (succeeded))
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/plan.md b/docs/iterations/014-member-dashboard-liveview-polish/plan.md
+index 64c9f0c..87d85dd 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/plan.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/plan.md
+@@ -1,7 +1,7 @@
+ # Member dashboard LiveView polish
+ 
+ Date: 2026-06-01
+-Status: ready
++Status: validated
+ 
+ ## Goal
+ 
+@@ -84,7 +84,7 @@ The underlying messaging business rules do not change. The user-observable impro
+ 
+ BDD decision: Not useful for this slice.
+ 
+-No Gherkin changes are planned. Existing scenarios in `acceptance-tests/features/member_message_deliverability.feature` already cover the relevant business behaviour: members can send messages, see messages in the club, and inspect member-facing receipt statuses. Iteration 014 changes dashboard presentation and the LiveView implementation shape, so LiveView/Phoenix tests are the right executable specification.
++No Gherkin changes are planned. Existing scenarios in `acceptance-tests/features/member_message_deliverability.feature` already cover the relevant business behaviour: members can send messages, see messages in the club, and inspect member-facing receipt statuses. Iteration 014 changes dashboard presentation and the LiveView implementation shape, so additional Gherkin here would mostly restate UI-level checks that are more precisely covered by LiveView/Phoenix tests.
+ 
+ ## Acceptance Criteria
+ 
+@@ -95,6 +95,7 @@ No Gherkin changes are planned. Existing scenarios in `acceptance-tests/features
+ - The dashboard shows a “Got something to share?” CTA card linking to `/messages/new?club_id=<club_id>`.
+ - The dashboard does not render an inline compose form.
+ - Recent message rows show sender/member identity, subject, link to member message detail, and stable browser-test attributes.
++- Recent message rows use the message projection `inserted_at` timestamp for “when” metadata when present, and omit the timestamp label for rows where it is unavailable.
+ - Recent message rows show a receipt glance/mini bar when receipt data exists.
+ - Receipt glance labels/counts use the member-facing status vocabulary, not operator delivery statuses.
+ - Empty message state is designed and includes a send-message action.
+@@ -118,47 +119,53 @@ Decisions made during planning:
+ 
+ 1. Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
+ 2. Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
+-3. Introduce a member dashboard LiveView, for example `MembaWeb.MemberDashboardLive`, routed for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`.
+-4. Move selected-club dashboard data loading into the LiveView mount path or a small query/presentation helper:
++3. Introduce `MembaWeb.MemberDashboardLive`, rendered for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`. Keep the existing `GET /` controller route as a small dispatcher/public page: logged-out visitors continue through the public/marketing rendering, while signed-in active club members with `club_id` get the LiveView-backed dashboard for the same URL. Do not add a separate user-visible dashboard URL in this slice.
++4. Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
+    - selected club;
+    - current member derived from authenticated identity;
+    - active members with initials/avatar data;
+    - recent messages;
+    - sender names;
+    - receipt summary data for recent message rows.
+-5. Build message-row receipt glance data using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
++5. Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
+    - counts by member-facing status;
+    - simple percentages/segment widths for the mini bar;
+-   - human glance copy such as “N of M opened” where data supports it.
++   - human glance copy such as “N of M opened” where data supports it;
++   - row “when” metadata from the message projection `inserted_at` timestamp (the projection timestamp for when the sent message was recorded). If an individual row lacks `inserted_at`, omit the timestamp label rather than showing placeholder copy.
+ 6. Render the dashboard toward `dashboard.jsx`:
+    - compact hero/greeting;
+    - CTA card linking to `/messages/new?club_id=<club_id>`;
+    - recent-message list rows with avatar/initials, sender, subject, receipt mini bar, glance copy, and detail link;
+    - active-members compact card with avatar stack and count;
+    - designed empty states.
+-7. Preserve or deliberately update stable selectors used by browser acceptance:
++7. Design and render empty states deliberately:
++   - render the no-recent-messages empty state when the selected club has no recent messages;
++   - render the no/first-active-members copy only if the active-member list/count is empty or effectively just the current member, while preserving correct auth behaviour.
++8. Preserve or deliberately update stable selectors used by browser acceptance:
+    - `club-message-row`;
+    - `club-message-link`;
+    - `club-member-row` or equivalent accessible member data;
+    - message/member data attributes needed by helpers.
+-8. Remove any remaining inline compose form from club home if iteration 013 has not already done so in the branch being implemented.
+-9. Add focused LiveView/Phoenix tests for:
++9. Ensure the club home has no inline compose form; remove any remaining inline compose markup/handlers so compose is only reached through the CTA link to `/messages/new?club_id=<club_id>`.
++10. Add focused LiveView/Phoenix tests for:
+    - signed-in active member sees dashboard;
+    - signed-in non-member/inactive member receives forbidden;
++   - logged-out/public club page behaviour is preserved;
+    - CTA points at compose route;
+    - no inline compose form;
+    - message rows and links render;
+    - receipt glance renders with member-facing vocabulary;
++   - timestamp labels use `inserted_at` when available and are omitted when unavailable;
+    - empty states render;
+    - active-member card renders count/avatar stack;
+    - no operator-only fields leak.
+-10. Run existing browser Cucumber for member-message deliverability and `dev check`.
++11. Run existing browser Cucumber for member-message deliverability and `dev check`.
+ 
+-## Open Technical Decisions
++## Technical Decisions
+ 
+-- Exact route organization for sharing `GET /?club_id=<club_id>` between public/logged-out marketing and signed-in member dashboard. Preserve user-visible behaviour over internal neatness.
+-- Whether message receipt glances are calculated per row in the LiveView or via a presentation/query helper. Prefer a helper if it keeps LiveView mount readable and testable.
+-- Exact “when” metadata source for message rows if current message projections do not carry sent timestamps. If unavailable, do not invent data; leave that visual detail out or use existing available metadata only.
++- Route organization: keep `GET /?club_id=<club_id>` as the user-visible address. Preserve the controller/public path for logged-out visitors and use it as the dispatcher/public rendering boundary; signed-in active members with a selected club see `MembaWeb.MemberDashboardLive` for the same URL. No separate dashboard URL is introduced in this slice.
++- Receipt glances: calculate row view data in a dedicated presentation/query helper, `MembaWeb.MemberDashboardPresentation`, using existing receipt projections and `MembaWeb.MemberReceiptPresentation` vocabulary.
++- Message row “when” metadata: use `Memba.Messaging.Projections.Message.inserted_at` as the sent/recorded timestamp. If a row has no timestamp, omit the timestamp label for that row instead of inventing data or showing “Unknown”.
+ 
+ ## New Capability
+ 
+@@ -179,6 +186,10 @@ Members land on a polished, LiveView-backed club dashboard that matches the rema
+   - confirm empty states in a brand-new club;
+   - confirm no operator-only delivery details appear.
+ 
++## Stop Condition
++
++Iteration 014 is complete when all acceptance criteria pass, `dev check` is green, the targeted dashboard tests and existing member-message browser scenario pass, and there are no regressions in logged-out/public or forbidden member flows for `GET /?club_id=<club_id>`.
++
+ ## Risks / Follow-ups
+ 
+ - Routing `/?club_id=` between public marketing and member LiveView needs care to preserve iteration 010 auth behaviour.
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 23c9d17..b733684 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -23,7 +23,7 @@ green than before.
+ | 011 | 2026-06-01 | merged | Member-facing message behaviour | [plan](011-member-facing-message-behaviour/plan.md) |
+ | 012 | 2026-06-01 | merged | Member receipt detail LiveView polish | [plan](012-member-receipt-detail-liveview-polish/plan.md) |
+ | 013 | 2026-06-01 | implementing | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
+-| 014 | 2026-06-01 | ready | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
++| 014 | 2026-06-01 | validated | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
+ 
+ Status notes:
+ 
