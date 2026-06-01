@@ -25,7 +25,7 @@ green than before.
 | 013 | 2026-06-01 | merged | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
 | 014 | 2026-06-01 | merged | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
 | 015 | 2026-06-01 | draft | Club slugs for inbound email routing | [plan](015-club-slugs/plan.md) |
-| 016 | 2026-06-01 | draft | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
+| 016 | 2026-06-01 | ready | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
 
 Status notes:
 
@@ -38,3 +38,4 @@ Shared acceptance feature files used across these iterations:
 
 - [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (`@wip` for iteration 011 planning until the member-facing browser slice is implemented)
 - [`operator_email_deliverability.feature`](../../acceptance-tests/features/operator_email_deliverability.feature) (iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
+- [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@wip` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
