@@ -53,7 +53,8 @@ Current implementation notes:
   - `Sending`: on its way;
   - `Delivery problem`: we couldn't reach them.
 - Render receipt groups collapsed by default.
-- Add LiveView expand/collapse behaviour for each status group:
+- Add LiveView expand/collapse behaviour for each visible status group:
+  - render group headers only for statuses with at least one receipt;
   - clicking a group header toggles that group;
   - expanded groups reveal the recipient rows for that status;
   - collapsing hides those rows again;
@@ -84,7 +85,9 @@ The underlying business rule does not change: active club members can see simpli
 
 BDD decision: Not useful for this slice.
 
-No Gherkin changes are planned. `acceptance-tests/features/member_message_deliverability.feature` already documents the relevant member-facing rule: members see simple shared receipt statuses for everyone addressed. Iteration 012 changes the presentation and interaction of that already-covered rule, so focused LiveView tests are the clearest executable specification.
+No Gherkin feature-file changes are planned. `acceptance-tests/features/member_message_deliverability.feature` already documents the relevant member-facing rule: members see simple shared receipt statuses for everyone addressed. Iteration 012 changes the presentation and interaction of that already-covered rule.
+
+The existing scenarios should remain unchanged and meaningful. Implementation may update browser acceptance support so row assertions expand the relevant receipt group before checking addressed members. That keeps the stakeholder language focused on the rule (“members see shared receipt statuses”) rather than the UI mechanics of opening a collapsible section. Focused LiveView tests will specify the new presentation behaviour: summary counts, initial collapsed state, toggling, row visibility, and zero-count status handling.
 
 ## Acceptance Criteria
 
@@ -92,13 +95,16 @@ No Gherkin changes are planned. `acceptance-tests/features/member_message_delive
 - Existing member-message browser Cucumber scenarios continue to pass unchanged.
 - The member message detail page is implemented as a LiveView or LiveView-backed route capable of server-side expand/collapse interaction.
 - The page shows subject, body, sender, and addressed receipt count as before.
-- The page shows a “Who got this” summary with status bar, counts, and percentages for `Opened`, `Delivered`, `Sending`, and `Delivery problem`.
-- Percentages are calculated from the total addressed receipt count and are displayed as whole percentages whose total is sensible for users. Zero-receipt messages do not crash or display misleading divide-by-zero values.
-- Receipt groups appear in this order: `Opened`, `Delivered`, `Sending`, `Delivery problem`.
-- Receipt groups are collapsed by default.
-- Each receipt group header shows icon, member-facing label, description, count, and percentage.
+- The page shows a “Who got this” summary with status bar, counts, and percentages for all four member-facing statuses: `Opened`, `Delivered`, `Sending`, and `Delivery problem`.
+- Percentages are calculated from the total addressed receipt count and are displayed as whole percentages whose total is sensible for users. Zero-receipt messages show `0` counts and `0%` for each status rather than crashing or displaying misleading divide-by-zero values.
+- The summary always represents all four statuses, including zero-count statuses.
+- The grouped recipient list renders group headers only for statuses with at least one receipt; zero-count statuses appear in the summary only.
+- Visible receipt groups appear in this order: `Opened`, `Delivered`, `Sending`, `Delivery problem`.
+- Visible receipt groups are collapsed by default.
+- Each visible receipt group header shows icon, member-facing label, description, count, and percentage.
 - Clicking a collapsed group expands it and reveals recipient rows for that status.
 - Clicking an expanded group collapses it and hides recipient rows for that status.
+- Collapsed groups show no recipient rows in the DOM or hide them from ordinary browser visibility assertions.
 - Expanded recipient rows preserve stable browser-test attributes used by the existing acceptance support.
 - The page does not expose delivery IDs, provider event names, webhook metadata, raw provider statuses, recipient email addresses, or delivery failure reasons.
 - Existing authorization/error behaviours are preserved for unauthenticated visitors, non-members, inactive members, and message/club mismatches.
@@ -124,25 +130,32 @@ The choice to make groups collapsed by default and show both counts and percenta
 5. Build a receipt presentation model for the LiveView:
    - reuse `MembaWeb.MemberReceiptPresentation` for labels and icons;
    - add descriptions, display order, counts, and percentages;
-   - create deterministic summary/group data for all four statuses, including zero-count statuses where useful for the summary.
+   - create deterministic summary data for all four statuses;
+   - create group data only for statuses whose count is greater than zero.
 6. Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
 7. Add LiveView state for collapsed groups:
-   - all groups collapsed initially;
+   - all visible groups collapsed initially;
    - `handle_event("toggle_receipt_group", ...)` toggles a status key;
    - avoid custom JavaScript unless needed.
-8. Preserve the existing stable DOM/test attributes for recipient rows so browser acceptance helpers do not need to change.
-9. Add focused LiveView/ConnCase tests covering:
+8. Preserve the existing stable DOM/test attributes for recipient rows.
+9. Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+10. Add focused LiveView/ConnCase tests covering:
    - route and authorization behaviours preserved;
    - summary counts and percentages for mixed statuses;
-   - all groups collapsed by default;
+   - all visible groups collapsed by default;
    - expand/collapse reveals and hides rows;
+   - zero-count statuses appear in the summary only, not as empty expandable groups;
    - no operator-only fields appear on the member page.
-10. Run the existing member-message browser Cucumber scenarios and `dev check`.
+11. Run the existing member-message browser Cucumber scenarios and `dev check`.
 
 ## Open Technical Decisions
 
 - Exact LiveView module name and whether small helper functions live in the LiveView or a presentation module. Prefer simple module boundaries that keep receipt calculations testable without over-engineering.
-- Whether zero-count statuses appear as collapsible group headers or only in the summary. The summary must represent all four statuses; recipient rows are required only for statuses with receipts.
+
+Resolved for this plan:
+
+- Zero-count statuses appear in the “Who got this” summary only, with count `0` and `0%`. They do not appear as empty collapsible group headers in the recipient list.
+- Existing Gherkin scenarios remain unchanged. Browser acceptance support may expand the relevant visible receipt group before asserting addressed recipient rows, while LiveView tests cover the collapse/expand UI behaviour directly.
 
 ## New Capability
 
@@ -152,19 +165,21 @@ Members can scan a message's reach using a summary bar with counts and percentag
 
 - Run `dev check`.
 - Run targeted LiveView/Phoenix tests for the new member message detail LiveView.
-- Confirm existing `acceptance-tests/features/member_message_deliverability.feature` passes unchanged through the browser runner.
+- Confirm existing `acceptance-tests/features/member_message_deliverability.feature` passes unchanged through the browser runner; if row assertions fail because groups are collapsed, fix the browser support to expand the relevant group rather than changing the feature language.
 - Manual demo:
   - sign in as Alice;
   - open a message with mixed receipt statuses;
-  - confirm the summary bar, counts, percentages, descriptions, and collapsed groups;
-  - expand and collapse each group;
-  - confirm recipient rows appear only when expanded;
+  - confirm the summary bar shows all four statuses, including any zero-count statuses;
+  - confirm zero-count statuses do not appear as empty groups in the recipient list;
+  - confirm non-empty group counts, percentages, descriptions, and default collapsed state;
+  - expand and collapse each non-empty group;
+  - confirm recipient rows appear only when their group is expanded;
   - confirm no operator-only details are visible;
   - confirm `/admin/*` diagnostics still show operator detail for staff.
 
 ## Risks / Follow-ups
 
 - LiveView conversion may require carefully preserving controller-era auth and error semantics.
-- Existing browser helpers expect recipient rows to be present; implementation may need to expand groups in helpers or expose rows only after interaction while keeping scenarios meaningful.
+- Browser acceptance support may need a small update to expand the relevant group before asserting recipient rows; keep this in support code and leave the feature language unchanged.
 - Percent rounding can produce totals that do not add exactly to 100%; choose a user-friendly deterministic approach and test it.
 - This does not address dashboard polish or separate compose screens; those remain good future iterations.
