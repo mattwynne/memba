@@ -1,0 +1,95 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index e89e148..c8dad99 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -109,7 +109,9 @@ async function expandCollapsedMemberReceiptGroups(
+ ) {
+   ensureState(world);
+ 
+-  for (let attempt = 0; attempt < 4; attempt += 1) {
++  const maxVisibleReceiptGroups = 4;
++
++  for (let expandedCount = 0; expandedCount <= maxVisibleReceiptGroups; expandedCount += 1) {
+     const collapsedToggles = world.page.locator(
+       '[id^="member-receipt-group-toggle-"][aria-expanded="false"]'
+     );
+@@ -119,6 +121,10 @@ async function expandCollapsedMemberReceiptGroups(
+       return;
+     }
+ 
++    if (expandedCount === maxVisibleReceiptGroups) {
++      break;
++    }
++
+     const toggle = collapsedToggles.first();
+     const toggleId = await toggle.getAttribute("id");
+ 
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 7493144..2023396 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -804,6 +804,54 @@ test("member receipt assertions expand collapsed visible groups before inspectin
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
+ });
+ 
++test("member receipt assertions can expand all four visible receipt groups", async () => {
++  const page = new FakePage();
++  page.rows.memberReceiptGroupToggles.push(
++    rowWithAttrs({
++      id: "member-receipt-group-toggle-opened",
++      "aria-expanded": "false"
++    }),
++    rowWithAttrs({
++      id: "member-receipt-group-toggle-delivered",
++      "aria-expanded": "false"
++    }),
++    rowWithAttrs({
++      id: "member-receipt-group-toggle-sent",
++      "aria-expanded": "false"
++    }),
++    rowWithAttrs({
++      id: "member-receipt-group-toggle-delivery-problem",
++      "aria-expanded": "false"
++    })
++  );
++  page.rows.memberReceipts.push(
++    rowWithAttrs({
++      "data-recipient-name": "Bob",
++      receiptIconName: "hero-check-circle",
++      receiptStatusLabel: "Delivered"
++    })
++  );
++  const world = worldWithPage(page);
++  world.messages = {
++    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
++  };
++  world.people = { Bob: { personId: "person-bob" } };
++
++  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
++    expect: fakeExpect([])
++  });
++
++  assert.deepEqual(
++    page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
++    ["true", "true", "true", "true"]
++  );
++  assert.equal(
++    page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
++      .length,
++    4
++  );
++});
++
+ test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
+   const page = new FakePage();
+   page.rows.operatorDeliveries.push(
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index d961030..4726224 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -10,4 +10,4 @@
+ - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+ - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+ - [x] 010 Add focused LiveView/ConnCase tests covering:
+-- [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
++- [x] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
