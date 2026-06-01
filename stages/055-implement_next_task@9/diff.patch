@@ -1,0 +1,59 @@
+diff --git a/docs/iterations/013-member-compose-liveview-flow/todo.md b/docs/iterations/013-member-compose-liveview-flow/todo.md
+index 1c8a6c7..54d30ad 100644
+--- a/docs/iterations/013-member-compose-liveview-flow/todo.md
++++ b/docs/iterations/013-member-compose-liveview-flow/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Render compose form based on `compose.jsx`:
+ - [x] 007 Render success state based on `ComposeSuccess`, adding the required “Send another message” action.
+ - [x] 008 Render failure state based on `ComposeError`, adjusted to say nothing was sent and contact support; include Try again and Back to club home actions.
+-- [ ] 009 Add or update LiveView/Phoenix tests for:
++- [x] 009 Add or update LiveView/Phoenix tests for:
+ - [ ] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
+ - [ ] 011 Remove `@wip` from the new failure scenario once implemented and passing.
+ - [ ] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index efba5a3..4a1b54b 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -170,6 +170,41 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     refute has_element?(view, "[name='message[sender_id]']")
+   end
+ 
++  test "routed GET redirects signed-out visitors and preserves the selected club return path",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    return_path = ~p"/messages/new?club_id=#{alice.club_id}"
++
++    conn = get(conn, return_path)
++
++    assert redirected_to(conn) == ~p"/auth"
++    assert get_session(conn, UserAuth.return_to_session_key()) == return_path
++  end
++
++  test "routed GET forbids a signed-in identity when the selected club is missing", %{
++    conn: conn
++  } do
++    _alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    conn =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> get(~p"/messages/new")
++
++    assert response(conn, 403) == "Forbidden"
++  end
++
+   test "routed GET forbids a signed-in identity outside the selected club", %{conn: conn} do
+     alice =
+       create_active_member(
