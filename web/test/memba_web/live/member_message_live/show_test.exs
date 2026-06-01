@@ -238,6 +238,57 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, opened_recipient)
   end
 
+  test "expanded recipient rows preserve stable browser-test attributes", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      receipt_status: "delivered"
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+
+    view
+    |> element("#member-receipt-group-toggle-delivered")
+    |> render_click()
+
+    assert has_element?(
+             view,
+             "#member-receipts-delivered " <>
+               "#member-receipt-#{bob.person_id}" <>
+               "[data-testid='member-receipt']" <>
+               "[data-recipient-id='#{bob.person_id}']" <>
+               "[data-recipient-name='Bob Builder']" <>
+               "[data-receipt-status='delivered']",
+             "Bob Builder"
+           )
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
     person_id = Ecto.UUID.generate()
