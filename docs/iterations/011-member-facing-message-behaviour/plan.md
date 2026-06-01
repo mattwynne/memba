@@ -1,7 +1,7 @@
 # Member-facing message behaviour
 
 Date: 2026-06-01
-Status: ready
+Status: validated for implementation
 
 ## Goal
 
@@ -93,6 +93,9 @@ Scenarios:
 - A club message is addressed to every active member of that club, including the sender for now.
 - Members from other clubs are not addressed or shown as addressed.
 - Any active member of the club can open the member-facing message detail page.
+- Unauthenticated access to member message detail redirects to `/auth` via the existing magic-link sign-in flow, preserving return path.
+- Signed-in users without active membership for the selected `club_id` (including inactive members) receive the existing forbidden response and do not see message details.
+- Requests where `message_id` does not belong to `club_id` receive existing not-found behaviour and do not see message details.
 - The message detail page shows subject/body/sender and addressed members with member-facing receipt labels and icons.
 - Status labels shown to members are exactly `Sending`, `Delivered`, `Delivery problem`, and `Opened`.
 - Member pages do not expose delivery IDs, provider event names, webhook metadata, raw provider statuses, or operator diagnostics.
@@ -124,6 +127,11 @@ Deferred: whether senders should receive their own messages long-term; whether s
 5. Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
    - authorize active membership for the `club_id` query param;
    - ensure the message belongs to that club;
+   - apply existing failure conventions:
+     - unauthenticated access redirects to `/auth` and preserves return path;
+     - signed-in non-members/inactive members for `club_id` get forbidden;
+     - message/club mismatch responds not found;
+     - failure paths do not expose message content or operator-only diagnostics;
    - show subject, body, sender, and addressed members with grouped receipt statuses and stable recipient rows.
 6. Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
 7. Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
