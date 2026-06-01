@@ -1,0 +1,1 @@
+{"cmd": "TODO_PATH='docs/iterations/014-member-dashboard-liveview-polish/todo.md'\nif [ ! -r \"$TODO_PATH\" ]; then\n  echo \"UNREADABLE\"\nelif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"EMPTY\"\nelse\n  grep -nE '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" || true\nfi"}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
