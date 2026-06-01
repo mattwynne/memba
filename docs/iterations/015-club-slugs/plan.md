@@ -1,7 +1,7 @@
 # Club slugs and public club subdomains
 
 Date: 2026-06-01
-Status: ready
+Status: validated
 
 ## Goal
 
