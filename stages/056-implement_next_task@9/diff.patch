@@ -1,0 +1,303 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 52668c5..e89e148 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -103,6 +103,40 @@ function allRows(page, containerId, testId) {
+   return page.locator(`#${containerId} [data-testid=${cssString(testId)}]`);
+ }
+ 
++async function expandCollapsedMemberReceiptGroups(
++  world,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  for (let attempt = 0; attempt < 4; attempt += 1) {
++    const collapsedToggles = world.page.locator(
++      '[id^="member-receipt-group-toggle-"][aria-expanded="false"]'
++    );
++    const collapsedCount = await collapsedToggles.count();
++
++    if (collapsedCount === 0) {
++      return;
++    }
++
++    const toggle = collapsedToggles.first();
++    const toggleId = await toggle.getAttribute("id");
++
++    await browserInteraction("expand collapsed member receipt group", () => toggle.click());
++
++    if (toggleId) {
++      await waitForProjectedVisible(
++        world,
++        world.page.locator(`[id=${cssString(toggleId)}][aria-expanded="true"]`),
++        `expanded member receipt group ${toggleId}`,
++        { expect, timeoutMs }
++      );
++    }
++  }
++
++  throw new Error("Expected no more than four member receipt groups to require expansion");
++}
++
+ function clubHomePath(clubId) {
+   return `/?club_id=${encodeURIComponent(clubId)}`;
+ }
+@@ -197,6 +231,49 @@ async function waitForProjectedCount(
+   );
+ }
+ 
++async function waitForExpandedMemberReceiptCount(
++  world,
++  locator,
++  expectedCount,
++  description,
++  { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}
++) {
++  const deadline = Date.now() + timeoutMs;
++  let lastError = null;
++
++  do {
++    const assertionTimeoutMs = Math.max(1, Math.min(1000, deadline - Date.now()));
++
++    try {
++      await expandCollapsedMemberReceiptGroups(world, {
++        expect,
++        timeoutMs: assertionTimeoutMs
++      });
++      await waitForProjectedCount(world, locator, expectedCount, description, {
++        expect,
++        timeoutMs: assertionTimeoutMs
++      });
++
++      return;
++    } catch (error) {
++      lastError = error;
++    }
++
++    const remainingMs = deadline - Date.now();
++
++    if (remainingMs > 0) {
++      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
++    }
++  } while (Date.now() <= deadline);
++
++  throw new Error(
++    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for expanded member receipt rows: ` +
++      `${description} should have count ${expectedCount}.\nLast projection error: ${
++        lastError ? errorMessage(lastError) : "(none)"
++      }`
++  );
++}
++
+ async function waitForProjectedText(
+   world,
+   locator,
+@@ -614,9 +691,10 @@ async function assertMemberMessageAddressedTo(
+   { expect = playwrightExpect } = {}
+ ) {
+   await openMemberMessage(world, subject, { expect });
++  await expandCollapsedMemberReceiptGroups(world, { expect });
+ 
+   const rows = allRows(world.page, "member-receipts", "member-receipt");
+-  await waitForProjectedCount(
++  await waitForExpandedMemberReceiptCount(
+     world,
+     rows,
+     expectedNames.length,
+@@ -646,6 +724,7 @@ async function assertMemberMessageNotAddressedTo(
+   { expect = playwrightExpect } = {}
+ ) {
+   await openMemberMessage(world, subject, { expect });
++  await expandCollapsedMemberReceiptGroups(world, { expect });
+ 
+   const rows = allRows(world.page, "member-receipts", "member-receipt");
+   const actualNames = await rowDatasetValues(rows, "recipientName");
+@@ -850,6 +929,7 @@ async function assertEveryAddressedMemberReceiptStatus(
+   );
+ 
+   await openMemberMessage(world, subject, { expect });
++  await expandCollapsedMemberReceiptGroups(world, { expect });
+ 
+   for (const recipientName of addressedMemberNames) {
+     await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+@@ -866,6 +946,7 @@ async function assertMemberReceiptStatus(
+   { expect = playwrightExpect } = {}
+ ) {
+   await openMemberMessage(world, subject, { expect });
++  await expandCollapsedMemberReceiptGroups(world, { expect });
+   await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+ 
+   return world;
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 792fbe3..7493144 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -65,6 +65,18 @@ class FakeLocator {
+     });
+   }
+ 
++  first() {
++    const rows = this.currentRows();
++    const row = rows[0] || { attrs: {}, text: undefined };
++
++    return new FakeLocator(this.page, `${this.selector} >> first`, {
++      attrs: row.attrs,
++      kind: "row",
++      rows: row.attrs ? [row] : [],
++      text: row.text
++    });
++  }
++
+   locator(selector) {
+     let childText = this.attrs.deliveryStatus || this.attrs.receiptStatus || this.attrs.receiptStatusLabel;
+     let childAttrs = {};
+@@ -96,6 +108,14 @@ class FakeLocator {
+     return this.attrs[attributeName];
+   }
+ 
++  async click() {
++    this.page.actions.push(["click", "locator", this.selector]);
++
++    if (this.attrs["aria-expanded"] === "false") {
++      this.attrs["aria-expanded"] = "true";
++    }
++  }
++
+   async evaluateAll(callback, key) {
+     const elements = this.currentRows().map((row) => ({
+       dataset: row.dataset,
+@@ -121,6 +141,7 @@ class FakePage {
+       clubMessages: [],
+       addressedRecipients: [],
+       deliveryRecords: [],
++      memberReceiptGroupToggles: [],
+       operatorDeliveries: [],
+       memberReceipts: []
+     };
+@@ -245,19 +266,47 @@ function rowsForSelector(rows, selector) {
+   if (selector.includes('data-testid="message-row"')) return filterRows(rows.messages, selector);
+   if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
+   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
+-  if (selector.includes("#member-receipts")) return rows.memberReceipts;
++  if (selector.includes("#member-receipts")) return visibleMemberReceiptRows(rows);
+   if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
+   if (selector.includes('data-test-id^="delivery-row-"')) {
+     return filterRows(rows.operatorDeliveries, selector);
+   }
+-  if (selector.includes('data-testid="member-receipt"')) return filterRows(rows.memberReceipts, selector);
++  if (
++    selector.includes('[id^="member-receipt-group-toggle-"]') ||
++    selector.includes("member-receipt-group-toggle-")
++  ) {
++    return filterRows(rows.memberReceiptGroupToggles, selector);
++  }
++  if (selector.includes('data-testid="member-receipt"')) return filterRows(visibleMemberReceiptRows(rows), selector);
+ 
+   return [];
+ }
+ 
++function visibleMemberReceiptRows(rows) {
++  const hasCollapsibleGroups = rows.memberReceiptGroupToggles.length > 0;
++
++  if (!hasCollapsibleGroups) {
++    return rows.memberReceipts;
++  }
++
++  const hasExpandedGroup = rows.memberReceiptGroupToggles.some(
++    (row) => row.attrs["aria-expanded"] === "true"
++  );
++
++  return hasExpandedGroup ? rows.memberReceipts : [];
++}
++
+ function filterRows(rows, selector) {
+   return rows.filter((row) => {
+     for (const [attributeName, value] of Object.entries(row.attrs || {})) {
++      const prefixMatch = selector.match(
++        new RegExp(`\\[${escapeRegExp(attributeName)}\\^="([^"]*)"\\]`)
++      );
++
++      if (prefixMatch && !String(value).startsWith(prefixMatch[1])) {
++        return false;
++      }
++
+       if (selector.includes(`[${attributeName}=`) && !selector.includes(`[${attributeName}="${value}"]`)) {
+         return false;
+       }
+@@ -267,6 +316,10 @@ function filterRows(rows, selector) {
+   });
+ }
+ 
++function escapeRegExp(value) {
++  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
++}
++
+ function idFor(prefix, value, count) {
+   return `${prefix}-${String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${count}`;
+ }
+@@ -705,6 +758,52 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon
+   );
+ });
+ 
++test("member receipt assertions expand collapsed visible groups before inspecting rows", async () => {
++  const page = new FakePage();
++  page.rows.memberReceiptGroupToggles.push(
++    rowWithAttrs({
++      id: "member-receipt-group-toggle-delivered",
++      "aria-expanded": "false"
++    })
++  );
++  page.rows.memberReceipts.push(
++    rowWithAttrs({
++      "data-recipient-name": "Bob",
++      receiptIconName: "hero-check-circle",
++      receiptStatusLabel: "Delivered"
++    })
++  );
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.messages = {
++    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
++  };
++  world.people = { Bob: { personId: "person-bob" } };
++
++  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.equal(page.rows.memberReceiptGroupToggles[0].attrs["aria-expanded"], "true");
++  assert.ok(
++    page.actions.some(
++      (action) =>
++        action[0] === "click" &&
++        action[1] === "locator" &&
++        action[2].includes('member-receipt-group-toggle-')
++    )
++  );
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "visible" &&
++        typeof expectation[1] === "string" &&
++        expectation[1].includes('[id="member-receipt-group-toggle-delivered"][aria-expanded="true"]')
++    )
++  );
++  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
++});
++
+ test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
+   const page = new FakePage();
+   page.rows.operatorDeliveries.push(
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index b3edbff..93372f2 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -8,6 +8,6 @@
+ - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+ - [x] 007 Add LiveView state for collapsed groups:
+ - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+-- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
++- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+ - [ ] 010 Add focused LiveView/ConnCase tests covering:
+ - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
