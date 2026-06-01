@@ -22,6 +22,7 @@ green than before.
 | 010 | 2026-05-31 | merged | Shared magic-link authentication | [plan](010-shared-magic-link-auth/plan.md) |
 | 011 | 2026-06-01 | merged | Member-facing message behaviour | [plan](011-member-facing-message-behaviour/plan.md) |
 | 012 | 2026-06-01 | ready | Member receipt detail LiveView polish | [plan](012-member-receipt-detail-liveview-polish/plan.md) |
+| 013 | 2026-06-01 | ready | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
 
 Status notes:
 
