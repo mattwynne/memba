@@ -23,6 +23,10 @@ defmodule Memba.Cucumber.MembershipSteps do
     create_people(context, ["Alice", "Bob", "Carol"])
   end
 
+  step "Alice, Bob, Carol, and Dana are people", context do
+    create_people(context, ["Alice", "Bob", "Carol", "Dana"])
+  end
+
   step "Alice and Bob are people", context do
     create_people(context, ["Alice", "Bob"])
   end
@@ -33,6 +37,10 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   step "Alice, Bob, and Carol are members of Kootenay Mountaineering Club", context do
     add_members(context, ["Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
+  end
+
+  step "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", context do
+    add_members(context, ["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
   end
 
   step "Alice and Bob are members of Kootenay Mountaineering Club", context do

@@ -4,8 +4,7 @@ defmodule MembaWeb.RouterTest do
   @old_harness_paths [
     "/clubs",
     "/clubs/club-123",
-    "/deliveries",
-    "/messages/message-123"
+    "/deliveries"
   ]
 
   describe "staff admin LiveView routes" do
@@ -56,6 +55,24 @@ defmodule MembaWeb.RouterTest do
                  MembaWeb.Router,
                  "POST",
                  "/webhooks/postmark",
+                 "localhost"
+               )
+    end
+  end
+
+  describe "member message routes" do
+    test "routes /messages/:message_id through the required club member pipeline" do
+      assert %{
+               path_params: %{"message_id" => "message-123"},
+               pipe_through: [:browser, :club_member_required],
+               plug: MembaWeb.PageController,
+               plug_opts: :show_message,
+               route: "/messages/:message_id"
+             } =
+               Phoenix.Router.route_info(
+                 MembaWeb.Router,
+                 "GET",
+                 "/messages/message-123",
                  "localhost"
                )
     end
