@@ -94,7 +94,17 @@ defmodule MembaWeb.MemberDashboardPresentation do
     |> Enum.reverse()
   end
 
-  defp present_message_rows(messages, member_names_by_id) do
+  @doc """
+  Shapes recent-message projection rows for dashboard rendering.
+
+  The row data keeps member-facing receipt vocabulary from
+  `MemberReceiptPresentation`, adds compact mini-bar segment data, and uses the
+  message projection `inserted_at` value for dashboard "when" metadata. Rows
+  without `inserted_at` intentionally leave the label empty instead of inventing
+  placeholder copy.
+  """
+  def present_message_rows(messages, member_names_by_id)
+      when is_list(messages) and is_map(member_names_by_id) do
     receipts_by_message_id = receipts_by_message_id(messages)
 
     Enum.map(messages, fn message ->
@@ -104,6 +114,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
         |> MemberReceiptPresentation.present_receipts()
 
       sender_name = Map.get(member_names_by_id, message.sender_id, "Club member")
+      receipt_count = receipt_model.total_count
 
       %{
         message: message,
@@ -113,12 +124,20 @@ defmodule MembaWeb.MemberDashboardPresentation do
         sender_initials: initials(sender_name),
         subject: message.subject,
         body: message.body,
-        receipt_count: receipt_model.total_count,
+        sent_at: message.inserted_at,
+        sent_at_label: sent_at_label(message.inserted_at),
+        receipt_count: receipt_count,
         receipt_summary: receipt_model.summary,
+        receipt_status_counts: receipt_status_counts(receipt_model.summary),
+        receipt_segments: receipt_segments(receipt_model.summary),
+        receipt_glance_copy: receipt_glance_copy(receipt_model.summary, receipt_count),
+        has_receipt_glance?: receipt_count > 0,
         receipt_groups: receipt_model.groups
       }
     end)
   end
+
+  def present_message_rows(_messages, _member_names_by_id), do: []
 
   defp receipts_by_message_id([]), do: %{}
 
@@ -156,4 +175,37 @@ defmodule MembaWeb.MemberDashboardPresentation do
   end
 
   defp initials(_name), do: "?"
+
+  defp receipt_status_counts(summary) do
+    Map.new(summary, fn status -> {status.status, status.count} end)
+  end
+
+  defp receipt_segments(summary) do
+    summary
+    |> Enum.filter(&(&1.count > 0))
+    |> Enum.map(fn status ->
+      %{
+        status: status.status,
+        status_label: status.status_label,
+        count: status.count,
+        width_percentage: status.percentage
+      }
+    end)
+  end
+
+  defp receipt_glance_copy(_summary, 0), do: nil
+
+  defp receipt_glance_copy(summary, total_count) do
+    opened_count =
+      summary
+      |> Enum.find_value(0, fn
+        %{status: "opened", count: count} -> count
+        _status -> false
+      end)
+
+    "#{opened_count} of #{total_count} opened"
+  end
+
+  defp sent_at_label(%DateTime{} = sent_at), do: Calendar.strftime(sent_at, "%b %d, %Y")
+  defp sent_at_label(_sent_at), do: nil
 end

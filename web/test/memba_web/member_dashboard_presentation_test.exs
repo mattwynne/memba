@@ -97,7 +97,16 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert newer_row.sender_id == bob.person_id
     assert newer_row.sender_name == "Bob Builder"
     assert newer_row.sender_initials == "BB"
+    assert newer_row.sent_at == newer_message.inserted_at
+    assert newer_row.sent_at_label == Calendar.strftime(newer_message.inserted_at, "%b %d, %Y")
     assert newer_row.receipt_count == 2
+
+    assert newer_row.receipt_status_counts == %{
+             "opened" => 1,
+             "delivered" => 0,
+             "sent" => 1,
+             "delivery problem" => 0
+           }
 
     assert Enum.map(newer_row.receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
              {"opened", 1, 50},
@@ -106,10 +115,43 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
              {"delivery problem", 0, 0}
            ]
 
+    assert Enum.map(
+             newer_row.receipt_segments,
+             &{&1.status, &1.status_label, &1.count, &1.width_percentage}
+           ) == [
+             {"opened", "Opened", 1, 50},
+             {"sent", "Sending", 1, 50}
+           ]
+
+    assert newer_row.receipt_glance_copy == "1 of 2 opened"
+    assert newer_row.has_receipt_glance?
+
     assert older_row.message_id == older_message.message_id
     assert older_row.sender_name == "Alice Adams"
     assert older_row.sender_initials == "AA"
+    assert older_row.sent_at == older_message.inserted_at
+    assert older_row.sent_at_label == Calendar.strftime(older_message.inserted_at, "%b %d, %Y")
     assert older_row.receipt_count == 0
+    assert older_row.receipt_segments == []
+    assert older_row.receipt_glance_copy == nil
+    refute older_row.has_receipt_glance?
+  end
+
+  test "omits timestamp labels for message rows without an inserted_at timestamp" do
+    message = %Message{
+      message_id: Ecto.UUID.generate(),
+      sender_id: Ecto.UUID.generate(),
+      subject: "Projection without timestamp",
+      body: "Body",
+      inserted_at: nil
+    }
+
+    assert [
+             %{
+               sent_at: nil,
+               sent_at_label: nil
+             }
+           ] = MemberDashboardPresentation.present_message_rows([message], %{})
   end
 
   test "forbids missing, invalid, unauthorized, or identity-mismatched selected clubs" do
