@@ -661,7 +661,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-01T10:11:14.705784141Z",
-  "last_event_at": "2026-06-01T10:14:47.289044400Z",
+  "last_event_at": "2026-06-01T10:14:50.317143416Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1831,9 +1831,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 86,
       "checkpoint": {
-        "timestamp": "2026-06-01T10:14:47.292004002Z",
+        "timestamp": "2026-06-01T10:14:50.317075373Z",
         "current_node": "not_ready",
         "completed_nodes": [
           "start",
@@ -1847,122 +1847,62 @@
         ],
         "node_retries": {},
         "context_values": {
-          "internal.retry_count.start": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "gemini_review_decision": "NOT READY",
-          "claude_review_blocking_gaps": "Three unresolved technical decisions (routing, receipt glance location, timestamp source); Missing iteration classification (behaviour-facing vs technical); Missing BDD scenario decision section or rationale",
-          "codex_review_blocking_gaps": "Unresolved technical decisions (routing, receipt glance computation, timestamp source/fallback); Iteration classification missing (behaviour-facing vs technical); Missing Acceptance Scenarios / Feature Files section or explicit no-Gherkin rationale; Timestamp criterion not deterministic",
-          "plan_ready": false,
+          "thread.gemini_review.current_node": "claude_review",
+          "codex_review_confidence": "High",
           "internal.retry_count.synthesis_gate": 0,
           "thread.read_plan.current_node": "gemini_review",
-          "claude_review_blocking_gap_count": 3,
-          "outcome": "failed",
-          "codex_review_blocking_gap_count": 4,
-          "plan_needs_human": true,
-          "internal.retry_count.read_plan": 0,
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
-          "last_stage": "synthesize",
-          "graph.rankdir": "LR",
-          "internal.retry_count.claude_review": 0,
-          "thread.codex_review.current_node": "synthesize",
-          "response.claude_review": "# Independent Plan Review\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Three open technical decisions remain unresolved**:\n   - Route organization for `GET /?club_id=<club_id>` (public marketing vs. member dashboard)\n   - Receipt glance calculation location (per-row in LiveView vs. presentation helper)\n   - Timestamp metadata source for message rows (if projections lack sent timestamps)\n   \n   These decisions directly impact implementation steps 1, 4, and 5. The plan notes preferences (\"prefer a helper\", \"preserve user-visible behaviour\") but doesn't commit to specific approaches.\n\n2. **Missing explicit iteration classification**: The plan doesn't state whether this is behaviour-facing or technical/engineering. This matters for determining whether new Gherkin scenarios are needed.\n\n3. **Missing BDD scenario decision section**: Per reference requirements, behaviour-facing iterations need an `## Acceptance Scenarios / Feature Files` section or explicit rationale for not using Gherkin. The plan mentions running existing `member_message_deliverability.feature` in validation but doesn't explain whether new scenarios are needed or why not.\n\n## Non-blocking Improvements\n\n1. **Implementation step 7** (\"Design and render empty states\") could specify which conditions trigger which empty states (e.g., \"when club has no messages\" vs. \"when club has no active members\").\n\n2. **Acceptance criterion 5** mentions \"timestamp (if available)\" but doesn't clearly state fallback behavior when timestamps are unavailable. Should the row omit timestamp entirely, show a different field, or display \"Unknown\"?\n\n3. **The \"Risks / Follow-ups\" section** mentions that routing needs care and receipt glances may need efficient queries, but doesn't propose mitigation strategies or acceptance criteria to validate these concerns are addressed.\n\n## Smallest Viable Iteration\n\nThe current scope is already reasonably focused. However, if forced to slice smaller, you could:\n\n**Option A**: Split into two iterations:\n- Iteration 14a: Convert to LiveView, remove inline compose, preserve exact current functionality\n- Iteration 14b: Add receipt glances, active-member card, empty states\n\n**Option B**: Defer polish elements:\n- Core iteration: LiveView conversion, compose CTA, basic message list\n- Defer: Receipt glances, active-member card, empty states to iteration 15\n\nHowever, the current scope seems appropriate if the technical decisions are resolved. The deliverable \"polished dashboard matching wireframe\" is coherent and useful.\n\n## Required Plan Edits\n\n1. **Resolve technical decisions** and integrate into implementation steps:\n   - **Route organization**: Choose between (a) route-based split with pattern matching in router, (b) single LiveView with mount-time auth check and conditional rendering, or (c) separate public and member routes. State the choice and update step 1 accordingly.\n   - **Receipt glances**: Choose between calculation in mount/handle_info vs. dedicated presentation helper. Update step 4 with the chosen module, function signature, and data source.\n   - **Timestamp metadata**: Inspect current message projections, confirm whether `sent_at` or equivalent exists. If yes, use it. If no, state explicitly what field will be shown instead (or that timestamp will be omitted). Update step 5 and acceptance criterion 5.\n\n2. **Add explicit iteration classification**: Insert a line near the top stating either:\n   - \"This is a technical/engineering iteration focused on presentation layer reorganization, not new business rules.\"\n   - Or: \"This is a behaviour-facing iteration that changes [specific user-visible behavior].\"\n\n3. **Add `## Acceptance Scenarios / Feature Files` section** (or explicit rationale):\n   - If technical/engineering: \"No new Gherkin scenarios needed. Existing `member_message_deliverability.feature` validates underlying message delivery behavior. This iteration only changes presentation layer; new LiveView tests in implementation step 10 validate UI rendering.\"\n   - If behaviour-facing: List specific scenarios to add/modify in shared feature files.\n\n4. **Minor: Specify empty state conditions** in implementation step 7:\n   - \"Render empty state when `Clubs.list_messages(club_id)` returns empty list\"\n   - \"Render empty member state when `Clubs.count_active_members(club_id)` returns 0\"\n\n## Validation Plan\n\nAfter required edits are made, the iteration will be ready when:\n\n1. All three open technical decisions are resolved with specific chosen approaches\n2. Implementation steps 1, 4, and 5 are updated to reference the chosen approaches\n3. The plan explicitly classifies the iteration type and explains the BDD scenario decision\n4. Acceptance criterion 5 clearly states fallback behavior for missing timestamps\n\nThe existing validation plan (dev check, LiveView tests, browser acceptance test, manual demo) is comprehensive and appropriate once the plan is implementation-ready.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":3,\"claude_review_blocking_gaps\":\"Three unresolved technical decisions (routing, receipt glance location, timestamp source); Missing iteration classification (behaviour-facing vs technical); Missing BDD scenario decision section or rationale\",\"claude_review_required_edits\":\"Resolve technical decisions and integrate into implementation steps; Add iteration classification; Add Acceptance Scenarios section or explicit rationale for no new Gherkin\"}}",
-          "internal.run_id": "01KT1AMYR4KQS8A3DP57F4EAKM",
-          "claude_review_required_edits": "Resolve technical decisions and integrate into implementation steps; Add iteration classification; Add Acceptance Scenarios section or explicit rationale for no new Gherkin",
-          "internal.retry_count.not_ready": 0,
-          "gemini_review_confidence": "High",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "current_node": "not_ready",
-          "internal.retry_count.codex_review": 0,
-          "thread.synthesis_gate.current_node": "not_ready",
-          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"NOT READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 1,\n    \"gemini_review_blocking_gaps\": \"Unresolved Open Technical Decisions regarding route organization, receipt glances calculation, and metadata source\",\n    \"gemini_review_required_edits\": \"Resolve the 'Open Technical Decisions' and integrate the chosen approaches into the implementation steps before starting\"\n  }\n}",
-          "thread.gemini_review.current_node": "claude_review",
-          "internal.thread_id": "synthesis_gate",
-          "gemini_review_blocking_gap_count": 1,
-          "internal.fidelity": "summary:high",
-          "internal.node_visit_count": 1,
-          "claude_review_confidence": "High",
           "thread.start.current_node": "read_plan",
-          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
-          "internal.retry_count.gemini_review": 0,
-          "claude_review_decision": "NOT READY",
-          "codex_review_required_edits": "Resolve and document technical decisions in implementation steps; Add explicit iteration classification; Add Acceptance Scenarios / Feature Files section or explicit rationale for no new Gherkin; Define deterministic timestamp fallback behavior and update acceptance criteria accordingly",
-          "preferred_label": "revise_plan",
+          "thread.synthesis_gate.current_node": "not_ready",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "current_node": "not_ready",
+          "plan_ready": false,
+          "internal.retry_count.start": 0,
+          "claude_review_blocking_gaps": "Three unresolved technical decisions (routing, receipt glance location, timestamp source); Missing iteration classification (behaviour-facing vs technical); Missing BDD scenario decision section or rationale",
+          "gemini_review_decision": "NOT READY",
+          "internal.retry_count.codex_review": 0,
+          "failure_class": "deterministic",
           "graph.default_fidelity": "summary:high",
+          "codex_review_decision": "NOT READY",
+          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+          "thread.claude_review.current_node": "codex_review",
+          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"NOT READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 1,\n    \"gemini_review_blocking_gaps\": \"Unresolved Open Technical Decisions regarding route organization, receipt glances calculation, and metadata source\",\n    \"gemini_review_required_edits\": \"Resolve the 'Open Technical Decisions' and integrate the chosen approaches into the implementation steps before starting\"\n  }\n}",
+          "plan_needs_human": true,
+          "response.claude_review": "# Independent Plan Review\n\n## Decision: NOT READY\n\n## Confidence: High\n\n## Blocking Gaps\n\n1. **Three open technical decisions remain unresolved**:\n   - Route organization for `GET /?club_id=<club_id>` (public marketing vs. member dashboard)\n   - Receipt glance calculation location (per-row in LiveView vs. presentation helper)\n   - Timestamp metadata source for message rows (if projections lack sent timestamps)\n   \n   These decisions directly impact implementation steps 1, 4, and 5. The plan notes preferences (\"prefer a helper\", \"preserve user-visible behaviour\") but doesn't commit to specific approaches.\n\n2. **Missing explicit iteration classification**: The plan doesn't state whether this is behaviour-facing or technical/engineering. This matters for determining whether new Gherkin scenarios are needed.\n\n3. **Missing BDD scenario decision section**: Per reference requirements, behaviour-facing iterations need an `## Acceptance Scenarios / Feature Files` section or explicit rationale for not using Gherkin. The plan mentions running existing `member_message_deliverability.feature` in validation but doesn't explain whether new scenarios are needed or why not.\n\n## Non-blocking Improvements\n\n1. **Implementation step 7** (\"Design and render empty states\") could specify which conditions trigger which empty states (e.g., \"when club has no messages\" vs. \"when club has no active members\").\n\n2. **Acceptance criterion 5** mentions \"timestamp (if available)\" but doesn't clearly state fallback behavior when timestamps are unavailable. Should the row omit timestamp entirely, show a different field, or display \"Unknown\"?\n\n3. **The \"Risks / Follow-ups\" section** mentions that routing needs care and receipt glances may need efficient queries, but doesn't propose mitigation strategies or acceptance criteria to validate these concerns are addressed.\n\n## Smallest Viable Iteration\n\nThe current scope is already reasonably focused. However, if forced to slice smaller, you could:\n\n**Option A**: Split into two iterations:\n- Iteration 14a: Convert to LiveView, remove inline compose, preserve exact current functionality\n- Iteration 14b: Add receipt glances, active-member card, empty states\n\n**Option B**: Defer polish elements:\n- Core iteration: LiveView conversion, compose CTA, basic message list\n- Defer: Receipt glances, active-member card, empty states to iteration 15\n\nHowever, the current scope seems appropriate if the technical decisions are resolved. The deliverable \"polished dashboard matching wireframe\" is coherent and useful.\n\n## Required Plan Edits\n\n1. **Resolve technical decisions** and integrate into implementation steps:\n   - **Route organization**: Choose between (a) route-based split with pattern matching in router, (b) single LiveView with mount-time auth check and conditional rendering, or (c) separate public and member routes. State the choice and update step 1 accordingly.\n   - **Receipt glances**: Choose between calculation in mount/handle_info vs. dedicated presentation helper. Update step 4 with the chosen module, function signature, and data source.\n   - **Timestamp metadata**: Inspect current message projections, confirm whether `sent_at` or equivalent exists. If yes, use it. If no, state explicitly what field will be shown instead (or that timestamp will be omitted). Update step 5 and acceptance criterion 5.\n\n2. **Add explicit iteration classification**: Insert a line near the top stating either:\n   - \"This is a technical/engineering iteration focused on presentation layer reorganization, not new business rules.\"\n   - Or: \"This is a behaviour-facing iteration that changes [specific user-visible behavior].\"\n\n3. **Add `## Acceptance Scenarios / Feature Files` section** (or explicit rationale):\n   - If technical/engineering: \"No new Gherkin scenarios needed. Existing `member_message_deliverability.feature` validates underlying message delivery behavior. This iteration only changes presentation layer; new LiveView tests in implementation step 10 validate UI rendering.\"\n   - If behaviour-facing: List specific scenarios to add/modify in shared feature files.\n\n4. **Minor: Specify empty state conditions** in implementation step 7:\n   - \"Render empty state when `Clubs.list_messages(club_id)` returns empty list\"\n   - \"Render empty member state when `Clubs.count_active_members(club_id)` returns 0\"\n\n## Validation Plan\n\nAfter required edits are made, the iteration will be ready when:\n\n1. All three open technical decisions are resolved with specific chosen approaches\n2. Implementation steps 1, 4, and 5 are updated to reference the chosen approaches\n3. The plan explicitly classifies the iteration type and explains the BDD scenario decision\n4. Acceptance criterion 5 clearly states fallback behavior for missing timestamps\n\nThe existing validation plan (dev check, LiveView tests, browser acceptance test, manual demo) is comprehensive and appropriate once the plan is implementation-ready.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":3,\"claude_review_blocking_gaps\":\"Three unresolved technical decisions (routing, receipt glance location, timestamp source); Missing iteration classification (behaviour-facing vs technical); Missing BDD scenario decision section or rationale\",\"claude_review_required_edits\":\"Resolve technical decisions and integrate into implementation steps; Add iteration classification; Add Acceptance Scenarios section or explicit rationale for no new Gherkin\"}}",
+          "internal.retry_count.gemini_review": 0,
+          "outcome": "failed",
+          "codex_review_blocking_gaps": "Unresolved technical decisions (routing, receipt glance computation, timestamp source/fallback); Iteration classification missing (behaviour-facing vs technical); Missing Acceptance Scenarios / Feature Files section or explicit no-Gherkin rationale; Timestamp criterion not deterministic",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "gemini_review_blocking_gap_count": 1,
+          "codex_review_required_edits": "Resolve and document technical decisions in implementation steps; Add explicit iteration classification; Add Acceptance Scenarios / Feature Files section or explicit rationale for no new Gherkin; Define deterministic timestamp fallback behavior and update acceptance criteria accordingly",
+          "gemini_review_confidence": "High",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.not_ready": 0,
+          "internal.retry_count.synthesize": 0,
+          "internal.work_dir": "/workspace/memba",
+          "codex_review_blocking_gap_count": 4,
+          "preferred_label": "revise_plan",
+          "response.codex_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Unresolved technical decisions (routing, receipt glance computation, timestamp source/fallback); Iteration classification missing (behaviour-facing vs technical); Missing Acceptance Scenarios / Feature Files section or explicit no-Gherkin rationale; Timestamp criterion not deterministic\",\"codex_review_required_edits\":\"Resolve and document technical decisions in implementation steps; Add explicit iteration classification; Add Acceptance Scenarios / Feature Files section or explicit rationale for no new Gherkin; Define deterministic timestamp fallback behavior and update acceptance criteria accordingly\"}}",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "thread.codex_review.current_node": "synthesize",
+          "claude_review_decision": "NOT READY",
+          "claude_review_required_edits": "Resolve technical decisions and integrate into implementation steps; Add iteration classification; Add Acceptance Scenarios section or explicit rationale for no new Gherkin",
+          "graph.rankdir": "LR",
+          "internal.retry_count.read_plan": 0,
+          "claude_review_confidence": "High",
+          "claude_review_blocking_gap_count": 3,
+          "internal.node_visit_count": 1,
+          "internal.run_id": "01KT1AMYR4KQS8A3DP57F4EAKM",
+          "internal.retry_count.claude_review": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.thread_id": "synthesis_gate",
+          "gemini_review_required_edits": "Resolve the 'Open Technical Decisions' and integrate the chosen approaches into the implementation steps before starting",
+          "last_stage": "synthesize",
+          "plan_needs_fix": false,
           "gemini_review_blocking_gaps": "Unresolved Open Technical Decisions regarding route organization, receipt glances calculation, and metadata source",
           "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.",
-          "codex_review_decision": "NOT READY",
-          "internal.work_dir": "/workspace/memba",
-          "failure_class": "deterministic",
-          "response.codex_review": "{\"preferred_next_label\":\"revise_plan\",\"outcome\":\"succeeded\",\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":4,\"codex_review_blocking_gaps\":\"Unresolved technical decisions (routing, receipt glance computation, timestamp source/fallback); Iteration classification missing (behaviour-facing vs technical); Missing Acceptance Scenarios / Feature Files section or explicit no-Gherkin rationale; Timestamp criterion not deterministic\",\"codex_review_required_edits\":\"Resolve and document technical decisions in implementation steps; Add explicit iteration classification; Add Acceptance Scenarios / Feature Files section or explicit rationale for no new Gherkin; Define deterministic timestamp fallback behavior and update acceptance criteria accordingly\"}}",
-          "gemini_review_required_edits": "Resolve the 'Open Technical Decisions' and integrate the chosen approaches into the implementation steps before starting",
-          "plan_needs_fix": false,
-          "codex_review_confidence": "High",
-          "internal.retry_count.synthesize": 0,
-          "thread.claude_review.current_node": "codex_review",
-          "thread.synthesize.current_node": "synthesis_gate",
           "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}"
         },
         "node_outcomes": {
-          "synthesize": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
-              "plan_ready": false,
-              "plan_needs_fix": false,
-              "plan_needs_human": true,
-              "last_stage": "synthesize",
-              "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}"
-            },
-            "notes": "Stage completed: synthesize",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 4372,
-                    "output_tokens": 33,
-                    "reasoning_tokens": 516,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 38330
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 11247,
-              "tool_time_ms": 0,
-              "active_time_ms": 11247
-            }
-          },
-          "not_ready": {
-            "status": "failed",
-            "context_updates": {
-              "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438"
-            },
-            "failure": {
-              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
-              "category": "deterministic"
-            },
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 153,
-              "active_time_ms": 153
-            }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -2020,6 +1960,10 @@
               "active_time_ms": 162
             }
           },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
           "codex_review": {
             "status": "succeeded",
             "preferred_label": "revise_plan",
@@ -2060,6 +2004,62 @@
               "inference_time_ms": 31245,
               "tool_time_ms": 0,
               "active_time_ms": 31245
+            }
+          },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 153,
+              "active_time_ms": 153
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_ready": false,
+              "plan_needs_fix": false,
+              "plan_needs_human": true,
+              "last_stage": "synthesize",
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}"
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4372,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 38330
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11247,
+              "tool_time_ms": 0,
+              "active_time_ms": 11247
             }
           },
           "synthesis_gate": {
@@ -2111,21 +2111,153 @@
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "83653024b78748377601dbca470b0b282629fff2",
+        "loop_failure_signatures": {
+          "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.": 1
+        },
         "node_visits": {
-          "synthesize": 1,
           "synthesis_gate": 1,
-          "gemini_review": 1,
           "claude_review": 1,
+          "gemini_review": 1,
+          "synthesize": 1,
           "read_plan": 1,
-          "codex_review": 1,
           "not_ready": 1,
+          "codex_review": 1,
           "start": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-01T10:14:50.332189503Z",
+    "status": "failed",
+    "timing": {
+      "wall_time_ms": 215615,
+      "inference_time_ms": 190410,
+      "tool_time_ms": 315,
+      "active_time_ms": 190725
+    },
+    "failure": {
+      "reason": "workflow_error",
+      "detail": {
+        "message": "goal gate unsatisfied for node not_ready and no retry target",
+        "category": "deterministic"
+      }
+    },
+    "final_git_commit_sha": "83653024b78748377601dbca470b0b282629fff2",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan",
+        "stage_label": "read_plan",
+        "timing": {
+          "wall_time_ms": 166,
+          "inference_time_ms": 0,
+          "tool_time_ms": 162,
+          "active_time_ms": 162
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 69015,
+          "inference_time_ms": 68966,
+          "tool_time_ms": 0,
+          "active_time_ms": 68966
+        },
+        "billing_usd_micros": 62388,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 78997,
+          "inference_time_ms": 78952,
+          "tool_time_ms": 0,
+          "active_time_ms": 78952
+        },
+        "billing_usd_micros": 57945,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 31291,
+          "inference_time_ms": 31245,
+          "tool_time_ms": 0,
+          "active_time_ms": 31245
+        },
+        "billing_usd_micros": 42904,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 11302,
+          "inference_time_ms": 11247,
+          "tool_time_ms": 0,
+          "active_time_ms": 11247
+        },
+        "billing_usd_micros": 38330,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 1,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "not_ready",
+        "stage_label": "not_ready",
+        "timing": {
+          "wall_time_ms": 162,
+          "inference_time_ms": 0,
+          "tool_time_ms": 153,
+          "active_time_ms": 153
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 23540,
+      "output_tokens": 4465,
+      "total_tokens": 33453,
+      "reasoning_tokens": 5448,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 201567
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -2149,7 +2281,12 @@
       "first_event_seq": 79,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "failed",
+        "notes": null,
+        "failure_reason": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+        "timestamp": "2026-06-01T10:14:47.290884329Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -2172,6 +2309,12 @@
       "termination": "exited",
       "started_at": "2026-06-01T10:14:47.127110426Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 162,
+        "inference_time_ms": 0,
+        "tool_time_ms": 153,
+        "active_time_ms": 153
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -2180,7 +2323,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "failed"
     },
     "read_plan@1": {
       "first_event_seq": 21,
