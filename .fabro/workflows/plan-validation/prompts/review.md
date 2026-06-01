@@ -1,6 +1,6 @@
 You are independently reviewing an iteration plan before implementation.
 
-Use the plan text from the preceding `Read Iteration Plan` stage. Do not assume any missing details. Be strict, practical, and specific.
+Use the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers. Do not assume any missing details. Be strict, practical, and specific.
 
 Review the plan against these readiness questions:
 

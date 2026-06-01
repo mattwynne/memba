@@ -1,6 +1,8 @@
 You are independently reviewing an iteration plan before implementation.
 
-Use the plan text from the preceding `Read Iteration Plan` stage. Do not assume any missing details. Be strict, practical, and specific.
+Use the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers. Do not assume any missing details. Be strict, practical, and specific.
+
+If a chunk says the plan exceeds the chunk limit, or if required chunks are missing/omitted from context, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.
 
 Review the plan against these readiness questions:
 

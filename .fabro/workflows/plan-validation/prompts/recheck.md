@@ -2,11 +2,11 @@ You are Claude Opus performing the post-fix readiness check for an iteration pla
 
 Use the context from:
 
-- The original plan read stage
+- The original chunked plan read stages
 - The three independent model reviews
 - Your Opus Synthesis & Repair Brief
 - Codex Plan Update
-- The updated plan text from the latest `Read Updated Plan` stage
+- The updated plan text from the latest chunked `Read Updated Plan ...` stages
 - Any previous recheck reports if this is a later loop pass
 
 Your job is to check the updated plan, decide whether it is ready, and decide whether another Codex edit pass is justified.

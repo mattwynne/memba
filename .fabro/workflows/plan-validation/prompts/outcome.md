@@ -1,6 +1,6 @@
 You are validating an iteration plan before implementation.
 
-Use the plan text from the preceding `Read Iteration Plan` stage.
+Use the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers.
 
 Assess whether the plan makes the expected post-iteration capability and success validation explicit.
 
