@@ -21,7 +21,7 @@ green than before.
 | 009 | 2026-05-31 | merged | Routing and LiveView surface split | [plan](009-routing-and-liveview-surface-split/plan.md) |
 | 010 | 2026-05-31 | merged | Shared magic-link authentication | [plan](010-shared-magic-link-auth/plan.md) |
 | 011 | 2026-06-01 | merged | Member-facing message behaviour | [plan](011-member-facing-message-behaviour/plan.md) |
-| 012 | 2026-06-01 | implementing | Member receipt detail LiveView polish | [plan](012-member-receipt-detail-liveview-polish/plan.md) |
+| 012 | 2026-06-01 | merged | Member receipt detail LiveView polish | [plan](012-member-receipt-detail-liveview-polish/plan.md) |
 | 013 | 2026-06-01 | ready | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
 | 014 | 2026-06-01 | ready | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
 
