@@ -9,13 +9,13 @@ defmodule Memba.Membership.Club do
 
   @behaviour Aggregate
 
-  defstruct [:club_id, :name]
+  defstruct [:club_id, :name, :slug]
 
   @impl Aggregate
   def execute(%__MODULE__{club_id: nil}, %CreateClub{} = command) do
     with :ok <- validate_club_id(command.club_id),
          {:ok, name} <- normalize_name(command.name) do
-      %ClubCreated{club_id: command.club_id, name: name}
+      %ClubCreated{club_id: command.club_id, name: name, slug: command.slug}
     end
   end
 
@@ -23,7 +23,7 @@ defmodule Memba.Membership.Club do
 
   @impl Aggregate
   def apply(%__MODULE__{} = club, %ClubCreated{} = event) do
-    %__MODULE__{club | club_id: event.club_id, name: event.name}
+    %__MODULE__{club | club_id: event.club_id, name: event.name, slug: event.slug}
   end
 
   defp validate_club_id(club_id) do

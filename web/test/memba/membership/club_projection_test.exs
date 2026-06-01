@@ -6,6 +6,21 @@ defmodule Memba.Membership.ClubProjectionTest do
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
+  test "club projection struct exposes the public slug attribute" do
+    club_id = Ecto.UUID.generate()
+
+    assert %ClubProjection{
+             club_id: ^club_id,
+             name: "Kootenay Mountaineering Club",
+             slug: "kmc"
+           } =
+             %ClubProjection{
+               club_id: club_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc"
+             }
+  end
+
   test "CreateClub is projected into the public Membership club query API" do
     club_id = Ecto.UUID.generate()
 

@@ -11,12 +11,14 @@ defmodule Memba.Membership.ClubTest do
 
       command = %CreateClub{
         club_id: club_id,
-        name: " Kootenay Mountaineering Club "
+        name: " Kootenay Mountaineering Club ",
+        slug: "kmc"
       }
 
       assert %ClubCreated{
                club_id: ^club_id,
-               name: "Kootenay Mountaineering Club"
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc"
              } = Club.execute(%Club{}, command)
     end
 
@@ -45,7 +47,8 @@ defmodule Memba.Membership.ClubTest do
       club =
         Club.apply(%Club{}, %ClubCreated{
           club_id: club_id,
-          name: "Kootenay Mountaineering Club"
+          name: "Kootenay Mountaineering Club",
+          slug: "kmc"
         })
 
       assert {:error, :already_created} =
@@ -59,10 +62,15 @@ defmodule Memba.Membership.ClubTest do
   test "apply/2 records the created club identity and name" do
     club_id = Ecto.UUID.generate()
 
-    assert %Club{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
+    assert %Club{
+             club_id: ^club_id,
+             name: "Kootenay Mountaineering Club",
+             slug: "kmc"
+           } =
              Club.apply(%Club{}, %ClubCreated{
                club_id: club_id,
-               name: "Kootenay Mountaineering Club"
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc"
              })
   end
 end

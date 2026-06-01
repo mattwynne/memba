@@ -5,5 +5,5 @@ defmodule Memba.Membership.Events.ClubCreated do
 
   @derive Jason.Encoder
   @enforce_keys [:club_id, :name]
-  defstruct [:club_id, :name]
+  defstruct [:club_id, :name, :slug]
 end
