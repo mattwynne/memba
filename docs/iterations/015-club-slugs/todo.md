@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Confirm production DNS prerequisite outside Fabro: `*.clubs.memba.io` points at the production Memba app before delivery starts.
-- [ ] 002 Inspect current Membership club command/event/aggregate/projector/projection code, public club route code, admin/staff route code, and all club creation call sites.
+- [x] 002 Inspect current Membership club command/event/aggregate/projector/projection code, public club route code, admin/staff route code, and all club creation call sites.
 - [ ] 003 Add `slug` to `CreateClub`, `ClubCreated`, `Memba.Membership.Club`, and `Memba.Membership.Projections.Club`.
 - [ ] 004 Implement slug generation and validation in a small Membership slug module or equivalent domain helper:
 - [ ] 005 Update `Membership.create_club/2` and relevant forms to use the generated default slug while allowing staff override.
