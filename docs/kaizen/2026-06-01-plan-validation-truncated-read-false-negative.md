@@ -114,4 +114,8 @@ Validation:
 Remaining follow-up:
 
 - Consider adding a non-LLM/static test fixture for long ready plans, so chunk coverage and prompt evidence can be checked without running the full model-based eval suite.
-- The workflow still has existing goal-gate retry-target warnings; this fix did not address those broader orchestration warnings.
+
+Follow-up applied later on 2026-06-01:
+
+- `.fabro/workflows/plan-validation/workflow.fabro`: removed `goal_gate=true` from the terminal failure nodes `read_failed` and `not_ready`. These nodes already fail deterministically by running scripts that exit 1; marking them as goal gates was unnecessary and produced Fabro validation warnings because goal gates are intended for critical nodes that must succeed, optionally with retry targets.
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed with no warnings.
