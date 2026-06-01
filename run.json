@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-01T07:24:26.102951032Z",
-  "last_event_at": "2026-06-01T08:19:50.716376898Z",
+  "last_event_at": "2026-06-01T08:19:54.678958594Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -7380,9 +7380,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1396,
       "checkpoint": {
-        "timestamp": "2026-06-01T08:19:50.775806439Z",
+        "timestamp": "2026-06-01T08:19:54.456746117Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -7414,6 +7414,321 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.start": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.wip_gate": 0,
+          "internal.fidelity": "summary:high",
+          "task_retry_available": false,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Current `todo.md` has `001`, `002`, and `003` checked, with `004` first unchecked.\n  - `git show a413e1c -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary task changed:\n    - `- [ ] 003 Route GET /messages/:message_id...`\n    - to `- [x] 003 Route GET /messages/:message_id...`\n  - Parent state had `003` as the first unchecked task, so the checked-off task matches the required next task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/router.ex` now routes:\n    - `live \"/messages/:message_id\", MemberMessageLive.Show, :show`\n    - inside the existing `pipe_through [:browser, :club_member_required]` scope.\n  - A `live_session :club_member` mounts current identity data for the member route.\n  - `web/lib/memba_web/live/member_message_live/show.ex` now supports routed params including `message_id` and `club_id`, loads the selected message, and renders the existing member message template path.\n  - `web/test/memba_web/router_test.exs` verifies `/messages/:message_id` routes to `MembaWeb.MemberMessageLive.Show` through `[:browser, :club_member_required]`.\n  - `web/test/memba_web/live/member_message_live/show_test.exs` verifies the routed URL shape and `club_id` query parameter reach the LiveView.\n  - No acceptance feature files or `acceptance-tests/` files were changed in the implementation commit.\n\n- Tests run/results found:\n  - Implementation summary reports targeted formatting plus `dev check` passing with `219 tests, 0 failures`.\n  - I also ran `PATH=\"$PWD/bin:$PATH\" dev check` against the live repository:\n    - passed, `219 tests, 0 failures`.\n  - Working tree remains clean after validation.\n\n- ADR/plan conformance notes:\n  - ADR 0015 respected: member message detail is now LiveView-backed.\n  - ADR 0013 reasonably respected for this routing slice with focused router/LiveView tests; lower-level LiveView/router assertions are appropriate for route mechanics.\n  - ADR 0006 not violated: member-facing receipt vocabulary is not changed and operator diagnostics are not exposed.\n  - Scope matches task `003`: the member-facing route shape is preserved while moving routing to the LiveView through the existing browser/member pipelines.\n  - Later tasks remain unchecked for the fuller loading/auth factoring, receipt presentation polish, collapse/expand UI, and acceptance support work.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.read_plan.current_node": "wip_gate",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.resume_gate": 0,
+          "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n\n2. **Changes made**\n   - Added `MembaWeb.MemberMessageDetail`\n     - Centralizes member message detail loading for the LiveView.\n     - Requires a valid selected club from the signed-in identity’s active clubs.\n     - Loads the message and verifies `message.club_id == club_id`.\n     - Returns `{:error, :forbidden}` for missing/invalid/unauthorized club selection.\n     - Returns `{:error, :not_found}` for missing messages or club/message mismatches.\n     - Preserves the existing receipt/sender assigns used by the current template.\n   - Updated `MembaWeb.MemberMessageLive.Show`\n     - Mount now delegates detail loading/authorization to `MemberMessageDetail.load/2`.\n     - Preserves existing not-found handling via `Phoenix.Router.NoRouteError`.\n     - Uses a 403-capable exception for LiveView mount-time forbidden handling.\n   - Added `MembaWeb.ForbiddenError`\n     - Plug-compatible exception with `plug_status: 403`.\n   - Cleaned up `MembaWeb.PageController`\n     - Removed now-unused `show_message/2` controller loading logic and its private helper duplication.\n   - Added `MembaWeb.MemberMessageDetailLoaderTest`\n     - Covers successful detail assign loading.\n     - Covers forbidden outcomes for missing, invalid, and unauthorized selected clubs.\n     - Covers not-found outcomes for missing messages and club/message mismatches.\n\n3. **Validation**\n   - `cd web && mix format --check-formatted lib/memba_web/forbidden_error.ex lib/memba_web/member_message_detail.ex lib/memba_web/live/member_message_live/show.ex lib/memba_web/controllers/page_controller.ex test/memba_web/member_message_detail_loader_test.exs`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `222 tests, 0 failures`.\n   - Note: a direct `mix test ...` attempt outside the dev-managed Postgres environment failed because the standalone Postgres socket was unavailable; `dev check` was then run successfully with required services.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n   - To:\n     - `- [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0015: member message detail loading now belongs to the LiveView path/helper rather than the controller route.\n   - ADR 0013: added focused automated tests for the user-facing loading/authorization behaviour.\n   - ADR 0006: preserved the existing member-facing receipt vocabulary by continuing to use `MembaWeb.MemberReceiptPresentation`; no operator-only fields were added to member-facing output.",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.retry_count.validate_task": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "failure_signature": "",
+          "graph.rankdir": "LR",
+          "internal.retry_count.implement_next_task": 0,
+          "current_node": "implement_next_task",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 4,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.thread_id": "all_tasks_done",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "graph.max_node_visits": "300",
+          "internal.retry_count.task_gate": 0,
+          "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper",
+          "thread.start.current_node": "read_plan",
+          "task_list_needs_human": false,
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "outcome": "succeeded",
+          "internal.run_id": "01KT111H679XB3J3BVBZC150ZS",
+          "last_stage": "implement_next_task",
+          "task_list_complete": false,
+          "command.output": "blob://sha256/ebef3f485c708e18fc88e58925418fb5410c53711ca3dfb867cb359ceddad0b7",
+          "internal.retry_count.read_plan": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.work_dir": "/workspace/memba",
+          "failure_class": "",
+          "task_valid": true
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n\n2. **Changes made**\n   - Added `MembaWeb.MemberMessageDetail`\n     - Centralizes member message detail loading for the LiveView.\n     - Requires a valid selected club from the signed-in identity’s active clubs.\n     - Loads the message and verifies `message.club_id == club_id`.\n     - Returns `{:error, :forbidden}` for missing/invalid/unauthorized club selection.\n     - Returns `{:error, :not_found}` for missing messages or club/message mismatches.\n     - Preserves the existing receipt/sender assigns used by the current template.\n   - Updated `MembaWeb.MemberMessageLive.Show`\n     - Mount now delegates detail loading/authorization to `MemberMessageDetail.load/2`.\n     - Preserves existing not-found handling via `Phoenix.Router.NoRouteError`.\n     - Uses a 403-capable exception for LiveView mount-time forbidden handling.\n   - Added `MembaWeb.ForbiddenError`\n     - Plug-compatible exception with `plug_status: 403`.\n   - Cleaned up `MembaWeb.PageController`\n     - Removed now-unused `show_message/2` controller loading logic and its private helper duplication.\n   - Added `MembaWeb.MemberMessageDetailLoaderTest`\n     - Covers successful detail assign loading.\n     - Covers forbidden outcomes for missing, invalid, and unauthorized selected clubs.\n     - Covers not-found outcomes for missing messages and club/message mismatches.\n\n3. **Validation**\n   - `cd web && mix format --check-formatted lib/memba_web/forbidden_error.ex lib/memba_web/member_message_detail.ex lib/memba_web/live/member_message_live/show.ex lib/memba_web/controllers/page_controller.ex test/memba_web/member_message_detail_loader_test.exs`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `222 tests, 0 failures`.\n   - Note: a direct `mix test ...` attempt outside the dev-managed Postgres environment failed because the standalone Postgres socket was unavailable; `dev check` was then run successfully with required services.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n   - To:\n     - `- [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0015: member message detail loading now belongs to the LiveView path/helper rather than the controller route.\n   - ADR 0013: added focused automated tests for the user-facing loading/authorization behaviour.\n   - ADR 0006: preserved the existing member-facing receipt vocabulary by continuing to use `MembaWeb.MemberReceiptPresentation`; no operator-only fields were added to member-facing output.",
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 866522,
+                    "output_tokens": 10468,
+                    "reasoning_tokens": 7798,
+                    "cache_read_tokens": 3623424,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6692302
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 602148,
+              "tool_time_ms": 229444,
+              "active_time_ms": 831592
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c6ef0ebdca9ed4e8d0e16642af8f57ee041a83f2b4f0537527e04fbce80b3f32"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 240,
+              "active_time_ms": 240
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_list_complete": false,
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 13079,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 144,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 70555
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 10308,
+              "tool_time_ms": 0,
+              "active_time_ms": 10308
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9f7442803bbc0f0e323b59fdeb3d08f1d3202e242683eb9c570ff8b23bbcdcf5"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168297,
+              "active_time_ms": 168297
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/adc68b88126605963eb588c91c44c58a47a0d4e9bd31f5be03774bd8e3d94abb"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 16890,
+              "active_time_ms": 16890
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c64a0135bcc8f39f098020142bc2c931d5ab16a38245565e0567465743b4924f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 171,
+              "active_time_ms": 171
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Current `todo.md` has `001`, `002`, and `003` checked, with `004` first unchecked.\n  - `git show a413e1c -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary task changed:\n    - `- [ ] 003 Route GET /messages/:message_id...`\n    - to `- [x] 003 Route GET /messages/:message_id...`\n  - Parent state had `003` as the first unchecked task, so the checked-off task matches the required next task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/router.ex` now routes:\n    - `live \"/messages/:message_id\", MemberMessageLive.Show, :show`\n    - inside the existing `pipe_through [:browser, :club_member_required]` scope.\n  - A `live_session :club_member` mounts current identity data for the member route.\n  - `web/lib/memba_web/live/member_message_live/show.ex` now supports routed params including `message_id` and `club_id`, loads the selected message, and renders the existing member message template path.\n  - `web/test/memba_web/router_test.exs` verifies `/messages/:message_id` routes to `MembaWeb.MemberMessageLive.Show` through `[:browser, :club_member_required]`.\n  - `web/test/memba_web/live/member_message_live/show_test.exs` verifies the routed URL shape and `club_id` query parameter reach the LiveView.\n  - No acceptance feature files or `acceptance-tests/` files were changed in the implementation commit.\n\n- Tests run/results found:\n  - Implementation summary reports targeted formatting plus `dev check` passing with `219 tests, 0 failures`.\n  - I also ran `PATH=\"$PWD/bin:$PATH\" dev check` against the live repository:\n    - passed, `219 tests, 0 failures`.\n  - Working tree remains clean after validation.\n\n- ADR/plan conformance notes:\n  - ADR 0015 respected: member message detail is now LiveView-backed.\n  - ADR 0013 reasonably respected for this routing slice with focused router/LiveView tests; lower-level LiveView/router assertions are appropriate for route mechanics.\n  - ADR 0006 not violated: member-facing receipt vocabulary is not changed and operator diagnostics are not exposed.\n  - Scope matches task `003`: the member-facing route shape is preserved while moving routing to the LiveView through the existing browser/member pipelines.\n  - Later tasks remain unchecked for the fuller loading/auth factoring, receipt presentation polish, collapse/expand UI, and acceptance support work.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "last_stage": "validate_task",
+              "task_retry_available": false,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Current `todo.md` has `001`, `002`, and `003` checked, with `004` first unchecked.\n  - `git show a413e1c -- docs/ite"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 317836,
+                    "output_tokens": 2458,
+                    "reasoning_tokens": 1380,
+                    "cache_read_tokens": 290816,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1849728
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 146044,
+              "tool_time_ms": 57591,
+              "active_time_ms": 203635
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1297459ec8132d109fa52cc4e19ecd08b6462b7b8125009a379faea32956d09d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 171,
+              "active_time_ms": 171
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ebef3f485c708e18fc88e58925418fb5410c53711ca3dfb867cb359ceddad0b7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "f5878708128c4130efea3bf58b698461bec11549",
+        "node_visits": {
+          "all_tasks_done": 4,
+          "implement_next_task": 4,
+          "pre_validate_snapshot": 3,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "start": 1,
+          "sync_task_list": 4,
+          "task_gate": 3,
+          "wip_gate": 1,
+          "validate_task": 3,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md\nindex 80c2a27..d4de068 100644\n--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md\n+++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md\n@@ -3,7 +3,7 @@\n - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.\n - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.\n - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.\n-- [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:\n+- [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:\n - [ ] 005 Build a receipt presentation model for the LiveView:\n - [ ] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.\n - [ ] 007 Add LiveView state for collapsed groups:\ndiff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex\nindex 21d2a87..c131144 100644\n--- a/web/lib/memba_web/controllers/page_controller.ex\n+++ b/web/lib/memba_web/controllers/page_controller.ex\n@@ -4,9 +4,6 @@ defmodule MembaWeb.PageController do\n   alias Memba.Accounts\n   alias Memba.Membership\n   alias Memba.Messaging\n-  alias MembaWeb.MemberReceiptPresentation\n-\n-  @member_receipt_status_order [\"opened\", \"delivered\", \"sent\", \"delivery problem\"]\n \n   def home(%{assigns: %{current_identity: identity}} = conn, %{\"club_id\" => club_id})\n       when not is_nil(identity) do\n@@ -83,43 +80,6 @@ defmodule MembaWeb.PageController do\n     end\n   end\n \n-  def show_message(conn, %{\"club_id\" => club_id, \"message_id\" => message_id}) do\n-    case Ecto.UUID.cast(club_id) do\n-      {:ok, club_id} ->\n-        selected_club = selected_club(conn, club_id)\n-        message = Messaging.get_message(message_id)\n-\n-        cond do\n-          is_nil(selected_club) ->\n-            forbidden(conn)\n-\n-          is_nil(message) or message.club_id != club_id ->\n-            not_found(conn)\n-\n-          true ->\n-            receipts =\n-              message.message_id\n-              |> Messaging.list_member_receipts()\n-              |> Enum.map(&MemberReceiptPresentation.present_receipt/1)\n-\n-            sender = Membership.get_person(message.sender_id)\n-\n-            conn\n-            |> assign(:page_title, message.subject)\n-            |> assign(:selected_club, selected_club)\n-            |> assign(:message, message)\n-            |> assign(:sender_name, sender_name(sender))\n-            |> assign(:member_receipts, receipts)\n-            |> assign(:member_receipt_count, Enum.count(receipts))\n-            |> assign(:member_receipt_groups, member_receipt_groups(receipts))\n-            |> render(:message)\n-        end\n-\n-      :error ->\n-        forbidden(conn)\n-    end\n-  end\n-\n   def about(conn, _params) do\n     conn\n     |> assign(:page_title, \"About\")\n@@ -179,29 +139,6 @@ defmodule MembaWeb.PageController do\n     Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)\n   end\n \n-  defp sender_name(%{name: name}) when is_binary(name) and name != \"\", do: name\n-  defp sender_name(_sender), do: \"Club member\"\n-\n-  defp member_receipt_groups(receipts) do\n-    receipts_by_status = Enum.group_by(receipts, & &1.status)\n-    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order\n-\n-    (@member_receipt_status_order ++ Enum.sort(extra_statuses))\n-    |> Enum.map(fn status ->\n-      status_receipts = Map.get(receipts_by_status, status, [])\n-      presentation = MemberReceiptPresentation.present_status(status)\n-\n-      %{\n-        status: status,\n-        status_label: presentation.label,\n-        status_icon: presentation.icon,\n-        count: Enum.count(status_receipts),\n-        receipts: status_receipts\n-      }\n-    end)\n-    |> Enum.reject(&(&1.count == 0))\n-  end\n-\n   defp current_member_for_identity(_members, nil), do: nil\n \n   defp current_member_for_identity(members, identity) do\n@@ -243,11 +180,5 @@ defmodule MembaWeb.PageController do\n     |> render(:\"404\")\n   end\n \n-  defp forbidden(conn) do\n-    conn\n-    |> send_resp(:forbidden, \"Forbidden\")\n-    |> halt()\n-  end\n-\n   defp format_reason(reason), do: reason |> inspect() |> String.replace(\"_\", \" \")\n end\ndiff --git a/web/lib/memba_web/forbidden_error.ex b/web/lib/memba_web/forbidden_error.ex\nnew file mode 100644\nindex 0000000..2a10625\n--- /dev/null\n+++ b/web/lib/memba_web/forbidden_error.ex\n@@ -0,0 +1,7 @@\n+defmodule MembaWeb.ForbiddenError do\n+  @moduledoc \"\"\"\n+  Exception used when LiveView mount-time authorization must preserve a 403 response.\n+  \"\"\"\n+\n+  defexception message: \"Forbidden\", plug_status: 403\n+end\ndiff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex\nindex 1058e52..6c2453f 100644\n--- a/web/lib/memba_web/live/member_message_live/show.ex\n+++ b/web/lib/memba_web/live/member_message_live/show.ex\n@@ -8,45 +8,23 @@ defmodule MembaWeb.MemberMessageLive.Show do\n   \"\"\"\n   use MembaWeb, :live_view\n \n-  alias Memba.Membership\n-  alias Memba.Messaging\n-  alias MembaWeb.MemberReceiptPresentation\n-\n-  @member_receipt_status_order [\"opened\", \"delivered\", \"sent\", \"delivery problem\"]\n+  alias MembaWeb.MemberMessageDetail\n \n   @impl Phoenix.LiveView\n-  def mount(%{\"club_id\" => club_id, \"message_id\" => message_id} = params, _session, socket) do\n+  def mount(%{\"club_id\" => _club_id, \"message_id\" => _message_id} = params, _session, socket) do\n     socket = ensure_identity_assigns(socket)\n \n-    with {:ok, club_id} <- Ecto.UUID.cast(club_id),\n-         selected_club when not is_nil(selected_club) <- selected_club(socket, club_id),\n-         message when not is_nil(message) <- Messaging.get_message(message_id),\n-         true <- message.club_id == club_id do\n-      receipts =\n-        message.message_id\n-        |> Messaging.list_member_receipts()\n-        |> Enum.map(&MemberReceiptPresentation.present_receipt/1)\n-\n-      sender = Membership.get_person(message.sender_id)\n-\n-      {:ok,\n-       socket\n-       |> assign(:route_params, params)\n-       |> assign(:page_title, message.subject)\n-       |> assign(:selected_club, selected_club)\n-       |> assign(:message, message)\n-       |> assign(:sender_name, sender_name(sender))\n-       |> assign(:member_receipts, receipts)\n-       |> assign(:member_receipt_count, Enum.count(receipts))\n-       |> assign(:member_receipt_groups, member_receipt_groups(receipts))}\n-    else\n-      :error ->\n-        not_found!(socket)\n+    case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do\n+      {:ok, detail_assigns} ->\n+        {:ok,\n+         socket\n+         |> assign(:route_params, params)\n+         |> assign(detail_assigns)}\n \n-      nil ->\n-        not_found!(socket)\n+      {:error, :forbidden} ->\n+        forbidden!(socket)\n \n-      false ->\n+      {:error, :not_found} ->\n         not_found!(socket)\n     end\n   end\n@@ -97,32 +75,7 @@ defmodule MembaWeb.MemberMessageLive.Show do\n     |> assign_new(:current_identity_clubs, fn -> [] end)\n   end\n \n-  defp selected_club(socket, club_id) do\n-    Enum.find(socket.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)\n-  end\n-\n-  defp sender_name(%{name: name}) when is_binary(name) and name != \"\", do: name\n-  defp sender_name(_sender), do: \"Club member\"\n-\n-  defp member_receipt_groups(receipts) do\n-    receipts_by_status = Enum.group_by(receipts, & &1.status)\n-    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order\n-\n-    (@member_receipt_status_order ++ Enum.sort(extra_statuses))\n-    |> Enum.map(fn status ->\n-      status_receipts = Map.get(receipts_by_status, status, [])\n-      presentation = MemberReceiptPresentation.present_status(status)\n-\n-      %{\n-        status: status,\n-        status_label: presentation.label,\n-        status_icon: presentation.icon,\n-        count: Enum.count(status_receipts),\n-        receipts: status_receipts\n-      }\n-    end)\n-    |> Enum.reject(&(&1.count == 0))\n-  end\n+  defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)\n \n   defp not_found!(socket) do\n     case socket.private[:connect_info] do\ndiff --git a/web/lib/memba_web/member_message_detail.ex b/web/lib/memba_web/member_message_detail.ex\nnew file mode 100644\nindex 0000000..c642b6e\n--- /dev/null\n+++ b/web/lib/memba_web/member_message_detail.ex\n@@ -0,0 +1,107 @@\n+defmodule MembaWeb.MemberMessageDetail do\n+  @moduledoc \"\"\"\n+  Loads the member-facing message detail data for the LiveView route.\n+\n+  The route-level plugs keep the public HTTP authorization semantics intact.\n+  This helper repeats the selected-club and message ownership checks inside the\n+  LiveView mount path so connected LiveView mounts do not depend only on the\n+  initial controller pipeline.\n+  \"\"\"\n+\n+  alias Memba.Membership\n+  alias Memba.Messaging\n+  alias MembaWeb.MemberReceiptPresentation\n+\n+  @member_receipt_status_order [\"opened\", \"delivered\", \"sent\", \"delivery problem\"]\n+\n+  @doc \"\"\"\n+  Load the selected club message detail for a signed-in member.\n+\n+  Returns:\n+\n+    * `{:ok, assigns}` when the selected active club owns the requested message;\n+    * `{:error, :forbidden}` for missing, invalid, or inactive selected clubs;\n+    * `{:error, :not_found}` for missing messages or message/club mismatches.\n+  \"\"\"\n+  def load(params, active_clubs) when is_map(params) and is_list(active_clubs) do\n+    with {:ok, club_id} <- cast_selected_club_id(params),\n+         {:ok, selected_club} <- fetch_selected_club(active_clubs, club_id),\n+         {:ok, message} <- fetch_message(params),\n+         :ok <- require_message_in_club(message, club_id) do\n+      {:ok, detail_assigns(selected_club, message)}\n+    end\n+  end\n+\n+  def load(_params, _active_clubs), do: {:error, :forbidden}\n+\n+  defp cast_selected_club_id(params) do\n+    case Ecto.UUID.cast(Map.get(params, \"club_id\")) do\n+      {:ok, club_id} -> {:ok, club_id}\n+      :error -> {:error, :forbidden}\n+    end\n+  end\n+\n+  defp fetch_selected_club(active_clubs, club_id) do\n+    case Enum.find(active_clubs, fn club -> club.club_id == club_id end) do\n+      nil -> {:error, :forbidden}\n+      selected_club -> {:ok, selected_club}\n+    end\n+  end\n+\n+  defp fetch_message(params) do\n+    case Messaging.get_message(Map.get(params, \"message_id\")) do\n+      nil -> {:error, :not_found}\n+      message -> {:ok, message}\n+    end\n+  end\n+\n+  defp require_message_in_club(message, club_id) do\n+    if message.club_id == club_id do\n+      :ok\n+    else\n+      {:error, :not_found}\n+    end\n+  end\n+\n+  defp detail_assigns(selected_club, message) do\n+    receipts =\n+      message.message_id\n+      |> Messaging.list_member_receipts()\n+      |> Enum.map(&MemberReceiptPresentation.present_receipt/1)\n+\n+    sender = Membership.get_person(message.sender_id)\n+\n+    %{\n+      page_title: message.subject,\n+      selected_club: selected_club,\n+      message: message,\n+      sender_name: sender_name(sender),\n+      member_receipts: receipts,\n+      member_receipt_count: Enum.count(receipts),\n+      member_receipt_groups: member_receipt_groups(receipts)\n+    }\n+  end\n+\n+  defp sender_name(%{name: name}) when is_binary(name) and name != \"\", do: name\n+  defp sender_name(_sender), do: \"Club member\"\n+\n+  defp member_receipt_groups(receipts) do\n+    receipts_by_status = Enum.group_by(receipts, & &1.status)\n+    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order\n+\n+    (@member_receipt_status_order ++ Enum.sort(extra_statuses))\n+    |> Enum.map(fn status ->\n+      status_receipts = Map.get(receipts_by_status, status, [])\n+      presentation = MemberReceiptPresentation.present_status(status)\n+\n+      %{\n+        status: status,\n+        status_label: presentation.label,\n+        status_icon: presentation.icon,\n+        count: Enum.count(status_receipts),\n+        receipts: status_receipts\n+      }\n+    end)\n+    |> Enum.reject(&(&1.count == 0))\n+  end\n+end\ndiff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs\nnew file mode 100644\nindex 0000000..2034817\n--- /dev/null\n+++ b/web/test/memba_web/member_message_detail_loader_test.exs\n@@ -0,0 +1,166 @@\n+defmodule MembaWeb.MemberMessageDetailLoaderTest do\n+  use MembaWeb.ConnCase, async: true\n+\n+  alias Memba.Membership.Projections.Club\n+  alias Memba.Membership.Projections.Membership\n+  alias Memba.Membership.Projections.Person\n+  alias Memba.Messaging.Projections.MemberReceipt\n+  alias Memba.Messaging.Projections.Message\n+  alias Memba.Repo\n+  alias MembaWeb.MemberMessageDetail\n+\n+  test \"loads detail assigns for an active selected club message\" do\n+    alice =\n+      create_active_member(\n+        email: \"alice@example.com\",\n+        name: \"Alice Adams\",\n+        club_name: \"Alpine Club\"\n+      )\n+\n+    bob =\n+      create_active_member(\n+        email: \"bob@example.com\",\n+        name: \"Bob Builder\",\n+        club_name: \"Alpine Club\",\n+        club_id: alice.club_id\n+      )\n+\n+    message =\n+      create_message(\n+        club_id: alice.club_id,\n+        sender_id: alice.person_id,\n+        subject: \"Trip planning night\",\n+        body: \"Bring your maps.\"\n+      )\n+\n+    create_member_receipt(\n+      message_id: message.message_id,\n+      recipient_id: bob.person_id,\n+      recipient_name: \"Bob Builder\",\n+      receipt_status: \"delivered\"\n+    )\n+\n+    assert {:ok, assigns} =\n+             MemberMessageDetail.load(\n+               %{\"club_id\" => alice.club_id, \"message_id\" => message.message_id},\n+               [alice]\n+             )\n+\n+    assert assigns.page_title == \"Trip planning night\"\n+    assert assigns.selected_club.club_id == alice.club_id\n+    assert assigns.message.message_id == message.message_id\n+    assert assigns.sender_name == \"Alice Adams\"\n+    assert assigns.member_receipt_count == 1\n+\n+    assert [%{status: \"delivered\", status_label: \"Delivered\", count: 1}] =\n+             assigns.member_receipt_groups\n+  end\n+\n+  test \"forbids missing, invalid, or unauthorized selected clubs\" do\n+    club = create_active_member(email: \"alice@example.com\", club_name: \"Alpine Club\")\n+    other_club = create_active_member(email: \"pat@example.com\", club_name: \"Paddling Club\")\n+\n+    message =\n+      create_message(\n+        club_id: club.club_id,\n+        sender_id: club.person_id,\n+        subject: \"Members only\"\n+      )\n+\n+    assert {:error, :forbidden} =\n+             MemberMessageDetail.load(%{\"message_id\" => message.message_id}, [club])\n+\n+    assert {:error, :forbidden} =\n+             MemberMessageDetail.load(\n+               %{\"club_id\" => \"not-a-uuid\", \"message_id\" => message.message_id},\n+               [club]\n+             )\n+\n+    assert {:error, :forbidden} =\n+             MemberMessageDetail.load(\n+               %{\"club_id\" => club.club_id, \"message_id\" => message.message_id},\n+               [other_club]\n+             )\n+  end\n+\n+  test \"returns not found for missing messages and message club mismatches\" do\n+    club = create_active_member(email: \"alice@example.com\", club_name: \"Alpine Club\")\n+    other_club = create_club(name: \"Paddling Club\")\n+\n+    mismatched_message =\n+      create_message(\n+        club_id: other_club.club_id,\n+        sender_id: club.person_id,\n+        subject: \"Wrong club\"\n+      )\n+\n+    assert {:error, :not_found} =\n+             MemberMessageDetail.load(\n+               %{\"club_id\" => club.club_id, \"message_id\" => Ecto.UUID.generate()},\n+               [club]\n+             )\n+\n+    assert {:error, :not_found} =\n+             MemberMessageDetail.load(\n+               %{\"club_id\" => club.club_id, \"message_id\" => mismatched_message.message_id},\n+               [club]\n+             )\n+  end\n+\n+  defp create_club(attrs) do\n+    Repo.insert!(%Club{\n+      club_id: Ecto.UUID.generate(),\n+      name: Keyword.fetch!(attrs, :name)\n+    })\n+  end\n+\n+  defp create_active_member(attrs) do\n+    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)\n+    person_id = Ecto.UUID.generate()\n+    club_name = Keyword.fetch!(attrs, :club_name)\n+\n+    club =\n+      Repo.get(Club, club_id) ||\n+        Repo.insert!(%Club{\n+          club_id: club_id,\n+          name: club_name\n+        })\n+\n+    Repo.insert!(%Person{\n+      person_id: person_id,\n+      name: Keyword.get(attrs, :name, \"Test Member\"),\n+      email: Keyword.fetch!(attrs, :email)\n+    })\n+\n+    Repo.insert!(%Membership{\n+      membership_id: Ecto.UUID.generate(),\n+      club_id: club_id,\n+      person_id: person_id,\n+      active: true\n+    })\n+\n+    club\n+    |> Map.from_struct()\n+    |> Map.put(:person_id, person_id)\n+  end\n+\n+  defp create_message(attrs) do\n+    Repo.insert!(%Message{\n+      message_id: Ecto.UUID.generate(),\n+      club_id: Keyword.fetch!(attrs, :club_id),\n+      sender_id: Keyword.fetch!(attrs, :sender_id),\n+      subject: Keyword.fetch!(attrs, :subject),\n+      body: Keyword.get(attrs, :body, \"Message body\")\n+    })\n+  end\n+\n+  defp create_member_receipt(attrs) do\n+    Repo.insert!(%MemberReceipt{\n+      delivery_id: Ecto.UUID.generate(),\n+      message_id: Keyword.fetch!(attrs, :message_id),\n+      recipient_id: Keyword.fetch!(attrs, :recipient_id),\n+      recipient_name: Keyword.fetch!(attrs, :recipient_name),\n+      receipt_status: Keyword.fetch!(attrs, :receipt_status)\n+    })\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 10,
+          "additions": 608,
+          "deletions": 73
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-01T08:19:54.685474393Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "task_retry_available": false,
           "internal.retry_count.pre_validate_snapshot": 0,
           "thread.validate_task.current_node": "task_gate",
@@ -7422,7 +7737,7 @@
           "task_list_needs_human": false,
           "task_valid": true,
           "internal.retry_count.implement_next_task": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "internal.retry_count.sync_task_list": 0,
           "thread.all_tasks_done.current_node": "implement_next_task",
@@ -7434,7 +7749,7 @@
           "thread.task_gate.current_node": "sync_task_list",
           "graph.default_fidelity": "summary:high",
           "internal.retry_count.wip_gate": 0,
-          "command.output": "blob://sha256/ebef3f485c708e18fc88e58925418fb5410c53711ca3dfb867cb359ceddad0b7",
+          "command.output": "blob://sha256/92fbb025ff8f8c74688cb51b45258e4d392e9add1f1721400827b763cdc5a99b",
           "thread.read_plan.current_node": "wip_gate",
           "thread.preflight_sandbox.current_node": "resume_gate",
           "graph.max_node_visits": "300",
@@ -7446,7 +7761,7 @@
           "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n\n2. **Changes made**\n   - Added `MembaWeb.MemberMessageDetail`\n     - Centralizes member message detail loading for the LiveView.\n     - Requires a valid selected club from the signed-in identity’s active clubs.\n     - Loads the message and verifies `message.club_id == club_id`.\n     - Returns `{:error, :forbidden}` for missing/invalid/unauthorized club selection.\n     - Returns `{:error, :not_found}` for missing messages or club/message mismatches.\n     - Preserves the existing receipt/sender assigns used by the current template.\n   - Updated `MembaWeb.MemberMessageLive.Show`\n     - Mount now delegates detail loading/authorization to `MemberMessageDetail.load/2`.\n     - Preserves existing not-found handling via `Phoenix.Router.NoRouteError`.\n     - Uses a 403-capable exception for LiveView mount-time forbidden handling.\n   - Added `MembaWeb.ForbiddenError`\n     - Plug-compatible exception with `plug_status: 403`.\n   - Cleaned up `MembaWeb.PageController`\n     - Removed now-unused `show_message/2` controller loading logic and its private helper duplication.\n   - Added `MembaWeb.MemberMessageDetailLoaderTest`\n     - Covers successful detail assign loading.\n     - Covers forbidden outcomes for missing, invalid, and unauthorized selected clubs.\n     - Covers not-found outcomes for missing messages and club/message mismatches.\n\n3. **Validation**\n   - `cd web && mix format --check-formatted lib/memba_web/forbidden_error.ex lib/memba_web/member_message_detail.ex lib/memba_web/live/member_message_live/show.ex lib/memba_web/controllers/page_controller.ex test/memba_web/member_message_detail_loader_test.exs`\n     - Passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `222 tests, 0 failures`.\n   - Note: a direct `mix test ...` attempt outside the dev-managed Postgres environment failed because the standalone Postgres socket was unavailable; `dev check` was then run successfully with required services.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n   - To:\n     - `- [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0015: member message detail loading now belongs to the LiveView path/helper rather than the controller route.\n   - ADR 0013: added focused automated tests for the user-facing loading/authorization behaviour.\n   - ADR 0006: preserved the existing member-facing receipt vocabulary by continuing to use `MembaWeb.MemberReceiptPresentation`; no operator-only fields were added to member-facing output.",
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Current `todo.md` has `001`, `002`, and `003` checked, with `004` first unchecked.\n  - `git show a413e1c -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary task changed:\n    - `- [ ] 003 Route GET /messages/:message_id...`\n    - to `- [x] 003 Route GET /messages/:message_id...`\n  - Parent state had `003` as the first unchecked task, so the checked-off task matches the required next task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/router.ex` now routes:\n    - `live \"/messages/:message_id\", MemberMessageLive.Show, :show`\n    - inside the existing `pipe_through [:browser, :club_member_required]` scope.\n  - A `live_session :club_member` mounts current identity data for the member route.\n  - `web/lib/memba_web/live/member_message_live/show.ex` now supports routed params including `message_id` and `club_id`, loads the selected message, and renders the existing member message template path.\n  - `web/test/memba_web/router_test.exs` verifies `/messages/:message_id` routes to `MembaWeb.MemberMessageLive.Show` through `[:browser, :club_member_required]`.\n  - `web/test/memba_web/live/member_message_live/show_test.exs` verifies the routed URL shape and `club_id` query parameter reach the LiveView.\n  - No acceptance feature files or `acceptance-tests/` files were changed in the implementation commit.\n\n- Tests run/results found:\n  - Implementation summary reports targeted formatting plus `dev check` passing with `219 tests, 0 failures`.\n  - I also ran `PATH=\"$PWD/bin:$PATH\" dev check` against the live repository:\n    - passed, `219 tests, 0 failures`.\n  - Working tree remains clean after validation.\n\n- ADR/plan conformance notes:\n  - ADR 0015 respected: member message detail is now LiveView-backed.\n  - ADR 0013 reasonably respected for this routing slice with focused router/LiveView tests; lower-level LiveView/router assertions are appropriate for route mechanics.\n  - ADR 0006 not violated: member-facing receipt vocabulary is not changed and operator diagnostics are not exposed.\n  - Scope matches task `003`: the member-facing route shape is preserved while moving routing to the LiveView through the existing browser/member pipelines.\n  - Later tasks remain unchecked for the fuller loading/auth factoring, receipt presentation polish, collapse/expand UI, and acceptance support work.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "internal.run_id": "01KT111H679XB3J3BVBZC150ZS",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "thread.start.current_node": "read_plan",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "internal.retry_count.validate_task": 0,
@@ -7605,15 +7920,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/1297459ec8132d109fa52cc4e19ecd08b6462b7b8125009a379faea32956d09d"
+              "command.output": "blob://sha256/92fbb025ff8f8c74688cb51b45258e4d392e9add1f1721400827b763cdc5a99b"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 171,
-              "active_time_ms": 171
+              "tool_time_ms": 165,
+              "active_time_ms": 165
             }
           },
           "wip_gate": {
@@ -7668,7 +7983,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "preflight_sandbox": 1,
           "implement_next_task": 4,
@@ -7677,7 +7992,7 @@
           "all_tasks_done": 4,
           "wip_gate": 1,
           "resume_gate": 1,
-          "pre_validate_snapshot": 3,
+          "pre_validate_snapshot": 4,
           "validate_task": 3,
           "sync_task_list": 4,
           "start": 1
@@ -7706,6 +8021,44 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "pre_validate_snapshot@4": {
+      "first_event_seq": 1399,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/92fbb025ff8f8c74688cb51b45258e4d392e9add1f1721400827b763cdc5a99b",
+        "exit_code": 0,
+        "duration_ms": 165,
+        "termination": "exited",
+        "output_bytes": 608,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 608,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-01T08:19:54.495876178Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "validate_task@3": {
       "first_event_seq": 975,
       "prompt": null,
