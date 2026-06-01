@@ -47,6 +47,7 @@ defmodule MembaWeb.Router do
     pipe_through [:browser, :club_member_required]
 
     live_session :club_member, on_mount: [{MembaWeb.UserAuth, :mount_current_identity}] do
+      live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
     end
   end
