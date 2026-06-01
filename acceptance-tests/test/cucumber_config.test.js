@@ -5,8 +5,8 @@ const test = require("node:test");
 
 const cucumberConfig = require("../cucumber");
 
-test("default browser Cucumber profile excludes todo-web scenarios", () => {
-  assert.equal(cucumberConfig.default.tags, "not @todo-web");
+test("default browser Cucumber profile excludes deferred scenarios", () => {
+  assert.equal(cucumberConfig.default.tags, "not @todo-web and not @wip");
 });
 
 test("default browser Cucumber profile still loads the shared feature suite", () => {
@@ -93,7 +93,7 @@ function featureTags(filePath) {
 }
 
 function matchesDefaultBrowserTags(tags) {
-  assert.equal(cucumberConfig.default.tags, "not @todo-web");
+  assert.equal(cucumberConfig.default.tags, "not @todo-web and not @wip");
 
-  return !tags.includes("@todo-web");
+  return !tags.includes("@todo-web") && !tags.includes("@wip");
 }

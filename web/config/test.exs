@@ -86,4 +86,5 @@ config :phoenix,
 
 config :cucumber,
   features: ["../acceptance-tests/features/**/*.feature"],
-  steps: ["test/features/step_definitions/**/*.exs"]
+  steps: ["test/features/step_definitions/**/*.exs"],
+  tags: "not @wip"
