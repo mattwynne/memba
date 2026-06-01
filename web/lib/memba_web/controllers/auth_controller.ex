@@ -34,12 +34,15 @@ defmodule MembaWeb.AuthController do
         |> put_flash(:info, "Signed in.")
         |> redirect(to: safe_return_to(return_to) || default_after_sign_in_path(email))
 
-      {:error, reason} ->
-        Logger.warning("Rejected auth magic link callback: #{inspect(reason)}")
+      {:error, :consumed} ->
+        if signed_in?(conn) do
+          redirect(conn, to: ~p"/")
+        else
+          reject_magic_link(conn, :consumed)
+        end
 
-        conn
-        |> put_flash(:error, @invalid_link_notice)
-        |> redirect(to: ~p"/auth")
+      {:error, reason} ->
+        reject_magic_link(conn, reason)
     end
   end
 
@@ -84,6 +87,16 @@ defmodule MembaWeb.AuthController do
         Logger.warning("Could not deliver auth magic link email: #{inspect(reason)}")
     end
   end
+
+  defp reject_magic_link(conn, reason) do
+    Logger.warning("Rejected auth magic link callback: #{inspect(reason)}")
+
+    conn
+    |> put_flash(:error, @invalid_link_notice)
+    |> redirect(to: ~p"/auth")
+  end
+
+  defp signed_in?(conn), do: not is_nil(Map.get(conn.assigns, :current_identity))
 
   defp safe_return_to(return_to) when is_binary(return_to) do
     cond do
