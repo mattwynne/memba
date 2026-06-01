@@ -1,0 +1,197 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index 588d459..ef3a57f 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Confirm production DNS prerequisite outside Fabro: `*.clubs.memba.io` points at the production Memba app before delivery starts.
+ - [x] 002 Inspect current Membership club command/event/aggregate/projector/projection code, public club route code, admin/staff route code, and all club creation call sites.
+-- [ ] 003 Add `slug` to `CreateClub`, `ClubCreated`, `Memba.Membership.Club`, and `Memba.Membership.Projections.Club`.
++- [x] 003 Add `slug` to `CreateClub`, `ClubCreated`, `Memba.Membership.Club`, and `Memba.Membership.Projections.Club`.
+ - [ ] 004 Implement slug generation and validation in a small Membership slug module or equivalent domain helper:
+ - [ ] 005 Update `Membership.create_club/2` and relevant forms to use the generated default slug while allowing staff override.
+ - [ ] 006 Add a migration to add `slug` to `membership_clubs`, backfill existing rows deterministically, set non-null, and create a unique index.
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index c709687..4225913 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -9,13 +9,13 @@ defmodule Memba.Membership.Club do
+ 
+   @behaviour Aggregate
+ 
+-  defstruct [:club_id, :name]
++  defstruct [:club_id, :name, :slug]
+ 
+   @impl Aggregate
+   def execute(%__MODULE__{club_id: nil}, %CreateClub{} = command) do
+     with :ok <- validate_club_id(command.club_id),
+          {:ok, name} <- normalize_name(command.name) do
+-      %ClubCreated{club_id: command.club_id, name: name}
++      %ClubCreated{club_id: command.club_id, name: name, slug: command.slug}
+     end
+   end
+ 
+@@ -23,7 +23,7 @@ defmodule Memba.Membership.Club do
+ 
+   @impl Aggregate
+   def apply(%__MODULE__{} = club, %ClubCreated{} = event) do
+-    %__MODULE__{club | club_id: event.club_id, name: event.name}
++    %__MODULE__{club | club_id: event.club_id, name: event.name, slug: event.slug}
+   end
+ 
+   defp validate_club_id(club_id) do
+diff --git a/web/lib/memba/membership/commands/create_club.ex b/web/lib/memba/membership/commands/create_club.ex
+index 2d2d55e..e7d5def 100644
+--- a/web/lib/memba/membership/commands/create_club.ex
++++ b/web/lib/memba/membership/commands/create_club.ex
+@@ -2,9 +2,10 @@ defmodule Memba.Membership.Commands.CreateClub do
+   @moduledoc """
+   Command to create a club in the Membership context.
+ 
+-  The caller supplies the aggregate identity as `club_id`.
++  The caller supplies the aggregate identity as `club_id` and may supply the
++  public club `slug`.
+   """
+ 
+   @enforce_keys [:club_id, :name]
+-  defstruct [:club_id, :name]
++  defstruct [:club_id, :name, :slug]
+ end
+diff --git a/web/lib/memba/membership/events/club_created.ex b/web/lib/memba/membership/events/club_created.ex
+index 05e9fcf..192a598 100644
+--- a/web/lib/memba/membership/events/club_created.ex
++++ b/web/lib/memba/membership/events/club_created.ex
+@@ -5,5 +5,5 @@ defmodule Memba.Membership.Events.ClubCreated do
+ 
+   @derive Jason.Encoder
+   @enforce_keys [:club_id, :name]
+-  defstruct [:club_id, :name]
++  defstruct [:club_id, :name, :slug]
+ end
+diff --git a/web/lib/memba/membership/projections/club.ex b/web/lib/memba/membership/projections/club.ex
+index 8b2d69d..aa8e300 100644
+--- a/web/lib/memba/membership/projections/club.ex
++++ b/web/lib/memba/membership/projections/club.ex
+@@ -8,6 +8,7 @@ defmodule Memba.Membership.Projections.Club do
+   @primary_key {:club_id, :binary_id, autogenerate: false}
+   schema "membership_clubs" do
+     field :name, :string
++    field :slug, :string, virtual: true
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/test/memba/membership/club_projection_test.exs b/web/test/memba/membership/club_projection_test.exs
+index 8358c02..273ad9f 100644
+--- a/web/test/memba/membership/club_projection_test.exs
++++ b/web/test/memba/membership/club_projection_test.exs
+@@ -6,6 +6,21 @@ defmodule Memba.Membership.ClubProjectionTest do
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+ 
++  test "club projection struct exposes the public slug attribute" do
++    club_id = Ecto.UUID.generate()
++
++    assert %ClubProjection{
++             club_id: ^club_id,
++             name: "Kootenay Mountaineering Club",
++             slug: "kmc"
++           } =
++             %ClubProjection{
++               club_id: club_id,
++               name: "Kootenay Mountaineering Club",
++               slug: "kmc"
++             }
++  end
++
+   test "CreateClub is projected into the public Membership club query API" do
+     club_id = Ecto.UUID.generate()
+ 
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 233dd1e..d48c37c 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -11,12 +11,14 @@ defmodule Memba.Membership.ClubTest do
+ 
+       command = %CreateClub{
+         club_id: club_id,
+-        name: " Kootenay Mountaineering Club "
++        name: " Kootenay Mountaineering Club ",
++        slug: "kmc"
+       }
+ 
+       assert %ClubCreated{
+                club_id: ^club_id,
+-               name: "Kootenay Mountaineering Club"
++               name: "Kootenay Mountaineering Club",
++               slug: "kmc"
+              } = Club.execute(%Club{}, command)
+     end
+ 
+@@ -45,7 +47,8 @@ defmodule Memba.Membership.ClubTest do
+       club =
+         Club.apply(%Club{}, %ClubCreated{
+           club_id: club_id,
+-          name: "Kootenay Mountaineering Club"
++          name: "Kootenay Mountaineering Club",
++          slug: "kmc"
+         })
+ 
+       assert {:error, :already_created} =
+@@ -59,10 +62,15 @@ defmodule Memba.Membership.ClubTest do
+   test "apply/2 records the created club identity and name" do
+     club_id = Ecto.UUID.generate()
+ 
+-    assert %Club{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
++    assert %Club{
++             club_id: ^club_id,
++             name: "Kootenay Mountaineering Club",
++             slug: "kmc"
++           } =
+              Club.apply(%Club{}, %ClubCreated{
+                club_id: club_id,
+-               name: "Kootenay Mountaineering Club"
++               name: "Kootenay Mountaineering Club",
++               slug: "kmc"
+              })
+   end
+ end
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index 629e129..d77ac29 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -12,7 +12,8 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+ 
+     command = %CreateClub{
+       club_id: club_id,
+-      name: "Kootenay Mountaineering Club"
++      name: "Kootenay Mountaineering Club",
++      slug: "kmc"
+     }
+ 
+     assert {:ok,
+@@ -22,16 +23,22 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+               events: [
+                 %ClubCreated{
+                   club_id: ^club_id,
+-                  name: "Kootenay Mountaineering Club"
++                  name: "Kootenay Mountaineering Club",
++                  slug: "kmc"
+                 }
+               ],
+               aggregate_state: %Club{
+                 club_id: ^club_id,
+-                name: "Kootenay Mountaineering Club"
++                name: "Kootenay Mountaineering Club",
++                slug: "kmc"
+               }
+             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
+ 
+-    assert %Club{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
++    assert %Club{
++             club_id: ^club_id,
++             name: "Kootenay Mountaineering Club",
++             slug: "kmc"
++           } =
+              App.aggregate_state(Club, club_id)
+   end
+ 
