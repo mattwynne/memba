@@ -126,7 +126,7 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "Alpine Club"
     assert response =~ "Welcome to your club space."
-    assert response =~ "Send a club message"
+    assert response =~ "Send club message"
     assert response =~ "Recent club messages"
     assert response =~ "Active members"
     assert response =~ "2 active members"
@@ -162,19 +162,24 @@ defmodule MembaWeb.PageControllerTest do
 
     assert html
            |> LazyHTML.query(
-             "form#member-message-form[action='/?club_id=#{club.club_id}'][method='post']"
+             "a#member-compose-shortcut[href='/messages/new?club_id=#{club.club_id}']"
            )
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#member-compose-recipient-summary[data-active-member-count='2']")
            |> Enum.any?()
 
     assert html
            |> LazyHTML.query(
-             "select#member-message-sender-select option[value='#{club.person_id}'][selected]"
+             "section#member-send-message a#member-send-message-link[href='/messages/new?club_id=#{club.club_id}']"
            )
            |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#member-compose-cta-summary[data-active-member-count='2']")
+           |> Enum.any?()
+
+    refute html |> LazyHTML.query("form#member-message-form") |> Enum.any?()
+    refute html |> LazyHTML.query("select#member-message-sender-select") |> Enum.any?()
+    refute html |> LazyHTML.query("input#member-message-subject-input") |> Enum.any?()
+    refute html |> LazyHTML.query("textarea#member-message-body-input") |> Enum.any?()
 
     assert html
            |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Alice Adams']")
