@@ -12,8 +12,6 @@ defmodule MembaWeb.MemberMessageDetail do
   alias Memba.Messaging
   alias MembaWeb.MemberReceiptPresentation
 
-  @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
-
   @doc """
   Load the selected club message detail for a signed-in member.
 
@@ -64,10 +62,10 @@ defmodule MembaWeb.MemberMessageDetail do
   end
 
   defp detail_assigns(selected_club, message) do
-    receipts =
+    receipt_model =
       message.message_id
       |> Messaging.list_member_receipts()
-      |> Enum.map(&MemberReceiptPresentation.present_receipt/1)
+      |> MemberReceiptPresentation.present_receipts()
 
     sender = Membership.get_person(message.sender_id)
 
@@ -76,32 +74,13 @@ defmodule MembaWeb.MemberMessageDetail do
       selected_club: selected_club,
       message: message,
       sender_name: sender_name(sender),
-      member_receipts: receipts,
-      member_receipt_count: Enum.count(receipts),
-      member_receipt_groups: member_receipt_groups(receipts)
+      member_receipts: receipt_model.receipts,
+      member_receipt_count: receipt_model.total_count,
+      member_receipt_summary: receipt_model.summary,
+      member_receipt_groups: receipt_model.groups
     }
   end
 
   defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
   defp sender_name(_sender), do: "Club member"
-
-  defp member_receipt_groups(receipts) do
-    receipts_by_status = Enum.group_by(receipts, & &1.status)
-    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
-
-    (@member_receipt_status_order ++ Enum.sort(extra_statuses))
-    |> Enum.map(fn status ->
-      status_receipts = Map.get(receipts_by_status, status, [])
-      presentation = MemberReceiptPresentation.present_status(status)
-
-      %{
-        status: status,
-        status_label: presentation.label,
-        status_icon: presentation.icon,
-        count: Enum.count(status_receipts),
-        receipts: status_receipts
-      }
-    end)
-    |> Enum.reject(&(&1.count == 0))
-  end
 end
