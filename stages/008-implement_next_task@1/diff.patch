@@ -1,0 +1,69 @@
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/task-001-inspection.md b/docs/iterations/014-member-dashboard-liveview-polish/task-001-inspection.md
+new file mode 100644
+index 0000000..a96a3f4
+--- /dev/null
++++ b/docs/iterations/014-member-dashboard-liveview-polish/task-001-inspection.md
+@@ -0,0 +1,51 @@
++# Task 001 inspection notes
++
++## Current `GET /` club-home flow
++
++- `MembaWeb.Router` routes `GET /` through `[:browser, :club_member_context]` to `MembaWeb.PageController.home/2`.
++- `MembaWeb.UserAuth.require_active_club_member_if_club_id_present/2` preserves public access by allowing logged-out `GET /?club_id=...` through, but delegates signed-in `club_id` requests to `require_active_club_member/2`.
++- `PageController.home/2` currently branches:
++  - signed-in with `club_id`: calls `render_club_home/2`;
++  - logged-out with known `club_id`: `live_render`s `MembaWeb.ClubMarketingLive`;
++  - no `club_id`: renders the generic home / My clubs page.
++- `render_club_home/2` authorizes by finding the selected club in `conn.assigns.current_identity_clubs`, then loads active members, current member, member-name lookup data, and recent messages before rendering `page_html/club.html.heex`.
++
++## Current club-home template and selectors
++
++- `web/lib/memba_web/controllers/page_html/club.html.heex` renders inside `<Layouts.club_site>`.
++- Stable member dashboard container: `#member-club-home[data-club-id]`.
++- Compose entry points are links to `/messages/new?club_id=...`:
++  - `#member-compose-shortcut`;
++  - `#member-send-message-link`.
++- No inline compose form is present in the current template; tests assert absence of legacy `#member-message-form`, sender select, subject input, and body textarea.
++- Message rows expose acceptance selectors:
++  - `[data-testid="club-message-row"]`;
++  - `data-message-id`;
++  - `data-message-subject`;
++  - `a[data-testid="club-message-link"]`.
++- Active member rows expose:
++  - `[data-testid="club-member-row"]`;
++  - `data-member-id`;
++  - `data-member-name`.
++
++## Current tests and browser helpers that depend on club home
++
++- `web/test/memba_web/controllers/page_controller_test.exs` covers:
++  - logged-out `GET /?club_id=...` public club marketing page;
++  - signed-in member club page rendering;
++  - CTA links to `/messages/new?club_id=...`;
++  - no inline compose form;
++  - message row/link selectors;
++  - active-member row selectors.
++- `web/test/memba_web/router_test.exs` currently asserts member message routes and the removed legacy inline `POST /`; it does not yet assert the `GET /?club_id=...` LiveView dispatch shape.
++- `web/test/memba_web/user_auth_test.exs` covers `require_active_club_member/2` for active members, non-members, missing `club_id`, and unauthenticated redirects. It does not currently have focused tests for `require_active_club_member_if_club_id_present/2`.
++- Browser acceptance helpers in `acceptance-tests/features/support/member_message.js` depend on:
++  - `openMemberClubHome/3` waiting for `#member-club-home[data-club-id=...]`;
++  - `openMemberComposeFromClubHome/3` clicking `#member-send-message-link`;
++  - send flow waiting for `[data-testid="club-message-row"][data-message-id=...]`;
++  - `assertMemberSeesMessageInClub/4` waiting for `[data-testid="club-message-row"][data-message-subject=...]`.
++- `acceptance-tests/test/member_message_steps.test.js` has fake-browser expectations for those same selectors and the `/?club_id=...` URL shape.
++
++## ADR 0015 implications for later tasks
++
++ADR 0015 is accepted and states member application pages, including the club home / member dashboard, should use LiveView by default. The current public/logged-out marketing flow may remain controller/LiveView-rendered separately because ADR 0015 allows logged-out marketing pages to remain non-member app surfaces.
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/todo.md b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+index 1369476..64fe12a 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/todo.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
++- [x] 001 Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
+ - [ ] 002 Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
+ - [ ] 003 Introduce `MembaWeb.MemberDashboardLive`, rendered for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`. Keep the existing `GET /` controller route as a small dispatcher/public page: logged-out visitors continue through the public/marketing rendering, while signed-in active club members with `club_id` get the LiveView-backed dashboard for the same URL. Do not add a separate user-visible dashboard URL in this slice.
+ - [ ] 004 Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
