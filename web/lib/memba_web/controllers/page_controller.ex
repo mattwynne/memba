@@ -5,6 +5,8 @@ defmodule MembaWeb.PageController do
   alias Memba.Membership
   alias Memba.Messaging
 
+  @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
+
   def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
       when not is_nil(identity) do
     render_club_home(conn, club_id)
@@ -80,6 +82,39 @@ defmodule MembaWeb.PageController do
     end
   end
 
+  def show_message(conn, %{"club_id" => club_id, "message_id" => message_id}) do
+    case Ecto.UUID.cast(club_id) do
+      {:ok, club_id} ->
+        selected_club = selected_club(conn, club_id)
+        message = Messaging.get_message(message_id)
+
+        cond do
+          is_nil(selected_club) ->
+            forbidden(conn)
+
+          is_nil(message) or message.club_id != club_id ->
+            not_found(conn)
+
+          true ->
+            receipts = Messaging.list_member_receipts(message.message_id)
+            sender = Membership.get_person(message.sender_id)
+
+            conn
+            |> assign(:page_title, message.subject)
+            |> assign(:selected_club, selected_club)
+            |> assign(:message, message)
+            |> assign(:sender_name, sender_name(sender))
+            |> assign(:member_receipts, receipts)
+            |> assign(:member_receipt_count, Enum.count(receipts))
+            |> assign(:member_receipt_groups, member_receipt_groups(receipts))
+            |> render(:message)
+        end
+
+      :error ->
+        forbidden(conn)
+    end
+  end
+
   def about(conn, _params) do
     conn
     |> assign(:page_title, "About")
@@ -139,6 +174,32 @@ defmodule MembaWeb.PageController do
     Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
   end
 
+  defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
+  defp sender_name(_sender), do: "Club member"
+
+  defp member_receipt_groups(receipts) do
+    receipts_by_status = Enum.group_by(receipts, &member_receipt_status/1)
+    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
+
+    (@member_receipt_status_order ++ Enum.sort(extra_statuses))
+    |> Enum.map(fn status ->
+      status_receipts = Map.get(receipts_by_status, status, [])
+
+      %{
+        status: status,
+        count: Enum.count(status_receipts),
+        receipts: status_receipts
+      }
+    end)
+    |> Enum.reject(&(&1.count == 0))
+  end
+
+  defp member_receipt_status(%{receipt_status: status}) when is_binary(status) and status != "" do
+    status
+  end
+
+  defp member_receipt_status(_receipt), do: "sent"
+
   defp current_member_for_identity(_members, nil), do: nil
 
   defp current_member_for_identity(members, identity) do
@@ -178,6 +239,12 @@ defmodule MembaWeb.PageController do
     |> put_status(:not_found)
     |> put_view(html: MembaWeb.ErrorHTML)
     |> render(:"404")
+  end
+
+  defp forbidden(conn) do
+    conn
+    |> send_resp(:forbidden, "Forbidden")
+    |> halt()
   end
 
   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")

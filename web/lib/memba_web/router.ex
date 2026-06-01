@@ -28,6 +28,10 @@ defmodule MembaWeb.Router do
     plug :require_active_club_member_if_club_id_present
   end
 
+  pipeline :club_member_required do
+    plug :require_active_club_member
+  end
+
   pipeline :api do
     plug :accepts, ["json"]
   end
@@ -37,6 +41,12 @@ defmodule MembaWeb.Router do
 
     get "/", PageController, :home
     post "/", PageController, :send_message
+  end
+
+  scope "/", MembaWeb do
+    pipe_through [:browser, :club_member_required]
+
+    get "/messages/:message_id", PageController, :show_message
   end
 
   scope "/", MembaWeb do
