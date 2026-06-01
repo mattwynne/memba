@@ -209,6 +209,34 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard reaches compose through links instead of inline compose controls", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(
+             view,
+             "#member-dashboard-cta #member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']",
+             "Send club message"
+           )
+
+    refute has_element?(view, "form#member-message-form")
+    refute has_element?(view, "form#member-message-compose-form")
+    refute has_element?(view, "[phx-submit='send_message']")
+    refute has_element?(view, "select#member-message-sender-select")
+    refute has_element?(view, "input#member-message-subject-input")
+    refute has_element?(view, "textarea#member-message-body-input")
+    refute has_element?(view, "button#member-message-send-button")
+  end
+
   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
     alice =
       create_active_member(
