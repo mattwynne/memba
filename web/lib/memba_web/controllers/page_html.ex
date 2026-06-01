@@ -8,6 +8,22 @@ defmodule MembaWeb.PageHTML do
 
   embed_templates "page_html/*"
 
+  defp first_name(%{name: name}) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> List.first()
+    |> case do
+      nil -> "member"
+      "" -> "member"
+      first_name -> first_name
+    end
+  end
+
+  defp first_name(_member), do: "member"
+
+  defp active_member_count_label(1), do: "1 active member"
+  defp active_member_count_label(count), do: "#{count} active members"
+
   defp receipt_status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
   defp receipt_status_slug(_status), do: "unknown"
 
@@ -16,6 +32,12 @@ defmodule MembaWeb.PageHTML do
   end
 
   defp receipt_bar_width(_status), do: "width: 0%;"
+
+  defp receipt_segment_width(%{width_percentage: percentage}) when is_integer(percentage) do
+    "width: #{percentage |> max(0) |> min(100)}%;"
+  end
+
+  defp receipt_segment_width(_segment), do: "width: 0%;"
 
   defp receipt_recipient_initial(name) when is_binary(name) do
     case String.first(name) do

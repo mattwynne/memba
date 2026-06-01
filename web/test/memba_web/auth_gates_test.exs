@@ -88,7 +88,7 @@ defmodule MembaWeb.AuthGatesTest do
 
       response = html_response(conn, 200)
 
-      assert response =~ "Welcome to your club space."
+      assert response =~ "What the club's been saying, and who's around right now."
       assert response =~ club.name
     end
   end
