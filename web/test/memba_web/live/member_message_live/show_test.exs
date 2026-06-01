@@ -6,6 +6,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
+  alias Memba.Messaging.Projections.MemberReceipt
   alias Memba.Messaging.Projections.Message
   alias Memba.Repo
   alias MembaWeb.UserAuth
@@ -47,6 +48,117 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(view, "a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
   end
 
+  test "routed message detail renders the Who got this summary and polished group headers", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Clark",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: alice.person_id,
+      recipient_name: "Alice Adams",
+      receipt_status: "sent"
+    )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      receipt_status: "opened"
+    )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: carol.person_id,
+      recipient_name: "Carol Clark",
+      receipt_status: "delivered"
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+
+    assert has_element?(view, "#member-receipt-summary", "Who got this")
+    assert has_element?(view, "#member-receipt-summary-bar")
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened'][data-receipt-count='1'][data-receipt-percentage='33']",
+             "read it"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='1'][data-receipt-percentage='33']",
+             "arrived, not opened yet"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='sent'][data-receipt-count='1'][data-receipt-percentage='33']",
+             "on its way"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivery problem'][data-receipt-count='0'][data-receipt-percentage='0']",
+             "we couldn't reach them"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-group'][data-receipt-status='opened']",
+             "Opened"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
+             "33%"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='member-receipt-group'][data-receipt-status='sent']",
+             "Sending"
+           )
+
+    refute has_element?(
+             view,
+             "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
+           )
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
     person_id = Ecto.UUID.generate()
@@ -84,6 +196,16 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.get(attrs, :body, "Message body")
+    })
+  end
+
+  defp create_member_receipt(attrs) do
+    Repo.insert!(%MemberReceipt{
+      delivery_id: Ecto.UUID.generate(),
+      message_id: Keyword.fetch!(attrs, :message_id),
+      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+      receipt_status: Keyword.fetch!(attrs, :receipt_status)
     })
   end
 end
