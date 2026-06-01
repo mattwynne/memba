@@ -1,0 +1,258 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index 14fb140..80c2a27 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+ - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+-- [ ] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
++- [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+ - [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+ - [ ] 005 Build a receipt presentation model for the LiveView:
+ - [ ] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+index 7c32ccf..1058e52 100644
+--- a/web/lib/memba_web/live/member_message_live/show.ex
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -8,16 +8,62 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   """
+   use MembaWeb, :live_view
+ 
++  alias Memba.Membership
++  alias Memba.Messaging
++  alias MembaWeb.MemberReceiptPresentation
++
++  @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
++
+   @impl Phoenix.LiveView
++  def mount(%{"club_id" => club_id, "message_id" => message_id} = params, _session, socket) do
++    socket = ensure_identity_assigns(socket)
++
++    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
++         selected_club when not is_nil(selected_club) <- selected_club(socket, club_id),
++         message when not is_nil(message) <- Messaging.get_message(message_id),
++         true <- message.club_id == club_id do
++      receipts =
++        message.message_id
++        |> Messaging.list_member_receipts()
++        |> Enum.map(&MemberReceiptPresentation.present_receipt/1)
++
++      sender = Membership.get_person(message.sender_id)
++
++      {:ok,
++       socket
++       |> assign(:route_params, params)
++       |> assign(:page_title, message.subject)
++       |> assign(:selected_club, selected_club)
++       |> assign(:message, message)
++       |> assign(:sender_name, sender_name(sender))
++       |> assign(:member_receipts, receipts)
++       |> assign(:member_receipt_count, Enum.count(receipts))
++       |> assign(:member_receipt_groups, member_receipt_groups(receipts))}
++    else
++      :error ->
++        not_found!(socket)
++
++      nil ->
++        not_found!(socket)
++
++      false ->
++        not_found!(socket)
++    end
++  end
++
+   def mount(params, _session, socket) when is_map(params) do
+-    {:ok, assign(socket, :route_params, params)}
++    {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, params)}
+   end
+ 
+   def mount(_params, _session, socket) do
+-    {:ok, assign(socket, :route_params, %{})}
++    {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
+   end
+ 
+   @impl Phoenix.LiveView
++  def render(%{message: _message} = assigns) do
++    MembaWeb.PageHTML.message(assigns)
++  end
++
+   def render(assigns) do
+     ~H"""
+     <Layouts.club_site flash={@flash}>
+@@ -44,4 +90,47 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     </Layouts.club_site>
+     """
+   end
++
++  defp ensure_identity_assigns(socket) do
++    socket
++    |> assign_new(:current_identity, fn -> nil end)
++    |> assign_new(:current_identity_clubs, fn -> [] end)
++  end
++
++  defp selected_club(socket, club_id) do
++    Enum.find(socket.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
++  end
++
++  defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
++  defp sender_name(_sender), do: "Club member"
++
++  defp member_receipt_groups(receipts) do
++    receipts_by_status = Enum.group_by(receipts, & &1.status)
++    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
++
++    (@member_receipt_status_order ++ Enum.sort(extra_statuses))
++    |> Enum.map(fn status ->
++      status_receipts = Map.get(receipts_by_status, status, [])
++      presentation = MemberReceiptPresentation.present_status(status)
++
++      %{
++        status: status,
++        status_label: presentation.label,
++        status_icon: presentation.icon,
++        count: Enum.count(status_receipts),
++        receipts: status_receipts
++      }
++    end)
++    |> Enum.reject(&(&1.count == 0))
++  end
++
++  defp not_found!(socket) do
++    case socket.private[:connect_info] do
++      %Plug.Conn{} = conn ->
++        raise Phoenix.Router.NoRouteError, conn: conn, router: MembaWeb.Router
++
++      _connect_info ->
++        raise "message detail not found"
++    end
++  end
+ end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 2c8b197..f3824fa 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -46,7 +46,9 @@ defmodule MembaWeb.Router do
+   scope "/", MembaWeb do
+     pipe_through [:browser, :club_member_required]
+ 
+-    get "/messages/:message_id", PageController, :show_message
++    live_session :club_member, on_mount: [{MembaWeb.UserAuth, :mount_current_identity}] do
++      live "/messages/:message_id", MemberMessageLive.Show, :show
++    end
+   end
+ 
+   scope "/", MembaWeb do
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 445cae9..90a9ad8 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -3,10 +3,87 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+   import Phoenix.LiveViewTest
+ 
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
++  alias Memba.Messaging.Projections.Message
++  alias Memba.Repo
++  alias MembaWeb.UserAuth
++
+   test "renders a member message detail LiveView shell in the club site layout", %{conn: conn} do
+     {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberMessageLive.Show)
+ 
+     assert has_element?(view, "#club-site-layout[data-surface='club-site']")
+     assert has_element?(view, "#member-message-detail[data-live-view='member-message-detail']")
+   end
++
++  test "routed GET keeps the member message URL shape and passes club_id to the LiveView", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    assert has_element?(
++             view,
++             "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
++           )
++
++    assert has_element?(view, "a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
++  end
++
++  defp create_active_member(attrs) do
++    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
++    person_id = Ecto.UUID.generate()
++    club_name = Keyword.fetch!(attrs, :club_name)
++
++    club =
++      Repo.get(Club, club_id) ||
++        Repo.insert!(%Club{
++          club_id: club_id,
++          name: club_name
++        })
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: Keyword.get(attrs, :name, "Test Member"),
++      email: Keyword.fetch!(attrs, :email)
++    })
++
++    Repo.insert!(%Membership{
++      membership_id: Ecto.UUID.generate(),
++      club_id: club_id,
++      person_id: person_id,
++      active: true
++    })
++
++    club
++    |> Map.from_struct()
++    |> Map.put(:person_id, person_id)
++  end
++
++  defp create_message(attrs) do
++    Repo.insert!(%Message{
++      message_id: Ecto.UUID.generate(),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      sender_id: Keyword.fetch!(attrs, :sender_id),
++      subject: Keyword.fetch!(attrs, :subject),
++      body: Keyword.get(attrs, :body, "Message body")
++    })
++  end
+ end
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index abb3c41..3bd32b7 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -61,12 +61,13 @@ defmodule MembaWeb.RouterTest do
+   end
+ 
+   describe "member message routes" do
+-    test "routes /messages/:message_id through the required club member pipeline" do
++    test "routes /messages/:message_id through the required club member pipeline to the member message LiveView" do
+       assert %{
+                path_params: %{"message_id" => "message-123"},
+                pipe_through: [:browser, :club_member_required],
+-               plug: MembaWeb.PageController,
+-               plug_opts: :show_message,
++               phoenix_live_view: {MembaWeb.MemberMessageLive.Show, :show, _opts, _live_session},
++               plug: Phoenix.LiveView.Plug,
++               plug_opts: :show,
+                route: "/messages/:message_id"
+              } =
+                Phoenix.Router.route_info(
