@@ -95,6 +95,7 @@ No Gherkin changes are planned. Existing scenarios in `acceptance-tests/features
 - The dashboard shows a “Got something to share?” CTA card linking to `/messages/new?club_id=<club_id>`.
 - The dashboard does not render an inline compose form.
 - Recent message rows show sender/member identity, subject, link to member message detail, and stable browser-test attributes.
+- Recent message rows use the message projection `inserted_at` timestamp for “when” metadata when present, and omit the timestamp label for rows where it is unavailable.
 - Recent message rows show a receipt glance/mini bar when receipt data exists.
 - Receipt glance labels/counts use the member-facing status vocabulary, not operator delivery statuses.
 - Empty message state is designed and includes a send-message action.
@@ -118,47 +119,53 @@ Decisions made during planning:
 
 1. Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
 2. Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
-3. Introduce a member dashboard LiveView, for example `MembaWeb.MemberDashboardLive`, routed for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`.
-4. Move selected-club dashboard data loading into the LiveView mount path or a small query/presentation helper:
+3. Introduce `MembaWeb.MemberDashboardLive`, rendered for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`. Keep the existing `GET /` controller route as a small dispatcher/public page: logged-out visitors continue through the public/marketing rendering, while signed-in active club members with `club_id` get the LiveView-backed dashboard for the same URL. Do not add a separate user-visible dashboard URL in this slice.
+4. Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
    - selected club;
    - current member derived from authenticated identity;
    - active members with initials/avatar data;
    - recent messages;
    - sender names;
    - receipt summary data for recent message rows.
-5. Build message-row receipt glance data using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
+5. Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
    - counts by member-facing status;
    - simple percentages/segment widths for the mini bar;
-   - human glance copy such as “N of M opened” where data supports it.
+   - human glance copy such as “N of M opened” where data supports it;
+   - row “when” metadata from the message projection `inserted_at` timestamp (the projection timestamp for when the sent message was recorded). If an individual row lacks `inserted_at`, omit the timestamp label rather than showing placeholder copy.
 6. Render the dashboard toward `dashboard.jsx`:
    - compact hero/greeting;
    - CTA card linking to `/messages/new?club_id=<club_id>`;
    - recent-message list rows with avatar/initials, sender, subject, receipt mini bar, glance copy, and detail link;
    - active-members compact card with avatar stack and count;
    - designed empty states.
-7. Preserve or deliberately update stable selectors used by browser acceptance:
+7. Design and render empty states deliberately:
+   - render the no-recent-messages empty state when the selected club has no recent messages;
+   - render the no/first-active-members copy only if the active-member list/count is empty or effectively just the current member, while preserving correct auth behaviour.
+8. Preserve or deliberately update stable selectors used by browser acceptance:
    - `club-message-row`;
    - `club-message-link`;
    - `club-member-row` or equivalent accessible member data;
    - message/member data attributes needed by helpers.
-8. Remove any remaining inline compose form from club home if iteration 013 has not already done so in the branch being implemented.
-9. Add focused LiveView/Phoenix tests for:
+9. Remove any remaining inline compose form from club home if iteration 013 has not already done so in the branch being implemented.
+10. Add focused LiveView/Phoenix tests for:
    - signed-in active member sees dashboard;
    - signed-in non-member/inactive member receives forbidden;
+   - logged-out/public club page behaviour is preserved;
    - CTA points at compose route;
    - no inline compose form;
    - message rows and links render;
    - receipt glance renders with member-facing vocabulary;
+   - timestamp labels use `inserted_at` when available and are omitted when unavailable;
    - empty states render;
    - active-member card renders count/avatar stack;
    - no operator-only fields leak.
-10. Run existing browser Cucumber for member-message deliverability and `dev check`.
+11. Run existing browser Cucumber for member-message deliverability and `dev check`.
 
-## Open Technical Decisions
+## Technical Decisions
 
-- Exact route organization for sharing `GET /?club_id=<club_id>` between public/logged-out marketing and signed-in member dashboard. Preserve user-visible behaviour over internal neatness.
-- Whether message receipt glances are calculated per row in the LiveView or via a presentation/query helper. Prefer a helper if it keeps LiveView mount readable and testable.
-- Exact “when” metadata source for message rows if current message projections do not carry sent timestamps. If unavailable, do not invent data; leave that visual detail out or use existing available metadata only.
+- Route organization: keep `GET /?club_id=<club_id>` as the user-visible address. Preserve the controller/public path for logged-out visitors and use it as the dispatcher/public rendering boundary; signed-in active members with a selected club see `MembaWeb.MemberDashboardLive` for the same URL. No separate dashboard URL is introduced in this slice.
+- Receipt glances: calculate row view data in a dedicated presentation/query helper, `MembaWeb.MemberDashboardPresentation`, using existing receipt projections and `MembaWeb.MemberReceiptPresentation` vocabulary.
+- Message row “when” metadata: use `Memba.Messaging.Projections.Message.inserted_at` as the sent/recorded timestamp. If a row has no timestamp, omit the timestamp label for that row instead of inventing data or showing “Unknown”.
 
 ## New Capability
 
