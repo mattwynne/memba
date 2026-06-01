@@ -65,6 +65,18 @@ class FakeLocator {
     });
   }
 
+  first() {
+    const rows = this.currentRows();
+    const row = rows[0] || { attrs: {}, text: undefined };
+
+    return new FakeLocator(this.page, `${this.selector} >> first`, {
+      attrs: row.attrs,
+      kind: "row",
+      rows: row.attrs ? [row] : [],
+      text: row.text
+    });
+  }
+
   locator(selector) {
     let childText = this.attrs.deliveryStatus || this.attrs.receiptStatus || this.attrs.receiptStatusLabel;
     let childAttrs = {};
@@ -96,6 +108,14 @@ class FakeLocator {
     return this.attrs[attributeName];
   }
 
+  async click() {
+    this.page.actions.push(["click", "locator", this.selector]);
+
+    if (this.attrs["aria-expanded"] === "false") {
+      this.attrs["aria-expanded"] = "true";
+    }
+  }
+
   async evaluateAll(callback, key) {
     const elements = this.currentRows().map((row) => ({
       dataset: row.dataset,
@@ -121,6 +141,7 @@ class FakePage {
       clubMessages: [],
       addressedRecipients: [],
       deliveryRecords: [],
+      memberReceiptGroupToggles: [],
       operatorDeliveries: [],
       memberReceipts: []
     };
@@ -245,19 +266,47 @@ function rowsForSelector(rows, selector) {
   if (selector.includes('data-testid="message-row"')) return filterRows(rows.messages, selector);
   if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
-  if (selector.includes("#member-receipts")) return rows.memberReceipts;
+  if (selector.includes("#member-receipts")) return visibleMemberReceiptRows(rows);
   if (selector.includes('data-testid="delivery-record"')) return filterRows(rows.deliveryRecords, selector);
   if (selector.includes('data-test-id^="delivery-row-"')) {
     return filterRows(rows.operatorDeliveries, selector);
   }
-  if (selector.includes('data-testid="member-receipt"')) return filterRows(rows.memberReceipts, selector);
+  if (
+    selector.includes('[id^="member-receipt-group-toggle-"]') ||
+    selector.includes("member-receipt-group-toggle-")
+  ) {
+    return filterRows(rows.memberReceiptGroupToggles, selector);
+  }
+  if (selector.includes('data-testid="member-receipt"')) return filterRows(visibleMemberReceiptRows(rows), selector);
 
   return [];
+}
+
+function visibleMemberReceiptRows(rows) {
+  const hasCollapsibleGroups = rows.memberReceiptGroupToggles.length > 0;
+
+  if (!hasCollapsibleGroups) {
+    return rows.memberReceipts;
+  }
+
+  const hasExpandedGroup = rows.memberReceiptGroupToggles.some(
+    (row) => row.attrs["aria-expanded"] === "true"
+  );
+
+  return hasExpandedGroup ? rows.memberReceipts : [];
 }
 
 function filterRows(rows, selector) {
   return rows.filter((row) => {
     for (const [attributeName, value] of Object.entries(row.attrs || {})) {
+      const prefixMatch = selector.match(
+        new RegExp(`\\[${escapeRegExp(attributeName)}\\^="([^"]*)"\\]`)
+      );
+
+      if (prefixMatch && !String(value).startsWith(prefixMatch[1])) {
+        return false;
+      }
+
       if (selector.includes(`[${attributeName}=`) && !selector.includes(`[${attributeName}="${value}"]`)) {
         return false;
       }
@@ -265,6 +314,10 @@ function filterRows(rows, selector) {
 
     return true;
   });
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function idFor(prefix, value, count) {
@@ -702,6 +755,100 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
         typeof expectation[1] === "string" &&
         expectation[1].includes('data-testid="receipt-status-icon"')
     )
+  );
+});
+
+test("member receipt assertions expand collapsed visible groups before inspecting rows", async () => {
+  const page = new FakePage();
+  page.rows.memberReceiptGroupToggles.push(
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-delivered",
+      "aria-expanded": "false"
+    })
+  );
+  page.rows.memberReceipts.push(
+    rowWithAttrs({
+      "data-recipient-name": "Bob",
+      receiptIconName: "hero-check-circle",
+      receiptStatusLabel: "Delivered"
+    })
+  );
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.messages = {
+    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
+  };
+  world.people = { Bob: { personId: "person-bob" } };
+
+  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.equal(page.rows.memberReceiptGroupToggles[0].attrs["aria-expanded"], "true");
+  assert.ok(
+    page.actions.some(
+      (action) =>
+        action[0] === "click" &&
+        action[1] === "locator" &&
+        action[2].includes('member-receipt-group-toggle-')
+    )
+  );
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "visible" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes('[id="member-receipt-group-toggle-delivered"][aria-expanded="true"]')
+    )
+  );
+  assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "Delivered"));
+});
+
+test("member receipt assertions can expand all four visible receipt groups", async () => {
+  const page = new FakePage();
+  page.rows.memberReceiptGroupToggles.push(
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-opened",
+      "aria-expanded": "false"
+    }),
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-delivered",
+      "aria-expanded": "false"
+    }),
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-sent",
+      "aria-expanded": "false"
+    }),
+    rowWithAttrs({
+      id: "member-receipt-group-toggle-delivery-problem",
+      "aria-expanded": "false"
+    })
+  );
+  page.rows.memberReceipts.push(
+    rowWithAttrs({
+      "data-recipient-name": "Bob",
+      receiptIconName: "hero-check-circle",
+      receiptStatusLabel: "Delivered"
+    })
+  );
+  const world = worldWithPage(page);
+  world.messages = {
+    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
+  };
+  world.people = { Bob: { personId: "person-bob" } };
+
+  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
+    expect: fakeExpect([])
+  });
+
+  assert.deepEqual(
+    page.rows.memberReceiptGroupToggles.map((toggle) => toggle.attrs["aria-expanded"]),
+    ["true", "true", "true", "true"]
+  );
+  assert.equal(
+    page.actions.filter((action) => action[0] === "click" && action[2].includes("member-receipt-group-toggle-"))
+      .length,
+    4
   );
 });
 

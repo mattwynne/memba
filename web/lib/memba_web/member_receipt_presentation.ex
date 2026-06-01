@@ -8,12 +8,20 @@ defmodule MembaWeb.MemberReceiptPresentation do
   """
 
   @fallback_status "sent"
+  @status_order ["opened", "delivered", "sent", "delivery problem"]
 
   @presentations %{
     "sent" => %{label: "Sending", icon: "hero-clock"},
     "delivered" => %{label: "Delivered", icon: "hero-check-circle"},
     "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"},
     "opened" => %{label: "Opened", icon: "hero-envelope-open"}
+  }
+
+  @descriptions %{
+    "opened" => "read it",
+    "delivered" => "arrived, not opened yet",
+    "sent" => "on its way",
+    "delivery problem" => "we couldn't reach them"
   }
 
   @doc """
@@ -45,6 +53,39 @@ defmodule MembaWeb.MemberReceiptPresentation do
     }
   end
 
+  @doc """
+  Builds the LiveView receipt presentation model for a message.
+
+  The summary always includes the four member-facing statuses in the design
+  order, even when a status has no receipts. Groups are built from the same
+  status models but only include statuses with at least one receipt.
+  """
+  def present_receipts(receipts) when is_list(receipts) do
+    presented_receipts = Enum.map(receipts, &present_receipt/1)
+    total_count = Enum.count(presented_receipts)
+    receipts_by_status = Enum.group_by(presented_receipts, & &1.status)
+
+    summary =
+      Enum.map(@status_order, fn status ->
+        status_receipts = Map.get(receipts_by_status, status, [])
+        status_model(status, status_receipts, total_count)
+      end)
+
+    groups =
+      summary
+      |> Enum.filter(&(&1.count > 0))
+      |> Enum.map(fn status_model ->
+        Map.put(status_model, :receipts, Map.fetch!(receipts_by_status, status_model.status))
+      end)
+
+    %{
+      receipts: presented_receipts,
+      total_count: total_count,
+      summary: summary,
+      groups: groups
+    }
+  end
+
   defp normalize_status(status) when is_binary(status) do
     if status == "", do: @fallback_status, else: status
   end
@@ -63,4 +104,21 @@ defmodule MembaWeb.MemberReceiptPresentation do
       words -> words |> Enum.join(" ") |> String.capitalize()
     end
   end
+
+  defp status_model(status, receipts, total_count) do
+    presentation = present_status(status)
+    count = Enum.count(receipts)
+
+    %{
+      status: status,
+      status_label: presentation.label,
+      status_icon: presentation.icon,
+      description: Map.fetch!(@descriptions, status),
+      count: count,
+      percentage: percentage(count, total_count)
+    }
+  end
+
+  defp percentage(_count, 0), do: 0
+  defp percentage(count, total_count), do: round(count * 100 / total_count)
 end
