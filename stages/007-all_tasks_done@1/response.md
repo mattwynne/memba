@@ -1,0 +1,1 @@
+{"cmd": "TODO_PATH='docs/iterations/011-member-facing-message-behaviour/todo.md'\nif [ ! -r \"$TODO_PATH\" ]; then\n  echo \"MISSING_OR_UNREADABLE\"\nelif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"EMPTY\"\nelse\n  echo \"READABLE\"\n  grep -n -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" || true\nfi"}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
