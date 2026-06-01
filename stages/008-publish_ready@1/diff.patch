@@ -1,0 +1,114 @@
+diff --git a/docs/adr/0015-use-liveview-for-member-application-pages.md b/docs/adr/0015-use-liveview-for-member-application-pages.md
+new file mode 100644
+index 0000000..64b7a0b
+--- /dev/null
++++ b/docs/adr/0015-use-liveview-for-member-application-pages.md
+@@ -0,0 +1,47 @@
++# 15. Use LiveView for member application pages
++
++Date: 2026-06-01
++
++## Status
++
++accepted
++
++## Context
++
++Memba's member-facing product is an application, not a set of mostly static pages. Member pages increasingly need authenticated state, club context, forms, confirmations, error states, progressive interaction, and a consistent white-label app shell.
++
++Recent member-message work exposed friction from treating member app pages as controller-rendered templates first and LiveViews only when interaction becomes unavoidable. That creates churn: routes, templates, tests, and acceptance helpers need to move later when a page gains stateful behaviour such as compose confirmations or expandable receipt groups.
++
++The product direction is that club-member app surfaces should feel coherent and interactive. Static marketing and legal pages have different needs and do not benefit from LiveView by default.
++
++## Decision
++
++Use Phoenix LiveView by default for member application pages.
++
++This includes authenticated club-member surfaces such as:
++
++- club home / member dashboard;
++- compose flows;
++- message detail and receipt views;
++- future member-only workflows that depend on identity, club context, forms, or interaction.
++
++Static pages may remain controller-rendered templates when they are genuinely static or marketing/legal content, for example:
++
++- `/about`;
++- `/terms`;
++- `/privacy`;
++- logged-out marketing pages unless they need LiveView interaction.
++
++When adding or changing a member application surface, start with a LiveView unless there is a specific reason not to. Do not make controller rendering the default just because the first version appears simple.
++
++## Consequences
++
++Member app pages have a consistent implementation model as they grow from display to interaction.
++
++Future interaction such as confirmations, expand/collapse, validation, live updates, filtering, or stateful navigation can be added without moving the page from controller templates to LiveView later.
++
++Tests can use LiveView/PhoenixTest patterns consistently for member app behaviour.
++
++Simple member pages may carry a small amount of LiveView structure before they strictly need it. This is an acceptable trade-off for consistency and reduced churn.
++
++Controller-rendered templates remain appropriate for static marketing/legal content and simple non-app pages.
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/manual-demo-script.md b/docs/iterations/014-member-dashboard-liveview-polish/manual-demo-script.md
+index ee17bd9..d061d92 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/manual-demo-script.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/manual-demo-script.md
+@@ -21,4 +21,4 @@ Use this after iteration 014 implementation.
+ 10. Open or create a brand-new club with no messages and confirm the designed empty message state appears with a send-message action.
+ 11. Confirm signed-in non-members/inactive members still receive the existing forbidden response for member dashboard access.
+ 12. Confirm public/logged-out club marketing behaviour for `/?club_id=<club_id>` still works.
+-13. Confirm an ADR records the rule that member application pages are LiveViews by default, with static marketing/legal pages as exceptions.
++13. Confirm ADR 0015 is followed: member application pages are LiveViews by default, with static marketing/legal pages as exceptions.
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/plan.md b/docs/iterations/014-member-dashboard-liveview-polish/plan.md
+index 3904fa5..64c9f0c 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/plan.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/plan.md
+@@ -7,7 +7,7 @@ Status: ready
+ 
+ Finish the remaining member-facing wireframe work by converting the club home/dashboard to a LiveView and polishing it toward the dashboard designs.
+ 
+-After this iteration, the signed-in club home at `GET /?club_id=<club_id>` is a LiveView member dashboard with a compact “Got something to share?” CTA card, polished recent-message rows with receipt glances, designed empty states, and a compact active-members card. This also records the product architecture decision that member application pages should be LiveViews unless they are genuinely static pages.
++After this iteration, the signed-in club home at `GET /?club_id=<club_id>` is a LiveView member dashboard with a compact “Got something to share?” CTA card, polished recent-message rows with receipt glances, designed empty states, and a compact active-members card. This applies ADR 0015's product architecture decision that member application pages should be LiveViews unless they are genuinely static pages.
+ 
+ ## Background / Context
+ 
+@@ -44,7 +44,7 @@ Relevant current implementation:
+   - signed-in users must be active members of the selected club to see the member dashboard;
+   - signed-in non-members/inactive members receive existing forbidden behaviour;
+   - missing/unknown clubs receive existing not-found behaviour.
+-- Add or update an ADR recording the product architecture decision: member application pages are LiveViews by default; static marketing/legal pages may remain controller/static pages.
++- Follow ADR 0015, which records the product architecture decision: member application pages are LiveViews by default; static marketing/legal pages may remain controller/static pages.
+ - Polish the member dashboard toward `dashboard.jsx`:
+   - club/member chrome remains via `<Layouts.club_site>`;
+   - greeting and lede use the compact dashboard tone;
+@@ -89,7 +89,7 @@ No Gherkin changes are planned. Existing scenarios in `acceptance-tests/features
+ ## Acceptance Criteria
+ 
+ - Signed-in selected-club home at `GET /?club_id=<club_id>` is implemented as a LiveView.
+-- An ADR records that member application pages should be LiveViews by default, while static marketing/legal pages may remain controller/static pages.
++- ADR 0015 is followed: member application pages should be LiveViews by default, while static marketing/legal pages may remain controller/static pages.
+ - Existing auth/failure behaviours for selected-club member home are preserved.
+ - The dashboard shows the club name, current member greeting, and concise lede.
+ - The dashboard shows a “Got something to share?” CTA card linking to `/messages/new?club_id=<club_id>`.
+@@ -111,17 +111,13 @@ None known.
+ Decisions made during planning:
+ 
+ - Club home/dashboard should be a LiveView.
+-- The architecture decision should be recorded in an ADR so future plans and implementers stop re-litigating controller vs LiveView for member app pages.
++- ADR 0015 records the architecture decision so future plans and implementers stop re-litigating controller vs LiveView for member app pages.
+ - Dashboard polish should finish the remaining wireframe gap without expanding into compose or receipt-detail work.
+ 
+ ## Implementation Plan
+ 
+ 1. Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
+-2. Add an ADR, likely `docs/adr/0015-use-liveview-for-member-application-pages.md`, recording:
+-   - context: member surfaces need interaction and consistent stateful UX;
+-   - decision: member application pages are LiveViews by default;
+-   - exceptions: static marketing/legal pages may remain controller/static;
+-   - consequences: new member pages should not default to controller templates.
++2. Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
+ 3. Introduce a member dashboard LiveView, for example `MembaWeb.MemberDashboardLive`, routed for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`.
+ 4. Move selected-club dashboard data loading into the LiveView mount path or a small query/presentation helper:
+    - selected club;
