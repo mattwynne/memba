@@ -1,0 +1,447 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index 647fbb6..8f4af78 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+ - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+ - [x] 005 Build a receipt presentation model for the LiveView:
+-- [ ] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
++- [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+ - [ ] 007 Add LiveView state for collapsed groups:
+ - [ ] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+ - [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index b5ccf11..6ff5c7a 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -7,4 +7,43 @@ defmodule MembaWeb.PageHTML do
+   use MembaWeb, :html
+ 
+   embed_templates "page_html/*"
++
++  defp receipt_status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
++  defp receipt_status_slug(_status), do: "unknown"
++
++  defp receipt_bar_width(%{percentage: percentage}) when is_integer(percentage) do
++    "width: #{max(percentage, 0)}%;"
++  end
++
++  defp receipt_bar_width(_status), do: "width: 0%;"
++
++  defp receipt_recipient_initial(name) when is_binary(name) do
++    case String.first(name) do
++      nil -> "?"
++      initial -> String.upcase(initial)
++    end
++  end
++
++  defp receipt_recipient_initial(_name), do: "?"
++
++  defp receipt_status_bg_class("opened"), do: "bg-emerald-500"
++  defp receipt_status_bg_class("delivered"), do: "bg-sky-500"
++  defp receipt_status_bg_class("sent"), do: "bg-slate-400"
++  defp receipt_status_bg_class("delivery problem"), do: "bg-amber-500"
++  defp receipt_status_bg_class(_status), do: "bg-slate-300"
++
++  defp receipt_status_text_class("opened"), do: "text-emerald-700"
++  defp receipt_status_text_class("delivered"), do: "text-sky-700"
++  defp receipt_status_text_class("sent"), do: "text-slate-600"
++  defp receipt_status_text_class("delivery problem"), do: "text-amber-700"
++  defp receipt_status_text_class(_status), do: "text-slate-600"
++
++  defp receipt_status_tint_class("opened"), do: "bg-emerald-50 text-emerald-700 ring-emerald-200"
++  defp receipt_status_tint_class("delivered"), do: "bg-sky-50 text-sky-700 ring-sky-200"
++  defp receipt_status_tint_class("sent"), do: "bg-slate-100 text-slate-600 ring-slate-200"
++
++  defp receipt_status_tint_class("delivery problem"),
++    do: "bg-amber-50 text-amber-700 ring-amber-200"
++
++  defp receipt_status_tint_class(_status), do: "bg-slate-100 text-slate-600 ring-slate-200"
+ end
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 2a6d11a..85a318d 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -5,92 +5,154 @@
+ >
+   <div
+     id="member-message-detail"
++    data-live-view="member-message-detail"
+     data-club-id={@selected_club.club_id}
+     data-message-id={@message.message_id}
+-    class="space-y-8"
++    class="mx-auto max-w-3xl"
+   >
+-    <a
++    <.link
+       id="back-to-club-home-link"
+       href={~p"/?#{[club_id: @selected_club.club_id]}"}
+-      class="inline-flex items-center gap-2 text-sm font-semibold text-[var(--club-site-accent)] transition hover:text-[var(--club-site-ink)]"
++      class="inline-flex items-center gap-2 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
+     >
+       <.icon name="hero-arrow-left" class="size-4" /> Club home
+-    </a>
++    </.link>
+ 
+-    <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
+-      <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++    <section class="mt-5 border-b border-[var(--club-site-line)] pb-8">
++      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]">
+         Club message
+       </p>
+-      <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++      <h1 class="mt-2 text-4xl font-semibold leading-tight tracking-tight text-[var(--club-site-ink)] sm:text-5xl">
+         {@message.subject}
+       </h1>
+-      <p id="member-message-meta" class="mt-4 text-sm font-medium text-[var(--club-site-muted)]">
+-        From <span class="text-[var(--club-site-ink)]">{@sender_name}</span>
+-        · to <span class="text-[var(--club-site-ink)]">{@member_receipt_count}</span>
++      <p id="member-message-meta" class="mt-4 text-sm leading-6 text-[var(--club-site-muted)]">
++        From <span class="font-semibold text-[var(--club-site-ink)]">{@sender_name}</span>
++        · to
++        <span class="font-semibold text-[var(--club-site-ink)]">{@member_receipt_count}</span>
+         member{if(@member_receipt_count == 1, do: "", else: "s")}
+       </p>
+       <p
+         id="member-message-body"
+-        class="mt-8 whitespace-pre-wrap rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-6 leading-7 text-[var(--club-site-ink)]"
++        class="mt-6 whitespace-pre-wrap text-base leading-8 text-[var(--club-site-muted)]"
+       >
+         {@message.body}
+       </p>
+     </section>
+ 
+-    <section
+-      id="member-receipts-section"
+-      class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+-    >
+-      <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+-        <div>
+-          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+-            Receipts
+-          </p>
+-          <h2 class="mt-2 flex items-center gap-2 text-2xl font-semibold text-[var(--club-site-ink)]">
+-            <.icon name="hero-users" class="size-5" /> Everyone addressed
++    <section id="member-receipt-summary" class="mt-8">
++      <div class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-5 shadow-sm sm:p-6">
++        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
++          <h2 class="flex items-center gap-2 text-base font-semibold text-[var(--club-site-ink)]">
++            <.icon name="hero-users" class="size-5 text-[var(--club-site-accent)]" /> Who got this
+           </h2>
++          <p
++            id="member-receipts-summary"
++            data-receipt-count={@member_receipt_count}
++            class="w-fit rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
++          >
++            {@member_receipt_count} member{if(@member_receipt_count == 1, do: "", else: "s")}
++          </p>
+         </div>
+-        <p
+-          id="member-receipts-summary"
+-          data-receipt-count={@member_receipt_count}
+-          class="rounded-full border border-[var(--club-site-line)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
++
++        <div
++          id="member-receipt-summary-bar"
++          class="mt-5 flex h-3.5 overflow-hidden rounded-full bg-slate-100 ring-1 ring-inset ring-[var(--club-site-line)]"
++          aria-hidden="true"
+         >
+-          {@member_receipt_count} member{if(@member_receipt_count == 1, do: "", else: "s")}
+-        </p>
++          <span
++            :for={status <- @member_receipt_summary}
++            data-testid="member-receipt-summary-bar-segment"
++            data-receipt-status={status.status}
++            data-receipt-count={status.count}
++            data-receipt-percentage={status.percentage}
++            class={["block h-full", receipt_status_bg_class(status.status)]}
++            style={receipt_bar_width(status)}
++          />
++        </div>
++
++        <div id="member-receipt-summary-legend" class="mt-5 grid gap-3 sm:grid-cols-2">
++          <div
++            :for={status <- @member_receipt_summary}
++            data-testid="member-receipt-summary-status"
++            data-receipt-status={status.status}
++            data-receipt-count={status.count}
++            data-receipt-percentage={status.percentage}
++            class="flex items-center gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3"
++          >
++            <span class={["size-2.5 rounded-[0.2rem]", receipt_status_bg_class(status.status)]} />
++            <span class="min-w-0 flex-1 text-sm text-[var(--club-site-muted)]">
++              <span class="block font-semibold text-[var(--club-site-ink)]">
++                {status.status_label}
++              </span>
++              <span class="block text-xs">{status.description}</span>
++            </span>
++            <span class="font-mono text-sm font-semibold text-[var(--club-site-ink)]">
++              {status.count}
++            </span>
++            <span class="font-mono text-xs font-semibold text-[var(--club-site-muted)]">
++              {status.percentage}%
++            </span>
++          </div>
++        </div>
++      </div>
++    </section>
++
++    <section id="member-receipts-section" class="mt-8">
++      <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
++        <div>
++          <h2 class="text-base font-semibold text-[var(--club-site-ink)]">Everyone, by status</h2>
++          <p class="mt-1 text-sm text-[var(--club-site-muted)]">
++            Receipt groups are ordered by opened, delivered, sending, then delivery problems.
++          </p>
++        </div>
+       </div>
+ 
+-      <div id="member-receipts" class="mt-6 space-y-4">
++      <div id="member-receipts" class="mt-5 space-y-3">
+         <p
+-          :if={@member_receipts == []}
++          :if={@member_receipt_groups == []}
+           id="member-receipts-empty"
+-          class="rounded-2xl border border-dashed border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-5 text-sm text-[var(--club-site-muted)]"
++          class="rounded-2xl border border-dashed border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-5 text-sm text-[var(--club-site-muted)]"
+         >
+           No addressed members are projected for this message yet.
+         </p>
+ 
+         <section
+           :for={group <- @member_receipt_groups}
+-          id={"member-receipt-group-#{String.replace(group.status, " ", "-")}"}
++          id={"member-receipt-group-#{receipt_status_slug(group.status)}"}
+           data-testid="member-receipt-group"
+           data-receipt-status={group.status}
+-          class="overflow-hidden rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)]"
++          class="overflow-hidden rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] shadow-sm"
+         >
+-          <header class="flex items-center justify-between gap-4 border-b border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-4">
+-            <h3 class="flex items-center gap-2 font-semibold text-[var(--club-site-ink)]">
+-              <.icon name={group.status_icon} class="size-5 text-[var(--club-site-accent)]" />
+-              <span>{group.status_label}</span>
+-            </h3>
+-            <span
+-              data-testid="receipt-group-count"
+-              class="rounded-full bg-[var(--club-site-bg)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
+-            >
+-              {group.count}
++          <header class="flex items-center gap-3 px-5 py-4 transition duration-200 hover:bg-[var(--club-site-bg)]">
++            <span class={[
++              "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
++              receipt_status_tint_class(group.status)
++            ]}>
++              <.icon name={group.status_icon} class="size-5" />
+             </span>
++            <div class="min-w-0 flex-1">
++              <h3 class="font-semibold text-[var(--club-site-ink)]">{group.status_label}</h3>
++              <p class="mt-0.5 text-sm text-[var(--club-site-muted)]">{group.description}</p>
++            </div>
++            <div class="flex items-center gap-3">
++              <span
++                data-testid="receipt-group-count"
++                class="font-mono text-sm font-semibold text-[var(--club-site-ink)]"
++              >
++                {group.count}
++              </span>
++              <span
++                data-testid="receipt-group-percentage"
++                class="font-mono text-xs font-semibold text-[var(--club-site-muted)]"
++              >
++                {group.percentage}%
++              </span>
++            </div>
+           </header>
+ 
+           <div
+-            id={"member-receipts-#{String.replace(group.status, " ", "-")}"}
+-            class="divide-y divide-[var(--club-site-line)]"
++            id={"member-receipts-#{receipt_status_slug(group.status)}"}
++            class="divide-y divide-[var(--club-site-line)] border-t border-[var(--club-site-line)] px-5 py-1"
+           >
+             <div
+               :for={receipt <- group.receipts}
+@@ -99,19 +161,32 @@
+               data-recipient-id={receipt.recipient_id}
+               data-recipient-name={receipt.recipient_name}
+               data-receipt-status={receipt.status}
+-              class="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
++              class="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+             >
+-              <p class="font-semibold text-[var(--club-site-ink)]">{receipt.recipient_name}</p>
++              <div class="flex min-w-0 items-center gap-3">
++                <span class={[
++                  "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ring-1 ring-inset",
++                  receipt_status_tint_class(receipt.status)
++                ]}>
++                  {receipt_recipient_initial(receipt.recipient_name)}
++                </span>
++                <p class="truncate font-medium text-[var(--club-site-ink)]">
++                  {receipt.recipient_name}
++                </p>
++              </div>
+               <p
+                 data-testid="receipt-status"
+                 data-receipt-status={receipt.status}
+-                class="inline-flex items-center gap-2 rounded-full bg-[var(--club-site-paper)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)] ring-1 ring-[var(--club-site-line)]"
++                class={[
++                  "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset",
++                  receipt_status_tint_class(receipt.status)
++                ]}
+               >
+                 <.icon
+                   name={receipt.status_icon}
+                   data-testid="receipt-status-icon"
+                   data-icon-name={receipt.status_icon}
+-                  class="size-4 text-[var(--club-site-accent)]"
++                  class={["size-4", receipt_status_text_class(receipt.status)]}
+                 />
+                 <span>{receipt.status_label}</span>
+               </p>
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 90a9ad8..a388421 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -6,6 +6,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Person
++  alias Memba.Messaging.Projections.MemberReceipt
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Repo
+   alias MembaWeb.UserAuth
+@@ -47,6 +48,117 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(view, "a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
+   end
+ 
++  test "routed message detail renders the Who got this summary and polished group headers", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    carol =
++      create_active_member(
++        email: "carol@example.com",
++        name: "Carol Clark",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: alice.person_id,
++        subject: "Trip planning night",
++        body: "Bring your maps."
++      )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: alice.person_id,
++      recipient_name: "Alice Adams",
++      receipt_status: "sent"
++    )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: bob.person_id,
++      recipient_name: "Bob Builder",
++      receipt_status: "opened"
++    )
++
++    create_member_receipt(
++      message_id: message.message_id,
++      recipient_id: carol.person_id,
++      recipient_name: "Carol Clark",
++      receipt_status: "delivered"
++    )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
++
++    assert has_element?(view, "#member-receipt-summary", "Who got this")
++    assert has_element?(view, "#member-receipt-summary-bar")
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened'][data-receipt-count='1'][data-receipt-percentage='33']",
++             "read it"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='1'][data-receipt-percentage='33']",
++             "arrived, not opened yet"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='sent'][data-receipt-count='1'][data-receipt-percentage='33']",
++             "on its way"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivery problem'][data-receipt-count='0'][data-receipt-percentage='0']",
++             "we couldn't reach them"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-group'][data-receipt-status='opened']",
++             "Opened"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
++             "33%"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='member-receipt-group'][data-receipt-status='sent']",
++             "Sending"
++           )
++
++    refute has_element?(
++             view,
++             "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
++           )
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
+     person_id = Ecto.UUID.generate()
+@@ -86,4 +198,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       body: Keyword.get(attrs, :body, "Message body")
+     })
+   end
++
++  defp create_member_receipt(attrs) do
++    Repo.insert!(%MemberReceipt{
++      delivery_id: Ecto.UUID.generate(),
++      message_id: Keyword.fetch!(attrs, :message_id),
++      recipient_id: Keyword.fetch!(attrs, :recipient_id),
++      recipient_name: Keyword.fetch!(attrs, :recipient_name),
++      receipt_status: Keyword.fetch!(attrs, :receipt_status)
++    })
++  end
+ end
