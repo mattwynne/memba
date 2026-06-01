@@ -49,12 +49,21 @@ Feature: Authentication
 
   Rule: A sign-in link can only be used once
 
-    Scenario: Reusing a sign-in link
+    Scenario: A signed-out person cannot reuse a sign-in link
+      Given Alice is a member of Kootenay Mountaineering Club
+      And Alice has received a sign-in link for their email address
+      And Alice has already followed the sign-in link
+      And Alice has signed out
+      When Alice follows the same sign-in link again
+      Then Alice should not be signed in
+
+    Scenario: Reopening a used sign-in link after signing in
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice has received a sign-in link for their email address
       And Alice has already followed the sign-in link
       When Alice follows the same sign-in link again
-      Then Alice should not be signed in
+      Then Alice should still be signed in
+      And Alice should be on the homepage
 
   Rule: Expired sign-in links cannot be used
 

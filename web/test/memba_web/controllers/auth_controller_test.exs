@@ -169,6 +169,21 @@ defmodule MembaWeb.AuthControllerTest do
       assert get_session(conn, UserAuth.identity_session_key()) == nil
       assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
     end
+
+    test "redirects already-signed-in browsers home when reopening an already-consumed link" do
+      assert {:ok, %{token: token}} = Accounts.request_magic_link("pat@memba.io")
+      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_magic_token(token)
+
+      conn =
+        build_conn(:get, "/auth/magic/#{token}")
+        |> init_test_session(%{UserAuth.identity_session_key() => "pat@memba.io"})
+        |> get("/auth/magic/#{token}")
+
+      assert redirected_to(conn) == ~p"/"
+      assert flash(conn, :error) == nil
+      assert get_session(conn, UserAuth.identity_session_key()) == "pat@memba.io"
+      assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
+    end
   end
 
   describe "DELETE /auth" do

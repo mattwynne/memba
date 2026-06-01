@@ -57,6 +57,10 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     Map.put(context, :signed_in_identity, nil)
   end
 
+  step "{word} has signed out", context do
+    sign_out(context)
+  end
+
   step "{word} has received a sign-in link for their email address",
        %{args: [person_name]} = context do
     person = fetch_from_context!(context, :people, person_name)
@@ -112,9 +116,22 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
+  step "{word} should still be signed in", %{args: [person_name]} = context do
+    identity = Map.fetch!(context, :signed_in_identity)
+    person = fetch_from_context!(context, :people, person_name)
+    assert identity.email == Accounts.normalize_email(person.email)
+    context
+  end
+
   step "{word} should be on the staff-only homepage", context do
     identity = Map.fetch!(context, :signed_in_identity)
     assert identity.staff? == true
+    assert Map.get(context, :current_page) == :staff_only_homepage
+    context
+  end
+
+  step "{word} should be on the homepage", context do
+    assert Map.get(context, :current_page) == :homepage
     context
   end
 
@@ -205,15 +222,43 @@ defmodule Memba.Cucumber.AuthenticationSteps do
 
     case Accounts.consume_magic_token(token) do
       {:ok, %{email: email}} ->
-        Map.put(context, :signed_in_identity, %{
-          email: email,
-          staff?: Accounts.staff_email?(email),
-          active_clubs: Accounts.list_active_clubs_for_email(email)
-        })
+        sign_in(context, email)
+
+      {:error, :consumed} ->
+        if Map.get(context, :signed_in_identity) do
+          Map.put(context, :current_page, :homepage)
+        else
+          Map.put(context, :signed_in_identity, nil)
+        end
 
       {:error, _reason} ->
         Map.put(context, :signed_in_identity, nil)
     end
+  end
+
+  defp sign_in(context, email) do
+    identity = %{
+      email: email,
+      staff?: Accounts.staff_email?(email),
+      active_clubs: Accounts.list_active_clubs_for_email(email)
+    }
+
+    current_page =
+      cond do
+        Map.get(context, :return_to) == :staff_only_homepage -> :staff_only_homepage
+        identity.staff? -> :staff_only_homepage
+        true -> :homepage
+      end
+
+    context
+    |> Map.put(:signed_in_identity, identity)
+    |> Map.put(:current_page, current_page)
+  end
+
+  defp sign_out(context) do
+    context
+    |> Map.put(:signed_in_identity, nil)
+    |> Map.put(:current_page, :homepage)
   end
 
   defp assert_signed_in_club(context, club_name) do

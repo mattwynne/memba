@@ -187,36 +187,46 @@ defmodule Memba.CucumberConfigurationTest do
        {"When", "Robin requests a sign-in link for their email address", 48},
        {"Then", "Robin should not receive a sign-in link", 49}
      ]},
-    {"Reusing a sign-in link",
+    {"A signed-out person cannot reuse a sign-in link",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 54},
-       {"And", "Alice has received a sign-in link for their email address", 55},
-       {"And", "Alice has already followed the sign-in link", 56},
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 53},
+       {"And", "Alice has received a sign-in link for their email address", 54},
+       {"And", "Alice has already followed the sign-in link", 55},
+       {"And", "Alice has signed out", 56},
        {"When", "Alice follows the same sign-in link again", 57},
        {"Then", "Alice should not be signed in", 58}
      ]},
+    {"Reopening a used sign-in link after signing in",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 61},
+       {"And", "Alice has received a sign-in link for their email address", 62},
+       {"And", "Alice has already followed the sign-in link", 63},
+       {"When", "Alice follows the same sign-in link again", 64},
+       {"Then", "Alice should still be signed in", 65},
+       {"And", "Alice should be on the homepage", 66}
+     ]},
     {"Following an expired sign-in link",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 63},
-       {"And", "Alice has received a sign-in link for their email address", 64},
-       {"And", "the sign-in link has expired", 65},
-       {"When", "Alice follows the sign-in link", 66},
-       {"Then", "Alice should not be signed in", 67}
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 71},
+       {"And", "Alice has received a sign-in link for their email address", 72},
+       {"And", "the sign-in link has expired", 73},
+       {"When", "Alice follows the sign-in link", 74},
+       {"Then", "Alice should not be signed in", 75}
      ]},
     {"Following a link that Memba did not issue",
      [
-       {"When", "Robin follows a sign-in link that Memba did not issue", 72},
-       {"Then", "Robin should not be signed in", 73}
+       {"When", "Robin follows a sign-in link that Memba did not issue", 80},
+       {"Then", "Robin should not be signed in", 81}
      ]},
     {"Staff signs in after trying to open the staff-only area",
      [
-       {"Given", "Pat is not a member of any club", 78},
-       {"And", "Pat has tried to open the staff-only area", 79},
-       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 80},
-       {"Then", "Pat should receive a sign-in link", 81},
-       {"When", "Pat follows the sign-in link", 82},
-       {"Then", "Pat should be signed in as Memba staff", 83},
-       {"And", "Pat should be on the staff-only homepage", 84}
+       {"Given", "Pat is not a member of any club", 86},
+       {"And", "Pat has tried to open the staff-only area", 87},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 88},
+       {"Then", "Pat should receive a sign-in link", 89},
+       {"When", "Pat follows the sign-in link", 90},
+       {"Then", "Pat should be signed in as Memba staff", 91},
+       {"And", "Pat should be on the staff-only homepage", 92}
      ]}
   ]
 
@@ -256,12 +266,15 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} follows a sign-in link that Memba did not issue",
     "{word} has received a sign-in link for their email address",
     "{word} has already followed the sign-in link",
+    "{word} has signed out",
     "the sign-in link has expired",
     "{word} has tried to open the staff-only area",
     "{word} should be signed in",
     "{word} should be signed in as Memba staff",
     "{word} should not be signed in",
+    "{word} should still be signed in",
     "{word} should be on the staff-only homepage",
+    "{word} should be on the homepage",
     "{word} should see Kootenay Mountaineering Club in their clubs",
     "{word} should see Nelson Paddling Club in their clubs",
     "{word} should be able to see Kootenay Mountaineering Club in their clubs"
