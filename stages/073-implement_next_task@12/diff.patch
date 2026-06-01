@@ -1,0 +1,148 @@
+diff --git a/docs/iterations/013-member-compose-liveview-flow/todo.md b/docs/iterations/013-member-compose-liveview-flow/todo.md
+index 249306f..1037ff7 100644
+--- a/docs/iterations/013-member-compose-liveview-flow/todo.md
++++ b/docs/iterations/013-member-compose-liveview-flow/todo.md
+@@ -11,5 +11,5 @@
+ - [x] 009 Add or update LiveView/Phoenix tests for:
+ - [x] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
+ - [x] 011 Remove `@wip` from the new failure scenario once implemented and passing.
+-- [ ] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
++- [x] 012 Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
+ - [ ] 013 Run the targeted browser Cucumber feature and `dev check`.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index c131144..dd76c13 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -35,51 +35,6 @@ defmodule MembaWeb.PageController do
+     |> render(:home)
+   end
+ 
+-  def send_message(%{assigns: %{current_identity: identity}} = conn, %{
+-        "club_id" => club_id,
+-        "message" => message_params
+-      })
+-      when not is_nil(identity) do
+-    selected_club = selected_club(conn, club_id)
+-    sender_id = Map.get(message_params, "sender_id")
+-
+-    cond do
+-      is_nil(selected_club) ->
+-        not_found(conn)
+-
+-      not Membership.active_member_of_club?(club_id, sender_id) ->
+-        conn
+-        |> put_flash(:error, "Choose an active member as the sender.")
+-        |> render_club_home(club_id, message_params)
+-
+-      true ->
+-        attrs =
+-          message_params
+-          |> Map.take(["sender_id", "subject", "body"])
+-          |> Map.merge(%{
+-            "message_id" => Ecto.UUID.generate(),
+-            "club_id" => club_id
+-          })
+-
+-        case Messaging.send_club_message(attrs, consistency: :strong) do
+-          :ok ->
+-            conn
+-            |> put_flash(:info, "Message sent")
+-            |> redirect(to: ~p"/?#{[club_id: club_id]}")
+-
+-          {:ok, _result} ->
+-            conn
+-            |> put_flash(:info, "Message sent")
+-            |> redirect(to: ~p"/?#{[club_id: club_id]}")
+-
+-          {:error, reason} ->
+-            conn
+-            |> put_flash(:error, "Could not send message: #{format_reason(reason)}")
+-            |> render_club_home(club_id, message_params)
+-        end
+-    end
+-  end
+-
+   def about(conn, _params) do
+     conn
+     |> assign(:page_title, "About")
+@@ -98,11 +53,7 @@ defmodule MembaWeb.PageController do
+     |> render(:privacy)
+   end
+ 
+-  defp render_club_home(
+-         conn,
+-         club_id,
+-         message_params \\ %{"sender_id" => "", "subject" => "", "body" => ""}
+-       ) do
++  defp render_club_home(conn, club_id) do
+     case selected_club(conn, club_id) do
+       nil ->
+         not_found(conn)
+@@ -119,7 +70,6 @@ defmodule MembaWeb.PageController do
+           |> Enum.reverse()
+ 
+         current_member = current_member_for_identity(members, conn.assigns.current_identity)
+-        message_params = put_default_sender(message_params, current_member)
+ 
+         conn
+         |> assign(:page_title, selected_club.name)
+@@ -128,9 +78,7 @@ defmodule MembaWeb.PageController do
+         |> assign(:active_member_count, Enum.count(members))
+         |> assign(:current_member, current_member)
+         |> assign(:member_names_by_id, Map.new(members, &{&1.id, &1.name}))
+-        |> assign(:member_options, Enum.map(members, &{&1.name, &1.id}))
+         |> assign(:messages, messages)
+-        |> assign(:message_form, Phoenix.Component.to_form(message_params, as: :message))
+         |> render(:club)
+     end
+   end
+@@ -147,15 +95,6 @@ defmodule MembaWeb.PageController do
+     Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+   end
+ 
+-  defp put_default_sender(message_params, nil), do: message_params
+-
+-  defp put_default_sender(message_params, current_member) do
+-    case Map.get(message_params, "sender_id") do
+-      value when value in [nil, ""] -> Map.put(message_params, "sender_id", current_member.id)
+-      _value -> message_params
+-    end
+-  end
+-
+   defp with_member_initials(member) do
+     Map.put(member, :initials, initials(member.name))
+   end
+@@ -179,6 +118,4 @@ defmodule MembaWeb.PageController do
+     |> put_view(html: MembaWeb.ErrorHTML)
+     |> render(:"404")
+   end
+-
+-  defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
+ end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index b861ddf..dfe3e86 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -40,7 +40,6 @@ defmodule MembaWeb.Router do
+     pipe_through [:browser, :club_member_context]
+ 
+     get "/", PageController, :home
+-    post "/", PageController, :send_message
+   end
+ 
+   scope "/", MembaWeb do
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 1d52009..3192179 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -61,6 +61,10 @@ defmodule MembaWeb.RouterTest do
+   end
+ 
+   describe "member message routes" do
++    test "does not route the legacy inline club-home send endpoint" do
++      assert :error = Phoenix.Router.route_info(MembaWeb.Router, "POST", "/", "localhost")
++    end
++
+     test "routes /messages/new through the required club member pipeline to the compose LiveView" do
+       assert %{
+                path_params: %{},
