@@ -1,7 +1,7 @@
 # Member compose LiveView flow
 
 Date: 2026-06-01
-Status: ready
+Status: validated
 
 ## Goal
 
