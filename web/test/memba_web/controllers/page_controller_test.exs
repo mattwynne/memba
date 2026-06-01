@@ -125,7 +125,7 @@ defmodule MembaWeb.PageControllerTest do
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Alpine Club"
-    assert response =~ "Welcome to your club space."
+    assert response =~ "What the club's been saying, and who's around right now."
     assert response =~ "Send club message"
     assert response =~ "Recent club messages"
     assert response =~ "Active members"
@@ -162,18 +162,12 @@ defmodule MembaWeb.PageControllerTest do
 
     assert html
            |> LazyHTML.query(
-             "a#member-compose-shortcut[href='/messages/new?club_id=#{club.club_id}']"
+             "section#member-dashboard-cta a#member-send-message-link[href='/messages/new?club_id=#{club.club_id}']"
            )
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query(
-             "section#member-send-message a#member-send-message-link[href='/messages/new?club_id=#{club.club_id}']"
-           )
-           |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("#member-compose-cta-summary[data-active-member-count='2']")
+           |> LazyHTML.query("#active-members-card[data-active-member-count='2']")
            |> Enum.any?()
 
     refute html |> LazyHTML.query("form#member-message-form") |> Enum.any?()

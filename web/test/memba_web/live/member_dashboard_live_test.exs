@@ -6,6 +6,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
+  alias Memba.Messaging.Projections.MemberReceipt
   alias Memba.Messaging.Projections.Message
   alias Memba.Repo
   alias MembaWeb.UserAuth
@@ -45,6 +46,125 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(view, "#member-message-#{message.message_id}")
     assert has_element?(view, "#club-member-#{alice.person_id}")
     assert has_element?(view, "#club-member-#{bob.person_id}")
+  end
+
+  test "dashboard renders polished CTA, message rows, receipt glance, and active-member card",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    sent_at = ~U[2026-05-30 12:00:00.000000Z]
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Trip night",
+        inserted_at: sent_at
+      )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: alice.person_id,
+      recipient_name: "Alice Adams",
+      receipt_status: "opened"
+    )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      receipt_status: "sent"
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(view, "#member-dashboard-hero", "Hello, Alice.")
+
+    assert has_element?(
+             view,
+             "#member-dashboard-cta #member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']",
+             "Send club message"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-sender-initials']",
+             "BB"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-sender-name']",
+             "Bob Builder"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-sent-at']",
+             Calendar.strftime(sent_at, "%b %d, %Y")
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-receipt-glance']",
+             "1 of 2 opened"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='opened'][data-receipt-percentage='50']"
+           )
+
+    assert has_element?(view, "#active-members-card[data-active-member-count='2']")
+
+    assert has_element?(
+             view,
+             "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "AA"
+           )
+  end
+
+  test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(view, "#member-message-list-empty", "No messages yet")
+
+    assert has_element?(
+             view,
+             "#member-message-empty-send-link[href='/messages/new?club_id=#{alice.club_id}']",
+             "Send the first one"
+           )
   end
 
   test "logged-out club home still renders the public club marketing experience", %{conn: conn} do
@@ -112,12 +232,26 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp create_message(attrs) do
+    inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+
     Repo.insert!(%Message{
       message_id: Ecto.UUID.generate(),
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
-      body: Keyword.get(attrs, :body, "Message body")
+      body: Keyword.get(attrs, :body, "Message body"),
+      inserted_at: inserted_at,
+      updated_at: inserted_at
+    })
+  end
+
+  defp create_member_receipt(attrs) do
+    Repo.insert!(%MemberReceipt{
+      delivery_id: Ecto.UUID.generate(),
+      message_id: Keyword.fetch!(attrs, :message_id),
+      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+      receipt_status: Keyword.fetch!(attrs, :receipt_status)
     })
   end
 end
