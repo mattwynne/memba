@@ -1,0 +1,148 @@
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/todo.md b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+index b5136db..1b2e5cb 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/todo.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
+ - [x] 005 Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
+ - [x] 006 Render the dashboard toward `dashboard.jsx`:
+-- [ ] 007 Design and render empty states deliberately:
++- [x] 007 Design and render empty states deliberately:
+ - [ ] 008 Preserve or deliberately update stable selectors used by browser acceptance:
+ - [ ] 009 Ensure the club home has no inline compose form; remove any remaining inline compose markup/handlers so compose is only reached through the CTA link to `/messages/new?club_id=<club_id>`.
+ - [ ] 010 Add focused LiveView/Phoenix tests for:
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 89f065a..de78764 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -161,9 +161,48 @@
+       <div
+         id="active-members-card"
+         data-active-member-count={@active_member_count}
++        data-active-members-state={
++          if @active_member_count <= 1, do: "first-member", else: "active-members"
++        }
+         class="mt-4 rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-5 shadow-sm"
+       >
+-        <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
++        <div
++          :if={@active_member_count <= 1}
++          id="active-members-empty-state"
++          class="text-center"
++        >
++          <div id="active-members-empty-avatar" class="flex justify-center">
++            <span
++              :for={member <- Enum.take(@members, 1)}
++              id={"club-member-#{member.id}"}
++              data-testid="club-member-row"
++              data-member-id={member.id}
++              data-member-name={member.name}
++              class="flex size-12 items-center justify-center rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] text-sm font-bold text-[var(--club-site-accent)] shadow-sm"
++              title={member.name}
++            >
++              {member.initials}
++            </span>
++            <span
++              :if={@members == []}
++              class="flex size-12 items-center justify-center rounded-2xl bg-[var(--club-site-bg)] text-[var(--club-site-muted)] ring-1 ring-[var(--club-site-line)]"
++              aria-hidden="true"
++            >
++              <.icon name="hero-users" class="size-6" />
++            </span>
++          </div>
++          <h3 class="mt-4 text-base font-semibold text-[var(--club-site-ink)]">
++            You're the first one here
++          </h3>
++          <p class="mx-auto mt-1 max-w-sm text-sm leading-6 text-[var(--club-site-muted)]">
++            As members join and renew, you'll see them listed here.
++          </p>
++        </div>
++
++        <div
++          :if={@active_member_count > 1}
++          class="flex flex-col gap-5 sm:flex-row sm:items-center"
++        >
+           <div id="active-members-avatar-stack" class="flex">
+             <span
+               :for={member <- Enum.take(@members, 6)}
+@@ -188,7 +227,10 @@
+             <strong class="block text-base font-semibold text-[var(--club-site-ink)]">
+               {active_member_count_label(@active_member_count)}
+             </strong>
+-            <p class="mt-1 text-sm leading-6 text-[var(--club-site-muted)]">
++            <p
++              id="active-members-card-copy"
++              class="mt-1 text-sm leading-6 text-[var(--club-site-muted)]"
++            >
+               Everyone with a current membership. They'll all receive your messages.
+             </p>
+           </div>
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index f832f5e..c853049 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -107,6 +107,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+              "#member-message-#{message.message_id} [data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
+            )
+ 
++    refute has_element?(view, "#member-message-list-empty")
++
+     assert has_element?(
+              view,
+              "#member-message-#{message.message_id} [data-testid='message-sender-initials']",
+@@ -137,6 +139,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+ 
+     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
++    assert has_element?(view, "#active-members-card[data-active-members-state='active-members']")
++    refute has_element?(view, "#active-members-empty-state", "You're the first one here")
+ 
+     assert has_element?(
+              view,
+@@ -167,6 +171,46 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard renders first-member active-member copy only when current member is alone",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#active-members-card[data-active-member-count='1'][data-active-members-state='first-member']"
++           )
++
++    assert has_element?(view, "#active-members-empty-state", "You're the first one here")
++
++    assert has_element?(
++             view,
++             "#active-members-empty-state",
++             "As members join and renew, you'll see them listed here."
++           )
++
++    assert has_element?(
++             view,
++             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
++             "AA"
++           )
++
++    refute has_element?(
++             view,
++             "#active-members-card-copy",
++             "Everyone with a current membership. They'll all receive your messages."
++           )
++  end
++
+   test "logged-out club home still renders the public club marketing experience", %{conn: conn} do
+     club = create_club(name: "Alpine Club")
+ 
