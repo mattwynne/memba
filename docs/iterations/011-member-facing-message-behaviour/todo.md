@@ -9,4 +9,4 @@
 - [x] 007 Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
 - [x] 008 Add focused tests for member route authorization, message-club ownership checks, status label/icon mapping, and no operator-only fields on member pages.
 - [x] 009 Remove `@wip` from `member_message_deliverability.feature` when browser scenarios pass.
-- [ ] 010 Run `dev check`.
+- [x] 010 Run `dev check`.
