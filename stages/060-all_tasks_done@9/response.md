@@ -1,0 +1,1 @@
+{"cmd": "set -eu\nTODO_PATH='docs/iterations/013-member-compose-liveview-flow/todo.md'\nif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"BLOCKING: missing, empty, or unreadable: $TODO_PATH\"\n  exit 0\nfi\ngrep -n -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" || true", "max_output_chars": 20000}{"cmd": "pwd"}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
