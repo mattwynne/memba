@@ -88,9 +88,64 @@ defmodule MembaWeb.MemberMessageLive.New do
         data-club-id={selected_club_id(@selected_club, @route_params)}
         data-current-member-id={current_member_id(@current_member)}
         data-active-member-count={@active_member_count}
+        data-compose-state={@compose_state}
+        data-sent-message-id={@sent_message_id}
         class="space-y-8"
       >
-        <section class="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm sm:p-8">
+        <section
+          :if={@compose_state == :sent}
+          id="member-compose-success-state"
+          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 text-center shadow-sm sm:p-10"
+        >
+          <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100">
+            <.icon name="hero-check" class="size-8" />
+          </div>
+
+          <p class="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+            Club message
+          </p>
+
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+            Message sent.
+          </h1>
+
+          <p
+            id="member-compose-success-summary"
+            data-active-member-count={@active_member_count}
+            class="mx-auto mt-4 max-w-xl text-base leading-7 text-[var(--club-site-muted)]"
+          >
+            Your note is on its way to {active_member_count_summary(@active_member_count)}. You can watch it land on the message page.
+          </p>
+
+          <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+            <.link
+              id="member-compose-see-receipts-link"
+              href={message_detail_path(@sent_message_id, @selected_club, @route_params)}
+              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <.icon name="hero-eye" class="size-4" /> See who got it
+            </.link>
+            <.link
+              id="member-compose-send-another-link"
+              href={compose_path(@selected_club, @route_params)}
+              class="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+            >
+              Send another message
+            </.link>
+            <.link
+              id="member-compose-back-home-link"
+              href={club_home_path(@selected_club, @route_params)}
+              class="inline-flex min-h-12 items-center justify-center rounded-full border border-transparent px-6 py-3 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
+            >
+              Back to home
+            </.link>
+          </div>
+        </section>
+
+        <section
+          :if={@compose_state != :sent}
+          class="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm sm:p-8"
+        >
           <.link
             id="member-compose-club-home-link"
             href={club_home_path(@selected_club, @route_params)}
@@ -303,6 +358,20 @@ defmodule MembaWeb.MemberMessageLive.New do
   end
 
   defp club_home_path(selected_club, _route_params), do: ~p"/?club_id=#{selected_club.club_id}"
+
+  defp compose_path(nil, route_params) do
+    case Map.get(route_params, "club_id") do
+      nil -> ~p"/messages/new"
+      club_id -> ~p"/messages/new?club_id=#{club_id}"
+    end
+  end
+
+  defp compose_path(selected_club, _route_params),
+    do: ~p"/messages/new?club_id=#{selected_club.club_id}"
+
+  defp message_detail_path(message_id, selected_club, route_params) do
+    ~p"/messages/#{message_id}?club_id=#{selected_club_id(selected_club, route_params)}"
+  end
 
   defp active_member_count_summary(nil), do: "all active members"
   defp active_member_count_summary(1), do: "the active member"

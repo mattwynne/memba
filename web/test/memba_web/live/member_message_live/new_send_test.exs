@@ -64,6 +64,39 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
            ] = Fake.deliveries()
 
     assert message_id == message.message_id
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-compose-state='sent'][data-sent-message-id='#{message.message_id}']"
+           )
+
+    assert has_element?(view, "#member-compose-success-state", "Message sent.")
+
+    assert has_element?(
+             view,
+             "#member-compose-success-summary[data-active-member-count='2']",
+             "all 2 active members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-see-receipts-link[href='/messages/#{message.message_id}?club_id=#{club_id}']",
+             "See who got it"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-send-another-link[href='/messages/new?club_id=#{club_id}']",
+             "Send another message"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-back-home-link[href='/?club_id=#{club_id}']",
+             "Back to home"
+           )
+
+    refute has_element?(view, "#member-message-compose-form")
   end
 
   defp create_active_member(club_id, attrs) do
