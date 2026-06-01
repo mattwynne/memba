@@ -3,9 +3,12 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
   import Phoenix.LiveViewTest
 
+  import ExUnit.CaptureLog
+
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.DeliveryProviders.Fake
+  alias Memba.Messaging.DeliveryProviders.Unavailable
   alias MembaWeb.UserAuth
 
   setup do
@@ -97,6 +100,73 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
            )
 
     refute has_element?(view, "#member-message-compose-form")
+  end
+
+  test "send failure renders an incident state with support guidance and retry actions", %{
+    conn: conn
+  } do
+    Application.put_env(:memba, :messaging_delivery_provider, Unavailable)
+
+    club_id = Ecto.UUID.generate()
+    _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/new?club_id=#{club_id}")
+
+    log =
+      capture_log(fn ->
+        view
+        |> element("#member-message-compose-form")
+        |> render_submit(%{
+          "message" => %{
+            "subject" => "Trail notice",
+            "body" => "The bridge is out."
+          }
+        })
+      end)
+
+    assert log =~ "Member message send failed"
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-compose-state='send_failed']"
+           )
+
+    assert has_element?(view, "#member-compose-error-state", "That didn’t send.")
+
+    assert has_element?(
+             view,
+             "#member-compose-error-summary",
+             "Your message was not sent to anyone."
+           )
+
+    assert has_element?(view, "#member-compose-error-summary", "contact support")
+
+    assert has_element?(
+             view,
+             "button#member-compose-try-again-button[type='button']",
+             "Try again"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-back-home-after-error-link[href='/?club_id=#{club_id}']",
+             "Back to club home"
+           )
+
+    refute has_element?(view, "#member-compose-success-state")
+    refute has_element?(view, "#member-message-compose-form")
+
+    view
+    |> element("#member-compose-try-again-button")
+    |> render_click()
+
+    assert has_element?(view, "#member-message-compose[data-compose-state='composing']")
+    assert has_element?(view, "#member-message-compose-form")
+    refute has_element?(view, "#member-compose-error-state")
   end
 
   defp create_active_member(club_id, attrs) do

@@ -7,7 +7,7 @@
 - [x] 005 Move sending behaviour into the LiveView submit event or a small shared service function:
 - [x] 006 Render compose form based on `compose.jsx`:
 - [x] 007 Render success state based on `ComposeSuccess`, adding the required “Send another message” action.
-- [ ] 008 Render failure state based on `ComposeError`, adjusted to say nothing was sent and contact support; include Try again and Back to club home actions.
+- [x] 008 Render failure state based on `ComposeError`, adjusted to say nothing was sent and contact support; include Try again and Back to club home actions.
 - [ ] 009 Add or update LiveView/Phoenix tests for:
 - [ ] 010 Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
 - [ ] 011 Remove `@wip` from the new failure scenario once implemented and passing.

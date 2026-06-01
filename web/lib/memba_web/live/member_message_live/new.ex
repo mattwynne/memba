@@ -8,6 +8,8 @@ defmodule MembaWeb.MemberMessageLive.New do
   """
   use MembaWeb, :live_view
 
+  require Logger
+
   alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Messaging
@@ -61,6 +63,8 @@ defmodule MembaWeb.MemberMessageLive.New do
          |> assign(:send_error, nil)}
 
       {:error, reason} ->
+        log_send_failure(socket, reason)
+
         {:noreply,
          socket
          |> assign(:compose_state, :send_failed)
@@ -72,6 +76,14 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   def handle_event("send_message", _params, socket) do
     handle_event("send_message", %{"message" => %{}}, socket)
+  end
+
+  def handle_event("try_again", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:compose_state, :composing)
+     |> assign(:sent_message_id, nil)
+     |> assign(:send_error, nil)}
   end
 
   @impl Phoenix.LiveView
@@ -143,7 +155,50 @@ defmodule MembaWeb.MemberMessageLive.New do
         </section>
 
         <section
-          :if={@compose_state != :sent}
+          :if={@compose_state == :send_failed}
+          id="member-compose-error-state"
+          class="mx-auto max-w-2xl overflow-hidden rounded-3xl border border-rose-100 bg-[var(--club-site-paper)] p-6 text-center shadow-sm sm:p-10"
+        >
+          <div class="mx-auto flex size-16 items-center justify-center rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-100">
+            <.icon name="hero-exclamation-triangle" class="size-8" />
+          </div>
+
+          <p class="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+            Club message
+          </p>
+
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+            That didn’t send.
+          </h1>
+
+          <p
+            id="member-compose-error-summary"
+            class="mx-auto mt-4 max-w-xl text-base leading-7 text-[var(--club-site-muted)]"
+          >
+            Your message was not sent to anyone. Please contact support so we can investigate before you try again.
+          </p>
+
+          <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+            <button
+              id="member-compose-try-again-button"
+              type="button"
+              phx-click="try_again"
+              class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+            >
+              <.icon name="hero-arrow-path" class="size-4" /> Try again
+            </button>
+            <.link
+              id="member-compose-back-home-after-error-link"
+              href={club_home_path(@selected_club, @route_params)}
+              class="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+            >
+              Back to club home
+            </.link>
+          </div>
+        </section>
+
+        <section
+          :if={@compose_state == :composing}
           class="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm sm:p-8"
         >
           <.link
@@ -282,6 +337,14 @@ defmodule MembaWeb.MemberMessageLive.New do
     else
       _missing_compose_context -> {:error, :forbidden}
     end
+  end
+
+  defp log_send_failure(socket, reason) do
+    Logger.error("Member message send failed",
+      club_id: selected_club_id(socket.assigns.selected_club, socket.assigns.route_params),
+      sender_id: current_member_id(socket.assigns.current_member),
+      reason: inspect(reason)
+    )
   end
 
   defp compose_context(club_id, current_identity, current_identity_clubs) do
