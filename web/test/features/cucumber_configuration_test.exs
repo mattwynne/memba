@@ -328,8 +328,8 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
-  test "domain Cucumber configuration does not use browser tag filtering" do
-    refute Application.get_env(:cucumber, :tags)
+  test "domain Cucumber configuration excludes only wip planning scenarios" do
+    assert Application.fetch_env!(:cucumber, :tags) == "not @wip"
 
     operator_feature_file =
       configured_feature_paths()
