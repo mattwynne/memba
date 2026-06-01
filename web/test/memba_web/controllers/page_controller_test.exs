@@ -4,7 +4,9 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
+  alias Memba.Messaging.Projections.MemberReceipt
   alias Memba.Messaging.Projections.Message
+  alias Memba.Messaging.Projections.OperatorDeliverability
   alias Memba.Repo
   alias MembaWeb.UserAuth
 
@@ -96,11 +98,17 @@ defmodule MembaWeb.PageControllerTest do
   end
 
   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
-    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+    club =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
 
     bob =
       create_active_member(
         email: "bob@example.com",
+        name: "Bob Builder",
         club_name: "Alpine Club",
         club_id: club.club_id
       )
@@ -119,8 +127,16 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Alpine Club"
     assert response =~ "Welcome to your club space."
     assert response =~ "Send a club message"
-    assert response =~ "Members"
-    assert response =~ "Sent messages"
+    assert response =~ "Recent club messages"
+    assert response =~ "Active members"
+    assert response =~ "2 active members"
+
+    assert html
+           |> LazyHTML.text()
+           |> String.contains?(
+             "Everyone with a current membership. They'll all receive your messages."
+           )
+
     assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
 
     assert html
@@ -151,7 +167,21 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Test Member']")
+           |> LazyHTML.query("#member-compose-recipient-summary[data-active-member-count='2']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "select#member-message-sender-select option[value='#{club.person_id}'][selected]"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Alice Adams']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Bob Builder']")
            |> Enum.any?()
 
     assert html
@@ -160,7 +190,204 @@ defmodule MembaWeb.PageControllerTest do
            )
            |> Enum.any?()
 
+    assert html
+           |> LazyHTML.query(
+             "a[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{club.club_id}']"
+           )
+           |> Enum.any?()
+
     refute response =~ "My clubs"
+  end
+
+  test "GET /messages/:message_id shows member message detail to active club members", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    alice_receipt =
+      create_member_receipt(
+        message_id: message.message_id,
+        recipient_id: alice.person_id,
+        recipient_name: "Alice Adams",
+        receipt_status: "sent"
+      )
+
+    bob_receipt =
+      create_member_receipt(
+        message_id: message.message_id,
+        recipient_id: bob.person_id,
+        recipient_name: "Bob Builder",
+        receipt_status: "delivered"
+      )
+
+    create_operator_deliverability(
+      delivery_id: bob_receipt.delivery_id,
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      recipient_address: "bob-private@example.invalid",
+      status: "bounced",
+      reason: "mailbox does not exist"
+    )
+
+    conn =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Trip planning night"
+    assert response =~ "Bring your maps."
+    assert response =~ "From"
+    assert response =~ "Alice Adams"
+
+    assert html
+           |> LazyHTML.query(
+             "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#member-receipts-summary[data-receipt-count='2']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt-group'][data-receipt-status='sent'] [data-testid='receipt-group-count']"
+           )
+           |> LazyHTML.text() =~ "1"
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] [data-testid='receipt-group-count']"
+           )
+           |> LazyHTML.text() =~ "1"
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'][data-receipt-status='sent'] [data-testid='receipt-status']"
+           )
+           |> LazyHTML.text() =~ "Sending"
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'][data-receipt-status='delivered'] [data-testid='receipt-status']"
+           )
+           |> LazyHTML.text() =~ "Delivered"
+
+    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
+    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'] [data-testid='receipt-status-icon'][data-icon-name='hero-clock']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'] [data-testid='receipt-status-icon'][data-icon-name='hero-check-circle']"
+           )
+           |> Enum.any?()
+
+    refute response =~ alice_receipt.delivery_id
+    refute response =~ bob_receipt.delivery_id
+    refute response =~ "bob-private@example.invalid"
+    refute response =~ "mailbox does not exist"
+    refute response =~ "bounced"
+  end
+
+  test "GET /messages/:message_id redirects unauthenticated visitors and preserves return path",
+       %{
+         conn: conn
+       } do
+    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+
+    message =
+      create_message(club_id: club.club_id, sender_id: club.person_id, subject: "Members only")
+
+    return_path = ~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}"
+
+    conn = get(conn, return_path)
+
+    assert redirected_to(conn) == ~p"/auth"
+    assert get_session(conn, UserAuth.return_to_session_key()) == return_path
+  end
+
+  test "GET /messages/:message_id forbids signed-in users outside the requested club", %{
+    conn: conn
+  } do
+    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+    _other_club = create_active_member(email: "pat@example.com", club_name: "Paddling Club")
+
+    message =
+      create_message(
+        club_id: club.club_id,
+        sender_id: club.person_id,
+        subject: "Members only",
+        body: "Private club message"
+      )
+
+    conn =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "pat@example.com"})
+      |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
+
+    assert response(conn, 403) == "Forbidden"
+    refute conn.resp_body =~ "Members only"
+    refute conn.resp_body =~ "Private club message"
+  end
+
+  test "GET /messages/:message_id returns not found when message belongs to a different club", %{
+    conn: conn
+  } do
+    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+    other_club = create_club(name: "Paddling Club")
+
+    message =
+      create_message(
+        club_id: other_club.club_id,
+        sender_id: club.person_id,
+        subject: "Wrong club",
+        body: "This should stay hidden"
+      )
+
+    conn =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
+
+    response = html_response(conn, 404)
+
+    refute response =~ "Wrong club"
+    refute response =~ "This should stay hidden"
   end
 
   test "GET / shows an Admin link for signed-in Memba staff", %{conn: conn} do
@@ -261,6 +488,29 @@ defmodule MembaWeb.PageControllerTest do
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
       body: Keyword.get(attrs, :body, "Message body")
+    })
+  end
+
+  defp create_member_receipt(attrs) do
+    Repo.insert!(%MemberReceipt{
+      delivery_id: Ecto.UUID.generate(),
+      message_id: Keyword.fetch!(attrs, :message_id),
+      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+    })
+  end
+
+  defp create_operator_deliverability(attrs) do
+    Repo.insert!(%OperatorDeliverability{
+      delivery_id: Keyword.fetch!(attrs, :delivery_id),
+      message_id: Keyword.fetch!(attrs, :message_id),
+      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+      recipient_address: Keyword.fetch!(attrs, :recipient_address),
+      channel: Keyword.get(attrs, :channel, "email"),
+      status: Keyword.fetch!(attrs, :status),
+      reason: Keyword.fetch!(attrs, :reason)
     })
   end
 end

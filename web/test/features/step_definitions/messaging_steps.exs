@@ -3,6 +3,7 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   import ExUnit.Assertions
 
+  alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportDeliveryBounced
@@ -38,12 +39,26 @@ defmodule Memba.Cucumber.MessagingSteps do
     report_delivery_status(context, recipient_name, subject, :delivered)
   end
 
+  step "{word} has opened the email for {string}", %{args: [recipient_name, subject]} = context do
+    report_delivery_status(context, recipient_name, subject, :opened)
+  end
+
   step "{word} email for {string} is reported as delayed because {string}",
        %{args: [recipient_name, subject, reason]} = context do
     report_delivery_status(context, recipient_name, subject, :delayed, reason)
   end
 
+  step "{word} email for {string} has been reported as delayed because {string}",
+       %{args: [recipient_name, subject, reason]} = context do
+    report_delivery_status(context, recipient_name, subject, :delayed, reason)
+  end
+
   step "{word} email for {string} is reported as bounced because {string}",
+       %{args: [recipient_name, subject, reason]} = context do
+    report_delivery_status(context, recipient_name, subject, :bounced, reason)
+  end
+
+  step "{word} email for {string} has been reported as bounced because {string}",
        %{args: [recipient_name, subject, reason]} = context do
     report_delivery_status(context, recipient_name, subject, :bounced, reason)
   end
@@ -62,6 +77,71 @@ defmodule Memba.Cucumber.MessagingSteps do
     receipt = member_receipt_for!(context, recipient_name, subject)
 
     assert receipt.receipt_status == expected_status
+
+    context
+  end
+
+  step "{word} should see the message {string} in Kootenay Mountaineering Club",
+       %{args: [viewer_name, subject]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+    message = fetch_from_context!(context, :messages, subject)
+    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+
+    assert message.club_id == club_id
+
+    context
+  end
+
+  step "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
+       %{args: [viewer_name]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+    assert_last_message_addressed_to(context, ["Alice", "Bob", "Carol", "Dana"])
+  end
+
+  step "{word} should not see {word} in the addressed members",
+       %{args: [viewer_name, person_name]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+
+    person_id = fetch_from_context!(context, :people, person_name)
+    deliveries = deliveries_for_last_message!(context)
+
+    refute person_name in Enum.map(deliveries, & &1.recipient_name)
+    refute person_id in Enum.map(deliveries, & &1.recipient_id)
+
+    context
+  end
+
+  step "{word} should see every addressed member's receipt status as {string}",
+       %{args: [viewer_name, expected_status_label]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+    expected_status = member_receipt_status_for_label(expected_status_label)
+
+    context
+    |> Map.fetch!(:addressed_member_names)
+    |> Enum.each(fn recipient_name ->
+      receipt = member_receipt_for!(context, recipient_name, context.sent_message.subject)
+      assert receipt.receipt_status == expected_status
+    end)
+
+    context
+  end
+
+  step "{word} views the message {string}", %{args: [viewer_name, subject]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+    message = fetch_from_context!(context, :messages, subject)
+    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+
+    assert message.club_id == club_id
+
+    Map.put(context, :viewed_message_subject, subject)
+  end
+
+  step "{word} should see {word} receipt status for {string} as {string}",
+       %{args: [viewer_name, recipient_name, subject, expected_status_label]} = context do
+    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
+
+    receipt = member_receipt_for!(context, recipient_name, subject)
+    assert receipt.receipt_status == member_receipt_status_for_label(expected_status_label)
 
     context
   end
@@ -106,19 +186,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step "the message should be addressed to Alice, Bob, and Carol", context do
-    expected_names = ["Alice", "Bob", "Carol"]
-    deliveries = deliveries_for_last_message!(context)
-
-    assert Enum.map(deliveries, & &1.recipient_name) == expected_names
-
-    expected_recipient_ids =
-      Enum.map(expected_names, &fetch_from_context!(context, :people, &1))
-
-    assert Enum.map(deliveries, & &1.recipient_id) == expected_recipient_ids
-
-    context
-    |> Map.put(:addressed_member_names, expected_names)
-    |> Map.put(:addressed_member_ids, expected_recipient_ids)
+    assert_last_message_addressed_to(context, ["Alice", "Bob", "Carol"])
   end
 
   step "the message should not be addressed to {word}", %{args: [person_name]} = context do
@@ -215,6 +283,17 @@ defmodule Memba.Cucumber.MessagingSteps do
     message = fetch_from_context!(context, :messages, subject)
     delivery = delivery_for!(context, recipient_name, subject)
 
+    if status == :opened && delivery.status == "sent" do
+      assert :ok =
+               App.dispatch(
+                 %ReportDeliveryDelivered{
+                   message_id: message.message_id,
+                   delivery_id: delivery.delivery_id
+                 },
+                 consistency: :strong
+               )
+    end
+
     command =
       case status do
         :delivered ->
@@ -254,6 +333,21 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert :ok = App.dispatch(command, consistency: :strong)
 
     context
+  end
+
+  defp assert_last_message_addressed_to(context, expected_names) do
+    deliveries = deliveries_for_last_message!(context)
+
+    assert Enum.map(deliveries, & &1.recipient_name) == expected_names
+
+    expected_recipient_ids =
+      Enum.map(expected_names, &fetch_from_context!(context, :people, &1))
+
+    assert Enum.map(deliveries, & &1.recipient_id) == expected_recipient_ids
+
+    context
+    |> Map.put(:addressed_member_names, expected_names)
+    |> Map.put(:addressed_member_ids, expected_recipient_ids)
   end
 
   defp member_receipt_for!(context, recipient_name, subject) do
@@ -299,6 +393,19 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> Map.fetch!(:last_message_id)
     |> Messaging.list_recipient_deliveries()
   end
+
+  defp assert_active_member!(context, person_name, club_name) do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    person_id = fetch_from_context!(context, :people, normalize_person_name(person_name))
+
+    assert Membership.active_member_of_club?(club_id, person_id)
+  end
+
+  defp member_receipt_status_for_label("Sending"), do: "sent"
+  defp member_receipt_status_for_label("Delivered"), do: "delivered"
+  defp member_receipt_status_for_label("Delivery problem"), do: "delivery problem"
+  defp member_receipt_status_for_label("Opened"), do: "opened"
+  defp member_receipt_status_for_label(status), do: status
 
   defp fetch_from_context!(context, collection_key, item_key) do
     context

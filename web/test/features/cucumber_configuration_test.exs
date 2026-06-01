@@ -9,80 +9,64 @@ defmodule Memba.CucumberConfigurationTest do
   @member_message_background_steps [
     {"Given", "Kootenay Mountaineering Club is a club", 6},
     {"And", "Nelson Paddling Club is a club", 7},
-    {"And", "Alice, Bob, and Carol are people", 8},
+    {"And", "Alice, Bob, Carol, and Dana are people", 8},
     {"And", "Pat is a person", 9},
-    {"And", "Alice, Bob, and Carol are members of Kootenay Mountaineering Club", 10},
+    {"And", "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", 10},
     {"And", "Pat is a member of Nelson Paddling Club", 11}
   ]
 
   @member_message_scenarios [
-    {"A member sends a club message",
+    {"Alice sends a club message",
      [
        {"When",
-        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        16},
-       {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
-       {"And", "the message should not be addressed to Pat", 18},
-       {"And", "each addressed member should have a separate delivery record", 19},
-       {"And", "each delivery should be sent through the email provider", 20}
-     ]},
-    {"A sent message is waiting for delivery confirmation",
+         "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+         16},
+       {"Then",
+        "Alice should see the message \"Trip planning night\" in Kootenay Mountaineering Club",
+        17},
+       {"And", "Alice should see the message was addressed to Alice, Bob, Carol, and Dana",
+        18},
+       {"And", "Alice should not see Pat in the addressed members", 19},
+       {"And", "Alice should see every addressed member's receipt status as \"Sending\"", 20}
+      ]},
+    {"Alice sees different receipt statuses for different members",
      [
-       {"When",
-        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+       {"Given",
+        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
         25},
-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"sent\"", 26}
-     ]},
-    {"A delivered message is shown as delivered",
+       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 26},
+       {"And",
+        "Carol's email for \"Trip planning night\" has been reported as bounced because \"mailbox does not exist\"",
+        27},
+       {"And", "Dana has opened the email for \"Trip planning night\"", 28},
+       {"When", "Alice views the message \"Trip planning night\"", 29},
+       {"Then", "Alice should see Bob's receipt status for \"Trip planning night\" as \"Delivered\"",
+        30},
+       {"And",
+        "Alice should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
+        31},
+       {"And", "Alice should see Dana's receipt status for \"Trip planning night\" as \"Opened\"",
+        32},
+       {"And", "Alice should see Alice's receipt status for \"Trip planning night\" as \"Sending\"",
+        33}
+      ]},
+    {"Bob sees the same shared receipt statuses",
      [
        {"Given",
         "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        29},
-       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 30},
-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivered\"", 31}
-     ]},
-    {"A delayed delivery is shown as a delivery problem",
-     [
-       {"Given",
-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        34},
-       {"When",
-        "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
-        35},
-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
-        36}
-     ]},
-    {"A bounced delivery is shown as a delivery problem",
-     [
-       {"Given",
-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        39},
-       {"When",
-        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
+        36},
+       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 37},
+       {"And",
+        "Carol's email for \"Trip planning night\" has been reported as delayed because \"recipient server is temporarily unavailable\"",
+        38},
+       {"When", "Bob views the message \"Trip planning night\"", 39},
+       {"Then", "Bob should see Alice's receipt status for \"Trip planning night\" as \"Sending\"",
         40},
-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
-        41}
-     ]},
-    {"A spam complaint is shown as a delivery problem",
-     [
-       {"Given",
-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        44},
-       {"When",
-        "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
-        45},
-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
-        46}
-     ]},
-    {"An opened message is shown as opened",
-     [
-       {"Given",
-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        49},
-       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 50},
-       {"When", "Bob opens the email for \"Trip planning night\"", 51},
-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"opened\"", 52}
-     ]}
+       {"And", "Bob should see Bob's receipt status for \"Trip planning night\" as \"Delivered\"",
+        41},
+       {"And", "Bob should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
+        42}
+      ]}
   ]
 
   @operator_background_steps [
@@ -264,9 +248,9 @@ defmodule Memba.CucumberConfigurationTest do
   @required_membership_background_steps [
     "Kootenay Mountaineering Club is a club",
     "Nelson Paddling Club is a club",
-    "Alice, Bob, and Carol are people",
+    "Alice, Bob, Carol, and Dana are people",
     "Pat is a person",
-    "Alice, Bob, and Carol are members of Kootenay Mountaineering Club",
+    "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club",
     "Pat is a member of Nelson Paddling Club"
   ]
 
@@ -323,10 +307,19 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} email for {string} is reported as delivered",
     "{word} email for {string} has been reported as delivered",
     "{word} email for {string} is reported as delayed because {string}",
+    "{word} email for {string} has been reported as delayed because {string}",
     "{word} email for {string} is reported as bounced because {string}",
+    "{word} email for {string} has been reported as bounced because {string}",
     "{word} email for {string} is reported as a spam complaint because {string}",
     "{word} opens the email for {string}",
+    "{word} has opened the email for {string}",
     "{word} receipt status for {string} should be {string}",
+    "{word} should see the message {string} in Kootenay Mountaineering Club",
+    "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
+    "{word} should not see {word} in the addressed members",
+    "{word} should see every addressed member's receipt status as {string}",
+    "{word} views the message {string}",
+    "{word} should see {word} receipt status for {string} as {string}",
     "{word} operator deliverability status should be {string}",
     "{word} operator deliverability reason should be {string}",
     "operators should see {word} delivery for {string} as {string}",
@@ -390,7 +383,8 @@ defmodule Memba.CucumberConfigurationTest do
         assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
           "Alice",
           "Bob",
-          "Carol"
+          "Carol",
+          "Dana"
         ])
 
         assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])

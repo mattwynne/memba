@@ -4,10 +4,15 @@ const test = require("node:test");
 const {
   addMembers,
   appUrl,
+  assertEveryAddressedMemberReceiptStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertMemberMessageAddressedTo,
+  assertMemberMessageNotAddressedTo,
+  assertMemberReceiptStatus,
+  assertMemberSeesMessageInClub,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReceiptStatus,
@@ -17,12 +22,16 @@ const {
   deliveryForRecipient,
   emailFor,
   kootenayClubName,
+  memberReceiptIconForLabel,
   memberReceiptStatusForEventType,
+  openMemberClubHome,
+  openMemberMessage,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
   projectionPollIntervalMs,
   projectionTimeoutMs,
   reportRecipientEmailStatus,
+  sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers
 } = require("../features/support/member_message");
 
@@ -57,12 +66,19 @@ class FakeLocator {
   }
 
   locator(selector) {
-    const childText =
-      selector.includes('data-test-id="delivery-reason"')
-        ? this.attrs.deliveryReason
-        : this.attrs.deliveryStatus || this.attrs.receiptStatus;
+    let childText = this.attrs.deliveryStatus || this.attrs.receiptStatus || this.attrs.receiptStatusLabel;
+    let childAttrs = {};
+
+    if (selector.includes('data-test-id="delivery-reason"')) {
+      childText = this.attrs.deliveryReason;
+    }
+
+    if (selector.includes('data-testid="receipt-status-icon"')) {
+      childAttrs = { "data-icon-name": this.attrs.receiptIconName };
+    }
 
     return new FakeLocator(this.page, `${this.selector} ${selector}`, {
+      attrs: childAttrs,
       kind: "child",
       value: selector,
       text: childText
@@ -95,12 +111,14 @@ class FakeLocator {
 class FakePage {
   constructor() {
     this.actions = [];
+    this.currentUrl = "about:blank";
     this.fields = {};
     this.rows = {
       clubs: [],
       people: [],
       members: [],
       messages: [],
+      clubMessages: [],
       addressedRecipients: [],
       deliveryRecords: [],
       operatorDeliveries: [],
@@ -109,7 +127,12 @@ class FakePage {
   }
 
   async goto(url) {
+    this.currentUrl = url;
     this.actions.push(["goto", url]);
+  }
+
+  url() {
+    return this.currentUrl;
   }
 
   getByLabel(name) {
@@ -175,10 +198,13 @@ class FakePage {
       const subject = this.fields["Message subject"];
       const messageId = idFor("message", subject, this.rows.messages.length + 1);
 
-      this.rows.messages.push(rowWithAttrs({
+      const messageRow = rowWithAttrs({
         "data-message-id": messageId,
         "data-message-subject": subject
-      }));
+      });
+
+      this.rows.messages.push(messageRow);
+      this.rows.clubMessages.push(messageRow);
     }
   }
 }
@@ -215,6 +241,7 @@ function rowsForSelector(rows, selector) {
   if (selector.includes('data-testid="club-row"')) return filterRows(rows.clubs, selector);
   if (selector.includes('data-testid="person-row"')) return filterRows(rows.people, selector);
   if (selector.includes('data-testid="member-row"')) return filterRows(rows.members, selector);
+  if (selector.includes('data-testid="club-message-row"')) return filterRows(rows.clubMessages, selector);
   if (selector.includes('data-testid="message-row"')) return filterRows(rows.messages, selector);
   if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
@@ -441,6 +468,84 @@ test("sending a Kootenay member message drives the club form and opens the real 
   ]);
 });
 
+test("member send flow drives the authenticated club home route and stores the new message", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.people = { Alice: { personId: "person-alice-1" } };
+
+  await sendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(world.messages["Trip planning night"], {
+    body: "Trip planning night details.",
+    clubId: "club-1",
+    messageId: "message-trip-planning-night-1",
+    senderName: "Alice",
+    subject: "Trip planning night"
+  });
+  assert.deepEqual(page.actions, [
+    ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
+    ["select", "Message sender", "person-alice-1"],
+    ["fill", "Message subject", "Trip planning night"],
+    ["fill", "Message body", "Trip planning night details."],
+    ["click", "button", { name: "Send club message" }]
+  ]);
+  assert.equal(
+    page.actions.some((action) => action[0] === "goto" && String(action[1]).startsWith("http://127.0.0.1:4444/admin")),
+    false
+  );
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "visible" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes('data-testid="club-message-row"') &&
+        expectation[1].includes('data-message-id="message-trip-planning-night-1"')
+    )
+  );
+});
+
+test("member club home opening waits on the stable member home container", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+
+  await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });
+
+  assert.deepEqual(page.actions, [["goto", "http://127.0.0.1:4444/?club_id=club-1"]]);
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "visible" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes("#member-club-home") &&
+        expectation[1].includes('data-club-id="club-1"')
+    )
+  );
+});
+
+test("member message opening uses the member-facing message route with club_id", async () => {
+  const page = new FakePage();
+  const world = worldWithPage(page);
+  world.messages = {
+    "Trip planning night": {
+      clubId: "club-1",
+      messageId: "message-1",
+      subject: "Trip planning night"
+    }
+  };
+
+  await openMemberMessage(world, "Trip planning night", { expect: fakeExpect([]) });
+
+  assert.deepEqual(page.actions, [
+    ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"]
+  ]);
+});
+
 test("message assertions read addressed recipients, delivery records, email channel, and receipts from UI rows", async () => {
   const page = new FakePage();
   page.rows.addressedRecipients.push(
@@ -508,6 +613,96 @@ test("message assertions read addressed recipients, delivery records, email chan
     recipientName: "Bob"
   });
   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+});
+
+test("member assertions read member-facing recipient rows, labels, and Heroicon names", async () => {
+  const page = new FakePage();
+  page.rows.clubMessages.push(
+    rowWithAttrs({
+      "data-message-id": "message-1",
+      "data-message-subject": "Trip planning night"
+    })
+  );
+  page.rows.memberReceipts.push(
+    rowWithAttrs({
+      "data-recipient-name": "Alice",
+      receiptIconName: "hero-clock",
+      receiptStatusLabel: "Sending"
+    }),
+    rowWithAttrs({
+      "data-recipient-name": "Bob",
+      receiptIconName: "hero-check-circle",
+      receiptStatusLabel: "Delivered"
+    }),
+    rowWithAttrs({
+      "data-recipient-name": "Carol",
+      receiptIconName: "hero-exclamation-triangle",
+      receiptStatusLabel: "Delivery problem"
+    })
+  );
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.lastMessageSubject = "Trip planning night";
+  world.messages = {
+    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
+  };
+  world.people = {
+    Alice: { personId: "person-alice" },
+    Bob: { personId: "person-bob" },
+    Carol: { personId: "person-carol" },
+    Pat: { personId: "person-pat" }
+  };
+
+  await assertMemberSeesMessageInClub(world, "Trip planning night", kootenayClubName, {
+    expect: fakeExpect(expectations)
+  });
+  await assertMemberMessageAddressedTo(world, ["Alice", "Bob", "Carol"], undefined, {
+    expect: fakeExpect(expectations)
+  });
+  await assertMemberMessageNotAddressedTo(world, "Pat", undefined, { expect: fakeExpect(expectations) });
+  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
+    expect: fakeExpect(expectations)
+  });
+
+  page.rows.memberReceipts[1].attrs.receiptStatusLabel = "Sending";
+  page.rows.memberReceipts[1].attrs.receiptIconName = "hero-clock";
+  page.rows.memberReceipts[2].attrs.receiptStatusLabel = "Sending";
+  page.rows.memberReceipts[2].attrs.receiptIconName = "hero-clock";
+
+  await assertEveryAddressedMemberReceiptStatus(world, "Trip planning night", "Sending", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(world.addressedMemberNames, ["Alice", "Bob", "Carol"]);
+  assert.equal(memberReceiptIconForLabel("Opened"), "hero-envelope-open");
+  assert.deepEqual(
+    page.actions.filter((action) => action[0] === "goto"),
+    [
+      ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
+      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
+      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
+      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
+      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"]
+    ]
+  );
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "text" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes('data-testid="receipt-status"') &&
+        expectation[2] === "Delivered"
+    )
+  );
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "visible" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes('data-testid="receipt-status-icon"')
+    )
+  );
 });
 
 test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
@@ -719,6 +914,37 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using 
   });
   assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
   assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+});
+
+test("reporting an opened email first reports delivery when the provider has not already done so", async () => {
+  const page = new FakePage();
+  page.rows.deliveryRecords.push({
+    attrs: {
+      "data-delivery-id": "delivery-dana",
+      "data-recipient-id": "person-dana",
+      "data-recipient-name": "Dana"
+    },
+    dataset: { deliveryId: "delivery-dana", recipientId: "person-dana", recipientName: "Dana" }
+  });
+  page.rows.memberReceipts.push({
+    attrs: { "data-recipient-name": "Dana", receiptStatus: "opened" },
+    dataset: { recipientName: "Dana" }
+  });
+  const request = new FakeRequestContext();
+  const world = worldWithPage(page);
+  world.request = request;
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = { Dana: { email: "dana@example.test", personId: "person-dana" } };
+
+  await reportRecipientEmailStatus(world, "Dana", "Trip planning night", "opened", {
+    expect: fakeExpect([])
+  });
+
+  assert.deepEqual(
+    request.posts.map((post) => redactGeneratedMessageId(post.options.data).RecordType),
+    ["Delivery", "Open"]
+  );
+  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Dana"].eventType, "opened");
 });
 
 test("reporting a recipient email status polls the browser-visible receipt projection", async () => {
