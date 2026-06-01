@@ -78,7 +78,7 @@ When deciding not to add or change feature files for a behaviour-facing iteratio
 
 ## Interview Guidance
 
-Ask only one question per message. Prefer multiple choice when it lowers effort, but use open questions when needed.
+Ask only one question per message. Prefer multiple choice when it lowers effort, but use open questions when needed. When asking a multiple-choice question, use the `question` tool rather than writing A/B/C/D options in prose. Use normal chat only for open-ended questions or when the tool cannot express the choice clearly.
 
 Cover these topics:
 
