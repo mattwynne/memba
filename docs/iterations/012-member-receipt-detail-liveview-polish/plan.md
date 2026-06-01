@@ -1,7 +1,7 @@
 # Member receipt detail LiveView polish
 
 Date: 2026-06-01
-Status: ready
+Status: validated
 
 ## Goal
 
@@ -46,7 +46,7 @@ Current implementation notes:
   - segmented horizontal status bar;
   - visible count and percentage for each status;
   - status order: `Opened`, `Delivered`, `Sending`, `Delivery problem`;
-  - percentages calculated from the addressed receipt count, with deterministic handling when there are zero receipts.
+  - percentages calculated from the addressed receipt count, displayed as whole percentages by rounding each status independently (totals may not equal exactly 100 due to rounding), with deterministic handling when there are zero receipts.
 - Add member-friendly status descriptions matching the wireframe intent:
   - `Opened`: read it;
   - `Delivered`: arrived, not opened yet;
@@ -96,7 +96,7 @@ The existing scenarios should remain unchanged and meaningful. Implementation ma
 - The member message detail page is implemented as a LiveView or LiveView-backed route capable of server-side expand/collapse interaction.
 - The page shows subject, body, sender, and addressed receipt count as before.
 - The page shows a “Who got this” summary with status bar, counts, and percentages for all four member-facing statuses: `Opened`, `Delivered`, `Sending`, and `Delivery problem`.
-- Percentages are calculated from the total addressed receipt count and are displayed as whole percentages whose total is sensible for users. Zero-receipt messages show `0` counts and `0%` for each status rather than crashing or displaying misleading divide-by-zero values.
+- Percentages are calculated from the total addressed receipt count and displayed as whole percentages by rounding each status independently; totals may not equal exactly 100 due to rounding. Zero-receipt messages show `0` counts and `0%` for each status rather than crashing or displaying misleading divide-by-zero values.
 - The summary always represents all four statuses, including zero-count statuses.
 - The grouped recipient list renders group headers only for statuses with at least one receipt; zero-count statuses appear in the summary only.
 - Visible receipt groups appear in this order: `Opened`, `Delivered`, `Sending`, `Delivery problem`.
@@ -156,6 +156,7 @@ Resolved for this plan:
 
 - Zero-count statuses appear in the “Who got this” summary only, with count `0` and `0%`. They do not appear as empty collapsible group headers in the recipient list.
 - Existing Gherkin scenarios remain unchanged. Browser acceptance support may expand the relevant visible receipt group before asserting addressed recipient rows, while LiveView tests cover the collapse/expand UI behaviour directly.
+- Percentages are displayed as whole numbers by rounding each status independently from addressed-recipient totals; displayed status percentages are not force-adjusted to sum to exactly 100.
 
 ## New Capability
 
@@ -181,5 +182,5 @@ Members can scan a message's reach using a summary bar with counts and percentag
 
 - LiveView conversion may require carefully preserving controller-era auth and error semantics.
 - Browser acceptance support may need a small update to expand the relevant group before asserting recipient rows; keep this in support code and leave the feature language unchanged.
-- Percent rounding can produce totals that do not add exactly to 100%; choose a user-friendly deterministic approach and test it.
+- Percent rounding can produce totals that do not add exactly to 100%; this plan uses deterministic independent status rounding and accepts non-100 displayed totals.
 - This does not address dashboard polish or separate compose screens; those remain good future iterations.
