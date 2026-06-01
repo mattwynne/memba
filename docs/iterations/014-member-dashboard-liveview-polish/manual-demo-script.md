@@ -21,4 +21,4 @@ Use this after iteration 014 implementation.
 10. Open or create a brand-new club with no messages and confirm the designed empty message state appears with a send-message action.
 11. Confirm signed-in non-members/inactive members still receive the existing forbidden response for member dashboard access.
 12. Confirm public/logged-out club marketing behaviour for `/?club_id=<club_id>` still works.
-13. Confirm an ADR records the rule that member application pages are LiveViews by default, with static marketing/legal pages as exceptions.
+13. Confirm ADR 0015 is followed: member application pages are LiveViews by default, with static marketing/legal pages as exceptions.
