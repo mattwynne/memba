@@ -1,0 +1,515 @@
+diff --git a/docs/iterations/011-member-facing-message-behaviour/todo.md b/docs/iterations/011-member-facing-message-behaviour/todo.md
+index 1c8c607..8843850 100644
+--- a/docs/iterations/011-member-facing-message-behaviour/todo.md
++++ b/docs/iterations/011-member-facing-message-behaviour/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect current authenticated club-site routes and the design references listed above.
+ - [x] 002 Add member acceptance support:
+ - [x] 003 Update member step definitions so:
+-- [ ] 004 Build/refine member club home at `GET /?club_id=<club_id>`:
++- [x] 004 Build/refine member club home at `GET /?club_id=<club_id>`:
+ - [ ] 005 Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
+ - [ ] 006 Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
+ - [ ] 007 Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index f6b95a6..c131144 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -1,6 +1,7 @@
+ defmodule MembaWeb.PageController do
+   use MembaWeb, :controller
+ 
++  alias Memba.Accounts
+   alias Memba.Membership
+   alias Memba.Messaging
+ 
+@@ -107,13 +108,26 @@ defmodule MembaWeb.PageController do
+         not_found(conn)
+ 
+       selected_club ->
+-        members = Membership.list_active_members_of_club(club_id)
+-        messages = Messaging.list_messages_for_club(club_id)
++        members =
++          club_id
++          |> Membership.list_active_members_of_club()
++          |> Enum.map(&with_member_initials/1)
++
++        messages =
++          club_id
++          |> Messaging.list_messages_for_club()
++          |> Enum.reverse()
++
++        current_member = current_member_for_identity(members, conn.assigns.current_identity)
++        message_params = put_default_sender(message_params, current_member)
+ 
+         conn
+         |> assign(:page_title, selected_club.name)
+         |> assign(:selected_club, selected_club)
+         |> assign(:members, members)
++        |> assign(:active_member_count, Enum.count(members))
++        |> assign(:current_member, current_member)
++        |> assign(:member_names_by_id, Map.new(members, &{&1.id, &1.name}))
+         |> assign(:member_options, Enum.map(members, &{&1.name, &1.id}))
+         |> assign(:messages, messages)
+         |> assign(:message_form, Phoenix.Component.to_form(message_params, as: :message))
+@@ -125,6 +139,40 @@ defmodule MembaWeb.PageController do
+     Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
+   end
+ 
++  defp current_member_for_identity(_members, nil), do: nil
++
++  defp current_member_for_identity(members, identity) do
++    identity_email = Accounts.normalize_email(identity.email)
++
++    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
++  end
++
++  defp put_default_sender(message_params, nil), do: message_params
++
++  defp put_default_sender(message_params, current_member) do
++    case Map.get(message_params, "sender_id") do
++      value when value in [nil, ""] -> Map.put(message_params, "sender_id", current_member.id)
++      _value -> message_params
++    end
++  end
++
++  defp with_member_initials(member) do
++    Map.put(member, :initials, initials(member.name))
++  end
++
++  defp initials(name) when is_binary(name) do
++    name
++    |> String.split(~r/\s+/, trim: true)
++    |> Enum.take(2)
++    |> Enum.map_join("", fn <<first::utf8, _rest::binary>> -> String.upcase(<<first::utf8>>) end)
++    |> case do
++      "" -> "?"
++      value -> value
++    end
++  end
++
++  defp initials(_name), do: "?"
++
+   defp not_found(conn) do
+     conn
+     |> put_status(:not_found)
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index 91c4b25..a1389b6 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -7,27 +7,36 @@
+     <section
+       id="member-club-home"
+       data-club-id={@selected_club.club_id}
+-      class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
++      class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+     >
+       <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+-        Active membership
++        {@selected_club.name}
+       </p>
+       <div class="mt-3 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+         <div>
+           <h1 class="text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+-            {@selected_club.name}
++            Hello, {(@current_member && @current_member.name) || "member"}.
+           </h1>
+           <p class="mt-5 max-w-2xl text-lg leading-8 text-[var(--club-site-muted)]">
+-            Welcome to your club space. Send messages, see who belongs, and check recent club updates.
++            Welcome to your club space. What the club's been saying, and who's around right now.
+           </p>
+         </div>
+-        <a
+-          id="back-to-my-clubs-link"
+-          href={~p"/"}
+-          class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5"
+-        >
+-          Back to my clubs
+-        </a>
++        <div class="flex flex-col gap-3 sm:flex-row">
++          <a
++            id="member-compose-shortcut"
++            href="#member-send-message"
++            class="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
++          >
++            <.icon name="hero-paper-airplane" class="size-5" /> Send club message
++          </a>
++          <a
++            id="back-to-my-clubs-link"
++            href={~p"/"}
++            class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
++          >
++            Back to my clubs
++          </a>
++        </div>
+       </div>
+     </section>
+ 
+@@ -35,65 +44,139 @@
+       id="member-send-message"
+       class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+     >
+-      <div class="max-w-2xl">
+-        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+-          Messages
+-        </p>
+-        <h2 class="mt-2 text-2xl font-semibold text-[var(--club-site-ink)]">
+-          Send a club message
+-        </h2>
+-        <p class="mt-3 leading-7 text-[var(--club-site-muted)]">
+-          Your message goes to every active member listed for this club.
+-        </p>
+-      </div>
++      <div class="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
++        <div>
++          <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++            New message
++          </p>
++          <h2 class="mt-2 text-3xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++            Send a club message
++          </h2>
++          <p class="mt-3 leading-7 text-[var(--club-site-muted)]">
++            Write once — every active member gets it.
++          </p>
+ 
+-      <.form
+-        for={@message_form}
+-        id="member-message-form"
+-        action={~p"/?#{[club_id: @selected_club.club_id]}"}
+-        method="post"
+-        class="mt-6 grid gap-4 lg:grid-cols-2"
+-      >
+-        <.input
+-          field={@message_form[:sender_id]}
+-          id="member-message-sender-select"
+-          label="Sender"
+-          type="select"
+-          aria-label="Message sender"
+-          prompt="Choose a sender"
+-          options={@member_options}
+-          required
+-        />
+-        <.input
+-          field={@message_form[:subject]}
+-          id="member-message-subject-input"
+-          label="Subject"
+-          aria-label="Message subject"
+-          required
+-        />
+-        <div class="lg:col-span-2">
++          <div
++            id="member-compose-recipient-summary"
++            data-active-member-count={@active_member_count}
++            class="mt-6 flex gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-4"
++          >
++            <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-paper)] text-[var(--club-site-accent)]">
++              <.icon name="hero-users" class="size-5" />
++            </span>
++            <p class="text-sm leading-6 text-[var(--club-site-muted)]">
++              This goes to
++              <strong class="text-[var(--club-site-ink)]">
++                {@active_member_count} active members
++              </strong>
++              of {@selected_club.name}. Everyone with a current membership. They'll all receive your messages.
++            </p>
++          </div>
++        </div>
++
++        <.form
++          for={@message_form}
++          id="member-message-form"
++          action={~p"/?#{[club_id: @selected_club.club_id]}"}
++          method="post"
++          class="grid gap-4"
++        >
++          <.input
++            field={@message_form[:sender_id]}
++            id="member-message-sender-select"
++            label="From"
++            type="select"
++            aria-label="Message sender"
++            options={@member_options}
++            required
++          />
++          <.input
++            field={@message_form[:subject]}
++            id="member-message-subject-input"
++            label="Subject"
++            aria-label="Message subject"
++            placeholder="What's this about?"
++            required
++          />
+           <.input
+             field={@message_form[:body]}
+             id="member-message-body-input"
+-            label="Body"
++            label="Message"
+             type="textarea"
+             aria-label="Message body"
++            placeholder="Write your note to the club…"
++            rows="7"
+             required
+           />
+-        </div>
+-        <div class="lg:col-span-2">
+-          <button
+-            id="member-send-message-button"
+-            type="submit"
+-            class="inline-flex items-center justify-center rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+-          >
+-            Send club message
+-          </button>
+-        </div>
+-      </.form>
++          <div>
++            <button
++              id="member-send-message-button"
++              type="submit"
++              aria-label="Send club message"
++              class="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
++            >
++              <.icon name="hero-paper-airplane" class="size-5" /> Send to all members
++            </button>
++          </div>
++        </.form>
++      </div>
+     </section>
+ 
+     <div class="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
++      <section
++        id="club-messages"
++        class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
++      >
++        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
++          Recent updates
++        </p>
++        <h2 class="mt-2 flex items-center gap-2 text-2xl font-semibold text-[var(--club-site-ink)]">
++          <.icon name="hero-envelope" class="size-5" /> Recent club messages
++        </h2>
++
++        <div id="member-message-list" class="mt-6 divide-y divide-[var(--club-site-line)]">
++          <p
++            :if={@messages == []}
++            id="member-message-list-empty"
++            class="py-4 text-sm text-[var(--club-site-muted)]"
++          >
++            No messages yet. When someone sends a note to the club, it'll show up here.
++          </p>
++          <article
++            :for={message <- @messages}
++            id={"member-message-#{message.message_id}"}
++            data-testid="club-message-row"
++            data-message-id={message.message_id}
++            data-message-subject={message.subject}
++            class="py-4"
++          >
++            <a
++              data-testid="club-message-link"
++              href={"/messages/#{message.message_id}?club_id=#{@selected_club.club_id}"}
++              class="group flex items-start gap-4 rounded-2xl p-3 transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--club-site-bg)]"
++            >
++              <span class="flex size-11 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-bg)] text-sm font-semibold text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
++                <.icon name="hero-envelope" class="size-5" />
++              </span>
++              <span class="min-w-0 flex-1">
++                <span class="block text-sm font-semibold text-[var(--club-site-muted)]">
++                  {Map.get(@member_names_by_id, message.sender_id, "Club member")}
++                </span>
++                <span class="mt-1 block font-semibold text-[var(--club-site-ink)] group-hover:underline">
++                  {message.subject}
++                </span>
++                <span class="mt-2 block whitespace-pre-wrap text-sm leading-6 text-[var(--club-site-muted)]">
++                  {message.body}
++                </span>
++              </span>
++              <span class="mt-1 text-[var(--club-site-muted)]">
++                <.icon name="hero-chevron-right" class="size-5" />
++              </span>
++            </a>
++          </article>
++        </div>
++      </section>
++
+       <section
+         id="club-members"
+         class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+@@ -103,14 +186,43 @@
+             <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+               People
+             </p>
+-            <h2 class="mt-2 text-2xl font-semibold text-[var(--club-site-ink)]">Members</h2>
++            <h2 class="mt-2 flex items-center gap-2 text-2xl font-semibold text-[var(--club-site-ink)]">
++              <.icon name="hero-users" class="size-5" /> Active members
++            </h2>
+           </div>
+           <span class="rounded-full border border-[var(--club-site-line)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]">
+-            {Enum.count(@members)}
++            {@active_member_count}
+           </span>
+         </div>
+ 
+-        <div id="member-list" class="mt-6 divide-y divide-[var(--club-site-line)]">
++        <div class="mt-6 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-5">
++          <div class="flex items-center gap-4">
++            <div class="flex -space-x-2">
++              <span
++                :for={member <- Enum.take(@members, 6)}
++                class="flex size-10 items-center justify-center rounded-full border-2 border-[var(--club-site-paper)] bg-[var(--club-site-paper)] text-xs font-semibold text-[var(--club-site-accent)] shadow-sm"
++              >
++                {member.initials}
++              </span>
++              <span
++                :if={@active_member_count > 6}
++                class="flex size-10 items-center justify-center rounded-full border-2 border-[var(--club-site-paper)] bg-[var(--club-site-accent)] text-xs font-semibold text-white shadow-sm"
++              >
++                +{@active_member_count - 6}
++              </span>
++            </div>
++            <div>
++              <strong class="text-[var(--club-site-ink)]">
++                {@active_member_count} active members
++              </strong>
++              <p class="mt-1 text-sm text-[var(--club-site-muted)]">
++                Everyone with a current membership. They'll all receive your messages.
++              </p>
++            </div>
++          </div>
++        </div>
++
++        <div id="member-list" class="mt-4 divide-y divide-[var(--club-site-line)]">
+           <p
+             :if={@members == []}
+             id="member-list-empty"
+@@ -124,46 +236,18 @@
+             data-testid="club-member-row"
+             data-member-id={member.id}
+             data-member-name={member.name}
+-            class="py-4"
++            class="flex items-center gap-4 py-4"
+           >
+-            <p class="font-semibold text-[var(--club-site-ink)]">{member.name}</p>
+-            <p class="mt-1 text-sm text-[var(--club-site-muted)]">{member.email}</p>
++            <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-bg)] text-xs font-semibold text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
++              {member.initials}
++            </span>
++            <span>
++              <span class="block font-semibold text-[var(--club-site-ink)]">{member.name}</span>
++              <span class="mt-1 block text-sm text-[var(--club-site-muted)]">{member.email}</span>
++            </span>
+           </div>
+         </div>
+       </section>
+-
+-      <section
+-        id="club-messages"
+-        class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+-      >
+-        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+-          Recent updates
+-        </p>
+-        <h2 class="mt-2 text-2xl font-semibold text-[var(--club-site-ink)]">Sent messages</h2>
+-
+-        <div id="member-message-list" class="mt-6 divide-y divide-[var(--club-site-line)]">
+-          <p
+-            :if={@messages == []}
+-            id="member-message-list-empty"
+-            class="py-4 text-sm text-[var(--club-site-muted)]"
+-          >
+-            No messages have been sent yet.
+-          </p>
+-          <article
+-            :for={message <- @messages}
+-            id={"member-message-#{message.message_id}"}
+-            data-testid="club-message-row"
+-            data-message-id={message.message_id}
+-            data-message-subject={message.subject}
+-            class="py-4"
+-          >
+-            <h3 class="font-semibold text-[var(--club-site-ink)]">{message.subject}</h3>
+-            <p class="mt-2 whitespace-pre-wrap leading-7 text-[var(--club-site-muted)]">
+-              {message.body}
+-            </p>
+-          </article>
+-        </div>
+-      </section>
+     </div>
+   </div>
+ </Layouts.club_site>
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 400187c..075bb99 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -96,11 +96,17 @@ defmodule MembaWeb.PageControllerTest do
+   end
+ 
+   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
+-    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
++    club =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
+ 
+     bob =
+       create_active_member(
+         email: "bob@example.com",
++        name: "Bob Builder",
+         club_name: "Alpine Club",
+         club_id: club.club_id
+       )
+@@ -119,8 +125,16 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "Alpine Club"
+     assert response =~ "Welcome to your club space."
+     assert response =~ "Send a club message"
+-    assert response =~ "Members"
+-    assert response =~ "Sent messages"
++    assert response =~ "Recent club messages"
++    assert response =~ "Active members"
++    assert response =~ "2 active members"
++
++    assert html
++           |> LazyHTML.text()
++           |> String.contains?(
++             "Everyone with a current membership. They'll all receive your messages."
++           )
++
+     assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
+ 
+     assert html
+@@ -151,7 +165,21 @@ defmodule MembaWeb.PageControllerTest do
+            |> Enum.any?()
+ 
+     assert html
+-           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Test Member']")
++           |> LazyHTML.query("#member-compose-recipient-summary[data-active-member-count='2']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query(
++             "select#member-message-sender-select option[value='#{club.person_id}'][selected]"
++           )
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Alice Adams']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Bob Builder']")
+            |> Enum.any?()
+ 
+     assert html
+@@ -160,6 +188,12 @@ defmodule MembaWeb.PageControllerTest do
+            )
+            |> Enum.any?()
+ 
++    assert html
++           |> LazyHTML.query(
++             "a[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{club.club_id}']"
++           )
++           |> Enum.any?()
++
+     refute response =~ "My clubs"
+   end
+ 
