@@ -10,17 +10,23 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Messaging
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id} = params, _session, socket) do
     socket = ensure_identity_assigns(socket)
 
-    case compose_context(club_id, socket.assigns.current_identity, socket.assigns.current_identity_clubs) do
+    case compose_context(
+           club_id,
+           socket.assigns.current_identity,
+           socket.assigns.current_identity_clubs
+         ) do
       {:ok, compose_assigns} ->
         {:ok,
          socket
          |> assign(:route_params, params)
          |> assign(compose_assigns)
+         |> assign_initial_send_state()
          |> assign(:message_form, message_form())}
 
       {:error, :forbidden} ->
@@ -42,6 +48,30 @@ defmodule MembaWeb.MemberMessageLive.New do
      |> ensure_identity_assigns()
      |> assign(:route_params, %{})
      |> assign_empty_compose_context()}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("send_message", %{"message" => message_params}, socket) do
+    case send_current_member_message(socket, message_params) do
+      {:ok, message_id} ->
+        {:noreply,
+         socket
+         |> assign(:compose_state, :sent)
+         |> assign(:sent_message_id, message_id)
+         |> assign(:send_error, nil)}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:compose_state, :send_failed)
+         |> assign(:sent_message_id, nil)
+         |> assign(:send_error, reason)
+         |> assign(:message_form, message_form(message_params))}
+    end
+  end
+
+  def handle_event("send_message", _params, socket) do
+    handle_event("send_message", %{"message" => %{}}, socket)
   end
 
   @impl Phoenix.LiveView
@@ -84,9 +114,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               data-sender-id={@current_member.id}
               class="rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-4 text-sm leading-6 text-[var(--club-site-muted)]"
             >
-              From
-              <strong class="text-[var(--club-site-ink)]">{@current_member.name}</strong>
-              (you)
+              From <strong class="text-[var(--club-site-ink)]">{@current_member.name}</strong> (you)
             </p>
 
             <p
@@ -102,7 +130,12 @@ defmodule MembaWeb.MemberMessageLive.New do
             </p>
           </div>
 
-          <.form for={@message_form} id="member-message-compose-form" class="mt-6 grid gap-4">
+          <.form
+            for={@message_form}
+            id="member-message-compose-form"
+            phx-submit="send_message"
+            class="mt-6 grid gap-4"
+          >
             <.input
               field={@message_form[:subject]}
               id="member-message-subject-input"
@@ -125,6 +158,28 @@ defmodule MembaWeb.MemberMessageLive.New do
     socket
     |> assign_new(:current_identity, fn -> nil end)
     |> assign_new(:current_identity_clubs, fn -> [] end)
+  end
+
+  defp send_current_member_message(socket, message_params) do
+    with %{selected_club: %{club_id: club_id}, current_member: %{id: sender_id}} <- socket.assigns do
+      message_id = Ecto.UUID.generate()
+
+      attrs = %{
+        "message_id" => message_id,
+        "club_id" => club_id,
+        "sender_id" => sender_id,
+        "subject" => Map.get(message_params, "subject", ""),
+        "body" => Map.get(message_params, "body", "")
+      }
+
+      case Messaging.send_club_message(attrs, consistency: :strong) do
+        :ok -> {:ok, message_id}
+        {:ok, _result} -> {:ok, message_id}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      _missing_compose_context -> {:error, :forbidden}
+    end
   end
 
   defp compose_context(club_id, current_identity, current_identity_clubs) do
@@ -161,11 +216,27 @@ defmodule MembaWeb.MemberMessageLive.New do
     |> assign(:selected_club, nil)
     |> assign(:current_member, nil)
     |> assign(:active_member_count, nil)
+    |> assign_initial_send_state()
     |> assign(:message_form, message_form())
   end
 
+  defp assign_initial_send_state(socket) do
+    socket
+    |> assign(:compose_state, :composing)
+    |> assign(:sent_message_id, nil)
+    |> assign(:send_error, nil)
+  end
+
   defp message_form do
-    to_form(%{"subject" => "", "body" => ""}, as: :message)
+    message_form(%{"subject" => "", "body" => ""})
+  end
+
+  defp message_form(message_params) do
+    message_params
+    |> Map.take(["subject", "body"])
+    |> Map.put_new("subject", "")
+    |> Map.put_new("body", "")
+    |> to_form(as: :message)
   end
 
   defp selected_club_name(nil), do: "Club"

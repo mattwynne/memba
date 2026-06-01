@@ -1,0 +1,105 @@
+defmodule MembaWeb.MemberMessageLive.NewSendTest do
+  use MembaWeb.FeatureCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  alias Memba.Membership
+  alias Memba.Messaging
+  alias Memba.Messaging.DeliveryProviders.Fake
+  alias MembaWeb.UserAuth
+
+  setup do
+    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
+
+    Application.put_env(:memba, :messaging_delivery_provider, Fake)
+    Fake.reset()
+
+    on_exit(fn ->
+      restore_env(:messaging_delivery_provider, original_provider)
+      Fake.reset()
+    end)
+
+    :ok
+  end
+
+  test "submit sends a generated club message as the signed-in member and ignores sender params",
+       %{
+         conn: conn
+       } do
+    club_id = Ecto.UUID.generate()
+    alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/new?club_id=#{club_id}")
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "sender_id" => bob.person_id,
+        "subject" => "Trip planning night",
+        "body" => "Bring route ideas."
+      }
+    })
+
+    assert [message] = Messaging.list_messages_for_club(club_id)
+    assert Ecto.UUID.cast(message.message_id) != :error
+    assert message.sender_id == alice.person_id
+    assert message.subject == "Trip planning night"
+    assert message.body == "Bring route ideas."
+
+    assert [
+             %{recipient_id: alice_recipient_id, receipt_status: "sent"},
+             %{recipient_id: bob_recipient_id, receipt_status: "sent"}
+           ] = Messaging.list_member_receipts(message.message_id)
+
+    assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
+
+    assert [
+             %{message_id: message_id, club_id: ^club_id, recipient_id: ^alice_recipient_id},
+             %{message_id: message_id, club_id: ^club_id, recipient_id: ^bob_recipient_id}
+           ] = Fake.deliveries()
+
+    assert message_id == message.message_id
+  end
+
+  defp create_active_member(club_id, attrs) do
+    person_id = Ecto.UUID.generate()
+
+    if is_nil(Membership.get_club(club_id)) do
+      assert :ok =
+               Membership.create_club(
+                 %{club_id: club_id, name: "Kootenay Mountaineering Club"},
+                 consistency: :strong
+               )
+    end
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Ecto.UUID.generate(),
+                 club_id: club_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+
+    %{club_id: club_id, person_id: person_id}
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+end
