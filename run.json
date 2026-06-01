@@ -1,0 +1,1230 @@
+{
+  "title": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and...",
+  "spec": {
+    "run_id": "01KT1K8F46M1BXTJ1GQWD4WZ2F",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "base_sha": "c711ffddc40963a0cb752847b35b5442ec8d16a7",
+          "plan_path": "docs/iterations/013-member-compose-liveview-flow/plan.md"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.5",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [
+            "bash /workspace/memba/.fabro/workflows/iteration-review/prepare_mix.sh"
+          ],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "auto"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**"
+          ],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "ref": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "IterationReview",
+      "nodes": {
+        "claude_review": {
+          "id": "claude_review",
+          "attrs": {
+            "prompt": {
+              "String": "You are independently reviewing the completed, plan-conforming implementation of the iteration plan at docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nUse the prior context: the plan text, collected implementation evidence, current working tree state, commit range from `c711ffddc40963a0cb752847b35b5442ec8d16a7..HEAD`, and the successful dev check output. Be strict, practical, and specific. Do not edit files.\n\nThis workflow reviews an already-committed implementation after the implementation workflow has proved plan conformance. The review job is code polish plus smell radar: refactoring, maintainability, project conventions, ADR conformance, and surfacing judgement-worthy non-blocking smells. Do not emit shell-command/tool-call JSON; return the Markdown review report only.\n\nAutomated tests are the behavioural feedback loop in this workflow. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback. Do not ask for feature-file edits.\n\nReview against these questions:\n\n0. ADR conformance\n   - Read every ADR cited by the plan and any nearby/current ADRs under `docs/adr/` that govern touched architecture.\n   - Does the implementation obey accepted ADR decisions and consequences as binding constraints?\n   - Does it avoid replacing ADR-mandated infrastructure or architecture with simpler local substitutes, unless the plan explicitly deferred that decision?\n   - Do tests and implementation evidence prove the ADR-relevant behaviour, wiring, or structure?\n   - Reject if the implementation conflicts with accepted ADRs or omits a cited ADR's central decision without an explicit plan deferral or human decision.\n\n1. Light plan-fidelity sanity check\n   - Does the implementation appear consistent with the stated goal and capability, given the plan-conformance gate has already passed?\n   - Did it avoid obvious out-of-scope work?\n   - If you find a substantial plan gap, classify it as blocking and requiring human input or a new implementation pass.\n\n2. Behaviour and automated coverage\n   - Did dev check pass before review?\n   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?\n   - Were acceptance feature files left unchanged as domain acceptance criteria?\n\n3. Technical quality / refactoring\n   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?\n   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?\n   - Is the implementation maintainable, minimal, and well factored?\n\n4. Code-health classification\n   - Blocking: ADR violations, behavioural gaps, missing or unsafe coverage, repeated blockers, or anything needing product/architecture judgement before merge.\n   - Bounded-safe: concrete, low-risk refactoring, maintainability, convention, or test-quality fixes an agent can apply without changing product behaviour or feature files.\n   - Judgement-worthy non-blocking: design smells, coupling, duplication, naming, dependency, or architecture drift that might merit human judgement later but should not block this merge.\n\nReturn a Markdown report with:\n\n- Decision: ACCEPT or REJECT\n- Confidence: High, Medium, or Low\n- ADR conformance: PASS or FAIL\n- ADR violations: numbered list with ADR number/file and implementation evidence\n- Blocking issues: numbered list\n- Bounded-safe fixes: numbered list\n- Judgement-worthy non-blocking code-health findings: numbered list; for each include file(s), smell, and why it may need human judgement\n- Suggested fixes: concrete changes if rejected or bounded-safe fixes exist\n- Validation notes: tests/checks/manual checks relevant to the decision"
+            },
+            "model": {
+              "String": "claude-sonnet-4-5"
+            },
+            "label": {
+              "String": "Claude Review"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "gemini_review": {
+          "id": "gemini_review",
+          "attrs": {
+            "prompt": {
+              "String": "You are independently reviewing the completed, plan-conforming implementation of the iteration plan at docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nUse the prior context: the plan text, collected implementation evidence, current working tree state, commit range from `c711ffddc40963a0cb752847b35b5442ec8d16a7..HEAD`, and the successful dev check output. Be strict, practical, and specific. Do not edit files.\n\nThis workflow reviews an already-committed implementation after the implementation workflow has proved plan conformance. The review job is code polish plus smell radar: refactoring, maintainability, project conventions, ADR conformance, and surfacing judgement-worthy non-blocking smells. Do not emit shell-command/tool-call JSON; return the Markdown review report only.\n\nAutomated tests are the behavioural feedback loop in this workflow. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback. Do not ask for feature-file edits.\n\nReview against these questions:\n\n0. ADR conformance\n   - Read every ADR cited by the plan and any nearby/current ADRs under `docs/adr/` that govern touched architecture.\n   - Does the implementation obey accepted ADR decisions and consequences as binding constraints?\n   - Does it avoid replacing ADR-mandated infrastructure or architecture with simpler local substitutes, unless the plan explicitly deferred that decision?\n   - Do tests and implementation evidence prove the ADR-relevant behaviour, wiring, or structure?\n   - Reject if the implementation conflicts with accepted ADRs or omits a cited ADR's central decision without an explicit plan deferral or human decision.\n\n1. Light plan-fidelity sanity check\n   - Does the implementation appear consistent with the stated goal and capability, given the plan-conformance gate has already passed?\n   - Did it avoid obvious out-of-scope work?\n   - If you find a substantial plan gap, classify it as blocking and requiring human input or a new implementation pass.\n\n2. Behaviour and automated coverage\n   - Did dev check pass before review?\n   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?\n   - Were acceptance feature files left unchanged as domain acceptance criteria?\n\n3. Technical quality / refactoring\n   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?\n   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?\n   - Is the implementation maintainable, minimal, and well factored?\n\n4. Code-health classification\n   - Blocking: ADR violations, behavioural gaps, missing or unsafe coverage, repeated blockers, or anything needing product/architecture judgement before merge.\n   - Bounded-safe: concrete, low-risk refactoring, maintainability, convention, or test-quality fixes an agent can apply without changing product behaviour or feature files.\n   - Judgement-worthy non-blocking: design smells, coupling, duplication, naming, dependency, or architecture drift that might merit human judgement later but should not block this merge.\n\nReturn a Markdown report with:\n\n- Decision: ACCEPT or REJECT\n- Confidence: High, Medium, or Low\n- ADR conformance: PASS or FAIL\n- ADR violations: numbered list with ADR number/file and implementation evidence\n- Blocking issues: numbered list\n- Bounded-safe fixes: numbered list\n- Judgement-worthy non-blocking code-health findings: numbered list; for each include file(s), smell, and why it may need human judgement\n- Suggested fixes: concrete changes if rejected or bounded-safe fixes exist\n- Validation notes: tests/checks/manual checks relevant to the decision"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gemini-3.1-pro-preview"
+            },
+            "provider": {
+              "String": "gemini"
+            },
+            "label": {
+              "String": "Gemini Review"
+            }
+          }
+        },
+        "not_ready": {
+          "id": "not_ready",
+          "attrs": {
+            "goal_gate": {
+              "Boolean": true
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Fail: Needs Human Review"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Iteration review failed: reviewers found blocking issues that require human input or exceeded the automatic repair budget.' >&2\nexit 1"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Start"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "final_summary": {
+          "id": "final_summary",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "label": {
+              "String": "Final Summary"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "prompt": {
+              "String": "Prepare the final review summary for docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nUse the plan text, dev check output, implementation evidence, independent reviews, review synthesis, optional code-health recording, final artifact gate evidence, and publish step output. Do not edit files.\n\nCritical requirements:\n\n- Cite the final artifact gate output to confirm the reviewed implementation evidence.\n- Do not claim files were changed unless they appear in the final artifact gate evidence.\n- If review repairs were applied, list only files shown in final artifact evidence.\n- If `docs/code-health.md` was updated, summarize the recorded judgement-worthy non-blocking findings.\n- Do not invent, assume, or hallucinate changed files that are not present in the artifact evidence.\n\nReturn:\n\n- Result: REVIEW_ACCEPTED\n- Plan path\n- Base sha and reviewed commit range\n- ADR conformance summary from independent reviews/synthesis\n- Independent review outcome\n- Any repairs applied during review\n- Code-health note status\n- Key files reviewed or repaired, matching final artifact gate evidence\n- Publish outcome: whether review polish was pushed to main or main was left unchanged\n- Tests and validation run\n- Any manual demo/checks still recommended\n- Any non-blocking follow-ups"
+            }
+          }
+        },
+        "dev_check": {
+          "id": "dev_check",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "PATH=\"$PWD/bin:$PATH\" dev ci"
+            },
+            "label": {
+              "String": "Run Dev Check"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 1800,
+                "nanos": 0
+              }
+            }
+          }
+        },
+        "fix_dev_check": {
+          "id": "fix_dev_check",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "max_visits": {
+              "Integer": 3
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fix Dev Check Failures"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "prompt": {
+              "String": "The preceding Run Dev Check stage failed while implementing docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nThis is the automated-test feedback loop for the implementation. Use the dev check output and current working tree to fix the failures until the full automated suite can pass. Stay within the iteration scope.\n\nRules:\n\n- Prefer the smallest correct fix.\n- Do not skip or weaken tests, checks, Credo rules, formatter rules, or compiler warnings unless the plan explicitly says to change them.\n- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). Treat them as locked acceptance criteria; if they appear wrong, report the blocker instead of changing them.\n- Do not add unrelated cleanup.\n- Re-read relevant project guidance before touching Phoenix, LiveView, HEEx, Ecto, or Elixir test code.\n- Do not commit changes.\n- **Sandbox/runtime boundary**: If the failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.\n- **If no changes were needed**: If after reviewing the failures you determine that no code/config/test changes are required, state that explicitly and provide clear justification for why the dev check failures do not require changes.\n\nWhen finished, summarize:\n\n1. Each dev check failure from the preceding stage.\n2. The concrete code/config/test changes made for each failure (or an explicit statement that no changes were needed with justification).\n3. Files changed (grouped by failure addressed).\n4. Tests run and their results.\n5. Any remaining failures or human questions.\n\nInclude a failure-to-fix mapping showing which files/modules address each dev check failure."
+            }
+          }
+        },
+        "review_merge": {
+          "id": "review_merge",
+          "attrs": {
+            "shape": {
+              "String": "tripleoctagon"
+            },
+            "label": {
+              "String": "Merge Reviews"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "review_gate": {
+          "id": "review_gate",
+          "attrs": {
+            "label": {
+              "String": "Implementation accepted?"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "diamond"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "publish_polish_to_main": {
+          "id": "publish_polish_to_main",
+          "attrs": {
+            "label": {
+              "String": "Publish Review Polish to Main"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 300,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/013-member-compose-liveview-flow/plan.md'"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "synthesis_unavailable": {
+          "id": "synthesis_unavailable",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Fail: Review Synthesis Unavailable"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": "echo 'Iteration review could not synthesize completed independent reviews after retrying a transient LLM/provider failure. Product review evidence exists in the completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
+            }
+          }
+        },
+        "synthesize_review": {
+          "id": "synthesize_review",
+          "attrs": {
+            "label": {
+              "String": "Synthesize Review"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "retry_policy": {
+              "String": "patient"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "allow_partial": {
+              "Boolean": true
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "prompt": {
+              "String": "Synthesize the independent implementation reviews for docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nThis review runs after implementation has already merged to `main`. It is a smell radar and bounded polish loop, not a delivery gate. Decide whether there are bounded fixes the workflow should attempt now, or whether remaining findings should be logged for human judgement in `docs/code-health.md` while the run continues.\n\n## Context\n\nUse the prior context from this workflow run:\n\n- The iteration plan text and its explicit requirements.\n- Implementation evidence collected from `c711ffddc40963a0cb752847b35b5442ec8d16a7` to `HEAD`.\n- Successful `dev check` output.\n- Independent review reports (Claude, Codex, Gemini).\n- Previous synthesis decisions and repair summaries, if this is a repeated synthesis after repair.\n\n## Standards\n\n- Treat automated tests and implementation plan-conformance as already-owned by the implementation workflow.\n- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, documentation, or low-risk test-quality issues that can be resolved without changing product behaviour or feature files.\n- Do not request edits to acceptance feature files (`*.feature`).\n- Do not introduce new product behaviour in review.\n- If a finding requires product, architecture, scope, or acceptance-criteria judgement, do not block. Mark it as a code-health/manual follow-up.\n- If a prior automatic repair attempted the same issue and it still remains, do not request another repair. Mark it as a code-health/manual follow-up.\n- If no bounded automatic fixes are worth attempting, accept the review and let the next step record any judgement-worthy findings in `docs/code-health.md`.\n\n## Output format\n\nReturn a concise Markdown synthesis with these sections:\n\n### Decision\n\nOne of: **ACCEPTED** or **FIX**.\n\n### Review synthesis\n\nSummarize the important findings across reviewers.\n\n### Bounded automatic fixes\n\nIf **FIX**, list exact bounded changes to make, with constraints and validation.\n\n### Code-health findings for human judgement\n\nList findings that should be logged to `docs/code-health.md` because they are not safe bounded review fixes. If none, state \"None.\"\n\n### Fixed or dismissed findings\n\nNote findings that were already fixed during this review run, duplicates, or findings you are dismissing as not supported by evidence.\n\n## Routing JSON\n\nEnd your response with exactly one JSON object that Fabro can use for routing. The JSON object must be the final text in the response and must not be wrapped in a Markdown code fence.\n\nUse one of these shapes:\n\n- Accepted / log-only findings:\n  `{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}`\n- Automatic fixes appropriate:\n  `{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"fix-id-1\",\"title\":\"Short fix title\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}`\n\nDo not route to human input from this post-merge review. Human-judgement findings belong in the Markdown section above so the next step can record them in `docs/code-health.md`."
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "verify_review_repair": {
+          "id": "verify_review_repair",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "script": {
+              "String": "set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Verify Review Repair"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "publish_failed": {
+          "id": "publish_failed",
+          "attrs": {
+            "goal_gate": {
+              "Boolean": true
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "echo 'Iteration review accepted the implementation, but could not publish green review polish to main. Check push credentials, branch protection, and whether origin/main moved with conflicts.' >&2\nexit 1"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Fail: Publish Review Polish"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "collect_implementation_evidence": {
+          "id": "collect_implementation_evidence",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 120,
+                "nanos": 0
+              }
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "set -eu\nbase_sha='c711ffddc40963a0cb752847b35b5442ec8d16a7'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi"
+            },
+            "label": {
+              "String": "Collect Implementation Evidence"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "final_artifact_failed": {
+          "id": "final_artifact_failed",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Fail: Final Artifact Gate"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "script": {
+              "String": "echo 'Iteration review accepted the implementation, but final artifact policy failed. Check feature-file plan permissions and review-polish diffs, then rerun review.' >&2\nexit 1"
+            }
+          }
+        },
+        "preflight_failed": {
+          "id": "preflight_failed",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "script": {
+              "String": "echo 'Iteration review failed before review: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\nexit 1"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Fail: Sandbox Preflight"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "finalize_failed": {
+          "id": "finalize_failed",
+          "attrs": {
+            "label": {
+              "String": "Fail: Finalize Iteration Status"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "script": {
+              "String": "echo 'Iteration review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.' >&2\nexit 1"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "record_code_health": {
+          "id": "record_code_health",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "prompt": {
+              "String": "Record judgement-worthy review findings for docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nReview runs after implementation has already merged to main. It must not block delivery. Use the review synthesis and reviewer reports to decide whether any finding needs human judgement rather than bounded automatic polish.\n\nRules:\n\n- If there are no judgement-worthy findings, do not edit files. Say that no code-health entry is needed.\n- If there are judgement-worthy findings, append them to `docs/code-health.md` under a dated section for this iteration.\n- Do not log issues that were already fixed during this review run.\n- Keep entries factual and actionable. Include the plan path, the finding, evidence, risk, and a suggested next action.\n- Do not edit acceptance feature files.\n- Do not change product behaviour in this step.\n\nReturn a concise summary of whether `docs/code-health.md` was updated and why."
+            },
+            "label": {
+              "String": "Record Code Health Findings"
+            },
+            "shape": {
+              "String": "tab"
+            }
+          }
+        },
+        "apply_review_fixes": {
+          "id": "apply_review_fixes",
+          "attrs": {
+            "timeout": {
+              "Duration": {
+                "secs": 2400,
+                "nanos": 0
+              }
+            },
+            "label": {
+              "String": "Apply Review Fixes"
+            },
+            "prompt": {
+              "String": "Apply the automatic repair brief from the preceding Synthesize Review stage for docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nRules:\n\n- Fix only the concrete bounded issues selected by the review synthesis.\n- Treat this as a post-green refactoring/maintainability pass. Do not add new product behaviour here.\n- Stay within the iteration plan and do not introduce new product decisions.\n- Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). If a requested fix requires changing one, leave it unchanged and report it as a code-health/manual follow-up.\n- Add or update automated tests only when needed to preserve or clarify existing behaviour while refactoring.\n- Do not skip or weaken existing validation.\n- Do not commit changes.\n- Review must never push red. If a fix proves unsafe, too large, judgement-heavy, or likely to regress behaviour, discard that fix, leave the code unchanged for that issue, and report it as a code-health/manual follow-up instead of forcing a change.\n- **Sandbox/runtime boundary**: If the requested fix or failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.\n- **If no changes were needed**: If after reviewing the issues you determine that no code/config/test changes are required, state that explicitly and provide clear justification for why the review issues do not require changes.\n\nWhen finished, summarize:\n\n1. Each review issue from the gate.\n2. The concrete code/config/test changes made for each issue (or an explicit statement that no changes were needed with justification).\n3. Files changed (grouped by issue addressed).\n4. Tests run and their results.\n5. Any remaining gaps or human questions.\n\nInclude an issue-to-fix mapping showing which files/modules/tests address each review issue."
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "max_visits": {
+              "Integer": 3
+            }
+          }
+        },
+        "review_fork": {
+          "id": "review_fork",
+          "attrs": {
+            "shape": {
+              "String": "component"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "join_policy": {
+              "String": "wait_all"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Independent Implementation Reviews"
+            },
+            "max_parallel": {
+              "Integer": 3
+            }
+          }
+        },
+        "finalize_iteration_status": {
+          "id": "finalize_iteration_status",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 300,
+                "nanos": 0
+              }
+            },
+            "script": {
+              "String": "bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/013-member-compose-liveview-flow/plan.md'"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Finalize Iteration Status"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "collect_evidence_failed": {
+          "id": "collect_evidence_failed",
+          "attrs": {
+            "goal_gate": {
+              "Boolean": true
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Iteration review failed before gates: implementation evidence could not be collected. Check base_sha visibility, then retry via bin/dev fabro review.' >&2\nexit 1"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Fail: Evidence Collection"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Exit"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        },
+        "read_plan": {
+          "id": "read_plan",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Read Iteration Plan"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "script": {
+              "String": "PLAN_PATH='docs/iterations/013-member-compose-liveview-flow/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\""
+            }
+          }
+        },
+        "final_artifact_gate": {
+          "id": "final_artifact_gate",
+          "attrs": {
+            "script": {
+              "String": "bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/013-member-compose-liveview-flow/plan.md' 'c711ffddc40963a0cb752847b35b5442ec8d16a7'"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Final Artifact Gate"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "read_failed": {
+          "id": "read_failed",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "goal_gate": {
+              "Boolean": true
+            },
+            "script": {
+              "String": "echo 'Iteration review failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\nexit 1"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fail: Plan Missing"
+            }
+          }
+        },
+        "codex_review": {
+          "id": "codex_review",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "prompt": {
+              "String": "You are independently reviewing the completed, plan-conforming implementation of the iteration plan at docs/iterations/013-member-compose-liveview-flow/plan.md.\n\nUse the prior context: the plan text, collected implementation evidence, current working tree state, commit range from `c711ffddc40963a0cb752847b35b5442ec8d16a7..HEAD`, and the successful dev check output. Be strict, practical, and specific. Do not edit files.\n\nThis workflow reviews an already-committed implementation after the implementation workflow has proved plan conformance. The review job is code polish plus smell radar: refactoring, maintainability, project conventions, ADR conformance, and surfacing judgement-worthy non-blocking smells. Do not emit shell-command/tool-call JSON; return the Markdown review report only.\n\nAutomated tests are the behavioural feedback loop in this workflow. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback. Do not ask for feature-file edits.\n\nReview against these questions:\n\n0. ADR conformance\n   - Read every ADR cited by the plan and any nearby/current ADRs under `docs/adr/` that govern touched architecture.\n   - Does the implementation obey accepted ADR decisions and consequences as binding constraints?\n   - Does it avoid replacing ADR-mandated infrastructure or architecture with simpler local substitutes, unless the plan explicitly deferred that decision?\n   - Do tests and implementation evidence prove the ADR-relevant behaviour, wiring, or structure?\n   - Reject if the implementation conflicts with accepted ADRs or omits a cited ADR's central decision without an explicit plan deferral or human decision.\n\n1. Light plan-fidelity sanity check\n   - Does the implementation appear consistent with the stated goal and capability, given the plan-conformance gate has already passed?\n   - Did it avoid obvious out-of-scope work?\n   - If you find a substantial plan gap, classify it as blocking and requiring human input or a new implementation pass.\n\n2. Behaviour and automated coverage\n   - Did dev check pass before review?\n   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?\n   - Were acceptance feature files left unchanged as domain acceptance criteria?\n\n3. Technical quality / refactoring\n   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?\n   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?\n   - Is the implementation maintainable, minimal, and well factored?\n\n4. Code-health classification\n   - Blocking: ADR violations, behavioural gaps, missing or unsafe coverage, repeated blockers, or anything needing product/architecture judgement before merge.\n   - Bounded-safe: concrete, low-risk refactoring, maintainability, convention, or test-quality fixes an agent can apply without changing product behaviour or feature files.\n   - Judgement-worthy non-blocking: design smells, coupling, duplication, naming, dependency, or architecture drift that might merit human judgement later but should not block this merge.\n\nReturn a Markdown report with:\n\n- Decision: ACCEPT or REJECT\n- Confidence: High, Medium, or Low\n- ADR conformance: PASS or FAIL\n- ADR violations: numbered list with ADR number/file and implementation evidence\n- Blocking issues: numbered list\n- Bounded-safe fixes: numbered list\n- Judgement-worthy non-blocking code-health findings: numbered list; for each include file(s), smell, and why it may need human judgement\n- Suggested fixes: concrete changes if rejected or bounded-safe fixes exist\n- Validation notes: tests/checks/manual checks relevant to the decision"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Codex/GPT Review"
+            }
+          }
+        },
+        "preflight_sandbox": {
+          "id": "preflight_sandbox",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Preflight Review Sandbox"
+            },
+            "timeout": {
+              "Duration": {
+                "secs": 600,
+                "nanos": 0
+              }
+            }
+          }
+        },
+        "snapshot_before_review_repair": {
+          "id": "snapshot_before_review_repair",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": "set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\""
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Snapshot Before Review Repair"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_plan",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan",
+          "to": "preflight_sandbox",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "preflight_sandbox",
+          "to": "dev_check",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "preflight_sandbox",
+          "to": "preflight_failed",
+          "attrs": {}
+        },
+        {
+          "from": "preflight_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "dev_check",
+          "to": "collect_implementation_evidence",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            },
+            "label": {
+              "String": "Dev check passed"
+            }
+          }
+        },
+        {
+          "from": "dev_check",
+          "to": "fix_dev_check",
+          "attrs": {
+            "label": {
+              "String": "Fix failures"
+            }
+          }
+        },
+        {
+          "from": "fix_dev_check",
+          "to": "dev_check",
+          "attrs": {}
+        },
+        {
+          "from": "collect_implementation_evidence",
+          "to": "review_fork",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "collect_implementation_evidence",
+          "to": "collect_evidence_failed",
+          "attrs": {}
+        },
+        {
+          "from": "collect_evidence_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "claude_review",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "codex_review",
+          "attrs": {}
+        },
+        {
+          "from": "review_fork",
+          "to": "gemini_review",
+          "attrs": {}
+        },
+        {
+          "from": "claude_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "codex_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "gemini_review",
+          "to": "review_merge",
+          "attrs": {}
+        },
+        {
+          "from": "review_merge",
+          "to": "synthesize_review",
+          "attrs": {}
+        },
+        {
+          "from": "synthesize_review",
+          "to": "review_gate",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "synthesize_review",
+          "to": "synthesis_unavailable",
+          "attrs": {
+            "label": {
+              "String": "Synthesis unavailable"
+            }
+          }
+        },
+        {
+          "from": "synthesis_unavailable",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "review_gate",
+          "to": "record_code_health",
+          "attrs": {
+            "condition": {
+              "String": "context.implementation_accepted=true"
+            },
+            "label": {
+              "String": "Accepted"
+            }
+          }
+        },
+        {
+          "from": "review_gate",
+          "to": "snapshot_before_review_repair",
+          "attrs": {
+            "condition": {
+              "String": "context.review_fixes_available=true"
+            },
+            "label": {
+              "String": "Fix"
+            }
+          }
+        },
+        {
+          "from": "review_gate",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "Needs human input"
+            }
+          }
+        },
+        {
+          "from": "snapshot_before_review_repair",
+          "to": "apply_review_fixes",
+          "attrs": {}
+        },
+        {
+          "from": "apply_review_fixes",
+          "to": "verify_review_repair",
+          "attrs": {}
+        },
+        {
+          "from": "verify_review_repair",
+          "to": "dev_check",
+          "attrs": {}
+        },
+        {
+          "from": "record_code_health",
+          "to": "final_artifact_gate",
+          "attrs": {}
+        },
+        {
+          "from": "final_artifact_gate",
+          "to": "publish_polish_to_main",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "final_artifact_gate",
+          "to": "final_artifact_failed",
+          "attrs": {}
+        },
+        {
+          "from": "final_artifact_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "publish_polish_to_main",
+          "to": "finalize_iteration_status",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "publish_polish_to_main",
+          "to": "publish_failed",
+          "attrs": {}
+        },
+        {
+          "from": "publish_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "finalize_iteration_status",
+          "to": "final_summary",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "finalize_iteration_status",
+          "to": "finalize_failed",
+          "attrs": {}
+        },
+        {
+          "from": "finalize_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "final_summary",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "not_ready",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "rankdir": {
+          "String": "LR"
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        },
+        "goal": {
+          "String": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals"
+        },
+        "model_stylesheet": {
+          "String": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
+        },
+        "max_node_visits": {
+          "Integer": 160
+        }
+      }
+    },
+    "graph_source": "digraph IterationReview {\n    graph [\n        goal=\"Review the completed plan-conforming implementation of {{ inputs.plan_path }} for code polish, ADR conformance, and code-health signals\",\n        default_fidelity=\"summary:high\",\n        max_node_visits=160,\n        model_stylesheet=\"\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    read_plan [\n        label=\"Read Iteration Plan\",\n        shape=parallelogram,\n        script=\"PLAN_PATH='{{ inputs.plan_path }}'\\nif [ ! -f \\\"$PLAN_PATH\\\" ]; then\\n  echo \\\"Iteration plan not found: $PLAN_PATH\\\" >&2\\n  exit 1\\nfi\\nprintf 'PLAN_PATH=%s\\\\n\\\\n' \\\"$PLAN_PATH\\\"\\nline_count=0\\nwhile IFS= read -r line && [ \\\"$line_count\\\" -lt 320 ]; do\\n  printf '%s\\\\n' \\\"$line\\\"\\n  line_count=$((line_count + 1))\\ndone < \\\"$PLAN_PATH\\\"\"\n    ]\n\n    read_failed [\n        label=\"Fail: Plan Missing\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review failed: the plan file could not be read. Pass -I plan_path=docs/iterations/NNN-topic/plan.md and ensure it is committed/pushed for remote sandboxes.' >&2\\nexit 1\"\n    ]\n\n    preflight_sandbox [\n        label=\"Preflight Review Sandbox\",\n        shape=parallelogram,\n        script=\"set -eu\\nif [ ! -x bin/dev ]; then\\n  echo \\\"Missing or non-executable bin/dev\\\" >&2\\n  exit 1\\nfi\\nstatus=$(git status --short)\\nif [ -n \\\"$status\\\" ]; then\\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\\n  printf '%s\\\\n' \\\"$status\\\" >&2\\n  exit 1\\nfi\\nrm -rf .fabro/tmp\\nmkdir -p .fabro/tmp\\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\\necho \\\"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\\\"\\nPATH=\\\"$PWD/bin:$PATH\\\" dev sandbox-check\",\n        timeout=\"600s\"\n    ]\n\n    preflight_failed [\n        label=\"Fail: Sandbox Preflight\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review failed before review: the sandbox/toolchain preflight did not pass. Fix the Fabro environment or image, then retry.' >&2\\nexit 1\"\n    ]\n\n    dev_check [\n        label=\"Run Dev Check\",\n        shape=parallelogram,\n        script=\"PATH=\\\"$PWD/bin:$PATH\\\" dev ci\",\n        timeout=\"1800s\"\n    ]\n\n    fix_dev_check [\n        label=\"Fix Dev Check Failures\",\n        prompt=\"@prompts/fix_dev_check.md\",\n        timeout=\"2400s\",\n        max_visits=3\n    ]\n\n    collect_implementation_evidence [\n        label=\"Collect Implementation Evidence\",\n        shape=parallelogram,\n        script=\"set -eu\\nbase_sha='{{ inputs.base_sha }}'\\necho '=== Implementation Evidence Debug ==='\\necho \\\"PWD: $PWD\\\"\\necho \\\"Branch: $(git branch --show-current || true)\\\"\\necho \\\"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\\\"\\necho \\\"Base sha input: ${base_sha:-<empty>}\\\"\\necho ''\\nif [ -z \\\"$base_sha\\\" ]; then\\n  echo 'Missing required input: base_sha' >&2\\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\\n  exit 1\\nfi\\nif ! git cat-file -e \\\"$base_sha^{commit}\\\" 2>/dev/null; then\\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\\n  echo \\\"Base sha is not present locally: $base_sha\\\" >&2\\n  echo \\\"Repository shallow: $shallow\\\" >&2\\n  if [ \\\"$shallow\\\" = true ]; then\\n    echo 'Trying to unshallow repository before failing...' >&2\\n    git fetch --quiet --unshallow origin || true\\n  fi\\nfi\\nif ! git cat-file -e \\\"$base_sha^{commit}\\\" 2>/dev/null; then\\n  echo \\\"Base sha still does not resolve after fallback: $base_sha\\\" >&2\\n  echo '--- available refs ---' >&2\\n  git show-ref >&2 || true\\n  echo '--- recent commits ---' >&2\\n  git log --oneline --decorate --max-count=40 --all >&2 || true\\n  exit 1\\nfi\\necho '=== Implementation Evidence ==='\\necho \\\"Branch: $(git branch --show-current || true)\\\"\\necho \\\"HEAD: $(git rev-parse HEAD)\\\"\\necho \\\"Base sha: $base_sha\\\"\\necho ''\\necho '--- git status --short ---'\\ngit status --short\\necho ''\\necho '--- git diff --stat ---'\\nif ! git diff --stat \\\"$base_sha\\\"..HEAD; then\\n  echo \\\"Could not compute diff stat from $base_sha to HEAD.\\\" >&2\\n  exit 1\\nfi\\necho ''\\necho '--- git diff --name-status ---'\\nif ! git diff --name-status \\\"$base_sha\\\"..HEAD; then\\n  echo \\\"Could not compute diff name-status from $base_sha to HEAD.\\\" >&2\\n  exit 1\\nfi\\necho ''\\necho '--- changed source/config/test file excerpts ---'\\nif ! changed_files=$(git diff --name-only \\\"$base_sha\\\"..HEAD); then\\n  echo \\\"Could not compute changed files from $base_sha to HEAD.\\\" >&2\\n  exit 1\\nfi\\nif [ -z \\\"$changed_files\\\" ]; then\\n  echo 'No files differ between base sha and HEAD.'\\nelse\\n  excerpt_files=$(printf '%s\\n' \\\"$changed_files\\\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\\\.exs|mix\\\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\\n  if [ -z \\\"$excerpt_files\\\" ]; then\\n    echo 'No changed files matched the excerpt filter.'\\n  else\\n    printf '%s\\n' \\\"$excerpt_files\\\" | while IFS= read -r file; do\\n      if [ -f \\\"$file\\\" ]; then\\n        echo \\\"=== $file ===\\\"\\n        sed -n '1,220p' \\\"$file\\\"\\n        echo ''\\n      fi\\n    done\\n  fi\\nfi\",\n        timeout=\"120s\"\n    ]\n\n    collect_evidence_failed [\n        label=\"Fail: Evidence Collection\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review failed before gates: implementation evidence could not be collected. Check base_sha visibility, then retry via bin/dev fabro review.' >&2\\nexit 1\"\n    ]\n\n    review_fork [label=\"Independent Implementation Reviews\", shape=component, join_policy=\"wait_all\", max_parallel=3]\n    claude_review [\n        label=\"Claude Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n    codex_review [\n        label=\"Codex/GPT Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n    gemini_review [\n        label=\"Gemini Review\",\n        shape=tab,\n        prompt=\"@prompts/review.md\"\n    ]\n    review_merge [label=\"Merge Reviews\", shape=tripleoctagon]\n    synthesize_review [\n        label=\"Synthesize Review\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/synthesize_review.md\",\n        retry_policy=\"patient\",\n        allow_partial=true\n    ]\n    synthesis_unavailable [\n        label=\"Fail: Review Synthesis Unavailable\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review could not synthesize completed independent reviews after retrying a transient LLM/provider failure. Product review evidence exists in the completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\\nexit 1\"\n    ]\n    review_gate [shape=diamond, label=\"Implementation accepted?\"]\n    snapshot_before_review_repair [\n        label=\"Snapshot Before Review Repair\",\n        shape=parallelogram,\n        script=\"set -eu\\nmkdir -p .fabro/tmp\\nkind='review'\\ngit diff --binary > \\\".fabro/tmp/${kind}-repair-before.patch\\\"\\ngit diff --name-only > \\\".fabro/tmp/${kind}-repair-before-files.txt\\\"\\ngit diff --stat > \\\".fabro/tmp/${kind}-repair-before-stat.txt\\\" || true\\nprintf 'Repair baseline (%s) captured.\\\\n' \\\"$kind\\\"\"\n    ]\n    apply_review_fixes [\n        label=\"Apply Review Fixes\",\n        prompt=\"@prompts/apply_review_fixes.md\",\n        timeout=\"2400s\",\n        max_visits=3\n    ]\n    verify_review_repair [\n        label=\"Verify Review Repair\",\n        shape=parallelogram,\n        script=\"set -eu\\nkind='review'\\nbefore=\\\".fabro/tmp/${kind}-repair-before.patch\\\"\\nafter=\\\".fabro/tmp/${kind}-repair-after.patch\\\"\\ngit diff --binary > \\\"$after\\\"\\ngit diff --name-only > \\\".fabro/tmp/${kind}-repair-after-files.txt\\\"\\ngit diff --stat > \\\".fabro/tmp/${kind}-repair-after-stat.txt\\\" || true\\nprintf 'Repair baseline (%s) captured in %s\\\\n' \\\"$kind\\\" \\\"$before\\\"\\nprintf 'Repair after    (%s) captured in %s\\\\n' \\\"$kind\\\" \\\"$after\\\"\\nprintf 'Changed files after repair:\\\\n'\\ngit diff --name-only\\nif cmp -s \\\"$before\\\" \\\"$after\\\"; then\\n  echo \\\"${kind} repair produced no working-tree diff change since repair started.\\\" >&2\\n  echo \\\"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\\\" >&2\\n  exit 1\\nfi\\nif git diff --name-only | grep -E '\\\\.feature$'; then\\n  echo \\\"Repair modified locked acceptance feature files.\\\" >&2\\n  exit 1\\nfi\"\n    ]\n    not_ready [\n        label=\"Fail: Needs Human Review\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review failed: reviewers found blocking issues that require human input or exceeded the automatic repair budget.' >&2\\nexit 1\"\n    ]\n\n    record_code_health [\n        label=\"Record Code Health Findings\",\n        shape=tab,\n        prompt=\"@prompts/record_code_health.md\"\n    ]\n\n    final_artifact_gate [\n        label=\"Final Artifact Gate\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh '{{ inputs.plan_path }}' '{{ inputs.base_sha }}'\"\n    ]\n\n    publish_polish_to_main [\n        label=\"Publish Review Polish to Main\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh '{{ inputs.plan_path }}'\",\n        timeout=\"300s\"\n    ]\n\n    final_artifact_failed [\n        label=\"Fail: Final Artifact Gate\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review accepted the implementation, but final artifact policy failed. Check feature-file plan permissions and review-polish diffs, then rerun review.' >&2\\nexit 1\"\n    ]\n\n    publish_failed [\n        label=\"Fail: Publish Review Polish\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review accepted the implementation, but could not publish green review polish to main. Check push credentials, branch protection, and whether origin/main moved with conflicts.' >&2\\nexit 1\"\n    ]\n\n    finalize_iteration_status [\n        label=\"Finalize Iteration Status\",\n        shape=parallelogram,\n        script=\"bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh '{{ inputs.plan_path }}'\",\n        timeout=\"300s\"\n    ]\n\n    finalize_failed [\n        label=\"Fail: Finalize Iteration Status\",\n        shape=parallelogram,\n        goal_gate=true,\n        script=\"echo 'Iteration review succeeded but could not mark the iteration merged. Rerun review after resolving push/status conflicts.' >&2\\nexit 1\"\n    ]\n\n    final_summary [\n        label=\"Final Summary\",\n        shape=tab,\n        prompt=\"@prompts/final_summary.md\"\n    ]\n\n    start -> read_plan\n    read_plan -> preflight_sandbox [condition=\"outcome=succeeded\"]\n    read_plan -> read_failed\n    read_failed -> exit\n\n    preflight_sandbox -> dev_check [condition=\"outcome=succeeded\"]\n    preflight_sandbox -> preflight_failed\n    preflight_failed -> exit\n\n    dev_check -> collect_implementation_evidence [label=\"Dev check passed\", condition=\"outcome=succeeded\"]\n    dev_check -> fix_dev_check [label=\"Fix failures\"]\n    fix_dev_check -> dev_check\n    collect_implementation_evidence -> review_fork [condition=\"outcome=succeeded\"]\n    collect_implementation_evidence -> collect_evidence_failed\n    collect_evidence_failed -> exit\n\n    review_fork -> claude_review\n    review_fork -> codex_review\n    review_fork -> gemini_review\n    claude_review -> review_merge\n    codex_review -> review_merge\n    gemini_review -> review_merge\n    review_merge -> synthesize_review\n    synthesize_review -> review_gate [condition=\"outcome=succeeded\"]\n    synthesize_review -> synthesis_unavailable [label=\"Synthesis unavailable\"]\n    synthesis_unavailable -> exit\n    review_gate -> record_code_health [label=\"Accepted\", condition=\"context.implementation_accepted=true\"]\n    review_gate -> snapshot_before_review_repair [label=\"Fix\", condition=\"context.review_fixes_available=true\"]\n    review_gate -> not_ready [label=\"Needs human input\"]\n    snapshot_before_review_repair -> apply_review_fixes\n    apply_review_fixes -> verify_review_repair\n    verify_review_repair -> dev_check\n\n    record_code_health -> final_artifact_gate\n    final_artifact_gate -> publish_polish_to_main [condition=\"outcome=succeeded\"]\n    final_artifact_gate -> final_artifact_failed\n    final_artifact_failed -> exit\n    publish_polish_to_main -> finalize_iteration_status [condition=\"outcome=succeeded\"]\n    publish_polish_to_main -> publish_failed\n    publish_failed -> exit\n    finalize_iteration_status -> final_summary [condition=\"outcome=succeeded\"]\n    finalize_iteration_status -> finalize_failed\n    finalize_failed -> exit\n    final_summary -> exit\n    not_ready -> exit\n}\n",
+    "workflow_slug": "iteration-review",
+    "source_directory": "/Users/matt/git/mattwynne/memba-review-fabro-run-01KT1AXYNBZVQQVFSVTDCJ3GV3",
+    "provenance": {
+      "server": {
+        "version": "0.245.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "3ea609f5211138ecfafb209680539d90c35bd529668ccf7700da6dc411747b1e",
+    "definition_blob": "61bfed93b7521f6e571043747aa9f49753b99c0be8530e5cca554b0cbd9033fd",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "fabro/run/01KT1AXYNBZVQQVFSVTDCJ3GV3",
+      "sha": "38139967a3d9fcf5917592a230d50e3a083fc3a1",
+      "dirty": "clean",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KT1K8F46M1BXTJ1GQWD4WZ2F",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-06-01T12:41:39.322353281Z",
+  "last_event_at": "2026-06-01T12:42:50.127916187Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+    "runtime": {
+      "id": "5263247ff4da8f3ebf92820fc4e8c8249893124e5ac52d22141a9595636cbd29",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "fabro/run/01KT1AXYNBZVQQVFSVTDCJ3GV3",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
