@@ -1,0 +1,554 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index 4e711af..dfdf413 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -1,9 +1,6 @@
+-const assert = require("node:assert/strict");
+ const { Given, When, Then } = require("@cucumber/cucumber");
+-const { expect: playwrightExpect } = require("@playwright/test");
+ const {
+   addMembers,
+-  appUrl,
+   assertEachAddressedMemberHasSeparateDeliveryRecord,
+   assertEachDeliverySentThroughEmailProvider,
+   assertEachAddressedMemberReceivedEmailInTestMailbox,
+@@ -17,90 +14,9 @@ const {
+   kootenayClubName,
+   nelsonClubName,
+   reportRecipientEmailStatus,
+-  sendMessageToKootenayMembers,
+-  testMailboxEmails,
+-  waitForMailboxEmails
++  sendMessageToKootenayMembers
+ } = require("../support/member_message");
+-
+-async function withStaffHarness(world, action) {
+-  world.clubs = world.clubs || {};
+-  world.people = world.people || {};
+-  world.memberships = world.memberships || {};
+-  world.messages = world.messages || {};
+-  world.deliveries = world.deliveries || {};
+-  world.reportedDeliveryStatuses = world.reportedDeliveryStatuses || {};
+-
+-  const context = await world.browser.newContext();
+-  const page = await context.newPage();
+-  const harnessWorld = {
+-    ...world,
+-    context,
+-    page,
+-    clubs: world.clubs,
+-    people: world.people,
+-    memberships: world.memberships,
+-    messages: world.messages,
+-    deliveries: world.deliveries,
+-    reportedDeliveryStatuses: world.reportedDeliveryStatuses
+-  };
+-
+-  try {
+-    await signInStaff(harnessWorld);
+-    await action(harnessWorld);
+-    copyHarnessState(world, harnessWorld);
+-  } finally {
+-    await context.close();
+-  }
+-}
+-
+-function copyHarnessState(world, harnessWorld) {
+-  for (const key of [
+-    "addressedMemberIds",
+-    "addressedMemberNames",
+-    "currentOperatorDelivery",
+-    "lastMessageSubject",
+-    "mailboxEmailsBeforeSend"
+-  ]) {
+-    if (Object.prototype.hasOwnProperty.call(harnessWorld, key)) {
+-      world[key] = harnessWorld[key];
+-    }
+-  }
+-}
+-
+-async function signInStaff(world) {
+-  const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
+-  const previousEmails = await testMailboxEmails(world);
+-
+-  await world.page.goto(appUrl(world.baseUrl, "/auth"));
+-  await world.page.getByLabel("Email address").fill(staffEmail);
+-  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
+-
+-  const emails = await waitForMailboxEmails(
+-    world,
+-    previousEmails.length + 1,
+-    `staff harness sign-in email for ${staffEmail}`
+-  );
+-  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+-  const email = emails
+-    .filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)))
+-    .find(
+-      (mailboxEmail) =>
+-        mailboxEmail.subject === "Sign in to Memba" &&
+-        mailboxEmail.to.some((recipient) => recipient.includes(staffEmail))
+-    );
+-
+-  assert.ok(email, `Expected staff harness sign-in email for ${staffEmail}`);
+-
+-  const signInLink = String(email.text_body || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
+-  assert.ok(signInLink, `Expected staff harness email to contain a sign-in link; saw ${email.text_body}`);
+-
+-  await world.page.goto(signInLink[0]);
+-  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
+-}
+-
+-function mailboxMessageId(email) {
+-  return email && email.headers && email.headers["Message-ID"];
+-}
++const { withStaffHarness } = require("../support/member_harness");
+ 
+ Given("Kootenay Mountaineering Club is a club", async function () {
+   await withStaffHarness(this, (staff) => createClub(staff, kootenayClubName));
+diff --git a/acceptance-tests/features/support/member_harness.js b/acceptance-tests/features/support/member_harness.js
+new file mode 100644
+index 0000000..d0bda0e
+--- /dev/null
++++ b/acceptance-tests/features/support/member_harness.js
+@@ -0,0 +1,231 @@
++const assert = require("node:assert/strict");
++const { expect: playwrightExpect } = require("@playwright/test");
++const {
++  appUrl,
++  ensureState,
++  testMailboxEmails,
++  waitForMailboxEmails
++} = require("./member_message");
++
++const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
++const signInSubject = "Sign in to Memba";
++
++async function withStaffHarness(world, action) {
++  await withIsolatedHarnessWorld(world, async (harnessWorld) => {
++    await signInStaff(harnessWorld);
++    await action(harnessWorld);
++  });
++}
++
++async function withMemberHarness(world, memberName, action) {
++  await withIsolatedHarnessWorld(
++    world,
++    async (harnessWorld) => {
++      guardPageAgainstAdminRoutes(harnessWorld, memberName);
++      await signInMember(harnessWorld, memberName);
++      await memberBrowserAction(harnessWorld, `member action for ${memberName}`, () => action(harnessWorld));
++    },
++    { memberName }
++  );
++}
++
++async function memberBrowserAction(world, description, action) {
++  assertMemberPageIsNotAdmin(world, `${description} before action`);
++  const result = await action();
++  assertMemberPageIsNotAdmin(world, `${description} after action`);
++
++  return result;
++}
++
++function assertMemberPageIsNotAdmin(world, description = "member browser helper") {
++  const currentUrl = currentPageUrl(world.page);
++
++  if (currentUrl && isAdminRoute(currentUrl, world.baseUrl)) {
++    throw new Error(`Member browser helper reached staff/admin route during ${description}: ${currentUrl}`);
++  }
++}
++
++async function withIsolatedHarnessWorld(world, action, options = {}) {
++  ensureHarnessState(world);
++
++  const context = await world.browser.newContext();
++  const page = await context.newPage();
++  const harnessWorld = {
++    ...world,
++    context,
++    page,
++    clubs: world.clubs,
++    people: world.people,
++    memberships: world.memberships,
++    messages: world.messages,
++    deliveries: world.deliveries,
++    reportedDeliveryStatuses: world.reportedDeliveryStatuses,
++    signInRequests: world.signInRequests,
++    signInLinks: world.signInLinks
++  };
++
++  if (options.memberName) {
++    harnessWorld.memberName = options.memberName;
++  }
++
++  try {
++    await action(harnessWorld);
++    copyHarnessState(world, harnessWorld);
++  } finally {
++    await context.close();
++  }
++}
++
++function ensureHarnessState(world) {
++  ensureState(world);
++  world.signInRequests = world.signInRequests || {};
++  world.signInLinks = world.signInLinks || {};
++
++  return world;
++}
++
++function copyHarnessState(world, harnessWorld) {
++  for (const key of [
++    "addressedMemberIds",
++    "addressedMemberNames",
++    "currentOperatorDelivery",
++    "lastMessageSubject",
++    "mailboxEmailsBeforeSend"
++  ]) {
++    if (Object.prototype.hasOwnProperty.call(harnessWorld, key)) {
++      world[key] = harnessWorld[key];
++    }
++  }
++}
++
++async function signInStaff(world) {
++  await signInByMagicLink(world, staffEmail, "staff harness");
++  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
++}
++
++async function signInMember(world, memberName) {
++  const person = personFromWorld(world, memberName);
++
++  await signInByMagicLink(world, person.email, memberName);
++  assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
++}
++
++async function signInByMagicLink(world, email, label) {
++  const previousEmails = await testMailboxEmails(world);
++
++  await world.page.goto(appUrl(world.baseUrl, "/auth"));
++  await world.page.getByLabel("Email address").fill(email);
++  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
++
++  const emails = await waitForMailboxEmails(
++    world,
++    previousEmails.length + 1,
++    `sign-in email for ${label} <${email}>`
++  );
++  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
++  const signInEmail = emails
++    .filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)))
++    .find((mailboxEmail) => signInEmailMatches(mailboxEmail, email));
++
++  assert.ok(
++    signInEmail,
++    `Expected ${label} <${email}> to receive a sign-in email; saw ${JSON.stringify(emails.map(emailSummary))}`
++  );
++
++  const signInLink = signInLinkFromTextBody(signInEmail.text_body);
++  assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${signInEmail.text_body}`);
++
++  await world.page.goto(signInLink);
++}
++
++function guardPageAgainstAdminRoutes(world, memberName) {
++  const page = world.page;
++
++  if (!page || typeof page.goto !== "function" || page.__membaMemberAdminGuard) {
++    return page;
++  }
++
++  const originalGoto = page.goto.bind(page);
++
++  page.goto = async (targetUrl, ...args) => {
++    if (isAdminRoute(targetUrl, world.baseUrl)) {
++      throw new Error(
++        `Member browser helper attempted to navigate to staff/admin route for ${memberName}: ${targetUrl}`
++      );
++    }
++
++    const result = await originalGoto(targetUrl, ...args);
++    assertMemberPageIsNotAdmin(world, `navigation for ${memberName}`);
++
++    return result;
++  };
++
++  page.__membaMemberAdminGuard = true;
++
++  return page;
++}
++
++function isAdminRoute(url, baseUrl) {
++  const pathname = pathForUrl(url, baseUrl);
++
++  return pathname === "/admin" || pathname.startsWith("/admin/");
++}
++
++function pathForUrl(url, baseUrl) {
++  try {
++    return new URL(url, `${baseUrl || "http://memba.test"}/`).pathname;
++  } catch (_error) {
++    return "";
++  }
++}
++
++function currentPageUrl(page) {
++  if (!page) {
++    return null;
++  }
++
++  if (typeof page.url === "function") {
++    return page.url();
++  }
++
++  return page.currentUrl || null;
++}
++
++function personFromWorld(world, memberName) {
++  ensureHarnessState(world);
++  const person = world.people[memberName];
++
++  assert.ok(person, `Expected ${memberName} to be known in the scenario`);
++  assert.ok(person.email, `Expected ${memberName} to have an email address for member sign-in`);
++
++  return person;
++}
++
++function signInEmailMatches(email, recipientEmail) {
++  return (
++    email.subject === signInSubject &&
++    Array.isArray(email.to) &&
++    email.to.some((recipient) => String(recipient).includes(recipientEmail))
++  );
++}
++
++function signInLinkFromTextBody(textBody) {
++  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
++  return match && match[0];
++}
++
++function mailboxMessageId(email) {
++  return email && email.headers && email.headers["Message-ID"];
++}
++
++function emailSummary(email) {
++  return { subject: email.subject, to: email.to, text_body: email.text_body };
++}
++
++module.exports = {
++  assertMemberPageIsNotAdmin,
++  memberBrowserAction,
++  signInMember,
++  withMemberHarness,
++  withStaffHarness
++};
+diff --git a/acceptance-tests/test/member_harness.test.js b/acceptance-tests/test/member_harness.test.js
+new file mode 100644
+index 0000000..4685138
+--- /dev/null
++++ b/acceptance-tests/test/member_harness.test.js
+@@ -0,0 +1,191 @@
++const assert = require("node:assert/strict");
++const test = require("node:test");
++
++const {
++  assertMemberPageIsNotAdmin,
++  memberBrowserAction,
++  withMemberHarness
++} = require("../features/support/member_harness");
++const { appUrl, kootenayClubName } = require("../features/support/member_message");
++
++class FakeBrowser {
++  constructor(mailbox = []) {
++    this.contexts = [];
++    this.mailbox = mailbox;
++  }
++
++  async newContext() {
++    const context = new FakeContext(this.mailbox);
++    this.contexts.push(context);
++
++    return context;
++  }
++}
++
++class FakeContext {
++  constructor(mailbox) {
++    this.closed = false;
++    this.mailbox = mailbox;
++    this.request = new FakeRequest(mailbox);
++    this.page = new FakePage(mailbox, this.request);
++  }
++
++  async newPage() {
++    return this.page;
++  }
++
++  async close() {
++    this.closed = true;
++  }
++}
++
++class FakeRequest {
++  constructor(mailbox) {
++    this.mailbox = mailbox;
++  }
++
++  async get(url) {
++    return new FakeResponse(200, { data: [...this.mailbox], url });
++  }
++}
++
++class FakeResponse {
++  constructor(status, body) {
++    this.responseStatus = status;
++    this.body = body;
++  }
++
++  status() {
++    return this.responseStatus;
++  }
++
++  async json() {
++    return this.body;
++  }
++
++  async text() {
++    return JSON.stringify(this.body);
++  }
++}
++
++class FakePage {
++  constructor(mailbox, request) {
++    this.actions = [];
++    this.currentUrl = "about:blank";
++    this.fields = {};
++    this.mailbox = mailbox;
++    this.request = request;
++  }
++
++  async goto(url) {
++    this.currentUrl = url;
++    this.actions.push(["goto", url]);
++  }
++
++  url() {
++    return this.currentUrl;
++  }
++
++  getByLabel(label) {
++    return {
++      fill: async (value) => {
++        this.fields[label] = value;
++        this.actions.push(["fill", label, value]);
++      }
++    };
++  }
++
++  getByRole(role, options) {
++    return {
++      click: async () => {
++        this.actions.push(["click", role, options]);
++
++        if (role === "button" && options.name === "Email me a sign-in link") {
++          const email = this.fields["Email address"];
++          const messageNumber = this.mailbox.length + 1;
++
++          this.mailbox.push({
++            headers: { "Message-ID": `<sign-in-${messageNumber}@example.test>` },
++            subject: "Sign in to Memba",
++            text_body: `Use http://127.0.0.1:4444/auth/magic/token-${messageNumber} to sign in`,
++            to: [`${email}`]
++          });
++        }
++      }
++    };
++  }
++}
++
++function worldWithBrowser() {
++  return {
++    baseUrl: "http://127.0.0.1:4444",
++    browser: new FakeBrowser(),
++    clubs: { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } },
++    people: { Alice: { email: "alice@example.test", name: "Alice", personId: "person-alice" } }
++  };
++}
++
++test("withMemberHarness signs in with the member email and shares scenario state", async () => {
++  const world = worldWithBrowser();
++
++  await withMemberHarness(world, "Alice", async (member) => {
++    assert.equal(member.people, world.people);
++    assert.equal(member.clubs, world.clubs);
++    await member.page.goto(appUrl(member.baseUrl, "/?club_id=club-1"));
++    member.lastMessageSubject = "Trip planning night";
++  });
++
++  const context = world.browser.contexts[0];
++
++  assert.equal(context.closed, true);
++  assert.equal(world.lastMessageSubject, "Trip planning night");
++  assert.deepEqual(context.page.actions, [
++    ["goto", "http://127.0.0.1:4444/auth"],
++    ["fill", "Email address", "alice@example.test"],
++    ["click", "button", { name: "Email me a sign-in link" }],
++    ["goto", "http://127.0.0.1:4444/auth/magic/token-1"],
++    ["goto", "http://127.0.0.1:4444/?club_id=club-1"]
++  ]);
++});
++
++test("withMemberHarness fails fast when member helpers navigate to admin routes", async () => {
++  const world = worldWithBrowser();
++
++  await assert.rejects(
++    () =>
++      withMemberHarness(world, "Alice", async (member) => {
++        await member.page.goto(appUrl(member.baseUrl, "/admin/messages/message-1"));
++      }),
++    /Member browser helper attempted to navigate to staff\/admin route for Alice:/
++  );
++
++  assert.equal(world.browser.contexts[0].closed, true);
++  assert.equal(
++    world.browser.contexts[0].page.actions.some(
++      (action) => action[0] === "goto" && String(action[1]).includes("/admin/messages")
++    ),
++    false
++  );
++});
++
++test("memberBrowserAction catches final admin-route browser state", async () => {
++  const page = new FakePage([], new FakeRequest([]));
++  const world = { baseUrl: "http://127.0.0.1:4444", page };
++
++  await assert.rejects(
++    () =>
++      memberBrowserAction(world, "checking member receipts", async () => {
++        page.currentUrl = "http://127.0.0.1:4444/admin/deliveries";
++      }),
++    /Member browser helper reached staff\/admin route during checking member receipts after action:/
++  );
++});
++
++test("assertMemberPageIsNotAdmin allows member-facing URLs", () => {
++  const page = new FakePage([], new FakeRequest([]));
++  page.currentUrl = "http://127.0.0.1:4444/messages/message-1?club_id=club-1";
++
++  assert.doesNotThrow(() =>
++    assertMemberPageIsNotAdmin({ baseUrl: "http://127.0.0.1:4444", page }, "message detail")
++  );
++});
+diff --git a/docs/iterations/011-member-facing-message-behaviour/todo.md b/docs/iterations/011-member-facing-message-behaviour/todo.md
+index 9b1146f..1240e17 100644
+--- a/docs/iterations/011-member-facing-message-behaviour/todo.md
++++ b/docs/iterations/011-member-facing-message-behaviour/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect current authenticated club-site routes and the design references listed above.
+-- [ ] 002 Add member acceptance support:
++- [x] 002 Add member acceptance support:
+ - [ ] 003 Update member step definitions so:
+ - [ ] 004 Build/refine member club home at `GET /?club_id=<club_id>`:
+ - [ ] 005 Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
