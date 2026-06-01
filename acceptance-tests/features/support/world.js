@@ -10,6 +10,7 @@ const {
 const { chromium } = require("playwright");
 const { configureBrowserEnvironment } = require("./browser_environment");
 const { createBrowserAcceptanceLifecycle } = require("./lifecycle");
+const { restoreClubMessageSending } = require("./member_message");
 
 const lifecycle = createBrowserAcceptanceLifecycle();
 const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
@@ -61,6 +62,8 @@ Before(async function ({ pickle } = {}) {
 });
 
 After(async function ({ result } = {}) {
+  await restoreClubMessageSending(this);
+
   const failed = result && result.status === Status.FAILED;
 
   if (failed && this.attach) {

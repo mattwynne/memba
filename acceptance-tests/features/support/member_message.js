@@ -373,6 +373,25 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect, 
   );
 }
 
+async function openMemberComposeFromClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
+  await openMemberClubHome(world, clubName, { expect, timeoutMs });
+
+  const composeLink = world.page.locator("#member-send-message-link");
+  await waitForProjectedVisible(world, composeLink, `member compose link for ${clubName}`, {
+    expect,
+    timeoutMs
+  });
+
+  await browserInteraction(`open member compose flow for ${clubName}`, () => composeLink.click());
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-message-compose[data-compose-state=\"composing\"]"),
+    `member compose form for ${clubName}`,
+    { expect, timeoutMs }
+  );
+}
+
 async function openMemberMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
   ensureState(world);
 
@@ -560,35 +579,27 @@ async function sendMemberMessageToKootenayMembers(
   ensureState(world);
 
   const body = `${subject} details.`;
-  const sender = world.people[senderName];
-  assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
+
+  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+
+  await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
+
+  await browserInteraction(`submit member compose form for ${JSON.stringify(subject)}`, async () => {
+    await world.page.getByLabel("Subject").fill(subject);
+    await world.page.getByLabel("Message").fill(body);
+    await world.page.getByRole("button", { name: "Send to all members" }).click();
+  });
+
+  const sentState = world.page.locator("#member-message-compose[data-compose-state=\"sent\"]");
+  await waitForProjectedVisible(world, sentState, `member compose success for ${JSON.stringify(subject)}`, {
+    expect
+  });
+
+  const messageId = await sentState.getAttribute("data-sent-message-id");
+  assert.ok(messageId, `Expected compose success state to expose a message id for ${JSON.stringify(subject)}`);
 
   await openMemberClubHome(world, kootenayClubName, { expect });
 
-  const messageRows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
-  const previousMessageIds = await rowAttributeValues(messageRows, "data-message-id");
-  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
-
-  await browserInteraction(`submit member message form for ${JSON.stringify(subject)}`, async () => {
-    await world.page.getByLabel("Message sender").selectOption(sender.personId);
-    await world.page.getByLabel("Message subject").fill(subject);
-    await world.page.getByLabel("Message body").fill(body);
-    await world.page.getByRole("button", { name: "Send club message" }).click();
-  });
-  await waitForProjectedCount(
-    world,
-    messageRows,
-    previousMessageIds.length + 1,
-    `new member club message row for ${JSON.stringify(subject)}`,
-    { expect }
-  );
-
-  const messageId = await newRowAttributeValue(
-    messageRows,
-    "data-message-id",
-    previousMessageIds,
-    `member club message row for ${subject}`
-  );
   await waitForProjectedVisible(
     world,
     rowByData(world.page, "club-message-row", "data-message-id", messageId),
@@ -605,6 +616,117 @@ async function sendMemberMessageToKootenayMembers(
   };
   world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
   world.lastMessageSubject = subject;
+
+  return world;
+}
+
+async function trySendMemberMessageToKootenayMembers(
+  world,
+  _senderName,
+  subject,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const body = `${subject} details.`;
+
+  await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
+
+  await browserInteraction(`submit unavailable member compose form for ${JSON.stringify(subject)}`, async () => {
+    await world.page.getByLabel("Subject").fill(subject);
+    await world.page.getByLabel("Message").fill(body);
+    await world.page.getByRole("button", { name: "Send to all members" }).click();
+  });
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-message-compose[data-compose-state=\"send_failed\"]"),
+    `member compose send failure for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  world.failedMessageSubject = subject;
+
+  return world;
+}
+
+async function configureMessagingDeliveryProvider(world, provider) {
+  const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
+  assert.ok(
+    request && typeof request.post === "function",
+    "Expected Playwright request context to be available for acceptance test support configuration"
+  );
+
+  let response;
+
+  try {
+    response = await request.post(appUrl(world.baseUrl, "/dev/test-support/messaging-delivery-provider"), {
+      data: { provider },
+      headers: {
+        "content-type": "application/json"
+      }
+    });
+  } catch (error) {
+    throw new Error(
+      `Acceptance test support configuration failed: POST /dev/test-support/messaging-delivery-provider request error.\n` +
+        `Provider: ${provider}\nCause: ${errorMessage(error)}`,
+      { cause: error }
+    );
+  }
+
+  const status = response.status();
+
+  if (status !== 204) {
+    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
+
+    throw new Error(
+      `Acceptance test support configuration failed: expected HTTP 204 from ` +
+        `POST /dev/test-support/messaging-delivery-provider, got HTTP ${status}.\n` +
+        `Provider: ${provider}\nResponse body: ${body}`
+    );
+  }
+
+  return world;
+}
+
+async function makeClubMessageSendingUnavailable(world) {
+  await configureMessagingDeliveryProvider(world, "unavailable");
+  world.clubMessageSendingWasConfigured = true;
+
+  return world;
+}
+
+async function restoreClubMessageSending(world) {
+  if (!world.clubMessageSendingWasConfigured) {
+    return world;
+  }
+
+  await configureMessagingDeliveryProvider(world, "local");
+  world.clubMessageSendingWasConfigured = false;
+
+  return world;
+}
+
+async function assertMemberWasToldMessageWasNotSent(world, { expect = playwrightExpect } = {}) {
+  await waitForProjectedText(
+    world,
+    world.page.locator("#member-compose-error-summary"),
+    "Your message was not sent to anyone. Please contact support so we can investigate before you try again.",
+    "member compose failure not-sent copy",
+    { expect }
+  );
+
+  return world;
+}
+
+async function assertMemberWasToldToContactSupport(world, { expect = playwrightExpect } = {}) {
+  await waitForProjectedText(
+    world,
+    world.page.locator("#member-compose-error-summary"),
+    "Your message was not sent to anyone. Please contact support so we can investigate before you try again.",
+    "member compose failure support copy",
+    { expect }
+  );
 
   return world;
 }
@@ -1447,6 +1569,8 @@ module.exports = {
   assertMemberMessageNotAddressedTo,
   assertMemberReceiptStatus,
   assertMemberSeesMessageInClub,
+  assertMemberWasToldMessageWasNotSent,
+  assertMemberWasToldToContactSupport,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReceiptStatus,
@@ -1458,9 +1582,11 @@ module.exports = {
   emailFor,
   ensureState,
   kootenayClubName,
+  makeClubMessageSendingUnavailable,
   memberReceiptIconForLabel,
   memberReceiptStatusForEventType,
   nelsonClubName,
+  openMemberComposeFromClubHome,
   openMemberClubHome,
   openMemberMessage,
   postmarkPayloadForStatus,
@@ -1472,9 +1598,11 @@ module.exports = {
   openDeliveriesOverview,
   openClub,
   openMessage,
+  restoreClubMessageSending,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
   testMailboxEmails,
+  trySendMemberMessageToKootenayMembers,
   visitClubsIndex,
   waitForMailboxEmails
 };

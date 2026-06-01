@@ -12,6 +12,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.Commands.ReportDeliveryOpened
   alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
   alias Memba.Messaging.DeliveryProviders.Fake
+  alias Memba.Messaging.DeliveryProviders.Unavailable
   alias Memba.Messaging.DeliveryRequest
   alias Memba.Messaging.Projections.RecipientDelivery
 
@@ -27,6 +28,30 @@ defmodule Memba.Cucumber.MessagingSteps do
     Fake.reset()
 
     send_message_to_kootenay_members(context, sender_name, subject)
+  end
+
+  step "club message sending is unavailable", context do
+    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
+    Application.put_env(:memba, :messaging_delivery_provider, Unavailable)
+
+    Map.put(context, :messaging_delivery_provider_before_unavailable, original_provider)
+  end
+
+  step "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
+       %{args: [sender_name, subject]} = context do
+    try_send_message_to_kootenay_members(context, sender_name, subject)
+  end
+
+  step "{word} should be told the message was not sent", %{args: [_viewer_name]} = context do
+    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
+
+    context
+  end
+
+  step "{word} should be told to contact support", %{args: [_viewer_name]} = context do
+    assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
+
+    context
   end
 
   step "{word} email for {string} is reported as delivered",
@@ -278,6 +303,41 @@ defmodule Memba.Cucumber.MessagingSteps do
     })
   end
 
+  defp try_send_message_to_kootenay_members(context, sender_name, subject) do
+    message_id = Ecto.UUID.generate()
+    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+    sender_id = fetch_from_context!(context, :people, sender_name)
+    body = "#{subject} details."
+
+    result =
+      try do
+        Messaging.send_club_message(
+          %{
+            message_id: message_id,
+            club_id: club_id,
+            sender_id: sender_id,
+            subject: subject,
+            body: body
+          },
+          consistency: :strong
+        )
+      after
+        context
+        |> Map.get(:messaging_delivery_provider_before_unavailable, :missing)
+        |> restore_messaging_delivery_provider()
+      end
+
+    context
+    |> Map.put(:failed_send_result, result)
+    |> Map.put(:failed_send_message, %{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: sender_id,
+      subject: subject,
+      body: body
+    })
+  end
+
   defp report_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
     recipient_name = normalize_person_name(recipient_name)
     message = fetch_from_context!(context, :messages, subject)
@@ -436,4 +496,12 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp assert_unique(values) do
     assert Enum.uniq(values) == values
   end
+
+  defp restore_messaging_delivery_provider(:missing), do: :ok
+
+  defp restore_messaging_delivery_provider(nil),
+    do: Application.delete_env(:memba, :messaging_delivery_provider)
+
+  defp restore_messaging_delivery_provider(provider),
+    do: Application.put_env(:memba, :messaging_delivery_provider, provider)
 end

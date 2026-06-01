@@ -9,6 +9,12 @@ defmodule MembaWeb.DevTestSupportController do
   alias Memba.Accounts.MagicToken
   alias Memba.Repo
 
+  @messaging_delivery_providers %{
+    "fake" => Memba.Messaging.DeliveryProviders.Fake,
+    "local" => Memba.Messaging.DeliveryProviders.Local,
+    "unavailable" => Memba.Messaging.DeliveryProviders.Unavailable
+  }
+
   def expire_auth_link(conn, %{"email" => email}) do
     normalized_email = Accounts.normalize_email(email)
     expired_at = DateTime.add(DateTime.utc_now(:microsecond), -60, :second)
@@ -29,5 +35,19 @@ defmodule MembaWeb.DevTestSupportController do
     end
 
     send_resp(conn, :no_content, "")
+  end
+
+  def configure_messaging_delivery_provider(conn, %{"provider" => provider_name}) do
+    with {:ok, provider} <- Map.fetch(@messaging_delivery_providers, provider_name),
+         true <- Code.ensure_loaded?(provider) do
+      Application.put_env(:memba, :messaging_delivery_provider, provider)
+
+      send_resp(conn, :no_content, "")
+    else
+      _unknown_or_unavailable ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "unknown messaging delivery provider"})
+    end
   end
 end

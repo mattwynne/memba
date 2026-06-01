@@ -11,18 +11,27 @@ const {
   assertMemberMessageNotAddressedTo,
   assertMemberReceiptStatus,
   assertMemberSeesMessageInClub,
+  assertMemberWasToldMessageWasNotSent,
+  assertMemberWasToldToContactSupport,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   createClub,
   createPeople,
   kootenayClubName,
+  makeClubMessageSendingUnavailable,
   nelsonClubName,
   openMemberMessage,
   reportRecipientEmailStatus,
   sendMemberMessageToKootenayMembers,
-  sendMessageToKootenayMembers
+  sendMessageToKootenayMembers,
+  trySendMemberMessageToKootenayMembers
 } = require("../support/member_message");
-const { withMemberHarness, withStaffHarness } = require("../support/member_harness");
+const {
+  memberBrowserAction,
+  signInMember,
+  withMemberHarness,
+  withStaffHarness
+} = require("../support/member_harness");
 
 Given("Kootenay Mountaineering Club is a club", async function () {
   await withStaffHarness(this, (staff) => createClub(staff, kootenayClubName));
@@ -65,12 +74,38 @@ When(
   }
 );
 
+Given("club message sending is unavailable", async function () {
+  await makeClubMessageSendingUnavailable(this);
+});
+
+When(
+  "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
+  async function (senderName, subject) {
+    await signInMember(this, senderName);
+    await memberBrowserAction(this, `failed member message send for ${senderName}`, () =>
+      trySendMemberMessageToKootenayMembers(this, senderName, subject)
+    );
+  }
+);
+
 Given(
   "{word} has sent the message {string} to Kootenay Mountaineering Club members",
   async function (senderName, subject) {
     await withStaffHarness(this, (staff) => sendMessageToKootenayMembers(staff, senderName, subject));
   }
 );
+
+Then("{word} should be told the message was not sent", async function (viewerName) {
+  await memberBrowserAction(this, `not-sent failure notice for ${viewerName}`, () =>
+    assertMemberWasToldMessageWasNotSent(this)
+  );
+});
+
+Then("{word} should be told to contact support", async function (viewerName) {
+  await memberBrowserAction(this, `support failure notice for ${viewerName}`, () =>
+    assertMemberWasToldToContactSupport(this)
+  );
+});
 
 Then(
   "{word} should see the message {string} in Kootenay Mountaineering Club",
