@@ -1,0 +1,823 @@
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index dfdf413..810fe44 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -1,22 +1,28 @@
+ const { Given, When, Then } = require("@cucumber/cucumber");
+ const {
+   addMembers,
++  assertEveryAddressedMemberReceiptStatus,
+   assertEachAddressedMemberHasSeparateDeliveryRecord,
+   assertEachDeliverySentThroughEmailProvider,
+   assertEachAddressedMemberReceivedEmailInTestMailbox,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertMemberMessageAddressedTo,
++  assertMemberMessageNotAddressedTo,
++  assertMemberReceiptStatus,
++  assertMemberSeesMessageInClub,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+-  assertReceiptStatus,
+   createClub,
+   createPeople,
+   kootenayClubName,
+   nelsonClubName,
++  openMemberMessage,
+   reportRecipientEmailStatus,
++  sendMemberMessageToKootenayMembers,
+   sendMessageToKootenayMembers
+ } = require("../support/member_message");
+-const { withStaffHarness } = require("../support/member_harness");
++const { withMemberHarness, withStaffHarness } = require("../support/member_harness");
+ 
+ Given("Kootenay Mountaineering Club is a club", async function () {
+   await withStaffHarness(this, (staff) => createClub(staff, kootenayClubName));
+@@ -30,6 +36,10 @@ Given("Alice, Bob, and Carol are people", async function () {
+   await withStaffHarness(this, (staff) => createPeople(staff, ["Alice", "Bob", "Carol"]));
+ });
+ 
++Given("Alice, Bob, Carol, and Dana are people", async function () {
++  await withStaffHarness(this, (staff) => createPeople(staff, ["Alice", "Bob", "Carol", "Dana"]));
++});
++
+ Given("Pat is a person", async function () {
+   await withStaffHarness(this, (staff) => createPeople(staff, ["Pat"]));
+ });
+@@ -38,6 +48,10 @@ Given("Alice, Bob, and Carol are members of Kootenay Mountaineering Club", async
+   await withStaffHarness(this, (staff) => addMembers(staff, ["Alice", "Bob", "Carol"], kootenayClubName));
+ });
+ 
++Given("Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", async function () {
++  await withStaffHarness(this, (staff) => addMembers(staff, ["Alice", "Bob", "Carol", "Dana"], kootenayClubName));
++});
++
+ Given("Pat is a member of Nelson Paddling Club", async function () {
+   await withStaffHarness(this, (staff) => addMembers(staff, ["Pat"], nelsonClubName));
+ });
+@@ -45,7 +59,9 @@ Given("Pat is a member of Nelson Paddling Club", async function () {
+ When(
+   "{word} sends the message {string} to Kootenay Mountaineering Club members",
+   async function (senderName, subject) {
+-    await withStaffHarness(this, (staff) => sendMessageToKootenayMembers(staff, senderName, subject));
++    await withMemberHarness(this, senderName, (member) =>
++      sendMemberMessageToKootenayMembers(member, senderName, subject)
++    );
+   }
+ );
+ 
+@@ -56,6 +72,39 @@ Given(
+   }
+ );
+ 
++Then(
++  "{word} should see the message {string} in Kootenay Mountaineering Club",
++  async function (viewerName, subject) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertMemberSeesMessageInClub(member, subject, kootenayClubName)
++    );
++  }
++);
++
++Then(/^(\w+) should see the message was addressed to (.+)$/, async function (
++  viewerName,
++  expectedNamesText
++) {
++  await withMemberHarness(this, viewerName, (member) =>
++    assertMemberMessageAddressedTo(member, parsePersonList(expectedNamesText))
++  );
++});
++
++Then("{word} should not see {word} in the addressed members", async function (viewerName, excludedName) {
++  await withMemberHarness(this, viewerName, (member) =>
++    assertMemberMessageNotAddressedTo(member, excludedName)
++  );
++});
++
++Then(
++  "{word} should see every addressed member's receipt status as {string}",
++  async function (viewerName, expectedStatus) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertEveryAddressedMemberReceiptStatus(member, member.lastMessageSubject, expectedStatus)
++    );
++  }
++);
++
+ Then("the message should be addressed to Alice, Bob, and Carol", async function () {
+   await withStaffHarness(this, (staff) => assertLastMessageAddressedTo(staff, ["Alice", "Bob", "Carol"]));
+ });
+@@ -78,8 +127,23 @@ Then("each addressed member should receive the email in the test mailbox", async
+ 
+ Then(
+   "{word}'s receipt status for {string} should be {string}",
+-  async function (recipientName, subject, expectedStatus) {
+-    await withStaffHarness(this, (staff) => assertReceiptStatus(staff, recipientName, subject, expectedStatus));
++  async function (viewerName, subject, expectedStatus) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertMemberReceiptStatus(member, viewerName, subject, expectedStatus)
++    );
++  }
++);
++
++When("{word} views the message {string}", async function (viewerName, subject) {
++  await withMemberHarness(this, viewerName, (member) => openMemberMessage(member, subject));
++});
++
++Then(
++  "{word} should see {word}'s receipt status for {string} as {string}",
++  async function (viewerName, recipientName, subject, expectedStatus) {
++    await withMemberHarness(this, viewerName, (member) =>
++      assertMemberReceiptStatus(member, recipientName, subject, expectedStatus)
++    );
+   }
+ );
+ 
+@@ -104,6 +168,13 @@ When(
+   }
+ );
+ 
++Given(
++  "{word}'s email for {string} has been reported as delayed because {string}",
++  async function (recipientName, subject, reason) {
++    await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "delayed", { reason }));
++  }
++);
++
+ When(
+   "{word}'s email for {string} is reported as bounced because {string}",
+   async function (recipientName, subject, reason) {
+@@ -111,6 +182,13 @@ When(
+   }
+ );
+ 
++Given(
++  "{word}'s email for {string} has been reported as bounced because {string}",
++  async function (recipientName, subject, reason) {
++    await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "bounced", { reason }));
++  }
++);
++
+ When(
+   "{word}'s email for {string} is reported as a spam complaint because {string}",
+   async function (recipientName, subject, reason) {
+@@ -122,6 +200,10 @@ When("{word} opens the email for {string}", async function (recipientName, subje
+   await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
+ });
+ 
++Given("{word} has opened the email for {string}", async function (recipientName, subject) {
++  await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
++});
++
+ Then(
+   "operators should see {word}'s delivery for {string} as {string}",
+   async function (recipientName, subject, expectedStatus) {
+@@ -135,3 +217,11 @@ Then(
+     await withStaffHarness(this, (staff) => assertOperatorDeliveryReason(staff, recipientName, expectedReason));
+   }
+ );
++
++function parsePersonList(text) {
++  return text
++    .replace(/,?\s+and\s+/g, ", ")
++    .split(/\s*,\s*/)
++    .map((name) => name.trim())
++    .filter(Boolean);
++}
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 4472f89..db490ef 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -103,6 +103,14 @@ function allRows(page, containerId, testId) {
+   return page.locator(`#${containerId} [data-testid=${cssString(testId)}]`);
+ }
+ 
++function clubHomePath(clubId) {
++  return `/?club_id=${encodeURIComponent(clubId)}`;
++}
++
++function memberMessagePath(message) {
++  return `/messages/${encodeURIComponent(message.messageId)}?club_id=${encodeURIComponent(message.clubId)}`;
++}
++
+ async function rowAttributeValues(rows, attributeName) {
+   return rows.evaluateAll(
+     (elements, attr) =>
+@@ -265,6 +273,41 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
+   );
+ }
+ 
++async function openMemberClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
++  ensureState(world);
++
++  const club = world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to have been created before opening the member club home`);
++
++  await browserInteraction(`visit member club home for ${clubName}`, () =>
++    world.page.goto(appUrl(world.baseUrl, clubHomePath(club.clubId)))
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.getByRole("heading", { name: clubName }),
++    `member club home heading for ${clubName}`,
++    { expect, timeoutMs }
++  );
++}
++
++async function openMemberMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
++  ensureState(world);
++
++  const message = world.messages[subject];
++  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
++  assert.ok(message.clubId, `Expected message ${JSON.stringify(subject)} to have a club id`);
++
++  await browserInteraction(`visit member message page for ${JSON.stringify(subject)}`, () =>
++    world.page.goto(appUrl(world.baseUrl, memberMessagePath(message)))
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.getByRole("heading", { name: subject }),
++    `member message heading for ${JSON.stringify(subject)}`,
++    { expect, timeoutMs }
++  );
++}
++
+ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
+   await browserInteraction("visit /admin/deliveries", () =>
+     world.page.goto(appUrl(world.baseUrl, "/admin/deliveries"))
+@@ -425,6 +468,64 @@ async function addMemberOnCurrentClubPage(
+   };
+ }
+ 
++async function sendMemberMessageToKootenayMembers(
++  world,
++  senderName,
++  subject,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const body = `${subject} details.`;
++  const sender = world.people[senderName];
++  assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
++
++  await openMemberClubHome(world, kootenayClubName, { expect });
++
++  const messageRows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
++  const previousMessageIds = await rowAttributeValues(messageRows, "data-message-id");
++  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
++
++  await browserInteraction(`submit member message form for ${JSON.stringify(subject)}`, async () => {
++    await world.page.getByLabel("Message sender").selectOption(sender.personId);
++    await world.page.getByLabel("Message subject").fill(subject);
++    await world.page.getByLabel("Message body").fill(body);
++    await world.page.getByRole("button", { name: "Send club message" }).click();
++  });
++  await waitForProjectedCount(
++    world,
++    messageRows,
++    previousMessageIds.length + 1,
++    `new member club message row for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++
++  const messageId = await newRowAttributeValue(
++    messageRows,
++    "data-message-id",
++    previousMessageIds,
++    `member club message row for ${subject}`
++  );
++  await waitForProjectedVisible(
++    world,
++    rowByData(world.page, "club-message-row", "data-message-id", messageId),
++    `projected member club message row ${messageId}`,
++    { expect }
++  );
++
++  world.messages[subject] = {
++    body,
++    clubId: world.clubs[kootenayClubName].clubId,
++    messageId,
++    senderName,
++    subject
++  };
++  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
++  world.lastMessageSubject = subject;
++
++  return world;
++}
++
+ async function sendMessageToKootenayMembers(
+   world,
+   senderName,
+@@ -487,6 +588,77 @@ async function sendMessageToKootenayMembers(
+   return world;
+ }
+ 
++async function assertMemberSeesMessageInClub(
++  world,
++  subject,
++  clubName,
++  { expect = playwrightExpect } = {}
++) {
++  await openMemberClubHome(world, clubName, { expect });
++
++  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
++  await waitForProjectedVisible(
++    world,
++    row,
++    `member club message row for ${JSON.stringify(subject)} in ${clubName}`,
++    { expect }
++  );
++
++  return world;
++}
++
++async function assertMemberMessageAddressedTo(
++  world,
++  expectedNames,
++  subject = world.lastMessageSubject,
++  { expect = playwrightExpect } = {}
++) {
++  await openMemberMessage(world, subject, { expect });
++
++  const rows = allRows(world.page, "member-receipts", "member-receipt");
++  await waitForProjectedCount(
++    world,
++    rows,
++    expectedNames.length,
++    `member-facing recipient rows for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++
++  const actualNames = await rowDatasetValues(rows, "recipientName");
++  assertFinalBrowserState(`member-facing recipients for ${JSON.stringify(subject)}`, () =>
++    assert.deepEqual(actualNames, expectedNames)
++  );
++
++  world.addressedMemberNames = expectedNames;
++  world.addressedMemberIds = expectedNames.map((name) => {
++    const person = world.people[name];
++    assert.ok(person, `Expected ${name} to have been created`);
++    return person.personId;
++  });
++
++  return world;
++}
++
++async function assertMemberMessageNotAddressedTo(
++  world,
++  excludedName,
++  subject = world.lastMessageSubject,
++  { expect = playwrightExpect } = {}
++) {
++  await openMemberMessage(world, subject, { expect });
++
++  const rows = allRows(world.page, "member-receipts", "member-receipt");
++  const actualNames = await rowDatasetValues(rows, "recipientName");
++  assertFinalBrowserState(`member-facing recipients should not include ${excludedName}`, () =>
++    assert.ok(
++      !actualNames.includes(excludedName),
++      `Expected member-facing recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
++    )
++  );
++
++  return world;
++}
++
+ async function assertLastMessageAddressedTo(
+   world,
+   expectedNames,
+@@ -663,6 +835,81 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
+   return world;
+ }
+ 
++async function assertEveryAddressedMemberReceiptStatus(
++  world,
++  subject,
++  expectedLabel,
++  { expect = playwrightExpect } = {}
++) {
++  ensureState(world);
++
++  const addressedMemberNames = world.addressedMemberNames || [];
++  assert.ok(
++    addressedMemberNames.length > 0,
++    "Expected addressed members to be asserted before checking every member receipt status"
++  );
++
++  await openMemberMessage(world, subject, { expect });
++
++  for (const recipientName of addressedMemberNames) {
++    await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
++  }
++
++  return world;
++}
++
++async function assertMemberReceiptStatus(
++  world,
++  recipientName,
++  subject,
++  expectedLabel,
++  { expect = playwrightExpect } = {}
++) {
++  await openMemberMessage(world, subject, { expect });
++  await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
++
++  return world;
++}
++
++async function assertMemberReceiptStatusOnCurrentPage(
++  world,
++  recipientName,
++  subject,
++  expectedLabel,
++  { expect = playwrightExpect } = {}
++) {
++  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
++  await waitForProjectedVisible(
++    world,
++    row,
++    `${recipientName}'s member-facing receipt row for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++  await waitForProjectedText(
++    world,
++    row.locator("[data-testid=\"receipt-status\"]"),
++    expectedLabel,
++    `${recipientName}'s member-facing receipt status label for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++
++  const expectedIcon = memberReceiptIconForLabel(expectedLabel);
++  const icon = row.locator("[data-testid=\"receipt-status-icon\"]");
++  await waitForProjectedVisible(
++    world,
++    icon,
++    `${recipientName}'s member-facing receipt status icon for ${JSON.stringify(subject)}`,
++    { expect }
++  );
++
++  const actualIcon = await icon.getAttribute("data-icon-name");
++  assertFinalBrowserState(`${recipientName}'s member-facing receipt icon for ${JSON.stringify(subject)}`, () =>
++    assert.equal(actualIcon, expectedIcon)
++  );
++
++  return world;
++}
++
+ async function assertReceiptStatus(world, recipientName, subject, expectedStatus, { expect = playwrightExpect } = {}) {
+   await openMessage(world, subject, { expect });
+ 
+@@ -788,6 +1035,25 @@ function memberReceiptStatusForEventType(eventType) {
+   }
+ }
+ 
++function memberReceiptIconForLabel(label) {
++  switch (label) {
++    case "Sending":
++      return "hero-clock";
++
++    case "Delivered":
++      return "hero-check-circle";
++
++    case "Delivery problem":
++      return "hero-exclamation-triangle";
++
++    case "Opened":
++      return "hero-envelope-open";
++
++    default:
++      throw new Error(`Unsupported member-facing receipt label: ${label}`);
++  }
++}
++
+ async function waitForProjectedReceiptStatus(
+   world,
+   recipientName,
+@@ -1059,11 +1325,16 @@ function assertUnique(values, label) {
+ module.exports = {
+   addMembers,
+   appUrl,
++  assertEveryAddressedMemberReceiptStatus,
+   assertEachAddressedMemberHasSeparateDeliveryRecord,
+   assertEachAddressedMemberReceivedEmailInTestMailbox,
+   assertEachDeliverySentThroughEmailProvider,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertMemberMessageAddressedTo,
++  assertMemberMessageNotAddressedTo,
++  assertMemberReceiptStatus,
++  assertMemberSeesMessageInClub,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+@@ -1075,8 +1346,11 @@ module.exports = {
+   emailFor,
+   ensureState,
+   kootenayClubName,
++  memberReceiptIconForLabel,
+   memberReceiptStatusForEventType,
+   nelsonClubName,
++  openMemberClubHome,
++  openMemberMessage,
+   postmarkPayloadForStatus,
+   postPostmarkWebhook,
+   projectionPollIntervalMs,
+@@ -1086,6 +1360,7 @@ module.exports = {
+   openDeliveriesOverview,
+   openClub,
+   openMessage,
++  sendMemberMessageToKootenayMembers,
+   sendMessageToKootenayMembers,
+   testMailboxEmails,
+   visitClubsIndex,
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 59a5728..fac27cf 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -4,10 +4,15 @@ const test = require("node:test");
+ const {
+   addMembers,
+   appUrl,
++  assertEveryAddressedMemberReceiptStatus,
+   assertEachAddressedMemberHasSeparateDeliveryRecord,
+   assertEachDeliverySentThroughEmailProvider,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
++  assertMemberMessageAddressedTo,
++  assertMemberMessageNotAddressedTo,
++  assertMemberReceiptStatus,
++  assertMemberSeesMessageInClub,
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   assertReceiptStatus,
+@@ -17,12 +22,15 @@ const {
+   deliveryForRecipient,
+   emailFor,
+   kootenayClubName,
++  memberReceiptIconForLabel,
+   memberReceiptStatusForEventType,
++  openMemberMessage,
+   postmarkPayloadForStatus,
+   postPostmarkWebhook,
+   projectionPollIntervalMs,
+   projectionTimeoutMs,
+   reportRecipientEmailStatus,
++  sendMemberMessageToKootenayMembers,
+   sendMessageToKootenayMembers
+ } = require("../features/support/member_message");
+ 
+@@ -57,12 +65,19 @@ class FakeLocator {
+   }
+ 
+   locator(selector) {
+-    const childText =
+-      selector.includes('data-test-id="delivery-reason"')
+-        ? this.attrs.deliveryReason
+-        : this.attrs.deliveryStatus || this.attrs.receiptStatus;
++    let childText = this.attrs.deliveryStatus || this.attrs.receiptStatus || this.attrs.receiptStatusLabel;
++    let childAttrs = {};
++
++    if (selector.includes('data-test-id="delivery-reason"')) {
++      childText = this.attrs.deliveryReason;
++    }
++
++    if (selector.includes('data-testid="receipt-status-icon"')) {
++      childAttrs = { "data-icon-name": this.attrs.receiptIconName };
++    }
+ 
+     return new FakeLocator(this.page, `${this.selector} ${selector}`, {
++      attrs: childAttrs,
+       kind: "child",
+       value: selector,
+       text: childText
+@@ -95,12 +110,14 @@ class FakeLocator {
+ class FakePage {
+   constructor() {
+     this.actions = [];
++    this.currentUrl = "about:blank";
+     this.fields = {};
+     this.rows = {
+       clubs: [],
+       people: [],
+       members: [],
+       messages: [],
++      clubMessages: [],
+       addressedRecipients: [],
+       deliveryRecords: [],
+       operatorDeliveries: [],
+@@ -109,9 +126,14 @@ class FakePage {
+   }
+ 
+   async goto(url) {
++    this.currentUrl = url;
+     this.actions.push(["goto", url]);
+   }
+ 
++  url() {
++    return this.currentUrl;
++  }
++
+   getByLabel(name) {
+     return {
+       fill: async (value) => {
+@@ -175,10 +197,13 @@ class FakePage {
+       const subject = this.fields["Message subject"];
+       const messageId = idFor("message", subject, this.rows.messages.length + 1);
+ 
+-      this.rows.messages.push(rowWithAttrs({
++      const messageRow = rowWithAttrs({
+         "data-message-id": messageId,
+         "data-message-subject": subject
+-      }));
++      });
++
++      this.rows.messages.push(messageRow);
++      this.rows.clubMessages.push(messageRow);
+     }
+   }
+ }
+@@ -215,6 +240,7 @@ function rowsForSelector(rows, selector) {
+   if (selector.includes('data-testid="club-row"')) return filterRows(rows.clubs, selector);
+   if (selector.includes('data-testid="person-row"')) return filterRows(rows.people, selector);
+   if (selector.includes('data-testid="member-row"')) return filterRows(rows.members, selector);
++  if (selector.includes('data-testid="club-message-row"')) return filterRows(rows.clubMessages, selector);
+   if (selector.includes('data-testid="message-row"')) return filterRows(rows.messages, selector);
+   if (selector.includes("#addressed-recipients")) return rows.addressedRecipients;
+   if (selector.includes("#delivery-records")) return rows.deliveryRecords;
+@@ -441,6 +467,64 @@ test("sending a Kootenay member message drives the club form and opens the real
+   ]);
+ });
+ 
++test("member send flow drives the authenticated club home route and stores the new message", async () => {
++  const page = new FakePage();
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.people = { Alice: { personId: "person-alice-1" } };
++
++  await sendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.deepEqual(world.messages["Trip planning night"], {
++    body: "Trip planning night details.",
++    clubId: "club-1",
++    messageId: "message-trip-planning-night-1",
++    senderName: "Alice",
++    subject: "Trip planning night"
++  });
++  assert.deepEqual(page.actions, [
++    ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
++    ["select", "Message sender", "person-alice-1"],
++    ["fill", "Message subject", "Trip planning night"],
++    ["fill", "Message body", "Trip planning night details."],
++    ["click", "button", { name: "Send club message" }]
++  ]);
++  assert.equal(
++    page.actions.some((action) => action[0] === "goto" && String(action[1]).startsWith("http://127.0.0.1:4444/admin")),
++    false
++  );
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "visible" &&
++        typeof expectation[1] === "string" &&
++        expectation[1].includes('data-testid="club-message-row"') &&
++        expectation[1].includes('data-message-id="message-trip-planning-night-1"')
++    )
++  );
++});
++
++test("member message opening uses the member-facing message route with club_id", async () => {
++  const page = new FakePage();
++  const world = worldWithPage(page);
++  world.messages = {
++    "Trip planning night": {
++      clubId: "club-1",
++      messageId: "message-1",
++      subject: "Trip planning night"
++    }
++  };
++
++  await openMemberMessage(world, "Trip planning night", { expect: fakeExpect([]) });
++
++  assert.deepEqual(page.actions, [
++    ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"]
++  ]);
++});
++
+ test("message assertions read addressed recipients, delivery records, email channel, and receipts from UI rows", async () => {
+   const page = new FakePage();
+   page.rows.addressedRecipients.push(
+@@ -510,6 +594,96 @@ test("message assertions read addressed recipients, delivery records, email chan
+   assert.ok(expectations.some((expectation) => expectation[0] === "text" && expectation[2] === "sent"));
+ });
+ 
++test("member assertions read member-facing recipient rows, labels, and Heroicon names", async () => {
++  const page = new FakePage();
++  page.rows.clubMessages.push(
++    rowWithAttrs({
++      "data-message-id": "message-1",
++      "data-message-subject": "Trip planning night"
++    })
++  );
++  page.rows.memberReceipts.push(
++    rowWithAttrs({
++      "data-recipient-name": "Alice",
++      receiptIconName: "hero-clock",
++      receiptStatusLabel: "Sending"
++    }),
++    rowWithAttrs({
++      "data-recipient-name": "Bob",
++      receiptIconName: "hero-check-circle",
++      receiptStatusLabel: "Delivered"
++    }),
++    rowWithAttrs({
++      "data-recipient-name": "Carol",
++      receiptIconName: "hero-exclamation-triangle",
++      receiptStatusLabel: "Delivery problem"
++    })
++  );
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.lastMessageSubject = "Trip planning night";
++  world.messages = {
++    "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
++  };
++  world.people = {
++    Alice: { personId: "person-alice" },
++    Bob: { personId: "person-bob" },
++    Carol: { personId: "person-carol" },
++    Pat: { personId: "person-pat" }
++  };
++
++  await assertMemberSeesMessageInClub(world, "Trip planning night", kootenayClubName, {
++    expect: fakeExpect(expectations)
++  });
++  await assertMemberMessageAddressedTo(world, ["Alice", "Bob", "Carol"], undefined, {
++    expect: fakeExpect(expectations)
++  });
++  await assertMemberMessageNotAddressedTo(world, "Pat", undefined, { expect: fakeExpect(expectations) });
++  await assertMemberReceiptStatus(world, "Bob", "Trip planning night", "Delivered", {
++    expect: fakeExpect(expectations)
++  });
++
++  page.rows.memberReceipts[1].attrs.receiptStatusLabel = "Sending";
++  page.rows.memberReceipts[1].attrs.receiptIconName = "hero-clock";
++  page.rows.memberReceipts[2].attrs.receiptStatusLabel = "Sending";
++  page.rows.memberReceipts[2].attrs.receiptIconName = "hero-clock";
++
++  await assertEveryAddressedMemberReceiptStatus(world, "Trip planning night", "Sending", {
++    expect: fakeExpect(expectations)
++  });
++
++  assert.deepEqual(world.addressedMemberNames, ["Alice", "Bob", "Carol"]);
++  assert.equal(memberReceiptIconForLabel("Opened"), "hero-envelope-open");
++  assert.deepEqual(
++    page.actions.filter((action) => action[0] === "goto"),
++    [
++      ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
++      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
++      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
++      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
++      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"]
++    ]
++  );
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "text" &&
++        typeof expectation[1] === "string" &&
++        expectation[1].includes('data-testid="receipt-status"') &&
++        expectation[2] === "Delivered"
++    )
++  );
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "visible" &&
++        typeof expectation[1] === "string" &&
++        expectation[1].includes('data-testid="receipt-status-icon"')
++    )
++  );
++});
++
+ test("operator delivery assertions inspect the /deliveries overview by message and recipient", async () => {
+   const page = new FakePage();
+   page.rows.operatorDeliveries.push(
+diff --git a/docs/iterations/011-member-facing-message-behaviour/todo.md b/docs/iterations/011-member-facing-message-behaviour/todo.md
+index 1240e17..1c8c607 100644
+--- a/docs/iterations/011-member-facing-message-behaviour/todo.md
++++ b/docs/iterations/011-member-facing-message-behaviour/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect current authenticated club-site routes and the design references listed above.
+ - [x] 002 Add member acceptance support:
+-- [ ] 003 Update member step definitions so:
++- [x] 003 Update member step definitions so:
+ - [ ] 004 Build/refine member club home at `GET /?club_id=<club_id>`:
+ - [ ] 005 Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
+ - [ ] 006 Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
