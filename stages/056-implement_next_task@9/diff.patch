@@ -1,0 +1,580 @@
+diff --git a/acceptance-tests/features/member_message_deliverability.feature b/acceptance-tests/features/member_message_deliverability.feature
+index ea8d7ec..895984c 100644
+--- a/acceptance-tests/features/member_message_deliverability.feature
++++ b/acceptance-tests/features/member_message_deliverability.feature
+@@ -1,4 +1,3 @@
+-@wip
+ Feature: Member message deliverability
+   Club members need confidence that important club messages are reaching other members.
+   Memba shows simple receipt-style feedback to regular members.
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index db490ef..52668c5 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -284,8 +284,8 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect,
+   );
+   await waitForProjectedVisible(
+     world,
+-    world.page.getByRole("heading", { name: clubName }),
+-    `member club home heading for ${clubName}`,
++    world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`),
++    `member club home for ${clubName}`,
+     { expect, timeoutMs }
+   );
+ }
+@@ -1115,7 +1115,27 @@ async function reportRecipientEmailStatus(
+ ) {
+   ensureState(world);
+ 
++  const key = `${subject}:${recipientName}`;
+   const delivery = await deliveryForRecipient(world, recipientName, subject, { expect });
++
++  if (eventType === "opened" && !hasSuccessfulDeliveryReport(world, key)) {
++    const deliveredPayload = postmarkPayloadForStatus({
++      deliveryId: delivery.deliveryId,
++      eventType: "delivered",
++      messageId: delivery.messageId,
++      recipientEmail: delivery.recipientEmail
++    });
++
++    await postPostmarkWebhook(world, deliveredPayload);
++    await waitForProjectedReceiptStatus(
++      world,
++      recipientName,
++      subject,
++      memberReceiptStatusForEventType("delivered"),
++      { expect }
++    );
++  }
++
+   const payload = postmarkPayloadForStatus({
+     deliveryId: delivery.deliveryId,
+     eventType,
+@@ -1133,7 +1153,6 @@ async function reportRecipientEmailStatus(
+     { expect }
+   );
+ 
+-  const key = `${subject}:${recipientName}`;
+   world.reportedDeliveryStatuses[key] = {
+     eventType,
+     payload,
+@@ -1145,6 +1164,12 @@ async function reportRecipientEmailStatus(
+   return world;
+ }
+ 
++function hasSuccessfulDeliveryReport(world, key) {
++  const report = world.reportedDeliveryStatuses[key];
++
++  return report && ["delivered", "opened"].includes(report.eventType);
++}
++
+ async function deliveryForRecipient(
+   world,
+   recipientName,
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 16227f7..16ec7f8 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -19,6 +19,7 @@ test("default browser Cucumber profile selects all non-deferred web-backed share
+   assert.deepEqual(selectedFeatureNames, [
+     "authentication.feature",
+     "homepage.feature",
++    "member_message_deliverability.feature",
+     "operator_email_deliverability.feature"
+   ]);
+ });
+@@ -26,12 +27,7 @@ test("default browser Cucumber profile selects all non-deferred web-backed share
+ test("only explicitly deferred features are skipped from the browser run", () => {
+   const skippedFeatures = browserSkippedFeatures();
+ 
+-  assert.deepEqual(skippedFeatures, [
+-    {
+-      name: "member_message_deliverability.feature",
+-      tags: ["@wip"]
+-    }
+-  ]);
++  assert.deepEqual(skippedFeatures, []);
+ });
+ 
+ function browserSelectedFeatureNames() {
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index fac27cf..792fbe3 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -24,6 +24,7 @@ const {
+   kootenayClubName,
+   memberReceiptIconForLabel,
+   memberReceiptStatusForEventType,
++  openMemberClubHome,
+   openMemberMessage,
+   postmarkPayloadForStatus,
+   postPostmarkWebhook,
+@@ -507,6 +508,26 @@ test("member send flow drives the authenticated club home route and stores the n
+   );
+ });
+ 
++test("member club home opening waits on the stable member home container", async () => {
++  const page = new FakePage();
++  const expectations = [];
++  const world = worldWithPage(page);
++  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++
++  await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });
++
++  assert.deepEqual(page.actions, [["goto", "http://127.0.0.1:4444/?club_id=club-1"]]);
++  assert.ok(
++    expectations.some(
++      (expectation) =>
++        expectation[0] === "visible" &&
++        typeof expectation[1] === "string" &&
++        expectation[1].includes("#member-club-home") &&
++        expectation[1].includes('data-club-id="club-1"')
++    )
++  );
++});
++
+ test("member message opening uses the member-facing message route with club_id", async () => {
+   const page = new FakePage();
+   const world = worldWithPage(page);
+@@ -895,6 +916,37 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using
+   assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+ });
+ 
++test("reporting an opened email first reports delivery when the provider has not already done so", async () => {
++  const page = new FakePage();
++  page.rows.deliveryRecords.push({
++    attrs: {
++      "data-delivery-id": "delivery-dana",
++      "data-recipient-id": "person-dana",
++      "data-recipient-name": "Dana"
++    },
++    dataset: { deliveryId: "delivery-dana", recipientId: "person-dana", recipientName: "Dana" }
++  });
++  page.rows.memberReceipts.push({
++    attrs: { "data-recipient-name": "Dana", receiptStatus: "opened" },
++    dataset: { recipientName: "Dana" }
++  });
++  const request = new FakeRequestContext();
++  const world = worldWithPage(page);
++  world.request = request;
++  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
++  world.people = { Dana: { email: "dana@example.test", personId: "person-dana" } };
++
++  await reportRecipientEmailStatus(world, "Dana", "Trip planning night", "opened", {
++    expect: fakeExpect([])
++  });
++
++  assert.deepEqual(
++    request.posts.map((post) => redactGeneratedMessageId(post.options.data).RecordType),
++    ["Delivery", "Open"]
++  );
++  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Dana"].eventType, "opened");
++});
++
+ test("reporting a recipient email status polls the browser-visible receipt projection", async () => {
+   const page = new FakePage();
+   page.rows.deliveryRecords.push({
+diff --git a/docs/iterations/011-member-facing-message-behaviour/todo.md b/docs/iterations/011-member-facing-message-behaviour/todo.md
+index e64b6f1..324e274 100644
+--- a/docs/iterations/011-member-facing-message-behaviour/todo.md
++++ b/docs/iterations/011-member-facing-message-behaviour/todo.md
+@@ -8,5 +8,5 @@
+ - [x] 006 Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
+ - [x] 007 Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
+ - [x] 008 Add focused tests for member route authorization, message-club ownership checks, status label/icon mapping, and no operator-only fields on member pages.
+-- [ ] 009 Remove `@wip` from `member_message_deliverability.feature` when browser scenarios pass.
++- [x] 009 Remove `@wip` from `member_message_deliverability.feature` when browser scenarios pass.
+ - [ ] 010 Run `dev check`.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index 9edb6d1..98823b4 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -9,80 +9,64 @@ defmodule Memba.CucumberConfigurationTest do
+   @member_message_background_steps [
+     {"Given", "Kootenay Mountaineering Club is a club", 6},
+     {"And", "Nelson Paddling Club is a club", 7},
+-    {"And", "Alice, Bob, and Carol are people", 8},
++    {"And", "Alice, Bob, Carol, and Dana are people", 8},
+     {"And", "Pat is a person", 9},
+-    {"And", "Alice, Bob, and Carol are members of Kootenay Mountaineering Club", 10},
++    {"And", "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", 10},
+     {"And", "Pat is a member of Nelson Paddling Club", 11}
+   ]
+ 
+   @member_message_scenarios [
+-    {"A member sends a club message",
++    {"Alice sends a club message",
+      [
+        {"When",
+-        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        16},
+-       {"Then", "the message should be addressed to Alice, Bob, and Carol", 17},
+-       {"And", "the message should not be addressed to Pat", 18},
+-       {"And", "each addressed member should have a separate delivery record", 19},
+-       {"And", "each delivery should be sent through the email provider", 20}
+-     ]},
+-    {"A sent message is waiting for delivery confirmation",
+-     [
+-       {"When",
+-        "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        25},
+-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"sent\"", 26}
+-     ]},
+-    {"A delivered message is shown as delivered",
+-     [
+-       {"Given",
+-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        29},
+-       {"When", "Bob's email for \"Trip planning night\" is reported as delivered", 30},
+-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivered\"", 31}
+-     ]},
+-    {"A delayed delivery is shown as a delivery problem",
++         "Alice sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
++         16},
++       {"Then",
++        "Alice should see the message \"Trip planning night\" in Kootenay Mountaineering Club",
++        17},
++       {"And", "Alice should see the message was addressed to Alice, Bob, Carol, and Dana",
++        18},
++       {"And", "Alice should not see Pat in the addressed members", 19},
++       {"And", "Alice should see every addressed member's receipt status as \"Sending\"", 20}
++      ]},
++    {"Alice sees different receipt statuses for different members",
+      [
+        {"Given",
+         "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        34},
+-       {"When",
+-        "Bob's email for \"Trip planning night\" is reported as delayed because \"recipient server is temporarily unavailable\"",
+-        35},
+-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
+-        36}
+-     ]},
+-    {"A bounced delivery is shown as a delivery problem",
++        25},
++       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 26},
++       {"And",
++        "Carol's email for \"Trip planning night\" has been reported as bounced because \"mailbox does not exist\"",
++        27},
++       {"And", "Dana has opened the email for \"Trip planning night\"", 28},
++       {"When", "Alice views the message \"Trip planning night\"", 29},
++       {"Then", "Alice should see Bob's receipt status for \"Trip planning night\" as \"Delivered\"",
++        30},
++       {"And",
++        "Alice should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
++        31},
++       {"And", "Alice should see Dana's receipt status for \"Trip planning night\" as \"Opened\"",
++        32},
++       {"And", "Alice should see Alice's receipt status for \"Trip planning night\" as \"Sending\"",
++        33}
++      ]},
++    {"Bob sees the same shared receipt statuses",
+      [
+        {"Given",
+         "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        39},
+-       {"When",
+-        "Bob's email for \"Trip planning night\" is reported as bounced because \"mailbox does not exist\"",
++        36},
++       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 37},
++       {"And",
++        "Carol's email for \"Trip planning night\" has been reported as delayed because \"recipient server is temporarily unavailable\"",
++        38},
++       {"When", "Bob views the message \"Trip planning night\"", 39},
++       {"Then", "Bob should see Alice's receipt status for \"Trip planning night\" as \"Sending\"",
+         40},
+-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
+-        41}
+-     ]},
+-    {"A spam complaint is shown as a delivery problem",
+-     [
+-       {"Given",
+-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        44},
+-       {"When",
+-        "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
+-        45},
+-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"delivery problem\"",
+-        46}
+-     ]},
+-    {"An opened message is shown as opened",
+-     [
+-       {"Given",
+-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+-        49},
+-       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 50},
+-       {"When", "Bob opens the email for \"Trip planning night\"", 51},
+-       {"Then", "Bob's receipt status for \"Trip planning night\" should be \"opened\"", 52}
+-     ]}
++       {"And", "Bob should see Bob's receipt status for \"Trip planning night\" as \"Delivered\"",
++        41},
++       {"And", "Bob should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
++        42}
++      ]}
+   ]
+ 
+   @operator_background_steps [
+@@ -264,9 +248,9 @@ defmodule Memba.CucumberConfigurationTest do
+   @required_membership_background_steps [
+     "Kootenay Mountaineering Club is a club",
+     "Nelson Paddling Club is a club",
+-    "Alice, Bob, and Carol are people",
++    "Alice, Bob, Carol, and Dana are people",
+     "Pat is a person",
+-    "Alice, Bob, and Carol are members of Kootenay Mountaineering Club",
++    "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club",
+     "Pat is a member of Nelson Paddling Club"
+   ]
+ 
+@@ -323,10 +307,19 @@ defmodule Memba.CucumberConfigurationTest do
+     "{word} email for {string} is reported as delivered",
+     "{word} email for {string} has been reported as delivered",
+     "{word} email for {string} is reported as delayed because {string}",
++    "{word} email for {string} has been reported as delayed because {string}",
+     "{word} email for {string} is reported as bounced because {string}",
++    "{word} email for {string} has been reported as bounced because {string}",
+     "{word} email for {string} is reported as a spam complaint because {string}",
+     "{word} opens the email for {string}",
++    "{word} has opened the email for {string}",
+     "{word} receipt status for {string} should be {string}",
++    "{word} should see the message {string} in Kootenay Mountaineering Club",
++    "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
++    "{word} should not see {word} in the addressed members",
++    "{word} should see every addressed member's receipt status as {string}",
++    "{word} views the message {string}",
++    "{word} should see {word} receipt status for {string} as {string}",
+     "{word} operator deliverability status should be {string}",
+     "{word} operator deliverability reason should be {string}",
+     "operators should see {word} delivery for {string} as {string}",
+@@ -390,7 +383,8 @@ defmodule Memba.CucumberConfigurationTest do
+         assert_active_member_names(member_context, "Kootenay Mountaineering Club", [
+           "Alice",
+           "Bob",
+-          "Carol"
++          "Carol",
++          "Dana"
+         ])
+ 
+         assert_active_member_names(member_context, "Nelson Paddling Club", ["Pat"])
+diff --git a/web/test/features/step_definitions/membership_steps.exs b/web/test/features/step_definitions/membership_steps.exs
+index 3eca162..b90c6db 100644
+--- a/web/test/features/step_definitions/membership_steps.exs
++++ b/web/test/features/step_definitions/membership_steps.exs
+@@ -23,6 +23,10 @@ defmodule Memba.Cucumber.MembershipSteps do
+     create_people(context, ["Alice", "Bob", "Carol"])
+   end
+ 
++  step "Alice, Bob, Carol, and Dana are people", context do
++    create_people(context, ["Alice", "Bob", "Carol", "Dana"])
++  end
++
+   step "Alice and Bob are people", context do
+     create_people(context, ["Alice", "Bob"])
+   end
+@@ -35,6 +39,10 @@ defmodule Memba.Cucumber.MembershipSteps do
+     add_members(context, ["Alice", "Bob", "Carol"], "Kootenay Mountaineering Club")
+   end
+ 
++  step "Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", context do
++    add_members(context, ["Alice", "Bob", "Carol", "Dana"], "Kootenay Mountaineering Club")
++  end
++
+   step "Alice and Bob are members of Kootenay Mountaineering Club", context do
+     add_members(context, ["Alice", "Bob"], "Kootenay Mountaineering Club")
+   end
+diff --git a/web/test/features/step_definitions/messaging_steps.exs b/web/test/features/step_definitions/messaging_steps.exs
+index 64bb179..6c20fdd 100644
+--- a/web/test/features/step_definitions/messaging_steps.exs
++++ b/web/test/features/step_definitions/messaging_steps.exs
+@@ -3,6 +3,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+ 
+   import ExUnit.Assertions
+ 
++  alias Memba.Membership
+   alias Memba.Messaging
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.ReportDeliveryBounced
+@@ -38,16 +39,30 @@ defmodule Memba.Cucumber.MessagingSteps do
+     report_delivery_status(context, recipient_name, subject, :delivered)
+   end
+ 
++  step "{word} has opened the email for {string}", %{args: [recipient_name, subject]} = context do
++    report_delivery_status(context, recipient_name, subject, :opened)
++  end
++
+   step "{word} email for {string} is reported as delayed because {string}",
+        %{args: [recipient_name, subject, reason]} = context do
+     report_delivery_status(context, recipient_name, subject, :delayed, reason)
+   end
+ 
++  step "{word} email for {string} has been reported as delayed because {string}",
++       %{args: [recipient_name, subject, reason]} = context do
++    report_delivery_status(context, recipient_name, subject, :delayed, reason)
++  end
++
+   step "{word} email for {string} is reported as bounced because {string}",
+        %{args: [recipient_name, subject, reason]} = context do
+     report_delivery_status(context, recipient_name, subject, :bounced, reason)
+   end
+ 
++  step "{word} email for {string} has been reported as bounced because {string}",
++       %{args: [recipient_name, subject, reason]} = context do
++    report_delivery_status(context, recipient_name, subject, :bounced, reason)
++  end
++
+   step "{word} email for {string} is reported as a spam complaint because {string}",
+        %{args: [recipient_name, subject, reason]} = context do
+     report_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
+@@ -66,6 +81,71 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  step "{word} should see the message {string} in Kootenay Mountaineering Club",
++       %{args: [viewer_name, subject]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++    message = fetch_from_context!(context, :messages, subject)
++    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
++
++    assert message.club_id == club_id
++
++    context
++  end
++
++  step "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
++       %{args: [viewer_name]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++    assert_last_message_addressed_to(context, ["Alice", "Bob", "Carol", "Dana"])
++  end
++
++  step "{word} should not see {word} in the addressed members",
++       %{args: [viewer_name, person_name]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++
++    person_id = fetch_from_context!(context, :people, person_name)
++    deliveries = deliveries_for_last_message!(context)
++
++    refute person_name in Enum.map(deliveries, & &1.recipient_name)
++    refute person_id in Enum.map(deliveries, & &1.recipient_id)
++
++    context
++  end
++
++  step "{word} should see every addressed member's receipt status as {string}",
++       %{args: [viewer_name, expected_status_label]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++    expected_status = member_receipt_status_for_label(expected_status_label)
++
++    context
++    |> Map.fetch!(:addressed_member_names)
++    |> Enum.each(fn recipient_name ->
++      receipt = member_receipt_for!(context, recipient_name, context.sent_message.subject)
++      assert receipt.receipt_status == expected_status
++    end)
++
++    context
++  end
++
++  step "{word} views the message {string}", %{args: [viewer_name, subject]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++    message = fetch_from_context!(context, :messages, subject)
++    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
++
++    assert message.club_id == club_id
++
++    Map.put(context, :viewed_message_subject, subject)
++  end
++
++  step "{word} should see {word} receipt status for {string} as {string}",
++       %{args: [viewer_name, recipient_name, subject, expected_status_label]} = context do
++    assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
++
++    receipt = member_receipt_for!(context, recipient_name, subject)
++    assert receipt.receipt_status == member_receipt_status_for_label(expected_status_label)
++
++    context
++  end
++
+   step "{word} operator deliverability status should be {string}",
+        %{args: [recipient_name, expected_status]} = context do
+     deliverability = operator_deliverability_for!(context, recipient_name)
+@@ -106,19 +186,7 @@ defmodule Memba.Cucumber.MessagingSteps do
+   end
+ 
+   step "the message should be addressed to Alice, Bob, and Carol", context do
+-    expected_names = ["Alice", "Bob", "Carol"]
+-    deliveries = deliveries_for_last_message!(context)
+-
+-    assert Enum.map(deliveries, & &1.recipient_name) == expected_names
+-
+-    expected_recipient_ids =
+-      Enum.map(expected_names, &fetch_from_context!(context, :people, &1))
+-
+-    assert Enum.map(deliveries, & &1.recipient_id) == expected_recipient_ids
+-
+-    context
+-    |> Map.put(:addressed_member_names, expected_names)
+-    |> Map.put(:addressed_member_ids, expected_recipient_ids)
++    assert_last_message_addressed_to(context, ["Alice", "Bob", "Carol"])
+   end
+ 
+   step "the message should not be addressed to {word}", %{args: [person_name]} = context do
+@@ -215,6 +283,17 @@ defmodule Memba.Cucumber.MessagingSteps do
+     message = fetch_from_context!(context, :messages, subject)
+     delivery = delivery_for!(context, recipient_name, subject)
+ 
++    if status == :opened && delivery.status == "sent" do
++      assert :ok =
++               App.dispatch(
++                 %ReportDeliveryDelivered{
++                   message_id: message.message_id,
++                   delivery_id: delivery.delivery_id
++                 },
++                 consistency: :strong
++               )
++    end
++
+     command =
+       case status do
+         :delivered ->
+@@ -256,6 +335,21 @@ defmodule Memba.Cucumber.MessagingSteps do
+     context
+   end
+ 
++  defp assert_last_message_addressed_to(context, expected_names) do
++    deliveries = deliveries_for_last_message!(context)
++
++    assert Enum.map(deliveries, & &1.recipient_name) == expected_names
++
++    expected_recipient_ids =
++      Enum.map(expected_names, &fetch_from_context!(context, :people, &1))
++
++    assert Enum.map(deliveries, & &1.recipient_id) == expected_recipient_ids
++
++    context
++    |> Map.put(:addressed_member_names, expected_names)
++    |> Map.put(:addressed_member_ids, expected_recipient_ids)
++  end
++
+   defp member_receipt_for!(context, recipient_name, subject) do
+     recipient_name = normalize_person_name(recipient_name)
+     message = fetch_from_context!(context, :messages, subject)
+@@ -300,6 +394,19 @@ defmodule Memba.Cucumber.MessagingSteps do
+     |> Messaging.list_recipient_deliveries()
+   end
+ 
++  defp assert_active_member!(context, person_name, club_name) do
++    club_id = fetch_from_context!(context, :clubs, club_name)
++    person_id = fetch_from_context!(context, :people, normalize_person_name(person_name))
++
++    assert Membership.active_member_of_club?(club_id, person_id)
++  end
++
++  defp member_receipt_status_for_label("Sending"), do: "sent"
++  defp member_receipt_status_for_label("Delivered"), do: "delivered"
++  defp member_receipt_status_for_label("Delivery problem"), do: "delivery problem"
++  defp member_receipt_status_for_label("Opened"), do: "opened"
++  defp member_receipt_status_for_label(status), do: status
++
+   defp fetch_from_context!(context, collection_key, item_key) do
+     context
+     |> Map.get(collection_key, %{})
