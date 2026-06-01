@@ -1,0 +1,51 @@
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/todo.md b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+index 51addc3..0420e3c 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/todo.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+@@ -8,6 +8,6 @@
+ - [x] 006 Render the dashboard toward `dashboard.jsx`:
+ - [x] 007 Design and render empty states deliberately:
+ - [x] 008 Preserve or deliberately update stable selectors used by browser acceptance:
+-- [ ] 009 Ensure the club home has no inline compose form; remove any remaining inline compose markup/handlers so compose is only reached through the CTA link to `/messages/new?club_id=<club_id>`.
++- [x] 009 Ensure the club home has no inline compose form; remove any remaining inline compose markup/handlers so compose is only reached through the CTA link to `/messages/new?club_id=<club_id>`.
+ - [ ] 010 Add focused LiveView/Phoenix tests for:
+ - [ ] 011 Run existing browser Cucumber for member-message deliverability and `dev check`.
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 87ed720..ae4ec5a 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -209,6 +209,34 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard reaches compose through links instead of inline compose controls", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-dashboard-cta #member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']",
++             "Send club message"
++           )
++
++    refute has_element?(view, "form#member-message-form")
++    refute has_element?(view, "form#member-message-compose-form")
++    refute has_element?(view, "[phx-submit='send_message']")
++    refute has_element?(view, "select#member-message-sender-select")
++    refute has_element?(view, "input#member-message-subject-input")
++    refute has_element?(view, "textarea#member-message-body-input")
++    refute has_element?(view, "button#member-message-send-button")
++  end
++
+   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
+     alice =
+       create_active_member(
