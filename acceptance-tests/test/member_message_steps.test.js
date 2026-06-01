@@ -24,6 +24,7 @@ const {
   kootenayClubName,
   memberReceiptIconForLabel,
   memberReceiptStatusForEventType,
+  openMemberClubHome,
   openMemberMessage,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
@@ -507,6 +508,26 @@ test("member send flow drives the authenticated club home route and stores the n
   );
 });
 
+test("member club home opening waits on the stable member home container", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+
+  await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });
+
+  assert.deepEqual(page.actions, [["goto", "http://127.0.0.1:4444/?club_id=club-1"]]);
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "visible" &&
+        typeof expectation[1] === "string" &&
+        expectation[1].includes("#member-club-home") &&
+        expectation[1].includes('data-club-id="club-1"')
+    )
+  );
+});
+
 test("member message opening uses the member-facing message route with club_id", async () => {
   const page = new FakePage();
   const world = worldWithPage(page);
@@ -893,6 +914,37 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using 
   });
   assert.equal(world.reportedDeliveryStatuses["Trip planning night:Bob"].eventType, "delivered");
   assert.ok(expectations.some((expectation) => expectation[0] === "visible"));
+});
+
+test("reporting an opened email first reports delivery when the provider has not already done so", async () => {
+  const page = new FakePage();
+  page.rows.deliveryRecords.push({
+    attrs: {
+      "data-delivery-id": "delivery-dana",
+      "data-recipient-id": "person-dana",
+      "data-recipient-name": "Dana"
+    },
+    dataset: { deliveryId: "delivery-dana", recipientId: "person-dana", recipientName: "Dana" }
+  });
+  page.rows.memberReceipts.push({
+    attrs: { "data-recipient-name": "Dana", receiptStatus: "opened" },
+    dataset: { recipientName: "Dana" }
+  });
+  const request = new FakeRequestContext();
+  const world = worldWithPage(page);
+  world.request = request;
+  world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
+  world.people = { Dana: { email: "dana@example.test", personId: "person-dana" } };
+
+  await reportRecipientEmailStatus(world, "Dana", "Trip planning night", "opened", {
+    expect: fakeExpect([])
+  });
+
+  assert.deepEqual(
+    request.posts.map((post) => redactGeneratedMessageId(post.options.data).RecordType),
+    ["Delivery", "Open"]
+  );
+  assert.equal(world.reportedDeliveryStatuses["Trip planning night:Dana"].eventType, "opened");
 });
 
 test("reporting a recipient email status polls the browser-visible receipt projection", async () => {

@@ -1,4 +1,3 @@
-@wip
 Feature: Member message deliverability
   Club members need confidence that important club messages are reaching other members.
   Memba shows simple receipt-style feedback to regular members.

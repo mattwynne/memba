@@ -284,8 +284,8 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect, 
   );
   await waitForProjectedVisible(
     world,
-    world.page.getByRole("heading", { name: clubName }),
-    `member club home heading for ${clubName}`,
+    world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`),
+    `member club home for ${clubName}`,
     { expect, timeoutMs }
   );
 }
@@ -1115,7 +1115,27 @@ async function reportRecipientEmailStatus(
 ) {
   ensureState(world);
 
+  const key = `${subject}:${recipientName}`;
   const delivery = await deliveryForRecipient(world, recipientName, subject, { expect });
+
+  if (eventType === "opened" && !hasSuccessfulDeliveryReport(world, key)) {
+    const deliveredPayload = postmarkPayloadForStatus({
+      deliveryId: delivery.deliveryId,
+      eventType: "delivered",
+      messageId: delivery.messageId,
+      recipientEmail: delivery.recipientEmail
+    });
+
+    await postPostmarkWebhook(world, deliveredPayload);
+    await waitForProjectedReceiptStatus(
+      world,
+      recipientName,
+      subject,
+      memberReceiptStatusForEventType("delivered"),
+      { expect }
+    );
+  }
+
   const payload = postmarkPayloadForStatus({
     deliveryId: delivery.deliveryId,
     eventType,
@@ -1133,7 +1153,6 @@ async function reportRecipientEmailStatus(
     { expect }
   );
 
-  const key = `${subject}:${recipientName}`;
   world.reportedDeliveryStatuses[key] = {
     eventType,
     payload,
@@ -1143,6 +1162,12 @@ async function reportRecipientEmailStatus(
   };
 
   return world;
+}
+
+function hasSuccessfulDeliveryReport(world, key) {
+  const report = world.reportedDeliveryStatuses[key];
+
+  return report && ["delivered", "opened"].includes(report.eventType);
 }
 
 async function deliveryForRecipient(
