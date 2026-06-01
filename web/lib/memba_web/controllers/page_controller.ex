@@ -35,51 +35,6 @@ defmodule MembaWeb.PageController do
     |> render(:home)
   end
 
-  def send_message(%{assigns: %{current_identity: identity}} = conn, %{
-        "club_id" => club_id,
-        "message" => message_params
-      })
-      when not is_nil(identity) do
-    selected_club = selected_club(conn, club_id)
-    sender_id = Map.get(message_params, "sender_id")
-
-    cond do
-      is_nil(selected_club) ->
-        not_found(conn)
-
-      not Membership.active_member_of_club?(club_id, sender_id) ->
-        conn
-        |> put_flash(:error, "Choose an active member as the sender.")
-        |> render_club_home(club_id, message_params)
-
-      true ->
-        attrs =
-          message_params
-          |> Map.take(["sender_id", "subject", "body"])
-          |> Map.merge(%{
-            "message_id" => Ecto.UUID.generate(),
-            "club_id" => club_id
-          })
-
-        case Messaging.send_club_message(attrs, consistency: :strong) do
-          :ok ->
-            conn
-            |> put_flash(:info, "Message sent")
-            |> redirect(to: ~p"/?#{[club_id: club_id]}")
-
-          {:ok, _result} ->
-            conn
-            |> put_flash(:info, "Message sent")
-            |> redirect(to: ~p"/?#{[club_id: club_id]}")
-
-          {:error, reason} ->
-            conn
-            |> put_flash(:error, "Could not send message: #{format_reason(reason)}")
-            |> render_club_home(club_id, message_params)
-        end
-    end
-  end
-
   def about(conn, _params) do
     conn
     |> assign(:page_title, "About")
@@ -98,11 +53,7 @@ defmodule MembaWeb.PageController do
     |> render(:privacy)
   end
 
-  defp render_club_home(
-         conn,
-         club_id,
-         message_params \\ %{"sender_id" => "", "subject" => "", "body" => ""}
-       ) do
+  defp render_club_home(conn, club_id) do
     case selected_club(conn, club_id) do
       nil ->
         not_found(conn)
@@ -119,7 +70,6 @@ defmodule MembaWeb.PageController do
           |> Enum.reverse()
 
         current_member = current_member_for_identity(members, conn.assigns.current_identity)
-        message_params = put_default_sender(message_params, current_member)
 
         conn
         |> assign(:page_title, selected_club.name)
@@ -128,9 +78,7 @@ defmodule MembaWeb.PageController do
         |> assign(:active_member_count, Enum.count(members))
         |> assign(:current_member, current_member)
         |> assign(:member_names_by_id, Map.new(members, &{&1.id, &1.name}))
-        |> assign(:member_options, Enum.map(members, &{&1.name, &1.id}))
         |> assign(:messages, messages)
-        |> assign(:message_form, Phoenix.Component.to_form(message_params, as: :message))
         |> render(:club)
     end
   end
@@ -145,15 +93,6 @@ defmodule MembaWeb.PageController do
     identity_email = Accounts.normalize_email(identity.email)
 
     Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
-  end
-
-  defp put_default_sender(message_params, nil), do: message_params
-
-  defp put_default_sender(message_params, current_member) do
-    case Map.get(message_params, "sender_id") do
-      value when value in [nil, ""] -> Map.put(message_params, "sender_id", current_member.id)
-      _value -> message_params
-    end
   end
 
   defp with_member_initials(member) do
@@ -179,6 +118,4 @@ defmodule MembaWeb.PageController do
     |> put_view(html: MembaWeb.ErrorHTML)
     |> render(:"404")
   end
-
-  defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 end

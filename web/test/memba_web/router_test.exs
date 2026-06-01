@@ -61,6 +61,10 @@ defmodule MembaWeb.RouterTest do
   end
 
   describe "member message routes" do
+    test "does not route the legacy inline club-home send endpoint" do
+      assert :error = Phoenix.Router.route_info(MembaWeb.Router, "POST", "/", "localhost")
+    end
+
     test "routes /messages/new through the required club member pipeline to the compose LiveView" do
       assert %{
                path_params: %{},
