@@ -107,6 +107,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-message-#{message.message_id} [data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
            )
 
+    refute has_element?(view, "#member-message-list-empty")
+
     assert has_element?(
              view,
              "#member-message-#{message.message_id} [data-testid='message-sender-initials']",
@@ -137,6 +139,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
+    assert has_element?(view, "#active-members-card[data-active-members-state='active-members']")
+    refute has_element?(view, "#active-members-empty-state", "You're the first one here")
 
     assert has_element?(
              view,
@@ -164,6 +168,46 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#member-message-empty-send-link[href='/messages/new?club_id=#{alice.club_id}']",
              "Send the first one"
+           )
+  end
+
+  test "dashboard renders first-member active-member copy only when current member is alone",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(
+             view,
+             "#active-members-card[data-active-member-count='1'][data-active-members-state='first-member']"
+           )
+
+    assert has_element?(view, "#active-members-empty-state", "You're the first one here")
+
+    assert has_element?(
+             view,
+             "#active-members-empty-state",
+             "As members join and renew, you'll see them listed here."
+           )
+
+    assert has_element?(
+             view,
+             "#active-members-empty-avatar #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
+             "AA"
+           )
+
+    refute has_element?(
+             view,
+             "#active-members-card-copy",
+             "Everyone with a current membership. They'll all receive your messages."
            )
   end
 

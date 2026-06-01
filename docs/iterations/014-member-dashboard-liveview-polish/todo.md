@@ -6,7 +6,7 @@
 - [x] 004 Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
 - [x] 005 Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
 - [x] 006 Render the dashboard toward `dashboard.jsx`:
-- [ ] 007 Design and render empty states deliberately:
+- [x] 007 Design and render empty states deliberately:
 - [ ] 008 Preserve or deliberately update stable selectors used by browser acceptance:
 - [ ] 009 Ensure the club home has no inline compose form; remove any remaining inline compose markup/handlers so compose is only reached through the CTA link to `/messages/new?club_id=<club_id>`.
 - [ ] 010 Add focused LiveView/Phoenix tests for:
