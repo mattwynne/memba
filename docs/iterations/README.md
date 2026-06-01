@@ -23,7 +23,7 @@ green than before.
 | 011 | 2026-06-01 | merged | Member-facing message behaviour | [plan](011-member-facing-message-behaviour/plan.md) |
 | 012 | 2026-06-01 | merged | Member receipt detail LiveView polish | [plan](012-member-receipt-detail-liveview-polish/plan.md) |
 | 013 | 2026-06-01 | merged | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
-| 014 | 2026-06-01 | implementing | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
+| 014 | 2026-06-01 | merged | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
 
 Status notes:
 

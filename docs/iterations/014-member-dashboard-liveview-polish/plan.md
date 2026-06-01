@@ -1,7 +1,7 @@
 # Member dashboard LiveView polish
 
 Date: 2026-06-01
-Status: implementing
+Status: merged
 
 ## Goal
 
