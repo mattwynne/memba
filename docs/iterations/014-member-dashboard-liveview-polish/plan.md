@@ -7,7 +7,7 @@ Status: ready
 
 Finish the remaining member-facing wireframe work by converting the club home/dashboard to a LiveView and polishing it toward the dashboard designs.
 
-After this iteration, the signed-in club home at `GET /?club_id=<club_id>` is a LiveView member dashboard with a compact “Got something to share?” CTA card, polished recent-message rows with receipt glances, designed empty states, and a compact active-members card. This also records the product architecture decision that member application pages should be LiveViews unless they are genuinely static pages.
+After this iteration, the signed-in club home at `GET /?club_id=<club_id>` is a LiveView member dashboard with a compact “Got something to share?” CTA card, polished recent-message rows with receipt glances, designed empty states, and a compact active-members card. This applies ADR 0015's product architecture decision that member application pages should be LiveViews unless they are genuinely static pages.
 
 ## Background / Context
 
@@ -44,7 +44,7 @@ Relevant current implementation:
   - signed-in users must be active members of the selected club to see the member dashboard;
   - signed-in non-members/inactive members receive existing forbidden behaviour;
   - missing/unknown clubs receive existing not-found behaviour.
-- Add or update an ADR recording the product architecture decision: member application pages are LiveViews by default; static marketing/legal pages may remain controller/static pages.
+- Follow ADR 0015, which records the product architecture decision: member application pages are LiveViews by default; static marketing/legal pages may remain controller/static pages.
 - Polish the member dashboard toward `dashboard.jsx`:
   - club/member chrome remains via `<Layouts.club_site>`;
   - greeting and lede use the compact dashboard tone;
@@ -89,7 +89,7 @@ No Gherkin changes are planned. Existing scenarios in `acceptance-tests/features
 ## Acceptance Criteria
 
 - Signed-in selected-club home at `GET /?club_id=<club_id>` is implemented as a LiveView.
-- An ADR records that member application pages should be LiveViews by default, while static marketing/legal pages may remain controller/static pages.
+- ADR 0015 is followed: member application pages should be LiveViews by default, while static marketing/legal pages may remain controller/static pages.
 - Existing auth/failure behaviours for selected-club member home are preserved.
 - The dashboard shows the club name, current member greeting, and concise lede.
 - The dashboard shows a “Got something to share?” CTA card linking to `/messages/new?club_id=<club_id>`.
@@ -111,17 +111,13 @@ None known.
 Decisions made during planning:
 
 - Club home/dashboard should be a LiveView.
-- The architecture decision should be recorded in an ADR so future plans and implementers stop re-litigating controller vs LiveView for member app pages.
+- ADR 0015 records the architecture decision so future plans and implementers stop re-litigating controller vs LiveView for member app pages.
 - Dashboard polish should finish the remaining wireframe gap without expanding into compose or receipt-detail work.
 
 ## Implementation Plan
 
 1. Inspect current `PageController.home/2`, `club.html.heex`, `UserAuth` club-member plugs, route tests, and browser helpers that rely on club-home selectors.
-2. Add an ADR, likely `docs/adr/0015-use-liveview-for-member-application-pages.md`, recording:
-   - context: member surfaces need interaction and consistent stateful UX;
-   - decision: member application pages are LiveViews by default;
-   - exceptions: static marketing/legal pages may remain controller/static;
-   - consequences: new member pages should not default to controller templates.
+2. Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
 3. Introduce a member dashboard LiveView, for example `MembaWeb.MemberDashboardLive`, routed for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`.
 4. Move selected-club dashboard data loading into the LiveView mount path or a small query/presentation helper:
    - selected club;
