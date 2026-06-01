@@ -1,0 +1,302 @@
+diff --git a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+index d4de068..647fbb6 100644
+--- a/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
++++ b/docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+ - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+ - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+-- [ ] 005 Build a receipt presentation model for the LiveView:
++- [x] 005 Build a receipt presentation model for the LiveView:
+ - [ ] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+ - [ ] 007 Add LiveView state for collapsed groups:
+ - [ ] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+diff --git a/web/lib/memba_web/member_message_detail.ex b/web/lib/memba_web/member_message_detail.ex
+index c642b6e..055f7c1 100644
+--- a/web/lib/memba_web/member_message_detail.ex
++++ b/web/lib/memba_web/member_message_detail.ex
+@@ -12,8 +12,6 @@ defmodule MembaWeb.MemberMessageDetail do
+   alias Memba.Messaging
+   alias MembaWeb.MemberReceiptPresentation
+ 
+-  @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
+-
+   @doc """
+   Load the selected club message detail for a signed-in member.
+ 
+@@ -64,10 +62,10 @@ defmodule MembaWeb.MemberMessageDetail do
+   end
+ 
+   defp detail_assigns(selected_club, message) do
+-    receipts =
++    receipt_model =
+       message.message_id
+       |> Messaging.list_member_receipts()
+-      |> Enum.map(&MemberReceiptPresentation.present_receipt/1)
++      |> MemberReceiptPresentation.present_receipts()
+ 
+     sender = Membership.get_person(message.sender_id)
+ 
+@@ -76,32 +74,13 @@ defmodule MembaWeb.MemberMessageDetail do
+       selected_club: selected_club,
+       message: message,
+       sender_name: sender_name(sender),
+-      member_receipts: receipts,
+-      member_receipt_count: Enum.count(receipts),
+-      member_receipt_groups: member_receipt_groups(receipts)
++      member_receipts: receipt_model.receipts,
++      member_receipt_count: receipt_model.total_count,
++      member_receipt_summary: receipt_model.summary,
++      member_receipt_groups: receipt_model.groups
+     }
+   end
+ 
+   defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
+   defp sender_name(_sender), do: "Club member"
+-
+-  defp member_receipt_groups(receipts) do
+-    receipts_by_status = Enum.group_by(receipts, & &1.status)
+-    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
+-
+-    (@member_receipt_status_order ++ Enum.sort(extra_statuses))
+-    |> Enum.map(fn status ->
+-      status_receipts = Map.get(receipts_by_status, status, [])
+-      presentation = MemberReceiptPresentation.present_status(status)
+-
+-      %{
+-        status: status,
+-        status_label: presentation.label,
+-        status_icon: presentation.icon,
+-        count: Enum.count(status_receipts),
+-        receipts: status_receipts
+-      }
+-    end)
+-    |> Enum.reject(&(&1.count == 0))
+-  end
+ end
+diff --git a/web/lib/memba_web/member_receipt_presentation.ex b/web/lib/memba_web/member_receipt_presentation.ex
+index 784ebe4..8c85d40 100644
+--- a/web/lib/memba_web/member_receipt_presentation.ex
++++ b/web/lib/memba_web/member_receipt_presentation.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberReceiptPresentation do
+   """
+ 
+   @fallback_status "sent"
++  @status_order ["opened", "delivered", "sent", "delivery problem"]
+ 
+   @presentations %{
+     "sent" => %{label: "Sending", icon: "hero-clock"},
+@@ -16,6 +17,13 @@ defmodule MembaWeb.MemberReceiptPresentation do
+     "opened" => %{label: "Opened", icon: "hero-envelope-open"}
+   }
+ 
++  @descriptions %{
++    "opened" => "read it",
++    "delivered" => "arrived, not opened yet",
++    "sent" => "on its way",
++    "delivery problem" => "we couldn't reach them"
++  }
++
+   @doc """
+   Returns the member-facing label and icon for an internal receipt status.
+ 
+@@ -45,6 +53,39 @@ defmodule MembaWeb.MemberReceiptPresentation do
+     }
+   end
+ 
++  @doc """
++  Builds the LiveView receipt presentation model for a message.
++
++  The summary always includes the four member-facing statuses in the design
++  order, even when a status has no receipts. Groups are built from the same
++  status models but only include statuses with at least one receipt.
++  """
++  def present_receipts(receipts) when is_list(receipts) do
++    presented_receipts = Enum.map(receipts, &present_receipt/1)
++    total_count = Enum.count(presented_receipts)
++    receipts_by_status = Enum.group_by(presented_receipts, & &1.status)
++
++    summary =
++      Enum.map(@status_order, fn status ->
++        status_receipts = Map.get(receipts_by_status, status, [])
++        status_model(status, status_receipts, total_count)
++      end)
++
++    groups =
++      summary
++      |> Enum.filter(&(&1.count > 0))
++      |> Enum.map(fn status_model ->
++        Map.put(status_model, :receipts, Map.fetch!(receipts_by_status, status_model.status))
++      end)
++
++    %{
++      receipts: presented_receipts,
++      total_count: total_count,
++      summary: summary,
++      groups: groups
++    }
++  end
++
+   defp normalize_status(status) when is_binary(status) do
+     if status == "", do: @fallback_status, else: status
+   end
+@@ -63,4 +104,21 @@ defmodule MembaWeb.MemberReceiptPresentation do
+       words -> words |> Enum.join(" ") |> String.capitalize()
+     end
+   end
++
++  defp status_model(status, receipts, total_count) do
++    presentation = present_status(status)
++    count = Enum.count(receipts)
++
++    %{
++      status: status,
++      status_label: presentation.label,
++      status_icon: presentation.icon,
++      description: Map.fetch!(@descriptions, status),
++      count: count,
++      percentage: percentage(count, total_count)
++    }
++  end
++
++  defp percentage(_count, 0), do: 0
++  defp percentage(count, total_count), do: round(count * 100 / total_count)
+ end
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index 2034817..e0a4577 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -52,6 +52,13 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+     assert assigns.sender_name == "Alice Adams"
+     assert assigns.member_receipt_count == 1
+ 
++    assert Enum.map(assigns.member_receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
++             {"opened", 0, 0},
++             {"delivered", 1, 100},
++             {"sent", 0, 0},
++             {"delivery problem", 0, 0}
++           ]
++
+     assert [%{status: "delivered", status_label: "Delivered", count: 1}] =
+              assigns.member_receipt_groups
+   end
+diff --git a/web/test/memba_web/member_receipt_presentation_test.exs b/web/test/memba_web/member_receipt_presentation_test.exs
+index 3207b1b..c3e7a79 100644
+--- a/web/test/memba_web/member_receipt_presentation_test.exs
++++ b/web/test/memba_web/member_receipt_presentation_test.exs
+@@ -62,4 +62,115 @@ defmodule MembaWeb.MemberReceiptPresentationTest do
+              }
+     end
+   end
++
++  describe "present_receipts/1" do
++    test "builds ordered summary and non-empty groups with descriptions, counts, and percentages" do
++      receipts = [
++        %{recipient_id: "sent-1", recipient_name: "Sending Member", receipt_status: "sent"},
++        %{
++          recipient_id: "delivered-1",
++          recipient_name: "Delivered Member One",
++          receipt_status: "delivered"
++        },
++        %{recipient_id: "opened-1", recipient_name: "Opened Member", receipt_status: "opened"},
++        %{
++          recipient_id: "delivered-2",
++          recipient_name: "Delivered Member Two",
++          receipt_status: "delivered"
++        }
++      ]
++
++      assert %{
++               total_count: 4,
++               receipts: presented_receipts,
++               summary: summary,
++               groups: groups
++             } = MemberReceiptPresentation.present_receipts(receipts)
++
++      assert Enum.map(presented_receipts, & &1.status) == [
++               "sent",
++               "delivered",
++               "opened",
++               "delivered"
++             ]
++
++      assert summary == [
++               %{
++                 status: "opened",
++                 status_label: "Opened",
++                 status_icon: "hero-envelope-open",
++                 description: "read it",
++                 count: 1,
++                 percentage: 25
++               },
++               %{
++                 status: "delivered",
++                 status_label: "Delivered",
++                 status_icon: "hero-check-circle",
++                 description: "arrived, not opened yet",
++                 count: 2,
++                 percentage: 50
++               },
++               %{
++                 status: "sent",
++                 status_label: "Sending",
++                 status_icon: "hero-clock",
++                 description: "on its way",
++                 count: 1,
++                 percentage: 25
++               },
++               %{
++                 status: "delivery problem",
++                 status_label: "Delivery problem",
++                 status_icon: "hero-exclamation-triangle",
++                 description: "we couldn't reach them",
++                 count: 0,
++                 percentage: 0
++               }
++             ]
++
++      assert Enum.map(groups, & &1.status) == ["opened", "delivered", "sent"]
++      refute Enum.any?(groups, &(&1.status == "delivery problem"))
++
++      assert [
++               %{recipient_name: "Opened Member", status_label: "Opened"}
++             ] = Enum.find(groups, &(&1.status == "opened")).receipts
++
++      assert [
++               %{recipient_name: "Delivered Member One", status_label: "Delivered"},
++               %{recipient_name: "Delivered Member Two", status_label: "Delivered"}
++             ] = Enum.find(groups, &(&1.status == "delivered")).receipts
++    end
++
++    test "rounds percentages independently from the addressed receipt total" do
++      receipts = [
++        %{recipient_id: "opened-1", recipient_name: "Opened Member", receipt_status: "opened"},
++        %{recipient_id: "sent-1", recipient_name: "Sending Member One", receipt_status: "sent"},
++        %{recipient_id: "sent-2", recipient_name: "Sending Member Two", receipt_status: "sent"}
++      ]
++
++      model = MemberReceiptPresentation.present_receipts(receipts)
++
++      assert Enum.map(model.summary, &{&1.status, &1.percentage}) == [
++               {"opened", 33},
++               {"delivered", 0},
++               {"sent", 67},
++               {"delivery problem", 0}
++             ]
++    end
++
++    test "shows zero counts and percentages for every summary status when there are no receipts" do
++      assert %{
++               total_count: 0,
++               receipts: [],
++               groups: [],
++               summary: [
++                 %{status: "opened", count: 0, percentage: 0},
++                 %{status: "delivered", count: 0, percentage: 0},
++                 %{status: "sent", count: 0, percentage: 0},
++                 %{status: "delivery problem", count: 0, percentage: 0}
++               ]
++             } = MemberReceiptPresentation.present_receipts([])
++    end
++  end
+ end
