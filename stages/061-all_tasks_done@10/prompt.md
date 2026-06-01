@@ -1,0 +1,2494 @@
+Goal: Implement a validated iteration plan and leave the codebase passing dev check
+Run ID: 01KT111H679XB3J3BVBZC150ZS
+Pipeline progress: 59 of 30 stages completed
+
+## Stage: read_plan
+- Status: succeeded
+- Handler: command
+- Script: `PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+if [ ! -f "$PLAN_PATH" ]; then
+  echo "Iteration plan not found: $PLAN_PATH" >&2
+  exit 1
+fi
+printf 'PLAN_PATH=%s\n\n' "$PLAN_PATH"
+line_count=0
+while IFS= read -r line && [ "$line_count" -lt 320 ]; do
+  printf '%s\n' "$line"
+  line_count=$((line_count + 1))
+done < "$PLAN_PATH"`
+- Output:
+  ```
+  (138 lines omitted)
+     - all visible groups collapsed initially;
+     - `handle_event("toggle_receipt_group", ...)` toggles a status key;
+     - avoid custom JavaScript unless needed.
+  8. Preserve the existing stable DOM/test attributes for recipient rows.
+  9. Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  10. Add focused LiveView/ConnCase tests covering:
+     - route and authorization behaviours preserved;
+     - summary counts and percentages for mixed statuses;
+     - all visible groups collapsed by default;
+     - expand/collapse reveals and hides rows;
+     - zero-count statuses appear in the summary only, not as empty expandable groups;
+     - no operator-only fields appear on the member page.
+  11. Run the existing member-message browser Cucumber scenarios and `dev check`.
+  
+  ## Open Technical Decisions
+  
+  - Exact LiveView module name and whether small helper functions live in the LiveView or a presentation module. Prefer simple module boundaries that keep receipt calculations testable without over-engineering.
+  
+  Resolved for this plan:
+  
+  - Zero-count statuses appear in the “Who got this” summary only, with count `0` and `0%`. They do not appear as empty collapsible group headers in the recipient list.
+  - Existing Gherkin scenarios remain unchanged. Browser acceptance support may expand the relevant visible receipt group before asserting addressed recipient rows, while LiveView tests cover the collapse/expand UI behaviour directly.
+  - Percentages are displayed as whole numbers by rounding each status independently from addressed-recipient totals; displayed status percentages are not force-adjusted to sum to exactly 100.
+  
+  ## New Capability
+  
+  Members can scan a message's reach using a summary bar with counts and percentages, then expand specific receipt groups to see which members are in each status without leaving the page.
+  
+  ## Validation Plan
+  
+  - Run `dev check`.
+  - Run targeted LiveView/Phoenix tests for the new member message detail LiveView.
+  - Confirm existing `acceptance-tests/features/member_message_deliverability.feature` passes unchanged through the browser runner; if row assertions fail because groups are collapsed, fix the browser support to expand the relevant group rather than changing the feature language.
+  - Manual demo:
+    - sign in as Alice;
+    - open a message with mixed receipt statuses;
+    - confirm the summary bar shows all four statuses, including any zero-count statuses;
+    - confirm zero-count statuses do not appear as empty groups in the recipient list;
+    - confirm non-empty group counts, percentages, descriptions, and default collapsed state;
+    - expand and collapse each non-empty group;
+    - confirm recipient rows appear only when their group is expanded;
+    - confirm no operator-only details are visible;
+    - confirm `/admin/*` diagnostics still show operator detail for staff.
+  
+  ## Risks / Follow-ups
+  
+  - LiveView conversion may require carefully preserving controller-era auth and error semantics.
+  - Browser acceptance support may need a small update to expand the relevant group before asserting recipient rows; keep this in support code and leave the feature language unchanged.
+  - Percent rounding can produce totals that do not add exactly to 100%; this plan uses deterministic independent status rounding and accepts non-100 displayed totals.
+  - This does not address dashboard polish or separate compose screens; those remain good future iterations.
+  ```
+
+## Stage: wip_gate
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+PATH="$PWD/bin:$PATH" dev iteration check-predecessors "$PLAN_PATH"
+PATH="$PWD/bin:$PATH" dev iteration check-clear "$PLAN_PATH" --allow-same-iteration`
+- Output:
+  ```
+  (44 lines omitted)
+  
+  Elixir 1.18.4 (compiled with Erlang/OTP 27)
+  Earlier iterations are merged.
+  • Validating lock
+  ✓ Validating lock in 20.2ms
+  • Configuring shell
+  • Configuring cachix
+  ✓ Configuring cachix in 7.25ms
+  • Evaluating shell
+  • Building postgresql.conf
+  ✓ Building postgresql.conf in 54.2ms
+  • Building setup-postgres
+  ✓ Building setup-postgres in 57.3ms
+  • Building start-postgres
+  ✓ Building start-postgres in 54.2ms
+  • Building devenv-processes-postgres
+  ✓ Building devenv-processes-postgres in 55.6ms
+  • Building devenv-profile
+  structuredAttrs is enabled
+  created 2052 symlinks in user environment
+  ✓ Building devenv-profile in 344ms
+  • Building tasks.json
+  ✓ Building tasks.json in 59.0ms
+  • Building devenv-shell
+  Running phase: buildPhase
+  ✓ Building devenv-shell in 249ms
+  • Building devenv-shell-env
+  ✓ Building devenv-shell-env in 419ms
+  ✓ Evaluating shell in 7.76s
+  ✓ Configuring shell in 7.81s
+  • Loading tasks
+  • Evaluating devenv.config.task.config
+  ✓ Evaluating devenv.config.task.config in 2.92ms
+  ✓ Loading tasks in 3.53ms
+  • Running tasks
+  • Running devenv:files:cleanup
+  ✓ Running devenv:files:cleanup in 20.4ms
+  • Running devenv:enterShell
+  ✓ Running devenv:enterShell in 11.5ms
+  • Running devenv:enterTest
+  ✓ Running devenv:enterTest in 103µs (no command)
+  ✓ Running tasks in 32.8ms
+  ✨ devenv 2.1.0 is out of date. Please update to 2.1.2: https://devenv.sh/getting-started/#installation
+  Memba dev environment
+  Web app: web/
+  Acceptance tests: acceptance-tests/
+  Erlang/OTP 27 [erts-15.2.7.8] [source] [64-bit] [smp:8:1] [ds:8:1:10] [async-threads:1] [jit:ns]
+  
+  Elixir 1.18.4 (compiled with Erlang/OTP 27)
+  Implementation WIP slot is clear.
+  ```
+
+## Stage: preflight_sandbox
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+for tool in python3; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Missing required bare sandbox tool: $tool" >&2
+    echo "The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH." >&2
+    exit 1
+  fi
+done
+if [ ! -x bin/dev ]; then
+  echo "Missing or non-executable bin/dev" >&2
+  exit 1
+fi
+rm -rf .fabro/tmp
+PATH="$PWD/bin:$PATH" dev sandbox-check`
+- Output:
+  ```
+  (214 lines omitted)
+  ==> commanded_eventstore_adapter
+  Compiling 2 files (.ex)
+  Generated commanded_eventstore_adapter app
+  ==> commanded_ecto_projections
+  Compiling 1 file (.ex)
+  Generated commanded_ecto_projections app
+  ==> tailwind
+  Compiling 3 files (.ex)
+  Generated tailwind app
+  ==> elixir_make
+  Compiling 8 files (.ex)
+  Generated elixir_make app
+  ==> cc_precompiler
+  Compiling 3 files (.ex)
+  Generated cc_precompiler app
+  ==> lazy_html
+  Downloading precompiled NIF to /tmp/cache/elixir_make/lazy_html-nif-2.16-x86_64-linux-gnu-0.1.11.tar.gz
+  Compiling 3 files (.ex)
+  Generated lazy_html app
+  ==> websock
+  Compiling 1 file (.ex)
+  Generated websock app
+  ==> bandit
+  Compiling 54 files (.ex)
+  Generated bandit app
+  ==> swoosh
+  Compiling 59 files (.ex)
+  Generated swoosh app
+  ==> websock_adapter
+  Compiling 4 files (.ex)
+  Generated websock_adapter app
+  ==> phoenix
+  Compiling 74 files (.ex)
+  Generated phoenix app
+  ==> phoenix_live_view
+  Compiling 49 files (.ex)
+  Generated phoenix_live_view app
+  ==> phoenix_live_dashboard
+  Compiling 36 files (.ex)
+  Generated phoenix_live_dashboard app
+  ==> phoenix_test
+  Compiling 31 files (.ex)
+  Generated phoenix_test app
+  ==> phoenix_ecto
+  Compiling 7 files (.ex)
+  Generated phoenix_ecto app
+  Sandbox runtime check passed.
+  • Validating lock
+  ✓ Validating lock in 20.2ms
+  Manager did not shut down within 30 seconds, sending SIGKILL
+  ```
+
+## Stage: resume_gate
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+echo '=== Iteration resume gate ==='
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  printf 'HEAD: ' && git log -1 --format='%h %s'
+else
+  echo 'HEAD: unavailable'
+fi
+if [ -f "$TODO_PATH" ]; then
+  checked=$(grep -E '^[[:space:]]*- \[x\] ' "$TODO_PATH" | wc -l | tr -d ' ')
+  unchecked=$(grep -E '^[[:space:]]*- \[ \] ' "$TODO_PATH" | wc -l | tr -d ' ')
+  printf 'Todo: %s (%s checked, %s unchecked)\n' "$TODO_PATH" "${checked:-0}" "${unchecked:-0}"
+else
+  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\n' "$TODO_PATH"
+fi
+status=$(git status --short)
+if [ -n "$status" ]; then
+  echo 'Uncommitted changes present:'
+  printf '%s\n' "$status"
+  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2
+  exit 1
+fi
+echo 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'`
+- Output:
+  ```
+  === Iteration resume gate ===
+  HEAD: 401cb78 fabro(01KT111H679XB3J3BVBZC150ZS): preflight_sandbox (succeeded)
+  Todo: docs/iterations/012-member-receipt-detail-liveview-polish/todo.md is absent; sync_task_list will create it from plan.md.
+  Working tree clean; safe to resume from durable Fabro checkpoint commits.
+  ```
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 29.5k in / 105 out
+- Response:
+  > {"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Stage: implement_next_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 1.3m in / 13.9k out
+- Response:
+  > 1. **Selected todo line**
+  >    - `009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 2. **Changes made**
+  >    - Updated `acceptance-tests/features/support/member_message.js`:
+  >      - Added support helper to expand collapsed member receipt groups via existing LiveView group toggle buttons before checking member receipt rows.
+  >      - Made addressed-recipient count waiting projection-aware, so it can retry expansion if receipt groups appear after the page first loads.
+  >      - Applied the expansion helper to member-facing addressed-member and receipt-status assertions.
+  >    - Updated `acceptance-tests/test/member_message_steps.test.js`:
+  >      - Extended the fake Playwright page/locator test harness for collapsed group toggles.
+  >      - Added regression coverage proving member receipt assertions expand collapsed groups before inspecting rows.
+  >    - Did **not** change any `.feature` files.
+  > 
+  > 3. **Focused validation**
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm ci`
+  >      - Passed, installed browser acceptance dependencies locally.
+  >    - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >      - Passed: `37 tests, 0 failures`.
+  >    - `PATH="$PWD/bin:$PATH" dev check`
+  >      - Passed: `228 tests, 0 failures`.
+  > 
+  > 4. **Todo check-off made**
+  >    - Changed exactly:
+  >      - `- [ ] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  >    - To:
+  >      - `- [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.`
+  > 
+  > 5. **Todo splits/additions/reordering**
+  >    - None.
+  > 
+  > 6. **ADR conformance**
+  >    - ADR 0003 / ADR 0010: Kept shared Gherkin feature files unchanged and moved UI mechanics into browser support code.
+  >    - ADR 0013: Added/updated feature-style browser support tests around the acceptance helper behavior.
+  >    - ADR 0006 / ADR 0015: Preserved simplified member-facing receipt status assertions and worked with the LiveView expand/collapse UI instead of bypassing it.
+
+## Stage: pre_validate_snapshot
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+SNAPSHOT=/tmp/fabro-pre-validate-snapshot.md
+{
+  echo '# Pre-validation repository snapshot'
+  echo
+  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'
+  echo
+  echo '## HEAD'
+  git rev-parse --short HEAD || true
+  git log -1 --format='%h %s' || true
+  echo
+  echo '## git status --short'
+  git status --short || true
+  echo
+  echo '## git diff --stat'
+  git diff --stat || true
+  echo
+  echo "## Working-tree diff for $TODO_PATH"
+  if [ -f "$TODO_PATH" ]; then
+    git diff -- "$TODO_PATH" || true
+  else
+    echo "Todo file missing: $TODO_PATH"
+  fi
+  echo
+  echo '## git diff --name-only'
+  git diff --name-only || true
+  echo
+  echo '## Untracked files'
+  git ls-files --others --exclude-standard || true
+  echo
+  echo '## Combined changed path list from git status --porcelain'
+  git status --porcelain || true
+} > "$SNAPSHOT"
+echo "Wrote $SNAPSHOT"
+sed -n '1,220p' "$SNAPSHOT"`
+- Output:
+  ```
+  Wrote /tmp/fabro-pre-validate-snapshot.md
+  # Pre-validation repository snapshot
+  
+  Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.
+  
+  ## HEAD
+  7d9ee61
+  7d9ee61 fabro(01KT111H679XB3J3BVBZC150ZS): implement_next_task (succeeded)
+  
+  ## git status --short
+  
+  ## git diff --stat
+  
+  ## Working-tree diff for docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  
+  ## git diff --name-only
+  
+  ## Untracked files
+  
+  ## Combined changed path list from git status --porcelain
+  ```
+
+## Stage: validate_task
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 493.4k in / 4.7k out
+- Response:
+  > ### Decision
+  > **VALID**
+  > 
+  > ### Evidence
+  > - Completed todo/check-off evidence found:
+  >   - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot at implement checkpoint `7d9ee61`.
+  >   - Current working tree is clean after validation.
+  >   - Recent commits show `7d9ee61 fabro(...): implement_next_task (succeeded)` followed by `306eae7 pre_validate_snapshot`.
+  >   - `git show 7d9ee61 -- docs/iterations/012-member-receipt-detail-liveview-polish/todo.md` shows exactly one ordinary todo line changed:
+  >     - `009 Update browser acceptance support...`
+  >     - from `- [ ]` to `- [x]`.
+  >   - Parent todo state shows task `009` was the first unchecked task when implementation started.
+  > 
+  > - Implementation artifacts found:
+  >   - Implement checkpoint `7d9ee61` changed:
+  >     - `acceptance-tests/features/support/member_message.js`
+  >     - `acceptance-tests/test/member_message_steps.test.js`
+  >     - `docs/iterations/012-member-receipt-detail-liveview-polish/todo.md`
+  >   - Browser support now expands collapsed member receipt groups via existing LiveView toggle buttons before member-facing receipt row assertions.
+  >   - Addressed-member count waiting now retries expansion while projected rows/groups appear.
+  >   - Regression coverage was added for collapsed group expansion before member receipt assertions.
+  >   - No `.feature` files were changed.
+  > 
+  > - Tests run/results found:
+  >   - Re-ran focused acceptance support tests:
+  >     - `cd acceptance-tests && npm_config_cache=/tmp/npm-cache npm run test:config`
+  >     - Passed: `37 tests, 0 failures`.
+  >   - Re-ran required quality gate:
+  >     - `PATH="$PWD/bin:$PATH" dev check`
+  >     - Passed: `228 tests, 0 failures`.
+  > 
+  > - ADR/plan conformance notes:
+  >   - Plan task `009` specifically allowed updating browser acceptance support without changing Gherkin feature text; implementation matches that scope.
+  >   - ADR 0003 / ADR 0010 respected: shared feature files remain unchanged and UI mechanics stay in support code.
+  >   - ADR 0006 respected: member-facing simplified receipt status assertions remain intact.
+  >   - ADR 0013 respected: focused feature-support tests were added/updated.
+  >   - No todo work was deleted, weakened, split, or silently deferred.
+  >   - Task is small and independently checkpointed.
+  > 
+  > {"context_updates":{"task_valid":true,"task_retry_available":false}}
+
+## Stage: task_gate
+- Status: succeeded
+- Handler: conditional
+- Notes: Conditional node evaluated: task_gate
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/012-member-receipt-detail-liveview-polish/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Using existing docs/iterations/012-member-receipt-detail-liveview-polish/todo.md; preserving existing check-offs, splits, and ordering.
+  PLAN_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/plan.md
+  TODO_PATH=docs/iterations/012-member-receipt-detail-liveview-polish/todo.md
+  # Implementation TODO
+  
+  - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
+  - [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+  - [x] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
+  - [x] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
+  - [x] 005 Build a receipt presentation model for the LiveView:
+  - [x] 006 Render the polished message detail page with `<Layouts.club_site>` and Phoenix/Tailwind styling inspired by `receipts.jsx`.
+  - [x] 007 Add LiveView state for collapsed groups:
+  - [x] 008 Preserve the existing stable DOM/test attributes for recipient rows.
+  - [x] 009 Update browser acceptance support, if needed, so existing member-message scenarios can find addressed recipient rows by expanding the relevant visible group before asserting row content. Do not change the Gherkin feature text for this iteration.
+  - [ ] 010 Add focused LiveView/ConnCase tests covering:
+  - [ ] 011 Run the existing member-message browser Cucumber scenarios and `dev check`.
+  ```
+
+## Current context
+| Key | Value |
+|-----|-------|
+| task_list_complete | false |
+| task_list_needs_human | false |
+| task_retry_available | false |
+| task_valid | true |
+
+
+# Check iteration task list
+
+Determine whether the current iteration todo list has any unchecked implementation tasks remaining.
+
+Use the plan path input from the workflow:
+
+- `docs/iterations/012-member-receipt-detail-liveview-polish/plan.md`
+
+Rules:
+
+- Derive the todo path by replacing the trailing `/plan.md` with `/todo.md`.
+- Read the todo file.
+- If the todo file is missing, empty, or unreadable, report that as a blocking problem and set `task_list_complete` to `false` and `task_list_needs_human` to `true`.
+- If any line matches an unchecked Markdown task (`- [ ] ...`), set `task_list_complete` to `false` and `task_list_needs_human` to `false`.
+- If no unchecked Markdown tasks remain, set `task_list_complete` to `true` and `task_list_needs_human` to `false`.
+- Do not edit files.
+
+Return a concise explanation and end with exactly one JSON context update object.
+
+Examples:
+
+Unchecked tasks remain:
+
+```json
+{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+```
+
+All tasks complete:
+
+```json
+{"context_updates":{"task_list_complete":true,"task_list_needs_human":false}}
+```
+
+Blocking problem:
+
+```json
+{"context_updates":{"task_list_complete":false,"task_list_needs_human":true}}
+```
