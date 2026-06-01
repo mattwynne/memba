@@ -149,6 +149,66 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "dashboard preserves browser acceptance selectors for messages and members", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(
+             view,
+             "#member-club-home[data-club-id='#{alice.club_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='club-message-row'][data-message-id='#{message.message_id}'][data-message-subject='Trip planning night']"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='club-message-row'][data-message-id='#{message.message_id}'] " <>
+               "[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='club-member-row'][data-member-id='#{alice.person_id}'][data-member-name='Alice Adams']"
+           )
+
+    assert has_element?(
+             view,
+             "[data-testid='club-member-row'][data-member-id='#{bob.person_id}'][data-member-name='Bob Builder']"
+           )
+  end
+
   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
     alice =
       create_active_member(
