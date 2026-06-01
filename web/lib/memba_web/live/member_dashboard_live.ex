@@ -9,8 +9,7 @@ defmodule MembaWeb.MemberDashboardLive do
   use MembaWeb, :live_view
 
   alias Memba.Accounts
-  alias Memba.Membership
-  alias Memba.Messaging
+  alias MembaWeb.MemberDashboardPresentation
   alias MembaWeb.UserAuth
 
   @impl Phoenix.LiveView
@@ -21,7 +20,7 @@ defmodule MembaWeb.MemberDashboardLive do
 
     socket = assign_current_identity(socket, current_identity, current_identity_clubs)
 
-    case dashboard_context(club_id, current_identity, current_identity_clubs) do
+    case MemberDashboardPresentation.load(club_id, current_identity, current_identity_clubs) do
       {:ok, dashboard_assigns} ->
         {:ok, assign(socket, dashboard_assigns)}
 
@@ -33,47 +32,6 @@ defmodule MembaWeb.MemberDashboardLive do
   @impl Phoenix.LiveView
   def render(%{selected_club: _selected_club} = assigns) do
     MembaWeb.PageHTML.club(assigns)
-  end
-
-  defp dashboard_context(club_id, current_identity, current_identity_clubs) do
-    with selected_club when not is_nil(selected_club) <-
-           selected_club(current_identity_clubs, club_id),
-         members <-
-           club_id
-           |> Membership.list_active_members_of_club()
-           |> Enum.map(&with_initials/1),
-         current_member when not is_nil(current_member) <-
-           current_member_for_identity(members, current_identity) do
-      messages =
-        club_id
-        |> Messaging.list_messages_for_club()
-        |> Enum.reverse()
-
-      {:ok,
-       %{
-         page_title: selected_club.name,
-         selected_club: selected_club,
-         members: members,
-         active_member_count: Enum.count(members),
-         current_member: current_member,
-         member_names_by_id: Map.new(members, &{&1.id, &1.name}),
-         messages: messages
-       }}
-    else
-      _missing_or_unauthorized -> {:error, :forbidden}
-    end
-  end
-
-  defp selected_club(current_identity_clubs, club_id) do
-    Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
-  end
-
-  defp current_member_for_identity(_members, nil), do: nil
-
-  defp current_member_for_identity(members, identity) do
-    identity_email = Accounts.normalize_email(identity.email)
-
-    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
   end
 
   defp current_identity_from_session(session) do
@@ -110,21 +68,6 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp identity_clubs(nil), do: []
   defp identity_clubs(identity), do: identity.active_clubs
-
-  defp with_initials(member), do: Map.put(member, :initials, initials(member.name))
-
-  defp initials(name) when is_binary(name) do
-    name
-    |> String.split(~r/\s+/, trim: true)
-    |> Enum.take(2)
-    |> Enum.map_join("", fn <<first::utf8, _rest::binary>> -> String.upcase(<<first::utf8>>) end)
-    |> case do
-      "" -> "?"
-      value -> value
-    end
-  end
-
-  defp initials(_name), do: "?"
 
   defp forbidden!, do: raise(MembaWeb.ForbiddenError)
 end
