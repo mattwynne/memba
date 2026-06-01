@@ -1,0 +1,309 @@
+diff --git a/docs/iterations/011-member-facing-message-behaviour/todo.md b/docs/iterations/011-member-facing-message-behaviour/todo.md
+index 111ac7c..1664b56 100644
+--- a/docs/iterations/011-member-facing-message-behaviour/todo.md
++++ b/docs/iterations/011-member-facing-message-behaviour/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Update member step definitions so:
+ - [x] 004 Build/refine member club home at `GET /?club_id=<club_id>`:
+ - [x] 005 Add member message detail at `GET /messages/:message_id?club_id=<club_id>`:
+-- [ ] 006 Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
++- [x] 006 Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
+ - [ ] 007 Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
+ - [ ] 008 Add focused tests for member route authorization, message-club ownership checks, status label/icon mapping, and no operator-only fields on member pages.
+ - [ ] 009 Remove `@wip` from `member_message_deliverability.feature` when browser scenarios pass.
+diff --git a/web/lib/memba_web/components/core_components.ex b/web/lib/memba_web/components/core_components.ex
+index 6d269b4..190c5be 100644
+--- a/web/lib/memba_web/components/core_components.ex
++++ b/web/lib/memba_web/components/core_components.ex
+@@ -445,10 +445,11 @@ defmodule MembaWeb.CoreComponents do
+   """
+   attr :name, :string, required: true
+   attr :class, :any, default: "size-4"
++  attr :rest, :global
+ 
+   def icon(%{name: "hero-" <> _} = assigns) do
+     ~H"""
+-    <span class={[@name, @class]} />
++    <span class={[@name, @class]} {@rest} />
+     """
+   end
+ 
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index be33f63..21d2a87 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -4,6 +4,7 @@ defmodule MembaWeb.PageController do
+   alias Memba.Accounts
+   alias Memba.Membership
+   alias Memba.Messaging
++  alias MembaWeb.MemberReceiptPresentation
+ 
+   @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
+ 
+@@ -96,7 +97,11 @@ defmodule MembaWeb.PageController do
+             not_found(conn)
+ 
+           true ->
+-            receipts = Messaging.list_member_receipts(message.message_id)
++            receipts =
++              message.message_id
++              |> Messaging.list_member_receipts()
++              |> Enum.map(&MemberReceiptPresentation.present_receipt/1)
++
+             sender = Membership.get_person(message.sender_id)
+ 
+             conn
+@@ -178,15 +183,18 @@ defmodule MembaWeb.PageController do
+   defp sender_name(_sender), do: "Club member"
+ 
+   defp member_receipt_groups(receipts) do
+-    receipts_by_status = Enum.group_by(receipts, &member_receipt_status/1)
++    receipts_by_status = Enum.group_by(receipts, & &1.status)
+     extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
+ 
+     (@member_receipt_status_order ++ Enum.sort(extra_statuses))
+     |> Enum.map(fn status ->
+       status_receipts = Map.get(receipts_by_status, status, [])
++      presentation = MemberReceiptPresentation.present_status(status)
+ 
+       %{
+         status: status,
++        status_label: presentation.label,
++        status_icon: presentation.icon,
+         count: Enum.count(status_receipts),
+         receipts: status_receipts
+       }
+@@ -194,12 +202,6 @@ defmodule MembaWeb.PageController do
+     |> Enum.reject(&(&1.count == 0))
+   end
+ 
+-  defp member_receipt_status(%{receipt_status: status}) when is_binary(status) and status != "" do
+-    status
+-  end
+-
+-  defp member_receipt_status(_receipt), do: "sent"
+-
+   defp current_member_for_identity(_members, nil), do: nil
+ 
+   defp current_member_for_identity(members, identity) do
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 1b5427b..2a6d11a 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -76,7 +76,10 @@
+           class="overflow-hidden rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)]"
+         >
+           <header class="flex items-center justify-between gap-4 border-b border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-4">
+-            <h3 class="font-semibold text-[var(--club-site-ink)]">{group.status}</h3>
++            <h3 class="flex items-center gap-2 font-semibold text-[var(--club-site-ink)]">
++              <.icon name={group.status_icon} class="size-5 text-[var(--club-site-accent)]" />
++              <span>{group.status_label}</span>
++            </h3>
+             <span
+               data-testid="receipt-group-count"
+               class="rounded-full bg-[var(--club-site-bg)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
+@@ -95,16 +98,22 @@
+               data-testid="member-receipt"
+               data-recipient-id={receipt.recipient_id}
+               data-recipient-name={receipt.recipient_name}
+-              data-receipt-status={receipt.receipt_status}
++              data-receipt-status={receipt.status}
+               class="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+             >
+               <p class="font-semibold text-[var(--club-site-ink)]">{receipt.recipient_name}</p>
+               <p
+                 data-testid="receipt-status"
+-                data-receipt-status={receipt.receipt_status}
+-                class="rounded-full bg-[var(--club-site-paper)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)] ring-1 ring-[var(--club-site-line)]"
++                data-receipt-status={receipt.status}
++                class="inline-flex items-center gap-2 rounded-full bg-[var(--club-site-paper)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)] ring-1 ring-[var(--club-site-line)]"
+               >
+-                {receipt.receipt_status}
++                <.icon
++                  name={receipt.status_icon}
++                  data-testid="receipt-status-icon"
++                  data-icon-name={receipt.status_icon}
++                  class="size-4 text-[var(--club-site-accent)]"
++                />
++                <span>{receipt.status_label}</span>
+               </p>
+             </div>
+           </div>
+diff --git a/web/lib/memba_web/member_receipt_presentation.ex b/web/lib/memba_web/member_receipt_presentation.ex
+new file mode 100644
+index 0000000..784ebe4
+--- /dev/null
++++ b/web/lib/memba_web/member_receipt_presentation.ex
+@@ -0,0 +1,66 @@
++defmodule MembaWeb.MemberReceiptPresentation do
++  @moduledoc """
++  Presentation mapping for member-facing receipt statuses.
++
++  The messaging projection stores stable internal receipt status values. This
++  module maps those values to member-facing copy and Heroicon names without
++  changing the projection vocabulary.
++  """
++
++  @fallback_status "sent"
++
++  @presentations %{
++    "sent" => %{label: "Sending", icon: "hero-clock"},
++    "delivered" => %{label: "Delivered", icon: "hero-check-circle"},
++    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"},
++    "opened" => %{label: "Opened", icon: "hero-envelope-open"}
++  }
++
++  @doc """
++  Returns the member-facing label and icon for an internal receipt status.
++
++  Blank or missing statuses are treated as the projection's initial `sent`
++  status. Unknown statuses keep their internal value available to callers while
++  falling back to readable copy and a neutral icon.
++  """
++  def present_status(status) do
++    status = normalize_status(status)
++    presentation = Map.get(@presentations, status, unknown_presentation(status))
++
++    Map.put(presentation, :status, status)
++  end
++
++  @doc """
++  Returns a template-friendly receipt map with raw status plus presentation data.
++  """
++  def present_receipt(receipt) do
++    presentation = present_status(Map.get(receipt, :receipt_status))
++
++    %{
++      recipient_id: Map.get(receipt, :recipient_id),
++      recipient_name: Map.get(receipt, :recipient_name),
++      status: presentation.status,
++      status_label: presentation.label,
++      status_icon: presentation.icon
++    }
++  end
++
++  defp normalize_status(status) when is_binary(status) do
++    if status == "", do: @fallback_status, else: status
++  end
++
++  defp normalize_status(_status), do: @fallback_status
++
++  defp unknown_presentation(status) do
++    %{label: humanize_status(status), icon: "hero-question-mark-circle"}
++  end
++
++  defp humanize_status(status) do
++    status
++    |> String.split(~r/\s+/, trim: true)
++    |> case do
++      [] -> "Sending"
++      words -> words |> Enum.join(" ") |> String.capitalize()
++    end
++  end
++end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 31787ab..8dc4d13 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -294,13 +294,28 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query(
+              "[data-testid='member-receipt'][data-recipient-name='Alice Adams'][data-receipt-status='sent'] [data-testid='receipt-status']"
+            )
+-           |> LazyHTML.text() =~ "sent"
++           |> LazyHTML.text() =~ "Sending"
+ 
+     assert html
+            |> LazyHTML.query(
+              "[data-testid='member-receipt'][data-recipient-name='Bob Builder'][data-receipt-status='delivered'] [data-testid='receipt-status']"
+            )
+-           |> LazyHTML.text() =~ "delivered"
++           |> LazyHTML.text() =~ "Delivered"
++
++    assert html |> LazyHTML.query(".hero-clock") |> Enum.any?()
++    assert html |> LazyHTML.query(".hero-check-circle") |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='member-receipt'][data-recipient-name='Alice Adams'] [data-testid='receipt-status-icon'][data-icon-name='hero-clock']"
++           )
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='member-receipt'][data-recipient-name='Bob Builder'] [data-testid='receipt-status-icon'][data-icon-name='hero-check-circle']"
++           )
++           |> Enum.any?()
+ 
+     refute response =~ alice_receipt.delivery_id
+     refute response =~ bob_receipt.delivery_id
+diff --git a/web/test/memba_web/member_receipt_presentation_test.exs b/web/test/memba_web/member_receipt_presentation_test.exs
+new file mode 100644
+index 0000000..3207b1b
+--- /dev/null
++++ b/web/test/memba_web/member_receipt_presentation_test.exs
+@@ -0,0 +1,65 @@
++defmodule MembaWeb.MemberReceiptPresentationTest do
++  use ExUnit.Case, async: true
++
++  alias MembaWeb.MemberReceiptPresentation
++
++  describe "present_status/1" do
++    test "maps internal member receipt statuses to member-facing labels and Heroicons" do
++      assert MemberReceiptPresentation.present_status("sent") == %{
++               status: "sent",
++               label: "Sending",
++               icon: "hero-clock"
++             }
++
++      assert MemberReceiptPresentation.present_status("delivered") == %{
++               status: "delivered",
++               label: "Delivered",
++               icon: "hero-check-circle"
++             }
++
++      assert MemberReceiptPresentation.present_status("delivery problem") == %{
++               status: "delivery problem",
++               label: "Delivery problem",
++               icon: "hero-exclamation-triangle"
++             }
++
++      assert MemberReceiptPresentation.present_status("opened") == %{
++               status: "opened",
++               label: "Opened",
++               icon: "hero-envelope-open"
++             }
++    end
++
++    test "treats blank or missing statuses as the initial sent status" do
++      assert MemberReceiptPresentation.present_status(nil) == %{
++               status: "sent",
++               label: "Sending",
++               icon: "hero-clock"
++             }
++
++      assert MemberReceiptPresentation.present_status("") == %{
++               status: "sent",
++               label: "Sending",
++               icon: "hero-clock"
++             }
++    end
++  end
++
++  describe "present_receipt/1" do
++    test "keeps the raw projection status while adding display label and icon" do
++      receipt = %{
++        recipient_id: "person-123",
++        recipient_name: "Alice Adams",
++        receipt_status: "delivered"
++      }
++
++      assert MemberReceiptPresentation.present_receipt(receipt) == %{
++               recipient_id: "person-123",
++               recipient_name: "Alice Adams",
++               status: "delivered",
++               status_label: "Delivered",
++               status_icon: "hero-check-circle"
++             }
++    end
++  end
++end
