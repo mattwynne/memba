@@ -4,6 +4,7 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
+  alias Memba.Messaging.Projections.Message
   alias Memba.Repo
   alias MembaWeb.UserAuth
 
@@ -58,10 +59,54 @@ defmodule MembaWeb.PageControllerTest do
     end
 
     refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("form#home-sign-out-form[action='/auth'][method='post']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("form#home-sign-out-form input[name='_method'][value='delete']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("button#home-sign-out-button[type='submit']")
+           |> Enum.any?()
   end
 
-  test "GET / with a member club_id opens that club's member page", %{conn: conn} do
+  test "GET / with a club_id shows a public club marketing page to logged-out visitors", %{
+    conn: conn
+  } do
+    club = create_club(name: "Alpine Club")
+
+    conn = get(conn, ~p"/?#{[club_id: club.club_id]}")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Welcome to Alpine Club"
+    assert response =~ "Members can sign in to see club updates"
+
+    assert html
+           |> LazyHTML.query("#club-marketing-page[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+
+    assert html |> LazyHTML.query("a#club-marketing-sign-in-link[href='/auth']") |> Enum.any?()
+    refute response =~ "Send a club message"
+    refute response =~ "Signed in as"
+  end
+
+  test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
     club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        club_name: "Alpine Club",
+        club_id: club.club_id
+      )
+
+    message =
+      create_message(club_id: club.club_id, sender_id: bob.person_id, subject: "Trip night")
 
     conn =
       conn
@@ -73,10 +118,46 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "Alpine Club"
     assert response =~ "Welcome to your club space."
+    assert response =~ "Send a club message"
+    assert response =~ "Members"
+    assert response =~ "Sent messages"
     assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
 
     assert html
+           |> LazyHTML.query("#club-site-current-identity")
+           |> LazyHTML.text() =~ "Signed in as alice@example.com"
+
+    assert html
+           |> LazyHTML.query("form#club-site-sign-out-form[action='/auth'][method='post']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#club-site-layout header")
+           |> LazyHTML.text()
+           |> then(&(not String.contains?(&1, "Powered by Memba")))
+
+    assert html
+           |> LazyHTML.query("#club-site-layout footer")
+           |> LazyHTML.text() =~ "Powered by Memba"
+
+    assert html
            |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "form#member-message-form[action='/?club_id=#{club.club_id}'][method='post']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Test Member']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='club-message-row'][data-message-id='#{message.message_id}']"
+           )
            |> Enum.any?()
 
     refute response =~ "My clubs"
@@ -136,19 +217,28 @@ defmodule MembaWeb.PageControllerTest do
     assert html_response(conn, 200) =~ "Privacy Policy"
   end
 
+  defp create_club(attrs) do
+    Repo.insert!(%Club{
+      club_id: Ecto.UUID.generate(),
+      name: Keyword.fetch!(attrs, :name)
+    })
+  end
+
   defp create_active_member(attrs) do
-    club_id = Ecto.UUID.generate()
+    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
     person_id = Ecto.UUID.generate()
+    club_name = Keyword.fetch!(attrs, :club_name)
 
     club =
-      Repo.insert!(%Club{
-        club_id: club_id,
-        name: Keyword.fetch!(attrs, :club_name)
-      })
+      Repo.get(Club, club_id) ||
+        Repo.insert!(%Club{
+          club_id: club_id,
+          name: club_name
+        })
 
     Repo.insert!(%Person{
       person_id: person_id,
-      name: "Test Member",
+      name: Keyword.get(attrs, :name, "Test Member"),
       email: Keyword.fetch!(attrs, :email)
     })
 
@@ -160,5 +250,17 @@ defmodule MembaWeb.PageControllerTest do
     })
 
     club
+    |> Map.from_struct()
+    |> Map.put(:person_id, person_id)
+  end
+
+  defp create_message(attrs) do
+    Repo.insert!(%Message{
+      message_id: Ecto.UUID.generate(),
+      club_id: Keyword.fetch!(attrs, :club_id),
+      sender_id: Keyword.fetch!(attrs, :sender_id),
+      subject: Keyword.fetch!(attrs, :subject),
+      body: Keyword.get(attrs, :body, "Message body")
+    })
   end
 end

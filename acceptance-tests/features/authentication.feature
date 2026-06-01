@@ -1,6 +1,14 @@
 Feature: Authentication
   People use one sign-in form to access the parts of Memba they are allowed to use.
 
+  Rule: Club pages are public until member-only access is needed
+
+    Scenario: Logged-out visitor sees a club marketing page
+      Given Alice is a member of Kootenay Mountaineering Club
+      When Robin opens the Kootenay Mountaineering Club page
+      Then Robin should see the Kootenay Mountaineering Club marketing page
+      And the club page should show Powered by Memba in the footer
+
   Rule: Known club members can sign in
 
     Scenario: A club member signs in and sees their club
@@ -10,6 +18,9 @@ Feature: Authentication
       When Alice follows the sign-in link
       Then Alice should be signed in
       And Alice should see Kootenay Mountaineering Club in their clubs
+      When Alice opens the Kootenay Mountaineering Club page
+      Then Alice should see they are signed in on the club page
+      And the club page should show Powered by Memba in the footer
 
     Scenario: A club member with memberships in two clubs sees both clubs
       Given Alice is a member of Kootenay Mountaineering Club
@@ -90,3 +101,24 @@ Feature: Authentication
       When Pat follows the sign-in link
       Then Pat should be signed in as Memba staff
       And Pat should be on the staff-only homepage
+
+  Rule: Signed-in people can sign out
+
+    Scenario: Staff signs out
+      Given Pat is not a member of any club
+      When Pat requests a sign-in link for "pat@memba.io"
+      Then Pat should receive a sign-in link
+      When Pat follows the sign-in link
+      Then Pat should be signed in as Memba staff
+      When Pat signs out
+      Then Pat should be signed out
+
+    Scenario: Club member signs out from a club page
+      Given Alice is a member of Kootenay Mountaineering Club
+      When Alice requests a sign-in link for their email address
+      Then Alice should receive a sign-in link
+      When Alice follows the sign-in link
+      Then Alice should be signed in
+      When Alice opens the Kootenay Mountaineering Club page
+      And Alice signs out
+      Then Alice should be signed out

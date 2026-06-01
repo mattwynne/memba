@@ -37,15 +37,19 @@ defmodule MembaWeb.AuthGatesTest do
   end
 
   describe "club_id member routes" do
-    test "redirect unauthenticated browsers to sign in and preserve the club return path" do
-      club_id = Ecto.UUID.generate()
+    test "allow unauthenticated browsers to see the public club marketing page" do
+      club = create_club(name: "Alpine Club")
 
       conn =
-        build_conn(:get, "/?club_id=#{club_id}")
-        |> get("/?club_id=#{club_id}")
+        build_conn(:get, "/?club_id=#{club.club_id}")
+        |> get("/?club_id=#{club.club_id}")
 
-      assert redirected_to(conn) == ~p"/auth"
-      assert get_session(conn, UserAuth.return_to_session_key()) == "/?club_id=#{club_id}"
+      response = html_response(conn, 200)
+
+      assert response =~ "Welcome to Alpine Club"
+      assert response =~ "Sign in to continue"
+      assert response =~ "Powered by"
+      assert get_session(conn, UserAuth.return_to_session_key()) == nil
     end
 
     test "forbid signed-in browsers without active membership in the requested club", %{
@@ -87,6 +91,13 @@ defmodule MembaWeb.AuthGatesTest do
       assert response =~ "Welcome to your club space."
       assert response =~ club.name
     end
+  end
+
+  defp create_club(attrs) do
+    Repo.insert!(%Club{
+      club_id: Ecto.UUID.generate(),
+      name: Keyword.fetch!(attrs, :name)
+    })
   end
 
   defp create_active_member(attrs) do

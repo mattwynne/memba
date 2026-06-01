@@ -142,91 +142,122 @@ defmodule Memba.CucumberConfigurationTest do
   ]
 
   @authentication_scenarios [
+    {"Logged-out visitor sees a club marketing page",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 7},
+       {"When", "Robin opens the Kootenay Mountaineering Club page", 8},
+       {"Then", "Robin should see the Kootenay Mountaineering Club marketing page", 9},
+       {"And", "the club page should show Powered by Memba in the footer", 10}
+     ]},
     {"A club member signs in and sees their club",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 8},
-       {"When", "Alice requests a sign-in link for their email address", 9},
-       {"Then", "Alice should receive a sign-in link", 10},
-       {"When", "Alice follows the sign-in link", 11},
-       {"Then", "Alice should be signed in", 12},
-       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 13}
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 15},
+       {"When", "Alice requests a sign-in link for their email address", 16},
+       {"Then", "Alice should receive a sign-in link", 17},
+       {"When", "Alice follows the sign-in link", 18},
+       {"Then", "Alice should be signed in", 19},
+       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 20},
+       {"When", "Alice opens the Kootenay Mountaineering Club page", 21},
+       {"Then", "Alice should see they are signed in on the club page", 22},
+       {"And", "the club page should show Powered by Memba in the footer", 23}
      ]},
     {"A club member with memberships in two clubs sees both clubs",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 16},
-       {"And", "Alice is a member of Nelson Paddling Club", 17},
-       {"When", "Alice requests a sign-in link for their email address", 18},
-       {"Then", "Alice should receive a sign-in link", 19},
-       {"When", "Alice follows the sign-in link", 20},
-       {"Then", "Alice should be signed in", 21},
-       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 22},
-       {"And", "Alice should see Nelson Paddling Club in their clubs", 23}
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 26},
+       {"And", "Alice is a member of Nelson Paddling Club", 27},
+       {"When", "Alice requests a sign-in link for their email address", 28},
+       {"Then", "Alice should receive a sign-in link", 29},
+       {"When", "Alice follows the sign-in link", 30},
+       {"Then", "Alice should be signed in", 31},
+       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 32},
+       {"And", "Alice should see Nelson Paddling Club in their clubs", 33}
      ]},
     {"New Memba staff sign themselves up",
      [
-       {"Given", "Pat is not a member of any club", 28},
-       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 29},
-       {"Then", "Pat should receive a sign-in link", 30},
-       {"When", "Pat follows the sign-in link", 31},
-       {"Then", "Pat should be signed in as Memba staff", 32},
-       {"And", "Pat should be on the staff-only homepage", 33}
+       {"Given", "Pat is not a member of any club", 38},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 39},
+       {"Then", "Pat should receive a sign-in link", 40},
+       {"When", "Pat follows the sign-in link", 41},
+       {"Then", "Pat should be signed in as Memba staff", 42},
+       {"And", "Pat should be on the staff-only homepage", 43}
      ]},
     {"Memba staff who are also club members can use both kinds of access",
      [
-       {"Given", "Pat is a member of Kootenay Mountaineering Club", 36},
-       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 37},
-       {"Then", "Pat should receive a sign-in link", 38},
-       {"When", "Pat follows the sign-in link", 39},
-       {"Then", "Pat should be signed in as Memba staff", 40},
-       {"And", "Pat should be on the staff-only homepage", 41},
-       {"And", "Pat should be able to see Kootenay Mountaineering Club in their clubs", 42}
+       {"Given", "Pat is a member of Kootenay Mountaineering Club", 46},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 47},
+       {"Then", "Pat should receive a sign-in link", 48},
+       {"When", "Pat follows the sign-in link", 49},
+       {"Then", "Pat should be signed in as Memba staff", 50},
+       {"And", "Pat should be on the staff-only homepage", 51},
+       {"And", "Pat should be able to see Kootenay Mountaineering Club in their clubs", 52}
      ]},
     {"Unknown person requests a sign-in link",
      [
-       {"Given", "Robin is not a member of any club", 47},
-       {"When", "Robin requests a sign-in link for their email address", 48},
-       {"Then", "Robin should not receive a sign-in link", 49}
+       {"Given", "Robin is not a member of any club", 57},
+       {"When", "Robin requests a sign-in link for their email address", 58},
+       {"Then", "Robin should not receive a sign-in link", 59}
      ]},
     {"A signed-out person cannot reuse a sign-in link",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 53},
-       {"And", "Alice has received a sign-in link for their email address", 54},
-       {"And", "Alice has already followed the sign-in link", 55},
-       {"And", "Alice has signed out", 56},
-       {"When", "Alice follows the same sign-in link again", 57},
-       {"Then", "Alice should not be signed in", 58}
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 64},
+       {"And", "Alice has received a sign-in link for their email address", 65},
+       {"And", "Alice has already followed the sign-in link", 66},
+       {"And", "Alice has signed out", 67},
+       {"When", "Alice follows the same sign-in link again", 68},
+       {"Then", "Alice should not be signed in", 69}
      ]},
     {"Reopening a used sign-in link after signing in",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 61},
-       {"And", "Alice has received a sign-in link for their email address", 62},
-       {"And", "Alice has already followed the sign-in link", 63},
-       {"When", "Alice follows the same sign-in link again", 64},
-       {"Then", "Alice should still be signed in", 65},
-       {"And", "Alice should be on the homepage", 66}
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 72},
+       {"And", "Alice has received a sign-in link for their email address", 73},
+       {"And", "Alice has already followed the sign-in link", 74},
+       {"When", "Alice follows the same sign-in link again", 75},
+       {"Then", "Alice should still be signed in", 76},
+       {"And", "Alice should be on the homepage", 77}
      ]},
     {"Following an expired sign-in link",
      [
-       {"Given", "Alice is a member of Kootenay Mountaineering Club", 71},
-       {"And", "Alice has received a sign-in link for their email address", 72},
-       {"And", "the sign-in link has expired", 73},
-       {"When", "Alice follows the sign-in link", 74},
-       {"Then", "Alice should not be signed in", 75}
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 82},
+       {"And", "Alice has received a sign-in link for their email address", 83},
+       {"And", "the sign-in link has expired", 84},
+       {"When", "Alice follows the sign-in link", 85},
+       {"Then", "Alice should not be signed in", 86}
      ]},
     {"Following a link that Memba did not issue",
      [
-       {"When", "Robin follows a sign-in link that Memba did not issue", 80},
-       {"Then", "Robin should not be signed in", 81}
+       {"When", "Robin follows a sign-in link that Memba did not issue", 91},
+       {"Then", "Robin should not be signed in", 92}
      ]},
     {"Staff signs in after trying to open the staff-only area",
      [
-       {"Given", "Pat is not a member of any club", 86},
-       {"And", "Pat has tried to open the staff-only area", 87},
-       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 88},
-       {"Then", "Pat should receive a sign-in link", 89},
-       {"When", "Pat follows the sign-in link", 90},
-       {"Then", "Pat should be signed in as Memba staff", 91},
-       {"And", "Pat should be on the staff-only homepage", 92}
+       {"Given", "Pat is not a member of any club", 97},
+       {"And", "Pat has tried to open the staff-only area", 98},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 99},
+       {"Then", "Pat should receive a sign-in link", 100},
+       {"When", "Pat follows the sign-in link", 101},
+       {"Then", "Pat should be signed in as Memba staff", 102},
+       {"And", "Pat should be on the staff-only homepage", 103}
+     ]},
+    {"Staff signs out",
+     [
+       {"Given", "Pat is not a member of any club", 108},
+       {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 109},
+       {"Then", "Pat should receive a sign-in link", 110},
+       {"When", "Pat follows the sign-in link", 111},
+       {"Then", "Pat should be signed in as Memba staff", 112},
+       {"When", "Pat signs out", 113},
+       {"Then", "Pat should be signed out", 114}
+     ]},
+    {"Club member signs out from a club page",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 117},
+       {"When", "Alice requests a sign-in link for their email address", 118},
+       {"Then", "Alice should receive a sign-in link", 119},
+       {"When", "Alice follows the sign-in link", 120},
+       {"Then", "Alice should be signed in", 121},
+       {"When", "Alice opens the Kootenay Mountaineering Club page", 122},
+       {"And", "Alice signs out", 123},
+       {"Then", "Alice should be signed out", 124}
      ]}
   ]
 
@@ -264,6 +295,7 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} follows the sign-in link",
     "{word} follows the same sign-in link again",
     "{word} follows a sign-in link that Memba did not issue",
+    "{word} opens the Kootenay Mountaineering Club page",
     "{word} has received a sign-in link for their email address",
     "{word} has already followed the sign-in link",
     "{word} has signed out",
@@ -273,6 +305,11 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} should be signed in as Memba staff",
     "{word} should not be signed in",
     "{word} should still be signed in",
+    "{word} should see they are signed in on the club page",
+    "{word} should see the Kootenay Mountaineering Club marketing page",
+    "the club page should show Powered by Memba in the footer",
+    "{word} signs out",
+    "{word} should be signed out",
     "{word} should be on the staff-only homepage",
     "{word} should be on the homepage",
     "{word} should see Kootenay Mountaineering Club in their clubs",
