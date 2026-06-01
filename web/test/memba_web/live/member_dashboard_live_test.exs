@@ -8,7 +8,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Membership.Projections.Person
   alias Memba.Messaging.Projections.MemberReceipt
   alias Memba.Messaging.Projections.Message
+  alias Memba.Messaging.Projections.OperatorDeliverability
   alias Memba.Repo
+  alias MembaWeb.MemberDashboardPresentation
   alias MembaWeb.UserAuth
 
   test "routed club home renders signed-in active members through the dashboard LiveView", %{
@@ -146,6 +148,165 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              view,
              "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
              "AA"
+           )
+  end
+
+  test "dashboard receipt glance uses member vocabulary and does not leak operator-only fields",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    carol =
+      create_active_member(
+        email: "carol@example.com",
+        name: "Carol Canoe",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    dana =
+      create_active_member(
+        email: "dana@example.com",
+        name: "Dana Downhill",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: bob.person_id,
+        subject: "Weekend conditions"
+      )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: alice.person_id,
+      recipient_name: "Alice Adams",
+      receipt_status: "opened"
+    )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: bob.person_id,
+      recipient_name: "Bob Builder",
+      receipt_status: "delivered"
+    )
+
+    create_member_receipt(
+      message_id: message.message_id,
+      recipient_id: carol.person_id,
+      recipient_name: "Carol Canoe",
+      receipt_status: "sent"
+    )
+
+    dana_delivery_id =
+      create_member_receipt(
+        message_id: message.message_id,
+        recipient_id: dana.person_id,
+        recipient_name: "Dana Downhill",
+        receipt_status: "delivery problem"
+      ).delivery_id
+
+    create_operator_deliverability(
+      delivery_id: dana_delivery_id,
+      message_id: message.message_id,
+      recipient_id: dana.person_id,
+      recipient_name: "Dana Downhill",
+      recipient_address: "dana.operator@example.net",
+      channel: "postmark-webhook",
+      status: "bounced",
+      reason: "SMTP 550 Mailbox full from ProviderEvent::Bounce"
+    )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    message_selector = "#member-message-#{message.message_id}"
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-glance']",
+             "1 of 4 opened"
+           )
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened'][data-receipt-label='Opened'][data-receipt-count='1']"
+           )
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='1']"
+           )
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='sent'][data-receipt-label='Sending'][data-receipt-count='1']"
+           )
+
+    assert has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivery problem'][data-receipt-label='Delivery problem'][data-receipt-count='1']"
+           )
+
+    html = render(view)
+
+    refute html =~ dana_delivery_id
+    refute html =~ "dana.operator@example.net"
+    refute html =~ "postmark-webhook"
+    refute html =~ "bounced"
+    refute html =~ "SMTP 550 Mailbox full"
+    refute html =~ "ProviderEvent::Bounce"
+  end
+
+  test "dashboard omits timestamp label when a message row has no inserted_at timestamp" do
+    club_id = Ecto.UUID.generate()
+    sender_id = Ecto.UUID.generate()
+    message_id = Ecto.UUID.generate()
+
+    message = %Message{
+      message_id: message_id,
+      club_id: club_id,
+      sender_id: sender_id,
+      subject: "Projection without timestamp",
+      body: "Body",
+      inserted_at: nil
+    }
+
+    assert [message_row] =
+             MemberDashboardPresentation.present_message_rows([message], %{
+               sender_id => "Bob Builder"
+             })
+
+    html =
+      dashboard_html(%{
+        selected_club: %{club_id: club_id, name: "Alpine Club"},
+        message_rows: [message_row]
+      })
+
+    assert html_has_selector?(
+             html,
+             "#member-message-#{message_id}[data-testid='club-message-row']"
+           )
+
+    refute html_has_selector?(
+             html,
+             "#member-message-#{message_id} [data-testid='message-sent-at']"
            )
   end
 
@@ -326,6 +487,23 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert response(conn, 403) == "Forbidden"
   end
 
+  test "signed-in inactive members of the selected club are still forbidden", %{conn: conn} do
+    inactive_alice =
+      create_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club",
+        active: false
+      )
+
+    conn =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/?club_id=#{inactive_alice.club_id}")
+
+    assert response(conn, 403) == "Forbidden"
+  end
+
   defp create_club(attrs) do
     Repo.insert!(%Club{
       club_id: Ecto.UUID.generate(),
@@ -334,6 +512,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp create_active_member(attrs) do
+    attrs
+    |> Keyword.put(:active, true)
+    |> create_member()
+  end
+
+  defp create_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
     person_id = Ecto.UUID.generate()
     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
@@ -354,7 +538,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       membership_id: Ecto.UUID.generate(),
       club_id: club_id,
       person_id: person_id,
-      active: true
+      active: Keyword.get(attrs, :active, true)
     })
 
     %{
@@ -379,11 +563,46 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
   defp create_member_receipt(attrs) do
     Repo.insert!(%MemberReceipt{
-      delivery_id: Ecto.UUID.generate(),
+      delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       receipt_status: Keyword.fetch!(attrs, :receipt_status)
     })
+  end
+
+  defp create_operator_deliverability(attrs) do
+    Repo.insert!(%OperatorDeliverability{
+      delivery_id: Keyword.fetch!(attrs, :delivery_id),
+      message_id: Keyword.fetch!(attrs, :message_id),
+      recipient_id: Keyword.fetch!(attrs, :recipient_id),
+      recipient_name: Keyword.fetch!(attrs, :recipient_name),
+      recipient_address: Keyword.fetch!(attrs, :recipient_address),
+      channel: Keyword.fetch!(attrs, :channel),
+      status: Keyword.fetch!(attrs, :status),
+      reason: Keyword.fetch!(attrs, :reason)
+    })
+  end
+
+  defp dashboard_html(assigns) do
+    %{
+      flash: %{},
+      current_identity: %{email: "alice@example.com"},
+      selected_club: %{club_id: Ecto.UUID.generate(), name: "Alpine Club"},
+      current_member: %{name: "Alice Adams"},
+      members: [],
+      active_member_count: 0,
+      message_rows: []
+    }
+    |> Map.merge(assigns)
+    |> MembaWeb.PageHTML.club()
+    |> rendered_to_string()
+  end
+
+  defp html_has_selector?(html, selector) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> Enum.any?()
   end
 end
