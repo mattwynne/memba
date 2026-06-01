@@ -96,11 +96,17 @@ defmodule MembaWeb.PageControllerTest do
   end
 
   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
-    club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
+    club =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
 
     bob =
       create_active_member(
         email: "bob@example.com",
+        name: "Bob Builder",
         club_name: "Alpine Club",
         club_id: club.club_id
       )
@@ -119,8 +125,16 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Alpine Club"
     assert response =~ "Welcome to your club space."
     assert response =~ "Send a club message"
-    assert response =~ "Members"
-    assert response =~ "Sent messages"
+    assert response =~ "Recent club messages"
+    assert response =~ "Active members"
+    assert response =~ "2 active members"
+
+    assert html
+           |> LazyHTML.text()
+           |> String.contains?(
+             "Everyone with a current membership. They'll all receive your messages."
+           )
+
     assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
 
     assert html
@@ -151,12 +165,32 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Test Member']")
+           |> LazyHTML.query("#member-compose-recipient-summary[data-active-member-count='2']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "select#member-message-sender-select option[value='#{club.person_id}'][selected]"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Alice Adams']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("[data-testid='club-member-row'][data-member-name='Bob Builder']")
            |> Enum.any?()
 
     assert html
            |> LazyHTML.query(
              "[data-testid='club-message-row'][data-message-id='#{message.message_id}']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "a[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{club.club_id}']"
            )
            |> Enum.any?()
 

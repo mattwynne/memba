@@ -1,6 +1,7 @@
 defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
+  alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Messaging
 
@@ -107,13 +108,26 @@ defmodule MembaWeb.PageController do
         not_found(conn)
 
       selected_club ->
-        members = Membership.list_active_members_of_club(club_id)
-        messages = Messaging.list_messages_for_club(club_id)
+        members =
+          club_id
+          |> Membership.list_active_members_of_club()
+          |> Enum.map(&with_member_initials/1)
+
+        messages =
+          club_id
+          |> Messaging.list_messages_for_club()
+          |> Enum.reverse()
+
+        current_member = current_member_for_identity(members, conn.assigns.current_identity)
+        message_params = put_default_sender(message_params, current_member)
 
         conn
         |> assign(:page_title, selected_club.name)
         |> assign(:selected_club, selected_club)
         |> assign(:members, members)
+        |> assign(:active_member_count, Enum.count(members))
+        |> assign(:current_member, current_member)
+        |> assign(:member_names_by_id, Map.new(members, &{&1.id, &1.name}))
         |> assign(:member_options, Enum.map(members, &{&1.name, &1.id}))
         |> assign(:messages, messages)
         |> assign(:message_form, Phoenix.Component.to_form(message_params, as: :message))
@@ -124,6 +138,40 @@ defmodule MembaWeb.PageController do
   defp selected_club(conn, club_id) do
     Enum.find(conn.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
   end
+
+  defp current_member_for_identity(_members, nil), do: nil
+
+  defp current_member_for_identity(members, identity) do
+    identity_email = Accounts.normalize_email(identity.email)
+
+    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+  end
+
+  defp put_default_sender(message_params, nil), do: message_params
+
+  defp put_default_sender(message_params, current_member) do
+    case Map.get(message_params, "sender_id") do
+      value when value in [nil, ""] -> Map.put(message_params, "sender_id", current_member.id)
+      _value -> message_params
+    end
+  end
+
+  defp with_member_initials(member) do
+    Map.put(member, :initials, initials(member.name))
+  end
+
+  defp initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map_join("", fn <<first::utf8, _rest::binary>> -> String.upcase(<<first::utf8>>) end)
+    |> case do
+      "" -> "?"
+      value -> value
+    end
+  end
+
+  defp initials(_name), do: "?"
 
   defp not_found(conn) do
     conn
