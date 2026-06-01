@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the current member message route, controller template, auth plugs, and existing route/feature tests around `PageController.show_message/2`.
-- [ ] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
+- [x] 002 Introduce a member message detail LiveView, for example `MembaWeb.MemberMessageLive.Show`, using Phoenix 1.8 routing conventions and avoiding duplicate scope aliases.
 - [ ] 003 Route `GET /messages/:message_id` through the existing `:browser` and `:club_member_required` pipelines to the LiveView while preserving the same URL shape and `club_id` query parameter.
 - [ ] 004 Move the existing message detail loading and authorization logic into a clear LiveView mount path or supporting context/helper:
 - [ ] 005 Build a receipt presentation model for the LiveView:
