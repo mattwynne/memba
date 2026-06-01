@@ -1,0 +1,171 @@
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/todo.md b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+index bd97502..b59ce97 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/todo.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Read ADR 0015 (`docs/adr/0015-use-liveview-for-member-application-pages.md`) and apply it to the member dashboard.
+ - [x] 003 Introduce `MembaWeb.MemberDashboardLive`, rendered for signed-in selected-club home while preserving public/logged-out handling for `/?club_id=`. Keep the existing `GET /` controller route as a small dispatcher/public page: logged-out visitors continue through the public/marketing rendering, while signed-in active club members with `club_id` get the LiveView-backed dashboard for the same URL. Do not add a separate user-visible dashboard URL in this slice.
+ - [x] 004 Move selected-club dashboard data loading into the LiveView mount path plus a small query/presentation helper, `MembaWeb.MemberDashboardPresentation`, so the LiveView stays readable and the row-shaping logic is unit-testable:
+-- [ ] 005 Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
++- [x] 005 Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
+ - [ ] 006 Render the dashboard toward `dashboard.jsx`:
+ - [ ] 007 Design and render empty states deliberately:
+ - [ ] 008 Preserve or deliberately update stable selectors used by browser acceptance:
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index 5d10253..7b0f040 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -94,7 +94,17 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     |> Enum.reverse()
+   end
+ 
+-  defp present_message_rows(messages, member_names_by_id) do
++  @doc """
++  Shapes recent-message projection rows for dashboard rendering.
++
++  The row data keeps member-facing receipt vocabulary from
++  `MemberReceiptPresentation`, adds compact mini-bar segment data, and uses the
++  message projection `inserted_at` value for dashboard "when" metadata. Rows
++  without `inserted_at` intentionally leave the label empty instead of inventing
++  placeholder copy.
++  """
++  def present_message_rows(messages, member_names_by_id)
++      when is_list(messages) and is_map(member_names_by_id) do
+     receipts_by_message_id = receipts_by_message_id(messages)
+ 
+     Enum.map(messages, fn message ->
+@@ -104,6 +114,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+         |> MemberReceiptPresentation.present_receipts()
+ 
+       sender_name = Map.get(member_names_by_id, message.sender_id, "Club member")
++      receipt_count = receipt_model.total_count
+ 
+       %{
+         message: message,
+@@ -113,13 +124,21 @@ defmodule MembaWeb.MemberDashboardPresentation do
+         sender_initials: initials(sender_name),
+         subject: message.subject,
+         body: message.body,
+-        receipt_count: receipt_model.total_count,
++        sent_at: message.inserted_at,
++        sent_at_label: sent_at_label(message.inserted_at),
++        receipt_count: receipt_count,
+         receipt_summary: receipt_model.summary,
++        receipt_status_counts: receipt_status_counts(receipt_model.summary),
++        receipt_segments: receipt_segments(receipt_model.summary),
++        receipt_glance_copy: receipt_glance_copy(receipt_model.summary, receipt_count),
++        has_receipt_glance?: receipt_count > 0,
+         receipt_groups: receipt_model.groups
+       }
+     end)
+   end
+ 
++  def present_message_rows(_messages, _member_names_by_id), do: []
++
+   defp receipts_by_message_id([]), do: %{}
+ 
+   defp receipts_by_message_id(messages) do
+@@ -156,4 +175,37 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   end
+ 
+   defp initials(_name), do: "?"
++
++  defp receipt_status_counts(summary) do
++    Map.new(summary, fn status -> {status.status, status.count} end)
++  end
++
++  defp receipt_segments(summary) do
++    summary
++    |> Enum.filter(&(&1.count > 0))
++    |> Enum.map(fn status ->
++      %{
++        status: status.status,
++        status_label: status.status_label,
++        count: status.count,
++        width_percentage: status.percentage
++      }
++    end)
++  end
++
++  defp receipt_glance_copy(_summary, 0), do: nil
++
++  defp receipt_glance_copy(summary, total_count) do
++    opened_count =
++      summary
++      |> Enum.find_value(0, fn
++        %{status: "opened", count: count} -> count
++        _status -> false
++      end)
++
++    "#{opened_count} of #{total_count} opened"
++  end
++
++  defp sent_at_label(%DateTime{} = sent_at), do: Calendar.strftime(sent_at, "%b %d, %Y")
++  defp sent_at_label(_sent_at), do: nil
+ end
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index c4511e1..75a5dc4 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -97,8 +97,17 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert newer_row.sender_id == bob.person_id
+     assert newer_row.sender_name == "Bob Builder"
+     assert newer_row.sender_initials == "BB"
++    assert newer_row.sent_at == newer_message.inserted_at
++    assert newer_row.sent_at_label == Calendar.strftime(newer_message.inserted_at, "%b %d, %Y")
+     assert newer_row.receipt_count == 2
+ 
++    assert newer_row.receipt_status_counts == %{
++             "opened" => 1,
++             "delivered" => 0,
++             "sent" => 1,
++             "delivery problem" => 0
++           }
++
+     assert Enum.map(newer_row.receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
+              {"opened", 1, 50},
+              {"delivered", 0, 0},
+@@ -106,10 +115,43 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+              {"delivery problem", 0, 0}
+            ]
+ 
++    assert Enum.map(
++             newer_row.receipt_segments,
++             &{&1.status, &1.status_label, &1.count, &1.width_percentage}
++           ) == [
++             {"opened", "Opened", 1, 50},
++             {"sent", "Sending", 1, 50}
++           ]
++
++    assert newer_row.receipt_glance_copy == "1 of 2 opened"
++    assert newer_row.has_receipt_glance?
++
+     assert older_row.message_id == older_message.message_id
+     assert older_row.sender_name == "Alice Adams"
+     assert older_row.sender_initials == "AA"
++    assert older_row.sent_at == older_message.inserted_at
++    assert older_row.sent_at_label == Calendar.strftime(older_message.inserted_at, "%b %d, %Y")
+     assert older_row.receipt_count == 0
++    assert older_row.receipt_segments == []
++    assert older_row.receipt_glance_copy == nil
++    refute older_row.has_receipt_glance?
++  end
++
++  test "omits timestamp labels for message rows without an inserted_at timestamp" do
++    message = %Message{
++      message_id: Ecto.UUID.generate(),
++      sender_id: Ecto.UUID.generate(),
++      subject: "Projection without timestamp",
++      body: "Body",
++      inserted_at: nil
++    }
++
++    assert [
++             %{
++               sent_at: nil,
++               sent_at_label: nil
++             }
++           ] = MemberDashboardPresentation.present_message_rows([message], %{})
+   end
+ 
+   test "forbids missing, invalid, unauthorized, or identity-mismatched selected clubs" do
