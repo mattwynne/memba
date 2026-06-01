@@ -24,6 +24,8 @@ green than before.
 | 012 | 2026-06-01 | merged | Member receipt detail LiveView polish | [plan](012-member-receipt-detail-liveview-polish/plan.md) |
 | 013 | 2026-06-01 | merged | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
 | 014 | 2026-06-01 | merged | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
+| 015 | 2026-06-01 | draft | Club slugs for inbound email routing | [plan](015-club-slugs/plan.md) |
+| 016 | 2026-06-01 | draft | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
 
 Status notes:
 
