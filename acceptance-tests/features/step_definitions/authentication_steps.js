@@ -2,19 +2,27 @@ const { Given, When, Then } = require("@cucumber/cucumber");
 const {
   assertDoesNotReceiveSignInLink,
   assertNotSignedIn,
+  assertClubMarketingPage,
+  assertOnHomepage,
   assertOnStaffOnlyHomepage,
   assertReceivesSignInLink,
   assertSeesClub,
   assertSignedIn,
   assertSignedInAsStaff,
+  assertSignedOut,
+  assertSignedInOnClubPage,
+  assertStillSignedIn,
+  assertPoweredByMembaInClubFooter,
   ensureMember,
   expireSignInLink,
   followSameSignInLinkAgain,
   followSignInLink,
   followUnissuedSignInLink,
+  openClubPage,
   recordNonMember,
   requestSignInLinkForEmail,
   requestSignInLinkForPerson,
+  signOut,
   tryOpenStaffOnlyArea
 } = require("../support/authentication");
 
@@ -85,6 +93,42 @@ Then("{word} should be signed in as Memba staff", async function (personName) {
 
 Then("{word} should not be signed in", async function (_personName) {
   await assertNotSignedIn(this);
+});
+
+When("{word} signs out", async function (_personName) {
+  await signOut(this);
+});
+
+Given("{word} has signed out", async function (_personName) {
+  await signOut(this);
+});
+
+Then("{word} should still be signed in", async function (personName) {
+  await assertStillSignedIn(this, personName);
+});
+
+Then("{word} should be signed out", async function (_personName) {
+  await assertSignedOut(this);
+});
+
+When("{word} opens the Kootenay Mountaineering Club page", async function (_personName) {
+  await openClubPage(this, "Kootenay Mountaineering Club");
+});
+
+Then("{word} should see they are signed in on the club page", async function (personName) {
+  await assertSignedInOnClubPage(this, personName);
+});
+
+Then("{word} should see the Kootenay Mountaineering Club marketing page", async function (_personName) {
+  await assertClubMarketingPage(this, "Kootenay Mountaineering Club");
+});
+
+Then("the club page should show Powered by Memba in the footer", async function () {
+  await assertPoweredByMembaInClubFooter(this);
+});
+
+Then("{word} should be on the homepage", async function (_personName) {
+  await assertOnHomepage(this);
 });
 
 Then("{word} should be on the staff-only homepage", async function (_personName) {

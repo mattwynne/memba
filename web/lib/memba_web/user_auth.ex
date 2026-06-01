@@ -134,10 +134,15 @@ defmodule MembaWeb.UserAuth do
   def require_active_club_member_if_club_id_present(conn, _opts) do
     conn = fetch_query_params(conn)
 
-    if Map.has_key?(conn.query_params, "club_id") do
-      require_active_club_member(conn, [])
-    else
-      conn
+    cond do
+      not Map.has_key?(conn.query_params, "club_id") ->
+        conn
+
+      conn.method == "GET" and is_nil(ensure_current_identity(conn).assigns.current_identity) ->
+        conn
+
+      true ->
+        require_active_club_member(conn, [])
     end
   end
 

@@ -83,7 +83,10 @@ defmodule MembaWeb.Layouts do
             </span>
           </a>
 
-          <nav class="flex flex-wrap gap-2 text-sm font-medium" aria-label="Staff admin navigation">
+          <nav
+            class="flex flex-wrap items-center gap-2 text-sm font-medium"
+            aria-label="Staff admin navigation"
+          >
             <.link
               navigate={~p"/admin/clubs"}
               class="rounded-md px-3 py-2 text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
@@ -96,6 +99,15 @@ defmodule MembaWeb.Layouts do
             >
               Deliveries
             </.link>
+            <.form for={%{}} action={~p"/auth"} method="delete" id="admin-sign-out-form">
+              <button
+                id="admin-sign-out-button"
+                type="submit"
+                class="rounded-md border border-zinc-300 bg-white px-3 py-2 text-zinc-700 transition hover:bg-zinc-100 hover:text-zinc-950"
+              >
+                Sign out
+              </button>
+            </.form>
           </nav>
         </div>
       </header>
@@ -127,6 +139,10 @@ defmodule MembaWeb.Layouts do
   attr :flash, :map, required: true, doc: "the map of flash messages"
   attr :club_name, :string, default: "Club", doc: "the club name shown in the site chrome"
 
+  attr :current_identity, :map,
+    default: nil,
+    doc: "the signed-in identity shown in club member chrome"
+
   attr :theme, :map,
     default: %{},
     doc: "optional CSS color values keyed by the club-site theme names"
@@ -148,19 +164,44 @@ defmodule MembaWeb.Layouts do
       style={@theme_style}
     >
       <header class="border-b border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 sm:px-6 lg:px-8">
-        <div class="mx-auto flex max-w-7xl items-center justify-between py-4">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <a href={~p"/"} class="text-lg font-semibold tracking-tight text-[var(--club-site-ink)]">
             {@club_name}
           </a>
-          <span class="text-xs font-medium text-[var(--club-site-muted)]">
-            Powered by <span class="font-semibold text-[var(--club-site-accent)]">Memba</span>
-          </span>
+
+          <nav
+            :if={@current_identity}
+            class="flex flex-wrap items-center gap-3 text-sm font-medium"
+            aria-label="Club member navigation"
+          >
+            <span id="club-site-current-identity" class="text-[var(--club-site-muted)]">
+              Signed in as {@current_identity.email}
+            </span>
+            <.form for={%{}} action={~p"/auth"} method="delete" id="club-site-sign-out-form">
+              <button
+                id="club-site-sign-out-button"
+                type="submit"
+                class="rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-2 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+              >
+                Sign out
+              </button>
+            </.form>
+          </nav>
         </div>
       </header>
 
       <main class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
         {render_slot(@inner_block)}
       </main>
+
+      <footer
+        id="club-site-footer"
+        class="border-t border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-6 sm:px-6 lg:px-8"
+      >
+        <div class="mx-auto max-w-7xl text-sm font-medium text-[var(--club-site-muted)]">
+          Powered by <span class="font-semibold text-[var(--club-site-accent)]">Memba</span>
+        </div>
+      </footer>
     </div>
 
     <.flash_group flash={@flash} />

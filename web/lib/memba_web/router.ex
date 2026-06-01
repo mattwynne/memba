@@ -36,6 +36,7 @@ defmodule MembaWeb.Router do
     pipe_through [:browser, :club_member_context]
 
     get "/", PageController, :home
+    post "/", PageController, :send_message
   end
 
   scope "/", MembaWeb do

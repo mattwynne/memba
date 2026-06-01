@@ -191,9 +191,49 @@ async function assertSignedIn(world, personName) {
   await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${person.email}`);
 }
 
+async function assertStillSignedIn(world, personName) {
+  await assertSignedIn(world, personName);
+}
+
 async function assertSignedInAsStaff(world, _personName) {
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
   await playwrightExpect(world.page.getByRole("link", { name: "Clubs" })).toBeVisible();
+}
+
+async function openClubPage(world, clubName) {
+  ensureState(world);
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to be known in the scenario`);
+  await world.page.goto(appUrl(world.baseUrl, `/?club_id=${encodeURIComponent(club.clubId)}`));
+  await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+}
+
+async function signOut(world) {
+  await world.page.getByRole("button", { name: "Sign out" }).click();
+}
+
+async function assertSignedInOnClubPage(world, personName) {
+  const person = personFromWorld(world, personName);
+  await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(
+    `Signed in as ${person.email}`
+  );
+  await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
+}
+
+async function assertClubMarketingPage(world, clubName) {
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to be known in the scenario`);
+  await playwrightExpect(world.page.locator("#club-marketing-page")).toBeVisible();
+  await playwrightExpect(world.page.locator("#club-marketing-page")).toHaveAttribute("data-club-id", club.clubId);
+  await playwrightExpect(world.page.getByRole("heading", { name: `Welcome to ${clubName}` })).toBeVisible();
+  await playwrightExpect(world.page.getByRole("link", { name: "Sign in to continue" })).toBeVisible();
+  await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
+}
+
+async function assertPoweredByMembaInClubFooter(world) {
+  await playwrightExpect(world.page.locator("#club-site-layout header")).not.toContainText("Powered by Memba");
+  await playwrightExpect(world.page.locator("#club-site-layout footer")).toContainText("Powered by Memba");
 }
 
 async function assertNotSignedIn(world) {
@@ -201,9 +241,20 @@ async function assertNotSignedIn(world) {
   await playwrightExpect(world.page.getByText("That sign-in link is invalid or has expired.")).toBeVisible();
 }
 
+async function assertSignedOut(world) {
+  await playwrightExpect(world.page).toHaveURL(/\/$/);
+  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toHaveCount(0);
+  await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
+  await playwrightExpect(world.page.getByRole("link", { name: "Sign In" }).first()).toBeVisible();
+}
+
 async function assertOnStaffOnlyHomepage(world) {
   await playwrightExpect(world.page).toHaveURL(/\/admin\/clubs/);
   await playwrightExpect(world.page.getByRole("heading", { name: "Clubs", exact: true })).toBeVisible();
+}
+
+async function assertOnHomepage(world) {
+  await playwrightExpect(world.page).toHaveURL(/\/$/);
 }
 
 async function assertSeesClub(world, clubName) {
@@ -265,6 +316,7 @@ module.exports = {
   assertSeesClub,
   assertSignedIn,
   assertSignedInAsStaff,
+  assertStillSignedIn,
   ensureMember,
   expireSignInLink,
   followSameSignInLinkAgain,
@@ -272,8 +324,15 @@ module.exports = {
   followUnissuedSignInLink,
   kootenayClubName,
   nelsonClubName,
+  openClubPage,
   recordNonMember,
   requestSignInLinkForEmail,
   requestSignInLinkForPerson,
+  signOut,
+  assertSignedOut,
+  assertSignedInOnClubPage,
+  assertPoweredByMembaInClubFooter,
+  assertClubMarketingPage,
+  assertOnHomepage,
   tryOpenStaffOnlyArea
 };

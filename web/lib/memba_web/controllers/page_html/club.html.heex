@@ -1,26 +1,169 @@
-<Layouts.club_site flash={@flash} club_name={@selected_club.name}>
-  <section
-    id="member-club-home"
-    data-club-id={@selected_club.club_id}
-    class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
-  >
-    <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
-      Active membership
-    </p>
-    <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
-      {@selected_club.name}
-    </h1>
-    <p class="mt-5 max-w-2xl text-lg leading-8 text-[var(--club-site-muted)]">
-      Welcome to your club space.
-    </p>
-    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-      <a
-        id="back-to-my-clubs-link"
-        href={~p"/"}
-        class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5"
+<Layouts.club_site
+  flash={@flash}
+  club_name={@selected_club.name}
+  current_identity={@current_identity}
+>
+  <div class="space-y-8">
+    <section
+      id="member-club-home"
+      data-club-id={@selected_club.club_id}
+      class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+    >
+      <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+        Active membership
+      </p>
+      <div class="mt-3 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 class="text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+            {@selected_club.name}
+          </h1>
+          <p class="mt-5 max-w-2xl text-lg leading-8 text-[var(--club-site-muted)]">
+            Welcome to your club space. Send messages, see who belongs, and check recent club updates.
+          </p>
+        </div>
+        <a
+          id="back-to-my-clubs-link"
+          href={~p"/"}
+          class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-5 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5"
+        >
+          Back to my clubs
+        </a>
+      </div>
+    </section>
+
+    <section
+      id="member-send-message"
+      class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+    >
+      <div class="max-w-2xl">
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+          Messages
+        </p>
+        <h2 class="mt-2 text-2xl font-semibold text-[var(--club-site-ink)]">
+          Send a club message
+        </h2>
+        <p class="mt-3 leading-7 text-[var(--club-site-muted)]">
+          Your message goes to every active member listed for this club.
+        </p>
+      </div>
+
+      <.form
+        for={@message_form}
+        id="member-message-form"
+        action={~p"/?#{[club_id: @selected_club.club_id]}"}
+        method="post"
+        class="mt-6 grid gap-4 lg:grid-cols-2"
       >
-        Back to my clubs
-      </a>
+        <.input
+          field={@message_form[:sender_id]}
+          id="member-message-sender-select"
+          label="Sender"
+          type="select"
+          aria-label="Message sender"
+          prompt="Choose a sender"
+          options={@member_options}
+          required
+        />
+        <.input
+          field={@message_form[:subject]}
+          id="member-message-subject-input"
+          label="Subject"
+          aria-label="Message subject"
+          required
+        />
+        <div class="lg:col-span-2">
+          <.input
+            field={@message_form[:body]}
+            id="member-message-body-input"
+            label="Body"
+            type="textarea"
+            aria-label="Message body"
+            required
+          />
+        </div>
+        <div class="lg:col-span-2">
+          <button
+            id="member-send-message-button"
+            type="submit"
+            class="inline-flex items-center justify-center rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+          >
+            Send club message
+          </button>
+        </div>
+      </.form>
+    </section>
+
+    <div class="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+      <section
+        id="club-members"
+        class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+              People
+            </p>
+            <h2 class="mt-2 text-2xl font-semibold text-[var(--club-site-ink)]">Members</h2>
+          </div>
+          <span class="rounded-full border border-[var(--club-site-line)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]">
+            {Enum.count(@members)}
+          </span>
+        </div>
+
+        <div id="member-list" class="mt-6 divide-y divide-[var(--club-site-line)]">
+          <p
+            :if={@members == []}
+            id="member-list-empty"
+            class="py-4 text-sm text-[var(--club-site-muted)]"
+          >
+            No active members yet.
+          </p>
+          <div
+            :for={member <- @members}
+            id={"club-member-#{member.id}"}
+            data-testid="club-member-row"
+            data-member-id={member.id}
+            data-member-name={member.name}
+            class="py-4"
+          >
+            <p class="font-semibold text-[var(--club-site-ink)]">{member.name}</p>
+            <p class="mt-1 text-sm text-[var(--club-site-muted)]">{member.email}</p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="club-messages"
+        class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm"
+      >
+        <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
+          Recent updates
+        </p>
+        <h2 class="mt-2 text-2xl font-semibold text-[var(--club-site-ink)]">Sent messages</h2>
+
+        <div id="member-message-list" class="mt-6 divide-y divide-[var(--club-site-line)]">
+          <p
+            :if={@messages == []}
+            id="member-message-list-empty"
+            class="py-4 text-sm text-[var(--club-site-muted)]"
+          >
+            No messages have been sent yet.
+          </p>
+          <article
+            :for={message <- @messages}
+            id={"member-message-#{message.message_id}"}
+            data-testid="club-message-row"
+            data-message-id={message.message_id}
+            data-message-subject={message.subject}
+            class="py-4"
+          >
+            <h3 class="font-semibold text-[var(--club-site-ink)]">{message.subject}</h3>
+            <p class="mt-2 whitespace-pre-wrap leading-7 text-[var(--club-site-muted)]">
+              {message.body}
+            </p>
+          </article>
+        </div>
+      </section>
     </div>
-  </section>
+  </div>
 </Layouts.club_site>

@@ -57,6 +57,15 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     Map.put(context, :signed_in_identity, nil)
   end
 
+  step "{word} opens the Kootenay Mountaineering Club page", context do
+    _club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+    Map.put(context, :current_page, :club_page)
+  end
+
+  step "{word} signs out", context do
+    sign_out(context)
+  end
+
   step "{word} has signed out", context do
     sign_out(context)
   end
@@ -120,6 +129,31 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     identity = Map.fetch!(context, :signed_in_identity)
     person = fetch_from_context!(context, :people, person_name)
     assert identity.email == Accounts.normalize_email(person.email)
+    context
+  end
+
+  step "{word} should be signed out", context do
+    assert Map.get(context, :signed_in_identity) == nil
+    context
+  end
+
+  step "{word} should see they are signed in on the club page",
+       %{args: [person_name]} = context do
+    assert Map.get(context, :current_page) == :club_page
+    identity = Map.fetch!(context, :signed_in_identity)
+    person = fetch_from_context!(context, :people, person_name)
+    assert identity.email == Accounts.normalize_email(person.email)
+    context
+  end
+
+  step "{word} should see the Kootenay Mountaineering Club marketing page", context do
+    assert Map.get(context, :current_page) == :club_page
+    assert Map.get(context, :signed_in_identity) == nil
+    context
+  end
+
+  step "the club page should show Powered by Memba in the footer", context do
+    assert Map.get(context, :current_page) == :club_page
     context
   end
 
