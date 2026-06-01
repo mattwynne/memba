@@ -61,12 +61,13 @@ defmodule MembaWeb.RouterTest do
   end
 
   describe "member message routes" do
-    test "routes /messages/:message_id through the required club member pipeline" do
+    test "routes /messages/:message_id through the required club member pipeline to the member message LiveView" do
       assert %{
                path_params: %{"message_id" => "message-123"},
                pipe_through: [:browser, :club_member_required],
-               plug: MembaWeb.PageController,
-               plug_opts: :show_message,
+               phoenix_live_view: {MembaWeb.MemberMessageLive.Show, :show, _opts, _live_session},
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: :show,
                route: "/messages/:message_id"
              } =
                Phoenix.Router.route_info(
