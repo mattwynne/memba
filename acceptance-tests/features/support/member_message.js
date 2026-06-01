@@ -103,6 +103,14 @@ function allRows(page, containerId, testId) {
   return page.locator(`#${containerId} [data-testid=${cssString(testId)}]`);
 }
 
+function clubHomePath(clubId) {
+  return `/?club_id=${encodeURIComponent(clubId)}`;
+}
+
+function memberMessagePath(message) {
+  return `/messages/${encodeURIComponent(message.messageId)}?club_id=${encodeURIComponent(message.clubId)}`;
+}
+
 async function rowAttributeValues(rows, attributeName) {
   return rows.evaluateAll(
     (elements, attr) =>
@@ -261,6 +269,41 @@ async function openMessage(world, subject, { expect = playwrightExpect, timeoutM
     world,
     world.page.getByRole("heading", { name: subject }),
     `message heading for ${JSON.stringify(subject)}`,
+    { expect, timeoutMs }
+  );
+}
+
+async function openMemberClubHome(world, clubName, { expect = playwrightExpect, timeoutMs } = {}) {
+  ensureState(world);
+
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to have been created before opening the member club home`);
+
+  await browserInteraction(`visit member club home for ${clubName}`, () =>
+    world.page.goto(appUrl(world.baseUrl, clubHomePath(club.clubId)))
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: clubName }),
+    `member club home heading for ${clubName}`,
+    { expect, timeoutMs }
+  );
+}
+
+async function openMemberMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
+  ensureState(world);
+
+  const message = world.messages[subject];
+  assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
+  assert.ok(message.clubId, `Expected message ${JSON.stringify(subject)} to have a club id`);
+
+  await browserInteraction(`visit member message page for ${JSON.stringify(subject)}`, () =>
+    world.page.goto(appUrl(world.baseUrl, memberMessagePath(message)))
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: subject }),
+    `member message heading for ${JSON.stringify(subject)}`,
     { expect, timeoutMs }
   );
 }
@@ -425,6 +468,64 @@ async function addMemberOnCurrentClubPage(
   };
 }
 
+async function sendMemberMessageToKootenayMembers(
+  world,
+  senderName,
+  subject,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const body = `${subject} details.`;
+  const sender = world.people[senderName];
+  assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
+
+  await openMemberClubHome(world, kootenayClubName, { expect });
+
+  const messageRows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
+  const previousMessageIds = await rowAttributeValues(messageRows, "data-message-id");
+  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+
+  await browserInteraction(`submit member message form for ${JSON.stringify(subject)}`, async () => {
+    await world.page.getByLabel("Message sender").selectOption(sender.personId);
+    await world.page.getByLabel("Message subject").fill(subject);
+    await world.page.getByLabel("Message body").fill(body);
+    await world.page.getByRole("button", { name: "Send club message" }).click();
+  });
+  await waitForProjectedCount(
+    world,
+    messageRows,
+    previousMessageIds.length + 1,
+    `new member club message row for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  const messageId = await newRowAttributeValue(
+    messageRows,
+    "data-message-id",
+    previousMessageIds,
+    `member club message row for ${subject}`
+  );
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "club-message-row", "data-message-id", messageId),
+    `projected member club message row ${messageId}`,
+    { expect }
+  );
+
+  world.messages[subject] = {
+    body,
+    clubId: world.clubs[kootenayClubName].clubId,
+    messageId,
+    senderName,
+    subject
+  };
+  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
+  world.lastMessageSubject = subject;
+
+  return world;
+}
+
 async function sendMessageToKootenayMembers(
   world,
   senderName,
@@ -483,6 +584,77 @@ async function sendMessageToKootenayMembers(
   world.lastMessageSubject = subject;
 
   await openMessage(world, subject, { expect });
+
+  return world;
+}
+
+async function assertMemberSeesMessageInClub(
+  world,
+  subject,
+  clubName,
+  { expect = playwrightExpect } = {}
+) {
+  await openMemberClubHome(world, clubName, { expect });
+
+  const row = rowByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedVisible(
+    world,
+    row,
+    `member club message row for ${JSON.stringify(subject)} in ${clubName}`,
+    { expect }
+  );
+
+  return world;
+}
+
+async function assertMemberMessageAddressedTo(
+  world,
+  expectedNames,
+  subject = world.lastMessageSubject,
+  { expect = playwrightExpect } = {}
+) {
+  await openMemberMessage(world, subject, { expect });
+
+  const rows = allRows(world.page, "member-receipts", "member-receipt");
+  await waitForProjectedCount(
+    world,
+    rows,
+    expectedNames.length,
+    `member-facing recipient rows for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  const actualNames = await rowDatasetValues(rows, "recipientName");
+  assertFinalBrowserState(`member-facing recipients for ${JSON.stringify(subject)}`, () =>
+    assert.deepEqual(actualNames, expectedNames)
+  );
+
+  world.addressedMemberNames = expectedNames;
+  world.addressedMemberIds = expectedNames.map((name) => {
+    const person = world.people[name];
+    assert.ok(person, `Expected ${name} to have been created`);
+    return person.personId;
+  });
+
+  return world;
+}
+
+async function assertMemberMessageNotAddressedTo(
+  world,
+  excludedName,
+  subject = world.lastMessageSubject,
+  { expect = playwrightExpect } = {}
+) {
+  await openMemberMessage(world, subject, { expect });
+
+  const rows = allRows(world.page, "member-receipts", "member-receipt");
+  const actualNames = await rowDatasetValues(rows, "recipientName");
+  assertFinalBrowserState(`member-facing recipients should not include ${excludedName}`, () =>
+    assert.ok(
+      !actualNames.includes(excludedName),
+      `Expected member-facing recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
+    )
+  );
 
   return world;
 }
@@ -663,6 +835,81 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
   return world;
 }
 
+async function assertEveryAddressedMemberReceiptStatus(
+  world,
+  subject,
+  expectedLabel,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const addressedMemberNames = world.addressedMemberNames || [];
+  assert.ok(
+    addressedMemberNames.length > 0,
+    "Expected addressed members to be asserted before checking every member receipt status"
+  );
+
+  await openMemberMessage(world, subject, { expect });
+
+  for (const recipientName of addressedMemberNames) {
+    await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+  }
+
+  return world;
+}
+
+async function assertMemberReceiptStatus(
+  world,
+  recipientName,
+  subject,
+  expectedLabel,
+  { expect = playwrightExpect } = {}
+) {
+  await openMemberMessage(world, subject, { expect });
+  await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+
+  return world;
+}
+
+async function assertMemberReceiptStatusOnCurrentPage(
+  world,
+  recipientName,
+  subject,
+  expectedLabel,
+  { expect = playwrightExpect } = {}
+) {
+  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
+  await waitForProjectedVisible(
+    world,
+    row,
+    `${recipientName}'s member-facing receipt row for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+  await waitForProjectedText(
+    world,
+    row.locator("[data-testid=\"receipt-status\"]"),
+    expectedLabel,
+    `${recipientName}'s member-facing receipt status label for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  const expectedIcon = memberReceiptIconForLabel(expectedLabel);
+  const icon = row.locator("[data-testid=\"receipt-status-icon\"]");
+  await waitForProjectedVisible(
+    world,
+    icon,
+    `${recipientName}'s member-facing receipt status icon for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  const actualIcon = await icon.getAttribute("data-icon-name");
+  assertFinalBrowserState(`${recipientName}'s member-facing receipt icon for ${JSON.stringify(subject)}`, () =>
+    assert.equal(actualIcon, expectedIcon)
+  );
+
+  return world;
+}
+
 async function assertReceiptStatus(world, recipientName, subject, expectedStatus, { expect = playwrightExpect } = {}) {
   await openMessage(world, subject, { expect });
 
@@ -785,6 +1032,25 @@ function memberReceiptStatusForEventType(eventType) {
 
     default:
       throw new Error(`Unsupported browser receipt projection status event: ${eventType}`);
+  }
+}
+
+function memberReceiptIconForLabel(label) {
+  switch (label) {
+    case "Sending":
+      return "hero-clock";
+
+    case "Delivered":
+      return "hero-check-circle";
+
+    case "Delivery problem":
+      return "hero-exclamation-triangle";
+
+    case "Opened":
+      return "hero-envelope-open";
+
+    default:
+      throw new Error(`Unsupported member-facing receipt label: ${label}`);
   }
 }
 
@@ -1059,11 +1325,16 @@ function assertUnique(values, label) {
 module.exports = {
   addMembers,
   appUrl,
+  assertEveryAddressedMemberReceiptStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachDeliverySentThroughEmailProvider,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertMemberMessageAddressedTo,
+  assertMemberMessageNotAddressedTo,
+  assertMemberReceiptStatus,
+  assertMemberSeesMessageInClub,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReceiptStatus,
@@ -1075,8 +1346,11 @@ module.exports = {
   emailFor,
   ensureState,
   kootenayClubName,
+  memberReceiptIconForLabel,
   memberReceiptStatusForEventType,
   nelsonClubName,
+  openMemberClubHome,
+  openMemberMessage,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
   projectionPollIntervalMs,
@@ -1086,6 +1360,7 @@ module.exports = {
   openDeliveriesOverview,
   openClub,
   openMessage,
+  sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
   testMailboxEmails,
   visitClubsIndex,

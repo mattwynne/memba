@@ -1,22 +1,28 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const {
   addMembers,
+  assertEveryAddressedMemberReceiptStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
+  assertMemberMessageAddressedTo,
+  assertMemberMessageNotAddressedTo,
+  assertMemberReceiptStatus,
+  assertMemberSeesMessageInClub,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
-  assertReceiptStatus,
   createClub,
   createPeople,
   kootenayClubName,
   nelsonClubName,
+  openMemberMessage,
   reportRecipientEmailStatus,
+  sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers
 } = require("../support/member_message");
-const { withStaffHarness } = require("../support/member_harness");
+const { withMemberHarness, withStaffHarness } = require("../support/member_harness");
 
 Given("Kootenay Mountaineering Club is a club", async function () {
   await withStaffHarness(this, (staff) => createClub(staff, kootenayClubName));
@@ -30,12 +36,20 @@ Given("Alice, Bob, and Carol are people", async function () {
   await withStaffHarness(this, (staff) => createPeople(staff, ["Alice", "Bob", "Carol"]));
 });
 
+Given("Alice, Bob, Carol, and Dana are people", async function () {
+  await withStaffHarness(this, (staff) => createPeople(staff, ["Alice", "Bob", "Carol", "Dana"]));
+});
+
 Given("Pat is a person", async function () {
   await withStaffHarness(this, (staff) => createPeople(staff, ["Pat"]));
 });
 
 Given("Alice, Bob, and Carol are members of Kootenay Mountaineering Club", async function () {
   await withStaffHarness(this, (staff) => addMembers(staff, ["Alice", "Bob", "Carol"], kootenayClubName));
+});
+
+Given("Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", async function () {
+  await withStaffHarness(this, (staff) => addMembers(staff, ["Alice", "Bob", "Carol", "Dana"], kootenayClubName));
 });
 
 Given("Pat is a member of Nelson Paddling Club", async function () {
@@ -45,7 +59,9 @@ Given("Pat is a member of Nelson Paddling Club", async function () {
 When(
   "{word} sends the message {string} to Kootenay Mountaineering Club members",
   async function (senderName, subject) {
-    await withStaffHarness(this, (staff) => sendMessageToKootenayMembers(staff, senderName, subject));
+    await withMemberHarness(this, senderName, (member) =>
+      sendMemberMessageToKootenayMembers(member, senderName, subject)
+    );
   }
 );
 
@@ -53,6 +69,39 @@ Given(
   "{word} has sent the message {string} to Kootenay Mountaineering Club members",
   async function (senderName, subject) {
     await withStaffHarness(this, (staff) => sendMessageToKootenayMembers(staff, senderName, subject));
+  }
+);
+
+Then(
+  "{word} should see the message {string} in Kootenay Mountaineering Club",
+  async function (viewerName, subject) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertMemberSeesMessageInClub(member, subject, kootenayClubName)
+    );
+  }
+);
+
+Then(/^(\w+) should see the message was addressed to (.+)$/, async function (
+  viewerName,
+  expectedNamesText
+) {
+  await withMemberHarness(this, viewerName, (member) =>
+    assertMemberMessageAddressedTo(member, parsePersonList(expectedNamesText))
+  );
+});
+
+Then("{word} should not see {word} in the addressed members", async function (viewerName, excludedName) {
+  await withMemberHarness(this, viewerName, (member) =>
+    assertMemberMessageNotAddressedTo(member, excludedName)
+  );
+});
+
+Then(
+  "{word} should see every addressed member's receipt status as {string}",
+  async function (viewerName, expectedStatus) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertEveryAddressedMemberReceiptStatus(member, member.lastMessageSubject, expectedStatus)
+    );
   }
 );
 
@@ -78,8 +127,23 @@ Then("each addressed member should receive the email in the test mailbox", async
 
 Then(
   "{word}'s receipt status for {string} should be {string}",
-  async function (recipientName, subject, expectedStatus) {
-    await withStaffHarness(this, (staff) => assertReceiptStatus(staff, recipientName, subject, expectedStatus));
+  async function (viewerName, subject, expectedStatus) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertMemberReceiptStatus(member, viewerName, subject, expectedStatus)
+    );
+  }
+);
+
+When("{word} views the message {string}", async function (viewerName, subject) {
+  await withMemberHarness(this, viewerName, (member) => openMemberMessage(member, subject));
+});
+
+Then(
+  "{word} should see {word}'s receipt status for {string} as {string}",
+  async function (viewerName, recipientName, subject, expectedStatus) {
+    await withMemberHarness(this, viewerName, (member) =>
+      assertMemberReceiptStatus(member, recipientName, subject, expectedStatus)
+    );
   }
 );
 
@@ -104,8 +168,22 @@ When(
   }
 );
 
+Given(
+  "{word}'s email for {string} has been reported as delayed because {string}",
+  async function (recipientName, subject, reason) {
+    await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "delayed", { reason }));
+  }
+);
+
 When(
   "{word}'s email for {string} is reported as bounced because {string}",
+  async function (recipientName, subject, reason) {
+    await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "bounced", { reason }));
+  }
+);
+
+Given(
+  "{word}'s email for {string} has been reported as bounced because {string}",
   async function (recipientName, subject, reason) {
     await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "bounced", { reason }));
   }
@@ -122,6 +200,10 @@ When("{word} opens the email for {string}", async function (recipientName, subje
   await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
 });
 
+Given("{word} has opened the email for {string}", async function (recipientName, subject) {
+  await withStaffHarness(this, (staff) => reportRecipientEmailStatus(staff, recipientName, subject, "opened"));
+});
+
 Then(
   "operators should see {word}'s delivery for {string} as {string}",
   async function (recipientName, subject, expectedStatus) {
@@ -135,3 +217,11 @@ Then(
     await withStaffHarness(this, (staff) => assertOperatorDeliveryReason(staff, recipientName, expectedReason));
   }
 );
+
+function parsePersonList(text) {
+  return text
+    .replace(/,?\s+and\s+/g, ", ")
+    .split(/\s*,\s*/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
