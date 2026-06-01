@@ -8,45 +8,23 @@ defmodule MembaWeb.MemberMessageLive.Show do
   """
   use MembaWeb, :live_view
 
-  alias Memba.Membership
-  alias Memba.Messaging
-  alias MembaWeb.MemberReceiptPresentation
-
-  @member_receipt_status_order ["opened", "delivered", "sent", "delivery problem"]
+  alias MembaWeb.MemberMessageDetail
 
   @impl Phoenix.LiveView
-  def mount(%{"club_id" => club_id, "message_id" => message_id} = params, _session, socket) do
+  def mount(%{"club_id" => _club_id, "message_id" => _message_id} = params, _session, socket) do
     socket = ensure_identity_assigns(socket)
 
-    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
-         selected_club when not is_nil(selected_club) <- selected_club(socket, club_id),
-         message when not is_nil(message) <- Messaging.get_message(message_id),
-         true <- message.club_id == club_id do
-      receipts =
-        message.message_id
-        |> Messaging.list_member_receipts()
-        |> Enum.map(&MemberReceiptPresentation.present_receipt/1)
+    case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
+      {:ok, detail_assigns} ->
+        {:ok,
+         socket
+         |> assign(:route_params, params)
+         |> assign(detail_assigns)}
 
-      sender = Membership.get_person(message.sender_id)
+      {:error, :forbidden} ->
+        forbidden!(socket)
 
-      {:ok,
-       socket
-       |> assign(:route_params, params)
-       |> assign(:page_title, message.subject)
-       |> assign(:selected_club, selected_club)
-       |> assign(:message, message)
-       |> assign(:sender_name, sender_name(sender))
-       |> assign(:member_receipts, receipts)
-       |> assign(:member_receipt_count, Enum.count(receipts))
-       |> assign(:member_receipt_groups, member_receipt_groups(receipts))}
-    else
-      :error ->
-        not_found!(socket)
-
-      nil ->
-        not_found!(socket)
-
-      false ->
+      {:error, :not_found} ->
         not_found!(socket)
     end
   end
@@ -97,32 +75,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
     |> assign_new(:current_identity_clubs, fn -> [] end)
   end
 
-  defp selected_club(socket, club_id) do
-    Enum.find(socket.assigns.current_identity_clubs, fn club -> club.club_id == club_id end)
-  end
-
-  defp sender_name(%{name: name}) when is_binary(name) and name != "", do: name
-  defp sender_name(_sender), do: "Club member"
-
-  defp member_receipt_groups(receipts) do
-    receipts_by_status = Enum.group_by(receipts, & &1.status)
-    extra_statuses = Map.keys(receipts_by_status) -- @member_receipt_status_order
-
-    (@member_receipt_status_order ++ Enum.sort(extra_statuses))
-    |> Enum.map(fn status ->
-      status_receipts = Map.get(receipts_by_status, status, [])
-      presentation = MemberReceiptPresentation.present_status(status)
-
-      %{
-        status: status,
-        status_label: presentation.label,
-        status_icon: presentation.icon,
-        count: Enum.count(status_receipts),
-        receipts: status_receipts
-      }
-    end)
-    |> Enum.reject(&(&1.count == 0))
-  end
+  defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
 
   defp not_found!(socket) do
     case socket.private[:connect_info] do
