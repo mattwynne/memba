@@ -1,0 +1,84 @@
+diff --git a/docs/iterations/014-member-dashboard-liveview-polish/todo.md b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+index 1b2e5cb..51addc3 100644
+--- a/docs/iterations/014-member-dashboard-liveview-polish/todo.md
++++ b/docs/iterations/014-member-dashboard-liveview-polish/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Build message-row receipt glance data in `MembaWeb.MemberDashboardPresentation` using existing member receipt projections and `MembaWeb.MemberReceiptPresentation` where useful:
+ - [x] 006 Render the dashboard toward `dashboard.jsx`:
+ - [x] 007 Design and render empty states deliberately:
+-- [ ] 008 Preserve or deliberately update stable selectors used by browser acceptance:
++- [x] 008 Preserve or deliberately update stable selectors used by browser acceptance:
+ - [ ] 009 Ensure the club home has no inline compose form; remove any remaining inline compose markup/handlers so compose is only reached through the CTA link to `/messages/new?club_id=<club_id>`.
+ - [ ] 010 Add focused LiveView/Phoenix tests for:
+ - [ ] 011 Run existing browser Cucumber for member-message deliverability and `dev check`.
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index c853049..87ed720 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -149,6 +149,66 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard preserves browser acceptance selectors for messages and members", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    message =
++      create_message(
++        club_id: alice.club_id,
++        sender_id: bob.person_id,
++        subject: "Trip planning night"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-club-home[data-club-id='#{alice.club_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-send-message-link[href='/messages/new?club_id=#{alice.club_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='club-message-row'][data-message-id='#{message.message_id}'][data-message-subject='Trip planning night']"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='club-message-row'][data-message-id='#{message.message_id}'] " <>
++               "[data-testid='club-message-link'][href='/messages/#{message.message_id}?club_id=#{alice.club_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='club-member-row'][data-member-id='#{alice.person_id}'][data-member-name='Alice Adams']"
++           )
++
++    assert has_element?(
++             view,
++             "[data-testid='club-member-row'][data-member-id='#{bob.person_id}'][data-member-name='Bob Builder']"
++           )
++  end
++
+   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
+     alice =
+       create_active_member(
