@@ -1,0 +1,208 @@
+digraph PlanValidation {
+    graph [
+        goal="Rigorously validate the iteration plan at {{ inputs.plan_path }} and mark it validated when it is ready for future implementation",
+        default_fidelity="summary:high",
+        model_stylesheet="
+            * { model: gpt-5.5; reasoning_effort: high; }
+            #read_plan_001_060 { reasoning_effort: low; }
+            #read_plan_061_120 { reasoning_effort: low; }
+            #read_plan_121_180 { reasoning_effort: low; }
+            #read_plan_181_240 { reasoning_effort: low; }
+            #read_plan_241_300 { reasoning_effort: low; }
+            #read_plan_301_360 { reasoning_effort: low; }
+            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }
+            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }
+            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }
+            #synthesize { model: gpt-5.5; reasoning_effort: high; }
+            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }
+            #read_updated_plan_001_060 { reasoning_effort: low; }
+            #read_updated_plan_061_120 { reasoning_effort: low; }
+            #read_updated_plan_121_180 { reasoning_effort: low; }
+            #read_updated_plan_181_240 { reasoning_effort: low; }
+            #read_updated_plan_241_300 { reasoning_effort: low; }
+            #read_updated_plan_301_360 { reasoning_effort: low; }
+            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }
+            #publish_ready { reasoning_effort: low; }
+        "
+    ]
+    rankdir=LR
+
+    start [shape=Mdiamond, label="Start"]
+    exit  [shape=Msquare, label="Exit"]
+
+    read_plan_001_060 [
+        label="Read Plan 001-060",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 1 60 360 'original plan chunk 001-060'"
+    ]
+
+    read_plan_061_120 [
+        label="Read Plan 061-120",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 61 120 360 'original plan chunk 061-120'"
+    ]
+
+    read_plan_121_180 [
+        label="Read Plan 121-180",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 121 180 360 'original plan chunk 121-180'"
+    ]
+
+    read_plan_181_240 [
+        label="Read Plan 181-240",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 181 240 360 'original plan chunk 181-240'"
+    ]
+
+    read_plan_241_300 [
+        label="Read Plan 241-300",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 241 300 360 'original plan chunk 241-300'"
+    ]
+
+    read_plan_301_360 [
+        label="Read Plan 301-360",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 301 360 360 'original plan chunk 301-360'"
+    ]
+
+    read_failed [
+        label="Fail: Plan Missing or Too Long",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Plan validation failed: the plan file could not be read completely. Fix plan_path, make the plan visible to the sandbox, or extend the chunked read coverage before retrying.' >&2\nexit 1"
+    ]
+
+    gemini_review [
+        label="Gemini Review",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/gemini_review.md"
+    ]
+
+    claude_review [
+        label="Claude Review",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/claude_review.md"
+    ]
+
+    codex_review [
+        label="Codex/GPT Review",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/codex_review.md"
+    ]
+
+    synthesize [
+        label="Opus Synthesis & Repair Brief",
+        shape=tab,
+        output_schema="routing",
+        prompt="@prompts/synthesize.md"
+    ]
+
+    synthesis_gate [shape=diamond, label="Obvious fixes?"]
+
+    codex_update [
+        label="Codex Updates Plan",
+        prompt="@prompts/apply_fixes.md"
+    ]
+
+    read_updated_plan_001_060 [
+        label="Read Updated Plan 001-060",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 1 60 360 'updated plan chunk 001-060'"
+    ]
+
+    read_updated_plan_061_120 [
+        label="Read Updated Plan 061-120",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 61 120 360 'updated plan chunk 061-120'"
+    ]
+
+    read_updated_plan_121_180 [
+        label="Read Updated Plan 121-180",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 121 180 360 'updated plan chunk 121-180'"
+    ]
+
+    read_updated_plan_181_240 [
+        label="Read Updated Plan 181-240",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 181 240 360 'updated plan chunk 181-240'"
+    ]
+
+    read_updated_plan_241_300 [
+        label="Read Updated Plan 241-300",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 241 300 360 'updated plan chunk 241-300'"
+    ]
+
+    read_updated_plan_301_360 [
+        label="Read Updated Plan 301-360",
+        shape=parallelogram,
+        script=".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 301 360 360 'updated plan chunk 301-360'"
+    ]
+
+    opus_recheck [
+        label="Opus Recheck",
+        shape=tab,
+        prompt="@prompts/recheck.md"
+    ]
+
+    recheck_gate [shape=diamond, label="Plan ready?"]
+
+    publish_ready [
+        label="Publish Validated Plan",
+        shape=parallelogram,
+        script="if [ '{{ inputs.publish }}' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '{{ inputs.plan_path }}'"
+    ]
+
+    not_ready [
+        label="Fail: Plan Not Ready",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1"
+    ]
+
+    start -> read_plan_001_060
+    read_plan_001_060 -> read_plan_061_120 [condition="outcome=succeeded"]
+    read_plan_001_060 -> read_failed
+    read_plan_061_120 -> read_plan_121_180 [condition="outcome=succeeded"]
+    read_plan_061_120 -> read_failed
+    read_plan_121_180 -> read_plan_181_240 [condition="outcome=succeeded"]
+    read_plan_121_180 -> read_failed
+    read_plan_181_240 -> read_plan_241_300 [condition="outcome=succeeded"]
+    read_plan_181_240 -> read_failed
+    read_plan_241_300 -> read_plan_301_360 [condition="outcome=succeeded"]
+    read_plan_241_300 -> read_failed
+    read_plan_301_360 -> gemini_review [condition="outcome=succeeded"]
+    read_plan_301_360 -> read_failed
+    read_failed -> exit
+    gemini_review -> claude_review
+    claude_review -> codex_review
+    codex_review -> synthesize
+    synthesize -> synthesis_gate
+    synthesis_gate -> publish_ready [label="Already ready", condition="plan_ready=true"]
+    synthesis_gate -> codex_update [label="Apply obvious fixes", condition="plan_needs_fix=true"]
+    synthesis_gate -> not_ready [label="Needs human input"]
+    codex_update -> read_updated_plan_001_060
+    read_updated_plan_001_060 -> read_updated_plan_061_120 [condition="outcome=succeeded"]
+    read_updated_plan_001_060 -> read_failed
+    read_updated_plan_061_120 -> read_updated_plan_121_180 [condition="outcome=succeeded"]
+    read_updated_plan_061_120 -> read_failed
+    read_updated_plan_121_180 -> read_updated_plan_181_240 [condition="outcome=succeeded"]
+    read_updated_plan_121_180 -> read_failed
+    read_updated_plan_181_240 -> read_updated_plan_241_300 [condition="outcome=succeeded"]
+    read_updated_plan_181_240 -> read_failed
+    read_updated_plan_241_300 -> read_updated_plan_301_360 [condition="outcome=succeeded"]
+    read_updated_plan_241_300 -> read_failed
+    read_updated_plan_301_360 -> opus_recheck [condition="outcome=succeeded"]
+    read_updated_plan_301_360 -> read_failed
+    opus_recheck -> recheck_gate
+    recheck_gate -> publish_ready [label="Ready", condition="plan_ready=true"]
+    recheck_gate -> codex_update [label="Fix again", condition="plan_needs_fix=true && context.internal.node_visit_count < 3"]
+    recheck_gate -> not_ready [label="Not ready"]
+    publish_ready -> exit
+    not_ready -> exit
+}
