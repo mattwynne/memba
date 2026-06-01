@@ -144,7 +144,7 @@ Decisions made during planning:
 ## Implementation Plan
 
 1. Inspect the current club-home form, `PageController.send_message/2`, member auth plugs, route tests, and browser acceptance helpers for member message sending.
-2. Introduce a compose LiveView, for example `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline.
+2. Introduce `MembaWeb.MemberMessageLive.New`, routed at `GET /messages/new` through the existing browser/member auth pipeline. Use the route helper/path `~p"/messages/new?club_id=#{club.id}"` in templates/tests rather than inventing a bespoke named helper.
 3. In the LiveView mount path:
    - read `club_id` from query params;
    - find the selected club from the authenticated identity's active clubs;
@@ -173,14 +173,17 @@ Decisions made during planning:
    - send failure state and support copy;
    - club home CTA replacing inline compose.
 10. Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
+    - Simulate send unavailability through test support rather than Gherkin wording. Prefer a test-only configuration seam around the existing message sending/delivery boundary (for example an application-env flag or fake-provider failure mode set by step support) so the feature can say only that sending is unavailable.
 11. Remove `@wip` from the new failure scenario once implemented and passing.
-12. Run the targeted browser Cucumber feature and `dev check`.
+12. Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
+13. Run the targeted browser Cucumber feature and `dev check`.
 
-## Open Technical Decisions
+## Technical Decisions
 
-- Exact LiveView module name and route helper naming.
-- Best way to simulate message-send unavailability in acceptance tests without coupling Gherkin to infrastructure. Prefer a test-support seam or existing fake provider configuration rather than changing business wording.
-- Whether the old `POST /?club_id=<club_id>` route should be removed immediately or kept temporarily for compatibility. The member UI should stop using it in this slice.
+- LiveView module: `MembaWeb.MemberMessageLive.New`.
+- Compose path: `GET /messages/new?club_id=<club_id>`; use Phoenix verified routes (`~p`) in implementation/tests.
+- Send-unavailability simulation: add/use a test-support seam around the sending boundary or fake provider configuration, configured by step support, without exposing infrastructure details in Gherkin.
+- Legacy inline send endpoint: remove the old `POST /?club_id=<club_id>` route/controller action once the LiveView submit path replaces it.
 
 ## New Capability
 
