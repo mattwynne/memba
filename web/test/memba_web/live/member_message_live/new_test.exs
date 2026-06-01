@@ -170,6 +170,41 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute has_element?(view, "[name='message[sender_id]']")
   end
 
+  test "routed GET redirects signed-out visitors and preserves the selected club return path",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    return_path = ~p"/messages/new?club_id=#{alice.club_id}"
+
+    conn = get(conn, return_path)
+
+    assert redirected_to(conn) == ~p"/auth"
+    assert get_session(conn, UserAuth.return_to_session_key()) == return_path
+  end
+
+  test "routed GET forbids a signed-in identity when the selected club is missing", %{
+    conn: conn
+  } do
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    conn =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/messages/new")
+
+    assert response(conn, 403) == "Forbidden"
+  end
+
   test "routed GET forbids a signed-in identity outside the selected club", %{conn: conn} do
     alice =
       create_active_member(
