@@ -95,6 +95,81 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute has_element?(view, "[name='message[sender_id]']")
   end
 
+  test "routed compose screen renders the focused member message form affordances", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    _bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Climbing Club",
+        club_id: alice.club_id
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/new?club_id=#{alice.club_id}")
+
+    assert has_element?(
+             view,
+             "#member-compose-club-home-link[href='/?club_id=#{alice.club_id}']",
+             "Club home"
+           )
+
+    assert has_element?(view, "#member-compose-eyebrow", "New message")
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary[data-active-member-count='2']",
+             "all 2 active members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-recipient-summary",
+             "There’s no list to pick"
+           )
+
+    assert has_element?(
+             view,
+             "#member-compose-from-summary[data-sender-id='#{alice.person_id}'][aria-label='Sending as Alice Adams']",
+             "Sending as yourself"
+           )
+
+    assert has_element?(
+             view,
+             "input#member-message-subject-input[placeholder=\"What's this about?\"]"
+           )
+
+    assert has_element?(
+             view,
+             "textarea#member-message-body-input[placeholder='Write your note to the club…'][rows='8']"
+           )
+
+    assert has_element?(
+             view,
+             "button#member-message-send-button[type='submit']",
+             "Send to all members"
+           )
+
+    assert has_element?(
+             view,
+             "#member-message-cancel-link[href='/?club_id=#{alice.club_id}']",
+             "Cancel"
+           )
+
+    refute has_element?(view, "select")
+    refute has_element?(view, "[name='message[sender_id]']")
+  end
+
   test "routed GET forbids a signed-in identity outside the selected club", %{conn: conn} do
     alice =
       create_active_member(

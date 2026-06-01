@@ -90,44 +90,69 @@ defmodule MembaWeb.MemberMessageLive.New do
         data-active-member-count={@active_member_count}
         class="space-y-8"
       >
-        <section class="overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
+        <section class="mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm sm:p-8">
+          <.link
+            id="member-compose-club-home-link"
+            href={club_home_path(@selected_club, @route_params)}
+            class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
+          >
+            <.icon name="hero-arrow-left" class="size-4" /> Club home
+          </.link>
+
+          <p
+            id="member-compose-eyebrow"
+            class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]"
+          >
+            New message
+          </p>
+
+          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
+            Send a club message
+          </h1>
+
           <p
             id="member-compose-selected-club"
             data-club-id={selected_club_id(@selected_club, @route_params)}
-            class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]"
+            class="mt-3 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]"
           >
             {selected_club_name(@selected_club)}
           </p>
-          <p class="mt-4 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
-            New message
-          </p>
-          <h1 class="mt-3 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
-            Send a club message
-          </h1>
-          <p class="mt-4 max-w-2xl leading-7 text-[var(--club-site-muted)]">
-            This LiveView surface is ready for the focused member compose flow.
-          </p>
 
-          <div :if={@current_member} class="mt-6 grid gap-4 md:grid-cols-2">
-            <p
+          <div
+            id="member-compose-recipient-summary"
+            data-active-member-count={@active_member_count}
+            class="mt-6 flex gap-3 rounded-2xl border border-sky-100 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950"
+          >
+            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-sky-700 ring-1 ring-sky-100">
+              <.icon name="hero-users" class="size-4" />
+            </span>
+            <p>
+              This goes to
+              <strong class="font-semibold text-sky-950">
+                {active_member_count_summary(@active_member_count)}
+              </strong>
+              of {selected_club_name(@selected_club)}. There’s no list to pick — everyone with a current membership gets it.
+            </p>
+          </div>
+
+          <div :if={@current_member} class="mt-6">
+            <p class="mb-2 text-sm font-semibold text-[var(--club-site-ink)]">From</p>
+            <div
               id="member-compose-from-summary"
               data-sender-id={@current_member.id}
-              class="rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-4 text-sm leading-6 text-[var(--club-site-muted)]"
+              aria-label={"Sending as #{@current_member.name}"}
+              class="flex items-center gap-3 rounded-xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3"
             >
-              From <strong class="text-[var(--club-site-ink)]">{@current_member.name}</strong> (you)
-            </p>
-
-            <p
-              id="member-compose-recipient-summary"
-              data-active-member-count={@active_member_count}
-              class="rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-4 text-sm leading-6 text-[var(--club-site-muted)]"
-            >
-              This goes to
-              <strong class="text-[var(--club-site-ink)]">
-                {@active_member_count} active members
-              </strong>
-              of {selected_club_name(@selected_club)}.
-            </p>
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-bg)] text-xs font-semibold text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
+                {member_initials(@current_member.name)}
+              </span>
+              <span class="min-w-0">
+                <strong class="block truncate text-sm font-semibold text-[var(--club-site-ink)]">
+                  {@current_member.name} (you)
+                </strong>
+                <span class="block text-xs text-[var(--club-site-muted)]">Sending as yourself</span>
+              </span>
+            </div>
           </div>
 
           <.form
@@ -140,13 +165,35 @@ defmodule MembaWeb.MemberMessageLive.New do
               field={@message_form[:subject]}
               id="member-message-subject-input"
               label="Subject"
+              placeholder="What's this about?"
+              class="w-full rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
             />
             <.input
               field={@message_form[:body]}
               id="member-message-body-input"
               label="Message"
               type="textarea"
+              placeholder="Write your note to the club…"
+              rows="8"
+              class="min-h-40 w-full resize-y rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
             />
+
+            <div class="mt-2 flex flex-col gap-3 sm:flex-row">
+              <button
+                id="member-message-send-button"
+                type="submit"
+                class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <.icon name="hero-paper-airplane" class="size-4" /> Send to all members
+              </button>
+              <.link
+                id="member-message-cancel-link"
+                href={club_home_path(@selected_club, @route_params)}
+                class="inline-flex min-h-12 items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+              >
+                Cancel
+              </.link>
+            </div>
           </.form>
         </section>
       </div>
@@ -247,6 +294,34 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp current_member_id(nil), do: nil
   defp current_member_id(current_member), do: current_member.id
+
+  defp club_home_path(nil, route_params) do
+    case Map.get(route_params, "club_id") do
+      nil -> ~p"/"
+      club_id -> ~p"/?club_id=#{club_id}"
+    end
+  end
+
+  defp club_home_path(selected_club, _route_params), do: ~p"/?club_id=#{selected_club.club_id}"
+
+  defp active_member_count_summary(nil), do: "all active members"
+  defp active_member_count_summary(1), do: "the active member"
+  defp active_member_count_summary(count), do: "all #{count} active members"
+
+  defp member_initials(nil), do: "ME"
+
+  defp member_initials(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "ME"
+      initials -> initials
+    end
+  end
 
   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
 end
