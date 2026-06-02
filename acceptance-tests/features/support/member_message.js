@@ -1064,7 +1064,7 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
         email.subject === subject &&
         email.text_body === message.body &&
         email.to.some((recipient) => recipient.includes(person.email)) &&
-        (!sender || mailboxEmailFrom(email).includes(sender.email))
+        (!sender || mailboxEmailFrom(email).includes(`${senderName} via Memba`))
     );
 
     assertFinalBrowserState(`test mailbox email for ${recipientName}`, () =>
@@ -1072,7 +1072,7 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
         matchingEmail,
         `Expected a mailbox email for ${recipientName} <${person.email}> with subject ${JSON.stringify(
           subject
-        )}${sender ? ` from ${senderName} <${sender.email}>` : ""}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+        )}${sender ? ` from ${senderName} via Memba` : ""}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
       )
     );
   }

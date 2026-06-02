@@ -35,8 +35,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"Bob Barker", "bob@example.com"}
-    assert email.reply_to == {"", "help@memba.io"}
+    assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+    assert email.reply_to == {"Bob Barker", "bob@example.com"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
     assert email.subject == "Trip planning night"
     assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."
@@ -56,12 +56,16 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
            }
   end
 
-  test "omits reply-to when no reply-to address is configured" do
+  test "uses the verified Memba sender address even when no provider reply-to is configured" do
     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
 
     assert :ok = Postmark.deliver(email_delivery_request())
 
-    assert_received {:email, %Swoosh.Email{reply_to: nil}}
+    assert_received {:email,
+                     %Swoosh.Email{
+                       from: {"Bob Barker via Memba", "messages@mail.memba.io"},
+                       reply_to: {"Bob Barker", "bob@example.com"}
+                     }}
   end
 
   test "does not hand an email to Swoosh when required Postmark configuration is missing" do

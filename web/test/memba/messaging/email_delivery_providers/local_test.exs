@@ -33,8 +33,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     assert :ok = Local.deliver(request)
 
     assert_email_sent(fn email ->
-      assert email.from == {"Bob", "bob@example.test"}
-      assert email.reply_to == {"Matt Wynne", "matt@mattwynne.net"}
+      assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
+      assert email.reply_to == {"Bob", "bob@example.test"}
       assert email.to == [{"Alice", "alice@example.test"}]
       assert email.subject == "Trip planning night"
       assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."

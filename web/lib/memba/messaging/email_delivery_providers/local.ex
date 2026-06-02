@@ -26,8 +26,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
 
   defp email(%EmailDeliveryRequest{} = request) do
     new()
-    |> from({request.sender_name, request.sender_address})
-    |> maybe_reply_to(reply_to_address())
+    |> from({sender_display_name(request), from_address()})
+    |> reply_to({request.sender_name, request.sender_address})
     |> to({request.recipient_name, request.recipient_address})
     |> subject(request.subject)
     |> text_body(request.body)
@@ -35,17 +35,22 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
     |> put_provider_option(:metadata, metadata(request))
   end
 
-  defp reply_to_address do
+  defp from_address do
     provider_config()
-    |> Keyword.get(:reply_to)
+    |> Keyword.get(:from, "messages@mail.memba.local")
+    |> normalize_address()
+  end
+
+  defp sender_display_name(%EmailDeliveryRequest{} = request) do
+    "#{request.sender_name} via Memba"
   end
 
   defp provider_config do
     Application.get_env(:memba, Memba.Messaging.EmailDeliveryProviders.Postmark, [])
   end
 
-  defp maybe_reply_to(email, nil), do: email
-  defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
+  defp normalize_address({_name, address}), do: address
+  defp normalize_address(address), do: address
 
   defp metadata(%EmailDeliveryRequest{} = request) do
     %{
