@@ -11,6 +11,7 @@ defmodule Memba.Accounts.AuthEmail do
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmailConfig
 
+  @sender_name "Memba"
   @subject "Sign in to Memba"
 
   @doc """
@@ -51,7 +52,7 @@ defmodule Memba.Accounts.AuthEmail do
 
   defp sign_in_link_email(recipient_email, callback_url, %AuthEmailConfig{} = config) do
     new()
-    |> from(config.from)
+    |> from({@sender_name, config.from})
     |> to(recipient_email)
     |> subject(@subject)
     |> text_body(text_body(callback_url))
