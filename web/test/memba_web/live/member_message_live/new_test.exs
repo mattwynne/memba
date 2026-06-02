@@ -5,7 +5,6 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
-  alias Memba.Membership.Projections.Person
   alias Memba.Repo
   alias MembaWeb.IdentityAuth
 
@@ -231,19 +230,20 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
         name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
       )
 
-    Repo.insert!(%Person{
-      person_id: person_id,
-      name: Keyword.fetch!(attrs, :name),
-      email: Keyword.fetch!(attrs, :email)
-    })
+    person =
+      insert_membership_person!(
+        person_id: person_id,
+        name: Keyword.fetch!(attrs, :name),
+        email: Keyword.fetch!(attrs, :email)
+      )
 
     Repo.insert!(%Membership{
       membership_id: Ecto.UUID.generate(),
       club_id: club_id,
-      person_id: person_id,
+      person_id: person.person_id,
       active: true
     })
 
-    %{club_id: club_id, person_id: person_id}
+    %{club_id: club_id, person_id: person.person_id}
   end
 end

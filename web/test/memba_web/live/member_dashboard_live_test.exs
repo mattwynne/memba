@@ -5,7 +5,6 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
-  alias Memba.Membership.Projections.Person
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
@@ -525,22 +524,23 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         name: club_name
       )
 
-    Repo.insert!(%Person{
-      person_id: person_id,
-      name: Keyword.get(attrs, :name, "Test Member"),
-      email: Keyword.fetch!(attrs, :email)
-    })
+    person =
+      insert_membership_person!(
+        person_id: person_id,
+        name: Keyword.get(attrs, :name, "Test Member"),
+        email: Keyword.fetch!(attrs, :email)
+      )
 
     Repo.insert!(%Membership{
       membership_id: Ecto.UUID.generate(),
       club_id: club_id,
-      person_id: person_id,
+      person_id: person.person_id,
       active: Keyword.get(attrs, :active, true)
     })
 
     %{
       club_id: club_id,
-      person_id: person_id
+      person_id: person.person_id
     }
   end
 

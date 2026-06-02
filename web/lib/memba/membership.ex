@@ -14,6 +14,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
+  alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Slug
   alias Memba.Repo
 
@@ -148,6 +149,69 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch the primary projected email address for a person.
+
+  Returns `nil` when the person ID is absent, invalid, unknown, or has no
+  projected primary email-address row.
+  """
+  def get_person_primary_email(person_id) do
+    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+      PersonEmailAddress
+      |> where([email_address], email_address.person_id == ^person_id)
+      |> where([email_address], email_address.is_primary == true)
+      |> select([email_address], email_address.email)
+      |> Repo.one()
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  List non-primary projected email addresses for a person.
+
+  Invalid, missing, or unknown person IDs return an empty list.
+  """
+  def list_person_alternate_emails(person_id) do
+    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+      PersonEmailAddress
+      |> where([email_address], email_address.person_id == ^person_id)
+      |> where([email_address], email_address.is_primary == false)
+      |> order_by([email_address], asc: email_address.email, asc: email_address.id)
+      |> select([email_address], email_address.email)
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
+  List all projected email addresses for a person.
+
+  The primary address is returned first, followed by alternate addresses ordered
+  by display email and row ID. Results are plain maps so callers do not depend on
+  Membership projection schemas.
+  """
+  def list_person_email_addresses(person_id) do
+    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+      PersonEmailAddress
+      |> where([email_address], email_address.person_id == ^person_id)
+      |> order_by([email_address],
+        desc: email_address.is_primary,
+        asc: email_address.email,
+        asc: email_address.id
+      )
+      |> select([email_address], %{
+        email: email_address.email,
+        normalized_email: email_address.normalized_email,
+        primary?: email_address.is_primary
+      })
+      |> Repo.all()
+    else
+      :error -> []
+    end
+  end
+
+  @doc """
   List active members of the given club for recipient resolution.
 
   Returns plain maps containing the public identity needed outside the
@@ -161,13 +225,21 @@ defmodule Memba.Membership do
       |> join(:inner, [membership], person in Person,
         on: person.person_id == membership.person_id
       )
-      |> where([membership, _person], membership.club_id == ^club_id)
-      |> where([membership, _person], membership.active == true)
-      |> order_by([_membership, person], asc: person.name, asc: person.person_id)
-      |> select([_membership, person], %{
+      |> join(:inner, [membership, person], primary_email_address in PersonEmailAddress,
+        on:
+          primary_email_address.person_id == person.person_id and
+            primary_email_address.is_primary == true
+      )
+      |> where([membership, _person, _primary_email_address], membership.club_id == ^club_id)
+      |> where([membership, _person, _primary_email_address], membership.active == true)
+      |> order_by([_membership, person, _primary_email_address],
+        asc: person.name,
+        asc: person.person_id
+      )
+      |> select([_membership, person, primary_email_address], %{
         id: person.person_id,
         name: person.name,
-        email: person.email
+        email: primary_email_address.email
       })
       |> Repo.all()
     else
@@ -189,20 +261,20 @@ defmodule Memba.Membership do
 
       normalized_email ->
         MembershipProjection
-        |> join(:inner, [membership], person in Person,
-          on: person.person_id == membership.person_id
+        |> join(:inner, [membership], email_address in PersonEmailAddress,
+          on: email_address.person_id == membership.person_id
         )
-        |> join(:inner, [membership, _person], club in Club,
+        |> join(:inner, [membership, _email_address], club in Club,
           on: club.club_id == membership.club_id
         )
-        |> where([membership, _person, _club], membership.active == true)
+        |> where([membership, _email_address, _club], membership.active == true)
         |> where(
-          [_membership, person, _club],
-          fragment("lower(btrim(?))", person.email) == ^normalized_email
+          [_membership, email_address, _club],
+          email_address.normalized_email == ^normalized_email
         )
         |> distinct(true)
-        |> order_by([_membership, _person, club], asc: club.name, asc: club.club_id)
-        |> select([_membership, _person, club], club)
+        |> order_by([_membership, _email_address, club], asc: club.name, asc: club.club_id)
+        |> select([_membership, _email_address, club], club)
         |> Repo.all()
     end
   end
@@ -235,14 +307,14 @@ defmodule Memba.Membership do
     with {:ok, club_id} <- Ecto.UUID.cast(club_id),
          normalized_email when is_binary(normalized_email) <- normalize_email(email) do
       MembershipProjection
-      |> join(:inner, [membership], person in Person,
-        on: person.person_id == membership.person_id
+      |> join(:inner, [membership], email_address in PersonEmailAddress,
+        on: email_address.person_id == membership.person_id
       )
-      |> where([membership, _person], membership.club_id == ^club_id)
-      |> where([membership, _person], membership.active == true)
+      |> where([membership, _email_address], membership.club_id == ^club_id)
+      |> where([membership, _email_address], membership.active == true)
       |> where(
-        [_membership, person],
-        fragment("lower(btrim(?))", person.email) == ^normalized_email
+        [_membership, email_address],
+        email_address.normalized_email == ^normalized_email
       )
       |> Repo.exists?()
     else
