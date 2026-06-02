@@ -62,6 +62,32 @@ defmodule Memba.Membership.PublicApiTest do
              })
   end
 
+  test "create_club/2 rejects duplicate slugs before dispatching a new club" do
+    existing_club_id = Ecto.UUID.generate()
+    duplicate_club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: existing_club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert {:error, :slug_taken} =
+             Membership.create_club(
+               %{
+                 club_id: duplicate_club_id,
+                 name: "KMC Duplicate Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
+
+    assert %ClubProjection{club_id: ^existing_club_id, slug: "kmc"} =
+             Membership.get_club_by_slug("kmc")
+
+    assert is_nil(Membership.get_club(duplicate_club_id))
+  end
+
   test "update_club/2 edits a projected club name and slug" do
     club_id = Ecto.UUID.generate()
 

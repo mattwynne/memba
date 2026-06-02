@@ -23,7 +23,8 @@ defmodule Memba.Membership do
   `"club_id"`.
   """
   def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- create_club_command(attrs) do
+    with {:ok, command} <- create_club_command(attrs),
+         :ok <- prevent_duplicate_club_slug(command) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -273,6 +274,13 @@ defmodule Memba.Membership do
       {:error, :already_active_member}
     else
       :ok
+    end
+  end
+
+  defp prevent_duplicate_club_slug(%CreateClub{} = command) do
+    case Repo.get_by(Club, slug: command.slug) do
+      nil -> :ok
+      %Club{} -> {:error, :slug_taken}
     end
   end
 

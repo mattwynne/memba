@@ -13,5 +13,5 @@
 - [x] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
 - [x] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
 - [x] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
-- [ ] 014 Add tests for:
+- [x] 014 Add tests for:
 - [ ] 015 Run `dev check`.
