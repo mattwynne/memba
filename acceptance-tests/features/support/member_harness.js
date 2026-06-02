@@ -100,7 +100,17 @@ function copyHarnessState(world, harnessWorld) {
 
 async function signInStaff(world) {
   await signInByMagicLink(world, staffEmail, "staff harness");
+  await completeStaffOnboardingIfNeeded(world);
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
+}
+
+async function completeStaffOnboardingIfNeeded(world) {
+  if (!currentPageUrl(world.page).includes("/auth/onboard")) {
+    return;
+  }
+
+  await world.page.getByLabel("Your name").fill("Acceptance Staff");
+  await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
 }
 
 async function signInMember(world, memberName) {
@@ -210,7 +220,7 @@ function signInEmailMatches(email, recipientEmail) {
 }
 
 function signInLinkFromTextBody(textBody) {
-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
+  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
   return match && match[0];
 }
 

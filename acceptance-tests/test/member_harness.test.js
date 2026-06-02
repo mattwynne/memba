@@ -107,7 +107,7 @@ class FakePage {
           this.mailbox.push({
             headers: { "Message-ID": `<sign-in-${messageNumber}@example.test>` },
             subject: "Sign in to Memba",
-            text_body: `Use http://127.0.0.1:4444/auth/magic/token-${messageNumber} to sign in`,
+            text_body: `Use this link to sign in to Memba:\n\nhttp://127.0.0.1:4444/auth/sign-in/token-${messageNumber}`,
             to: [`${email}`]
           });
         }
@@ -149,7 +149,7 @@ test("withMemberHarness signs in with the member email and shares scenario state
     ["goto", "http://127.0.0.1:4444/auth"],
     ["fill", "Email address", "alice@example.test"],
     ["click", "button", { name: "Email me a sign-in link" }],
-    ["goto", "http://127.0.0.1:4444/auth/magic/token-1"],
+    ["goto", "http://127.0.0.1:4444/auth/sign-in/token-1"],
     ["goto", "http://127.0.0.1:4444/?club_id=club-1"]
   ]);
 });

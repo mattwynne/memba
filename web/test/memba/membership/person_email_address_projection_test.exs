@@ -1,5 +1,5 @@
 defmodule Memba.Membership.PersonEmailAddressProjectionTest do
-  use Memba.DataCase, async: true
+  use Memba.DataCase, async: false
 
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
