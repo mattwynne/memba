@@ -1,0 +1,952 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index be4df4a..4c20f11 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -14,7 +14,7 @@
+ - [x] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+ - [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+ - [x] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+-- [ ] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
++- [x] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+ - [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+ - [ ] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+ - [ ] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+diff --git a/web/lib/memba_web/live/admin/people_live/edit.ex b/web/lib/memba_web/live/admin/people_live/edit.ex
+index aa96f13..e469052 100644
+--- a/web/lib/memba_web/live/admin/people_live/edit.ex
++++ b/web/lib/memba_web/live/admin/people_live/edit.ex
+@@ -2,12 +2,14 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
++  alias MembaWeb.Admin.PersonEmailAddressForm
+ 
+   @impl Phoenix.LiveView
+   def mount(%{"club_id" => club_id, "person_id" => person_id}, _session, socket) do
+     club = Membership.get_club(club_id)
+     person = Membership.get_person(person_id)
+     email_addresses = Membership.list_person_email_addresses(person_id)
++    person_params = PersonEmailAddressForm.params_for_person(person, email_addresses)
+ 
+     {:ok,
+      socket
+@@ -15,8 +17,58 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
+      |> assign(:person_id, person_id)
+      |> assign(:club, club)
+      |> assign(:person, person)
+-     |> assign(:email_addresses, email_addresses)
+-     |> assign(:form, to_form(person_form_params(person), as: :person))}
++     |> assign_form(person_params, empty_errors())}
++  end
++
++  @impl Phoenix.LiveView
++  def handle_event("validate_person", %{"person" => person_params}, socket) do
++    {:noreply, assign_form(socket, person_params, validation_errors(person_params))}
++  end
++
++  def handle_event("add_email_address", _params, socket) do
++    {:noreply, assign_form(socket, PersonEmailAddressForm.add_row(socket.assigns.person_params))}
++  end
++
++  def handle_event("remove_email_address", %{"index" => index}, socket) do
++    {:noreply,
++     assign_form(socket, PersonEmailAddressForm.remove_row(socket.assigns.person_params, index))}
++  end
++
++  def handle_event("save_person", %{"person" => person_params}, socket) do
++    with {:ok, attrs} <- PersonEmailAddressForm.validate(person_params),
++         :ok <-
++           Membership.replace_person_email_addresses(
++             %{
++               "person_id" => socket.assigns.person_id,
++               "email_addresses" => attrs.email_addresses
++             },
++             consistency: :strong
++           ) do
++      {:noreply,
++       socket
++       |> put_flash(:info, "Person updated")
++       |> push_navigate(to: ~p"/admin/clubs/#{socket.assigns.club_id}")}
++    else
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Person updated")
++         |> push_navigate(to: ~p"/admin/clubs/#{socket.assigns.club_id}")}
++
++      {:error, %{} = form_errors} ->
++        {:noreply, assign_form(socket, person_params, form_errors)}
++
++      {:error, reason} ->
++        {:error, form_errors} = PersonEmailAddressForm.with_server_error(person_params, reason)
++
++        {:noreply,
++         socket
++         |> put_flash(
++           :error,
++           "Could not update person: #{PersonEmailAddressForm.format_reason(reason)}"
++         )
++         |> assign_form(person_params, form_errors)}
++    end
+   end
+ 
+   @impl Phoenix.LiveView
+@@ -50,36 +102,114 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
+           </section>
+ 
+           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+-            <.form for={@form} id="person-form" aria-label="Edit person" class="space-y-5">
++            <.form
++              for={@form}
++              id="person-form"
++              aria-label="Edit person"
++              class="space-y-5"
++              phx-change="validate_person"
++              phx-submit="save_person"
++            >
+               <div>
+                 <h2 class="text-lg font-semibold text-zinc-900">Person details</h2>
+                 <p class="mt-1 text-sm text-zinc-600">
+-                  The dedicated edit form is ready for the multi-address fields in this iteration.
++                  Choose one primary email address for outbound club messages.
+                 </p>
+               </div>
+ 
+               <.input
+-                field={@form[:name]}
++                name={@form[:name].name}
++                value={@form[:name].value}
+                 id="person-name-input"
+                 label="Name"
+                 aria-label="Person name"
++                errors={@form_errors.name}
+                 required
++                readonly
+               />
+ 
+-              <div id="person-email-addresses" aria-label="Email addresses" class="space-y-3">
+-                <h2 class="text-lg font-semibold text-zinc-900">Email addresses</h2>
++              <div
++                id="person-email-addresses"
++                aria-label="Email addresses"
++                class="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4"
++              >
++                <div>
++                  <h2 class="text-lg font-semibold text-zinc-900">Email addresses</h2>
++                  <p class="mt-1 text-sm text-zinc-500">
++                    Alternate addresses can identify this person; only the primary address receives club messages.
++                  </p>
++                </div>
++
+                 <p
+-                  :for={email_address <- @email_addresses}
+-                  data-testid="person-email-address"
+-                  data-primary={to_string(email_address.primary?)}
+-                  class="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm"
++                  :if={@form_errors.global}
++                  id="person-email-addresses-error"
++                  role="alert"
++                  class="text-sm font-medium text-red-700"
+                 >
+-                  <span class="font-medium text-zinc-900">{email_address.email}</span>
+-                  <span class="ml-2 text-zinc-500">
+-                    {if email_address.primary?, do: "Primary", else: "Alternate"}
+-                  </span>
++                  {@form_errors.global}
+                 </p>
++
++                <input type="hidden" name="person[primary_email_index]" value="" />
++
++                <div
++                  :for={row <- @email_rows}
++                  id={"person-email-row-#{row.index}"}
++                  data-testid="person-email-row"
++                  data-primary={to_string(row.primary?)}
++                  class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 sm:grid-cols-[auto_1fr_auto] sm:items-start"
++                >
++                  <label
++                    for={"person-primary-radio-#{row.index}"}
++                    class="mt-8 flex items-center gap-2 text-sm font-medium text-zinc-700"
++                  >
++                    <input
++                      id={"person-primary-radio-#{row.index}"}
++                      type="radio"
++                      name="person[primary_email_index]"
++                      value={row.index}
++                      checked={row.primary?}
++                      class="radio radio-sm"
++                    /> Primary
++                  </label>
++
++                  <.input
++                    id={"person-email-input-#{row.index}"}
++                    name={"person[email_addresses][#{row.index}][email]"}
++                    type="email"
++                    label="Email address"
++                    aria-label={"Email address #{row.index}"}
++                    value={row.email}
++                    errors={Map.get(@form_errors.row_errors, row.index, [])}
++                    required
++                  />
++
++                  <button
++                    :if={length(@email_rows) > 1}
++                    id={"remove-person-email-address-#{row.index}"}
++                    type="button"
++                    phx-click="remove_email_address"
++                    phx-value-index={row.index}
++                    aria-label={"Remove email address #{row.index}"}
++                    class="mt-7 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 hover:border-red-300 hover:text-red-700"
++                  >
++                    Remove
++                  </button>
++                </div>
++
++                <button
++                  id="add-person-email-address"
++                  type="button"
++                  phx-click="add_email_address"
++                  aria-label="Add email address"
++                  class="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700"
++                >
++                  Add email address
++                </button>
+               </div>
++
++              <.button id="save-person-button" type="submit" aria-label="Save person">
++                Save person
++              </.button>
+             </.form>
+           </section>
+         <% else %>
+@@ -95,6 +225,22 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do
+     """
+   end
+ 
+-  defp person_form_params(nil), do: %{"name" => ""}
+-  defp person_form_params(person), do: %{"name" => person.name}
++  defp assign_form(socket, person_params, form_errors \\ nil) do
++    form_errors = form_errors || empty_errors()
++
++    socket
++    |> assign(:person_params, person_params)
++    |> assign(:email_rows, PersonEmailAddressForm.rows(person_params))
++    |> assign(:form_errors, form_errors)
++    |> assign(:form, to_form(person_params, as: :person))
++  end
++
++  defp validation_errors(person_params) do
++    case PersonEmailAddressForm.validate(person_params) do
++      {:ok, _attrs} -> empty_errors()
++      {:error, errors} -> errors
++    end
++  end
++
++  defp empty_errors, do: %{name: [], row_errors: %{}, global: nil}
+ end
+diff --git a/web/lib/memba_web/live/admin/people_live/new.ex b/web/lib/memba_web/live/admin/people_live/new.ex
+index 039541d..2393517 100644
+--- a/web/lib/memba_web/live/admin/people_live/new.ex
++++ b/web/lib/memba_web/live/admin/people_live/new.ex
+@@ -2,8 +2,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
+-
+-  @person_form %{"name" => ""}
++  alias MembaWeb.Admin.PersonEmailAddressForm
+ 
+   @impl Phoenix.LiveView
+   def mount(%{"club_id" => club_id}, _session, socket) do
+@@ -13,7 +12,59 @@ defmodule MembaWeb.Admin.PeopleLive.New do
+      socket
+      |> assign(:club_id, club_id)
+      |> assign(:club, club)
+-     |> assign(:form, to_form(@person_form, as: :person))}
++     |> assign_form(PersonEmailAddressForm.empty_params(), empty_errors())}
++  end
++
++  @impl Phoenix.LiveView
++  def handle_event("validate_person", %{"person" => person_params}, socket) do
++    {:noreply, assign_form(socket, person_params, validation_errors(person_params))}
++  end
++
++  def handle_event("add_email_address", _params, socket) do
++    {:noreply, assign_form(socket, PersonEmailAddressForm.add_row(socket.assigns.person_params))}
++  end
++
++  def handle_event("remove_email_address", %{"index" => index}, socket) do
++    {:noreply,
++     assign_form(socket, PersonEmailAddressForm.remove_row(socket.assigns.person_params, index))}
++  end
++
++  def handle_event("create_person", %{"person" => person_params}, socket) do
++    with {:ok, attrs} <- PersonEmailAddressForm.validate(person_params),
++         :ok <-
++           Membership.create_person(
++             %{
++               "person_id" => Ecto.UUID.generate(),
++               "name" => attrs.name,
++               "email_addresses" => attrs.email_addresses
++             },
++             consistency: :strong
++           ) do
++      {:noreply,
++       socket
++       |> put_flash(:info, "Person created")
++       |> push_navigate(to: ~p"/admin/clubs/#{socket.assigns.club_id}")}
++    else
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Person created")
++         |> push_navigate(to: ~p"/admin/clubs/#{socket.assigns.club_id}")}
++
++      {:error, %{} = form_errors} ->
++        {:noreply, assign_form(socket, person_params, form_errors)}
++
++      {:error, reason} ->
++        {:error, form_errors} = PersonEmailAddressForm.with_server_error(person_params, reason)
++
++        {:noreply,
++         socket
++         |> put_flash(
++           :error,
++           "Could not create person: #{PersonEmailAddressForm.format_reason(reason)}"
++         )
++         |> assign_form(person_params, form_errors)}
++    end
+   end
+ 
+   @impl Phoenix.LiveView
+@@ -42,32 +93,115 @@ defmodule MembaWeb.Admin.PeopleLive.New do
+           </section>
+ 
+           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+-            <.form for={@form} id="person-form" aria-label="Create person" class="space-y-5">
++            <.form
++              for={@form}
++              id="person-form"
++              aria-label="Create person"
++              class="space-y-5"
++              phx-change="validate_person"
++              phx-submit="create_person"
++            >
+               <div>
+                 <h2 class="text-lg font-semibold text-zinc-900">Person details</h2>
+                 <p class="mt-1 text-sm text-zinc-600">
+-                  The dedicated create form is ready for the multi-address fields in this iteration.
++                  The first entered email address is selected as primary by default.
+                 </p>
+               </div>
+ 
+               <.input
+-                field={@form[:name]}
++                name={@form[:name].name}
++                value={@form[:name].value}
+                 id="person-name-input"
+                 label="Name"
+                 aria-label="Person name"
++                errors={@form_errors.name}
+                 required
+               />
+ 
+               <div
+                 id="person-email-addresses"
+                 aria-label="Email addresses"
+-                class="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4"
++                class="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+               >
+-                <p class="text-sm font-medium text-zinc-700">Primary and alternate email addresses</p>
+-                <p class="mt-1 text-sm text-zinc-500">
+-                  Email address rows and primary selection are added by the staff form task.
++                <div>
++                  <p class="text-sm font-medium text-zinc-700">
++                    Primary and alternate email addresses
++                  </p>
++                  <p class="mt-1 text-sm text-zinc-500">
++                    Choose exactly one primary address. Alternate addresses can still identify this person.
++                  </p>
++                </div>
++
++                <p
++                  :if={@form_errors.global}
++                  id="person-email-addresses-error"
++                  role="alert"
++                  class="text-sm font-medium text-red-700"
++                >
++                  {@form_errors.global}
+                 </p>
++
++                <input type="hidden" name="person[primary_email_index]" value="" />
++
++                <div
++                  :for={row <- @email_rows}
++                  id={"person-email-row-#{row.index}"}
++                  data-testid="person-email-row"
++                  data-primary={to_string(row.primary?)}
++                  class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 sm:grid-cols-[auto_1fr_auto] sm:items-start"
++                >
++                  <label
++                    for={"person-primary-radio-#{row.index}"}
++                    class="mt-8 flex items-center gap-2 text-sm font-medium text-zinc-700"
++                  >
++                    <input
++                      id={"person-primary-radio-#{row.index}"}
++                      type="radio"
++                      name="person[primary_email_index]"
++                      value={row.index}
++                      checked={row.primary?}
++                      class="radio radio-sm"
++                    /> Primary
++                  </label>
++
++                  <.input
++                    id={"person-email-input-#{row.index}"}
++                    name={"person[email_addresses][#{row.index}][email]"}
++                    type="email"
++                    label="Email address"
++                    aria-label={"Email address #{row.index}"}
++                    value={row.email}
++                    errors={Map.get(@form_errors.row_errors, row.index, [])}
++                    required
++                  />
++
++                  <button
++                    :if={length(@email_rows) > 1}
++                    id={"remove-person-email-address-#{row.index}"}
++                    type="button"
++                    phx-click="remove_email_address"
++                    phx-value-index={row.index}
++                    aria-label={"Remove email address #{row.index}"}
++                    class="mt-7 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 hover:border-red-300 hover:text-red-700"
++                  >
++                    Remove
++                  </button>
++                </div>
++
++                <button
++                  id="add-person-email-address"
++                  type="button"
++                  phx-click="add_email_address"
++                  aria-label="Add email address"
++                  class="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700"
++                >
++                  Add email address
++                </button>
+               </div>
++
++              <.button id="create-person-button" type="submit" aria-label="Create person">
++                Create person
++              </.button>
+             </.form>
+           </section>
+         <% else %>
+@@ -80,4 +214,23 @@ defmodule MembaWeb.Admin.PeopleLive.New do
+     </Layouts.admin>
+     """
+   end
++
++  defp assign_form(socket, person_params, form_errors \\ nil) do
++    form_errors = form_errors || empty_errors()
++
++    socket
++    |> assign(:person_params, person_params)
++    |> assign(:email_rows, PersonEmailAddressForm.rows(person_params))
++    |> assign(:form_errors, form_errors)
++    |> assign(:form, to_form(person_params, as: :person))
++  end
++
++  defp validation_errors(person_params) do
++    case PersonEmailAddressForm.validate(person_params) do
++      {:ok, _attrs} -> empty_errors()
++      {:error, errors} -> errors
++    end
++  end
++
++  defp empty_errors, do: %{name: [], row_errors: %{}, global: nil}
+ end
+diff --git a/web/lib/memba_web/live/admin/person_email_address_form.ex b/web/lib/memba_web/live/admin/person_email_address_form.ex
+new file mode 100644
+index 0000000..7a0b51d
+--- /dev/null
++++ b/web/lib/memba_web/live/admin/person_email_address_form.ex
+@@ -0,0 +1,267 @@
++defmodule MembaWeb.Admin.PersonEmailAddressForm do
++  @moduledoc false
++
++  alias Memba.Membership.EmailAddresses
++
++  @empty_params %{
++    "name" => "",
++    "primary_email_index" => "0",
++    "email_addresses" => %{"0" => %{"email" => ""}}
++  }
++
++  def empty_params, do: @empty_params
++
++  def params_for_person(nil, _email_addresses), do: @empty_params
++
++  def params_for_person(person, email_addresses) do
++    rows =
++      email_addresses
++      |> Enum.with_index()
++      |> Map.new(fn {email_address, index} ->
++        index = Integer.to_string(index)
++
++        {index,
++         %{"email" => email_address.email, "is_primary" => to_string(email_address.primary?)}}
++      end)
++
++    primary_index =
++      email_addresses
++      |> Enum.find_index(& &1.primary?)
++      |> case do
++        nil -> ""
++        index -> Integer.to_string(index)
++      end
++
++    %{
++      "name" => person.name,
++      "primary_email_index" => primary_index,
++      "email_addresses" => rows
++    }
++  end
++
++  def rows(params) when is_map(params) do
++    params
++    |> raw_rows()
++    |> apply_primary_index(Map.get(params, "primary_email_index", :missing))
++    |> ensure_one_row()
++  end
++
++  def validate(params) when is_map(params) do
++    rows = rows(params)
++    email_addresses = Enum.map(rows, &row_email_address/1)
++
++    with {:ok, name} <- validate_name(Map.get(params, "name")),
++         {:ok, normalized_email_addresses} <- EmailAddresses.validate_set(email_addresses) do
++      {:ok, %{name: name, email_addresses: normalized_email_addresses}}
++    else
++      {:error, :invalid_name} -> {:error, errors(name: "Enter a name.")}
++      {:error, reason} -> {:error, errors_for_email_reason(reason, rows)}
++    end
++  end
++
++  def with_server_error(params, reason) do
++    {:error, errors_for_email_reason(reason, rows(params))}
++  end
++
++  def add_row(params) when is_map(params) do
++    rows = rows(params)
++    next_index = rows |> Enum.map(& &1.index) |> next_index()
++
++    put_rows(params, rows ++ [%{index: next_index, email: "", primary?: false}])
++  end
++
++  def remove_row(params, remove_index) when is_map(params) do
++    rows =
++      params
++      |> rows()
++      |> Enum.reject(&(&1.index == remove_index))
++      |> ensure_one_row()
++
++    rows =
++      if Enum.any?(rows, & &1.primary?) do
++        rows
++      else
++        mark_first_primary(rows)
++      end
++
++    put_rows(params, rows)
++  end
++
++  def format_reason(:email_address_taken), do: "email address already belongs to another person"
++  def format_reason(:duplicate_email_address), do: "email addresses must be unique"
++  def format_reason(:invalid_email), do: "email address is invalid"
++  def format_reason(:email_address_required), do: "enter at least one email address"
++
++  def format_reason(:exactly_one_primary_email_required),
++    do: "choose exactly one primary email address"
++
++  def format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
++
++  defp validate_name(name) when is_binary(name) do
++    case String.trim(name) do
++      "" -> {:error, :invalid_name}
++      name -> {:ok, name}
++    end
++  end
++
++  defp validate_name(_name), do: {:error, :invalid_name}
++
++  defp raw_rows(params) do
++    case Map.get(params, "email_addresses") do
++      rows when is_map(rows) ->
++        rows
++        |> Enum.sort_by(fn {index, _row} -> parse_index(index) end)
++        |> Enum.map(fn {index, row} -> row_from_params(index, row) end)
++
++      rows when is_list(rows) ->
++        rows
++        |> Enum.with_index()
++        |> Enum.map(fn {row, index} -> row_from_params(Integer.to_string(index), row) end)
++
++      _other ->
++        []
++    end
++  end
++
++  defp row_from_params(index, row) when is_map(row) do
++    %{
++      index: to_string(index),
++      email: Map.get(row, "email", Map.get(row, :email, "")),
++      primary?: primary?(Map.get(row, "is_primary", Map.get(row, :is_primary, false)))
++    }
++  end
++
++  defp row_from_params(index, _row), do: %{index: to_string(index), email: "", primary?: false}
++
++  defp apply_primary_index(rows, :missing), do: rows
++  defp apply_primary_index(rows, ""), do: Enum.map(rows, &%{&1 | primary?: false})
++
++  defp apply_primary_index(rows, primary_index) do
++    primary_index = to_string(primary_index)
++    Enum.map(rows, &%{&1 | primary?: &1.index == primary_index})
++  end
++
++  defp ensure_one_row([]), do: [%{index: "0", email: "", primary?: true}]
++  defp ensure_one_row(rows), do: rows
++
++  defp mark_first_primary([row | rest]),
++    do: [%{row | primary?: true} | Enum.map(rest, &%{&1 | primary?: false})]
++
++  defp put_rows(params, rows) do
++    rows = reindex(rows)
++
++    email_addresses =
++      Map.new(rows, fn row ->
++        {row.index, %{"email" => row.email, "is_primary" => to_string(row.primary?)}}
++      end)
++
++    primary_index =
++      rows
++      |> Enum.find(& &1.primary?)
++      |> case do
++        nil -> ""
++        row -> row.index
++      end
++
++    params
++    |> Map.put("email_addresses", email_addresses)
++    |> Map.put("primary_email_index", primary_index)
++  end
++
++  defp reindex(rows) do
++    rows
++    |> Enum.with_index()
++    |> Enum.map(fn {row, index} -> %{row | index: Integer.to_string(index)} end)
++  end
++
++  defp row_email_address(row), do: %{email: row.email, is_primary: row.primary?}
++
++  defp errors(opts) do
++    %{
++      name: error_list(Keyword.get(opts, :name)),
++      row_errors: Keyword.get(opts, :row_errors, %{}),
++      global: Keyword.get(opts, :global)
++    }
++  end
++
++  defp errors_for_email_reason(:invalid_email, rows) do
++    invalid_row_errors =
++      rows
++      |> Enum.filter(fn row ->
++        match?({:error, :invalid_email}, EmailAddresses.normalize_email(row.email))
++      end)
++      |> Map.new(fn row -> {row.index, error_list("Enter a valid email address.")} end)
++
++    errors(row_errors: invalid_row_errors, global: "Fix invalid email addresses.")
++  end
++
++  defp errors_for_email_reason(:email_address_taken, rows) do
++    rows
++    |> Map.new(fn row -> {row.index, error_list("This email address is already used.")} end)
++    |> then(
++      &errors(row_errors: &1, global: "An email address is already used by another person.")
++    )
++  end
++
++  defp errors_for_email_reason(:duplicate_email_address, rows) do
++    duplicate_row_errors =
++      rows
++      |> duplicate_indexes()
++      |> Map.new(&{&1, error_list("Email addresses must be unique.")})
++
++    errors(row_errors: duplicate_row_errors, global: "Email addresses must be unique.")
++  end
++
++  defp errors_for_email_reason(:exactly_one_primary_email_required, _rows) do
++    errors(global: "Choose exactly one primary email address.")
++  end
++
++  defp errors_for_email_reason(:email_address_required, _rows) do
++    errors(global: "Enter at least one email address.")
++  end
++
++  defp errors_for_email_reason(reason, _rows), do: errors(global: format_reason(reason))
++
++  defp duplicate_indexes(rows) do
++    rows
++    |> Enum.reduce(%{}, fn row, grouped ->
++      case EmailAddresses.normalize_email(row.email) do
++        {:ok, %{normalized_email: normalized_email}} ->
++          Map.update(grouped, normalized_email, [row.index], &[row.index | &1])
++
++        {:error, :invalid_email} ->
++          grouped
++      end
++    end)
++    |> Map.values()
++    |> Enum.filter(&(length(&1) > 1))
++    |> List.flatten()
++  end
++
++  defp error_list(nil), do: []
++  defp error_list(message), do: [message]
++
++  defp primary?(true), do: true
++  defp primary?("true"), do: true
++  defp primary?("on"), do: true
++  defp primary?(_other), do: false
++
++  defp next_index([]), do: "0"
++
++  defp next_index(indexes) do
++    indexes
++    |> Enum.map(&parse_index/1)
++    |> Enum.max()
++    |> Kernel.+(1)
++    |> Integer.to_string()
++  end
++
++  defp parse_index(index) when is_integer(index), do: index
++
++  defp parse_index(index) do
++    case Integer.parse(to_string(index)) do
++      {index, ""} -> index
++      _other -> 0
++    end
++  end
++end
+diff --git a/web/test/memba_web/live/admin_people_live_test.exs b/web/test/memba_web/live/admin_people_live_test.exs
+index efe86f6..8fa2be9 100644
+--- a/web/test/memba_web/live/admin_people_live_test.exs
++++ b/web/test/memba_web/live/admin_people_live_test.exs
+@@ -1,6 +1,11 @@
+ defmodule MembaWeb.AdminPeopleLiveTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  import Phoenix.LiveViewTest
++
++  alias Memba.Membership
++  alias MembaWeb.Admin.PersonEmailAddressForm
++
+   test "staff can open the dedicated new-person LiveView for a club", %{conn: conn} do
+     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+ 
+@@ -14,6 +19,10 @@ defmodule MembaWeb.AdminPeopleLiveTest do
+     |> assert_has("#person-form[aria-label='Create person']")
+     |> assert_has("#person-name-input[aria-label='Person name']")
+     |> assert_has("#person-email-addresses[aria-label='Email addresses']")
++    |> assert_has("#person-email-row-0[data-testid='person-email-row'][data-primary='true']")
++    |> assert_has("#person-email-input-0[aria-label='Email address 0']")
++    |> assert_has("#person-primary-radio-0[checked]")
++    |> assert_has("#add-person-email-address")
+   end
+ 
+   test "staff can open the dedicated edit-person LiveView for a club person", %{conn: conn} do
+@@ -38,13 +47,177 @@ defmodule MembaWeb.AdminPeopleLiveTest do
+     |> assert_has("#person-form[aria-label='Edit person']")
+     |> assert_has("#person-name-input[aria-label='Person name']")
+     |> assert_has("#person-email-addresses[aria-label='Email addresses']")
+-    |> assert_has(
+-      "#person-email-addresses [data-testid='person-email-address'][data-primary='true']",
+-      text: "alice@example.com"
++    |> assert_has("#person-email-row-0[data-testid='person-email-row'][data-primary='true']")
++    |> assert_has("#person-email-row-1[data-testid='person-email-row'][data-primary='false']")
++    |> assert_has("#person-email-input-0[value='alice@example.com']")
++    |> assert_has("#person-email-input-1[value='alice@work.example']")
++    |> assert_has("#person-primary-radio-0[checked]")
++    |> assert_has("#add-person-email-address")
++  end
++
++  test "staff creates a person with primary and alternate email rows", %{conn: conn} do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++
++    {:ok, view, _html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club.club_id}/people/new")
++
++    view
++    |> element("#add-person-email-address")
++    |> render_click()
++
++    view
++    |> form("#person-form",
++      person: %{
++        name: "Alice Example",
++        primary_email_index: "0",
++        email_addresses: %{
++          "0" => %{email: " Alice@Example.COM "},
++          "1" => %{email: "alice@work.example"}
++        }
++      }
+     )
+-    |> assert_has(
+-      "#person-email-addresses [data-testid='person-email-address'][data-primary='false']",
+-      text: "alice@work.example"
++    |> render_submit()
++
++    assert_redirect(view, ~p"/admin/clubs/#{club.club_id}")
++
++    assert %{person_id: person_id, email: "Alice@Example.COM"} =
++             Membership.list_people()
++             |> Enum.find(&(&1.name == "Alice Example"))
++
++    assert Membership.list_person_email_addresses(person_id) == [
++             %{email: "Alice@Example.COM", normalized_email: "alice@example.com", primary?: true},
++             %{
++               email: "alice@work.example",
++               normalized_email: "alice@work.example",
++               primary?: false
++             }
++           ]
++  end
++
++  test "staff create form rejects malformed, missing-primary, multiple-primary, and duplicate email submissions",
++       %{conn: conn} do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: Ecto.UUID.generate(),
++                 name: "Existing Alice",
++                 email: "alice@example.com"
++               },
++               consistency: :strong
++             )
++
++    {:ok, view, _html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club.club_id}/people/new")
++
++    view
++    |> form("#person-form",
++      person: %{
++        name: "Malformed Alice",
++        primary_email_index: "0",
++        email_addresses: %{"0" => %{email: "not-an-email"}}
++      }
+     )
++    |> render_submit()
++
++    assert has_element?(view, "#person-email-addresses-error", "Fix invalid email addresses.")
++    assert has_element?(view, "#person-email-input-0.input-error")
++
++    view
++    |> element("#person-form")
++    |> render_submit(%{
++      "person" => %{
++        "name" => "No Primary Alice",
++        "primary_email_index" => "not-a-row",
++        "email_addresses" => %{"0" => %{"email" => "alice@work.example"}}
++      }
++    })
++
++    assert has_element?(
++             view,
++             "#person-email-addresses-error",
++             "Choose exactly one primary email address."
++           )
++
++    assert {:error, %{global: "Choose exactly one primary email address."}} =
++             PersonEmailAddressForm.validate(%{
++               "name" => "Two Primary Alice",
++               "email_addresses" => [
++                 %{"email" => "alice@home.example", "is_primary" => "true"},
++                 %{"email" => "alice@work.example", "is_primary" => "true"}
++               ]
++             })
++
++    view
++    |> form("#person-form",
++      person: %{
++        name: "Duplicate Alice",
++        primary_email_index: "0",
++        email_addresses: %{"0" => %{email: "alice@example.com"}}
++      }
++    )
++    |> render_submit()
++
++    assert has_element?(
++             view,
++             "#person-email-addresses-error",
++             "An email address is already used by another person."
++           )
++
++    refute Membership.list_people() |> Enum.any?(&(&1.name == "Duplicate Alice"))
++  end
++
++  test "staff edit form replaces addresses and primary selection", %{conn: conn} do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: "Alice Example",
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: true},
++                   %{email: "alice@work.example", is_primary: false}
++                 ]
++               },
++               consistency: :strong
++             )
++
++    {:ok, view, _html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club.club_id}/people/#{person_id}/edit")
++
++    view
++    |> form("#person-form",
++      person: %{
++        name: "Alice Example",
++        primary_email_index: "1",
++        email_addresses: %{
++          "0" => %{email: "alice@example.com"},
++          "1" => %{email: " alice@work.example "}
++        }
++      }
++    )
++    |> render_submit()
++
++    assert_redirect(view, ~p"/admin/clubs/#{club.club_id}")
++
++    assert %{email: "alice@work.example"} = Membership.get_person(person_id)
++
++    assert Membership.list_person_email_addresses(person_id) == [
++             %{
++               email: "alice@work.example",
++               normalized_email: "alice@work.example",
++               primary?: true
++             },
++             %{email: "alice@example.com", normalized_email: "alice@example.com", primary?: false}
++           ]
+   end
+ end

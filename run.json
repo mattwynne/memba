@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T02:24:55.246131743Z",
-  "last_event_at": "2026-06-02T05:28:05.266631182Z",
+  "last_event_at": "2026-06-02T05:28:29.151870566Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -30218,9 +30218,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 5582,
       "checkpoint": {
-        "timestamp": "2026-06-02T05:28:25.043296524Z",
+        "timestamp": "2026-06-02T05:28:29.151870566Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -30318,12 +30318,396 @@
         ],
         "node_retries": {},
         "context_values": {
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.`\n\n2. **Changes made**\n   - Added `MembaWeb.Admin.PersonEmailAddressForm` to normalize repeated email-row params, manage add/remove row state, validate:\n     - name present;\n     - at least one email;\n     - malformed/blank emails;\n     - exactly one primary;\n     - duplicate emails within a submitted set;\n     - duplicate emails already owned by another person.\n   - Updated `MembaWeb.Admin.PeopleLive.New`:\n     - repeated email rows;\n     - primary radio selection;\n     - first row primary by default;\n     - add/remove email row buttons;\n     - create submit using `Membership.create_person/2`;\n     - validation and duplicate-error display.\n   - Updated `MembaWeb.Admin.PeopleLive.Edit`:\n     - repeated existing email rows;\n     - primary radio selection;\n     - add/remove email row buttons;\n     - save submit using `Membership.replace_person_email_addresses/2`;\n     - validation and duplicate-error display.\n   - Expanded `web/test/memba_web/live/admin_people_live_test.exs` for create/edit rendering, creation with primary+alternate, malformed/no-primary/multiple-primary/duplicate validation, and replacing primary selection.\n\n3. **Focused validation**\n   - `cd web && mix format --check-formatted lib/memba_web/live/admin/person_email_address_form.ex lib/memba_web/live/admin/people_live/new.ex lib/memba_web/live/admin/people_live/edit.ex test/memba_web/live/admin_people_live_test.exs`\n     - Passed.\n   - Initial bare `mix test` could not connect to Postgres; repo-managed Postgres had a stale zombie lock/socket. Cleared the stale lock/socket and restarted Postgres.\n   - `cd web && PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 mix test test/memba_web/live/admin_people_live_test.exs`\n     - Passed: `5 tests, 0 failures`.\n   - `cd web && PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 mix test test/memba_web/live/admin/clubs_live/show_test.exs test/memba_web/live/admin_people_live_test.exs`\n     - Passed: `10 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `343 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off**\n   - Changed exactly:\n     - `- [ ] 015 Build the staff forms...`\n   - To:\n     - `- [x] 015 Build the staff forms...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001 / 0015: implemented the staff workflow in Phoenix LiveView.\n   - ADR 0013: added user-facing Phoenix/PhoenixTest-style coverage plus LiveView-specific form assertions where needed.\n   - ADR 0007: used Membership public APIs from web code; no Messaging coupling or cross-context persistence reach-through.\n   - ADR 0009: continued using projection-backed reads and Commanded-backed writes through Membership.\n   - ADR 0011: generated UUID person IDs before dispatch; did not use email as aggregate identity.",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.fidelity": "summary:high",
+          "task_valid": true,
+          "task_list_needs_human": false,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.task_gate": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it recorded a clean working tree at implement checkpoint `1097d76`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `25a58f0 pre_validate_snapshot` on top of `1097d76 implement_next_task`.\n  - `git diff 1097d76^ 1097d76 -- docs/iterations/016-person-email-addresses/todo.md` shows exactly one ordinary task line changed:\n    - `014` from `- [ ]` to `- [x]`.\n  - Parent todo state shows `014` was the first unchecked task before the implement checkpoint.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/live/admin/clubs_live/show.ex`:\n    - Removed the inline person creation form/event path.\n    - Added `#new-person-link` to `/admin/clubs/:club_id/people/new`.\n    - Keeps the people list.\n    - Displays primary email and alternate-email summary/count.\n    - Adds per-person edit links to `/admin/clubs/:club_id/people/:person_id/edit`.\n  - Updated tests:\n    - `web/test/memba_web/live/admin/clubs_live/show_test.exs`\n    - `web/test/memba_web/live/browser_acceptance_harness_test.exs`\n  - Changed files are focused on task `014`; no plan-required work was deleted or weakened.\n\n- Tests run/results found.\n  - `git diff --check 1097d76^ 1097d76` passed.\n  - Ran `PATH=\"$PWD/bin:$PATH\" dev check`.\n    - First attempts were blocked by a stale repo-managed Postgres lock/socket from a zombie process, not by code failures.\n    - After clearing the stale lock/socket, `dev check` passed:\n      - `340 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan task `014`.\n  - Respects the staff UI resolved decision: admin club show keeps the people list and links to dedicated create/edit LiveViews.\n  - Uses Phoenix LiveView surfaces and public Membership query APIs; no cross-context persistence reach-through found.\n  - Uses UUID route identifiers, not email as identity.\n  - Adds/updates web-facing tests consistent with ADR 0013.\n  - Acceptance feature files were not edited in this task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "internal.retry_count.resume_gate": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "failure_signature": "",
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "task_list_complete": false,
+          "graph.default_fidelity": "summary:high",
+          "internal.run_id": "01KT329V7X61YAG1PJ00TCBH59",
+          "internal.retry_count.read_plan": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "graph.rankdir": "LR",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "response.all_tasks_done": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\nif [ ! -r \\\"$TODO_PATH\\\" ]; then\\n  echo 'missing-or-unreadable'\\n  exit 0\\nfi\\ngrep -n -E '^[[:space:]]*- \\\\[ \\\\] ' \\\"$TODO_PATH\\\" || true\"}{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "command.output": "blob://sha256/75b2a1a48f13c16336a80b7c1631812d4c6782298946241886d1d2f8f3320834",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as pri",
+          "internal.node_visit_count": 15,
+          "current_node": "implement_next_task",
+          "internal.thread_id": "all_tasks_done",
+          "internal.work_dir": "/workspace/memba",
+          "task_retry_available": false,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.start.current_node": "read_plan",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "last_stage": "implement_next_task",
+          "internal.retry_count.preflight_sandbox": 0,
+          "graph.max_node_visits": "300",
+          "failure_class": ""
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/700c6321eeba8146e00c56da29c71ce56189d2633e22ee3e4f2816c265e80067"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 207,
+              "active_time_ms": 207
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a3750add5d6ded98a5bdd88bf5ecefde85cd0b9feefa467c9204d8088e5ba45c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 8395,
+              "active_time_ms": 8395
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/632d29dc59cd71cbe9da7694637f82f4bbc550e63a7b3e7d82058dffc3031368"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/75b2a1a48f13c16336a80b7c1631812d4c6782298946241886d1d2f8f3320834"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 220,
+              "active_time_ms": 220
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.`\n\n2. **Changes made**\n   - Added `MembaWeb.Admin.PersonEmailAddressForm` to normalize repeated email-row params, manage add/remove row state, validate:\n     - name present;\n     - at least one email;\n     - malformed/blank emails;\n     - exactly one primary;\n     - duplicate emails within a submitted set;\n     - duplicate emails already owned by another person.\n   - Updated `MembaWeb.Admin.PeopleLive.New`:\n     - repeated email rows;\n     - primary radio selection;\n     - first row primary by default;\n     - add/remove email row buttons;\n     - create submit using `Membership.create_person/2`;\n     - validation and duplicate-error display.\n   - Updated `MembaWeb.Admin.PeopleLive.Edit`:\n     - repeated existing email rows;\n     - primary radio selection;\n     - add/remove email row buttons;\n     - save submit using `Membership.replace_person_email_addresses/2`;\n     - validation and duplicate-error display.\n   - Expanded `web/test/memba_web/live/admin_people_live_test.exs` for create/edit rendering, creation with primary+alternate, malformed/no-primary/multiple-primary/duplicate validation, and replacing primary selection.\n\n3. **Focused validation**\n   - `cd web && mix format --check-formatted lib/memba_web/live/admin/person_email_address_form.ex lib/memba_web/live/admin/people_live/new.ex lib/memba_web/live/admin/people_live/edit.ex test/memba_web/live/admin_people_live_test.exs`\n     - Passed.\n   - Initial bare `mix test` could not connect to Postgres; repo-managed Postgres had a stale zombie lock/socket. Cleared the stale lock/socket and restarted Postgres.\n   - `cd web && PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 mix test test/memba_web/live/admin_people_live_test.exs`\n     - Passed: `5 tests, 0 failures`.\n   - `cd web && PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 mix test test/memba_web/live/admin/clubs_live/show_test.exs test/memba_web/live/admin_people_live_test.exs`\n     - Passed: `10 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `343 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off**\n   - Changed exactly:\n     - `- [ ] 015 Build the staff forms...`\n   - To:\n     - `- [x] 015 Build the staff forms...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001 / 0015: implemented the staff workflow in Phoenix LiveView.\n   - ADR 0013: added user-facing Phoenix/PhoenixTest-style coverage plus LiveView-specific form assertions where needed.\n   - ADR 0007: used Membership public APIs from web code; no Messaging coupling or cross-context persistence reach-through.\n   - ADR 0009: continued using projection-backed reads and Commanded-backed writes through Membership.\n   - ADR 0011: generated UUID person IDs before dispatch; did not use email as aggregate identity.",
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as pri"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1465349,
+                    "output_tokens": 17656,
+                    "reasoning_tokens": 8125,
+                    "cache_read_tokens": 8788480,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 12494415
+            },
+            "files_touched": [
+              "/workspace/memba/web/lib/memba_web/live/admin/person_email_address_form.ex"
+            ],
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 668487,
+              "tool_time_ms": 184910,
+              "active_time_ms": 853397
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4261ac09747d1d2c4e910b57fb3e9dc8efbb6de3e23d31fdc8ac74cb40b8e9be"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 533,
+              "active_time_ms": 533
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\nif [ ! -r \\\"$TODO_PATH\\\" ]; then\\n  echo 'missing-or-unreadable'\\n  exit 0\\nfi\\ngrep -n -E '^[[:space:]]*- \\\\[ \\\\] ' \\\"$TODO_PATH\\\" || true\"}{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\nif [ ! -r \\\"$TODO_PATH\\\" ]; then\\n  ",
+              "task_list_complete": false,
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 53230,
+                    "output_tokens": 143,
+                    "reasoning_tokens": 142,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 274700
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 7248,
+              "tool_time_ms": 0,
+              "active_time_ms": 7248
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9b567c0b81293855e7083617dc66244e18bf37a03936f3dcc752c155455a86b0"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161449,
+              "active_time_ms": 161449
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it recorded a clean working tree at implement checkpoint `1097d76`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `25a58f0 pre_validate_snapshot` on top of `1097d76 implement_next_task`.\n  - `git diff 1097d76^ 1097d76 -- docs/iterations/016-person-email-addresses/todo.md` shows exactly one ordinary task line changed:\n    - `014` from `- [ ]` to `- [x]`.\n  - Parent todo state shows `014` was the first unchecked task before the implement checkpoint.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/live/admin/clubs_live/show.ex`:\n    - Removed the inline person creation form/event path.\n    - Added `#new-person-link` to `/admin/clubs/:club_id/people/new`.\n    - Keeps the people list.\n    - Displays primary email and alternate-email summary/count.\n    - Adds per-person edit links to `/admin/clubs/:club_id/people/:person_id/edit`.\n  - Updated tests:\n    - `web/test/memba_web/live/admin/clubs_live/show_test.exs`\n    - `web/test/memba_web/live/browser_acceptance_harness_test.exs`\n  - Changed files are focused on task `014`; no plan-required work was deleted or weakened.\n\n- Tests run/results found.\n  - `git diff --check 1097d76^ 1097d76` passed.\n  - Ran `PATH=\"$PWD/bin:$PATH\" dev check`.\n    - First attempts were blocked by a stale repo-managed Postgres lock/socket from a zombie process, not by code failures.\n    - After clearing the stale lock/socket, `dev check` passed:\n      - `340 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan task `014`.\n  - Respects the staff UI resolved decision: admin club show keeps the people list and links to dedicated create/edit LiveViews.\n  - Uses Phoenix LiveView surfaces and public Membership query APIs; no cross-context persistence reach-through found.\n  - Uses UUID route identifiers, not email as identity.\n  - Adds/updates web-facing tests consistent with ADR 0013.\n  - Acceptance feature files were not edited in this task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it recorded a clean working tree at implement checkpoint `1097d76`.\n  - ",
+              "task_retry_available": false
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 750171,
+                    "output_tokens": 3135,
+                    "reasoning_tokens": 1705,
+                    "cache_read_tokens": 928768,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4360439
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 136319,
+              "tool_time_ms": 236991,
+              "active_time_ms": 373310
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "bbc3696ad57fdaa58218da4418a5af3f952f9122",
+        "node_visits": {
+          "implement_next_task": 15,
+          "start": 1,
+          "read_plan": 1,
+          "sync_task_list": 15,
+          "preflight_sandbox": 1,
+          "resume_gate": 1,
+          "all_tasks_done": 15,
+          "task_gate": 14,
+          "validate_task": 14,
+          "pre_validate_snapshot": 14,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md\nindex be4df4a..4c20f11 100644\n--- a/docs/iterations/016-person-email-addresses/todo.md\n+++ b/docs/iterations/016-person-email-addresses/todo.md\n@@ -14,7 +14,7 @@\n - [x] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.\n - [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:\n - [x] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.\n-- [ ] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.\n+- [x] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.\n - [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.\n - [ ] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.\n - [ ] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.\ndiff --git a/web/lib/memba_web/live/admin/people_live/edit.ex b/web/lib/memba_web/live/admin/people_live/edit.ex\nindex aa96f13..e469052 100644\n--- a/web/lib/memba_web/live/admin/people_live/edit.ex\n+++ b/web/lib/memba_web/live/admin/people_live/edit.ex\n@@ -2,12 +2,14 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do\n   use MembaWeb, :live_view\n \n   alias Memba.Membership\n+  alias MembaWeb.Admin.PersonEmailAddressForm\n \n   @impl Phoenix.LiveView\n   def mount(%{\"club_id\" => club_id, \"person_id\" => person_id}, _session, socket) do\n     club = Membership.get_club(club_id)\n     person = Membership.get_person(person_id)\n     email_addresses = Membership.list_person_email_addresses(person_id)\n+    person_params = PersonEmailAddressForm.params_for_person(person, email_addresses)\n \n     {:ok,\n      socket\n@@ -15,8 +17,58 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do\n      |> assign(:person_id, person_id)\n      |> assign(:club, club)\n      |> assign(:person, person)\n-     |> assign(:email_addresses, email_addresses)\n-     |> assign(:form, to_form(person_form_params(person), as: :person))}\n+     |> assign_form(person_params, empty_errors())}\n+  end\n+\n+  @impl Phoenix.LiveView\n+  def handle_event(\"validate_person\", %{\"person\" => person_params}, socket) do\n+    {:noreply, assign_form(socket, person_params, validation_errors(person_params))}\n+  end\n+\n+  def handle_event(\"add_email_address\", _params, socket) do\n+    {:noreply, assign_form(socket, PersonEmailAddressForm.add_row(socket.assigns.person_params))}\n+  end\n+\n+  def handle_event(\"remove_email_address\", %{\"index\" => index}, socket) do\n+    {:noreply,\n+     assign_form(socket, PersonEmailAddressForm.remove_row(socket.assigns.person_params, index))}\n+  end\n+\n+  def handle_event(\"save_person\", %{\"person\" => person_params}, socket) do\n+    with {:ok, attrs} <- PersonEmailAddressForm.validate(person_params),\n+         :ok <-\n+           Membership.replace_person_email_addresses(\n+             %{\n+               \"person_id\" => socket.assigns.person_id,\n+               \"email_addresses\" => attrs.email_addresses\n+             },\n+             consistency: :strong\n+           ) do\n+      {:noreply,\n+       socket\n+       |> put_flash(:info, \"Person updated\")\n+       |> push_navigate(to: ~p\"/admin/clubs/#{socket.assigns.club_id}\")}\n+    else\n+      {:ok, _result} ->\n+        {:noreply,\n+         socket\n+         |> put_flash(:info, \"Person updated\")\n+         |> push_navigate(to: ~p\"/admin/clubs/#{socket.assigns.club_id}\")}\n+\n+      {:error, %{} = form_errors} ->\n+        {:noreply, assign_form(socket, person_params, form_errors)}\n+\n+      {:error, reason} ->\n+        {:error, form_errors} = PersonEmailAddressForm.with_server_error(person_params, reason)\n+\n+        {:noreply,\n+         socket\n+         |> put_flash(\n+           :error,\n+           \"Could not update person: #{PersonEmailAddressForm.format_reason(reason)}\"\n+         )\n+         |> assign_form(person_params, form_errors)}\n+    end\n   end\n \n   @impl Phoenix.LiveView\n@@ -50,36 +102,114 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do\n           </section>\n \n           <section class=\"rounded-xl border border-zinc-200 bg-white p-5 shadow-sm\">\n-            <.form for={@form} id=\"person-form\" aria-label=\"Edit person\" class=\"space-y-5\">\n+            <.form\n+              for={@form}\n+              id=\"person-form\"\n+              aria-label=\"Edit person\"\n+              class=\"space-y-5\"\n+              phx-change=\"validate_person\"\n+              phx-submit=\"save_person\"\n+            >\n               <div>\n                 <h2 class=\"text-lg font-semibold text-zinc-900\">Person details</h2>\n                 <p class=\"mt-1 text-sm text-zinc-600\">\n-                  The dedicated edit form is ready for the multi-address fields in this iteration.\n+                  Choose one primary email address for outbound club messages.\n                 </p>\n               </div>\n \n               <.input\n-                field={@form[:name]}\n+                name={@form[:name].name}\n+                value={@form[:name].value}\n                 id=\"person-name-input\"\n                 label=\"Name\"\n                 aria-label=\"Person name\"\n+                errors={@form_errors.name}\n                 required\n+                readonly\n               />\n \n-              <div id=\"person-email-addresses\" aria-label=\"Email addresses\" class=\"space-y-3\">\n-                <h2 class=\"text-lg font-semibold text-zinc-900\">Email addresses</h2>\n+              <div\n+                id=\"person-email-addresses\"\n+                aria-label=\"Email addresses\"\n+                class=\"space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4\"\n+              >\n+                <div>\n+                  <h2 class=\"text-lg font-semibold text-zinc-900\">Email addresses</h2>\n+                  <p class=\"mt-1 text-sm text-zinc-500\">\n+                    Alternate addresses can identify this person; only the primary address receives club messages.\n+                  </p>\n+                </div>\n+\n                 <p\n-                  :for={email_address <- @email_addresses}\n-                  data-testid=\"person-email-address\"\n-                  data-primary={to_string(email_address.primary?)}\n-                  class=\"rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm\"\n+                  :if={@form_errors.global}\n+                  id=\"person-email-addresses-error\"\n+                  role=\"alert\"\n+                  class=\"text-sm font-medium text-red-700\"\n                 >\n-                  <span class=\"font-medium text-zinc-900\">{email_address.email}</span>\n-                  <span class=\"ml-2 text-zinc-500\">\n-                    {if email_address.primary?, do: \"Primary\", else: \"Alternate\"}\n-                  </span>\n+                  {@form_errors.global}\n                 </p>\n+\n+                <input type=\"hidden\" name=\"person[primary_email_index]\" value=\"\" />\n+\n+                <div\n+                  :for={row <- @email_rows}\n+                  id={\"person-email-row-#{row.index}\"}\n+                  data-testid=\"person-email-row\"\n+                  data-primary={to_string(row.primary?)}\n+                  class=\"grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 sm:grid-cols-[auto_1fr_auto] sm:items-start\"\n+                >\n+                  <label\n+                    for={\"person-primary-radio-#{row.index}\"}\n+                    class=\"mt-8 flex items-center gap-2 text-sm font-medium text-zinc-700\"\n+                  >\n+                    <input\n+                      id={\"person-primary-radio-#{row.index}\"}\n+                      type=\"radio\"\n+                      name=\"person[primary_email_index]\"\n+                      value={row.index}\n+                      checked={row.primary?}\n+                      class=\"radio radio-sm\"\n+                    /> Primary\n+                  </label>\n+\n+                  <.input\n+                    id={\"person-email-input-#{row.index}\"}\n+                    name={\"person[email_addresses][#{row.index}][email]\"}\n+                    type=\"email\"\n+                    label=\"Email address\"\n+                    aria-label={\"Email address #{row.index}\"}\n+                    value={row.email}\n+                    errors={Map.get(@form_errors.row_errors, row.index, [])}\n+                    required\n+                  />\n+\n+                  <button\n+                    :if={length(@email_rows) > 1}\n+                    id={\"remove-person-email-address-#{row.index}\"}\n+                    type=\"button\"\n+                    phx-click=\"remove_email_address\"\n+                    phx-value-index={row.index}\n+                    aria-label={\"Remove email address #{row.index}\"}\n+                    class=\"mt-7 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 hover:border-red-300 hover:text-red-700\"\n+                  >\n+                    Remove\n+                  </button>\n+                </div>\n+\n+                <button\n+                  id=\"add-person-email-address\"\n+                  type=\"button\"\n+                  phx-click=\"add_email_address\"\n+                  aria-label=\"Add email address\"\n+                  class=\"rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700\"\n+                >\n+                  Add email address\n+                </button>\n               </div>\n+\n+              <.button id=\"save-person-button\" type=\"submit\" aria-label=\"Save person\">\n+                Save person\n+              </.button>\n             </.form>\n           </section>\n         <% else %>\n@@ -95,6 +225,22 @@ defmodule MembaWeb.Admin.PeopleLive.Edit do\n     \"\"\"\n   end\n \n-  defp person_form_params(nil), do: %{\"name\" => \"\"}\n-  defp person_form_params(person), do: %{\"name\" => person.name}\n+  defp assign_form(socket, person_params, form_errors \\\\ nil) do\n+    form_errors = form_errors || empty_errors()\n+\n+    socket\n+    |> assign(:person_params, person_params)\n+    |> assign(:email_rows, PersonEmailAddressForm.rows(person_params))\n+    |> assign(:form_errors, form_errors)\n+    |> assign(:form, to_form(person_params, as: :person))\n+  end\n+\n+  defp validation_errors(person_params) do\n+    case PersonEmailAddressForm.validate(person_params) do\n+      {:ok, _attrs} -> empty_errors()\n+      {:error, errors} -> errors\n+    end\n+  end\n+\n+  defp empty_errors, do: %{name: [], row_errors: %{}, global: nil}\n end\ndiff --git a/web/lib/memba_web/live/admin/people_live/new.ex b/web/lib/memba_web/live/admin/people_live/new.ex\nindex 039541d..2393517 100644\n--- a/web/lib/memba_web/live/admin/people_live/new.ex\n+++ b/web/lib/memba_web/live/admin/people_live/new.ex\n@@ -2,8 +2,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do\n   use MembaWeb, :live_view\n \n   alias Memba.Membership\n-\n-  @person_form %{\"name\" => \"\"}\n+  alias MembaWeb.Admin.PersonEmailAddressForm\n \n   @impl Phoenix.LiveView\n   def mount(%{\"club_id\" => club_id}, _session, socket) do\n@@ -13,7 +12,59 @@ defmodule MembaWeb.Admin.PeopleLive.New do\n      socket\n      |> assign(:club_id, club_id)\n      |> assign(:club, club)\n-     |> assign(:form, to_form(@person_form, as: :person))}\n+     |> assign_form(PersonEmailAddressForm.empty_params(), empty_errors())}\n+  end\n+\n+  @impl Phoenix.LiveView\n+  def handle_event(\"validate_person\", %{\"person\" => person_params}, socket) do\n+    {:noreply, assign_form(socket, person_params, validation_errors(person_params))}\n+  end\n+\n+  def handle_event(\"add_email_address\", _params, socket) do\n+    {:noreply, assign_form(socket, PersonEmailAddressForm.add_row(socket.assigns.person_params))}\n+  end\n+\n+  def handle_event(\"remove_email_address\", %{\"index\" => index}, socket) do\n+    {:noreply,\n+     assign_form(socket, PersonEmailAddressForm.remove_row(socket.assigns.person_params, index))}\n+  end\n+\n+  def handle_event(\"create_person\", %{\"person\" => person_params}, socket) do\n+    with {:ok, attrs} <- PersonEmailAddressForm.validate(person_params),\n+         :ok <-\n+           Membership.create_person(\n+             %{\n+               \"person_id\" => Ecto.UUID.generate(),\n+               \"name\" => attrs.name,\n+               \"email_addresses\" => attrs.email_addresses\n+             },\n+             consistency: :strong\n+           ) do\n+      {:noreply,\n+       socket\n+       |> put_flash(:info, \"Person created\")\n+       |> push_navigate(to: ~p\"/admin/clubs/#{socket.assigns.club_id}\")}\n+    else\n+      {:ok, _result} ->\n+        {:noreply,\n+         socket\n+         |> put_flash(:info, \"Person created\")\n+         |> push_navigate(to: ~p\"/admin/clubs/#{socket.assigns.club_id}\")}\n+\n+      {:error, %{} = form_errors} ->\n+        {:noreply, assign_form(socket, person_params, form_errors)}\n+\n+      {:error, reason} ->\n+        {:error, form_errors} = PersonEmailAddressForm.with_server_error(person_params, reason)\n+\n+        {:noreply,\n+         socket\n+         |> put_flash(\n+           :error,\n+           \"Could not create person: #{PersonEmailAddressForm.format_reason(reason)}\"\n+         )\n+         |> assign_form(person_params, form_errors)}\n+    end\n   end\n \n   @impl Phoenix.LiveView\n@@ -42,32 +93,115 @@ defmodule MembaWeb.Admin.PeopleLive.New do\n           </section>\n \n           <section class=\"rounded-xl border border-zinc-200 bg-white p-5 shadow-sm\">\n-            <.form for={@form} id=\"person-form\" aria-label=\"Create person\" class=\"space-y-5\">\n+            <.form\n+              for={@form}\n+              id=\"person-form\"\n+              aria-label=\"Create person\"\n+              class=\"space-y-5\"\n+              phx-change=\"validate_person\"\n+              phx-submit=\"create_person\"\n+            >\n               <div>\n                 <h2 class=\"text-lg font-semibold text-zinc-900\">Person details</h2>\n                 <p class=\"mt-1 text-sm text-zinc-600\">\n-                  The dedicated create form is ready for the multi-address fields in this iteration.\n+                  The first entered email address is selected as primary by default.\n                 </p>\n               </div>\n \n               <.input\n-                field={@form[:name]}\n+                name={@form[:name].name}\n+                value={@form[:name].value}\n                 id=\"person-name-input\"\n                 label=\"Name\"\n                 aria-label=\"Person name\"\n+                errors={@form_errors.name}\n                 required\n               />\n \n               <div\n                 id=\"person-email-addresses\"\n                 aria-label=\"Email addresses\"\n-                class=\"rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4\"\n+                class=\"space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4\"\n               >\n-                <p class=\"text-sm font-medium text-zinc-700\">Primary and alternate email addresses</p>\n-                <p class=\"mt-1 text-sm text-zinc-500\">\n-                  Email address rows and primary selection are added by the staff form task.\n+                <div>\n+                  <p class=\"text-sm font-medium text-zinc-700\">\n+                    Primary and alternate email addresses\n+                  </p>\n+                  <p class=\"mt-1 text-sm text-zinc-500\">\n+                    Choose exactly one primary address. Alternate addresses can still identify this person.\n+                  </p>\n+                </div>\n+\n+                <p\n+                  :if={@form_errors.global}\n+                  id=\"person-email-addresses-error\"\n+                  role=\"alert\"\n+                  class=\"text-sm font-medium text-red-700\"\n+                >\n+                  {@form_errors.global}\n                 </p>\n+\n+                <input type=\"hidden\" name=\"person[primary_email_index]\" value=\"\" />\n+\n+                <div\n+                  :for={row <- @email_rows}\n+                  id={\"person-email-row-#{row.index}\"}\n+                  data-testid=\"person-email-row\"\n+                  data-primary={to_string(row.primary?)}\n+                  class=\"grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 sm:grid-cols-[auto_1fr_auto] sm:items-start\"\n+                >\n+                  <label\n+                    for={\"person-primary-radio-#{row.index}\"}\n+                    class=\"mt-8 flex items-center gap-2 text-sm font-medium text-zinc-700\"\n+                  >\n+                    <input\n+                      id={\"person-primary-radio-#{row.index}\"}\n+                      type=\"radio\"\n+                      name=\"person[primary_email_index]\"\n+                      value={row.index}\n+                      checked={row.primary?}\n+                      class=\"radio radio-sm\"\n+                    /> Primary\n+                  </label>\n+\n+                  <.input\n+                    id={\"person-email-input-#{row.index}\"}\n+                    name={\"person[email_addresses][#{row.index}][email]\"}\n+                    type=\"email\"\n+                    label=\"Email address\"\n+                    aria-label={\"Email address #{row.index}\"}\n+                    value={row.email}\n+                    errors={Map.get(@form_errors.row_errors, row.index, [])}\n+                    required\n+                  />\n+\n+                  <button\n+                    :if={length(@email_rows) > 1}\n+                    id={\"remove-person-email-address-#{row.index}\"}\n+                    type=\"button\"\n+                    phx-click=\"remove_email_address\"\n+                    phx-value-index={row.index}\n+                    aria-label={\"Remove email address #{row.index}\"}\n+                    class=\"mt-7 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 hover:border-red-300 hover:text-red-700\"\n+                  >\n+                    Remove\n+                  </button>\n+                </div>\n+\n+                <button\n+                  id=\"add-person-email-address\"\n+                  type=\"button\"\n+                  phx-click=\"add_email_address\"\n+                  aria-label=\"Add email address\"\n+                  class=\"rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700\"\n+                >\n+                  Add email address\n+                </button>\n               </div>\n+\n+              <.button id=\"create-person-button\" type=\"submit\" aria-label=\"Create person\">\n+                Create person\n+              </.button>\n             </.form>\n           </section>\n         <% else %>\n@@ -80,4 +214,23 @@ defmodule MembaWeb.Admin.PeopleLive.New do\n     </Layouts.admin>\n     \"\"\"\n   end\n+\n+  defp assign_form(socket, person_params, form_errors \\\\ nil) do\n+    form_errors = form_errors || empty_errors()\n+\n+    socket\n+    |> assign(:person_params, person_params)\n+    |> assign(:email_rows, PersonEmailAddressForm.rows(person_params))\n+    |> assign(:form_errors, form_errors)\n+    |> assign(:form, to_form(person_params, as: :person))\n+  end\n+\n+  defp validation_errors(person_params) do\n+    case PersonEmailAddressForm.validate(person_params) do\n+      {:ok, _attrs} -> empty_errors()\n+      {:error, errors} -> errors\n+    end\n+  end\n+\n+  defp empty_errors, do: %{name: [], row_errors: %{}, global: nil}\n end\ndiff --git a/web/lib/memba_web/live/admin/person_email_address_form.ex b/web/lib/memba_web/live/admin/person_email_address_form.ex\nnew file mode 100644\nindex 0000000..7a0b51d\n--- /dev/null\n+++ b/web/lib/memba_web/live/admin/person_email_address_form.ex\n@@ -0,0 +1,267 @@\n+defmodule MembaWeb.Admin.PersonEmailAddressForm do\n+  @moduledoc false\n+\n+  alias Memba.Membership.EmailAddresses\n+\n+  @empty_params %{\n+    \"name\" => \"\",\n+    \"primary_email_index\" => \"0\",\n+    \"email_addresses\" => %{\"0\" => %{\"email\" => \"\"}}\n+  }\n+\n+  def empty_params, do: @empty_params\n+\n+  def params_for_person(nil, _email_addresses), do: @empty_params\n+\n+  def params_for_person(person, email_addresses) do\n+    rows =\n+      email_addresses\n+      |> Enum.with_index()\n+      |> Map.new(fn {email_address, index} ->\n+        index = Integer.to_string(index)\n+\n+        {index,\n+         %{\"email\" => email_address.email, \"is_primary\" => to_string(email_address.primary?)}}\n+      end)\n+\n+    primary_index =\n+      email_addresses\n+      |> Enum.find_index(& &1.primary?)\n+      |> case do\n+        nil -> \"\"\n+        index -> Integer.to_string(index)\n+      end\n+\n+    %{\n+      \"name\" => person.name,\n+      \"primary_email_index\" => primary_index,\n+      \"email_addresses\" => rows\n+    }\n+  end\n+\n+  def rows(params) when is_map(params) do\n+    params\n+    |> raw_rows()\n+    |> apply_primary_index(Map.get(params, \"primary_email_index\", :missing))\n+    |> ensure_one_row()\n+  end\n+\n+  def validate(params) when is_map(params) do\n+    rows = rows(params)\n+    email_addresses = Enum.map(rows, &row_email_address/1)\n+\n+    with {:ok, name} <- validate_name(Map.get(params, \"name\")),\n+         {:ok, normalized_email_addresses} <- EmailAddresses.validate_set(email_addresses) do\n+      {:ok, %{name: name, email_addresses: normalized_email_addresses}}\n+    else\n+      {:error, :invalid_name} -> {:error, errors(name: \"Enter a name.\")}\n+      {:error, reason} -> {:error, errors_for_email_reason(reason, rows)}\n+    end\n+  end\n+\n+  def with_server_error(params, reason) do\n+    {:error, errors_for_email_reason(reason, rows(params))}\n+  end\n+\n+  def add_row(params) when is_map(params) do\n+    rows = rows(params)\n+    next_index = rows |> Enum.map(& &1.index) |> next_index()\n+\n+    put_rows(params, rows ++ [%{index: next_index, email: \"\", primary?: false}])\n+  end\n+\n+  def remove_row(params, remove_index) when is_map(params) do\n+    rows =\n+      params\n+      |> rows()\n+      |> Enum.reject(&(&1.index == remove_index))\n+      |> ensure_one_row()\n+\n+    rows =\n+      if Enum.any?(rows, & &1.primary?) do\n+        rows\n+      else\n+        mark_first_primary(rows)\n+      end\n+\n+    put_rows(params, rows)\n+  end\n+\n+  def format_reason(:email_address_taken), do: \"email address already belongs to another person\"\n+  def format_reason(:duplicate_email_address), do: \"email addresses must be unique\"\n+  def format_reason(:invalid_email), do: \"email address is invalid\"\n+  def format_reason(:email_address_required), do: \"enter at least one email address\"\n+\n+  def format_reason(:exactly_one_primary_email_required),\n+    do: \"choose exactly one primary email address\"\n+\n+  def format_reason(reason), do: reason |> inspect() |> String.replace(\"_\", \" \")\n+\n+  defp validate_name(name) when is_binary(name) do\n+    case String.trim(name) do\n+      \"\" -> {:error, :invalid_name}\n+      name -> {:ok, name}\n+    end\n+  end\n+\n+  defp validate_name(_name), do: {:error, :invalid_name}\n+\n+  defp raw_rows(params) do\n+    case Map.get(params, \"email_addresses\") do\n+      rows when is_map(rows) ->\n+        rows\n+        |> Enum.sort_by(fn {index, _row} -> parse_index(index) end)\n+        |> Enum.map(fn {index, row} -> row_from_params(index, row) end)\n+\n+      rows when is_list(rows) ->\n+        rows\n+        |> Enum.with_index()\n+        |> Enum.map(fn {row, index} -> row_from_params(Integer.to_string(index), row) end)\n+\n+      _other ->\n+        []\n+    end\n+  end\n+\n+  defp row_from_params(index, row) when is_map(row) do\n+    %{\n+      index: to_string(index),\n+      email: Map.get(row, \"email\", Map.get(row, :email, \"\")),\n+      primary?: primary?(Map.get(row, \"is_primary\", Map.get(row, :is_primary, false)))\n+    }\n+  end\n+\n+  defp row_from_params(index, _row), do: %{index: to_string(index), email: \"\", primary?: false}\n+\n+  defp apply_primary_index(rows, :missing), do: rows\n+  defp apply_primary_index(rows, \"\"), do: Enum.map(rows, &%{&1 | primary?: false})\n+\n+  defp apply_primary_index(rows, primary_index) do\n+    primary_index = to_string(primary_index)\n+    Enum.map(rows, &%{&1 | primary?: &1.index == primary_index})\n+  end\n+\n+  defp ensure_one_row([]), do: [%{index: \"0\", email: \"\", primary?: true}]\n+  defp ensure_one_row(rows), do: rows\n+\n+  defp mark_first_primary([row | rest]),\n+    do: [%{row | primary?: true} | Enum.map(rest, &%{&1 | primary?: false})]\n+\n+  defp put_rows(params, rows) do\n+    rows = reindex(rows)\n+\n+    email_addresses =\n+      Map.new(rows, fn row ->\n+        {row.index, %{\"email\" => row.email, \"is_primary\" => to_string(row.primary?)}}\n+      end)\n+\n+    primary_index =\n+      rows\n+      |> Enum.find(& &1.primary?)\n+      |> case do\n+        nil -> \"\"\n+        row -> row.index\n+      end\n+\n+    params\n+    |> Map.put(\"email_addresses\", email_addresses)\n+    |> Map.put(\"primary_email_index\", primary_index)\n+  end\n+\n+  defp reindex(rows) do\n+    rows\n+    |> Enum.with_index()\n+    |> Enum.map(fn {row, index} -> %{row | index: Integer.to_string(index)} end)\n+  end\n+\n+  defp row_email_address(row), do: %{email: row.email, is_primary: row.primary?}\n+\n+  defp errors(opts) do\n+    %{\n+      name: error_list(Keyword.get(opts, :name)),\n+      row_errors: Keyword.get(opts, :row_errors, %{}),\n+      global: Keyword.get(opts, :global)\n+    }\n+  end\n+\n+  defp errors_for_email_reason(:invalid_email, rows) do\n+    invalid_row_errors =\n+      rows\n+      |> Enum.filter(fn row ->\n+        match?({:error, :invalid_email}, EmailAddresses.normalize_email(row.email))\n+      end)\n+      |> Map.new(fn row -> {row.index, error_list(\"Enter a valid email address.\")} end)\n+\n+    errors(row_errors: invalid_row_errors, global: \"Fix invalid email addresses.\")\n+  end\n+\n+  defp errors_for_email_reason(:email_address_taken, rows) do\n+    rows\n+    |> Map.new(fn row -> {row.index, error_list(\"This email address is already used.\")} end)\n+    |> then(\n+      &errors(row_errors: &1, global: \"An email address is already used by another person.\")\n+    )\n+  end\n+\n+  defp errors_for_email_reason(:duplicate_email_address, rows) do\n+    duplicate_row_errors =\n+      rows\n+      |> duplicate_indexes()\n+      |> Map.new(&{&1, error_list(\"Email addresses must be unique.\")})\n+\n+    errors(row_errors: duplicate_row_errors, global: \"Email addresses must be unique.\")\n+  end\n+\n+  defp errors_for_email_reason(:exactly_one_primary_email_required, _rows) do\n+    errors(global: \"Choose exactly one primary email address.\")\n+  end\n+\n+  defp errors_for_email_reason(:email_address_required, _rows) do\n+    errors(global: \"Enter at least one email address.\")\n+  end\n+\n+  defp errors_for_email_reason(reason, _rows), do: errors(global: format_reason(reason))\n+\n+  defp duplicate_indexes(rows) do\n+    rows\n+    |> Enum.reduce(%{}, fn row, grouped ->\n+      case EmailAddresses.normalize_email(row.email) do\n+        {:ok, %{normalized_email: normalized_email}} ->\n+          Map.update(grouped, normalized_email, [row.index], &[row.index | &1])\n+\n+        {:error, :invalid_email} ->\n+          grouped\n+      end\n+    end)\n+    |> Map.values()\n+    |> Enum.filter(&(length(&1) > 1))\n+    |> List.flatten()\n+  end\n+\n+  defp error_list(nil), do: []\n+  defp error_list(message), do: [message]\n+\n+  defp primary?(true), do: true\n+  defp primary?(\"true\"), do: true\n+  defp primary?(\"on\"), do: true\n+  defp primary?(_other), do: false\n+\n+  defp next_index([]), do: \"0\"\n+\n+  defp next_index(indexes) do\n+    indexes\n+    |> Enum.map(&parse_index/1)\n+    |> Enum.max()\n+    |> Kernel.+(1)\n+    |> Integer.to_string()\n+  end\n+\n+  defp parse_index(index) when is_integer(index), do: index\n+\n+  defp parse_index(index) do\n+    case Integer.parse(to_string(index)) do\n+      {index, \"\"} -> index\n+      _other -> 0\n+    end\n+  end\n+end\ndiff --git a/web/test/memba_web/live/admin_people_live_test.exs b/web/test/memba_web/live/admin_people_live_test.exs\nindex efe86f6..8fa2be9 100644\n--- a/web/test/memba_web/live/admin_people_live_test.exs\n+++ b/web/test/memba_web/live/admin_people_live_test.exs\n@@ -1,6 +1,11 @@\n defmodule MembaWeb.AdminPeopleLiveTest do\n   use MembaWeb.FeatureCase, async: false\n \n+  import Phoenix.LiveViewTest\n+\n+  alias Memba.Membership\n+  alias MembaWeb.Admin.PersonEmailAddressForm\n+\n   test \"staff can open the dedicated new-person LiveView for a club\", %{conn: conn} do\n     club = insert_membership_club!(name: \"Kootenay Mountaineering Club\")\n \n@@ -14,6 +19,10 @@ defmodule MembaWeb.AdminPeopleLiveTest do\n     |> assert_has(\"#person-form[aria-label='Create person']\")\n     |> assert_has(\"#person-name-input[aria-label='Person name']\")\n     |> assert_has(\"#person-email-addresses[aria-label='Email addresses']\")\n+    |> assert_has(\"#person-email-row-0[data-testid='person-email-row'][data-primary='true']\")\n+    |> assert_has(\"#person-email-input-0[aria-label='Email address 0']\")\n+    |> assert_has(\"#person-primary-radio-0[checked]\")\n+    |> assert_has(\"#add-person-email-address\")\n   end\n \n   test \"staff can open the dedicated edit-person LiveView for a club person\", %{conn: conn} do\n@@ -38,13 +47,177 @@ defmodule MembaWeb.AdminPeopleLiveTest do\n     |> assert_has(\"#person-form[aria-label='Edit person']\")\n     |> assert_has(\"#person-name-input[aria-label='Person name']\")\n     |> assert_has(\"#person-email-addresses[aria-label='Email addresses']\")\n-    |> assert_has(\n-      \"#person-email-addresses [data-testid='person-email-address'][data-primary='true']\",\n-      text: \"alice@example.com\"\n+    |> assert_has(\"#person-email-row-0[data-testid='person-email-row'][data-primary='true']\")\n+    |> assert_has(\"#person-email-row-1[data-testid='person-email-row'][data-primary='false']\")\n+    |> assert_has(\"#person-email-input-0[value='alice@example.com']\")\n+    |> assert_has(\"#person-email-input-1[value='alice@work.example']\")\n+    |> assert_has(\"#person-primary-radio-0[checked]\")\n+    |> assert_has(\"#add-person-email-address\")\n+  end\n+\n+  test \"staff creates a person with primary and alternate email rows\", %{conn: conn} do\n+    club = insert_membership_club!(name: \"Kootenay Mountaineering Club\")\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> sign_in_staff()\n+      |> live(~p\"/admin/clubs/#{club.club_id}/people/new\")\n+\n+    view\n+    |> element(\"#add-person-email-address\")\n+    |> render_click()\n+\n+    view\n+    |> form(\"#person-form\",\n+      person: %{\n+        name: \"Alice Example\",\n+        primary_email_index: \"0\",\n+        email_addresses: %{\n+          \"0\" => %{email: \" Alice@Example.COM \"},\n+          \"1\" => %{email: \"alice@work.example\"}\n+        }\n+      }\n     )\n-    |> assert_has(\n-      \"#person-email-addresses [data-testid='person-email-address'][data-primary='false']\",\n-      text: \"alice@work.example\"\n+    |> render_submit()\n+\n+    assert_redirect(view, ~p\"/admin/clubs/#{club.club_id}\")\n+\n+    assert %{person_id: person_id, email: \"Alice@Example.COM\"} =\n+             Membership.list_people()\n+             |> Enum.find(&(&1.name == \"Alice Example\"))\n+\n+    assert Membership.list_person_email_addresses(person_id) == [\n+             %{email: \"Alice@Example.COM\", normalized_email: \"alice@example.com\", primary?: true},\n+             %{\n+               email: \"alice@work.example\",\n+               normalized_email: \"alice@work.example\",\n+               primary?: false\n+             }\n+           ]\n+  end\n+\n+  test \"staff create form rejects malformed, missing-primary, multiple-primary, and duplicate email submissions\",\n+       %{conn: conn} do\n+    club = insert_membership_club!(name: \"Kootenay Mountaineering Club\")\n+\n+    assert :ok =\n+             Membership.create_person(\n+               %{\n+                 person_id: Ecto.UUID.generate(),\n+                 name: \"Existing Alice\",\n+                 email: \"alice@example.com\"\n+               },\n+               consistency: :strong\n+             )\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> sign_in_staff()\n+      |> live(~p\"/admin/clubs/#{club.club_id}/people/new\")\n+\n+    view\n+    |> form(\"#person-form\",\n+      person: %{\n+        name: \"Malformed Alice\",\n+        primary_email_index: \"0\",\n+        email_addresses: %{\"0\" => %{email: \"not-an-email\"}}\n+      }\n     )\n+    |> render_submit()\n+\n+    assert has_element?(view, \"#person-email-addresses-error\", \"Fix invalid email addresses.\")\n+    assert has_element?(view, \"#person-email-input-0.input-error\")\n+\n+    view\n+    |> element(\"#person-form\")\n+    |> render_submit(%{\n+      \"person\" => %{\n+        \"name\" => \"No Primary Alice\",\n+        \"primary_email_index\" => \"not-a-row\",\n+        \"email_addresses\" => %{\"0\" => %{\"email\" => \"alice@work.example\"}}\n+      }\n+    })\n+\n+    assert has_element?(\n+             view,\n+             \"#person-email-addresses-error\",\n+             \"Choose exactly one primary email address.\"\n+           )\n+\n+    assert {:error, %{global: \"Choose exactly one primary email address.\"}} =\n+             PersonEmailAddressForm.validate(%{\n+               \"name\" => \"Two Primary Alice\",\n+               \"email_addresses\" => [\n+                 %{\"email\" => \"alice@home.example\", \"is_primary\" => \"true\"},\n+                 %{\"email\" => \"alice@work.example\", \"is_primary\" => \"true\"}\n+               ]\n+             })\n+\n+    view\n+    |> form(\"#person-form\",\n+      person: %{\n+        name: \"Duplicate Alice\",\n+        primary_email_index: \"0\",\n+        email_addresses: %{\"0\" => %{email: \"alice@example.com\"}}\n+      }\n+    )\n+    |> render_submit()\n+\n+    assert has_element?(\n+             view,\n+             \"#person-email-addresses-error\",\n+             \"An email address is already used by another person.\"\n+           )\n+\n+    refute Membership.list_people() |> Enum.any?(&(&1.name == \"Duplicate Alice\"))\n+  end\n+\n+  test \"staff edit form replaces addresses and primary selection\", %{conn: conn} do\n+    club = insert_membership_club!(name: \"Kootenay Mountaineering Club\")\n+    person_id = Ecto.UUID.generate()\n+\n+    assert :ok =\n+             Membership.create_person(\n+               %{\n+                 person_id: person_id,\n+                 name: \"Alice Example\",\n+                 email_addresses: [\n+                   %{email: \"alice@example.com\", is_primary: true},\n+                   %{email: \"alice@work.example\", is_primary: false}\n+                 ]\n+               },\n+               consistency: :strong\n+             )\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> sign_in_staff()\n+      |> live(~p\"/admin/clubs/#{club.club_id}/people/#{person_id}/edit\")\n+\n+    view\n+    |> form(\"#person-form\",\n+      person: %{\n+        name: \"Alice Example\",\n+        primary_email_index: \"1\",\n+        email_addresses: %{\n+          \"0\" => %{email: \"alice@example.com\"},\n+          \"1\" => %{email: \" alice@work.example \"}\n+        }\n+      }\n+    )\n+    |> render_submit()\n+\n+    assert_redirect(view, ~p\"/admin/clubs/#{club.club_id}\")\n+\n+    assert %{email: \"alice@work.example\"} = Membership.get_person(person_id)\n+\n+    assert Membership.list_person_email_addresses(person_id) == [\n+             %{\n+               email: \"alice@work.example\",\n+               normalized_email: \"alice@work.example\",\n+               primary?: true\n+             },\n+             %{email: \"alice@example.com\", normalized_email: \"alice@example.com\", primary?: false}\n+           ]\n   end\n end\n",
+        "summary": {
+          "files_changed": 48,
+          "additions": 3447,
+          "deletions": 244
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T05:28:29.721458206Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "graph.default_fidelity": "summary:high",
           "task_valid": true,
           "task_retry_available": false,
           "failure_signature": "",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.run_id": "01KT329V7X61YAG1PJ00TCBH59",
           "internal.retry_count.validate_task": 0,
           "task_list_needs_human": false,
@@ -30357,10 +30741,10 @@
           "internal.retry_count.start": 0,
           "response.all_tasks_done": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\nif [ ! -r \\\"$TODO_PATH\\\" ]; then\\n  echo 'missing-or-unreadable'\\n  exit 0\\nfi\\ngrep -n -E '^[[:space:]]*- \\\\[ \\\\] ' \\\"$TODO_PATH\\\" || true\"}{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "internal.retry_count.all_tasks_done": 0,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.preflight_sandbox": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it recorded a clean working tree at implement checkpoint `1097d76`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `25a58f0 pre_validate_snapshot` on top of `1097d76 implement_next_task`.\n  - `git diff 1097d76^ 1097d76 -- docs/iterations/016-person-email-addresses/todo.md` shows exactly one ordinary task line changed:\n    - `014` from `- [ ]` to `- [x]`.\n  - Parent todo state shows `014` was the first unchecked task before the implement checkpoint.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/live/admin/clubs_live/show.ex`:\n    - Removed the inline person creation form/event path.\n    - Added `#new-person-link` to `/admin/clubs/:club_id/people/new`.\n    - Keeps the people list.\n    - Displays primary email and alternate-email summary/count.\n    - Adds per-person edit links to `/admin/clubs/:club_id/people/:person_id/edit`.\n  - Updated tests:\n    - `web/test/memba_web/live/admin/clubs_live/show_test.exs`\n    - `web/test/memba_web/live/browser_acceptance_harness_test.exs`\n  - Changed files are focused on task `014`; no plan-required work was deleted or weakened.\n\n- Tests run/results found.\n  - `git diff --check 1097d76^ 1097d76` passed.\n  - Ran `PATH=\"$PWD/bin:$PATH\" dev check`.\n    - First attempts were blocked by a stale repo-managed Postgres lock/socket from a zombie process, not by code failures.\n    - After clearing the stale lock/socket, `dev check` passed:\n      - `340 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes.\n  - Matches implementation plan task `014`.\n  - Respects the staff UI resolved decision: admin club show keeps the people list and links to dedicated create/edit LiveViews.\n  - Uses Phoenix LiveView surfaces and public Membership query APIs; no cross-context persistence reach-through found.\n  - Uses UUID route identifiers, not email as identity.\n  - Adds/updates web-facing tests consistent with ADR 0013.\n  - Acceptance feature files were not edited in this task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
-          "command.output": "blob://sha256/75b2a1a48f13c16336a80b7c1631812d4c6782298946241886d1d2f8f3320834",
+          "command.output": "blob://sha256/c65b4f20b8c519cdf00612092a27950a74cd572e02dbacf326735787e2efcce0",
           "internal.retry_count.resume_gate": 0,
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "thread.read_plan.current_node": "wip_gate"
@@ -30441,15 +30825,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/4261ac09747d1d2c4e910b57fb3e9dc8efbb6de3e23d31fdc8ac74cb40b8e9be"
+              "command.output": "blob://sha256/c65b4f20b8c519cdf00612092a27950a74cd572e02dbacf326735787e2efcce0"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 533,
-              "active_time_ms": 533
+              "tool_time_ms": 340,
+              "active_time_ms": 340
             }
           },
           "sync_task_list": {
@@ -30575,7 +30959,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "wip_gate": 1,
           "implement_next_task": 15,
@@ -30584,7 +30968,7 @@
           "sync_task_list": 15,
           "read_plan": 1,
           "all_tasks_done": 15,
-          "pre_validate_snapshot": 14,
+          "pre_validate_snapshot": 15,
           "validate_task": 14,
           "task_gate": 14,
           "preflight_sandbox": 1
@@ -39148,7 +39532,12 @@
       "first_event_seq": 5246,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T05:28:25.041706219Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -39162,13 +39551,20 @@
       "output": null,
       "started_at": "2026-06-02T05:14:10.680735117Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 854362,
+        "inference_time_ms": 668487,
+        "tool_time_ms": 184910,
+        "active_time_ms": 853397
+      },
       "usage": {
-        "input_tokens": 1457587,
-        "output_tokens": 16901,
-        "total_tokens": 10113170,
-        "reasoning_tokens": 7898,
-        "cache_read_tokens": 8630784,
-        "cache_write_tokens": 0
+        "input_tokens": 1465349,
+        "output_tokens": 17656,
+        "total_tokens": 10279610,
+        "reasoning_tokens": 8125,
+        "cache_read_tokens": 8788480,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 12494415
       },
       "model": {
         "provider": "openai",
@@ -39343,22 +39739,22 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 165321,
-        "usage_percent": 60.77977941176471,
+        "input_tokens": 165458,
+        "usage_percent": 60.83014705882353,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-02T05:28:05.262028285Z",
-        "event_seq": 5570,
+        "generated_at": "2026-06-02T05:28:25.032495777Z",
+        "event_seq": 5577,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1002,
-            "usage_percent": 0.3683823529411765
+            "tokens": 1000,
+            "usage_percent": 0.36764705882352944
           },
           {
             "category": "tools",
-            "tokens": 1431,
-            "usage_percent": 0.5261029411764706
+            "tokens": 1428,
+            "usage_percent": 0.525
           },
           {
             "category": "memory",
@@ -39367,18 +39763,18 @@
           },
           {
             "category": "conversation",
-            "tokens": 162566,
-            "usage_percent": 59.76691176470588
+            "tokens": 162709,
+            "usage_percent": 59.81948529411765
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "all_tasks_done@4": {
       "first_event_seq": 1084,
