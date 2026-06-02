@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T04:43:10.799038858Z",
-  "last_event_at": "2026-06-02T05:12:09.720713791Z",
+  "last_event_at": "2026-06-02T05:12:14.003333649Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -5522,9 +5522,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 856,
       "checkpoint": {
-        "timestamp": "2026-06-02T05:12:09.738443832Z",
+        "timestamp": "2026-06-02T05:12:13.612059996Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -5550,12 +5550,321 @@
         ],
         "node_retries": {},
         "context_values": {
+          "task_list_complete": false,
+          "task_valid": true,
+          "internal.work_dir": "/workspace/memba",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "internal.fidelity": "summary:high",
+          "internal.thread_id": "all_tasks_done",
+          "failure_class": "",
+          "task_list_needs_human": false,
+          "internal.retry_count.wip_gate": 0,
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found:\n  - Live `todo.md` shows tasks `001` and `002` checked, with `003` still first unchecked.\n  - Recent checkpoint `a16ccba` changed exactly one ordinary task line:\n    - `- [ ] 002 Update shared acceptance feature expectations to remove opened receipts.`\n    - to `- [x] 002 Update shared acceptance feature expectations to remove opened receipts.`\n  - Parent state had task `001` checked and task `002` unchecked, so `002` was the first unchecked task.\n\n- Implementation artifacts found:\n  - `a16ccba` added a concrete test in `web/test/features/cucumber_configuration_test.exs`.\n  - The new test reads the two shared deliverability feature files and rejects opened/open receipt wording:\n    - `acceptance-tests/features/member_message_deliverability.feature`\n    - `acceptance-tests/features/memba_staff_email_deliverability.feature`\n  - Live inspection confirms those feature files currently describe Sending, Delivered, and Delivery problem only, with no opened/open wording.\n  - No acceptance `.feature` files were changed in the task commit.\n\n- Tests run/results found:\n  - I ran live validation: `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Result: passed, `354 tests, 0 failures`.\n\n- ADR/plan conformance notes:\n  - Work stayed within task `002` and the approved plan.\n  - The plan explicitly allows updating `web/test/features/cucumber_configuration_test.exs` to match the revised shared feature files without changing step definitions.\n  - ADR `0010` is respected: shared feature files remain the source living documentation, and the Elixir Cucumber configuration test validates them.\n  - Existing ADRs mentioning opened tracking are not worsened by this task; broader ADR/documentation reconciliation remains correctly scoped to later documentation work.\n  - The checkpoint is small and independently useful: one todo check-off plus one focused test addition.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.retry_count.all_tasks_done": 0,
+          "command.output": "blob://sha256/d687ba559d80ad595154842078671447039c30a3caa5b3ce42778ad05659842a",
+          "graph.default_fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.resume_gate": 0,
+          "graph.rankdir": "LR",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n2. **Changes made**\n   - Removed `ReportEmailDeliveryOpened` from the Messaging command router registration.\n   - Stopped the Messaging public API from dispatching opened commands:\n     - `Messaging.report_email_delivery_opened/2` now returns `{:error, :unsupported_delivery_status}` and is `@doc false`.\n   - Removed the aggregate command handler that emitted `EmailDeliveryOpened`.\n   - Removed the valid `:delivered -> :opened` aggregate transition.\n   - Kept the legacy opened command/event modules as compatibility shims, with updated moduledocs explaining they are not current behaviour.\n   - Changed aggregate handling of historic `EmailDeliveryOpened` events to no-op rather than putting the aggregate into `:opened`.\n   - Updated Messaging/domain/API tests so current command/API paths cover only sent, delivered, delayed, bounced, and spam complaint statuses.\n   - Updated obsolete tests that still invoked the opened API/command path so `dev check` remains green.\n   - Did not edit acceptance `.feature` files.\n\n3. **Focused validation**\n   - Formatted changed Elixir files with `mix format`.\n   - Ran focused tests:\n     - `mix test test/memba/messaging/message_test.exs test/memba/messaging/app_test.exs test/memba/messaging/send_message_dispatch_test.exs test/memba/messaging/status_report_api_test.exs test/memba/messaging/member_email_delivery_projection_test.exs test/memba/messaging/memba_staff_email_delivery_projection_test.exs test/memba_web/controllers/postmark_webhook_controller_test.exs test/memba_web/controllers/resend_webhook_controller_test.exs test/memba_web/live/browser_acceptance_harness_test.exs`\n     - Result: `40 tests, 0 failures`\n   - Ran compile validation:\n     - `mix compile --warnings-as-errors`\n     - Result: passed\n   - Ran full project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: passed, `354 tests, 0 failures`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n   - To:\n     - `- [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - Read relevant ADRs: `0002`, `0004`, `0006`, `0007`, `0012`, and `0016`.\n   - Preserved Commanded/CQRS structure from ADRs `0002`, `0004`, and `0007`.\n   - Preserved delivered/problem handling from ADR `0006`, while aligning with the newer iteration plan decision that opened is no longer current product behaviour.\n   - Kept opened event/command modules as internal compatibility shims rather than deleting them outright, consistent with the plan’s replay/deserialization caution.\n   - ADR `0012` still describes the old opened behaviour; this task intentionally implements the iteration plan’s newer policy while leaving broader ADR/documentation reconciliation to the later documentation task.",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.node_visit_count": 3,
+          "thread.validate_task.current_node": "task_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.start.current_node": "read_plan",
+          "last_stage": "implement_next_task",
+          "task_retry_available": false,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "graph.max_node_visits": "300",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n2. **Changes made**",
+          "internal.run_id": "01KT3A6RKDN4AWT9A4B57VEAM0",
+          "internal.retry_count.task_gate": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.validate_task": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "current_node": "implement_next_task",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "thread.task_gate.current_node": "sync_task_list",
+          "outcome": "succeeded",
+          "internal.retry_count.preflight_sandbox": 0,
+          "failure_signature": "",
+          "internal.retry_count.sync_task_list": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a9a6b4e197e36a13fef3ce4dd2d1f59e3590be9cf50f75afaf0db7611ad4abc0"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 231,
+              "active_time_ms": 231
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/adfc2d6e33ffe9f835adb8c39025008c20cb262b7def204aada0ca4dc4919d3b"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 174839,
+              "active_time_ms": 174839
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_retry_available": false,
+              "task_valid": true,
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found:\n  - Live `todo.md` shows tasks `001` and `002` checked, with `003` still first unchecked.\n  - Recent checkpoint `a16cc",
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found:\n  - Live `todo.md` shows tasks `001` and `002` checked, with `003` still first unchecked.\n  - Recent checkpoint `a16ccba` changed exactly one ordinary task line:\n    - `- [ ] 002 Update shared acceptance feature expectations to remove opened receipts.`\n    - to `- [x] 002 Update shared acceptance feature expectations to remove opened receipts.`\n  - Parent state had task `001` checked and task `002` unchecked, so `002` was the first unchecked task.\n\n- Implementation artifacts found:\n  - `a16ccba` added a concrete test in `web/test/features/cucumber_configuration_test.exs`.\n  - The new test reads the two shared deliverability feature files and rejects opened/open receipt wording:\n    - `acceptance-tests/features/member_message_deliverability.feature`\n    - `acceptance-tests/features/memba_staff_email_deliverability.feature`\n  - Live inspection confirms those feature files currently describe Sending, Delivered, and Delivery problem only, with no opened/open wording.\n  - No acceptance `.feature` files were changed in the task commit.\n\n- Tests run/results found:\n  - I ran live validation: `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Result: passed, `354 tests, 0 failures`.\n\n- ADR/plan conformance notes:\n  - Work stayed within task `002` and the approved plan.\n  - The plan explicitly allows updating `web/test/features/cucumber_configuration_test.exs` to match the revised shared feature files without changing step definitions.\n  - ADR `0010` is respected: shared feature files remain the source living documentation, and the Elixir Cucumber configuration test validates them.\n  - Existing ADRs mentioning opened tracking are not worsened by this task; broader ADR/documentation reconciliation remains correctly scoped to later documentation work.\n  - The checkpoint is small and independently useful: one todo check-off plus one focused test addition.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 229653,
+                    "output_tokens": 2187,
+                    "reasoning_tokens": 1510,
+                    "cache_read_tokens": 65536,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1291943
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 91885,
+              "tool_time_ms": 25907,
+              "active_time_ms": 117792
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/623045938803c746d7889adfe5cb5f991c3545ffe8a327cb669c7741ec9c8774"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 8416,
+              "active_time_ms": 8416
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/25c77911b820073bb182567cbd85d33d0ba5bd73ff1c8eb3c8ef0a8ab10d4f4c"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 207,
+              "active_time_ms": 207
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9532,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 79,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 50870
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3851,
+              "tool_time_ms": 0,
+              "active_time_ms": 3851
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d687ba559d80ad595154842078671447039c30a3caa5b3ce42778ad05659842a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n2. **Changes made**\n   - Removed `ReportEmailDeliveryOpened` from the Messaging command router registration.\n   - Stopped the Messaging public API from dispatching opened commands:\n     - `Messaging.report_email_delivery_opened/2` now returns `{:error, :unsupported_delivery_status}` and is `@doc false`.\n   - Removed the aggregate command handler that emitted `EmailDeliveryOpened`.\n   - Removed the valid `:delivered -> :opened` aggregate transition.\n   - Kept the legacy opened command/event modules as compatibility shims, with updated moduledocs explaining they are not current behaviour.\n   - Changed aggregate handling of historic `EmailDeliveryOpened` events to no-op rather than putting the aggregate into `:opened`.\n   - Updated Messaging/domain/API tests so current command/API paths cover only sent, delivered, delayed, bounced, and spam complaint statuses.\n   - Updated obsolete tests that still invoked the opened API/command path so `dev check` remains green.\n   - Did not edit acceptance `.feature` files.\n\n3. **Focused validation**\n   - Formatted changed Elixir files with `mix format`.\n   - Ran focused tests:\n     - `mix test test/memba/messaging/message_test.exs test/memba/messaging/app_test.exs test/memba/messaging/send_message_dispatch_test.exs test/memba/messaging/status_report_api_test.exs test/memba/messaging/member_email_delivery_projection_test.exs test/memba/messaging/memba_staff_email_delivery_projection_test.exs test/memba_web/controllers/postmark_webhook_controller_test.exs test/memba_web/controllers/resend_webhook_controller_test.exs test/memba_web/live/browser_acceptance_harness_test.exs`\n     - Result: `40 tests, 0 failures`\n   - Ran compile validation:\n     - `mix compile --warnings-as-errors`\n     - Result: passed\n   - Ran full project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: passed, `354 tests, 0 failures`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n   - To:\n     - `- [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - Read relevant ADRs: `0002`, `0004`, `0006`, `0007`, `0012`, and `0016`.\n   - Preserved Commanded/CQRS structure from ADRs `0002`, `0004`, and `0007`.\n   - Preserved delivered/problem handling from ADR `0006`, while aligning with the newer iteration plan decision that opened is no longer current product behaviour.\n   - Kept opened event/command modules as internal compatibility shims rather than deleting them outright, consistent with the plan’s replay/deserialization caution.\n   - ADR `0012` still describes the old opened behaviour; this task intentionally implements the iteration plan’s newer policy while leaving broader ADR/documentation reconciliation to the later documentation task.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n2. **Changes made**"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1398559,
+                    "output_tokens": 12955,
+                    "reasoning_tokens": 6103,
+                    "cache_read_tokens": 2016256,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 8572663
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 449841,
+              "tool_time_ms": 336278,
+              "active_time_ms": 786119
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d53404fe49d72ad42303b286281f9220e09a4e6bbf3709d5a1b6918c30848913"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 163,
+              "active_time_ms": 163
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "eec2a067ebdb008a9037278f381d573640274113",
+        "node_visits": {
+          "sync_task_list": 3,
+          "task_gate": 2,
+          "pre_validate_snapshot": 2,
+          "resume_gate": 1,
+          "validate_task": 2,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "implement_next_task": 3,
+          "all_tasks_done": 3,
+          "start": 1,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md\nindex aea24aa..6f525bd 100644\n--- a/docs/iterations/017-remove-open-tracking/todo.md\n+++ b/docs/iterations/017-remove-open-tracking/todo.md\n@@ -2,7 +2,7 @@\n \n - [x] 001 Inspect current opened references in `web/lib`, `web/test`, `acceptance-tests/features`, active docs, and Postmark delivery code. Exclude old `docs/iterations/**` design/prototype artifacts from cleanup unless they are active validation inputs.\n - [x] 002 Update shared acceptance feature expectations to remove opened receipts.\n-- [ ] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:\n+- [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:\n - [ ] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.\n - [ ] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.\n - [ ] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.\ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex a807cd5..176dd7f 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -8,7 +8,6 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.EmailDeliveryProvider\n@@ -82,15 +81,10 @@ defmodule Memba.Messaging do\n     end\n   end\n \n-  @doc \"\"\"\n-  Report that a recipient opened a delivery.\n-  \"\"\"\n+  @doc false\n   def report_email_delivery_opened(attrs, dispatch_opts \\\\ [])\n       when is_map(attrs) and is_list(dispatch_opts) do\n-    with {:ok, command} <- report_email_delivery_opened_command(attrs),\n-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do\n-      dispatch_result\n-    end\n+    {:error, :unsupported_delivery_status}\n   end\n \n   @doc \"\"\"\n@@ -170,8 +164,8 @@ defmodule Memba.Messaging do\n   @doc \"\"\"\n   Fetch a member-facing email delivery for a recipient on a message.\n \n-  Invalid or missing IDs return `nil`. The status uses ADR 0006's\n-  simplified member vocabulary: sent, delivered, delivery problem, or opened.\n+  Invalid or missing IDs return `nil`. The status uses the simplified member\n+  vocabulary: sent, delivered, or delivery problem.\n   \"\"\"\n   def get_member_email_delivery(message_id, recipient_id) do\n     with {:ok, message_id} <- Ecto.UUID.cast(message_id),\n@@ -372,13 +366,6 @@ defmodule Memba.Messaging do\n     end\n   end\n \n-  defp report_email_delivery_opened_command(attrs) do\n-    with {:ok, message_id} <- fetch_required(attrs, :message_id),\n-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do\n-      {:ok, %ReportEmailDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}\n-    end\n-  end\n-\n   defp fetch_required(attrs, key) do\n     string_key = Atom.to_string(key)\n \ndiff --git a/web/lib/memba/messaging/commands/report_email_delivery_opened.ex b/web/lib/memba/messaging/commands/report_email_delivery_opened.ex\nindex 6a78f07..b1288f6 100644\n--- a/web/lib/memba/messaging/commands/report_email_delivery_opened.ex\n+++ b/web/lib/memba/messaging/commands/report_email_delivery_opened.ex\n@@ -1,6 +1,9 @@\n defmodule Memba.Messaging.Commands.ReportEmailDeliveryOpened do\n   @moduledoc \"\"\"\n-  Command to report that a recipient opened an email delivery at least once.\n+  Legacy command kept only so historic/test-support code can compile.\n+\n+  Current Messaging behaviour does not route, dispatch, or emit opened delivery\n+  reports.\n   \"\"\"\n \n   @enforce_keys [:message_id, :delivery_id]\ndiff --git a/web/lib/memba/messaging/events/email_delivery_opened.ex b/web/lib/memba/messaging/events/email_delivery_opened.ex\nindex 60b6469..48fb27b 100644\n--- a/web/lib/memba/messaging/events/email_delivery_opened.ex\n+++ b/web/lib/memba/messaging/events/email_delivery_opened.ex\n@@ -1,6 +1,8 @@\n defmodule Memba.Messaging.Events.EmailDeliveryOpened do\n   @moduledoc \"\"\"\n-  Event raised when a email delivery has been opened at least once.\n+  Legacy event kept for deserializing historic event-store data.\n+\n+  Current Messaging behaviour does not emit opened delivery events.\n   \"\"\"\n \n   @derive Jason.Encoder\ndiff --git a/web/lib/memba/messaging/message.ex b/web/lib/memba/messaging/message.ex\nindex b64c773..16006e7 100644\n--- a/web/lib/memba/messaging/message.ex\n+++ b/web/lib/memba/messaging/message.ex\n@@ -10,7 +10,6 @@ defmodule Memba.Messaging.Message do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Events.MessageSent\n@@ -75,10 +74,6 @@ defmodule Memba.Messaging.Message do\n     report_status_with_reason(message, command, :spam_complaint, EmailDeliverySpamComplaint)\n   end\n \n-  def execute(%__MODULE__{} = message, %ReportEmailDeliveryOpened{} = command) do\n-    report_status(message, command, :opened, EmailDeliveryOpened)\n-  end\n-\n   @impl Aggregate\n   def apply(%__MODULE__{} = message, %MessageSent{} = event) do\n     %__MODULE__{\n@@ -120,8 +115,8 @@ defmodule Memba.Messaging.Message do\n     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)\n   end\n \n-  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{} = event) do\n-    put_delivery_status(message, event.delivery_id, :opened)\n+  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{}) do\n+    message\n   end\n \n   defp report_status(%__MODULE__{} = message, command, next_status, event_module) do\n@@ -192,7 +187,6 @@ defmodule Memba.Messaging.Message do\n   defp valid_transition?(:delayed, :delivered), do: true\n   defp valid_transition?(:delayed, :bounced), do: true\n   defp valid_transition?(:delayed, :spam_complaint), do: true\n-  defp valid_transition?(:delivered, :opened), do: true\n   defp valid_transition?(_current_status, _next_status), do: false\n \n   defp put_delivery_status(%__MODULE__{} = message, delivery_id, status, reason \\\\ nil) do\ndiff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex\nindex 707e4cd..403e3ef 100644\n--- a/web/lib/memba/messaging/router.ex\n+++ b/web/lib/memba/messaging/router.ex\n@@ -9,7 +9,6 @@ defmodule Memba.Messaging.Router do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n \n@@ -21,8 +20,7 @@ defmodule Memba.Messaging.Router do\n       ReportEmailDeliveryDelivered,\n       ReportEmailDeliveryDelayed,\n       ReportEmailDeliveryBounced,\n-      ReportEmailDeliverySpamComplaint,\n-      ReportEmailDeliveryOpened\n+      ReportEmailDeliverySpamComplaint\n     ],\n     to: Message\n   )\ndiff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs\nindex a7ed9ef..becacd9 100644\n--- a/web/test/memba/messaging/app_test.exs\n+++ b/web/test/memba/messaging/app_test.exs\n@@ -7,7 +7,6 @@ defmodule Memba.Messaging.AppTest do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Router\n@@ -30,8 +29,7 @@ defmodule Memba.Messaging.AppTest do\n         ReportEmailDeliveryDelivered,\n         ReportEmailDeliveryDelayed,\n         ReportEmailDeliveryBounced,\n-        ReportEmailDeliverySpamComplaint,\n-        ReportEmailDeliveryOpened\n+        ReportEmailDeliverySpamComplaint\n       ])\n \n     assert MapSet.new(App.__registered_commands__()) == expected_commands\ndiff --git a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs\nindex 7511d0c..dca850c 100644\n--- a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs\n+++ b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs\n@@ -6,7 +6,6 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection\n@@ -114,15 +113,6 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do\n                consistency: :strong\n              )\n \n-    assert :ok =\n-             App.dispatch(\n-               %ReportEmailDeliveryOpened{\n-                 message_id: message_id,\n-                 delivery_id: frank.delivery_id\n-               },\n-               consistency: :strong\n-             )\n-\n     email_deliveries_by_recipient =\n       message_id\n       |> Messaging.list_operator_email_deliveries()\n@@ -134,7 +124,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do\n              \"Carol\" => {\"delayed\", \"recipient server is temporarily unavailable\"},\n              \"Dana\" => {\"bounced\", \"mailbox does not exist\"},\n              \"Erin\" => {\"spam complaint\", \"recipient marked the message as spam\"},\n-             \"Frank\" => {\"opened\", nil}\n+             \"Frank\" => {\"delivered\", nil}\n            }\n   end\n \ndiff --git a/web/test/memba/messaging/member_email_delivery_projection_test.exs b/web/test/memba/messaging/member_email_delivery_projection_test.exs\nindex 30acf67..cbd4bcd 100644\n--- a/web/test/memba/messaging/member_email_delivery_projection_test.exs\n+++ b/web/test/memba/messaging/member_email_delivery_projection_test.exs\n@@ -6,7 +6,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection\n@@ -106,15 +105,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do\n                consistency: :strong\n              )\n \n-    assert :ok =\n-             App.dispatch(\n-               %ReportEmailDeliveryOpened{\n-                 message_id: message_id,\n-                 delivery_id: frank.delivery_id\n-               },\n-               consistency: :strong\n-             )\n-\n     receipts_by_recipient =\n       message_id\n       |> Messaging.list_member_email_deliverys()\n@@ -126,7 +116,7 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do\n              \"Carol\" => \"delivery problem\",\n              \"Dana\" => \"delivery problem\",\n              \"Erin\" => \"delivery problem\",\n-             \"Frank\" => \"opened\"\n+             \"Frank\" => \"delivered\"\n            }\n   end\n \ndiff --git a/web/test/memba/messaging/message_test.exs b/web/test/memba/messaging/message_test.exs\nindex 26c50e9..cdc3a94 100644\n--- a/web/test/memba/messaging/message_test.exs\n+++ b/web/test/memba/messaging/message_test.exs\n@@ -4,7 +4,6 @@ defmodule Memba.Messaging.MessageTest do\n   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened\n   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Events.MessageSent\n@@ -170,7 +169,7 @@ defmodule Memba.Messaging.MessageTest do\n   end\n \n   describe \"execute/2 delivery status reports\" do\n-    test \"emits delivered, delayed, bounced, spam complaint, and opened events\" do\n+    test \"emits delivered, delayed, bounced, and spam complaint events\" do\n       {message, ids} = sent_message()\n \n       assert %EmailDeliveryDelivered{\n@@ -214,21 +213,6 @@ defmodule Memba.Messaging.MessageTest do\n                  delivery_id: ids.delivery_id,\n                  reason: \"recipient marked the message as spam\"\n                })\n-\n-      delivered_message =\n-        Message.apply(\n-          message,\n-          %EmailDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}\n-        )\n-\n-      assert %EmailDeliveryOpened{\n-               message_id: ids.message_id,\n-               delivery_id: ids.delivery_id\n-             } ==\n-               Message.execute(delivered_message, %ReportEmailDeliveryOpened{\n-                 message_id: ids.message_id,\n-                 delivery_id: ids.delivery_id\n-               })\n     end\n \n     test \"rejects malformed status report commands\" do\n@@ -306,12 +290,6 @@ defmodule Memba.Messaging.MessageTest do\n     test \"rejects invalid delivery status transitions\" do\n       {message, ids} = sent_message()\n \n-      assert {:error, :invalid_delivery_status_transition} =\n-               Message.execute(message, %ReportEmailDeliveryOpened{\n-                 message_id: ids.message_id,\n-                 delivery_id: ids.delivery_id\n-               })\n-\n       delivered_message =\n         Message.apply(\n           message,\n@@ -325,18 +303,6 @@ defmodule Memba.Messaging.MessageTest do\n                  reason: \"recipient server is temporarily unavailable\"\n                })\n \n-      opened_message =\n-        Message.apply(\n-          delivered_message,\n-          %EmailDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}\n-        )\n-\n-      assert {:error, :invalid_delivery_status_transition} =\n-               Message.execute(opened_message, %ReportEmailDeliveryDelivered{\n-                 message_id: ids.message_id,\n-                 delivery_id: ids.delivery_id\n-               })\n-\n       bounced_message =\n         Message.apply(message, %EmailDeliveryBounced{\n           message_id: ids.message_id,\n@@ -386,18 +352,6 @@ defmodule Memba.Messaging.MessageTest do\n                  delivery_id: ids.delivery_id,\n                  reason: \"different temporary failure\"\n                })\n-\n-      opened_message =\n-        Message.apply(\n-          delivered_message,\n-          %EmailDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}\n-        )\n-\n-      assert [] =\n-               Message.execute(opened_message, %ReportEmailDeliveryOpened{\n-                 message_id: ids.message_id,\n-                 delivery_id: ids.delivery_id\n-               })\n     end\n   end\n \n@@ -459,7 +413,7 @@ defmodule Memba.Messaging.MessageTest do\n              })\n              |> Map.fetch!(:delivery_statuses)\n \n-    assert %{^delivery_id => %{status: :opened, reason: nil}} =\n+    assert %{^delivery_id => %{status: :delivered, reason: nil}} =\n              message\n              |> Message.apply(%EmailDeliveryDelivered{\n                message_id: ids.message_id,\ndiff --git a/web/test/memba/messaging/send_message_dispatch_test.exs b/web/test/memba/messaging/send_message_dispatch_test.exs\nindex bc6ef6a..e1e6f59 100644\n--- a/web/test/memba/messaging/send_message_dispatch_test.exs\n+++ b/web/test/memba/messaging/send_message_dispatch_test.exs\n@@ -1,6 +1,8 @@\n defmodule Memba.Messaging.SendMessageDispatchTest do\n   use Memba.EventSourcedCase, async: false\n \n+  import ExUnit.CaptureLog\n+\n   alias Commanded.Commands.ExecutionResult\n   alias Memba.Messaging.App\n   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered\n@@ -9,7 +11,6 @@ defmodule Memba.Messaging.SendMessageDispatchTest do\n   alias Memba.Messaging.Events.MessageSent\n   alias Memba.Messaging.Events.EmailDeliveryCreated\n   alias Memba.Messaging.Events.EmailDeliveryDelivered\n-  alias Memba.Messaging.Events.EmailDeliveryOpened\n   alias Memba.Messaging.Message\n   alias Memba.Messaging.Recipient\n \n@@ -154,45 +155,17 @@ defmodule Memba.Messaging.SendMessageDispatchTest do\n                consistency: :strong\n              )\n \n-    assert {:ok,\n-            %ExecutionResult{\n-              aggregate_uuid: ^message_id,\n-              aggregate_version: 4,\n-              events: [\n-                %EmailDeliveryOpened{\n-                  message_id: ^message_id,\n-                  delivery_id: ^delivery_id\n-                }\n-              ],\n-              aggregate_state: %Message{\n-                delivery_statuses: %{\n-                  ^delivery_id => %{status: :opened, reason: nil}\n-                }\n-              }\n-            }} =\n-             App.dispatch(\n-               %ReportEmailDeliveryOpened{\n-                 message_id: message_id,\n-                 delivery_id: delivery_id\n-               },\n-               returning: :execution_result,\n-               consistency: :strong\n-             )\n-\n-    assert {:ok,\n-            %ExecutionResult{\n-              aggregate_uuid: ^message_id,\n-              aggregate_version: 4,\n-              events: []\n-            }} =\n-             App.dispatch(\n-               %ReportEmailDeliveryOpened{\n-                 message_id: message_id,\n-                 delivery_id: delivery_id\n-               },\n-               returning: :execution_result,\n-               consistency: :strong\n-             )\n+    capture_log(fn ->\n+      assert {:error, :unregistered_command} =\n+               App.dispatch(\n+                 %ReportEmailDeliveryOpened{\n+                   message_id: message_id,\n+                   delivery_id: delivery_id\n+                 },\n+                 returning: :execution_result,\n+                 consistency: :strong\n+               )\n+    end)\n   end\n \n   defp with_sender_recipient(%SendMessage{} = command) do\ndiff --git a/web/test/memba/messaging/status_report_api_test.exs b/web/test/memba/messaging/status_report_api_test.exs\nindex ade12d0..be5614f 100644\n--- a/web/test/memba/messaging/status_report_api_test.exs\n+++ b/web/test/memba/messaging/status_report_api_test.exs\n@@ -6,7 +6,7 @@ defmodule Memba.Messaging.StatusReportApiTest do\n   alias Memba.Messaging.Commands.SendMessage\n   alias Memba.Messaging.Recipient\n \n-  test \"public status reporting APIs dispatch delivery status commands\" do\n+  test \"public status reporting APIs dispatch supported delivery status commands\" do\n     message_id = Ecto.UUID.generate()\n     recipients = recipients([\"Alice\", \"Bob\", \"Carol\", \"Dana\", \"Erin\"])\n     [alice, bob, carol, dana, erin] = recipients\n@@ -56,7 +56,7 @@ defmodule Memba.Messaging.StatusReportApiTest do\n                consistency: :strong\n              )\n \n-    assert :ok =\n+    assert {:error, :unsupported_delivery_status} =\n              Messaging.report_email_delivery_opened(\n                %{message_id: message_id, delivery_id: erin.delivery_id},\n                consistency: :strong\n@@ -89,7 +89,8 @@ defmodule Memba.Messaging.StatusReportApiTest do\n     assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status ==\n              \"bounced\"\n \n-    assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status == \"opened\"\n+    assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status ==\n+             \"delivered\"\n \n     assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status ==\n              \"spam complaint\"\ndiff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs\nindex 32c3161..b1f1201 100644\n--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs\n+++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs\n@@ -8,7 +8,9 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do\n \n   import Plug.Conn\n \n-  test \"maps realistic Postmark delivery and open events with outbound metadata\", %{conn: conn} do\n+  test \"maps realistic Postmark delivery events and rejects open events without mutation\", %{\n+    conn: conn\n+  } do\n     %{message_id: message_id, recipients: [bob]} = message = send_message_to([\"Bob\"])\n \n     conn =\n@@ -26,13 +28,14 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do\n       |> recycle()\n       |> post_postmark_event(realistic_postmark_payload(:opened, message, bob))\n \n-    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+    assert %{\"errors\" => %{\"detail\" => detail}} = json_response(conn, 422)\n+    assert detail =~ \":unsupported_delivery_status\"\n \n     assert_eventually(fn ->\n-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == \"opened\"\n+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == \"delivered\"\n \n       assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==\n-               \"opened\"\n+               \"delivered\"\n     end)\n   end\n \ndiff --git a/web/test/memba_web/controllers/resend_webhook_controller_test.exs b/web/test/memba_web/controllers/resend_webhook_controller_test.exs\nindex 5219981..add6e9d 100644\n--- a/web/test/memba_web/controllers/resend_webhook_controller_test.exs\n+++ b/web/test/memba_web/controllers/resend_webhook_controller_test.exs\n@@ -8,7 +8,9 @@ defmodule MembaWeb.ResendWebhookControllerTest do\n \n   import Plug.Conn\n \n-  test \"maps realistic Resend delivery and open events with outbound tags\", %{conn: conn} do\n+  test \"maps realistic Resend delivery events and rejects open events without mutation\", %{\n+    conn: conn\n+  } do\n     %{message_id: message_id, recipients: [bob]} = message = send_message_to([\"Bob\"])\n \n     conn = post_resend_event(conn, realistic_resend_payload(:delivered, message, bob))\n@@ -25,13 +27,14 @@ defmodule MembaWeb.ResendWebhookControllerTest do\n       |> recycle()\n       |> post_resend_event(realistic_resend_payload(:opened, message, bob))\n \n-    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+    assert %{\"errors\" => %{\"detail\" => detail}} = json_response(conn, 422)\n+    assert detail =~ \":unsupported_delivery_status\"\n \n     assert_eventually(fn ->\n-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == \"opened\"\n+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == \"delivered\"\n \n       assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==\n-               \"opened\"\n+               \"delivered\"\n     end)\n   end\n \ndiff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs\nindex 7a3496a..d570bdf 100644\n--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs\n+++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs\n@@ -177,12 +177,6 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do\n                delivery_id: delivery_ids_by_name[\"Frank\"]\n              })\n \n-    assert :ok =\n-             report_email_delivery_opened(%{\n-               message_id: message_id,\n-               delivery_id: delivery_ids_by_name[\"Frank\"]\n-             })\n-\n     conn\n     |> sign_in_staff()\n     |> visit(\"/admin/messages/#{message_id}\")\n@@ -192,7 +186,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do\n     |> assert_member_email_delivery(\"Carol\", \"delivery problem\")\n     |> assert_member_email_delivery(\"Dana\", \"delivery problem\")\n     |> assert_member_email_delivery(\"Erin\", \"delivery problem\")\n-    |> assert_member_email_delivery(\"Frank\", \"opened\")\n+    |> assert_member_email_delivery(\"Frank\", \"delivered\")\n   end\n \n   defp create_club(session, name) do\n@@ -262,10 +256,6 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do\n     apply(Messaging, :report_email_delivery_spam_complaint, [attrs, [consistency: :strong]])\n   end\n \n-  defp report_email_delivery_opened(attrs) do\n-    apply(Messaging, :report_email_delivery_opened, [attrs, [consistency: :strong]])\n-  end\n-\n   defp send_projected_message_with_recipients(names) do\n     [sender | _rest] =\n       recipients =\n",
+        "summary": {
+          "files_changed": 17,
+          "additions": 231,
+          "deletions": 165
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T05:12:14.025109216Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.work_dir": "/workspace/memba",
           "thread.validate_task.current_node": "task_gate",
           "internal.retry_count.implement_next_task": 0,
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "internal.retry_count.start": 0,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "last_stage": "implement_next_task",
           "internal.retry_count.all_tasks_done": 0,
           "thread.all_tasks_done.current_node": "implement_next_task",
@@ -5566,13 +5875,13 @@
           "thread.task_gate.current_node": "sync_task_list",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "failure_signature": "",
-          "command.output": "blob://sha256/d687ba559d80ad595154842078671447039c30a3caa5b3ce42778ad05659842a",
+          "command.output": "blob://sha256/e1216e10a4263257fdd2751e9052e348455a9d9478c2eb9f127008b4bf1aad88",
           "internal.retry_count.wip_gate": 0,
           "thread.read_plan.current_node": "wip_gate",
           "internal.retry_count.validate_task": 0,
           "internal.retry_count.task_gate": 0,
           "graph.rankdir": "LR",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.node_visit_count": 3,
           "task_list_needs_human": false,
           "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n2. **Changes made**\n   - Removed `ReportEmailDeliveryOpened` from the Messaging command router registration.\n   - Stopped the Messaging public API from dispatching opened commands:\n     - `Messaging.report_email_delivery_opened/2` now returns `{:error, :unsupported_delivery_status}` and is `@doc false`.\n   - Removed the aggregate command handler that emitted `EmailDeliveryOpened`.\n   - Removed the valid `:delivered -> :opened` aggregate transition.\n   - Kept the legacy opened command/event modules as compatibility shims, with updated moduledocs explaining they are not current behaviour.\n   - Changed aggregate handling of historic `EmailDeliveryOpened` events to no-op rather than putting the aggregate into `:opened`.\n   - Updated Messaging/domain/API tests so current command/API paths cover only sent, delivered, delayed, bounced, and spam complaint statuses.\n   - Updated obsolete tests that still invoked the opened API/command path so `dev check` remains green.\n   - Did not edit acceptance `.feature` files.\n\n3. **Focused validation**\n   - Formatted changed Elixir files with `mix format`.\n   - Ran focused tests:\n     - `mix test test/memba/messaging/message_test.exs test/memba/messaging/app_test.exs test/memba/messaging/send_message_dispatch_test.exs test/memba/messaging/status_report_api_test.exs test/memba/messaging/member_email_delivery_projection_test.exs test/memba/messaging/memba_staff_email_delivery_projection_test.exs test/memba_web/controllers/postmark_webhook_controller_test.exs test/memba_web/controllers/resend_webhook_controller_test.exs test/memba_web/live/browser_acceptance_harness_test.exs`\n     - Result: `40 tests, 0 failures`\n   - Ran compile validation:\n     - `mix compile --warnings-as-errors`\n     - Result: passed\n   - Ran full project gate:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: passed, `354 tests, 0 failures`\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n   - To:\n     - `- [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - Read relevant ADRs: `0002`, `0004`, `0006`, `0007`, `0012`, and `0016`.\n   - Preserved Commanded/CQRS structure from ADRs `0002`, `0004`, and `0007`.\n   - Preserved delivered/problem handling from ADR `0006`, while aligning with the newer iteration plan decision that opened is no longer current product behaviour.\n   - Kept opened event/command modules as internal compatibility shims rather than deleting them outright, consistent with the plan’s replay/deserialization caution.\n   - ADR `0012` still describes the old opened behaviour; this task intentionally implements the iteration plan’s newer policy while leaving broader ADR/documentation reconciliation to the later documentation task.",
@@ -5639,15 +5948,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/d53404fe49d72ad42303b286281f9220e09a4e6bbf3709d5a1b6918c30848913"
+              "command.output": "blob://sha256/e1216e10a4263257fdd2751e9052e348455a9d9478c2eb9f127008b4bf1aad88"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 163,
-              "active_time_ms": 163
+              "tool_time_ms": 333,
+              "active_time_ms": 333
             }
           },
           "all_tasks_done": {
@@ -5804,9 +6113,9 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
-          "pre_validate_snapshot": 2,
+          "pre_validate_snapshot": 3,
           "validate_task": 2,
           "resume_gate": 1,
           "read_plan": 1,
@@ -5977,7 +6286,12 @@
       "first_event_seq": 591,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T05:12:09.733792688Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -5991,13 +6305,20 @@
       "output": null,
       "started_at": "2026-06-02T04:58:59.997665027Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 789737,
+        "inference_time_ms": 449841,
+        "tool_time_ms": 336278,
+        "active_time_ms": 786119
+      },
       "usage": {
         "input_tokens": 1398559,
         "output_tokens": 12955,
         "total_tokens": 3433873,
         "reasoning_tokens": 6103,
         "cache_read_tokens": 2016256,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 8572663
       },
       "model": {
         "provider": "openai",
@@ -6171,7 +6492,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "all_tasks_done@2": {
       "first_event_seq": 311,
@@ -6304,6 +6625,44 @@
         "model_id": "gpt-5.5"
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@3": {
+      "first_event_seq": 859,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/e1216e10a4263257fdd2751e9052e348455a9d9478c2eb9f127008b4bf1aad88",
+        "exit_code": 0,
+        "duration_ms": 333,
+        "termination": "exited",
+        "output_bytes": 591,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 591,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-02T05:12:13.653721144Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "validate_task@1": {
       "first_event_seq": 226,
