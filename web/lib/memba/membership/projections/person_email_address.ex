@@ -5,6 +5,10 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
 
   use Ecto.Schema
 
+  import Ecto.Changeset
+
+  alias Memba.Membership.EmailAddresses
+
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "membership_person_email_addresses" do
     field :person_id, :binary_id
@@ -13,5 +17,39 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
     field :is_primary, :boolean, default: false
 
     timestamps(type: :utc_datetime_usec)
+  end
+
+  def changeset(email_address, attrs) do
+    email_address
+    |> cast(attrs, [:person_id, :email, :is_primary])
+    |> validate_required([:person_id, :email, :is_primary])
+    |> normalize_email()
+    |> validate_required([:normalized_email])
+    |> foreign_key_constraint(:person_id)
+    |> unique_constraint(:normalized_email,
+      name: :membership_person_email_addresses_normalized_email_index
+    )
+    |> unique_constraint(:person_id,
+      name: :membership_person_email_addresses_one_primary_per_person_index,
+      message: "already has a primary email address"
+    )
+  end
+
+  defp normalize_email(changeset) do
+    case get_field(changeset, :email) do
+      nil ->
+        changeset
+
+      email ->
+        case EmailAddresses.normalize_email(email) do
+          {:ok, %{email: email, normalized_email: normalized_email}} ->
+            changeset
+            |> put_change(:email, email)
+            |> put_change(:normalized_email, normalized_email)
+
+          {:error, :invalid_email} ->
+            add_error(changeset, :email, "is invalid")
+        end
+    end
   end
 end

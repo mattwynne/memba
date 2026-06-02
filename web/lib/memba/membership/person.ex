@@ -5,6 +5,7 @@ defmodule Memba.Membership.Person do
 
   alias Commanded.Aggregates.Aggregate
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Events.PersonCreated
 
   @behaviour Aggregate
@@ -15,7 +16,7 @@ defmodule Memba.Membership.Person do
   def execute(%__MODULE__{person_id: nil}, %CreatePerson{} = command) do
     with :ok <- validate_person_id(command.person_id),
          {:ok, name} <- normalize_name(command.name),
-         {:ok, email} <- normalize_email(command.email) do
+         {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do
       %PersonCreated{person_id: command.person_id, name: name, email: email}
     end
   end
@@ -42,23 +43,4 @@ defmodule Memba.Membership.Person do
   end
 
   defp normalize_name(_name), do: {:error, :invalid_name}
-
-  defp normalize_email(email) when is_binary(email) do
-    email = email |> String.trim() |> String.downcase()
-
-    if valid_email?(email) do
-      {:ok, email}
-    else
-      {:error, :invalid_email}
-    end
-  end
-
-  defp normalize_email(_email), do: {:error, :invalid_email}
-
-  defp valid_email?(email) do
-    case String.split(email, "@") do
-      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
-      _other -> false
-    end
-  end
 end
