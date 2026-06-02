@@ -157,6 +157,46 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
            } = Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
   end
 
+  test "Memba staff email delivery queries coerce legacy opened projection rows to delivered" do
+    %{message_id: message_id, recipients: [_alice, bob]} =
+      send_message_with_recipients(["Alice", "Bob"])
+
+    MembaStaffEmailDeliveryProjection
+    |> where([deliverability], deliverability.delivery_id == ^bob.delivery_id)
+    |> Repo.update_all(set: [status: "opened", reason: "legacy open event"])
+
+    assert %MembaStaffEmailDeliveryProjection{
+             delivery_id: delivery_id,
+             status: "delivered",
+             reason: nil
+           } = Messaging.get_memba_staff_email_delivery(bob.delivery_id)
+
+    assert delivery_id == bob.delivery_id
+
+    assert %MembaStaffEmailDeliveryProjection{
+             recipient_id: recipient_id,
+             status: "delivered",
+             reason: nil
+           } = Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
+
+    assert recipient_id == bob.person_id
+
+    assert %{
+             "Alice" => {"sent", nil},
+             "Bob" => {"delivered", nil}
+           } =
+             message_id
+             |> Messaging.list_operator_email_deliveries()
+             |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
+
+    assert %{
+             "Alice" => {"sent", nil},
+             "Bob" => {"delivered", nil}
+           } =
+             Messaging.list_operator_deliveries()
+             |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
+  end
+
   test "Memba staff email delivery overview query lists deliveries across messages newest event first" do
     %{message_id: first_message_id, recipients: [alice]} =
       send_message_with_recipients(["Alice"], subject: "Spring snowpack update")

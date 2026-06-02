@@ -101,15 +101,13 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert newer_row.receipt_count == 2
 
     assert newer_row.status_counts == %{
-             "opened" => 1,
-             "delivered" => 0,
+             "delivered" => 1,
              "sent" => 1,
              "delivery problem" => 0
            }
 
     assert Enum.map(newer_row.receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
-             {"opened", 1, 50},
-             {"delivered", 0, 0},
+             {"delivered", 1, 50},
              {"sent", 1, 50},
              {"delivery problem", 0, 0}
            ]
@@ -118,11 +116,11 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
              newer_row.receipt_segments,
              &{&1.status, &1.status_label, &1.count, &1.width_percentage}
            ) == [
-             {"opened", "Opened", 1, 50},
+             {"delivered", "Delivered", 1, 50},
              {"sent", "Sending", 1, 50}
            ]
 
-    assert newer_row.receipt_glance_copy == "1 of 2 opened"
+    assert newer_row.receipt_glance_copy == "1 of 2 delivered"
     assert newer_row.has_receipt_glance?
 
     assert older_row.message_id == older_message.message_id

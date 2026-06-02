@@ -120,6 +120,37 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
            }
   end
 
+  test "member email delivery queries coerce legacy opened projection rows to delivered" do
+    %{message_id: message_id, recipients: [_alice, bob]} =
+      send_message_with_recipients(["Alice", "Bob"])
+
+    MemberEmailDeliveryProjection
+    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
+    |> Repo.update_all(set: [status: "opened"])
+
+    assert %MemberEmailDeliveryProjection{
+             delivery_id: delivery_id,
+             status: "delivered"
+           } = Messaging.get_member_email_delivery(bob.delivery_id)
+
+    assert delivery_id == bob.delivery_id
+
+    assert %MemberEmailDeliveryProjection{
+             recipient_id: recipient_id,
+             status: "delivered"
+           } = Messaging.get_member_email_delivery(message_id, bob.person_id)
+
+    assert recipient_id == bob.person_id
+
+    assert %{
+             "Alice" => "sent",
+             "Bob" => "delivered"
+           } =
+             message_id
+             |> Messaging.list_member_email_deliverys()
+             |> Map.new(&{&1.recipient_name, &1.status})
+  end
+
   test "member email delivery queries return empty results for missing or invalid IDs" do
     assert is_nil(Messaging.get_member_email_delivery(Ecto.UUID.generate()))
     assert is_nil(Messaging.get_member_email_delivery(nil))

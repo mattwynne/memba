@@ -113,14 +113,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened'][data-receipt-count='1'][data-receipt-percentage='33']",
-             "read it"
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
+             "arrived"
            )
 
-    assert has_element?(
+    refute has_element?(
              view,
-             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='1'][data-receipt-percentage='33']",
-             "arrived, not opened yet"
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
            )
 
     assert has_element?(
@@ -135,16 +134,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "we couldn't reach them"
            )
 
-    assert has_element?(
+    refute has_element?(
              view,
-             "[data-testid='member-receipt-group'][data-receipt-status='opened']",
-             "Opened"
+             "[data-testid='member-receipt-group'][data-receipt-status='opened']"
            )
 
     assert has_element?(
              view,
              "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
-             "33%"
+             "67%"
            )
 
     assert has_element?(
@@ -209,33 +207,31 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
-    opened_toggle = "#member-receipt-group-toggle-opened"
-    opened_rows = "#member-receipts-opened"
+    delivered_toggle = "#member-receipt-group-toggle-delivered"
+    delivered_rows = "#member-receipts-delivered"
 
-    opened_recipient =
-      "#{opened_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
+    delivered_recipient =
+      "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
 
-    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
-    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
-    refute has_element?(view, opened_rows)
-    refute has_element?(view, opened_recipient)
-
-    view
-    |> element(opened_toggle)
-    |> render_click()
-
-    assert has_element?(view, "#{opened_toggle}[aria-expanded='true']")
-    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
-    assert has_element?(view, opened_rows)
-    assert has_element?(view, opened_recipient, "Bob Builder")
+    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
+    refute has_element?(view, delivered_rows)
+    refute has_element?(view, delivered_recipient)
 
     view
-    |> element(opened_toggle)
+    |> element(delivered_toggle)
     |> render_click()
 
-    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
-    refute has_element?(view, opened_rows)
-    refute has_element?(view, opened_recipient)
+    assert has_element?(view, "#{delivered_toggle}[aria-expanded='true']")
+    assert has_element?(view, delivered_rows)
+    assert has_element?(view, delivered_recipient, "Bob Builder")
+
+    view
+    |> element(delivered_toggle)
+    |> render_click()
+
+    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
+    refute has_element?(view, delivered_rows)
+    refute has_element?(view, delivered_recipient)
   end
 
   test "zero-count statuses render in the summary only and not as empty groups", %{conn: conn} do
@@ -268,14 +264,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(
              view,
              "[data-testid='member-receipt-summary-status']" <>
-               "[data-receipt-status='opened']" <>
+               "[data-receipt-status='delivered']" <>
                "[data-receipt-count='1']" <>
                "[data-receipt-percentage='100']",
-             "Opened"
+             "Delivered"
            )
 
     for {status, label} <- [
-          {"delivered", "Delivered"},
           {"sent", "Sending"},
           {"delivery problem", "Delivery problem"}
         ] do
@@ -300,9 +295,19 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     assert has_element?(
              view,
-             "[data-testid='member-receipt-group'][data-receipt-status='opened'] " <>
-               "#member-receipt-group-toggle-opened[aria-expanded='false']",
+             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] " <>
+               "#member-receipt-group-toggle-delivered[aria-expanded='false']",
              "100%"
+           )
+
+    refute has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+           )
+
+    refute has_element?(
+             view,
+             "[data-testid='member-receipt-group'][data-receipt-status='opened']"
            )
   end
 
