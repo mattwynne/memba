@@ -27,7 +27,7 @@ green than before.
 | 015 | 2026-06-01 | merged | Club slugs and public club subdomains | [plan](015-club-slugs/plan.md) |
 | 016 | 2026-06-01 | merged | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
 | 017 | 2026-06-01 | merged | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |
-| 018 | 2026-06-01 | implementing | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |
+| 018 | 2026-06-01 | validated | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |
 
 Status notes:
 
