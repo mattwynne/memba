@@ -148,12 +148,14 @@ The route is `POST /webhooks/postmark` and accepts JSON webhook payloads. Enable
 the Postmark events that Memba currently maps onto delivery state:
 
 - `Delivery`
-- `Open`
 - `Bounce` for both transient/delayed and hard bounce outcomes
 - `SpamComplaint`
 
 Memba returns `202 Accepted` with `{"status":"accepted"}` when a webhook event is
 processed. Unsupported or incomplete events return `422 Unprocessable Entity`.
+Do not enable Postmark `Open`/`Opened` webhook events for Memba. Memba does not
+track email opens; if a provider sends an open event anyway, Memba rejects it as
+unsupported and does not change delivery status.
 
 Webhook signature verification is not part of this slice, so production exposure
 should account for that follow-up security work.
@@ -164,16 +166,16 @@ For Resend, configure this webhook URL:
 https://<memba-host>/webhooks/resend
 ```
 
-Enable Resend events for delivered, opened, bounced, complained/spam complaint,
-and delivery-delayed events where available. Memba correlates member-message
-Resend events using the `memba_message_id` and `memba_delivery_id` tags/headers
-on outbound email.
+Enable Resend events for delivered, bounced, complained/spam complaint, and
+delivery-delayed events where available. Do not enable Resend opened/open events
+for Memba. Memba correlates member-message Resend events using the
+`memba_message_id` and `memba_delivery_id` tags/headers on outbound email.
 
 The shared magic-link auth stream does not require a Memba webhook route. Keep
-provider webhooks configured for member-message delivery/open/bounce events only.
-Do not point auth-stream delivery events at these routes unless the webhook
-handler is later extended to handle auth-email events without member-message
-metadata.
+provider webhooks configured for member-message delivery and delivery-problem
+events only. Do not point auth-stream delivery events at these routes unless the
+webhook handler is later extended to handle auth-email events without
+member-message metadata.
 
 ## Correlation metadata
 
@@ -201,7 +203,7 @@ For member-message email, the Postmark provider:
   escaped HTML body;
 - sets the configured sender/from address;
 - sets the configured reply-to address when present;
-- enables Postmark open tracking per email;
+- does not request Postmark open tracking;
 - sends through `Memba.Mailer` using Swoosh's Postmark adapter.
 
 Postmark API, authentication, transport, configuration, or unexpected Swoosh
@@ -223,8 +225,7 @@ For a controlled environment only:
 4. Send one member message to a controlled inbox.
 5. Confirm Postmark accepts the email and the inbox receives it from the
    configured sender with the configured reply-to address.
-6. Open the HTML email and confirm an open webhook reaches Memba.
-7. Trigger or observe delivery/problem webhooks and confirm the message receipt
+6. Trigger or observe delivery/problem webhooks and confirm the message receipt
    and `/deliveries` overview update through Memba's delivery records.
 
 For a controlled magic-link auth smoke test:

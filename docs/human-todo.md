@@ -30,8 +30,9 @@ and webhook details.
 ### Webhook configuration
 
 - [x] In Postmark, configure the webhook URL for the deployed Memba environment: `https://memba.io/webhooks/postmark`.
-- [x] Enable webhook events needed by Memba: delivered, opened, bounced, and spam complaint. Postmark delivery-delay events arrive through the bounce/delayed shape handled by the app.
-- [x] Enable open tracking for the outbound member broadcast stream/domain.
+- [x] Enable webhook events needed by Memba: delivered, bounced, and spam complaint. Postmark delivery-delay events arrive through the bounce/delayed shape handled by the app.
+- [ ] Disable/remove Postmark open webhook events if they were previously enabled. Memba rejects open events as unsupported and does not change delivery status from them.
+- [ ] Keep Postmark open tracking disabled for the outbound member broadcast stream/domain. Memba does not request or consume open-tracking signals.
 - [x] Confirm Postmark webhook payloads include metadata/custom fields so Memba can receive `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
 
 ### Deployment configuration
@@ -50,7 +51,6 @@ and webhook details.
 - [ ] Send one member broadcast from an explicitly configured environment.
 - [ ] Confirm Postmark accepts the email.
 - [ ] Confirm the email arrives from the configured From address and has the configured Reply-To address.
-- [ ] Open the HTML email and confirm an opened event reaches Memba.
 - [ ] Trigger or observe delivered/problem webhook events and confirm Memba updates delivery status.
 
 Notes:
@@ -68,7 +68,7 @@ the exact runtime configuration and smoke-test steps.
 
 - [ ] Create a dedicated Postmark Transactional Message Stream for authentication email: `outbound-authentication`.
 - [ ] Keep auth email separate from the member broadcast stream `outbound-member-broadcasts`.
-- [ ] Do not point auth-stream delivery/open/bounce events at `POST /webhooks/postmark` unless the app is later extended to process auth-email webhook events.
+- [ ] Do not point auth-stream delivery or delivery-problem events at `POST /webhooks/postmark` unless the app is later extended to process auth-email webhook events.
 
 ### Auth sender address
 
