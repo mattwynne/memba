@@ -11,6 +11,7 @@ defmodule Memba.Membership.Router do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.UpdateClub
 
   identify(Club, by: :club_id)
   identify(Membership, by: :membership_id)
@@ -19,4 +20,5 @@ defmodule Memba.Membership.Router do
   dispatch(AddMember, to: Membership)
   dispatch(CreateClub, to: Club)
   dispatch(CreatePerson, to: Person)
+  dispatch(UpdateClub, to: Club)
 end

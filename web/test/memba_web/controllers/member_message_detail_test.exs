@@ -262,10 +262,10 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
     club =
       Repo.get(Club, club_id) ||
-        Repo.insert!(%Club{
+        insert_membership_club!(
           club_id: club_id,
           name: Keyword.fetch!(attrs, :club_name)
-        })
+        )
 
     Repo.insert!(%Person{
       person_id: person_id,

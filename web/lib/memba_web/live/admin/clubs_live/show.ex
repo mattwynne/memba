@@ -2,8 +2,10 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.Slug
   alias Memba.Messaging
 
+  @empty_club %{"name" => "", "slug" => ""}
   @empty_person %{"name" => "", "email" => ""}
   @empty_membership %{"person_id" => ""}
   @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
@@ -20,6 +22,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
      |> assign(:club_id, club_id)
      |> assign(:club, club)
      |> assign_forms()
+     |> assign_club_slug_feedback(current_club_slug(club))
      |> assign(:person_options, person_options(people))
      |> assign(:member_options, member_options(members))
      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
@@ -28,6 +31,41 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("validate_club_slug", %{"club" => club_params}, socket) do
+    {:noreply,
+     socket
+     |> assign(:club_form, to_form(club_params, as: :club))
+     |> assign_club_slug_feedback(Map.get(club_params, "slug"))}
+  end
+
+  def handle_event("update_club", %{"club" => club_params}, socket) do
+    attrs =
+      club_params
+      |> Map.take(["name", "slug"])
+      |> Map.put("club_id", socket.assigns.club_id)
+
+    case Membership.update_club(attrs, consistency: :strong) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Club updated")
+         |> refresh_club()}
+
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Club updated")
+         |> refresh_club()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not update club: #{format_reason(reason)}")
+         |> assign(:club_form, to_form(club_params, as: :club))
+         |> assign_club_slug_feedback(Map.get(club_params, "slug"))}
+    end
+  end
+
   def handle_event("create_person", %{"person" => person_params}, socket) do
     attrs =
       person_params
@@ -140,6 +178,9 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
             <div class="space-y-2">
               <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
               <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
+              <p id="club-slug-display" class="text-sm font-medium text-zinc-600">
+                Slug: <span class="font-mono">{@club.slug}</span>
+              </p>
               <p class="text-zinc-600">
                 Add people to this club, then send a message to the active members.
               </p>
@@ -153,6 +194,59 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
             >
               Open club home page
             </.link>
+          </section>
+
+          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-zinc-900">Edit club</h2>
+
+            <.form
+              for={@club_form}
+              id="edit-club-form"
+              aria-label="Edit club"
+              class="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+              phx-change="validate_club_slug"
+              phx-submit="update_club"
+            >
+              <.input
+                field={@club_form[:name]}
+                id="edit-club-name-input"
+                label="Name"
+                aria-label="Club name"
+                required
+              />
+              <div>
+                <.input
+                  field={@club_form[:slug]}
+                  id="edit-club-slug-input"
+                  label="Slug"
+                  aria-label="Club slug"
+                  aria-describedby="edit-club-slug-help edit-club-slug-feedback"
+                  aria-invalid={@club_slug_feedback.status in ["invalid", "taken"]}
+                  maxlength={Slug.max_length()}
+                  required
+                />
+                <p id="edit-club-slug-help" class="mt-1 text-xs text-zinc-500">
+                  Use lowercase letters, numbers, and hyphens.
+                </p>
+                <p
+                  id="edit-club-slug-feedback"
+                  role="status"
+                  aria-live="polite"
+                  data-status={@club_slug_feedback.status}
+                  class={slug_feedback_class(@club_slug_feedback)}
+                >
+                  {@club_slug_feedback.message}
+                </p>
+              </div>
+              <.button
+                id="update-club-button"
+                type="submit"
+                aria-label="Save club"
+                disabled={not @club_slug_feedback.valid}
+              >
+                Save club
+              </.button>
+            </.form>
           </section>
 
           <div class="grid gap-6 lg:grid-cols-2">
@@ -352,9 +446,19 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   defp assign_forms(socket) do
     socket
+    |> assign(:club_form, to_form(club_form_params(socket.assigns.club), as: :club))
     |> assign(:person_form, to_form(@empty_person, as: :person))
     |> assign(:membership_form, to_form(@empty_membership, as: :membership))
     |> assign(:message_form, to_form(@empty_message, as: :message))
+  end
+
+  defp refresh_club(socket) do
+    club = Membership.get_club(socket.assigns.club_id)
+
+    socket
+    |> assign(:club, club)
+    |> assign(:club_form, to_form(club_form_params(club), as: :club))
+    |> assign_club_slug_feedback(current_club_slug(club))
   end
 
   defp refresh_people(socket) do
@@ -383,6 +487,73 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   defp person_options(people), do: Enum.map(people, &{&1.name, &1.person_id})
 
   defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
+
+  defp club_form_params(nil), do: @empty_club
+
+  defp club_form_params(club) do
+    %{"name" => club.name, "slug" => club.slug}
+  end
+
+  defp current_club_slug(nil), do: ""
+  defp current_club_slug(club), do: club.slug
+
+  defp assign_club_slug_feedback(socket, slug) do
+    assign(socket, :club_slug_feedback, club_slug_feedback(socket.assigns.club_id, slug))
+  end
+
+  defp club_slug_feedback(club_id, slug) do
+    case Slug.validate(slug) do
+      {:ok, valid_slug} ->
+        availability_feedback(club_id, valid_slug)
+
+      {:error, reason} ->
+        %{
+          status: "invalid",
+          valid: false,
+          message: invalid_slug_message(reason)
+        }
+    end
+  end
+
+  defp availability_feedback(club_id, slug) do
+    case Membership.get_club_by_slug(slug) do
+      nil ->
+        available_slug_feedback()
+
+      %{club_id: ^club_id} ->
+        available_slug_feedback()
+
+      _club ->
+        %{
+          status: "taken",
+          valid: false,
+          message: "This slug is already used by another club."
+        }
+    end
+  end
+
+  defp available_slug_feedback do
+    %{
+      status: "available",
+      valid: true,
+      message: "This slug is valid and available."
+    }
+  end
+
+  defp invalid_slug_message(:blank), do: "Enter a slug."
+
+  defp invalid_slug_message(:too_long),
+    do: "Slug must be #{Slug.max_length()} characters or fewer."
+
+  defp invalid_slug_message(_reason) do
+    "Slug must use lowercase letters, numbers, and hyphens with no leading or trailing hyphen."
+  end
+
+  defp slug_feedback_class(%{status: "available"}),
+    do: "mt-1 text-xs font-medium text-emerald-700"
+
+  defp slug_feedback_class(%{status: "taken"}), do: "mt-1 text-xs font-medium text-red-700"
+  defp slug_feedback_class(_feedback), do: "mt-1 text-xs font-medium text-amber-700"
 
   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 end

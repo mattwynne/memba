@@ -9,9 +9,11 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
+  alias Memba.Membership.Slug
   alias Memba.Repo
 
   @doc """
@@ -21,7 +23,22 @@ defmodule Memba.Membership do
   `"club_id"`.
   """
   def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- create_club_command(attrs) do
+    with {:ok, command} <- create_club_command(attrs),
+         :ok <- prevent_duplicate_club_slug(command) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Update a club's staff-managed display name and public slug.
+
+  The caller supplies the club aggregate identity as `:club_id` or
+  `"club_id"`. Slugs must already be valid address-safe values and must not be
+  used by another projected club.
+  """
+  def update_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- update_club_command(attrs),
+         :ok <- prevent_duplicate_club_slug(command) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -62,6 +79,21 @@ defmodule Memba.Membership do
       Repo.get(Club, club_id)
     else
       :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch a projected club read model by public slug.
+
+  Lookup input is normalized only where safe for public addressing: surrounding
+  whitespace is trimmed and casing is folded before validating the slug. Values
+  that are still invalid, missing, or unknown return `nil`.
+  """
+  def get_club_by_slug(slug) do
+    with {:ok, slug} <- Slug.normalize_for_lookup(slug) do
+      Repo.get_by(Club, slug: slug)
+    else
+      {:error, _reason} -> nil
     end
   end
 
@@ -205,8 +237,19 @@ defmodule Memba.Membership do
 
   defp create_club_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, name} <- fetch_required(attrs, :name) do
-      {:ok, %CreateClub{club_id: club_id, name: name}}
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, slug} <- club_slug(attrs, name) do
+      {:ok, %CreateClub{club_id: club_id, name: name, slug: slug}}
+    end
+  end
+
+  defp update_club_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, club_id} <- cast_club_id(club_id),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, slug} <- fetch_required(attrs, :slug),
+         {:ok, slug} <- Slug.validate(slug) do
+      {:ok, %UpdateClub{club_id: club_id, name: name, slug: slug}}
     end
   end
 
@@ -234,6 +277,21 @@ defmodule Memba.Membership do
     end
   end
 
+  defp prevent_duplicate_club_slug(%CreateClub{} = command) do
+    case Repo.get_by(Club, slug: command.slug) do
+      nil -> :ok
+      %Club{} -> {:error, :slug_taken}
+    end
+  end
+
+  defp prevent_duplicate_club_slug(%UpdateClub{} = command) do
+    case Repo.get_by(Club, slug: command.slug) do
+      nil -> :ok
+      %Club{club_id: club_id} when club_id == command.club_id -> :ok
+      %Club{} -> {:error, :slug_taken}
+    end
+  end
+
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
       :ok -> :ok
@@ -249,6 +307,31 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
+    end
+  end
+
+  defp fetch_optional(attrs, key) when is_atom(key) do
+    string_key = Atom.to_string(key)
+
+    case attrs do
+      %{^key => value} -> {:ok, value}
+      %{^string_key => value} -> {:ok, value}
+      _attrs -> :error
+    end
+  end
+
+  defp cast_club_id(club_id) do
+    case Ecto.UUID.cast(club_id) do
+      {:ok, club_id} -> {:ok, club_id}
+      :error -> {:error, :invalid_club_id}
+    end
+  end
+
+  defp club_slug(attrs, name) do
+    case fetch_optional(attrs, :slug) do
+      {:ok, ""} -> Slug.default_from_name(name) |> Slug.validate()
+      {:ok, slug} -> Slug.validate(slug)
+      :error -> Slug.default_from_name(name) |> Slug.validate()
     end
   end
 

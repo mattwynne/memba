@@ -40,6 +40,64 @@ defmodule Memba.EventSourcedSetupTest do
     assert [[true]] = query!("SELECT to_regclass('public.membership_people') IS NOT NULL").rows
   end
 
+  test "membership club slugs are required, deterministic, and unique" do
+    Memba.EventSourcedCase.reset_event_sourced_storage!()
+
+    try do
+      assert [["NO", "text"]] =
+               query!("""
+               SELECT is_nullable, data_type
+               FROM information_schema.columns
+               WHERE table_schema = 'public'
+                 AND table_name = 'membership_clubs'
+                 AND column_name = 'slug'
+               """).rows
+
+      assert [[true]] =
+               query!("""
+               SELECT index_definition.index_is_unique
+               FROM (
+                 SELECT indexes.indisunique AS index_is_unique
+                 FROM pg_class tables
+                 JOIN pg_index indexes ON indexes.indrelid = tables.oid
+                 JOIN pg_class index_names ON index_names.oid = indexes.indexrelid
+                 WHERE tables.relname = 'membership_clubs'
+                   AND index_names.relname = 'membership_clubs_slug_index'
+               ) AS index_definition
+               """).rows
+
+      club_id = Ecto.UUID.generate()
+
+      query!("""
+      INSERT INTO membership_clubs (club_id, name, inserted_at, updated_at)
+      VALUES ('#{club_id}', 'Kootenay Mountaineering Club', now(), now())
+      """)
+
+      assert [["kootenay-mountaineering-club"]] =
+               query!("SELECT slug FROM membership_clubs WHERE club_id = '#{club_id}'").rows
+
+      duplicate_error =
+        assert_raise Postgrex.Error, fn ->
+          duplicate_club_id = Ecto.UUID.generate()
+
+          query!("""
+          INSERT INTO membership_clubs (club_id, name, slug, inserted_at, updated_at)
+          VALUES (
+            '#{duplicate_club_id}',
+            'Duplicate Slug Club',
+            'kootenay-mountaineering-club',
+            now(),
+            now()
+          )
+          """)
+        end
+
+      assert duplicate_error.postgres.constraint == "membership_clubs_slug_index"
+    after
+      Memba.EventSourcedCase.reset_event_sourced_storage!()
+    end
+  end
+
   test "event-sourced test helper resets EventStore and projection rows" do
     Memba.EventSourcedCase.reset_event_sourced_storage!()
 

@@ -10,6 +10,7 @@ defmodule Memba.Cucumber.MembershipSteps do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Slug
 
   step "Kootenay Mountaineering Club is a club", context do
     create_club(context, "Kootenay Mountaineering Club")
@@ -56,7 +57,11 @@ defmodule Memba.Cucumber.MembershipSteps do
 
     assert :ok =
              App.dispatch(
-               %CreateClub{club_id: club_id, name: club_name},
+               %CreateClub{
+                 club_id: club_id,
+                 name: club_name,
+                 slug: scenario_slug(context, club_name)
+               },
                consistency: :strong
              )
 
@@ -67,6 +72,32 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   defp create_people(context, names) do
     Enum.reduce(names, context, &create_person(&2, &1))
+  end
+
+  defp scenario_slug(context, club_name) do
+    suffix = scenario_slug_suffix(context)
+
+    slug_base =
+      club_name
+      |> Slug.default_from_name()
+      |> String.slice(0, Slug.max_length() - String.length("-" <> suffix))
+      |> String.trim("-")
+
+    case slug_base do
+      "" -> suffix
+      slug_base -> "#{slug_base}-#{suffix}"
+    end
+  end
+
+  defp scenario_slug_suffix(context) do
+    context
+    |> Map.get(:scenario)
+    |> case do
+      %{id: id} when is_binary(id) -> id
+      _scenario -> Ecto.UUID.generate()
+    end
+    |> String.replace(~r/[^a-z0-9]+/u, "")
+    |> String.slice(0, 8)
   end
 
   defp create_person(context, name) do
