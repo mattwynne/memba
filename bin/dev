@@ -104,9 +104,21 @@ postgres() {
   start_services
 }
 
+migrate_databases() {
+  (
+    cd "$repo_root/web"
+
+    mix ecto.create --quiet || true
+    mix event_store.create --quiet || true
+    mix ecto.migrate
+    mix event_store.init --quiet
+  )
+}
+
 # @cmd Start Postgres and the Phoenix web app
 up() {
   start_services
+  migrate_databases
   trap down EXIT
   (cd "$repo_root/web" && mix phx.server)
 }
