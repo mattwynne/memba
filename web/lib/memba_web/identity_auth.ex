@@ -10,10 +10,13 @@ defmodule MembaWeb.IdentityAuth do
   import Plug.Conn
 
   alias Memba.Accounts
+  alias Memba.Membership
 
   @identity_session_key "current_identity_email"
   @return_to_session_key "identity_return_to"
+  @staff_onboarding_return_to_session_key "staff_onboarding_return_to"
   @auth_path "/auth"
+  @staff_onboarding_path "/auth/onboard"
 
   @doc """
   Return the session key used to store the signed-in email address.
@@ -24,6 +27,11 @@ defmodule MembaWeb.IdentityAuth do
   Return the session key used to preserve the original authenticated return path.
   """
   def return_to_session_key, do: @return_to_session_key
+
+  @doc """
+  Return the session key used to preserve the requested staff path while onboarding.
+  """
+  def staff_onboarding_return_to_session_key, do: @staff_onboarding_return_to_session_key
 
   @doc """
   Renew the browser session and store the normalized signed-in email address.
@@ -102,6 +110,27 @@ defmodule MembaWeb.IdentityAuth do
   end
 
   @doc """
+  Require signed-in Memba staff to have completed first-time onboarding.
+  """
+  def require_staff_onboarding_completed(conn, _opts) do
+    conn = ensure_current_identity(conn)
+
+    cond do
+      is_nil(conn.assigns.current_identity) ->
+        redirect_to_auth(conn)
+
+      not conn.assigns.current_identity.staff? ->
+        forbidden(conn)
+
+      staff_person?(conn.assigns.current_identity.email) ->
+        conn
+
+      true ->
+        redirect_to_staff_onboarding(conn)
+    end
+  end
+
+  @doc """
   Require the signed-in identity to be an active member of the requested club.
 
   The club is read from the `club_id` query parameter. Missing, invalid, or
@@ -173,8 +202,12 @@ defmodule MembaWeb.IdentityAuth do
       is_nil(socket.assigns.current_identity) ->
         {:halt, Phoenix.LiveView.redirect(socket, to: @auth_path)}
 
-      socket.assigns.current_identity.staff? ->
+      socket.assigns.current_identity.staff? and
+          staff_person?(socket.assigns.current_identity.email) ->
         {:cont, socket}
+
+      socket.assigns.current_identity.staff? ->
+        {:halt, Phoenix.LiveView.redirect(socket, to: @staff_onboarding_path)}
 
       true ->
         {:halt, forbidden_redirect(socket)}
@@ -252,6 +285,8 @@ defmodule MembaWeb.IdentityAuth do
   defp identity_clubs(nil), do: []
   defp identity_clubs(identity), do: identity.active_clubs
 
+  defp staff_person?(email), do: not is_nil(Membership.get_person_by_email(email))
+
   defp redirect_to_auth(conn) do
     conn
     |> maybe_store_return_to()
@@ -273,6 +308,21 @@ defmodule MembaWeb.IdentityAuth do
 
   defp current_return_path(%Plug.Conn{request_path: request_path, query_string: query_string}) do
     request_path <> "?" <> query_string
+  end
+
+  defp redirect_to_staff_onboarding(conn) do
+    conn
+    |> maybe_store_staff_onboarding_return_to()
+    |> Phoenix.Controller.redirect(to: @staff_onboarding_path)
+    |> halt()
+  end
+
+  defp maybe_store_staff_onboarding_return_to(conn) do
+    if conn.method == "GET" do
+      put_session(conn, @staff_onboarding_return_to_session_key, current_return_path(conn))
+    else
+      conn
+    end
   end
 
   defp forbidden(conn) do

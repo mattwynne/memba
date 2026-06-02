@@ -33,9 +33,32 @@ defmodule MembaWeb.FeatureCase do
   end
 
   def sign_in_staff(conn, email \\ "pat@memba.io") do
+    normalized_email = Memba.Accounts.normalize_email(email)
+
+    if is_nil(Memba.Membership.get_person_by_email(normalized_email)) do
+      Memba.MembershipFixtures.insert_membership_person!(
+        name: staff_name_from_email(normalized_email),
+        email: normalized_email
+      )
+    end
+
     Plug.Test.init_test_session(conn, %{
-      MembaWeb.IdentityAuth.identity_session_key() => email
+      MembaWeb.IdentityAuth.identity_session_key() => normalized_email
     })
+  end
+
+  defp staff_name_from_email(email) do
+    email
+    |> String.split("@")
+    |> List.first()
+    |> String.replace(~r/[^a-z0-9]+/i, " ")
+    |> String.trim()
+    |> String.split(" ", trim: true)
+    |> Enum.map_join(" ", &String.capitalize/1)
+    |> case do
+      "" -> "Memba Staff"
+      name -> name
+    end
   end
 
   defp assert_eventually(assertion, deadline, interval) do

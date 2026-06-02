@@ -13,11 +13,23 @@ defmodule MembaWeb.Router do
     plug :put_secure_browser_headers
   end
 
+  pipeline :staff_onboarding_browser do
+    plug :accepts, ["html"]
+    plug :fetch_session
+    plug :fetch_current_identity
+    plug :require_staff_identity
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {MembaWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+  end
+
   pipeline :staff_browser do
     plug :accepts, ["html"]
     plug :fetch_session
     plug :fetch_current_identity
     plug :require_staff_identity
+    plug :require_staff_onboarding_completed
     plug :fetch_live_flash
     plug :put_root_layout, html: {MembaWeb.Layouts, :root}
     plug :protect_from_forgery
@@ -49,6 +61,13 @@ defmodule MembaWeb.Router do
       live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
     end
+  end
+
+  scope "/", MembaWeb do
+    pipe_through :staff_onboarding_browser
+
+    get "/auth/onboard", AuthController, :onboard
+    post "/auth/onboard", AuthController, :create_onboarded_staff_person
   end
 
   scope "/", MembaWeb do
