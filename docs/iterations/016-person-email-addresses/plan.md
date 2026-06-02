@@ -1,7 +1,7 @@
 # Multiple email addresses per person
 
 Date: 2026-06-01
-Status: ready
+Status: validated
 
 ## Goal
 
