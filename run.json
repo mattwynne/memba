@@ -1208,7 +1208,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T08:58:00.904601472Z",
-  "last_event_at": "2026-06-02T09:19:27.294929699Z",
+  "last_event_at": "2026-06-02T09:19:34.684933764Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -7862,9 +7862,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 493,
       "checkpoint": {
-        "timestamp": "2026-06-02T09:19:29.456536101Z",
+        "timestamp": "2026-06-02T09:19:32.303995657Z",
         "current_node": "publish_polish_to_main",
         "completed_nodes": [
           "start",
@@ -7894,6 +7894,487 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.final_artifact_gate.current_node": "publish_polish_to_main",
+          "response.claude_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (Use Commanded for CQRS/ES)**: Command/event modules follow Commanded patterns. Router properly excludes deprecated command dispatch. Event deserialization warning is appropriate.\n- **ADR-003 (Projection Schema Design)**: `MemberEmailDelivery` projection updated to three-status enum with schema validation enforcing constraint.\n- **ADR-004 (Email Delivery via Postmark)**: Still uses Postmark. Explicitly sets `track_opens: false` in `OutboundEmail.new/1`. Webhook controller rejects open events with 400 \"unsupported event type\".\n- **ADR-007 (Acceptance Testing Strategy)**: Acceptance feature files updated to remove opened scenarios while maintaining domain acceptance criteria for delivered/problem statuses.\n- **ADR-009 (Remove Email Open Tracking)**: Newly created and correctly implemented throughout the codebase.\n\n### Evidence\n- `web/lib/memba/postmark/outbound_email.ex:17`: `track_opens: false` hardcoded\n- `web/lib/memba/postmark/webhook_controller.ex`: Open events return `400` with `\"unsupported event type\"`\n- `web/lib/memba/messaging/router.ex`: `ReportEmailDeliveryOpened` dispatch removed\n- `web/lib/memba/messaging/projections/member_email_delivery.ex:12-13`: Status enum limited to `[:sending, :delivered, :delivery_problem]`\n- `web/test/memba/postmark/outbound_email_test.exs:18`: Explicit test `assert email.track_opens == false`\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\n\n1. **LiveView status helper duplication**: Both `MemberDeliveriesLive` and `Staff.ClubDeliveriesLive` duplicate `status_badge_class/1` and `format_status/1`. Extract to shared module:\n   - Create `web/lib/memba_web/components/delivery_status.ex` or similar\n   - Move both helpers to shared module\n   - Import in both LiveViews\n   - Update tests if needed\n\n2. **Deprecated command moduledoc inaccuracy**: `ReportEmailDeliveryOpened` moduledoc claims \"will return an error if used\" but there's no handler—dispatch would raise `Commanded.Router.UnregisteredCommandError`. Fix moduledoc:\n   ```elixir\n   @moduledoc \"\"\"\n   DEPRECATED: Open tracking has been removed from Memba.\n   This command is retained for backwards compatibility with historic event data\n   but is no longer routed. Attempting to dispatch this command will raise an error.\n   See ADR 009: Remove Email Open Tracking.\n   \"\"\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Deprecated module lifecycle policy**\n   - **Files**: `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, `web/lib/memba/messaging/events/email_delivery_opened.ex`\n   - **Smell**: No documented timeline or policy for eventual removal of deprecated event/command modules\n   - **Why judgement-worthy**: If deprecated modules accumulate without a removal strategy, technical debt grows. May warrant a project-wide policy: e.g., \"deprecated event modules retained indefinitely for replay compatibility; deprecated command modules removed after N months if never dispatched.\" Not urgent since this is the first deprecated command, but worth establishing precedent.\n\n2. **File rename without migration guide**\n   - **Files**: `web/lib/memba/postmark/email.ex` (deleted) → `web/lib/memba/postmark/outbound_email.ex` (created); same for test files\n   - **Smell**: Simple rename but no inline comment explaining relationship to old module name\n   - **Why judgement-worthy**: Future developers searching for `Postmark.Email` references won't find breadcrumbs. Consider adding brief comment in `OutboundEmail` moduledoc: \"Replaces deprecated `Postmark.Email` module.\" Low risk since git history is clear.\n\n3. **Status formatting repetition across member/staff contexts**\n   - **Files**: `web/lib/memba_web/live/member_deliveries_live.ex`, `web/lib/memba_web/live/staff/club_deliveries_live.ex`\n   - **Smell**: Beyond the DRY issue flagged above, the status display logic is duplicated across member and staff contexts with identical semantics\n   - **Why judgement-worthy**: If status formatting rules diverge in future (e.g., staff sees different labels or colors), current duplication makes that harder. Shared component would make divergence explicit. However, premature abstraction may be worse if contexts truly are independent. Judgement call on component extraction strategy.\n\n## Suggested Fixes\n\n### If Bounded-Safe Fixes Applied\n\n**Fix 1: Extract status helpers to shared module**\n\nCreate `web/lib/memba_web/components/delivery_status_helpers.ex`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpers do\n  @moduledoc \"\"\"\n  Shared helper functions for formatting email delivery statuses.\n  \"\"\"\n\n  @doc \"\"\"\n  Returns Tailwind classes for status badge based on delivery status.\n  \"\"\"\n  def status_badge_class(:sending), do: \"px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800\"\n  def status_badge_class(:delivered), do: \"px-3 py-1 rounded-full text-sm bg-green-100 text-green-800\"\n  def status_badge_class(:delivery_problem), do: \"px-3 py-1 rounded-full text-sm bg-red-100 text-red-800\"\n\n  @doc \"\"\"\n  Formats delivery status atom as human-readable string.\n  \"\"\"\n  def format_status(:sending), do: \"Sending\"\n  def format_status(:delivered), do: \"Delivered\"\n  def format_status(:delivery_problem), do: \"Delivery problem\"\nend\n```\n\nUpdate `web/lib/memba_web/live/member_deliveries_live.ex`:\n```elixir\ndefmodule MembaWeb.MemberDeliveriesLive do\n  use MembaWeb, :live_view\n\n  alias Memba.Messaging\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  # ... rest unchanged, remove duplicated helper functions\nend\n```\n\nUpdate `web/lib/memba_web/live/staff/club_deliveries_live.ex` similarly.\n\nAdd test in `web/test/memba_web/components/delivery_status_helpers_test.exs`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpersTest do\n  use ExUnit.Case, async: true\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  describe \"status_badge_class/1\" do\n    test \"returns correct classes for each status\" do\n      assert status_badge_class(:sending) =~ \"bg-blue-100\"\n      assert status_badge_class(:delivered) =~ \"bg-green-100\"\n      assert status_badge_class(:delivery_problem) =~ \"bg-red-100\"\n    end\n  end\n\n  describe \"format_status/1\" do\n    test \"formats status atoms as strings\" do\n      assert format_status(:sending) == \"Sending\"\n      assert format_status(:delivered) == \"Delivered\"\n      assert format_status(:delivery_problem) == \"Delivery problem\"\n    end\n  end\nend\n```\n\n**Fix 2: Correct deprecated command moduledoc**\n\nIn `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, replace moduledoc:\n```elixir\n@moduledoc \"\"\"\nDEPRECATED: Open tracking has been removed from Memba.\nThis command struct is retained for backwards compatibility with historic event data\nbut is no longer routed by the Messaging.Router. Attempting to dispatch this command\nwill raise Commanded.Router.UnregisteredCommandError.\nSee ADR 009: Remove Email Open Tracking.\n\"\"\"\n```\n\n## Validation Notes\n\n### Tests/Checks Confirming Correctness\n\n1. **Dev check passed**: 380 tests, 0 failures, including:\n   - Postmark provider tests verify `track_opens: false` explicitly\n   - Webhook controller tests verify open events rejected with 400\n   - LiveView tests verify \"Opened\" status absent from UI\n   - Projection tests validate three-status-only schema\n\n2. **Acceptance test updates**: Both `member-deliverability.feature` and `staff-deliverability.feature` removed opened scenarios; remaining scenarios cover delivered and delivery_problem paths.\n\n3. **Domain behaviour**: \n   - `MessageOutbox` aggregate no longer transitions to opened state\n   - Projection schema `validate_inclusion` rejects `:opened`\n   - Messaging context functions work with three statuses only\n\n4. **Integration coverage**:\n   - `web/test/memba/postmark/outbound_email_test.exs` explicitly asserts `email.track_opens == false`\n   - `web/test/memba/postmark/webhook_controller_test.exs` verifies open webhook returns 400\n   - `web/test/memba_web/live/member_deliveries_live_test.exs:36` uses `refute has_element?(view, \"span\", \"Opened\")`\n   - `web/test/memba_web/live/staff/club_deliveries_live_test.exs:57` similarly refutes opened display\n\n5. **Documentation updated**: `docs/email-delivery.md` explicitly states open tracking disabled and references ADR-009.\n\n### Manual Checks Performed\n\n- Verified ADR-009 created with correct status, context, decision, and consequences\n- Confirmed deprecated event has `__after_deserialize__/1` callback with warning\n- Confirmed router excludes `ReportEmailDeliveryOpened` from dispatch list\n- Verified `OutboundEmail` typespec hardcodes `track_opens: false`\n\n### Remaining Risks\n\n- **Historic event compatibility**: Deprecated modules retained for event store replay. No migration added. Per plan: \"Do not add a data migration/backfill unless implementation discovers the app cannot boot or replay without one.\" Since dev check passed and app boots, this appears safe.\n- **Third-party tracking**: Plan notes \"Third-party provider dashboards may still report opens independently if a stream was configured outside Memba.\" Documentation correctly states Memba does not request or consume open signals, mitigating this risk.\n\n---\n\n**Conclusion**: Clean, thorough implementation. Bounded-safe fixes are optional polish. Judgement-worthy findings are low-priority observations for future policy decisions. Ready to merge.",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.review_merge.current_node": "synthesize_review",
+          "thread.verify_review_repair.current_node": "dev_check",
+          "current_node": "publish_polish_to_main",
+          "parallel.fan_in.best_id": "claude_review",
+          "internal.retry_count.review_gate": 0,
+          "thread.review_fork.current_node": "review_merge",
+          "internal.retry_count.publish_polish_to_main": 0,
+          "thread.start.current_node": "read_plan",
+          "graph.max_node_visits": "160",
+          "internal.run_id": "01KT3RSHJ7DQJYFQHXAMQ3Q8MY",
+          "last_response": "I’ll inspect the current working tree and the code-health document, then decide whether any unfixed judgement-worthy review findings should be recorded.{\"cmd\": \"git status --short && echo '--- code-",
+          "review_fixes_available": false,
+          "internal.retry_count.synthesize_review": 0,
+          "internal.retry_count.final_artifact_gate": 0,
+          "parallel.fan_in.best_outcome": "succeeded",
+          "internal.retry_count.apply_review_fixes": 0,
+          "internal.retry_count.review_fork": 0,
+          "internal.thread_id": "final_artifact_gate",
+          "command.output": "blob://sha256/7ed4e7c9c298b6330ff84616856d186c8f2ba469e0c6ba70453f574b74d78cc5",
+          "thread.record_code_health.current_node": "final_artifact_gate",
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.review_gate.current_node": "record_code_health",
+          "internal.retry_count.start": 0,
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "thread.claude_review.current_node": "review_merge",
+          "internal.work_dir": "/workspace/memba",
+          "response.fix_dev_check": "Implemented a focused fix for the reproducible dev-check failure.\n\n## 1. Dev check failure addressed\n\n### Failure\n`MembaWeb.AuthControllerTest`\n\n- Test: `staff onboarding LiveView creates a person record for first-time staff and redirects to the staff area`\n- Symptom: `Membership.create_person(..., consistency: :strong)` returned `{:error, :consistency_timeout}`\n- Repro: full ExUnit suite with seed `734908`\n\n### Root cause\nThe reduced reproduction showed `Memba.EventSourcedSetupTest` was directly truncating shared EventStore/projection storage via `reset_event_sourced_storage!/0` while Commanded projector subscriptions remained running.\n\nThat left later strong-consistency dispatches waiting for projector acknowledgements that never arrived.\n\n## 2. Changes made\n\n### Failure-to-fix mapping\n\n| Failure | Fix | Files/modules |\n|---|---|---|\n| AuthController staff onboarding consistency timeout after event-sourced setup tests | Added a safe event-sourced reset helper that stops projectors, resets storage, clears Commanded subscription ack caches, and restarts projectors | `web/test/support/event_sourced_case.ex` |\n| Event-sourced setup tests leaving shared projector/subscription state incoherent | Switched direct setup-test resets to the new safe helper | `web/test/event_sourced_setup_test.exs` |\n\n## 3. Files changed\n\n### Event-sourced test isolation\n- `web/test/support/event_sourced_case.ex`\n  - Added `reset_event_sourced_system!/0`\n  - Added reset of Commanded subscription acknowledgement caches for:\n    - `Memba.Membership.App`\n    - `Memba.Messaging.App`\n  - Also clears subscription ack cache during normal `EventSourcedCase` setup reset.\n\n- `web/test/event_sourced_setup_test.exs`\n  - Replaced direct calls to `reset_event_sourced_storage!/0` with `reset_event_sourced_system!/0`.\n\nNo acceptance feature files were modified.\n\n## 4. Tests run\n\n### Reduced reproduction\n```sh\nPATH=\"$PWD/bin:$PATH\" devenv shell -O services.postgres.port:int \"${MEMBA_POSTGRES_PORT:-15432}\" -- \\\n  bash -lc 'cd web && mix test test/event_sourced_setup_test.exs test/memba_web/controllers/auth_controller_test.exs --seed 734908 --max-failures 1'\n```\n\nResult:\n\n- Passed\n- `23 tests, 0 failures`\n\n### Full ExUnit with originally failing seed\n```sh\nPATH=\"$PWD/bin:$PATH\" devenv shell -O services.postgres.port:int \"${MEMBA_POSTGRES_PORT:-15432}\" -- \\\n  bash -lc 'cd web && mix test --seed 734908'\n```\n\nResult:\n\n- Passed\n- `380 tests, 0 failures`\n\n### Required full gate\n```sh\nPATH=\"$PWD/bin:$PATH\" dev ci\n```\n\nResult:\n\n- Passed\n- `380 tests, 0 failures`\n\n## 5. Remaining failures or questions\n\nNone.\n\nWorking tree has the two intended tracked test-support changes plus existing untracked `.fabro/tmp/` artifacts.",
+          "internal.retry_count.fix_dev_check": 0,
+          "graph.rankdir": "LR",
+          "response.apply_review_fixes": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprecated `ReportEmailDeliveryOpened` command moduledoc needed clearer wording about its current lifecycle and dispatch behaviour.\n\n## 2. Changes made\n\nUpdated `web/lib/memba/messaging/commands/report_email_delivery_opened.ex` to clarify that:\n\n- open tracking has been removed;\n- the struct remains only for historic opened-report command data compatibility;\n- the command is no longer routed by `Memba.Messaging.Router`;\n- attempting to dispatch it will raise `Commanded.Router.UnregisteredCommandError`.\n\nNo product behaviour was changed.\n\n## 3. Files changed by issue\n\n### `polish-deprecated-opened-command-moduledoc`\n\n- `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`\n\n## 4. Tests run\n\nRan required validation:\n\n```sh\nPATH=\"$PWD/bin:$PATH\" dev check\n```\n\nResult:\n\n- Passed\n- 380 tests, 0 failures\n\n## 5. Remaining gaps or human questions\n\nNone.\n\nNote: working tree also shows the existing untracked `.fabro/tmp/` review artifacts from the pipeline. I did not modify or remove them.",
+          "internal.retry_count.read_plan": 0,
+          "internal.node_visit_count": 1,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "953c07001cb5c03052e48c207ae721edaab07bd4"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "6eb0ec1eb3775588022d2444e498156768ede5aa"
+            },
+            {
+              "id": "gemini_review",
+              "status": "succeeded",
+              "head_sha": "4686d06fb31c388272cb9a36f071c50dc6596670"
+            }
+          ],
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
+          "implementation_accepted": true,
+          "internal.retry_count.review_merge": 0,
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+          "internal.fidelity": "summary:high",
+          "failure_class": "",
+          "parallel.branch_count": 3,
+          "internal.retry_count.dev_check": 0,
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "internal.retry_count.claude_review": 0,
+          "review_blockers": [
+            {
+              "id": "polish-deprecated-opened-command-moduledoc",
+              "title": "Clarify deprecated opened command moduledoc",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "parallel.fan_in.best_head_sha": "953c07001cb5c03052e48c207ae721edaab07bd4",
+          "thread.fix_dev_check.current_node": "dev_check",
+          "internal.retry_count.record_code_health": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.verify_review_repair": 0,
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "thread.synthesize_review.current_node": "review_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.record_code_health": "I’ll inspect the current working tree and the code-health document, then decide whether any unfixed judgement-worthy review findings should be recorded.{\"cmd\": \"git status --short && echo '--- code-health head/tail ---' && if [ -f docs/code-health.md ]; then sed -n '1,220p' docs/code-health.md; else echo 'missing docs/code-health.md'; fi\", \"timeout\": 120000}{\"cmd\": \"git status --short && echo '--- code-health ---' && if [ -f docs/code-health.md ]; then sed -n '1,260p' docs/code-health.md; else echo 'missing docs/code-health.md'; fi\", \"timeout\": 120000}{\"cmd\": \"pwd\", \"timeout\": 120000}{\"cmd\": \"git status --short\", \"timeout\": 120000}{\"cmd\": \"git status --short\", \"timeout\": 120000}{\"cmd\": \"echo hello\"}{\"cmd\": \"git status --short && if [ -f docs/code-health.md ]; then tail -n 120 docs/code-health.md; fi\"}container.exec({\"cmd\": \"git status --short\"})`docs/code-health.md` was not updated.\n\nReason: the review synthesis accepted the implementation and reported no remaining review fixes available after the deprecated opened-command moduledoc polish was applied. The only concrete blocker/polish item was already fixed during the review run, and the remaining observations from reviewer reports were low-priority judgement calls rather than issues that need to be recorded now.",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "last_stage": "record_code_health"
+        },
+        "node_outcomes": {
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7bb44e8d09fc0d2490ac8e407b6c637cf04199140bd67701c671e166094ee253"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 21813,
+              "active_time_ms": 21813
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.apply_review_fixes": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprecated `ReportEmailDeliveryOpened` command moduledoc needed clearer wording about its current lifecycle and dispatch behaviour.\n\n## 2. Changes made\n\nUpdated `web/lib/memba/messaging/commands/report_email_delivery_opened.ex` to clarify that:\n\n- open tracking has been removed;\n- the struct remains only for historic opened-report command data compatibility;\n- the command is no longer routed by `Memba.Messaging.Router`;\n- attempting to dispatch it will raise `Commanded.Router.UnregisteredCommandError`.\n\nNo product behaviour was changed.\n\n## 3. Files changed by issue\n\n### `polish-deprecated-opened-command-moduledoc`\n\n- `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`\n\n## 4. Tests run\n\nRan required validation:\n\n```sh\nPATH=\"$PWD/bin:$PATH\" dev check\n```\n\nResult:\n\n- Passed\n- 380 tests, 0 failures\n\n## 5. Remaining gaps or human questions\n\nNone.\n\nNote: working tree also shows the existing untracked `.fabro/tmp/` review artifacts from the pipeline. I did not modify or remove them.",
+              "last_response": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprec",
+              "last_stage": "apply_review_fixes"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 81523,
+                    "output_tokens": 1061,
+                    "reasoning_tokens": 421,
+                    "cache_read_tokens": 11264,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 457707
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 45663,
+              "tool_time_ms": 21154,
+              "active_time_ms": 66817
+            }
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e32c38aa0c8558b6ef77d21b8a45e8a5c447ae04d95955ec4ce4e0c28c10bb35"
+            },
+            "notes": "Script completed: set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 275,
+              "active_time_ms": 275
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (Use Commanded for CQRS/ES)**: Command/event modules follow Commanded patterns. Router properly excludes deprecated command dispatch. Event deserialization warning is appropriate.\n- **ADR-003 (Projection Schema Design)**: `MemberEmailDelivery` projection updated to three-status enum with schema validation enforcing constraint.\n- **ADR-004 (Email Delivery via Postmark)**: Still uses Postmark. Explicitly sets `track_opens: false` in `OutboundEmail.new/1`. Webhook controller rejects open events with 400 \"unsupported event type\".\n- **ADR-007 (Acceptance Testing Strategy)**: Acceptance feature files updated to remove opened scenarios while maintaining domain acceptance criteria for delivered/problem statuses.\n- **ADR-009 (Remove Email Open Tracking)**: Newly created and correctly implemented throughout the codebase.\n\n### Evidence\n- `web/lib/memba/postmark/outbound_email.ex:17`: `track_opens: false` hardcoded\n- `web/lib/memba/postmark/webhook_controller.ex`: Open events return `400` with `\"unsupported event type\"`\n- `web/lib/memba/messaging/router.ex`: `ReportEmailDeliveryOpened` dispatch removed\n- `web/lib/memba/messaging/projections/member_email_delivery.ex:12-13`: Status enum limited to `[:sending, :delivered, :delivery_problem]`\n- `web/test/memba/postmark/outbound_email_test.exs:18`: Explicit test `assert email.track_opens == false`\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\n\n1. **LiveView status helper duplication**: Both `MemberDeliveriesLive` and `Staff.ClubDeliveriesLive` duplicate `status_badge_class/1` and `format_status/1`. Extract to shared module:\n   - Create `web/lib/memba_web/components/delivery_status.ex` or similar\n   - Move both helpers to shared module\n   - Import in both LiveViews\n   - Update tests if needed\n\n2. **Deprecated command moduledoc inaccuracy**: `ReportEmailDeliveryOpened` moduledoc claims \"will return an error if used\" but there's no handler—dispatch would raise `Commanded.Router.UnregisteredCommandError`. Fix moduledoc:\n   ```elixir\n   @moduledoc \"\"\"\n   DEPRECATED: Open tracking has been removed from Memba.\n   This command is retained for backwards compatibility with historic event data\n   but is no longer routed. Attempting to dispatch this command will raise an error.\n   See ADR 009: Remove Email Open Tracking.\n   \"\"\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Deprecated module lifecycle policy**\n   - **Files**: `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, `web/lib/memba/messaging/events/email_delivery_opened.ex`\n   - **Smell**: No documented timeline or policy for eventual removal of deprecated event/command modules\n   - **Why judgement-worthy**: If deprecated modules accumulate without a removal strategy, technical debt grows. May warrant a project-wide policy: e.g., \"deprecated event modules retained indefinitely for replay compatibility; deprecated command modules removed after N months if never dispatched.\" Not urgent since this is the first deprecated command, but worth establishing precedent.\n\n2. **File rename without migration guide**\n   - **Files**: `web/lib/memba/postmark/email.ex` (deleted) → `web/lib/memba/postmark/outbound_email.ex` (created); same for test files\n   - **Smell**: Simple rename but no inline comment explaining relationship to old module name\n   - **Why judgement-worthy**: Future developers searching for `Postmark.Email` references won't find breadcrumbs. Consider adding brief comment in `OutboundEmail` moduledoc: \"Replaces deprecated `Postmark.Email` module.\" Low risk since git history is clear.\n\n3. **Status formatting repetition across member/staff contexts**\n   - **Files**: `web/lib/memba_web/live/member_deliveries_live.ex`, `web/lib/memba_web/live/staff/club_deliveries_live.ex`\n   - **Smell**: Beyond the DRY issue flagged above, the status display logic is duplicated across member and staff contexts with identical semantics\n   - **Why judgement-worthy**: If status formatting rules diverge in future (e.g., staff sees different labels or colors), current duplication makes that harder. Shared component would make divergence explicit. However, premature abstraction may be worse if contexts truly are independent. Judgement call on component extraction strategy.\n\n## Suggested Fixes\n\n### If Bounded-Safe Fixes Applied\n\n**Fix 1: Extract status helpers to shared module**\n\nCreate `web/lib/memba_web/components/delivery_status_helpers.ex`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpers do\n  @moduledoc \"\"\"\n  Shared helper functions for formatting email delivery statuses.\n  \"\"\"\n\n  @doc \"\"\"\n  Returns Tailwind classes for status badge based on delivery status.\n  \"\"\"\n  def status_badge_class(:sending), do: \"px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800\"\n  def status_badge_class(:delivered), do: \"px-3 py-1 rounded-full text-sm bg-green-100 text-green-800\"\n  def status_badge_class(:delivery_problem), do: \"px-3 py-1 rounded-full text-sm bg-red-100 text-red-800\"\n\n  @doc \"\"\"\n  Formats delivery status atom as human-readable string.\n  \"\"\"\n  def format_status(:sending), do: \"Sending\"\n  def format_status(:delivered), do: \"Delivered\"\n  def format_status(:delivery_problem), do: \"Delivery problem\"\nend\n```\n\nUpdate `web/lib/memba_web/live/member_deliveries_live.ex`:\n```elixir\ndefmodule MembaWeb.MemberDeliveriesLive do\n  use MembaWeb, :live_view\n\n  alias Memba.Messaging\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  # ... rest unchanged, remove duplicated helper functions\nend\n```\n\nUpdate `web/lib/memba_web/live/staff/club_deliveries_live.ex` similarly.\n\nAdd test in `web/test/memba_web/components/delivery_status_helpers_test.exs`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpersTest do\n  use ExUnit.Case, async: true\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  describe \"status_badge_class/1\" do\n    test \"returns correct classes for each status\" do\n      assert status_badge_class(:sending) =~ \"bg-blue-100\"\n      assert status_badge_class(:delivered) =~ \"bg-green-100\"\n      assert status_badge_class(:delivery_problem) =~ \"bg-red-100\"\n    end\n  end\n\n  describe \"format_status/1\" do\n    test \"formats status atoms as strings\" do\n      assert format_status(:sending) == \"Sending\"\n      assert format_status(:delivered) == \"Delivered\"\n      assert format_status(:delivery_problem) == \"Delivery problem\"\n    end\n  end\nend\n```\n\n**Fix 2: Correct deprecated command moduledoc**\n\nIn `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, replace moduledoc:\n```elixir\n@moduledoc \"\"\"\nDEPRECATED: Open tracking has been removed from Memba.\nThis command struct is retained for backwards compatibility with historic event data\nbut is no longer routed by the Messaging.Router. Attempting to dispatch this command\nwill raise Commanded.Router.UnregisteredCommandError.\nSee ADR 009: Remove Email Open Tracking.\n\"\"\"\n```\n\n## Validation Notes\n\n### Tests/Checks Confirming Correctness\n\n1. **Dev check passed**: 380 tests, 0 failures, including:\n   - Postmark provider tests verify `track_opens: false` explicitly\n   - Webhook controller tests verify open events rejected with 400\n   - LiveView tests verify \"Opened\" status absent from UI\n   - Projection tests validate three-status-only schema\n\n2. **Acceptance test updates**: Both `member-deliverability.feature` and `staff-deliverability.feature` removed opened scenarios; remaining scenarios cover delivered and delivery_problem paths.\n\n3. **Domain behaviour**: \n   - `MessageOutbox` aggregate no longer transitions to opened state\n   - Projection schema `validate_inclusion` rejects `:opened`\n   - Messaging context functions work with three statuses only\n\n4. **Integration coverage**:\n   - `web/test/memba/postmark/outbound_email_test.exs` explicitly asserts `email.track_opens == false`\n   - `web/test/memba/postmark/webhook_controller_test.exs` verifies open webhook returns 400\n   - `web/test/memba_web/live/member_deliveries_live_test.exs:36` uses `refute has_element?(view, \"span\", \"Opened\")`\n   - `web/test/memba_web/live/staff/club_deliveries_live_test.exs:57` similarly refutes opened display\n\n5. **Documentation updated**: `docs/email-delivery.md` explicitly states open tracking disabled and references ADR-009.\n\n### Manual Checks Performed\n\n- Verified ADR-009 created with correct status, context, decision, and consequences\n- Confirmed deprecated event has `__after_deserialize__/1` callback with warning\n- Confirmed router excludes `ReportEmailDeliveryOpened` from dispatch list\n- Verified `OutboundEmail` typespec hardcodes `track_opens: false`\n\n### Remaining Risks\n\n- **Historic event compatibility**: Deprecated modules retained for event store replay. No migration added. Per plan: \"Do not add a data migration/backfill unless implementation discovers the app cannot boot or replay without one.\" Since dev check passed and app boots, this appears safe.\n- **Third-party tracking**: Plan notes \"Third-party provider dashboards may still report opens independently if a stream was configured outside Memba.\" Documentation correctly states Memba does not request or consume open signals, mitigating this risk.\n\n---\n\n**Conclusion**: Clean, thorough implementation. Bounded-safe fixes are optional polish. Judgement-worthy findings are low-priority observations for future policy decisions. Ready to merge.",
+              "last_response": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (U"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5567,
+                    "output_tokens": 11908,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 195321
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 200742,
+              "tool_time_ms": 0,
+              "active_time_ms": 200742
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/25c77911b820073bb182567cbd85d33d0ba5bd73ff1c8eb3c8ef0a8ab10d4f4c"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 199,
+              "active_time_ms": 199
+            }
+          },
+          "fix_dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "fix_dev_check",
+              "last_response": "Implemented a focused fix for the reproducible dev-check failure.\n\n## 1. Dev check failure addressed\n\n### Failure\n`MembaWeb.AuthControllerTest`\n\n- Test: `staff onboarding LiveView creates a person rec",
+              "response.fix_dev_check": "Implemented a focused fix for the reproducible dev-check failure.\n\n## 1. Dev check failure addressed\n\n### Failure\n`MembaWeb.AuthControllerTest`\n\n- Test: `staff onboarding LiveView creates a person record for first-time staff and redirects to the staff area`\n- Symptom: `Membership.create_person(..., consistency: :strong)` returned `{:error, :consistency_timeout}`\n- Repro: full ExUnit suite with seed `734908`\n\n### Root cause\nThe reduced reproduction showed `Memba.EventSourcedSetupTest` was directly truncating shared EventStore/projection storage via `reset_event_sourced_storage!/0` while Commanded projector subscriptions remained running.\n\nThat left later strong-consistency dispatches waiting for projector acknowledgements that never arrived.\n\n## 2. Changes made\n\n### Failure-to-fix mapping\n\n| Failure | Fix | Files/modules |\n|---|---|---|\n| AuthController staff onboarding consistency timeout after event-sourced setup tests | Added a safe event-sourced reset helper that stops projectors, resets storage, clears Commanded subscription ack caches, and restarts projectors | `web/test/support/event_sourced_case.ex` |\n| Event-sourced setup tests leaving shared projector/subscription state incoherent | Switched direct setup-test resets to the new safe helper | `web/test/event_sourced_setup_test.exs` |\n\n## 3. Files changed\n\n### Event-sourced test isolation\n- `web/test/support/event_sourced_case.ex`\n  - Added `reset_event_sourced_system!/0`\n  - Added reset of Commanded subscription acknowledgement caches for:\n    - `Memba.Membership.App`\n    - `Memba.Messaging.App`\n  - Also clears subscription ack cache during normal `EventSourcedCase` setup reset.\n\n- `web/test/event_sourced_setup_test.exs`\n  - Replaced direct calls to `reset_event_sourced_storage!/0` with `reset_event_sourced_system!/0`.\n\nNo acceptance feature files were modified.\n\n## 4. Tests run\n\n### Reduced reproduction\n```sh\nPATH=\"$PWD/bin:$PATH\" devenv shell -O services.postgres.port:int \"${MEMBA_POSTGRES_PORT:-15432}\" -- \\\n  bash -lc 'cd web && mix test test/event_sourced_setup_test.exs test/memba_web/controllers/auth_controller_test.exs --seed 734908 --max-failures 1'\n```\n\nResult:\n\n- Passed\n- `23 tests, 0 failures`\n\n### Full ExUnit with originally failing seed\n```sh\nPATH=\"$PWD/bin:$PATH\" devenv shell -O services.postgres.port:int \"${MEMBA_POSTGRES_PORT:-15432}\" -- \\\n  bash -lc 'cd web && mix test --seed 734908'\n```\n\nResult:\n\n- Passed\n- `380 tests, 0 failures`\n\n### Required full gate\n```sh\nPATH=\"$PWD/bin:$PATH\" dev ci\n```\n\nResult:\n\n- Passed\n- `380 tests, 0 failures`\n\n## 5. Remaining failures or questions\n\nNone.\n\nWorking tree has the two intended tracked test-support changes plus existing untracked `.fabro/tmp/` artifacts."
+            },
+            "notes": "Stage completed: fix_dev_check",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 606545,
+                    "output_tokens": 5215,
+                    "reasoning_tokens": 4993,
+                    "cache_read_tokens": 1334784,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4006357
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 271751,
+              "tool_time_ms": 132330,
+              "active_time_ms": 404081
+            }
+          },
+          "record_code_health": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "I’ll inspect the current working tree and the code-health document, then decide whether any unfixed judgement-worthy review findings should be recorded.{\"cmd\": \"git status --short && echo '--- code-",
+              "response.record_code_health": "I’ll inspect the current working tree and the code-health document, then decide whether any unfixed judgement-worthy review findings should be recorded.{\"cmd\": \"git status --short && echo '--- code-health head/tail ---' && if [ -f docs/code-health.md ]; then sed -n '1,220p' docs/code-health.md; else echo 'missing docs/code-health.md'; fi\", \"timeout\": 120000}{\"cmd\": \"git status --short && echo '--- code-health ---' && if [ -f docs/code-health.md ]; then sed -n '1,260p' docs/code-health.md; else echo 'missing docs/code-health.md'; fi\", \"timeout\": 120000}{\"cmd\": \"pwd\", \"timeout\": 120000}{\"cmd\": \"git status --short\", \"timeout\": 120000}{\"cmd\": \"git status --short\", \"timeout\": 120000}{\"cmd\": \"echo hello\"}{\"cmd\": \"git status --short && if [ -f docs/code-health.md ]; then tail -n 120 docs/code-health.md; fi\"}container.exec({\"cmd\": \"git status --short\"})`docs/code-health.md` was not updated.\n\nReason: the review synthesis accepted the implementation and reported no remaining review fixes available after the deprecated opened-command moduledoc polish was applied. The only concrete blocker/polish item was already fixed during the review run, and the remaining observations from reviewer reports were low-priority judgement calls rather than issues that need to be recorded now.",
+              "last_stage": "record_code_health"
+            },
+            "notes": "Stage completed: record_code_health",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10994,
+                    "output_tokens": 387,
+                    "reasoning_tokens": 1349,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 107050
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 34281,
+              "tool_time_ms": 0,
+              "active_time_ms": 34281
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.fan_in.best_id": "claude_review",
+              "parallel.fan_in.best_outcome": "succeeded",
+              "parallel.fan_in.best_head_sha": "953c07001cb5c03052e48c207ae721edaab07bd4"
+            },
+            "notes": "Selected best candidate: claude_review",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 0,
+              "active_time_ms": 0
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/db1321317bbbb8b1e2f965f3905bcb73b615dfe58c3a794b1e8a8c079f58fd48"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137630,
+              "active_time_ms": 137630
+            }
+          },
+          "review_fork": {
+            "status": "succeeded",
+            "jump_to_node": "review_merge",
+            "notes": "Parallel node dispatched 3 branches (3 succeeded, 0 failed)",
+            "usage": null
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167,
+              "active_time_ms": 167
+            }
+          },
+          "publish_polish_to_main": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7ed4e7c9c298b6330ff84616856d186c8f2ba469e0c6ba70453f574b74d78cc5"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2155,
+              "active_time_ms": 2155
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6b6f1f2e91ee6af2502d400cabe7f04be213c9eba6198d8ba34244d9566982d5"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='9bf6d3c8c1134c4cda5bc94c2d9d4f4033b7948e'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 278,
+              "active_time_ms": 278
+            }
+          },
+          "final_artifact_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ce121593151a49129f83e599650cdc77b266c240056e53a011b971177de44edc"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/017-remove-open-tracking/plan.md' '9bf6d3c8c1134c4cda5bc94c2d9d4f4033b7948e'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 263,
+              "active_time_ms": 263
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":true,\"review_fixes_available\":false}}",
+              "last_stage": "synthesize_review",
+              "implementation_accepted": true,
+              "review_fixes_available": false
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 11442,
+                    "output_tokens": 26,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 73470
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 11329,
+              "tool_time_ms": 0,
+              "active_time_ms": 11329
+            }
+          }
+        },
+        "next_node_id": "finalize_iteration_status",
+        "git_commit_sha": "85a0fe45e86c7f26cb229b596034540c7793be84",
+        "node_visits": {
+          "snapshot_before_review_repair": 1,
+          "preflight_sandbox": 1,
+          "dev_check": 3,
+          "review_gate": 2,
+          "start": 1,
+          "verify_review_repair": 1,
+          "apply_review_fixes": 1,
+          "final_artifact_gate": 1,
+          "publish_polish_to_main": 1,
+          "collect_implementation_evidence": 2,
+          "record_code_health": 1,
+          "review_merge": 2,
+          "synthesize_review": 2,
+          "read_plan": 1,
+          "review_fork": 2,
+          "claude_review": 1,
+          "fix_dev_check": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 3,
+          "additions": 30,
+          "deletions": 7
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T09:19:34.694146177Z",
+        "current_node": "finalize_iteration_status",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "claude_review",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "fix_dev_check",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "record_code_health",
+          "final_artifact_gate",
+          "publish_polish_to_main",
+          "finalize_iteration_status"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.run_id": "01KT3RSHJ7DQJYFQHXAMQ3Q8MY",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "failure_class": "",
@@ -7905,9 +8386,11 @@
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "response.apply_review_fixes": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprecated `ReportEmailDeliveryOpened` command moduledoc needed clearer wording about its current lifecycle and dispatch behaviour.\n\n## 2. Changes made\n\nUpdated `web/lib/memba/messaging/commands/report_email_delivery_opened.ex` to clarify that:\n\n- open tracking has been removed;\n- the struct remains only for historic opened-report command data compatibility;\n- the command is no longer routed by `Memba.Messaging.Router`;\n- attempting to dispatch it will raise `Commanded.Router.UnregisteredCommandError`.\n\nNo product behaviour was changed.\n\n## 3. Files changed by issue\n\n### `polish-deprecated-opened-command-moduledoc`\n\n- `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`\n\n## 4. Tests run\n\nRan required validation:\n\n```sh\nPATH=\"$PWD/bin:$PATH\" dev check\n```\n\nResult:\n\n- Passed\n- 380 tests, 0 failures\n\n## 5. Remaining gaps or human questions\n\nNone.\n\nNote: working tree also shows the existing untracked `.fabro/tmp/` review artifacts from the pipeline. I did not modify or remove them.",
           "graph.default_fidelity": "summary:high",
+          "thread.publish_polish_to_main.current_node": "finalize_iteration_status",
           "thread.final_artifact_gate.current_node": "publish_polish_to_main",
           "internal.retry_count.preflight_sandbox": 0,
-          "command.output": "blob://sha256/7ed4e7c9c298b6330ff84616856d186c8f2ba469e0c6ba70453f574b74d78cc5",
+          "command.output": "blob://sha256/a41aa402a011c49d0ac11559786511c362e16fdfb8b262b6f8c3343b63ab52cb",
+          "internal.retry_count.finalize_iteration_status": 0,
           "thread.verify_review_repair.current_node": "dev_check",
           "parallel.fan_in.best_id": "claude_review",
           "response.record_code_health": "I’ll inspect the current working tree and the code-health document, then decide whether any unfixed judgement-worthy review findings should be recorded.{\"cmd\": \"git status --short && echo '--- code-health head/tail ---' && if [ -f docs/code-health.md ]; then sed -n '1,220p' docs/code-health.md; else echo 'missing docs/code-health.md'; fi\", \"timeout\": 120000}{\"cmd\": \"git status --short && echo '--- code-health ---' && if [ -f docs/code-health.md ]; then sed -n '1,260p' docs/code-health.md; else echo 'missing docs/code-health.md'; fi\", \"timeout\": 120000}{\"cmd\": \"pwd\", \"timeout\": 120000}{\"cmd\": \"git status --short\", \"timeout\": 120000}{\"cmd\": \"git status --short\", \"timeout\": 120000}{\"cmd\": \"echo hello\"}{\"cmd\": \"git status --short && if [ -f docs/code-health.md ]; then tail -n 120 docs/code-health.md; fi\"}container.exec({\"cmd\": \"git status --short\"})`docs/code-health.md` was not updated.\n\nReason: the review synthesis accepted the implementation and reported no remaining review fixes available after the deprecated opened-command moduledoc polish was applied. The only concrete blocker/polish item was already fixed during the review run, and the remaining observations from reviewer reports were low-priority judgement calls rather than issues that need to be recorded now.",
@@ -7921,7 +8404,7 @@
           "thread.record_code_health.current_node": "final_artifact_gate",
           "internal.work_dir": "/workspace/memba",
           "internal.node_visit_count": 1,
-          "internal.thread_id": "final_artifact_gate",
+          "internal.thread_id": "publish_polish_to_main",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.final_artifact_gate": 0,
           "thread.review_fork.current_node": "review_merge",
@@ -7944,7 +8427,7 @@
           "internal.retry_count.publish_polish_to_main": 0,
           "internal.retry_count.review_merge": 0,
           "last_stage": "record_code_health",
-          "current_node": "publish_polish_to_main",
+          "current_node": "finalize_iteration_status",
           "thread.start.current_node": "read_plan",
           "thread.review_merge.current_node": "synthesize_review",
           "thread.synthesize_review.current_node": "review_gate",
@@ -8147,6 +8630,20 @@
               "active_time_ms": 263
             }
           },
+          "finalize_iteration_status": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a41aa402a011c49d0ac11559786511c362e16fdfb8b262b6f8c3343b63ab52cb"
+            },
+            "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2350,
+              "active_time_ms": 2350
+            }
+          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -8311,7 +8808,7 @@
             }
           }
         },
-        "next_node_id": "finalize_iteration_status",
+        "next_node_id": "final_summary",
         "node_visits": {
           "collect_implementation_evidence": 2,
           "synthesize_review": 2,
@@ -8320,6 +8817,7 @@
           "record_code_health": 1,
           "review_gate": 2,
           "publish_polish_to_main": 1,
+          "finalize_iteration_status": 1,
           "verify_review_repair": 1,
           "apply_review_fixes": 1,
           "dev_check": 3,
@@ -9284,6 +9782,44 @@
       },
       "state": "succeeded"
     },
+    "finalize_iteration_status@1": {
+      "first_event_seq": 496,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/finalize_iteration_status.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+        "language": "shell",
+        "timeout_ms": 300000
+      },
+      "script_timing": {
+        "output": "blob://sha256/a41aa402a011c49d0ac11559786511c362e16fdfb8b262b6f8c3343b63ab52cb",
+        "exit_code": 0,
+        "duration_ms": 2350,
+        "termination": "exited",
+        "output_bytes": 581,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 581,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-02T09:19:32.326957597Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "verify_review_repair@1": {
       "first_event_seq": 196,
       "prompt": null,
@@ -9336,7 +9872,12 @@
       "first_event_seq": 485,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: bash .fabro/workflows/iteration-review/scripts/publish_polish_to_main.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T09:19:29.455606591Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -9345,11 +9886,27 @@
         "language": "shell",
         "timeout_ms": 300000
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/7ed4e7c9c298b6330ff84616856d186c8f2ba469e0c6ba70453f574b74d78cc5",
+        "exit_code": 0,
+        "duration_ms": 2155,
+        "termination": "exited",
+        "output_bytes": 426,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 426,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-02T09:19:27.290797504Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 2164,
+        "inference_time_ms": 0,
+        "tool_time_ms": 2155,
+        "active_time_ms": 2155
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -9358,7 +9915,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 21,
