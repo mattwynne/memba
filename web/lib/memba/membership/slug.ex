@@ -64,4 +64,20 @@ defmodule Memba.Membership.Slug do
   Return whether a value is a valid staff-entered slug.
   """
   def valid?(slug), do: match?({:ok, _slug}, validate(slug))
+
+  @doc """
+  Normalize a slug-like value for lookup and validate the result.
+
+  Host names are case-insensitive and controller/query inputs can carry
+  incidental surrounding whitespace, so lookup normalization trims and downcases
+  only. It does not kebab-case or otherwise rewrite unsafe characters.
+  """
+  def normalize_for_lookup(slug) when is_binary(slug) do
+    slug
+    |> String.trim()
+    |> String.downcase()
+    |> validate()
+  end
+
+  def normalize_for_lookup(_slug), do: {:error, :invalid_format}
 end

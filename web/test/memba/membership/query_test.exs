@@ -11,6 +11,40 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Slug
 
+  describe "get_club_by_slug/1" do
+    test "returns the projected club for a valid slug" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+
+      assert %ClubProjection{
+               club_id: club_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc"
+             } = Membership.get_club_by_slug("kmc")
+
+      assert club_id == club.club_id
+    end
+
+    test "uses safe lookup normalization for casing and surrounding whitespace" do
+      club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+
+      assert %ClubProjection{club_id: club_id, slug: "kmc"} =
+               Membership.get_club_by_slug(" KMC ")
+
+      assert club_id == club.club_id
+    end
+
+    test "returns nil for invalid, unknown, or non-string slugs" do
+      _club = create_club("Kootenay Mountaineering Club", slug: "kmc")
+
+      assert is_nil(Membership.get_club_by_slug("unknown"))
+      assert is_nil(Membership.get_club_by_slug("kmc club"))
+      assert is_nil(Membership.get_club_by_slug("kmc_club"))
+      assert is_nil(Membership.get_club_by_slug("kmc.club"))
+      assert is_nil(Membership.get_club_by_slug("-kmc"))
+      assert is_nil(Membership.get_club_by_slug(nil))
+    end
+  end
+
   describe "list_active_members_of_club/1" do
     test "returns active members of the given club and excludes members of other clubs" do
       kootenay_club_id = Ecto.UUID.generate()
@@ -144,15 +178,19 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
-  defp create_club(name) do
-    club = %{club_id: Ecto.UUID.generate(), name: name}
+  defp create_club(name, opts \\ []) do
+    club = %{
+      club_id: Ecto.UUID.generate(),
+      name: name,
+      slug: Keyword.get_lazy(opts, :slug, fn -> slug_for(name) end)
+    }
 
     assert :ok =
              App.dispatch(
                %CreateClub{
                  club_id: club.club_id,
                  name: club.name,
-                 slug: slug_for(name)
+                 slug: club.slug
                },
                consistency: :strong
              )

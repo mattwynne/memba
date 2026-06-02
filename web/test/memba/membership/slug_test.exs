@@ -72,4 +72,21 @@ defmodule Memba.Membership.SlugTest do
       refute Slug.valid?("KMC")
     end
   end
+
+  describe "normalize_for_lookup/1" do
+    test "normalizes only casing and surrounding whitespace before validation" do
+      assert Slug.normalize_for_lookup(" KMC ") == {:ok, "kmc"}
+
+      assert Slug.normalize_for_lookup("kootenay-mountaineering-club") ==
+               {:ok, "kootenay-mountaineering-club"}
+    end
+
+    test "rejects values that are still not address-safe after safe normalization" do
+      assert Slug.normalize_for_lookup("kmc club") == {:error, :invalid_format}
+      assert Slug.normalize_for_lookup("kmc_club") == {:error, :invalid_format}
+      assert Slug.normalize_for_lookup("kmc.club") == {:error, :invalid_format}
+      assert Slug.normalize_for_lookup("-kmc") == {:error, :invalid_format}
+      assert Slug.normalize_for_lookup(nil) == {:error, :invalid_format}
+    end
+  end
 end

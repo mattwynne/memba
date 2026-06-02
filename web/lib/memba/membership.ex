@@ -67,6 +67,21 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a projected club read model by public slug.
+
+  Lookup input is normalized only where safe for public addressing: surrounding
+  whitespace is trimmed and casing is folded before validating the slug. Values
+  that are still invalid, missing, or unknown return `nil`.
+  """
+  def get_club_by_slug(slug) do
+    with {:ok, slug} <- Slug.normalize_for_lookup(slug) do
+      Repo.get_by(Club, slug: slug)
+    else
+      {:error, _reason} -> nil
+    end
+  end
+
+  @doc """
   Fetch a projected person read model by caller-generated UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
