@@ -6,7 +6,7 @@
 - [x] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
 - [x] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
 - [x] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
-- [ ] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+- [x] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
 - [ ] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
 - [ ] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
 - [ ] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.

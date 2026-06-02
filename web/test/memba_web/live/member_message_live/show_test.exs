@@ -114,7 +114,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(
              view,
              "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
-             "arrived, not opened yet"
+             "delivered to their inbox"
            )
 
     assert has_element?(
@@ -150,6 +150,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              view,
              "[data-testid='member-receipt-group'][data-receipt-status='opened']"
            )
+
+    refute has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+           )
+
+    refute render(view) =~ "Opened"
+    refute render(view) =~ "not opened"
   end
 
   test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
@@ -266,11 +274,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
              "Delivered"
            )
 
-    for {status, label} <- [
-          {"opened", "Opened"},
-          {"sent", "Sending"},
-          {"delivery problem", "Delivery problem"}
-        ] do
+    for {status, label} <- [{"sent", "Sending"}, {"delivery problem", "Delivery problem"}] do
       assert has_element?(
                view,
                "[data-testid='member-receipt-summary-status']" <>
@@ -289,6 +293,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
       refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
     end
+
+    refute has_element?(
+             view,
+             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+           )
+
+    refute has_element?(view, "#member-receipt-group-toggle-opened")
 
     assert has_element?(
              view,

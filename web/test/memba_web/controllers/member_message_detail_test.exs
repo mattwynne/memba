@@ -194,6 +194,15 @@ defmodule MembaWeb.MemberMessageDetailTest do
                "[data-testid='member-receipt-group'][data-receipt-status='opened']"
              )
              |> Enum.any?()
+
+      refute html
+             |> LazyHTML.query(
+               "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
+             )
+             |> Enum.any?()
+
+      refute response =~ "Opened"
+      refute response =~ "not opened"
     end
 
     test "does not expose Memba-staff-only delivery fields on member message detail", %{
