@@ -1,6 +1,7 @@
 defmodule MembaWeb.AuthControllerTest do
   use MembaWeb.ConnCase, async: false
 
+  import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
   alias Memba.Accounts
@@ -34,7 +35,7 @@ defmodule MembaWeb.AuthControllerTest do
       refute response =~ "signs up anyone with a memba.io email as Memba staff"
 
       assert html
-             |> LazyHTML.query("form#sign-in-link-form[action='/auth'][method='post']")
+             |> LazyHTML.query("form#sign-in-link-form[phx-submit='request_sign_in_link']")
              |> Enum.any?()
 
       assert html
@@ -45,28 +46,24 @@ defmodule MembaWeb.AuthControllerTest do
     end
   end
 
-  describe "POST /auth" do
+  describe "auth LiveViews" do
     test "redirects known and unknown emails to the same neutral acknowledgement page", %{
       conn: conn
     } do
       configure_auth_email()
       create_active_member(email: "alice@example.com")
 
-      known_conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE@EXAMPLE.COM "}})
+      assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
+               "We’ve sent your sign-in link"
 
-      assert redirected_to(known_conn) == ~p"/auth/check-email"
-      assert flash(known_conn, :info) == nil
-
-      conn = Phoenix.ConnTest.recycle(conn)
-      unknown_conn = post(conn, ~p"/auth", %{"auth" => %{"email" => "unknown@example.com"}})
-
-      assert redirected_to(unknown_conn) == ~p"/auth/check-email"
-      assert flash(unknown_conn, :info) == nil
+      assert conn
+             |> Phoenix.ConnTest.recycle()
+             |> submit_sign_in_link_request("unknown@example.com") =~
+               "We’ve sent your sign-in link"
     end
 
     test "shows the sign-in link request acknowledgement page", %{conn: conn} do
-      conn = get(conn, ~p"/auth/check-email")
-      response = html_response(conn, 200)
+      {:ok, _view, response} = live(conn, ~p"/auth/check-email")
       html = LazyHTML.from_fragment(response)
 
       assert response =~ "We’ve sent your sign-in link"
@@ -81,9 +78,9 @@ defmodule MembaWeb.AuthControllerTest do
       configure_auth_email()
       create_active_member(email: "alice@example.com")
 
-      conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE@EXAMPLE.COM "}})
+      assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
+               "We’ve sent your sign-in link"
 
-      assert redirected_to(conn) == ~p"/auth/check-email"
       assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
@@ -103,9 +100,9 @@ defmodule MembaWeb.AuthControllerTest do
         ]
       )
 
-      conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE.WORK@example.com "}})
+      assert submit_sign_in_link_request(conn, " ALICE.WORK@example.com ") =~
+               "We’ve sent your sign-in link"
 
-      assert redirected_to(conn) == ~p"/auth/check-email"
       assert [%SignInToken{email: "alice.work@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
@@ -120,9 +117,9 @@ defmodule MembaWeb.AuthControllerTest do
     } do
       configure_auth_email()
 
-      conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " New.Staff@Memba.IO "}})
+      assert submit_sign_in_link_request(conn, " New.Staff@Memba.IO ") =~
+               "We’ve sent your sign-in link"
 
-      assert redirected_to(conn) == ~p"/auth/check-email"
       assert [%SignInToken{email: "new.staff@memba.io"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
@@ -134,9 +131,9 @@ defmodule MembaWeb.AuthControllerTest do
     test "does not create a token or send email for unknown recipients", %{conn: conn} do
       configure_auth_email()
 
-      conn = post(conn, ~p"/auth", %{"auth" => %{"email" => "unknown@example.com"}})
+      assert submit_sign_in_link_request(conn, "unknown@example.com") =~
+               "We’ve sent your sign-in link"
 
-      assert redirected_to(conn) == ~p"/auth/check-email"
       assert Repo.all(SignInToken) == []
       assert_no_email_sent()
     end
@@ -259,7 +256,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert html |> LazyHTML.query("section#staff-onboarding") |> Enum.any?()
 
       assert html
-             |> LazyHTML.query("form#staff-onboarding-form[action='/auth/onboard']")
+             |> LazyHTML.query("form#staff-onboarding-form[phx-submit='finish_onboarding']")
              |> Enum.any?()
 
       assert html |> LazyHTML.query("input#staff-name-input[name='staff[name]']") |> Enum.any?()
@@ -277,32 +274,37 @@ defmodule MembaWeb.AuthControllerTest do
     end
   end
 
-  describe "POST /auth/onboard" do
+  describe "staff onboarding LiveView" do
     test "creates a person record for first-time staff and redirects to the staff area", %{
       conn: conn
     } do
-      conn =
+      {:ok, view, _html} =
         conn
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
-        |> post(~p"/auth/onboard", %{"staff" => %{"name" => " Pat Staff "}})
+        |> live(~p"/auth/onboard")
 
-      assert redirected_to(conn) == ~p"/admin/clubs"
-      assert flash(conn, :info) == "Welcome to Memba, Pat Staff."
+      assert {:error, {:live_redirect, %{to: "/admin/clubs"}}} =
+               view
+               |> form("#staff-onboarding-form", staff: %{name: " Pat Staff "})
+               |> render_submit()
 
       assert %{name: "Pat Staff", email: "pat@memba.io"} =
                Memba.Membership.get_person_by_email("pat@memba.io")
     end
 
     test "keeps first-time staff on onboarding when the name is blank", %{conn: conn} do
-      conn =
+      {:ok, view, _html} =
         conn
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
-        |> post(~p"/auth/onboard", %{"staff" => %{"name" => " "}})
+        |> live(~p"/auth/onboard")
 
-      response = html_response(conn, 200)
+      response =
+        view
+        |> form("#staff-onboarding-form", staff: %{name: " "})
+        |> render_submit()
 
       assert response =~ "Tell us your name"
-      assert flash(conn, :error) == "Please tell us your name."
+      assert response =~ "Please tell us your name."
       assert Memba.Membership.get_person_by_email("pat@memba.io") == nil
     end
   end
@@ -340,6 +342,14 @@ defmodule MembaWeb.AuthControllerTest do
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 
   defp flash(conn, key), do: Phoenix.Flash.get(conn.assigns.flash, key)
+
+  defp submit_sign_in_link_request(conn, email) do
+    {:ok, view, _html} = live(conn, ~p"/auth")
+
+    view
+    |> form("#sign-in-link-form", auth: %{email: email})
+    |> render_submit()
+  end
 
   defp create_active_member(attrs) do
     club_id = Ecto.UUID.generate()

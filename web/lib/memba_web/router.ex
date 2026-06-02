@@ -66,16 +66,19 @@ defmodule MembaWeb.Router do
   scope "/", MembaWeb do
     pipe_through :staff_onboarding_browser
 
-    get "/auth/onboard", AuthController, :onboard
-    post "/auth/onboard", AuthController, :create_onboarded_staff_person
+    live_session :staff_onboarding do
+      live "/auth/onboard", AuthLive.Onboard
+    end
   end
 
   scope "/", MembaWeb do
     pipe_through :browser
 
-    get "/auth", AuthController, :new
-    get "/auth/check-email", AuthController, :sent
-    post "/auth", AuthController, :create
+    live_session :auth do
+      live "/auth", AuthLive.SignIn, :new
+      live "/auth/check-email", AuthLive.SignIn, :sent
+    end
+
     get "/auth/sign-in/:token", AuthController, :callback
     delete "/auth", AuthController, :delete
     get "/about", PageController, :about
