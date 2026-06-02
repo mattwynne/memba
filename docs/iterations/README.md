@@ -27,6 +27,7 @@ green than before.
 | 015 | 2026-06-01 | merged | Club slugs and public club subdomains | [plan](015-club-slugs/plan.md) |
 | 016 | 2026-06-01 | merged | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
 | 017 | 2026-06-01 | validated | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |
+| 018 | 2026-06-01 | ready | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |
 
 Status notes:
 
@@ -41,3 +42,4 @@ Shared acceptance feature files used across these iterations:
 - [`memba_staff_email_deliverability.feature`](../../acceptance-tests/features/memba_staff_email_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
 - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@wip` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
 - [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@wip` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
+- [`member_club_subdomains.feature`](../../acceptance-tests/features/member_club_subdomains.feature) (`@wip` planning scenarios for iteration 018 until member-facing club subdomain routing and navigation are implemented)

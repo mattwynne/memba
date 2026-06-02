@@ -19,8 +19,8 @@ test("default browser Cucumber profile selects all non-deferred web-backed share
   assert.deepEqual(selectedFeatureNames, [
     "authentication.feature",
     "homepage.feature",
-    "member_message_deliverability.feature",
-    "operator_email_deliverability.feature"
+    "memba_staff_email_deliverability.feature",
+    "member_message_deliverability.feature"
   ]);
 });
 
@@ -28,6 +28,7 @@ test("only explicitly deferred features are skipped from the browser run", () =>
   const skippedFeatures = browserSkippedFeatures();
 
   assert.deepEqual(skippedFeatures.map((feature) => feature.name), [
+    "member_club_subdomains.feature",
     "person_email_addresses.feature",
     "staff_club_slugs.feature"
   ]);
