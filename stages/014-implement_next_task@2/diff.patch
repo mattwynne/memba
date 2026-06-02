@@ -1,0 +1,180 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 9a39b56..c365cb6 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect current Membership person command/event/aggregate/projector/projection code, Accounts lookup code, Messaging recipient resolution, seeds, fixtures, staff/admin LiveViews, and acceptance support that assume a single `email` field.
+-- [ ] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
++- [x] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
+ - [ ] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
+ - [ ] 004 Add database constraints and matching changeset/command validation:
+ - [ ] 005 Evolve Membership commands/events using an atomic replace-all model:
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 711d827..96818f4 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -14,6 +14,7 @@ config :memba,
+     :projection_versions,
+     :membership_clubs,
+     :membership_memberships,
++    :membership_person_email_addresses,
+     :membership_people,
+     :messaging_messages,
+     :messaging_email_deliveries,
+diff --git a/web/lib/memba/membership/projections/person_email_address.ex b/web/lib/memba/membership/projections/person_email_address.ex
+new file mode 100644
+index 0000000..09f7cba
+--- /dev/null
++++ b/web/lib/memba/membership/projections/person_email_address.ex
+@@ -0,0 +1,17 @@
++defmodule Memba.Membership.Projections.PersonEmailAddress do
++  @moduledoc """
++  Read model projection for an email address attached to a Membership person.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:id, :binary_id, autogenerate: true}
++  schema "membership_person_email_addresses" do
++    field :person_id, :binary_id
++    field :email, :string
++    field :normalized_email, :string
++    field :is_primary, :boolean, default: false
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/priv/repo/migrations/20260602023706_create_membership_person_email_addresses_projection.exs b/web/priv/repo/migrations/20260602023706_create_membership_person_email_addresses_projection.exs
+new file mode 100644
+index 0000000..e1abf32
+--- /dev/null
++++ b/web/priv/repo/migrations/20260602023706_create_membership_person_email_addresses_projection.exs
+@@ -0,0 +1,22 @@
++defmodule Memba.Repo.Migrations.CreateMembershipPersonEmailAddressesProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:membership_person_email_addresses, primary_key: false) do
++      add :id, :uuid, primary_key: true
++
++      add :person_id,
++          references(:membership_people,
++            column: :person_id,
++            type: :uuid,
++            on_delete: :delete_all
++          )
++
++      add :email, :text
++      add :normalized_email, :text
++      add :is_primary, :boolean, null: false, default: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++  end
++end
+diff --git a/web/test/memba/membership/person_email_address_projection_test.exs b/web/test/memba/membership/person_email_address_projection_test.exs
+new file mode 100644
+index 0000000..738b800
+--- /dev/null
++++ b/web/test/memba/membership/person_email_address_projection_test.exs
+@@ -0,0 +1,98 @@
++defmodule Memba.Membership.PersonEmailAddressProjectionTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Membership.Projections.Person
++  alias Memba.Membership.Projections.PersonEmailAddress
++
++  test "person email address projection rows can be persisted and read" do
++    person_id = Ecto.UUID.generate()
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: "Alice",
++      email: "alice@example.com"
++    })
++
++    projection =
++      Repo.insert!(%PersonEmailAddress{
++        person_id: person_id,
++        email: "alice@example.com",
++        normalized_email: "alice@example.com",
++        is_primary: true
++      })
++
++    assert %PersonEmailAddress{
++             id: id,
++             person_id: ^person_id,
++             email: "alice@example.com",
++             normalized_email: "alice@example.com",
++             is_primary: true
++           } = Repo.get!(PersonEmailAddress, projection.id)
++
++    assert Ecto.UUID.cast(id) != :error
++    assert %DateTime{} = projection.inserted_at
++    assert %DateTime{} = projection.updated_at
++  end
++
++  test "is_primary defaults to false and is not nullable" do
++    person_id = Ecto.UUID.generate()
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: "Alice",
++      email: "alice@example.com"
++    })
++
++    Repo.insert_all(PersonEmailAddress, [
++      %{
++        id: Ecto.UUID.generate(),
++        person_id: person_id,
++        email: "alice@example.com",
++        normalized_email: "alice@example.com",
++        inserted_at: now,
++        updated_at: now
++      }
++    ])
++
++    assert [%PersonEmailAddress{is_primary: false}] = Repo.all(PersonEmailAddress)
++
++    assert_raise Postgrex.Error, ~r/null value in column "is_primary"/, fn ->
++      Repo.insert_all(PersonEmailAddress, [
++        %{
++          id: Ecto.UUID.generate(),
++          person_id: person_id,
++          email: "other@example.com",
++          normalized_email: "other@example.com",
++          is_primary: nil,
++          inserted_at: now,
++          updated_at: now
++        }
++      ])
++    end
++  end
++
++  test "person email address rows are deleted when the person projection is deleted" do
++    person_id = Ecto.UUID.generate()
++
++    person =
++      Repo.insert!(%Person{
++        person_id: person_id,
++        name: "Alice",
++        email: "alice@example.com"
++      })
++
++    email_address =
++      Repo.insert!(%PersonEmailAddress{
++        person_id: person_id,
++        email: "alice@example.com",
++        normalized_email: "alice@example.com"
++      })
++
++    assert Repo.get!(PersonEmailAddress, email_address.id)
++
++    Repo.delete!(person)
++
++    assert Repo.get(PersonEmailAddress, email_address.id) == nil
++  end
++end
