@@ -1,4 +1,3 @@
-@wip
 Feature: Member club subdomains
   Club members use their club's slug subdomain as the home for member-only club pages.
 
@@ -21,7 +20,8 @@ Feature: Member club subdomains
       Then the message should be addressed to Kootenay Mountaineering Club members
 
     Scenario: Alice views a message on the Kootenay Mountaineering Club subdomain
-      Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
+      Given Alice is a member of Kootenay Mountaineering Club
+      And Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
       And Kootenay Mountaineering Club has the slug "kmc"
       When Alice views the message "Trip planning night" on "kmc.clubs.memba.io"
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
@@ -37,7 +37,8 @@ Feature: Member club subdomains
       Then Alice should return to the private message URL on "kmc.clubs.memba.io"
 
     Scenario: Pat cannot view another club's private message URL
-      Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
+      Given Alice is a member of Kootenay Mountaineering Club
+      And Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
       And Pat is a member of Nelson Paddling Club
       And Kootenay Mountaineering Club has the slug "kmc"
       When Pat opens the private message URL on "kmc.clubs.memba.io"

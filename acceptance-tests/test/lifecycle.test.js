@@ -49,7 +49,7 @@ test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in
   await lifecycle.start();
   await lifecycle.stop();
 
-  assert.equal(lifecycle.baseUrl, "http://localhost:4444");
+  assert.equal(lifecycle.baseUrl, "http://lvh.me:4444");
   assert.deepEqual(
     calls.map((call) => `${call.type}:${call.label || call.url}`),
     [
@@ -57,7 +57,7 @@ test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in
       ...databaseSetupSteps.map((step) => `run:Database setup: ${step.label}`),
       `run:Asset setup: ${assetBuildStep.label}`,
       "start:Phoenix server",
-      "httpReady:http://localhost:4444",
+      "httpReady:http://lvh.me:4444",
       "stop:Phoenix server"
     ]
   );

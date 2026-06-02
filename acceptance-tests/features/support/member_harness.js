@@ -151,7 +151,7 @@ async function signInByMagicLink(world, email, label) {
   const signInLink = signInLinkFromTextBody(signInEmail.text_body);
   assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${signInEmail.text_body}`);
 
-  await world.page.goto(signInLink);
+  await world.page.goto(browserAppUrl(world, signInLink));
 }
 
 function guardPageAgainstAdminRoutes(world, memberName) {
@@ -235,6 +235,19 @@ function signInEmailMatches(email, recipientEmail) {
 function signInLinkFromTextBody(textBody) {
   const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
   return match && match[0];
+}
+
+function browserAppUrl(world, url) {
+  const parsed = new URL(url, `${world.baseUrl}/`);
+  const base = new URL(world.baseUrl);
+
+  if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+    parsed.protocol = base.protocol;
+    parsed.hostname = base.hostname;
+    parsed.port = base.port;
+  }
+
+  return parsed.toString();
 }
 
 function mailboxMessageId(email) {

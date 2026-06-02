@@ -63,7 +63,19 @@ Given("Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club",
 });
 
 Given("Pat is a member of Nelson Paddling Club", async function () {
-  await withStaffHarness(this, (staff) => addMembers(staff, ["Pat"], nelsonClubName));
+  await withStaffHarness(this, async (staff) => {
+    if (!staff.clubs || !staff.clubs[nelsonClubName]) {
+      await createClub(staff, nelsonClubName);
+    }
+
+    if (!staff.people || !staff.people.Pat) {
+      await createPerson(staff, "Pat", nelsonClubName);
+    }
+
+    if (!staff.memberships || !staff.memberships[`${nelsonClubName}:Pat`]) {
+      await addMembers(staff, ["Pat"], nelsonClubName);
+    }
+  });
 });
 
 When(

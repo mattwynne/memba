@@ -509,6 +509,36 @@ async function createClub(world, clubName, { expect = playwrightExpect, slug } =
   return world;
 }
 
+async function updateClubSlug(world, clubName, slug, { expect = playwrightExpect, timeoutMs } = {}) {
+  ensureState(world);
+
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to have been created before updating its slug`);
+
+  if (club.slug === slug) {
+    return world;
+  }
+
+  await openClub(world, clubName, { expect, timeoutMs });
+
+  await browserInteraction(`update club slug for ${clubName} to ${slug}`, async () => {
+    await world.page.getByLabel("Club slug").fill(slug);
+    await world.page.getByRole("button", { name: "Save club" }).click();
+  });
+
+  await waitForProjectedText(
+    world,
+    world.page.locator("#club-slug-display"),
+    `Slug: ${slug}`,
+    `updated club slug display for ${clubName}`,
+    { expect, timeoutMs }
+  );
+
+  club.slug = slug;
+
+  return world;
+}
+
 async function createPeople(world, names, { expect = playwrightExpect } = {}) {
   ensureState(world);
 
@@ -1810,6 +1840,7 @@ module.exports = {
   sendMessageToKootenayMembers,
   testMailboxEmails,
   trySendMemberMessageToKootenayMembers,
+  updateClubSlug,
   updatePersonEmailAddresses,
   visitClubsIndex,
   waitForMailboxEmails
