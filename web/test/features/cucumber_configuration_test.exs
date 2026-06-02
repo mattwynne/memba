@@ -349,6 +349,23 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
+  test "shared deliverability features do not describe opened receipts" do
+    shared_feature_paths = configured_feature_paths()
+
+    for feature_name <- [
+          "member_message_deliverability.feature",
+          "memba_staff_email_deliverability.feature"
+        ] do
+      feature =
+        shared_feature_paths
+        |> feature_file_named!(feature_name)
+        |> File.read!()
+
+      refute feature =~ ~r/\bopened\b/i
+      refute feature =~ ~r/\bopens?\b/i
+    end
+  end
+
   test "domain Cucumber configuration excludes only wip planning scenarios" do
     assert Application.fetch_env!(:cucumber, :tags) == "not @wip"
 
