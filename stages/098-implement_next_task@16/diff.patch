@@ -1,0 +1,222 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 4c20f11..15ce716 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -15,7 +15,7 @@
+ - [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+ - [x] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+ - [x] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+-- [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
++- [x] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+ - [ ] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+ - [ ] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+ - [ ] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
+diff --git a/web/lib/memba_web/live/admin/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+index afa7327..d832b34 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -13,7 +13,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   def mount(%{"club_id" => club_id}, _session, socket) do
+     club = Membership.get_club(club_id)
+     people = Membership.list_people() |> people_with_email_summaries()
+-    members = Membership.list_active_members_of_club(club_id)
++    members = Membership.list_active_members_of_club(club_id) |> members_with_email_summaries()
+     messages = Messaging.list_messages_for_club(club_id)
+ 
+     {:ok,
+@@ -225,7 +225,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+                 <div>
+                   <h2 class="text-lg font-semibold text-zinc-900">People</h2>
+                   <p class="mt-1 text-sm text-zinc-600">
+-                    Manage staff-created people and their primary email address.
++                    Manage staff-created people and their primary and alternate email addresses.
+                   </p>
+                 </div>
+ 
+@@ -266,14 +266,30 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+                     >
+                       Primary: <span class="font-medium text-zinc-800">{person.primary_email}</span>
+                     </p>
+-                    <p
+-                      id={"person-alternate-summary-#{person.person_id}"}
+-                      data-testid="person-alternate-summary"
++                    <div
++                      id={"person-alternate-emails-#{person.person_id}"}
++                      data-testid="person-alternate-emails"
+                       data-alternate-count={person.alternate_count}
+-                      class="text-sm text-zinc-500"
++                      class="space-y-1 text-sm text-zinc-500"
+                     >
+-                      {alternate_email_summary(person)}
+-                    </p>
++                      <p class="font-medium text-zinc-700">Alternate email addresses</p>
++                      <p
++                        :if={person.alternate_count == 0}
++                        data-testid="person-alternate-empty"
++                        class="text-zinc-500"
++                      >
++                        No alternate email addresses
++                      </p>
++                      <ul :if={person.alternate_count > 0} class="space-y-0.5">
++                        <li
++                          :for={email <- person.alternate_emails}
++                          data-testid="person-alternate-email"
++                          class="font-medium text-zinc-700"
++                        >
++                          {email}
++                        </li>
++                      </ul>
++                    </div>
+                   </div>
+ 
+                   <.link
+@@ -337,7 +353,37 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+                   class="py-3"
+                 >
+                   <p class="font-medium text-zinc-900">{member.name}</p>
+-                  <p class="text-sm text-zinc-500">{member.email}</p>
++                  <p
++                    id={"member-primary-email-#{member.id}"}
++                    data-testid="member-primary-email"
++                    class="mt-1 text-sm text-zinc-600"
++                  >
++                    Primary: <span class="font-medium text-zinc-800">{member.primary_email}</span>
++                  </p>
++                  <div
++                    id={"member-alternate-emails-#{member.id}"}
++                    data-testid="member-alternate-emails"
++                    data-alternate-count={member.alternate_count}
++                    class="mt-1 space-y-1 text-sm text-zinc-500"
++                  >
++                    <p class="font-medium text-zinc-700">Alternate email addresses</p>
++                    <p
++                      :if={member.alternate_count == 0}
++                      data-testid="member-alternate-empty"
++                      class="text-zinc-500"
++                    >
++                      No alternate email addresses
++                    </p>
++                    <ul :if={member.alternate_count > 0} class="space-y-0.5">
++                      <li
++                        :for={email <- member.alternate_emails}
++                        data-testid="member-alternate-email"
++                        class="font-medium text-zinc-700"
++                      >
++                        {email}
++                      </li>
++                    </ul>
++                  </div>
+                 </div>
+               </div>
+             </section>
+@@ -446,7 +492,10 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   end
+ 
+   defp refresh_members(socket) do
+-    members = Membership.list_active_members_of_club(socket.assigns.club_id)
++    members =
++      socket.assigns.club_id
++      |> Membership.list_active_members_of_club()
++      |> members_with_email_summaries()
+ 
+     socket
+     |> assign(:member_options, member_options(members))
+@@ -478,14 +527,19 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+     end)
+   end
+ 
+-  defp alternate_email_summary(%{alternate_count: 0}), do: "No alternate emails"
+-
+-  defp alternate_email_summary(%{alternate_count: 1, alternate_emails: [email]}) do
+-    "1 alternate email: #{email}"
+-  end
++  defp members_with_email_summaries(members) do
++    Enum.map(members, fn member ->
++      alternate_emails = Membership.list_person_alternate_emails(member.id)
+ 
+-  defp alternate_email_summary(%{alternate_count: count, alternate_emails: emails}) do
+-    "#{count} alternate emails: #{Enum.join(emails, ", ")}"
++      %{
++        id: member.id,
++        name: member.name,
++        email: member.email,
++        primary_email: member.email,
++        alternate_emails: alternate_emails,
++        alternate_count: length(alternate_emails)
++      }
++    end)
+   end
+ 
+   defp club_form_params(nil), do: @empty_club
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+index dbb3af0..eb6f23d 100644
+--- a/web/test/memba_web/live/admin/clubs_live/show_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -134,7 +134,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+     refute has_element?(view, "#update-club-button[disabled]")
+   end
+ 
+-  test "people list links to dedicated create and edit pages and summarizes email addresses", %{
++  test "people and member lists show primary and alternate email addresses distinctly", %{
+     conn: conn
+   } do
+     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+@@ -146,6 +146,16 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+       is_primary: false
+     )
+ 
++    assert :ok =
++             Membership.add_member(
++               %{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: club.club_id,
++                 person_id: person.person_id
++               },
++               consistency: :strong
++             )
++
+     {:ok, view, _initial_html} =
+       conn
+       |> sign_in_staff()
+@@ -162,13 +172,13 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+ 
+     assert has_element?(
+              view,
+-             "#person-#{person.person_id} [data-testid='person-alternate-summary'][data-alternate-count='1']",
+-             "1 alternate email"
++             "#person-#{person.person_id} [data-testid='person-alternate-emails'][data-alternate-count='1']",
++             "Alternate email addresses"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#person-#{person.person_id} [data-testid='person-alternate-summary']",
++             "#person-#{person.person_id} [data-testid='person-alternate-email']",
+              "alice@work.example"
+            )
+ 
+@@ -176,6 +186,24 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+              view,
+              "#edit-person-link-#{person.person_id}[href='/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit']"
+            )
++
++    assert has_element?(
++             view,
++             "#member-#{person.person_id} [data-testid='member-primary-email']",
++             "alice@example.com"
++           )
++
++    assert has_element?(
++             view,
++             "#member-#{person.person_id} [data-testid='member-alternate-emails'][data-alternate-count='1']",
++             "Alternate email addresses"
++           )
++
++    assert has_element?(
++             view,
++             "#member-#{person.person_id} [data-testid='member-alternate-email']",
++             "alice@work.example"
++           )
+   end
+ 
+   defp input_value(html, selector) do
