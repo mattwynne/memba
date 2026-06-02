@@ -22,7 +22,10 @@ defmodule MembaWeb.MemberDashboardLive do
 
     case MemberDashboardPresentation.load(club_id, current_identity, current_identity_clubs) do
       {:ok, dashboard_assigns} ->
-        {:ok, assign(socket, dashboard_assigns)}
+        {:ok,
+         socket
+         |> assign(:club_id_source, Map.get(session, "club_id_source", "query"))
+         |> assign(dashboard_assigns)}
 
       {:error, :forbidden} ->
         forbidden!()

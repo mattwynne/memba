@@ -15,7 +15,8 @@ defmodule MembaWeb.MemberMessageLive.New do
   alias Memba.Messaging
 
   @impl Phoenix.LiveView
-  def mount(%{"club_id" => club_id} = params, _session, socket) do
+  def mount(%{"club_id" => club_id} = params, session, socket) do
+    params = put_club_id_source(params, session)
     socket = ensure_identity_assigns(socket)
 
     case compose_context(
@@ -36,7 +37,9 @@ defmodule MembaWeb.MemberMessageLive.New do
     end
   end
 
-  def mount(params, _session, socket) when is_map(params) do
+  def mount(params, session, socket) when is_map(params) do
+    params = put_club_id_source(params, session)
+
     {:ok,
      socket
      |> ensure_identity_assigns()
@@ -404,6 +407,13 @@ defmodule MembaWeb.MemberMessageLive.New do
     |> to_form(as: :message)
   end
 
+  defp put_club_id_source(params, session) do
+    case Map.get(session, "club_id_source") do
+      "host" -> Map.put(params, "club_id_source", "host")
+      _source -> params
+    end
+  end
+
   defp selected_club_name(nil), do: "Club"
   defp selected_club_name(selected_club), do: selected_club.name
 
@@ -420,6 +430,7 @@ defmodule MembaWeb.MemberMessageLive.New do
     end
   end
 
+  defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/"
   defp club_home_path(selected_club, _route_params), do: ~p"/?club_id=#{selected_club.club_id}"
 
   defp compose_path(nil, route_params) do
@@ -429,8 +440,14 @@ defmodule MembaWeb.MemberMessageLive.New do
     end
   end
 
+  defp compose_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/messages/new"
+
   defp compose_path(selected_club, _route_params),
     do: ~p"/messages/new?club_id=#{selected_club.club_id}"
+
+  defp message_detail_path(message_id, _selected_club, %{"club_id_source" => "host"}) do
+    ~p"/messages/#{message_id}"
+  end
 
   defp message_detail_path(message_id, selected_club, route_params) do
     ~p"/messages/#{message_id}?club_id=#{selected_club_id(selected_club, route_params)}"

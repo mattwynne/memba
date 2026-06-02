@@ -116,5 +116,10 @@ config :memba, Memba.Accounts.AuthEmail,
   from: "auth@mail.memba.local",
   message_stream: "development-auth"
 
+config :memba, :club_site,
+  base_domain: "lvh.me",
+  scheme: "http",
+  port: 4000
+
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false

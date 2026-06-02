@@ -2,12 +2,11 @@ defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
   alias Memba.Membership
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
-  @public_club_host_suffix ".clubs.memba.io"
-
   def home(conn, params) do
-    case public_club_slug_from_host(conn.host) do
+    case ClubSite.slug_from_host(conn.host) do
       {:ok, slug} -> home_for_public_club_slug(conn, slug)
       :error -> home_for_params(conn, params)
     end
@@ -23,12 +22,7 @@ defmodule MembaWeb.PageController do
         not_found(conn)
 
       Membership.active_member_of_club_by_email?(club_id, identity.email) ->
-        Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
-          session: %{
-            "club_id" => club_id,
-            IdentityAuth.identity_session_key() => identity.email
-          }
-        )
+        render_member_dashboard(conn, club_id, "query")
 
       true ->
         render_public_club_page(conn, club_id)
@@ -57,25 +51,22 @@ defmodule MembaWeb.PageController do
 
   defp home_for_public_club_slug(conn, slug) do
     case Membership.get_club_by_slug(slug) do
-      nil -> not_found(conn)
-      club -> render_public_club_page(conn, club.club_id)
+      nil ->
+        not_found(conn)
+
+      club ->
+        if signed_in_active_member?(conn, club.club_id) do
+          render_member_dashboard(conn, club.club_id, "host")
+        else
+          render_public_club_page(conn, club.club_id)
+        end
     end
   end
 
-  defp public_club_slug_from_host(host) when is_binary(host) do
-    host = host |> String.downcase() |> String.trim_trailing(".")
+  defp signed_in_active_member?(%{assigns: %{current_identity: nil}}, _club_id), do: false
 
-    if String.ends_with?(host, @public_club_host_suffix) do
-      host
-      |> String.trim_trailing(@public_club_host_suffix)
-      |> String.split(".", parts: 2)
-      |> case do
-        [slug | _rest] when slug != "" -> {:ok, slug}
-        _no_slug -> :error
-      end
-    else
-      :error
-    end
+  defp signed_in_active_member?(%{assigns: %{current_identity: identity}}, club_id) do
+    Membership.active_member_of_club_by_email?(club_id, identity.email)
   end
 
   def about(conn, _params) do
@@ -100,6 +91,16 @@ defmodule MembaWeb.PageController do
     conn
     |> assign(:page_title, "Privacy Policy")
     |> render(:privacy)
+  end
+
+  defp render_member_dashboard(conn, club_id, club_id_source) do
+    Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
+      session: %{
+        "club_id" => club_id,
+        "club_id_source" => club_id_source,
+        IdentityAuth.identity_session_key() => conn.assigns.current_identity.email
+      }
+    )
   end
 
   defp render_public_club_page(conn, club_id) do

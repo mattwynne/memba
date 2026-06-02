@@ -3,6 +3,7 @@ const { expect: playwrightExpect } = require("@playwright/test");
 const {
   addMembers,
   appUrl,
+  clubSiteUrl,
   createClub,
   createPerson,
   cssString,
@@ -227,7 +228,7 @@ async function openClubPage(world, clubName) {
   ensureState(world);
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to be known in the scenario`);
-  await world.page.goto(appUrl(world.baseUrl, `/?club_id=${encodeURIComponent(club.clubId)}`));
+  await world.page.goto(clubSiteUrl(world.baseUrl, club));
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
 }
 

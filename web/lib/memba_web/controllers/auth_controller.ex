@@ -5,6 +5,7 @@ defmodule MembaWeb.AuthController do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   @invalid_link_notice "That sign-in link is invalid or has expired."
@@ -18,7 +19,7 @@ defmodule MembaWeb.AuthController do
         |> IdentityAuth.log_in_identity(email)
         |> maybe_store_staff_onboarding_return_to(email, return_to)
         |> put_flash(:info, "Signed in.")
-        |> redirect(to: path_after_sign_in(email, return_to))
+        |> redirect_after_sign_in(path_after_sign_in(email, return_to))
 
       {:error, :consumed} ->
         if signed_in?(conn) do
@@ -53,6 +54,7 @@ defmodule MembaWeb.AuthController do
     cond do
       String.starts_with?(return_to, "//") -> nil
       String.starts_with?(return_to, "/") -> return_to
+      ClubSite.safe_club_url?(return_to) -> return_to
       true -> nil
     end
   end
@@ -66,6 +68,9 @@ defmodule MembaWeb.AuthController do
       true -> safe_return_to(return_to) || ~p"/"
     end
   end
+
+  defp redirect_after_sign_in(conn, "http" <> _rest = url), do: redirect(conn, external: url)
+  defp redirect_after_sign_in(conn, path), do: redirect(conn, to: path)
 
   defp needs_staff_onboarding?(email) do
     Accounts.staff_email?(email) and not staff_person?(email)

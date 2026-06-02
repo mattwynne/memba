@@ -11,6 +11,7 @@ defmodule MembaWeb.IdentityAuth do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias MembaWeb.ClubSite
 
   @identity_session_key "current_identity_email"
   @return_to_session_key "identity_return_to"
@@ -302,11 +303,22 @@ defmodule MembaWeb.IdentityAuth do
     end
   end
 
-  defp current_return_path(%Plug.Conn{request_path: request_path, query_string: ""}) do
+  defp current_return_path(%Plug.Conn{} = conn) do
+    if ClubSite.club_host?(conn.host) do
+      ClubSite.current_url(conn)
+    else
+      current_local_return_path(conn)
+    end
+  end
+
+  defp current_local_return_path(%Plug.Conn{request_path: request_path, query_string: ""}) do
     request_path
   end
 
-  defp current_return_path(%Plug.Conn{request_path: request_path, query_string: query_string}) do
+  defp current_local_return_path(%Plug.Conn{
+         request_path: request_path,
+         query_string: query_string
+       }) do
     request_path <> "?" <> query_string
   end
 

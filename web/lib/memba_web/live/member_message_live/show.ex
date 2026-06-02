@@ -11,7 +11,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
   alias MembaWeb.MemberMessageDetail
 
   @impl Phoenix.LiveView
-  def mount(%{"club_id" => _club_id, "message_id" => _message_id} = params, _session, socket) do
+  def mount(%{"club_id" => _club_id, "message_id" => _message_id} = params, session, socket) do
+    params = put_club_id_source(params, session)
     socket = ensure_identity_assigns(socket)
 
     case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
@@ -30,7 +31,8 @@ defmodule MembaWeb.MemberMessageLive.Show do
     end
   end
 
-  def mount(params, _session, socket) when is_map(params) do
+  def mount(params, session, socket) when is_map(params) do
+    params = put_club_id_source(params, session)
     {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, params)}
   end
 
@@ -75,6 +77,13 @@ defmodule MembaWeb.MemberMessageLive.Show do
       </div>
     </Layouts.club_site>
     """
+  end
+
+  defp put_club_id_source(params, session) do
+    case Map.get(session, "club_id_source") do
+      "host" -> Map.put(params, "club_id_source", "host")
+      _source -> params
+    end
   end
 
   defp toggle_receipt_group(socket, status) do

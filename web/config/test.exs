@@ -84,6 +84,11 @@ config :phoenix_live_view,
 config :phoenix,
   sort_verified_routes_query_params: true
 
+config :memba, :club_site,
+  base_domain: "lvh.me",
+  scheme: "http",
+  port: 4002
+
 config :cucumber,
   features: ["../acceptance-tests/features/**/*.feature"],
   steps: ["test/features/step_definitions/**/*.exs"],

@@ -54,6 +54,19 @@ defmodule MembaWeb.PageHTML do
 
   defp receipt_group_expanded?(_expanded_groups, _status), do: false
 
+  defp member_club_home_path(_selected_club, "host"), do: ~p"/"
+  defp member_club_home_path(selected_club, _source), do: ~p"/?club_id=#{selected_club.club_id}"
+
+  defp member_compose_path(_selected_club, "host"), do: ~p"/messages/new"
+
+  defp member_compose_path(selected_club, _source),
+    do: ~p"/messages/new?club_id=#{selected_club.club_id}"
+
+  defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
+
+  defp member_message_path(message_id, selected_club, _source),
+    do: ~p"/messages/#{message_id}?club_id=#{selected_club.club_id}"
+
   defp status_bg_class("delivered"), do: "bg-sky-500"
   defp status_bg_class("sent"), do: "bg-slate-400"
   defp status_bg_class("delivery problem"), do: "bg-amber-500"

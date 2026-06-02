@@ -41,6 +41,7 @@ defmodule MembaWeb.Router do
   end
 
   pipeline :club_member_required do
+    plug MembaWeb.Plugs.ClubSiteMemberRoute
     plug :require_active_club_member
   end
 
@@ -57,7 +58,9 @@ defmodule MembaWeb.Router do
   scope "/", MembaWeb do
     pipe_through [:browser, :club_member_required]
 
-    live_session :club_member, on_mount: [{MembaWeb.IdentityAuth, :mount_current_identity}] do
+    live_session :club_member,
+      on_mount: [{MembaWeb.IdentityAuth, :mount_current_identity}],
+      session: {MembaWeb.Plugs.ClubSiteMemberRoute, :live_session, []} do
       live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
     end

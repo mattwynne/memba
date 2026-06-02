@@ -1,12 +1,14 @@
 defmodule MembaWeb.PageControllerTest do
   use MembaWeb.ConnCase
 
+  alias Memba.Accounts
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
+  alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
   test "GET /", %{conn: conn} do
@@ -45,7 +47,7 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ ~s(href="/clubs")
   end
 
-  test "GET / shows Your clubs with query-string club links for signed-in members", %{conn: conn} do
+  test "GET / shows Your clubs with club subdomain links for signed-in members", %{conn: conn} do
     first_club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
     second_club = create_active_member(email: "ALICE@example.com", club_name: "Bridge Club")
 
@@ -65,13 +67,15 @@ defmodule MembaWeb.PageControllerTest do
 
     for club <- [first_club, second_club] do
       assert html
-             |> LazyHTML.query("a[data-testid='my-club-link'][href='/?club_id=#{club.club_id}']")
+             |> LazyHTML.query("a[data-testid='my-club-link'][href='#{ClubSite.url(club)}']")
              |> Enum.any?()
 
       refute html
-             |> LazyHTML.query("a[data-testid='my-club-link'][href='/?club_id=#{club.club_id}']")
+             |> LazyHTML.query("a[data-testid='my-club-link']")
              |> LazyHTML.text()
              |> String.contains?(club.club_id)
+
+      refute response =~ "club_id=#{club.club_id}"
     end
 
     refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
@@ -141,7 +145,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> Map.put(:host, "kmc.clubs.memba.io")
+      |> Map.put(:host, "kmc.lvh.me")
       |> get(~p"/")
 
     response = html_response(conn, 200)
@@ -159,7 +163,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> Map.put(:host, "unknown.clubs.memba.io")
+      |> Map.put(:host, "unknown.lvh.me")
       |> get(~p"/")
 
     response = html_response(conn, 404)
@@ -266,6 +270,238 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     refute response =~ "Your clubs"
+  end
+
+  test "GET / on a club subdomain shows the member dashboard to active club members", %{
+    conn: conn
+  } do
+    club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: club.name,
+        club_id: club.club_id
+      )
+
+    message =
+      create_message(club_id: club.club_id, sender_id: alice.person_id, subject: "Trip night")
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Hello, Alice."
+    refute response =~ "Welcome to Kootenay Mountaineering Club"
+
+    assert html
+           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("#member-send-message-link[href='/messages/new']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "a[data-testid='club-message-link'][href='/messages/#{message.message_id}']"
+           )
+           |> Enum.any?()
+  end
+
+  test "GET / on a club subdomain shows the public page to signed-in non-members", %{conn: conn} do
+    club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    _other_club =
+      create_active_member(email: "pat@example.com", club_name: "Nelson Paddling Club")
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
+      |> get(~p"/")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Welcome to Kootenay Mountaineering Club"
+
+    assert html
+           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+
+    refute response =~ "Send club message"
+  end
+
+  test "GET /messages/new on a club subdomain selects the host club", %{conn: conn} do
+    club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: club.name,
+        club_id: club.club_id
+      )
+
+    _bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: club.name,
+        club_id: club.club_id
+      )
+
+    _pat = create_active_member(email: "pat@example.com", club_name: "Nelson Paddling Club")
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/messages/new")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Kootenay Mountaineering Club"
+
+    assert html
+           |> LazyHTML.query(
+             "#member-message-compose[data-club-id='#{club.club_id}'][data-active-member-count='2']"
+           )
+           |> Enum.any?()
+
+    assert html |> LazyHTML.query("#member-compose-club-home-link[href='/']") |> Enum.any?()
+    refute response =~ "club_id="
+  end
+
+  test "GET /messages/:message_id on a club subdomain shows the host-selected club message", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club"
+      )
+
+    club = Repo.get!(Club, alice.club_id) |> Ecto.Changeset.change(slug: "kmc") |> Repo.update!()
+
+    message =
+      create_message(
+        club_id: club.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night",
+        body: "Bring your maps."
+      )
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/messages/#{message.message_id}")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Trip planning night"
+    assert response =~ "Bring your maps."
+
+    assert html
+           |> LazyHTML.query(
+             "#member-message-detail[data-club-id='#{club.club_id}'][data-message-id='#{message.message_id}']"
+           )
+           |> Enum.any?()
+
+    assert html |> LazyHTML.query("#back-to-club-home-link[href='/']") |> Enum.any?()
+    refute response =~ "club_id="
+  end
+
+  test "GET /messages/:message_id on a club subdomain redirects signed-out visitors and preserves the full URL",
+       %{conn: conn} do
+    alice =
+      create_active_member(email: "alice@example.com", club_name: "Kootenay Mountaineering Club")
+
+    club = Repo.get!(Club, alice.club_id) |> Ecto.Changeset.change(slug: "kmc") |> Repo.update!()
+
+    message =
+      create_message(club_id: club.club_id, sender_id: alice.person_id, subject: "Members only")
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> get(~p"/messages/#{message.message_id}")
+
+    assert redirected_to(conn) == ~p"/auth"
+
+    assert get_session(conn, IdentityAuth.return_to_session_key()) ==
+             "http://kmc.lvh.me/messages/#{message.message_id}"
+  end
+
+  test "auth callback returns active members to private club subdomain URLs", %{conn: conn} do
+    alice =
+      create_active_member(email: "alice@example.com", club_name: "Kootenay Mountaineering Club")
+
+    club = Repo.get!(Club, alice.club_id) |> Ecto.Changeset.change(slug: "kmc") |> Repo.update!()
+
+    message =
+      create_message(club_id: club.club_id, sender_id: alice.person_id, subject: "Members only")
+
+    return_to = "http://kmc.lvh.me/messages/#{message.message_id}"
+    assert {:ok, %{token: token}} = Accounts.request_sign_in_link("alice@example.com")
+
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.return_to_session_key() => return_to})
+      |> get(~p"/auth/sign-in/#{token}")
+
+    assert redirected_to(conn) == return_to
+  end
+
+  test "GET /messages/:message_id on a club subdomain forbids signed-in non-members", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(email: "alice@example.com", club_name: "Kootenay Mountaineering Club")
+
+    club = Repo.get!(Club, alice.club_id) |> Ecto.Changeset.change(slug: "kmc") |> Repo.update!()
+
+    _other_club =
+      create_active_member(email: "pat@example.com", club_name: "Nelson Paddling Club")
+
+    message =
+      create_message(
+        club_id: club.club_id,
+        sender_id: alice.person_id,
+        subject: "Members only",
+        body: "Private club message"
+      )
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
+      |> get(~p"/messages/#{message.message_id}")
+
+    assert response(conn, 403) == "Forbidden"
+    refute conn.resp_body =~ "Members only"
+    refute conn.resp_body =~ "Private club message"
+  end
+
+  test "GET /messages/new on an unknown club subdomain returns not found", %{conn: conn} do
+    conn =
+      conn
+      |> Map.put(:host, "unknown.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/messages/new")
+
+    assert html_response(conn, 404)
   end
 
   test "GET /messages/:message_id shows member message detail to active club members", %{
@@ -478,7 +714,7 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Staff Tennis Club"
 
     assert html
-           |> LazyHTML.query("a[data-testid='my-club-link'][href='/?club_id=#{club.club_id}']")
+           |> LazyHTML.query("a[data-testid='my-club-link'][href='#{ClubSite.url(club)}']")
            |> Enum.any?()
 
     assert html

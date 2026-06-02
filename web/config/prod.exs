@@ -25,6 +25,11 @@ config :swoosh, api_client: Swoosh.ApiClient.Req
 # Disable Swoosh Local Memory Storage
 config :swoosh, local: false
 
+config :memba, :club_site,
+  base_domain: "clubs.memba.io",
+  scheme: "https",
+  port: 443
+
 # Do not print debug messages in production
 config :logger, level: :info
 
