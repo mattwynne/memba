@@ -1,0 +1,762 @@
+diff --git a/acceptance-tests/features/person_email_addresses.feature b/acceptance-tests/features/person_email_addresses.feature
+index f1d1b35..c88be8c 100644
+--- a/acceptance-tests/features/person_email_addresses.feature
++++ b/acceptance-tests/features/person_email_addresses.feature
+@@ -1,4 +1,3 @@
+-@wip
+ Feature: Person email addresses
+   People may be known by more than one email address while Memba still has one primary address for sending club mail.
+ 
+diff --git a/acceptance-tests/features/step_definitions/member_message_steps.js b/acceptance-tests/features/step_definitions/member_message_steps.js
+index 3c2e4a3..3528555 100644
+--- a/acceptance-tests/features/step_definitions/member_message_steps.js
++++ b/acceptance-tests/features/step_definitions/member_message_steps.js
+@@ -16,6 +16,7 @@ const {
+   assertOperatorDeliveryReason,
+   assertOperatorDeliveryStatus,
+   createClub,
++  createPerson,
+   createPeople,
+   kootenayClubName,
+   makeClubMessageSendingUnavailable,
+@@ -68,6 +69,7 @@ Given("Pat is a member of Nelson Paddling Club", async function () {
+ When(
+   "{word} sends the message {string} to Kootenay Mountaineering Club members",
+   async function (senderName, subject) {
++    await ensureKootenayMember(this, senderName);
+     await withMemberHarness(this, senderName, (member) =>
+       sendMemberMessageToKootenayMembers(member, senderName, subject)
+     );
+@@ -260,3 +262,30 @@ function parsePersonList(text) {
+     .map((name) => name.trim())
+     .filter(Boolean);
+ }
++
++async function ensureKootenayMember(world, personName) {
++  if (
++    world.clubs &&
++    world.clubs[kootenayClubName] &&
++    world.people &&
++    world.people[personName] &&
++    world.memberships &&
++    world.memberships[`${kootenayClubName}:${personName}`]
++  ) {
++    return;
++  }
++
++  await withStaffHarness(world, async (staff) => {
++    if (!staff.clubs || !staff.clubs[kootenayClubName]) {
++      await createClub(staff, kootenayClubName);
++    }
++
++    if (!staff.people || !staff.people[personName]) {
++      await createPerson(staff, personName, kootenayClubName);
++    }
++
++    if (!staff.memberships || !staff.memberships[`${kootenayClubName}:${personName}`]) {
++      await addMembers(staff, [personName], kootenayClubName);
++    }
++  });
++}
+diff --git a/acceptance-tests/features/step_definitions/person_email_address_steps.js b/acceptance-tests/features/step_definitions/person_email_address_steps.js
+new file mode 100644
+index 0000000..9370775
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/person_email_address_steps.js
+@@ -0,0 +1,262 @@
++const assert = require("node:assert/strict");
++const { Given, When, Then } = require("@cucumber/cucumber");
++const { expect: playwrightExpect } = require("@playwright/test");
++const {
++  addMembers,
++  createClub,
++  createPerson,
++  cssString,
++  kootenayClubName,
++  projectionPollIntervalMs,
++  projectionTimeoutMs,
++  testMailboxEmails,
++  updatePersonEmailAddresses
++} = require("../support/member_message");
++const {
++  assertReceivesSignInLink,
++  assertSignedInAsStaff,
++  followSignInLink,
++  requestSignInLinkForEmail
++} = require("../support/authentication");
++const { withStaffHarness } = require("../support/member_harness");
++
++Given("{word}'s primary email address is {string}", async function (personName, primaryEmail) {
++  await withStaffHarness(this, async (staff) => {
++    await ensurePersonEmailAddresses(staff, personName, [
++      { email: primaryEmail, isPrimary: true },
++      ...alternateEmailAddressesFor(staff, personName)
++    ]);
++  });
++});
++
++Given("{word}'s alternate email address is {string}", async function (personName, alternateEmail) {
++  await withStaffHarness(this, async (staff) => {
++    const current = personEmailAddressesFor(staff, personName);
++    const primary = current.find((emailAddress) => emailAddress.isPrimary) || {
++      email: defaultPrimaryEmailFor(personName),
++      isPrimary: true
++    };
++    const alternates = current.filter(
++      (emailAddress) => !emailAddress.isPrimary && emailAddress.email !== alternateEmail
++    );
++
++    await ensurePersonEmailAddresses(staff, personName, [
++      primary,
++      ...alternates,
++      { email: alternateEmail, isPrimary: false }
++    ]);
++  });
++});
++
++Then("{word} should receive a sign-in link at {string}", async function (personName, expectedEmail) {
++  await assertReceivesSignInLink(this, personName);
++  const request = this.signInRequests && this.signInRequests[personName];
++
++  assert.equal(request && request.email, expectedEmail);
++});
++
++Then("{word} should receive the email at {string}", async function (_personName, recipientEmail) {
++  await assertMessageEmailRecipient(this, recipientEmail);
++});
++
++Then("{word} should not receive the email at {string}", async function (_personName, recipientEmail) {
++  await assertNoMessageEmailRecipient(this, recipientEmail);
++});
++
++Given("{word} is signed in as Memba staff", async function (personName) {
++  await requestSignInLinkForEmail(this, staffEmailFor(personName), personName);
++  await assertReceivesSignInLink(this, personName);
++  await followSignInLink(this, personName);
++  await assertSignedInAsStaff(this, personName);
++});
++
++When(
++  "{word} creates a person named {word} with primary email {string} and alternate email {string}",
++  async function (_staffName, personName, primaryEmail, alternateEmail) {
++    await ensureStaffClub(this);
++    await createPerson(this, personName, kootenayClubName, {
++      emailAddresses: [
++        { email: primaryEmail, isPrimary: true },
++        { email: alternateEmail, isPrimary: false }
++      ]
++    });
++  }
++);
++
++Given(
++  "{word} has primary email {string} and alternate email {string}",
++  async function (personName, primaryEmail, alternateEmail) {
++    await ensurePersonEmailAddresses(this, personName, [
++      { email: primaryEmail, isPrimary: true },
++      { email: alternateEmail, isPrimary: false }
++    ]);
++  }
++);
++
++When(
++  "{word} makes {string} {word}'s primary email address",
++  async function (_staffName, newPrimaryEmail, personName) {
++    const nextEmailAddresses = personEmailAddressesFor(this, personName).map((emailAddress) => ({
++      email: emailAddress.email,
++      isPrimary: emailAddress.email === newPrimaryEmail
++    }));
++
++    assert.ok(
++      nextEmailAddresses.some((emailAddress) => emailAddress.isPrimary),
++      `Expected ${personName} to have known email address ${newPrimaryEmail}`
++    );
++
++    await updatePersonEmailAddresses(this, personName, kootenayClubName, nextEmailAddresses);
++  }
++);
++
++Then("{word}'s primary email address should be {string}", async function (personName, expectedEmail) {
++  const person = personFor(this, personName);
++  assert.equal(person.primaryEmail, expectedEmail);
++
++  await playwrightExpect(personRow(this, personName).locator('[data-testid="person-primary-email"]')).toContainText(
++    expectedEmail
++  );
++});
++
++Then("{word}'s alternate email addresses should include {string}", async function (personName, expectedEmail) {
++  const person = personFor(this, personName);
++  assert.ok(
++    person.alternateEmails.includes(expectedEmail),
++    `Expected ${personName}'s alternate emails to include ${expectedEmail}; saw ${person.alternateEmails.join(", ")}`
++  );
++
++  await playwrightExpect(personRow(this, personName).locator('[data-testid="person-alternate-emails"]')).toContainText(
++    expectedEmail
++  );
++});
++
++async function ensurePersonEmailAddresses(world, personName, emailAddresses) {
++  await ensureStaffClub(world);
++
++  if (world.people && world.people[personName]) {
++    await updatePersonEmailAddresses(world, personName, kootenayClubName, emailAddresses);
++  } else {
++    await createPerson(world, personName, kootenayClubName, { emailAddresses });
++  }
++}
++
++async function ensureStaffClub(world) {
++  if (!world.clubs || !world.clubs[kootenayClubName]) {
++    await createClub(world, kootenayClubName);
++  }
++}
++
++function personEmailAddressesFor(world, personName) {
++  const person = personFor(world, personName);
++
++  return person.emailAddresses && person.emailAddresses.length > 0
++    ? person.emailAddresses
++    : [{ email: person.email || person.primaryEmail, isPrimary: true }];
++}
++
++function alternateEmailAddressesFor(world, personName) {
++  if (!world.people || !world.people[personName]) {
++    return [];
++  }
++
++  return personEmailAddressesFor(world, personName).filter((emailAddress) => !emailAddress.isPrimary);
++}
++
++function personFor(world, personName) {
++  const person = world.people && world.people[personName];
++  assert.ok(person, `Expected ${personName} to be known in the scenario`);
++
++  return person;
++}
++
++function personRow(world, personName) {
++  const person = personFor(world, personName);
++
++  return world.page
++    .locator(`[data-testid="person-row"][data-person-id=${cssString(person.personId)}]`)
++    .last();
++}
++
++function staffEmailFor(personName) {
++  return `${String(personName).trim().toLowerCase()}@memba.io`;
++}
++
++function defaultPrimaryEmailFor(personName) {
++  return `${String(personName).trim().toLowerCase()}@example.test`;
++}
++
++async function assertMessageEmailRecipient(world, recipientEmail) {
++  const subject = world.lastMessageSubject;
++  assert.ok(subject, "Expected a club message to have been sent before checking mailbox delivery");
++
++  await waitForMessageEmailMatching(world, (email) => messageEmailMatches(email, subject, recipientEmail));
++}
++
++async function assertNoMessageEmailRecipient(world, recipientEmail) {
++  const subject = world.lastMessageSubject;
++  assert.ok(subject, "Expected a club message to have been sent before checking mailbox delivery");
++
++  const deadline = Date.now() + Math.min(1000, projectionTimeoutMs(world));
++
++  do {
++    const matchingEmail = newMessageEmails(world, await testMailboxEmails(world)).find((email) =>
++      messageEmailMatches(email, subject, recipientEmail)
++    );
++
++    assert.equal(
++      matchingEmail,
++      undefined,
++      `Expected no ${subject} email to ${recipientEmail}; saw ${JSON.stringify(mailboxEmailSummary(matchingEmail))}`
++    );
++
++    await delay(Math.min(100, projectionPollIntervalMs(world)));
++  } while (Date.now() <= deadline);
++}
++
++async function waitForMessageEmailMatching(world, predicate) {
++  const deadline = Date.now() + projectionTimeoutMs(world);
++  let emails = [];
++
++  do {
++    emails = newMessageEmails(world, await testMailboxEmails(world));
++    const matchingEmail = emails.find(predicate);
++
++    if (matchingEmail) {
++      return matchingEmail;
++    }
++
++    await delay(Math.min(projectionPollIntervalMs(world), Math.max(0, deadline - Date.now())));
++  } while (Date.now() <= deadline);
++
++  throw new Error(
++    `Timed out waiting for matching club-message email; saw ${JSON.stringify(emails.map(mailboxEmailSummary))}`
++  );
++}
++
++function newMessageEmails(world, emails) {
++  const previousIds = (world.mailboxEmailsBeforeSend || []).map(mailboxMessageId).filter(Boolean);
++
++  return emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
++}
++
++function messageEmailMatches(email, subject, recipientEmail) {
++  return (
++    email &&
++    email.subject === subject &&
++    Array.isArray(email.to) &&
++    email.to.some((recipient) => String(recipient).includes(recipientEmail))
++  );
++}
++
++function mailboxMessageId(email) {
++  return email && email.headers && email.headers["Message-ID"];
++}
++
++function mailboxEmailSummary(email) {
++  return email && { subject: email.subject, to: email.to, text_body: email.text_body };
++}
++
++function delay(ms) {
++  return new Promise((resolve) => setTimeout(resolve, ms));
++}
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index ffdf119..9ea3710 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -195,7 +195,7 @@ async function tryOpenStaffOnlyArea(world) {
+ 
+ async function assertSignedIn(world, personName) {
+   const person = personFromWorld(world, personName);
+-  await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${person.email}`);
++  await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${signedInEmailFor(world, personName, person)}`);
+ }
+ 
+ async function assertStillSignedIn(world, personName) {
+@@ -223,7 +223,7 @@ async function assertSignedInOnClubPage(world, personName) {
+   const person = personFromWorld(world, personName);
+   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
+   await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(
+-    `Signed in as ${person.email}`
++    `Signed in as ${signedInEmailFor(world, personName, person)}`
+   );
+   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
+ }
+@@ -288,6 +288,12 @@ function signInRequestFor(world, personName) {
+   return request;
+ }
+ 
++function signedInEmailFor(world, personName, person) {
++  const request = world.signInRequests && world.signInRequests[personName];
++
++  return (request && request.email) || person.email;
++}
++
+ function signInLinkFor(world, personName) {
+   const link = world.signInLinks && world.signInLinks[personName];
+   assert.ok(link, `Expected ${personName} to have received a sign-in link`);
+@@ -303,7 +309,7 @@ function signInEmailMatches(email, recipientEmail) {
+ }
+ 
+ function signInLinkFromTextBody(textBody) {
+-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
++  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:magic|sign-in)\/\S+/);
+   return match && match[0];
+ }
+ 
+diff --git a/acceptance-tests/features/support/member_harness.js b/acceptance-tests/features/support/member_harness.js
+index 0debafa..40b8943 100644
+--- a/acceptance-tests/features/support/member_harness.js
++++ b/acceptance-tests/features/support/member_harness.js
+@@ -218,7 +218,7 @@ function signInEmailMatches(email, recipientEmail) {
+ }
+ 
+ function signInLinkFromTextBody(textBody) {
+-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
++  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:magic|sign-in)\/\S+/);
+   return match && match[0];
+ }
+ 
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 7843778..c4dc624 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -503,11 +503,16 @@ async function createPeople(world, names, { expect = playwrightExpect } = {}) {
+   return world;
+ }
+ 
+-async function createPerson(world, name, clubName = kootenayClubName, { email, expect = playwrightExpect } = {}) {
++async function createPerson(
++  world,
++  name,
++  clubName = kootenayClubName,
++  { email, emailAddresses, expect = playwrightExpect } = {}
++) {
+   ensureState(world);
+ 
+   await openClub(world, clubName, { expect });
+-  await createPersonOnCurrentClubPage(world, name, clubName, { email, expect });
++  await createPersonOnCurrentClubPage(world, name, clubName, { email, emailAddresses, expect });
+ 
+   return world;
+ }
+@@ -516,10 +521,11 @@ async function createPersonOnCurrentClubPage(
+   world,
+   name,
+   clubName,
+-  { email = emailFor(name), expect = playwrightExpect, timeoutMs } = {}
++  { email, emailAddresses, expect = playwrightExpect, timeoutMs } = {}
+ ) {
+   const club = world.clubs[clubName];
+   assert.ok(club, `Expected ${clubName} to have been created before creating ${name}`);
++  const normalizedEmailAddresses = personEmailAddressSet(name, { email, emailAddresses });
+ 
+   const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
+   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
+@@ -536,7 +542,7 @@ async function createPersonOnCurrentClubPage(
+ 
+   await browserInteraction(`submit person creation form for ${name}`, async () => {
+     await world.page.getByLabel("Person name").fill(name);
+-    await world.page.getByLabel("Email address 0").fill(email);
++    await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
+     await world.page.getByRole("button", { name: "Create person" }).click();
+   });
+   await waitForProjectedCount(
+@@ -560,17 +566,119 @@ async function createPersonOnCurrentClubPage(
+     { expect }
+   );
+ 
+-  world.people[name] = personState({ email, name, personId });
++  world.people[name] = personState({ emailAddresses: normalizedEmailAddresses, name, personId });
++}
++
++async function updatePersonEmailAddresses(
++  world,
++  name,
++  clubName = kootenayClubName,
++  emailAddresses,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  ensureState(world);
++
++  const club = world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to have been created before editing ${name}`);
++
++  const person = world.people[name];
++  assert.ok(person && person.personId, `Expected ${name} to have been created before editing email addresses`);
++
++  const normalizedEmailAddresses = personEmailAddressSet(name, { emailAddresses });
++
++  await browserInteraction(`visit edit-person page for ${name}`, () =>
++    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/people/${person.personId}/edit`))
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.getByRole("heading", { name: `Edit ${name}` }),
++    `edit person heading for ${name}`,
++    { expect, timeoutMs }
++  );
++
++  await browserInteraction(`submit person email-address edit form for ${name}`, async () => {
++    await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
++    await world.page.getByRole("button", { name: "Save person" }).click();
++  });
++  await waitForProjectedVisible(
++    world,
++    rowByData(world.page, "person-row", "data-person-id", person.personId),
++    `projected edited person row ${person.personId}`,
++    { expect }
++  );
++
++  world.people[name] = personState({
++    emailAddresses: normalizedEmailAddresses,
++    name,
++    personId: person.personId
++  });
++
++  return world;
++}
++
++async function fillPersonEmailAddressRows(
++  world,
++  emailAddresses,
++  { expect = playwrightExpect, timeoutMs } = {}
++) {
++  const existingRows = world.page.locator('[data-testid="person-email-row"]');
++  const existingRowCount = await existingRows.count();
++
++  for (const [index, emailAddress] of emailAddresses.entries()) {
++    if (index >= existingRowCount) {
++      await world.page.getByRole("button", { name: "Add email address" }).click();
++      await waitForProjectedVisible(
++        world,
++        world.page.getByLabel(`Email address ${index}`, { exact: true }),
++        `email address row ${index}`,
++        { expect, timeoutMs }
++      );
++    }
++
++    await world.page.getByLabel(`Email address ${index}`, { exact: true }).fill(emailAddress.email);
++
++    if (emailAddress.isPrimary) {
++      await world.page.locator(`#person-primary-radio-${index}`).click();
++    }
++  }
++}
++
++function personEmailAddressSet(name, { email, emailAddresses } = {}) {
++  const rawEmailAddresses = emailAddresses || [{ email: email || emailFor(name), isPrimary: true }];
++  const normalizedEmailAddresses = rawEmailAddresses.map((emailAddress) => {
++    const normalizedEmail = String(emailAddress.email || "").trim();
++    const isPrimary = Boolean(
++      emailAddress.isPrimary ?? emailAddress.is_primary ?? emailAddress.primary ?? emailAddress["primary?"]
++    );
++
++    assert.ok(normalizedEmail, `Expected ${name} email-address entries to include a non-blank email`);
++
++    return { email: normalizedEmail, isPrimary };
++  });
++
++  assert.equal(
++    normalizedEmailAddresses.filter((emailAddress) => emailAddress.isPrimary).length,
++    1,
++    `Expected exactly one primary email address for ${name}`
++  );
++
++  return normalizedEmailAddresses;
+ }
+ 
+-function personState({ email, name, personId }) {
++function personState({ emailAddresses, name, personId }) {
++  const primaryEmailAddress = emailAddresses.find((emailAddress) => emailAddress.isPrimary);
++  assert.ok(primaryEmailAddress, `Expected ${name} to have one primary email address`);
++  const alternateEmails = emailAddresses
++    .filter((emailAddress) => !emailAddress.isPrimary)
++    .map((emailAddress) => emailAddress.email);
++
+   return {
+-    alternateEmails: [],
+-    email,
+-    emailAddresses: [{ email, isPrimary: true }],
++    alternateEmails,
++    email: primaryEmailAddress.email,
++    emailAddresses,
+     name,
+     personId,
+-    primaryEmail: email
++    primaryEmail: primaryEmailAddress.email
+   };
+ }
+ 
+@@ -1663,6 +1771,7 @@ module.exports = {
+   sendMessageToKootenayMembers,
+   testMailboxEmails,
+   trySendMemberMessageToKootenayMembers,
++  updatePersonEmailAddresses,
+   visitClubsIndex,
+   waitForMailboxEmails
+ };
+diff --git a/acceptance-tests/features/support/world.js b/acceptance-tests/features/support/world.js
+index 98d4b05..c7b44e8 100644
+--- a/acceptance-tests/features/support/world.js
++++ b/acceptance-tests/features/support/world.js
+@@ -59,6 +59,7 @@ Before(async function ({ pickle } = {}) {
+     );
+   });
+ 
++  await resetAcceptanceState(this);
+ });
+ 
+ After(async function ({ result } = {}) {
+@@ -103,3 +104,15 @@ After(async function ({ result } = {}) {
+     await this.browser.close();
+   }
+ });
++
++async function resetAcceptanceState(world) {
++  const response = await world.context.request.post(
++    new URL("/dev/test-support/reset", `${world.baseUrl}/`).toString()
++  );
++
++  if (response.status() !== 204) {
++    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
++
++    throw new Error(`Expected acceptance reset to return 204, got ${response.status()}: ${body}`);
++  }
++}
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 5c48670..9a0160b 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -19,8 +19,9 @@ test("default browser Cucumber profile selects all non-deferred web-backed share
+   assert.deepEqual(selectedFeatureNames, [
+     "authentication.feature",
+     "homepage.feature",
++    "memba_staff_email_deliverability.feature",
+     "member_message_deliverability.feature",
+-    "operator_email_deliverability.feature"
++    "person_email_addresses.feature"
+   ]);
+ });
+ 
+@@ -28,7 +29,6 @@ test("only explicitly deferred features are skipped from the browser run", () =>
+   const skippedFeatures = browserSkippedFeatures();
+ 
+   assert.deepEqual(skippedFeatures.map((feature) => feature.name), [
+-    "person_email_addresses.feature",
+     "staff_club_slugs.feature"
+   ]);
+ });
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 08adcde..cd4232f 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -17,5 +17,5 @@
+ - [x] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+ - [x] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+ - [x] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+-- [ ] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
++- [x] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+ - [ ] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index edb4053..a645d1d 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -9,6 +9,18 @@ defmodule MembaWeb.DevTestSupportController do
+   alias Memba.Accounts.SignInToken
+   alias Memba.Repo
+ 
++  @projection_versions_table :projection_versions
++  @projectors [
++    Memba.Membership.Projectors.Club,
++    Memba.Membership.Projectors.Membership,
++    Memba.Membership.Projectors.Person,
++    Memba.Messaging.Projectors.Message,
++    Memba.Messaging.Projectors.EmailDelivery,
++    Memba.Messaging.Projectors.MemberEmailDelivery,
++    Memba.Messaging.Projectors.MembaStaffEmailDelivery
++  ]
++  @public_reset_tables [:auth_sign_in_tokens]
++
+   @messaging_email_delivery_providers %{
+     "fake" => Memba.Messaging.EmailDeliveryProviders.Fake,
+     "local" => Memba.Messaging.EmailDeliveryProviders.Local,
+@@ -37,6 +49,19 @@ defmodule MembaWeb.DevTestSupportController do
+     send_resp(conn, :no_content, "")
+   end
+ 
++  def reset_acceptance_state(conn, _params) do
++    projector_child_ids = stop_event_sourced_projectors!()
++
++    try do
++      reset_event_store!()
++      reset_public_tables!()
++    after
++      start_event_sourced_projectors!(projector_child_ids)
++    end
++
++    send_resp(conn, :no_content, "")
++  end
++
+   def configure_messaging_email_delivery_provider(conn, %{"provider" => provider_name}) do
+     with {:ok, provider} <- Map.fetch(@messaging_email_delivery_providers, provider_name),
+          true <- Code.ensure_loaded?(provider) do
+@@ -50,4 +75,79 @@ defmodule MembaWeb.DevTestSupportController do
+         |> json(%{error: "unknown messaging email delivery provider"})
+     end
+   end
++
++  defp stop_event_sourced_projectors! do
++    for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
++        module in @projectors do
++      if is_pid(pid) do
++        :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
++      end
++
++      child_id
++    end
++  end
++
++  defp start_event_sourced_projectors!(child_ids) do
++    Enum.each(child_ids, fn child_id ->
++      case Supervisor.restart_child(Memba.Supervisor, child_id) do
++        {:ok, _pid} -> :ok
++        {:ok, _pid, _info} -> :ok
++        {:error, :running} -> :ok
++      end
++    end)
++  end
++
++  defp reset_event_store! do
++    schema = event_store_schema()
++
++    Repo.transaction(fn ->
++      Repo.query!(~s(SET LOCAL search_path TO #{quote_identifier(schema)};))
++      Repo.query!(~s(SET LOCAL eventstore.reset TO 'on';))
++
++      Repo.query!("""
++      TRUNCATE TABLE snapshots, subscriptions, stream_events, streams, events
++      RESTART IDENTITY;
++      """)
++
++      Repo.query!("""
++      INSERT INTO streams (stream_id, stream_uuid, stream_version)
++      VALUES (0, '$all', 0);
++      """)
++    end)
++  end
++
++  defp reset_public_tables! do
++    tables =
++      :memba
++      |> Application.get_env(:event_sourced_projection_tables, [])
++      |> List.wrap()
++      |> then(fn tables -> @public_reset_tables ++ [@projection_versions_table | tables] end)
++      |> Enum.uniq()
++
++    if tables != [] do
++      table_names =
++        tables
++        |> Enum.map(&qualified_public_table_name/1)
++        |> Enum.join(", ")
++
++      Repo.query!("TRUNCATE TABLE #{table_names} RESTART IDENTITY CASCADE;")
++    end
++  end
++
++  defp event_store_schema do
++    Memba.EventStore.config()
++    |> Keyword.fetch!(:schema)
++    |> to_string()
++  end
++
++  defp qualified_public_table_name(table), do: ~s(public.#{quote_identifier(table)})
++
++  defp quote_identifier(identifier) do
++    escaped =
++      identifier
++      |> to_string()
++      |> String.replace(~s("), ~s(""))
++
++    ~s("#{escaped}")
++  end
+ end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 81ceba8..cfb6335 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -105,6 +105,8 @@ defmodule MembaWeb.Router do
+ 
+       post "/auth-links/expire", DevTestSupportController, :expire_auth_link
+ 
++      post "/reset", DevTestSupportController, :reset_acceptance_state
++
+       post "/messaging-delivery-provider",
+            DevTestSupportController,
+            :configure_messaging_email_delivery_provider
