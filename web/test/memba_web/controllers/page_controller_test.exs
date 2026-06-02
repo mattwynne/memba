@@ -97,6 +97,38 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "Signed in as"
   end
 
+  test "GET / on a public club subdomain shows that club marketing page", %{conn: conn} do
+    club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.clubs.memba.io")
+      |> get(~p"/")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Welcome to Kootenay Mountaineering Club"
+
+    assert html
+           |> LazyHTML.query("#club-marketing-page[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+  end
+
+  test "GET / on an unknown public club subdomain returns not found", %{conn: conn} do
+    _club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    conn =
+      conn
+      |> Map.put(:host, "unknown.clubs.memba.io")
+      |> get(~p"/")
+
+    response = html_response(conn, 404)
+
+    refute response =~ "Kootenay Mountaineering Club"
+    refute response =~ "Keep every member in the loop."
+  end
+
   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
     club =
       create_active_member(
@@ -434,7 +466,8 @@ defmodule MembaWeb.PageControllerTest do
   defp create_club(attrs) do
     Repo.insert!(%Club{
       club_id: Ecto.UUID.generate(),
-      name: Keyword.fetch!(attrs, :name)
+      name: Keyword.fetch!(attrs, :name),
+      slug: Keyword.get(attrs, :slug)
     })
   end
 
