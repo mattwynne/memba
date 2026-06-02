@@ -10,7 +10,7 @@
 - [x] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
 - [x] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
 - [x] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
-- [ ] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+- [x] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
 - [ ] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
 - [ ] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
 - [ ] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
