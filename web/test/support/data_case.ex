@@ -24,6 +24,7 @@ defmodule Memba.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import Memba.DataCase
+      import Memba.MembershipFixtures
     end
   end
 

@@ -175,7 +175,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     if is_nil(Membership.get_club(club_id)) do
       assert :ok =
                Membership.create_club(
-                 %{club_id: club_id, name: "Kootenay Mountaineering Club"},
+                 membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
                  consistency: :strong
                )
     end

@@ -206,10 +206,12 @@ class FakePage {
   applyClickSideEffect(role, name) {
     if (name === "Create club") {
       const clubName = this.fields["Club name"];
+      const clubSlug = this.fields["Club slug"];
       const clubId = idFor("club", clubName, this.rows.clubs.length + 1);
       this.rows.clubs.push(rowWithAttrs({
         "data-club-id": clubId,
-        "data-club-name": clubName
+        "data-club-name": clubName,
+        "data-club-slug": clubSlug
       }));
     }
 
@@ -449,7 +451,8 @@ test("creating a club drives /admin/clubs and stores the generated club id from 
   const page = new FakePage();
   page.rows.clubs.push(rowWithAttrs({
     "data-club-id": "club-existing-1",
-    "data-club-name": kootenayClubName
+    "data-club-name": kootenayClubName,
+    "data-club-slug": "kootenay-mountaineering-club"
   }));
   const expectations = [];
   const world = worldWithPage(page);
@@ -459,13 +462,29 @@ test("creating a club drives /admin/clubs and stores the generated club id from 
   assert.deepEqual(page.actions, [
     ["goto", "http://127.0.0.1:4444/admin/clubs"],
     ["fill", "Club name", kootenayClubName],
+    ["fill", "Club slug", "kootenay-mountaineering-club-2"],
     ["click", "button", { name: "Create club" }]
   ]);
   assert.deepEqual(world.clubs[kootenayClubName], {
     clubId: "club-kootenay-mountaineering-club-2",
-    name: kootenayClubName
+    name: kootenayClubName,
+    slug: "kootenay-mountaineering-club-2"
   });
   assert.deepEqual(expectations.map((expectation) => expectation[0]), ["count", "visible"]);
+});
+
+test("creating a club accepts and stores an explicit slug for acceptance setup", async () => {
+  const page = new FakePage();
+  const world = worldWithPage(page);
+
+  await createClub(world, kootenayClubName, { expect: fakeExpect([]), slug: "kmc" });
+
+  assert.ok(page.actions.some((action) => action[0] === "fill" && action[1] === "Club slug" && action[2] === "kmc"));
+  assert.deepEqual(world.clubs[kootenayClubName], {
+    clubId: "club-kootenay-mountaineering-club-1",
+    name: kootenayClubName,
+    slug: "kmc"
+  });
 });
 
 test("browser command projection waits use bounded Playwright assertion timeouts", async () => {
@@ -514,7 +533,13 @@ test("creating people and members uses accessible form labels and keeps browser 
   const page = new FakePage();
   const expectations = [];
   const world = worldWithPage(page);
-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
 
   await createPeople(world, ["Alice", "Bob"], { expect: fakeExpect(expectations) });
   await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
@@ -551,7 +576,13 @@ test("sending a Kootenay member message drives the club form and opens the real 
   const page = new FakePage();
   const expectations = [];
   const world = worldWithPage(page);
-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
   world.people = { Alice: { personId: "person-alice-1" } };
 
   await sendMessageToKootenayMembers(world, "Alice", "Trip planning night", {
@@ -578,7 +609,13 @@ test("member send flow opens compose from club home and stores the new message",
   const page = new FakePage();
   const expectations = [];
   const world = worldWithPage(page);
-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
   world.people = { Alice: { personId: "person-alice-1" } };
 
   await sendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
@@ -620,7 +657,13 @@ test("member failed-send flow stays on compose failure state with support guidan
   const expectations = [];
   const world = worldWithPage(page);
   page.sendUnavailable = true;
-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
   world.people = { Alice: { personId: "person-alice-1" } };
 
   await trySendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
@@ -653,7 +696,13 @@ test("member club home opening waits on the stable member home container", async
   const page = new FakePage();
   const expectations = [];
   const world = worldWithPage(page);
-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
 
   await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });
 
@@ -783,7 +832,13 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
   );
   const expectations = [];
   const world = worldWithPage(page);
-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kootenay-mountaineering-club"
+    }
+  };
   world.lastMessageSubject = "Trip planning night";
   world.messages = {
     "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }

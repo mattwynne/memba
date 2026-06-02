@@ -14,6 +14,7 @@ defmodule MembaWeb.FeatureCase do
       import Phoenix.ConnTest
       import PhoenixTest
       import MembaWeb.FeatureCase
+      import Memba.MembershipFixtures
     end
   end
 

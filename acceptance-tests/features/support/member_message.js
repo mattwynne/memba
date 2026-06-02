@@ -4,6 +4,7 @@ const { expect: playwrightExpect } = require("@playwright/test");
 
 const kootenayClubName = "Kootenay Mountaineering Club";
 const nelsonClubName = "Nelson Paddling Club";
+const maxClubSlugLength = 32;
 const defaultProjectionPollIntervalMs = 250;
 const defaultProjectionTimeoutMs = 10000;
 
@@ -25,6 +26,31 @@ function emailFor(name) {
     .replace(/^\.+|\.+$/g, "");
 
   return `${normalizedName}@example.test`;
+}
+
+function defaultClubSlug(clubName) {
+  return String(clubName || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, maxClubSlugLength)
+    .replace(/^-+|-+$/g, "");
+}
+
+function clubSlugForOccurrence(clubName, occurrence) {
+  const base = defaultClubSlug(clubName) || "club";
+
+  if (occurrence <= 1) {
+    return base;
+  }
+
+  const suffix = `-${occurrence}`;
+  const trimmedBase = base
+    .slice(0, maxClubSlugLength - suffix.length)
+    .replace(/^-+|-+$/g, "");
+
+  return `${trimmedBase || "club"}${suffix}`;
 }
 
 function postmarkPayloadForStatus({
@@ -422,16 +448,18 @@ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeou
   );
 }
 
-async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
+async function createClub(world, clubName, { expect = playwrightExpect, slug } = {}) {
   ensureState(world);
 
   await visitClubsIndex(world);
 
   const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
   const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
+  const requestedSlug = slug || clubSlugForOccurrence(clubName, previousClubIds.length + 1);
 
   await browserInteraction(`submit club creation form for ${clubName}`, async () => {
     await world.page.getByLabel("Club name").fill(clubName);
+    await world.page.getByLabel("Club slug").fill(requestedSlug);
     await world.page.getByRole("button", { name: "Create club" }).click();
   });
   await waitForProjectedCount(
@@ -454,8 +482,11 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
     `projected club row ${clubId}`,
     { expect }
   );
+  const clubSlug =
+    (await rowByData(world.page, "club-row", "data-club-id", clubId).getAttribute("data-club-slug")) ||
+    requestedSlug;
 
-  world.clubs[clubName] = { clubId, name: clubName };
+  world.clubs[clubName] = { clubId, name: clubName, slug: clubSlug };
 
   return world;
 }

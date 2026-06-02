@@ -1,6 +1,6 @@
-defmodule Memba.Membership.Events.ClubCreated do
+defmodule Memba.Membership.Events.ClubUpdated do
   @moduledoc """
-  Event raised when a club has been created.
+  Event raised when a club's staff-managed display name or public slug changes.
   """
 
   @derive Jason.Encoder

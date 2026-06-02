@@ -226,10 +226,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     person_id = Ecto.UUID.generate()
 
     Repo.get(Club, club_id) ||
-      Repo.insert!(%Club{
+      insert_membership_club!(
         club_id: club_id,
         name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
-      })
+      )
 
     Repo.insert!(%Person{
       person_id: person_id,

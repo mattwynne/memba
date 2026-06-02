@@ -4,6 +4,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -15,7 +16,13 @@ defmodule Memba.Membership.PublicApiTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              events: [%ClubCreated{club_id: ^club_id, name: "Kootenay Mountaineering Club"}]
+              events: [
+                %ClubCreated{
+                  club_id: ^club_id,
+                  name: "Kootenay Mountaineering Club",
+                  slug: "kootenay-mountaineering-club"
+                }
+              ]
             }} =
              Membership.create_club(
                %{"club_id" => club_id, "name" => " Kootenay Mountaineering Club "},
@@ -25,6 +32,128 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert %ClubProjection{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
              Membership.get_club(club_id)
+  end
+
+  test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
+    club_id = Ecto.UUID.generate()
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              events: [
+                %ClubCreated{
+                  club_id: ^club_id,
+                  name: "Kootenay Mountaineering Club",
+                  slug: "kmc"
+                }
+              ]
+            }} =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:error, :invalid_format} =
+             Membership.create_club(%{
+               club_id: Ecto.UUID.generate(),
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc club!"
+             })
+  end
+
+  test "create_club/2 rejects duplicate slugs before dispatching a new club" do
+    existing_club_id = Ecto.UUID.generate()
+    duplicate_club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: existing_club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert {:error, :slug_taken} =
+             Membership.create_club(
+               %{
+                 club_id: duplicate_club_id,
+                 name: "KMC Duplicate Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
+
+    assert %ClubProjection{club_id: ^existing_club_id, slug: "kmc"} =
+             Membership.get_club_by_slug("kmc")
+
+    assert is_nil(Membership.get_club(duplicate_club_id))
+  end
+
+  test "update_club/2 edits a projected club name and slug" do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              events: [
+                %ClubUpdated{
+                  club_id: ^club_id,
+                  name: "KMC Alpine Club",
+                  slug: "kmc-alpine"
+                }
+              ]
+            }} =
+             Membership.update_club(
+               %{
+                 "club_id" => club_id,
+                 "name" => " KMC Alpine Club ",
+                 "slug" => "kmc-alpine"
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %ClubProjection{
+             club_id: ^club_id,
+             name: "KMC Alpine Club",
+             slug: "kmc-alpine"
+           } = Membership.get_club(club_id)
+  end
+
+  test "update_club/2 rejects invalid and duplicate slugs" do
+    kootenay_id = Ecto.UUID.generate()
+    nelson_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: kootenay_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: nelson_id, name: "Nelson Cycling Club", slug: "nelson-cycling"},
+               consistency: :strong
+             )
+
+    assert {:error, :invalid_format} =
+             Membership.update_club(%{
+               club_id: kootenay_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "KMC Club!"
+             })
+
+    assert {:error, :slug_taken} =
+             Membership.update_club(%{
+               club_id: kootenay_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "nelson-cycling"
+             })
   end
 
   test "create_person/2 dispatches CreatePerson through the Membership context" do
@@ -58,7 +187,7 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert :ok =
              Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club"},
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
                consistency: :strong
              )
 

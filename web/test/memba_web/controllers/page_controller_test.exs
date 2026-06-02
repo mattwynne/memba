@@ -137,6 +137,37 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "Signed in as pat@memba.io"
   end
 
+  test "GET / on a public club subdomain shows that club public page", %{conn: conn} do
+    club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    conn =
+      conn
+      |> Map.put(:host, "kmc.clubs.memba.io")
+      |> get(~p"/")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Welcome to Kootenay Mountaineering Club"
+
+    assert html
+           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+  end
+
+  test "GET / on an unknown public club subdomain returns not found", %{conn: conn} do
+    _club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    conn =
+      conn
+      |> Map.put(:host, "unknown.clubs.memba.io")
+      |> get(~p"/")
+
+    response = html_response(conn, 404)
+
+    refute response =~ "Kootenay Mountaineering Club"
+  end
+
   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
     club =
       create_active_member(
@@ -485,10 +516,7 @@ defmodule MembaWeb.PageControllerTest do
   end
 
   defp create_club(attrs) do
-    Repo.insert!(%Club{
-      club_id: Ecto.UUID.generate(),
-      name: Keyword.fetch!(attrs, :name)
-    })
+    insert_membership_club!(attrs)
   end
 
   defp create_active_member(attrs) do
@@ -498,10 +526,10 @@ defmodule MembaWeb.PageControllerTest do
 
     club =
       Repo.get(Club, club_id) ||
-        Repo.insert!(%Club{
+        insert_membership_club!(
           club_id: club_id,
           name: club_name
-        })
+        )
 
     Repo.insert!(%Person{
       person_id: person_id,

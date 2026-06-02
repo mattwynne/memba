@@ -135,7 +135,7 @@ defmodule Memba.AccountsTest do
 
     assert :ok =
              Membership.create_club(
-               %{club_id: club_id, name: Keyword.fetch!(attrs, :club_name)},
+               membership_club_attrs(club_id: club_id, name: Keyword.fetch!(attrs, :club_name)),
                consistency: :strong
              )
 

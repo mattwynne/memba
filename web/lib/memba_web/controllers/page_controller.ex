@@ -4,8 +4,20 @@ defmodule MembaWeb.PageController do
   alias Memba.Membership
   alias MembaWeb.IdentityAuth
 
-  def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
-      when not is_nil(identity) do
+  @public_club_host_suffix ".clubs.memba.io"
+
+  def home(conn, params) do
+    case public_club_slug_from_host(conn.host) do
+      {:ok, slug} -> home_for_public_club_slug(conn, slug)
+      :error -> home_for_params(conn, params)
+    end
+  end
+
+  defp home_for_params(
+         %{assigns: %{current_identity: identity}} = conn,
+         %{"club_id" => club_id}
+       )
+       when not is_nil(identity) do
     cond do
       is_nil(Membership.get_club(club_id)) ->
         not_found(conn)
@@ -23,14 +35,14 @@ defmodule MembaWeb.PageController do
     end
   end
 
-  def home(conn, %{"club_id" => club_id}) do
+  defp home_for_params(conn, %{"club_id" => club_id}) do
     case Membership.get_club(club_id) do
       nil -> not_found(conn)
       _club -> render_public_club_page(conn, club_id)
     end
   end
 
-  def home(conn, _params) do
+  defp home_for_params(conn, _params) do
     page_title =
       if conn.assigns.current_identity do
         "Your clubs"
@@ -41,6 +53,29 @@ defmodule MembaWeb.PageController do
     conn
     |> assign(:page_title, page_title)
     |> render(:home)
+  end
+
+  defp home_for_public_club_slug(conn, slug) do
+    case Membership.get_club_by_slug(slug) do
+      nil -> not_found(conn)
+      club -> render_public_club_page(conn, club.club_id)
+    end
+  end
+
+  defp public_club_slug_from_host(host) when is_binary(host) do
+    host = host |> String.downcase() |> String.trim_trailing(".")
+
+    if String.ends_with?(host, @public_club_host_suffix) do
+      host
+      |> String.trim_trailing(@public_club_host_suffix)
+      |> String.split(".", parts: 2)
+      |> case do
+        [slug | _rest] when slug != "" -> {:ok, slug}
+        _no_slug -> :error
+      end
+    else
+      :error
+    end
   end
 
   def about(conn, _params) do
