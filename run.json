@@ -1034,7 +1034,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T22:22:07.167077251Z",
-  "last_event_at": "2026-06-02T22:25:41.571153847Z",
+  "last_event_at": "2026-06-02T22:25:46.365117201Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3238,9 +3238,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 137,
       "checkpoint": {
-        "timestamp": "2026-06-02T22:25:43.345692066Z",
+        "timestamp": "2026-06-02T22:25:46.364994932Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -3259,152 +3259,111 @@
         ],
         "node_retries": {},
         "context_values": {
-          "thread.start.current_node": "read_plan_001_060",
-          "thread.read_plan_061_120.current_node": "read_plan_121_180",
-          "current_node": "publish_ready",
-          "internal.retry_count.synthesize": 0,
-          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
-          "thread.gemini_review.current_node": "claude_review",
-          "internal.retry_count.read_plan_061_120": 0,
-          "failure_signature": "",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "internal.retry_count.synthesis_gate": 0,
-          "thread.read_plan_241_300.current_node": "read_plan_301_360",
-          "internal.retry_count.gemini_review": 0,
-          "plan_needs_fix": false,
           "response.claude_review": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan could make more explicit which Postmark capabilities are already implemented (outbound member messages from iteration 008), which need implementation (inbound email), and which need verification/testing (auth email, rejection email paths). This is inferable from \"verify or add\" language but not completely explicit.\n\n2. **Dependency precision**: The plan says \"start after iteration 019\" but could be more explicit: \"This iteration cannot start until iteration 019 is delivered AND inbound email with Resend has been observed working in production.\" The background implies this, but stating it explicitly in the implementation plan would remove ambiguity.\n\n3. **Effort indication**: The plan doesn't include an estimate or complexity signal. This appears to be a 2-4 day technical slice but isn't stated.\n\nThese improvements would enhance clarity but do not block implementation.\n\n## Smallest Viable Iteration\n\n**This plan already represents the smallest viable iteration for the stated goal.**\n\nThe goal is enabling Matt to cut production email over to Postmark with a documented runbook and rollback path. To achieve this safely, the iteration must:\n\n- Add Postmark inbound email support (the main new capability)\n- Verify Postmark outbound member messages still work correctly\n- Verify Postmark auth email configuration and behavior\n- Verify rejection emails work through Postmark\n- Keep Resend as a tested fallback\n- Document the complete cutover and rollback procedures\n\nAny smaller scope would leave an incomplete migration that cannot be safely executed. You cannot migrate only some email types while maintaining the member-facing address `<club-slug>@clubs.memba.io`.\n\nThe plan correctly excludes actual production changes (out of scope for delivery) and new features (out of scope for this migration).\n\n## Required Plan Edits\n\n**None.**\n\nThe plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe plan includes a comprehensive validation strategy (lines 121-147):\n\n**Automated validation:**\n- Focused tests for Postmark inbound parsing/translation\n- Regression tests for provider-neutral API (iteration 019)\n- Regression tests for Resend fallback\n- Tests for Postmark outbound metadata and delivery-status correlation\n- Tests for Postmark auth configuration and error handling\n- `dev check` passing\n\n**Manual validation:**\nA 7-step smoke test covering:\n1. Postmark dashboard/DNS/webhook configuration verification\n2. Production secrets correctly set for Postmark\n3. Magic-link auth email delivery and sign-in flow\n4. Outbound member message delivery and delivery-status webhook updates\n5. Inbound club messages from active members\n6. Rejection emails for unsupported senders/attachments\n7. Rollback path verification (Resend secrets/webhooks still available)\n\nThis validation plan is sufficient to prove:\n- All email types work through Postmark\n- Existing behavior is preserved\n- Resend fallback remains functional\n- Matt can safely perform the production cutover\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✓\n\n**Goal:** \"After this iteration, Matt can manually cut production over to Postmark for member-message outbound delivery, inbound club-message email, rejection emails, and magic-link authentication using a documented runbook, while keeping Resend available as a rollback/fallback provider.\"\n\n- Clear beneficiary: Matt (operator)\n- Clear outcome: Can perform manual production cutover\n- Explicit about what is enabled vs. executed\n- User-facing behavior unchanged (technical/engineering iteration)\n\n### 2. Scope Focus ✓\n\n**In scope:**\n- Postmark inbound email support for club messages\n- Provider-neutral translation of Postmark payloads\n- Preservation of iteration 019 behaviors (authorization, rejection, idempotency)\n- Outbound member-message delivery via Postmark (verification)\n- Magic-link auth via Postmark (verification)\n- Rejection email handling via Postmark\n- Complete operational documentation and runbook\n- Automated tests\n- Resend fallback preservation\n\n**Out of scope:**\n- Actual production cutover (Matt performs manually)\n- Business rule changes\n- New inbound email features\n- Removing Resend support\n- Webhook authentication expansion\n\nThe scope is coherent, focused on migration enablement, and appropriately sized. It addresses all email types in a single slice to enable a complete migration while keeping behavior unchanged.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n\n**Acceptance criteria** (lines 61-120): Concrete, testable, and comprehensive:\n- Postmark inbound parsing/translation works\n- Sender authorization preserved\n- Attachments/non-plain-text rejected appropriately\n- Idempotency handling works\n- Provider selection configurable for all email types\n- Configuration failures are clear\n- Resend remains selectable for rollback\n- Documentation specifies exact variables/secrets/setup\n- Manual smoke tests documented\n- Local dev remains deterministic\n- `dev check` passes\n\nCovers happy paths, edge cases, error states, configuration, and rollback.\n\n**BDD decision** (lines 001-060): Explicitly addressed with clear rationale:\n- Iteration type: Technical/engineering\n- User behavior unchanged\n- Existing acceptance scenarios (iteration 019) already express the behavior\n- Provider plumbing better tested with integration/unit tests\n- No new Gherkin scenarios needed\n\nThis decision is appropriate and well-justified.\n\n**Business decisions** (lines 061-120): All resolved during planning:\n- Migrate all email paths to Postmark (not just club messages)\n- Keep `<club-slug>@clubs.memba.io` unchanged\n- Delivery prepares code/docs only; Matt performs cutover manually\n- Preserve Resend as tested fallback\n\n### 4. Implementation Plan and Technical Decisions ✓\n\n**Implementation plan** (lines 061-120): 16 detailed, ordered steps:\n1. Start after iteration 019 completion and observation\n2. Inspect iteration 019's provider-neutral API/idempotency/tests\n3. Inspect existing Postmark capabilities\n4. Determine Postmark inbound routing approach\n5. Add Postmark inbound parser/controller\n6. Reuse provider-neutral command/API\n7. Add Postmark idempotency support\n8. Add tests for Postmark inbound\n9. Verify/add tests for Postmark outbound metadata\n10. Verify/add tests for Postmark auth configuration\n11. Verify rejection email delivery\n12. Update `docs/postmark-email.md`\n13. Update/add runbook documentation\n14. Update ADRs as needed\n15. Run targeted tests\n16. Run `dev check`\n\nNames specific files (`docs/postmark-email.md`, `docs/human-todo.md`), modules (inbound parser/controller, provider-neutral API), and integration points (delivery-status webhooks, auth email configuration).\n\n**Technical decisions** (lines 121-180): Appropriately scoped as implementation-time investigation questions:\n- Postmark inbound payload shape and idempotency field\n- Routing approach (separate vs. dispatching webhook route)\n- Domain/MX setup for `clubs.memba.io`\n- Attachment metadata availability\n- Provider-specific inbound authentication (if available and non-disruptive)\n\nThese are discovery questions requiring Postmark API inspection, not blocking design decisions.\n\n### 5. Expected Capability and Validation ✓\n\n**New capability** (lines 121-180):\n\"Memba can receive, send, and operationally validate all production email paths through Postmark while preserving Resend as a fallback. Matt has a concrete runbook for a manual production cutover and rollback.\"\n\nClear before/after state:\n- Before: Resend for inbound; Postmark for outbound but not fully validated/documented\n- After: All email paths work with Postmark, fully tested and documented with cutover runbook\n\n**Stop condition:** Clear - all tests pass, runbook documented, `dev check` green.\n\n### Risks/Follow-ups\n\nThe plan acknowledges realistic risks (lines 121-180):\n- Postmark payload differences may require API adjustments\n- DNS/MX setup requires manual work\n- Production cutover risks (mitigated by runbook/rollback)\n- Webhook authentication remains a follow-up concern\n- Dual-provider maintenance cost (accepted as valuable during provider validation)\n\nThoughtful and realistic risk assessment with documented mitigations.\n\n## Alignment with Gemini Review\n\nThe Gemini review reached the same conclusion: READY with High confidence and 0 blocking gaps. Both reviews agree this plan is thorough, well-structured, and ready for implementation.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "internal.retry_count.publish_ready": 0,
-          "thread.read_plan_301_360.current_node": "gemini_review",
+          "claude_review_confidence": "High",
+          "internal.retry_count.claude_review": 0,
+          "internal.thread_id": "synthesis_gate",
+          "internal.retry_count.synthesize": 0,
+          "failure_class": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.codex_review": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "thread.read_plan_121_180.current_node": "read_plan_181_240",
+          "internal.retry_count.read_plan_241_300": 0,
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "claude_review_required_edits": "None",
+          "gemini_review_confidence": "High",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation\",\n    \"codex_review_required_edits\": \"Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated\"\n  }\n}",
+          "internal.retry_count.read_plan_001_060": 0,
+          "internal.run_id": "01KT56VXDXGHN5GF62XH24BAJK",
           "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
           "claude_review_blocking_gap_count": 0,
-          "codex_review_required_edits": "Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated",
-          "internal.run_id": "01KT56VXDXGHN5GF62XH24BAJK",
-          "internal.retry_count.read_plan_241_300": 0,
-          "codex_review_decision": "NOT READY",
-          "thread.read_plan_001_060.current_node": "read_plan_061_120",
-          "codex_review_blocking_gap_count": 1,
-          "plan_ready": true,
-          "gemini_review_required_edits": "None",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "thread.synthesis_gate.current_node": "publish_ready",
-          "gemini_review_confidence": "High",
-          "internal.retry_count.read_plan_121_180": 0,
-          "graph.rankdir": "LR",
-          "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.read_plan_301_360": 0,
-          "outcome": "succeeded",
-          "thread.read_plan_121_180.current_node": "read_plan_181_240",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "command.output": "blob://sha256/3ed2a469696fbba95109faf8cbc973a6f4d024718f4a8cd05da92584b5ae4333",
-          "internal.retry_count.claude_review": 0,
-          "failure_class": "",
-          "internal.fidelity": "summary:high",
-          "internal.node_visit_count": 1,
           "claude_review_blocking_gaps": "None",
-          "gemini_review_blocking_gaps": "None",
-          "plan_needs_human": false,
-          "internal.retry_count.read_plan_181_240": 0,
-          "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
-          "thread.codex_review.current_node": "synthesize",
-          "claude_review_required_edits": "None",
-          "internal.retry_count.start": 0,
-          "internal.retry_count.codex_review": 0,
-          "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation\",\n    \"codex_review_required_edits\": \"Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated\"\n  }\n}",
-          "last_stage": "synthesize",
-          "codex_review_blocking_gaps": "Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation",
-          "thread.read_plan_181_240.current_node": "read_plan_241_300",
-          "claude_review_confidence": "High",
-          "internal.thread_id": "synthesis_gate",
-          "internal.retry_count.read_plan_001_060": 0,
-          "gemini_review_blocking_gap_count": 0,
+          "codex_review_blocking_gap_count": 1,
+          "codex_review_confidence": "High",
+          "codex_review_required_edits": "Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated",
           "graph.default_fidelity": "summary:high",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.read_plan_121_180": 0,
+          "internal.retry_count.synthesis_gate": 0,
+          "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+          "plan_needs_human": false,
+          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+          "thread.read_plan_241_300.current_node": "read_plan_301_360",
+          "internal.retry_count.gemini_review": 0,
+          "thread.read_plan_181_240.current_node": "read_plan_241_300",
+          "thread.codex_review.current_node": "synthesize",
+          "gemini_review_required_edits": "None",
+          "graph.rankdir": "LR",
+          "gemini_review_blocking_gaps": "None",
+          "current_node": "publish_ready",
+          "codex_review_decision": "NOT READY",
+          "last_stage": "synthesize",
           "gemini_review_decision": "READY",
+          "internal.work_dir": "/workspace/memba",
+          "thread.read_plan_301_360.current_node": "gemini_review",
+          "internal.fidelity": "summary:high",
+          "outcome": "succeeded",
+          "thread.read_plan_001_060.current_node": "read_plan_061_120",
+          "plan_ready": true,
+          "codex_review_blocking_gaps": "Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation",
+          "failure_signature": "",
+          "thread.read_plan_061_120.current_node": "read_plan_121_180",
+          "gemini_review_blocking_gap_count": 0,
           "claude_review_decision": "READY",
-          "thread.claude_review.current_node": "codex_review",
-          "codex_review_confidence": "High"
+          "internal.retry_count.start": 0,
+          "internal.retry_count.publish_ready": 0,
+          "plan_needs_fix": false,
+          "internal.retry_count.read_plan_061_120": 0,
+          "internal.node_visit_count": 1,
+          "internal.retry_count.read_plan_301_360": 0,
+          "thread.start.current_node": "read_plan_001_060",
+          "internal.retry_count.read_plan_181_240": 0,
+          "thread.gemini_review.current_node": "claude_review"
         },
         "node_outcomes": {
-          "gemini_review": {
+          "read_plan_001_060": {
             "status": "succeeded",
             "context_updates": {
-              "gemini_review_blocking_gaps": "None",
-              "gemini_review_blocking_gap_count": 0,
-              "gemini_review_required_edits": "None",
-              "gemini_review_confidence": "High",
-              "gemini_review_decision": "READY",
-              "last_stage": "gemini_review",
-              "last_response": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-              "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+              "command.output": "blob://sha256/0772a32579592a2ed973bc1ad027259412ac5bd05dc597afea94d9c9c52312f7"
             },
-            "notes": "Stage completed: gemini_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "gemini",
-                    "model_id": "gemini-3.1-pro-preview"
-                  },
-                  "tokens": {
-                    "input_tokens": 5182,
-                    "output_tokens": 60,
-                    "reasoning_tokens": 1021,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "gemini",
-                  "storage_segments": []
-                }
-              },
-              "total_usd_micros": 23336
-            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 1 60 360 'original plan chunk 001-060'",
+            "usage": null,
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 10771,
-              "tool_time_ms": 0,
-              "active_time_ms": 10771
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
             }
           },
-          "codex_review": {
+          "read_plan_181_240": {
             "status": "succeeded",
             "context_updates": {
-              "codex_review_blocking_gaps": "Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation",
-              "last_response": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence",
-              "codex_review_blocking_gap_count": 1,
-              "codex_review_decision": "NOT READY",
-              "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation\",\n    \"codex_review_required_edits\": \"Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated\"\n  }\n}",
-              "codex_review_required_edits": "Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated",
-              "last_stage": "codex_review",
-              "codex_review_confidence": "High"
+              "command.output": "blob://sha256/90c1706a59ae60185673898d3a31fab903ed2ea27604d2da20e66c4755f6ae37"
             },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 7039,
-                    "output_tokens": 127,
-                    "reasoning_tokens": 516,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 54485
-            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 181 240 360 'original plan chunk 181-240'",
+            "usage": null,
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 13254,
-              "tool_time_ms": 0,
-              "active_time_ms": 13254
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3ed2a469696fbba95109faf8cbc973a6f4d024718f4a8cd05da92584b5ae4333"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 1768,
+              "active_time_ms": 1768
             }
           },
           "read_plan_241_300": {
@@ -3419,20 +3378,6 @@
               "inference_time_ms": 0,
               "tool_time_ms": 150,
               "active_time_ms": 150
-            }
-          },
-          "read_plan_301_360": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/2989a24fdaf4685dda3d948b0175a6d655f15700d8e527b4330f90303d2dd465"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 301 360 360 'original plan chunk 301-360'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 156,
-              "active_time_ms": 156
             }
           },
           "claude_review": {
@@ -3478,32 +3423,91 @@
               "active_time_ms": 112998
             }
           },
-          "read_plan_121_180": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "codex_review": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/6872b20239012a62ff0fcef2e1991f2f3dc38382a333ee5243418eb479e829a8"
+              "codex_review_blocking_gaps": "Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation",
+              "last_response": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence",
+              "codex_review_blocking_gap_count": 1,
+              "codex_review_decision": "NOT READY",
+              "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation\",\n    \"codex_review_required_edits\": \"Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated\"\n  }\n}",
+              "codex_review_required_edits": "Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated",
+              "last_stage": "codex_review",
+              "codex_review_confidence": "High"
             },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 121 180 360 'original plan chunk 121-180'",
-            "usage": null,
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7039,
+                    "output_tokens": 127,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 54485
+            },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 155,
-              "active_time_ms": 155
+              "inference_time_ms": 13254,
+              "tool_time_ms": 0,
+              "active_time_ms": 13254
             }
           },
-          "read_plan_181_240": {
+          "gemini_review": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/90c1706a59ae60185673898d3a31fab903ed2ea27604d2da20e66c4755f6ae37"
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_blocking_gap_count": 0,
+              "gemini_review_required_edits": "None",
+              "gemini_review_confidence": "High",
+              "gemini_review_decision": "READY",
+              "last_stage": "gemini_review",
+              "last_response": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
             },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 181 240 360 'original plan chunk 181-240'",
-            "usage": null,
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 5182,
+                    "output_tokens": 60,
+                    "reasoning_tokens": 1021,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 23336
+            },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 158,
-              "active_time_ms": 158
+              "inference_time_ms": 10771,
+              "tool_time_ms": 0,
+              "active_time_ms": 10771
             }
           },
           "read_plan_061_120": {
@@ -3519,6 +3523,25 @@
               "tool_time_ms": 159,
               "active_time_ms": 159
             }
+          },
+          "read_plan_121_180": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6872b20239012a62ff0fcef2e1991f2f3dc38382a333ee5243418eb479e829a8"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 121 180 360 'original plan chunk 121-180'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           },
           "synthesize": {
             "status": "succeeded",
@@ -3559,65 +3582,220 @@
               "active_time_ms": 40189
             }
           },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "publish_ready": {
+          "read_plan_301_360": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/3ed2a469696fbba95109faf8cbc973a6f4d024718f4a8cd05da92584b5ae4333"
+              "command.output": "blob://sha256/2989a24fdaf4685dda3d948b0175a6d655f15700d8e527b4330f90303d2dd465"
             },
-            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md'",
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 301 360 360 'original plan chunk 301-360'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 1768,
-              "active_time_ms": 1768
-            }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
-          "read_plan_001_060": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/0772a32579592a2ed973bc1ad027259412ac5bd05dc597afea94d9c9c52312f7"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 1 60 360 'original plan chunk 001-060'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 166,
-              "active_time_ms": 166
+              "tool_time_ms": 156,
+              "active_time_ms": 156
             }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "7713e206122c935cf9fb17d4fb030eed581d30f9",
         "node_visits": {
           "synthesize": 1,
-          "read_plan_061_120": 1,
-          "codex_review": 1,
-          "read_plan_301_360": 1,
-          "read_plan_121_180": 1,
-          "read_plan_241_300": 1,
-          "start": 1,
-          "read_plan_181_240": 1,
-          "gemini_review": 1,
-          "claude_review": 1,
+          "publish_ready": 1,
           "read_plan_001_060": 1,
-          "synthesis_gate": 1,
-          "publish_ready": 1
+          "read_plan_181_240": 1,
+          "read_plan_301_360": 1,
+          "claude_review": 1,
+          "codex_review": 1,
+          "read_plan_061_120": 1,
+          "read_plan_241_300": 1,
+          "read_plan_121_180": 1,
+          "start": 1,
+          "gemini_review": 1,
+          "synthesis_gate": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/020-migrate-production-email-to-postmark/plan.md b/docs/iterations/020-migrate-production-email-to-postmark/plan.md\nindex a7dd73a..b69a7af 100644\n--- a/docs/iterations/020-migrate-production-email-to-postmark/plan.md\n+++ b/docs/iterations/020-migrate-production-email-to-postmark/plan.md\n@@ -1,7 +1,7 @@\n # Migrate production email to Postmark\n \n Date: 2026-06-02\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex 879b6ed..1fc1458 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -29,7 +29,7 @@ green than before.\n | 017 | 2026-06-01 | merged | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |\n | 018 | 2026-06-01 | merged | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |\n | 019 | 2026-06-02 | ready | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |\n-| 020 | 2026-06-02 | ready | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |\n+| 020 | 2026-06-02 | validated | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |\n \n Status notes:\n \n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-02T22:25:46.399467304Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 219202,
+      "inference_time_ms": 177212,
+      "tool_time_ms": 2712,
+      "active_time_ms": 179924
+    },
+    "final_git_commit_sha": "7713e206122c935cf9fb17d4fb030eed581d30f9",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_001_060",
+        "stage_label": "read_plan_001_060",
+        "timing": {
+          "wall_time_ms": 169,
+          "inference_time_ms": 0,
+          "tool_time_ms": 166,
+          "active_time_ms": 166
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_061_120",
+        "stage_label": "read_plan_061_120",
+        "timing": {
+          "wall_time_ms": 163,
+          "inference_time_ms": 0,
+          "tool_time_ms": 159,
+          "active_time_ms": 159
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_121_180",
+        "stage_label": "read_plan_121_180",
+        "timing": {
+          "wall_time_ms": 159,
+          "inference_time_ms": 0,
+          "tool_time_ms": 155,
+          "active_time_ms": 155
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_181_240",
+        "stage_label": "read_plan_181_240",
+        "timing": {
+          "wall_time_ms": 164,
+          "inference_time_ms": 0,
+          "tool_time_ms": 158,
+          "active_time_ms": 158
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_241_300",
+        "stage_label": "read_plan_241_300",
+        "timing": {
+          "wall_time_ms": 154,
+          "inference_time_ms": 0,
+          "tool_time_ms": 150,
+          "active_time_ms": 150
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_301_360",
+        "stage_label": "read_plan_301_360",
+        "timing": {
+          "wall_time_ms": 160,
+          "inference_time_ms": 0,
+          "tool_time_ms": 156,
+          "active_time_ms": 156
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 10827,
+          "inference_time_ms": 10771,
+          "tool_time_ms": 0,
+          "active_time_ms": 10771
+        },
+        "billing_usd_micros": 23336,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 113052,
+          "inference_time_ms": 112998,
+          "tool_time_ms": 0,
+          "active_time_ms": 112998
+        },
+        "billing_usd_micros": 104817,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 13307,
+          "inference_time_ms": 13254,
+          "tool_time_ms": 0,
+          "active_time_ms": 13254
+        },
+        "billing_usd_micros": 54485,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 40240,
+          "inference_time_ms": 40189,
+          "tool_time_ms": 0,
+          "active_time_ms": 40189
+        },
+        "billing_usd_micros": 102025,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 1,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 1773,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1768,
+          "active_time_ms": 1768
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 25590,
+      "output_tokens": 6089,
+      "total_tokens": 35286,
+      "reasoning_tokens": 3607,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 284663
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -3797,7 +3975,12 @@
       "first_event_seq": 130,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T22:25:43.343549462Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -3805,11 +3988,27 @@
         "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md'",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/3ed2a469696fbba95109faf8cbc973a6f4d024718f4a8cd05da92584b5ae4333",
+        "exit_code": 0,
+        "duration_ms": 1768,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-02T22:25:41.569550551Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 1773,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1768,
+        "active_time_ms": 1768
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -3818,7 +4017,41 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 140,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-02T22:25:46.365117201Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T22:25:46.365104474Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
     },
     "read_plan_301_360@1": {
       "first_event_seq": 72,
