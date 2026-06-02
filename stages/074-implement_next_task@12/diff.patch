@@ -1,0 +1,152 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index 98c6f03..5002ef6 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 Add `Membership.get_club_by_slug/1`, using normalized lookup input only where safe and returning `nil` for invalid/unknown values.
+ - [x] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
+ - [x] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
+-- [ ] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
++- [x] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
+ - [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
+ - [ ] 014 Add tests for:
+ - [ ] 015 Run `dev check`.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index b144fa8..ebbae00 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -4,8 +4,20 @@ defmodule MembaWeb.PageController do
+   alias Memba.Membership
+   alias MembaWeb.UserAuth
+ 
+-  def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
+-      when not is_nil(identity) do
++  @public_club_host_suffix ".clubs.memba.io"
++
++  def home(conn, params) do
++    case public_club_slug_from_host(conn.host) do
++      {:ok, slug} -> home_for_public_club_slug(conn, slug)
++      :error -> home_for_params(conn, params)
++    end
++  end
++
++  defp home_for_params(
++         %{assigns: %{current_identity: identity}} = conn,
++         %{"club_id" => club_id}
++       )
++       when not is_nil(identity) do
+     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
+       session: %{
+         "club_id" => club_id,
+@@ -14,19 +26,17 @@ defmodule MembaWeb.PageController do
+     )
+   end
+ 
+-  def home(conn, %{"club_id" => club_id}) do
++  defp home_for_params(conn, %{"club_id" => club_id}) do
+     case Membership.get_club(club_id) do
+       nil ->
+         not_found(conn)
+ 
+       _club ->
+-        Phoenix.LiveView.Controller.live_render(conn, MembaWeb.ClubMarketingLive,
+-          session: %{"club_id" => club_id}
+-        )
++        render_public_club_page(conn, club_id)
+     end
+   end
+ 
+-  def home(conn, _params) do
++  defp home_for_params(conn, _params) do
+     page_title =
+       if conn.assigns.current_identity do
+         "My clubs"
+@@ -39,6 +49,35 @@ defmodule MembaWeb.PageController do
+     |> render(:home)
+   end
+ 
++  defp home_for_public_club_slug(conn, slug) do
++    case Membership.get_club_by_slug(slug) do
++      nil -> not_found(conn)
++      club -> render_public_club_page(conn, club.club_id)
++    end
++  end
++
++  defp public_club_slug_from_host(host) when is_binary(host) do
++    host = host |> String.downcase() |> String.trim_trailing(".")
++
++    if String.ends_with?(host, @public_club_host_suffix) do
++      host
++      |> String.trim_trailing(@public_club_host_suffix)
++      |> String.split(".", parts: 2)
++      |> case do
++        [slug | _rest] when slug != "" -> {:ok, slug}
++        _no_slug -> :error
++      end
++    else
++      :error
++    end
++  end
++
++  defp render_public_club_page(conn, club_id) do
++    Phoenix.LiveView.Controller.live_render(conn, MembaWeb.ClubMarketingLive,
++      session: %{"club_id" => club_id}
++    )
++  end
++
+   def about(conn, _params) do
+     conn
+     |> assign(:page_title, "About")
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 33c962f..60be47e 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -97,6 +97,38 @@ defmodule MembaWeb.PageControllerTest do
+     refute response =~ "Signed in as"
+   end
+ 
++  test "GET / on a public club subdomain shows that club marketing page", %{conn: conn} do
++    club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
++
++    conn =
++      conn
++      |> Map.put(:host, "kmc.clubs.memba.io")
++      |> get(~p"/")
++
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Welcome to Kootenay Mountaineering Club"
++
++    assert html
++           |> LazyHTML.query("#club-marketing-page[data-club-id='#{club.club_id}']")
++           |> Enum.any?()
++  end
++
++  test "GET / on an unknown public club subdomain returns not found", %{conn: conn} do
++    _club = create_club(name: "Kootenay Mountaineering Club", slug: "kmc")
++
++    conn =
++      conn
++      |> Map.put(:host, "unknown.clubs.memba.io")
++      |> get(~p"/")
++
++    response = html_response(conn, 404)
++
++    refute response =~ "Kootenay Mountaineering Club"
++    refute response =~ "Keep every member in the loop."
++  end
++
+   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
+     club =
+       create_active_member(
+@@ -434,7 +466,8 @@ defmodule MembaWeb.PageControllerTest do
+   defp create_club(attrs) do
+     Repo.insert!(%Club{
+       club_id: Ecto.UUID.generate(),
+-      name: Keyword.fetch!(attrs, :name)
++      name: Keyword.fetch!(attrs, :name),
++      slug: Keyword.get(attrs, :slug)
+     })
+   end
+ 
