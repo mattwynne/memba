@@ -7,6 +7,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
@@ -46,7 +47,8 @@ defmodule Memba.Membership.AppTest do
   end
 
   test "Membership Commanded app includes the Membership router" do
-    expected_commands = MapSet.new([AddMember, CreateClub, CreatePerson, UpdateClub])
+    expected_commands =
+      MapSet.new([AddMember, CreateClub, CreatePerson, ReplacePersonEmailAddresses, UpdateClub])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands
     assert MapSet.new(Router.__registered_commands__()) == expected_commands

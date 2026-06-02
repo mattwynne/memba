@@ -6,6 +6,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
@@ -178,6 +179,94 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert %PersonProjection{person_id: ^person_id, name: "Alice", email: "alice@example.com"} =
              Membership.get_person(person_id)
+  end
+
+  test "create_person/2 accepts an email-address set for new staff create flows" do
+    person_id = Ecto.UUID.generate()
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonCreated{
+                  person_id: ^person_id,
+                  name: "Alice",
+                  email: "Alice@Example.COM"
+                },
+                %PersonEmailAddressesReplaced{
+                  person_id: ^person_id,
+                  primary_email: "Alice@Example.COM",
+                  email_addresses: [
+                    %{
+                      email: "Alice@Example.COM",
+                      normalized_email: "alice@example.com",
+                      is_primary: true
+                    },
+                    %{
+                      email: "alice@work.example",
+                      normalized_email: "alice@work.example",
+                      is_primary: false
+                    }
+                  ]
+                }
+              ]
+            }} =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: " Alice ",
+                 email_addresses: [
+                   %{email: " Alice@Example.COM ", is_primary: true},
+                   %{email: "alice@work.example", is_primary: false}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+  end
+
+  test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
+    person_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^person_id,
+              events: [
+                %PersonEmailAddressesReplaced{
+                  person_id: ^person_id,
+                  primary_email: "alice@work.example",
+                  email_addresses: [
+                    %{
+                      email: "alice@example.com",
+                      normalized_email: "alice@example.com",
+                      is_primary: false
+                    },
+                    %{
+                      email: "alice@work.example",
+                      normalized_email: "alice@work.example",
+                      is_primary: true
+                    }
+                  ]
+                }
+              ]
+            }} =
+             Membership.replace_person_email_addresses(
+               %{
+                 person_id: person_id,
+                 email_addresses: [
+                   %{email: "alice@example.com", is_primary: false},
+                   %{email: "alice@work.example", is_primary: true}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
   end
 
   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
