@@ -99,7 +99,13 @@ defmodule Memba.AccountsTest do
           email: "alice@example.com"
         )
 
-      nelson = create_active_member(club_name: "Nelson Cycling Club", email: "Alice@Example.COM")
+      nelson =
+        create_active_member(
+          club_name: "Nelson Cycling Club",
+          person_id: kootenay.person_id,
+          email: "alice@example.com"
+        )
+
       _other = create_active_member(club_name: "Other Club", email: "other@example.com")
 
       assert [
@@ -131,7 +137,7 @@ defmodule Memba.AccountsTest do
 
   defp create_active_member(attrs) do
     club_id = Ecto.UUID.generate()
-    person_id = Ecto.UUID.generate()
+    person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
 
     assert :ok =
              Membership.create_club(
@@ -139,15 +145,17 @@ defmodule Memba.AccountsTest do
                consistency: :strong
              )
 
-    assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: "Test Member",
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+    unless Membership.get_person(person_id) do
+      assert :ok =
+               Membership.create_person(
+                 %{
+                   person_id: person_id,
+                   name: "Test Member",
+                   email: Keyword.fetch!(attrs, :email)
+                 },
+                 consistency: :strong
+               )
+    end
 
     assert :ok =
              Membership.add_member(

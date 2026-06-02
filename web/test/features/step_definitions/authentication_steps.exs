@@ -19,7 +19,9 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   end
 
   step "{word} is not a member of any club", %{args: [person_name]} = context do
-    update_context_map(context, :people, person_name, %{email: default_email_for(person_name)})
+    update_context_map(context, :people, person_name, %{
+      email: default_email_for(context, person_name)
+    })
   end
 
   step "{word} requests a sign-in link for their email address",
@@ -211,7 +213,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       context
     else
       person_id = Ecto.UUID.generate()
-      email = default_email_for(person_name)
+      email = default_email_for(context, person_name)
 
       assert :ok =
                Membership.create_person(
@@ -306,8 +308,8 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
-  defp default_email_for("Pat"), do: "pat@memba.io"
-  defp default_email_for(person_name), do: email_for(person_name)
+  defp default_email_for(_context, "Pat"), do: "pat@memba.io"
+  defp default_email_for(context, person_name), do: email_for(context, person_name)
 
   defp scenario_slug(context, club_name) do
     suffix =
@@ -327,14 +329,22 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     "#{base}-#{suffix}"
   end
 
-  defp email_for(name) do
+  defp email_for(context, name) do
     normalized_name =
       name
       |> String.downcase()
       |> String.replace(~r/[^a-z0-9]+/, ".")
       |> String.trim(".")
 
-    "#{normalized_name}@example.test"
+    "#{normalized_name}-#{scenario_email_suffix(context)}@example.test"
+  end
+
+  defp scenario_email_suffix(context) do
+    context
+    |> Map.get(:scenario_name, "scenario")
+    |> :erlang.phash2(1_000_000)
+    |> Integer.to_string(36)
+    |> String.downcase()
   end
 
   defp fetch_from_context!(context, collection_key, item_key) do

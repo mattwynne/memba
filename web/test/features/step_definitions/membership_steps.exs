@@ -101,19 +101,23 @@ defmodule Memba.Cucumber.MembershipSteps do
   end
 
   defp create_person(context, name) do
-    person_id = Ecto.UUID.generate()
-    email = email_for(name)
+    if get_in(context, [:people, name]) do
+      context
+    else
+      person_id = Ecto.UUID.generate()
+      email = email_for(context, name)
 
-    assert :ok =
-             App.dispatch(
-               %CreatePerson{person_id: person_id, name: name, email: email},
-               consistency: :strong
-             )
+      assert :ok =
+               App.dispatch(
+                 %CreatePerson{person_id: person_id, name: name, email: email},
+                 consistency: :strong
+               )
 
-    assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
-             Membership.get_person(person_id)
+      assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
+               Membership.get_person(person_id)
 
-    update_context_map(context, :people, name, person_id)
+      update_context_map(context, :people, name, person_id)
+    end
   end
 
   defp add_members(context, person_names, club_name) do
@@ -170,13 +174,21 @@ defmodule Memba.Cucumber.MembershipSteps do
     Map.put(context, collection_key, collection)
   end
 
-  defp email_for(name) do
+  defp email_for(context, name) do
     normalized_name =
       name
       |> String.downcase()
       |> String.replace(~r/[^a-z0-9]+/, ".")
       |> String.trim(".")
 
-    "#{normalized_name}@example.test"
+    "#{normalized_name}-#{scenario_email_suffix(context)}@example.test"
+  end
+
+  defp scenario_email_suffix(context) do
+    context
+    |> Map.get(:scenario_name, "scenario")
+    |> :erlang.phash2(1_000_000)
+    |> Integer.to_string(36)
+    |> String.downcase()
   end
 end
