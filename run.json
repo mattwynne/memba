@@ -1034,7 +1034,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T09:34:16.146017514Z",
-  "last_event_at": "2026-06-02T09:37:34.671699627Z",
+  "last_event_at": "2026-06-02T09:37:39.831792908Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3238,9 +3238,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 136,
       "checkpoint": {
-        "timestamp": "2026-06-02T09:37:36.649371116Z",
+        "timestamp": "2026-06-02T09:37:39.831686778Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -3259,89 +3259,71 @@
         ],
         "node_retries": {},
         "context_values": {
-          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
-          "internal.retry_count.read_plan_241_300": 0,
-          "thread.read_plan_181_240.current_node": "read_plan_241_300",
-          "internal.thread_id": "synthesis_gate",
-          "thread.read_plan_061_120.current_node": "read_plan_121_180",
-          "gemini_review_required_edits": "None",
-          "graph.default_fidelity": "summary:high",
-          "codex_review_required_edits": "Provide or re-run unelided Read Plan chunk outputs covering the complete plan before marking validated",
-          "internal.retry_count.claude_review": 0,
-          "internal.retry_count.publish_ready": 0,
-          "internal.retry_count.read_plan_061_120": 0,
-          "plan_ready": true,
-          "thread.synthesis_gate.current_node": "publish_ready",
-          "response.claude_review": "# Iteration Plan Review: Member Club Subdomains\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone. The plan is complete and ready for implementation.\n\n## Non-blocking Improvements\n\nNone significant. The plan is at an appropriate level of detail. Minor details like specific controller/LiveView module names and helper module naming can be determined during implementation as indicated by the \"inspect\" and \"add\" steps.\n\n## Smallest Viable Iteration\n\nThe current scope is already the smallest viable iteration. While you could theoretically split this into:\n1. Root subdomain routing + \"My clubs\" links only\n2. Compose and message detail subdomain support\n\nThis would leave members with a partially-working subdomain they can navigate to but cannot use for their primary workflows (sending and reading messages). The current scope keeps all essential member subdomain navigation together, making it the smallest useful slice.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Review by Criteria\n\n### 1. Goal Clarity ✅\n- **Goal**: Enable members to navigate their club sites using stable, human-readable subdomain URLs instead of UUID query strings\n- **User/business outcome**: Clear - members get stable, human-readable club addresses\n- **Beneficiary**: Active members navigating their clubs\n- **Assessment**: Well articulated and outcome-focused\n\n### 2. Scope Focus ✅\n- **Coherence**: Focused on member subdomain navigation across all essential workflows\n- **Size**: Appropriate - includes root routing, member pages (compose, detail), auth flows, and authorization boundaries\n- **Boundaries**: Clear in-scope and out-of-scope lists; explicitly excludes custom domains, club-branded auth, slug history, complete UUID removal, and production DNS changes\n- **Assessment**: Tightly scoped to one coherent outcome\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**BDD Decision**: Explicit and justified\n- States \"BDD decision: Required\"\n- Rationale: Changes member-visible URLs, club selection, authentication continuation, and authorization rules; stakeholder-readable scenarios are useful\n- Names feature file: `acceptance-tests/features/member_club_subdomains.feature`\n- Lists 6 scenarios covering key behaviors (subdomain navigation, host-selected club, auth return-to, authorization boundaries, public access)\n- Properly tagged `@wip` for planning\n\n**Acceptance Criteria**: Comprehensive (22 criteria)\n- **Happy paths**: Member dashboard, compose, message detail, \"My clubs\" links\n- **Edge cases**: Unknown subdomain (404), non-member at root (public page)\n- **Permissions**: Active membership required, non-member forbidden from private URLs\n- **Error states**: 404 for unknown subdomains, forbidden for non-members\n- **Authentication flows**: Redirect to sign-in, preserve return URL, magic-link continuation\n- **Data/state**: Messages address correct club members based on subdomain\n- **Backward compatibility**: Fallback `?club_id=<uuid>` routes continue working and remain protected\n- **Existing functionality**: Public routes, staff/admin routes unaffected\n- **Documentation**: ADR 0019 recorded\n- **Quality gate**: `dev check` passes\n\n**Business Decisions**: None unresolved\n\n**Assessment**: Complete, concrete, and testable\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation Steps**: 14 clear, ordered steps covering:\n1. Inspection of current routing, controllers, LiveViews\n2. Configuration for club-site base domain\n3. URL/host helper for club URLs and slug extraction\n4. \"My clubs\" link generation updates\n5. Root subdomain routing (public/member/non-member cases)\n6. Host-selected member routes (compose, detail)\n7. Private route auth and membership enforcement\n8. Auth redirect/return-to preservation\n9. Legacy fallback route preservation\n10. Template updates to stop generating `club_id` parameters\n11. Acceptance test support for `lvh.me` URLs\n12. Comprehensive test additions/updates\n13. `@wip` tag management\n14. `dev check` execution\n\n**Specificity**: Names key integration points (controllers, LiveViews, routes, templates, auth handling, acceptance support)\n\n**Technical Decisions**: None unresolved\n- Documents decisions already made: ADR 0019 `lvh.me` strategy, fallback approach, auth flows, non-member handling\n\n**Assessment**: Clear path forward with sufficient technical guidance\n\n### 5. Expected Capability and Validation ✅\n\n**New Capability**: \"Members can use a stable, human-readable club subdomain as their normal club-site address. The app can select the active club from the host for member dashboard, compose, and message detail pages, while still preserving public club pages and authentication/authorization boundaries.\"\n\n**Validation Plan**: Comprehensive\n- `dev check` execution\n- Targeted web tests for host detection, URL generation, routing, auth, authorization\n- Acceptance-test configuration checks (`@wip` exclusion)\n- Browser acceptance support tests (verify `lvh.me` usage)\n- 10-step manual demo covering all key scenarios\n\n**Stop Condition**: Clear - acceptance criteria met, validation steps pass\n\n**Risks/Follow-ups**: Documents 5 known considerations (URL generation subtleties, auth safety, fallback retirement, browser test handling, production deployment prerequisites)\n\n**Assessment**: Clear success criteria and comprehensive validation approach\n\n## Validation Plan Summary\n\nThe iteration will be proven successful when:\n1. All 22 acceptance criteria are met\n2. `dev check` passes\n3. Targeted web tests pass for subdomain routing, URL generation, auth flows, and authorization\n4. Acceptance test support correctly uses `lvh.me` for local club URLs\n5. Manual demo successfully exercises all key member subdomain workflows\n6. `@wip` tag is managed appropriately\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "graph.rankdir": "LR",
-          "codex_review_confidence": "High",
-          "plan_needs_human": false,
-          "claude_review_decision": "READY",
-          "thread.read_plan_001_060.current_node": "read_plan_061_120",
-          "internal.retry_count.read_plan_301_360": 0,
-          "command.output": "blob://sha256/107ba4d4a9e6d7725fd2a2032bfd7f9084bd26caa98a1692c32816577aa8d96e",
-          "internal.retry_count.gemini_review": 0,
-          "codex_review_blocking_gap_count": 1,
-          "internal.node_visit_count": 1,
-          "internal.retry_count.read_plan_001_060": 0,
-          "last_stage": "synthesize",
-          "internal.retry_count.read_plan_121_180": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "codex_review_blocking_gaps": "Workflow evidence gap: required plan chunks in context contain omitted lines, so the complete plan text was not available for independent validation",
-          "current_node": "publish_ready",
-          "thread.read_plan_241_300.current_node": "read_plan_301_360",
-          "gemini_review_blocking_gaps": "None",
-          "claude_review_blocking_gaps": "None",
-          "claude_review_required_edits": "None",
-          "thread.claude_review.current_node": "codex_review",
-          "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.synthesis_gate": 0,
-          "internal.retry_count.synthesize": 0,
-          "internal.run_id": "01KT3TXYP7VZ85A8R7FDY2FWMR",
-          "thread.read_plan_121_180.current_node": "read_plan_181_240",
+          "internal.retry_count.codex_review": 0,
           "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
-          "gemini_review_blocking_gap_count": 0,
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "gemini_review_decision": "READY",
-          "plan_needs_fix": false,
-          "failure_signature": "",
-          "thread.gemini_review.current_node": "claude_review",
-          "internal.retry_count.start": 0,
-          "claude_review_confidence": "High",
+          "codex_review_blocking_gaps": "Workflow evidence gap: required plan chunks in context contain omitted lines, so the complete plan text was not available for independent validation",
           "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":1,\"codex_review_blocking_gaps\":\"Workflow evidence gap: required plan chunks in context contain omitted lines, so the complete plan text was not available for independent validation\",\"codex_review_required_edits\":\"Provide or re-run unelided Read Plan chunk outputs covering the complete plan before marking validated\"}}",
+          "thread.claude_review.current_node": "codex_review",
           "thread.codex_review.current_node": "synthesize",
           "thread.read_plan_301_360.current_node": "gemini_review",
-          "failure_class": "",
+          "thread.gemini_review.current_node": "claude_review",
+          "current_node": "publish_ready",
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.synthesize": 0,
+          "response.claude_review": "# Iteration Plan Review: Member Club Subdomains\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone. The plan is complete and ready for implementation.\n\n## Non-blocking Improvements\n\nNone significant. The plan is at an appropriate level of detail. Minor details like specific controller/LiveView module names and helper module naming can be determined during implementation as indicated by the \"inspect\" and \"add\" steps.\n\n## Smallest Viable Iteration\n\nThe current scope is already the smallest viable iteration. While you could theoretically split this into:\n1. Root subdomain routing + \"My clubs\" links only\n2. Compose and message detail subdomain support\n\nThis would leave members with a partially-working subdomain they can navigate to but cannot use for their primary workflows (sending and reading messages). The current scope keeps all essential member subdomain navigation together, making it the smallest useful slice.\n\n## Required Plan Edits\n\nNone. The plan is ready for implementation as written.\n\n## Review by Criteria\n\n### 1. Goal Clarity ✅\n- **Goal**: Enable members to navigate their club sites using stable, human-readable subdomain URLs instead of UUID query strings\n- **User/business outcome**: Clear - members get stable, human-readable club addresses\n- **Beneficiary**: Active members navigating their clubs\n- **Assessment**: Well articulated and outcome-focused\n\n### 2. Scope Focus ✅\n- **Coherence**: Focused on member subdomain navigation across all essential workflows\n- **Size**: Appropriate - includes root routing, member pages (compose, detail), auth flows, and authorization boundaries\n- **Boundaries**: Clear in-scope and out-of-scope lists; explicitly excludes custom domains, club-branded auth, slug history, complete UUID removal, and production DNS changes\n- **Assessment**: Tightly scoped to one coherent outcome\n\n### 3. Acceptance Criteria, BDD Decision, Business Decisions ✅\n\n**BDD Decision**: Explicit and justified\n- States \"BDD decision: Required\"\n- Rationale: Changes member-visible URLs, club selection, authentication continuation, and authorization rules; stakeholder-readable scenarios are useful\n- Names feature file: `acceptance-tests/features/member_club_subdomains.feature`\n- Lists 6 scenarios covering key behaviors (subdomain navigation, host-selected club, auth return-to, authorization boundaries, public access)\n- Properly tagged `@wip` for planning\n\n**Acceptance Criteria**: Comprehensive (22 criteria)\n- **Happy paths**: Member dashboard, compose, message detail, \"My clubs\" links\n- **Edge cases**: Unknown subdomain (404), non-member at root (public page)\n- **Permissions**: Active membership required, non-member forbidden from private URLs\n- **Error states**: 404 for unknown subdomains, forbidden for non-members\n- **Authentication flows**: Redirect to sign-in, preserve return URL, magic-link continuation\n- **Data/state**: Messages address correct club members based on subdomain\n- **Backward compatibility**: Fallback `?club_id=<uuid>` routes continue working and remain protected\n- **Existing functionality**: Public routes, staff/admin routes unaffected\n- **Documentation**: ADR 0019 recorded\n- **Quality gate**: `dev check` passes\n\n**Business Decisions**: None unresolved\n\n**Assessment**: Complete, concrete, and testable\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Implementation Steps**: 14 clear, ordered steps covering:\n1. Inspection of current routing, controllers, LiveViews\n2. Configuration for club-site base domain\n3. URL/host helper for club URLs and slug extraction\n4. \"My clubs\" link generation updates\n5. Root subdomain routing (public/member/non-member cases)\n6. Host-selected member routes (compose, detail)\n7. Private route auth and membership enforcement\n8. Auth redirect/return-to preservation\n9. Legacy fallback route preservation\n10. Template updates to stop generating `club_id` parameters\n11. Acceptance test support for `lvh.me` URLs\n12. Comprehensive test additions/updates\n13. `@wip` tag management\n14. `dev check` execution\n\n**Specificity**: Names key integration points (controllers, LiveViews, routes, templates, auth handling, acceptance support)\n\n**Technical Decisions**: None unresolved\n- Documents decisions already made: ADR 0019 `lvh.me` strategy, fallback approach, auth flows, non-member handling\n\n**Assessment**: Clear path forward with sufficient technical guidance\n\n### 5. Expected Capability and Validation ✅\n\n**New Capability**: \"Members can use a stable, human-readable club subdomain as their normal club-site address. The app can select the active club from the host for member dashboard, compose, and message detail pages, while still preserving public club pages and authentication/authorization boundaries.\"\n\n**Validation Plan**: Comprehensive\n- `dev check` execution\n- Targeted web tests for host detection, URL generation, routing, auth, authorization\n- Acceptance-test configuration checks (`@wip` exclusion)\n- Browser acceptance support tests (verify `lvh.me` usage)\n- 10-step manual demo covering all key scenarios\n\n**Stop Condition**: Clear - acceptance criteria met, validation steps pass\n\n**Risks/Follow-ups**: Documents 5 known considerations (URL generation subtleties, auth safety, fallback retirement, browser test handling, production deployment prerequisites)\n\n**Assessment**: Clear success criteria and comprehensive validation approach\n\n## Validation Plan Summary\n\nThe iteration will be proven successful when:\n1. All 22 acceptance criteria are met\n2. `dev check` passes\n3. Targeted web tests pass for subdomain routing, URL generation, auth flows, and authorization\n4. Acceptance test support correctly uses `lvh.me` for local club URLs\n5. Manual demo successfully exercises all key member subdomain workflows\n6. `@wip` tag is managed appropriately\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "claude_review_required_edits": "None",
+          "internal.retry_count.publish_ready": 0,
+          "gemini_review_blocking_gap_count": 0,
+          "gemini_review_required_edits": "None",
+          "plan_ready": true,
+          "internal.retry_count.start": 0,
+          "internal.thread_id": "synthesis_gate",
+          "thread.synthesize.current_node": "synthesis_gate",
           "internal.fidelity": "summary:high",
+          "claude_review_decision": "READY",
+          "internal.retry_count.read_plan_181_240": 0,
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.node_visit_count": 1,
+          "gemini_review_decision": "READY",
+          "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "claude_review_blocking_gaps": "None",
+          "last_stage": "synthesize",
+          "internal.work_dir": "/workspace/memba",
+          "thread.start.current_node": "read_plan_001_060",
+          "command.output": "blob://sha256/107ba4d4a9e6d7725fd2a2032bfd7f9084bd26caa98a1692c32816577aa8d96e",
+          "internal.retry_count.read_plan_121_180": 0,
+          "codex_review_blocking_gap_count": 1,
+          "failure_class": "",
           "codex_review_decision": "NOT READY",
           "outcome": "succeeded",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "thread.start.current_node": "read_plan_001_060",
+          "internal.retry_count.read_plan_061_120": 0,
+          "claude_review_blocking_gap_count": 0,
+          "internal.retry_count.read_plan_241_300": 0,
+          "gemini_review_blocking_gaps": "None",
           "gemini_review_confidence": "High",
-          "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
-          "internal.retry_count.read_plan_181_240": 0,
-          "internal.retry_count.codex_review": 0,
-          "claude_review_blocking_gap_count": 0
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.read_plan_001_060": 0,
+          "internal.retry_count.claude_review": 0,
+          "graph.rankdir": "LR",
+          "failure_signature": "",
+          "thread.read_plan_241_300.current_node": "read_plan_301_360",
+          "thread.read_plan_001_060.current_node": "read_plan_061_120",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "codex_review_confidence": "High",
+          "internal.run_id": "01KT3TXYP7VZ85A8R7FDY2FWMR",
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "thread.read_plan_181_240.current_node": "read_plan_241_300",
+          "plan_needs_fix": false,
+          "thread.read_plan_121_180.current_node": "read_plan_181_240",
+          "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+          "codex_review_required_edits": "Provide or re-run unelided Read Plan chunk outputs covering the complete plan before marking validated",
+          "claude_review_confidence": "High",
+          "internal.retry_count.read_plan_301_360": 0,
+          "plan_needs_human": false,
+          "graph.default_fidelity": "summary:high",
+          "thread.read_plan_061_120.current_node": "read_plan_121_180"
         },
         "node_outcomes": {
-          "read_plan_001_060": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/6f9f9f61a213c9c91b286ceb2b6eae4d95347c04c83925a3c3e3c4292ce6236f"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 1 60 360 'original plan chunk 001-060'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 160,
-              "active_time_ms": 160
-            }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
           "read_plan_121_180": {
             "status": "succeeded",
             "context_updates": {
@@ -3354,20 +3336,6 @@
               "inference_time_ms": 0,
               "tool_time_ms": 160,
               "active_time_ms": 160
-            }
-          },
-          "read_plan_061_120": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/467ed46573cf859980a2d222c4e41bed5858c4b5a7d35f3f81079a98ecf71125"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 61 120 360 'original plan chunk 061-120'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 153,
-              "active_time_ms": 153
             }
           },
           "read_plan_241_300": {
@@ -3383,6 +3351,15 @@
               "tool_time_ms": 156,
               "active_time_ms": 156
             }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
           },
           "codex_review": {
             "status": "succeeded",
@@ -3425,57 +3402,46 @@
               "active_time_ms": 50874
             }
           },
-          "read_plan_301_360": {
+          "read_plan_181_240": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/64ef942ff09b7c8d33e3f4d6e3b23558b43e5336f508328a803004c412403b11"
+              "command.output": "blob://sha256/c846a2aebe2156b057854f96eb772b7d64d221ffeaf481b0f79e87c376d4a868"
             },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 301 360 360 'original plan chunk 301-360'",
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 181 240 360 'original plan chunk 181-240'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 151,
-              "active_time_ms": 151
+              "tool_time_ms": 153,
+              "active_time_ms": 153
             }
           },
-          "synthesize": {
+          "publish_ready": {
             "status": "succeeded",
             "context_updates": {
-              "plan_needs_human": false,
-              "plan_needs_fix": false,
-              "last_stage": "synthesize",
-              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
-              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
-              "plan_ready": true
+              "command.output": "blob://sha256/107ba4d4a9e6d7725fd2a2032bfd7f9084bd26caa98a1692c32816577aa8d96e"
             },
-            "notes": "Stage completed: synthesize",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 7096,
-                    "output_tokens": 45,
-                    "reasoning_tokens": 1034,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 67850
-            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/018-member-club-subdomains/plan.md'",
+            "usage": null,
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 21684,
-              "tool_time_ms": 0,
-              "active_time_ms": 21684
+              "inference_time_ms": 0,
+              "tool_time_ms": 1972,
+              "active_time_ms": 1972
+            }
+          },
+          "read_plan_001_060": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6f9f9f61a213c9c91b286ceb2b6eae4d95347c04c83925a3c3e3c4292ce6236f"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 1 60 360 'original plan chunk 001-060'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 160,
+              "active_time_ms": 160
             }
           },
           "gemini_review": {
@@ -3520,18 +3486,57 @@
               "active_time_ms": 11771
             }
           },
-          "read_plan_181_240": {
+          "read_plan_061_120": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/c846a2aebe2156b057854f96eb772b7d64d221ffeaf481b0f79e87c376d4a868"
+              "command.output": "blob://sha256/467ed46573cf859980a2d222c4e41bed5858c4b5a7d35f3f81079a98ecf71125"
             },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 181 240 360 'original plan chunk 181-240'",
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 61 120 360 'original plan chunk 061-120'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
               "tool_time_ms": 153,
               "active_time_ms": 153
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "plan_needs_human": false,
+              "plan_needs_fix": false,
+              "last_stage": "synthesize",
+              "last_response": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+              "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": true,\n    \"plan_needs_fix\": false,\n    \"plan_needs_human\": false\n  }\n}",
+              "plan_ready": true
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7096,
+                    "output_tokens": 45,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 67850
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 21684,
+              "tool_time_ms": 0,
+              "active_time_ms": 21684
             }
           },
           "claude_review": {
@@ -3577,47 +3582,220 @@
               "active_time_ms": 73738
             }
           },
-          "synthesis_gate": {
-            "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
-          },
-          "publish_ready": {
+          "read_plan_301_360": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/107ba4d4a9e6d7725fd2a2032bfd7f9084bd26caa98a1692c32816577aa8d96e"
+              "command.output": "blob://sha256/64ef942ff09b7c8d33e3f4d6e3b23558b43e5336f508328a803004c412403b11"
             },
-            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/018-member-club-subdomains/plan.md'",
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/018-member-club-subdomains/plan.md' 301 360 360 'original plan chunk 301-360'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 1972,
-              "active_time_ms": 1972
+              "tool_time_ms": 151,
+              "active_time_ms": 151
             }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "c74b2032b440dca79671f37326731252bd542a50",
         "node_visits": {
-          "claude_review": 1,
-          "synthesize": 1,
-          "read_plan_301_360": 1,
           "read_plan_181_240": 1,
+          "read_plan_301_360": 1,
+          "read_plan_061_120": 1,
+          "read_plan_241_300": 1,
+          "read_plan_001_060": 1,
+          "start": 1,
+          "claude_review": 1,
           "gemini_review": 1,
+          "read_plan_121_180": 1,
           "synthesis_gate": 1,
           "publish_ready": 1,
-          "read_plan_001_060": 1,
-          "read_plan_061_120": 1,
-          "read_plan_121_180": 1,
           "codex_review": 1,
-          "start": 1,
-          "read_plan_241_300": 1
+          "synthesize": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/018-member-club-subdomains/plan.md b/docs/iterations/018-member-club-subdomains/plan.md\nindex df73edd..0d86c64 100644\n--- a/docs/iterations/018-member-club-subdomains/plan.md\n+++ b/docs/iterations/018-member-club-subdomains/plan.md\n@@ -1,7 +1,7 @@\n # Member-facing club subdomains\n \n Date: 2026-06-01\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex f0987ee..b42ec6b 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -27,7 +27,7 @@ green than before.\n | 015 | 2026-06-01 | merged | Club slugs and public club subdomains | [plan](015-club-slugs/plan.md) |\n | 016 | 2026-06-01 | merged | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |\n | 017 | 2026-06-01 | merged | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |\n-| 018 | 2026-06-01 | ready | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |\n+| 018 | 2026-06-01 | validated | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |\n \n Status notes:\n \n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-02T09:37:39.853245458Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 203690,
+      "inference_time_ms": 158067,
+      "tool_time_ms": 2905,
+      "active_time_ms": 160972
+    },
+    "final_git_commit_sha": "c74b2032b440dca79671f37326731252bd542a50",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_001_060",
+        "stage_label": "read_plan_001_060",
+        "timing": {
+          "wall_time_ms": 164,
+          "inference_time_ms": 0,
+          "tool_time_ms": 160,
+          "active_time_ms": 160
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_061_120",
+        "stage_label": "read_plan_061_120",
+        "timing": {
+          "wall_time_ms": 159,
+          "inference_time_ms": 0,
+          "tool_time_ms": 153,
+          "active_time_ms": 153
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_121_180",
+        "stage_label": "read_plan_121_180",
+        "timing": {
+          "wall_time_ms": 164,
+          "inference_time_ms": 0,
+          "tool_time_ms": 160,
+          "active_time_ms": 160
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_181_240",
+        "stage_label": "read_plan_181_240",
+        "timing": {
+          "wall_time_ms": 159,
+          "inference_time_ms": 0,
+          "tool_time_ms": 153,
+          "active_time_ms": 153
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_241_300",
+        "stage_label": "read_plan_241_300",
+        "timing": {
+          "wall_time_ms": 162,
+          "inference_time_ms": 0,
+          "tool_time_ms": 156,
+          "active_time_ms": 156
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_301_360",
+        "stage_label": "read_plan_301_360",
+        "timing": {
+          "wall_time_ms": 156,
+          "inference_time_ms": 0,
+          "tool_time_ms": 151,
+          "active_time_ms": 151
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 11818,
+          "inference_time_ms": 11771,
+          "tool_time_ms": 0,
+          "active_time_ms": 11771
+        },
+        "billing_usd_micros": 24650,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 73785,
+          "inference_time_ms": 73738,
+          "tool_time_ms": 0,
+          "active_time_ms": 73738
+        },
+        "billing_usd_micros": 72708,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 50923,
+          "inference_time_ms": 50874,
+          "tool_time_ms": 0,
+          "active_time_ms": 50874
+        },
+        "billing_usd_micros": 112945,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 21736,
+          "inference_time_ms": 21684,
+          "tool_time_ms": 0,
+          "active_time_ms": 21684
+        },
+        "billing_usd_micros": 67850,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 2,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 1977,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1972,
+          "active_time_ms": 1972
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 24560,
+      "output_tokens": 3914,
+      "total_tokens": 33205,
+      "reasoning_tokens": 4731,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 278153
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -3685,7 +3863,12 @@
       "first_event_seq": 129,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/018-member-club-subdomains/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T09:37:36.648306917Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -3693,11 +3876,27 @@
         "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/018-member-club-subdomains/plan.md'",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/107ba4d4a9e6d7725fd2a2032bfd7f9084bd26caa98a1692c32816577aa8d96e",
+        "exit_code": 0,
+        "duration_ms": 1972,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-02T09:37:34.670720896Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 1977,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1972,
+        "active_time_ms": 1972
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -3706,7 +3905,41 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 139,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-02T09:37:39.831792908Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T09:37:39.831779784Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
     },
     "synthesize@1": {
       "first_event_seq": 111,
