@@ -1,0 +1,131 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index c365cb6..f13bdbf 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect current Membership person command/event/aggregate/projector/projection code, Accounts lookup code, Messaging recipient resolution, seeds, fixtures, staff/admin LiveViews, and acceptance support that assume a single `email` field.
+ - [x] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
+-- [ ] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
++- [x] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
+ - [ ] 004 Add database constraints and matching changeset/command validation:
+ - [ ] 005 Evolve Membership commands/events using an atomic replace-all model:
+ - [ ] 006 Add projector handling so:
+diff --git a/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs b/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs
+new file mode 100644
+index 0000000..4eca4d3
+--- /dev/null
++++ b/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs
+@@ -0,0 +1,40 @@
++defmodule Memba.Repo.Migrations.BackfillMembershipPersonEmailAddresses do
++  use Ecto.Migration
++
++  def up do
++    execute(backfill_sql())
++  end
++
++  def down do
++    :ok
++  end
++
++  def backfill_sql do
++    """
++    INSERT INTO membership_person_email_addresses (
++      id,
++      person_id,
++      email,
++      normalized_email,
++      is_primary,
++      inserted_at,
++      updated_at
++    )
++    SELECT
++      gen_random_uuid(),
++      person.person_id,
++      btrim(person.email),
++      lower(btrim(person.email)),
++      TRUE,
++      now(),
++      now()
++    FROM membership_people AS person
++    WHERE NOT EXISTS (
++      SELECT 1
++      FROM membership_person_email_addresses AS existing_email_address
++      WHERE existing_email_address.person_id = person.person_id
++        AND existing_email_address.normalized_email = lower(btrim(person.email))
++    );
++    """
++  end
++end
+diff --git a/web/test/memba/membership/person_email_address_projection_test.exs b/web/test/memba/membership/person_email_address_projection_test.exs
+index 738b800..dda7ecf 100644
+--- a/web/test/memba/membership/person_email_address_projection_test.exs
++++ b/web/test/memba/membership/person_email_address_projection_test.exs
+@@ -4,6 +4,54 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
+   alias Memba.Membership.Projections.Person
+   alias Memba.Membership.Projections.PersonEmailAddress
+ 
++  @backfill_migration Memba.Repo.Migrations.BackfillMembershipPersonEmailAddresses
++  @backfill_migration_path Path.expand(
++                             "../../../priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs",
++                             __DIR__
++                           )
++
++  test "backfill migration creates one primary address row for each existing person email" do
++    alice_id = Ecto.UUID.generate()
++    bob_id = Ecto.UUID.generate()
++
++    Repo.insert!(%Person{
++      person_id: alice_id,
++      name: "Alice",
++      email: " Alice@Example.COM "
++    })
++
++    Repo.insert!(%Person{
++      person_id: bob_id,
++      name: "Bob",
++      email: "bob@example.com"
++    })
++
++    assert Repo.all(PersonEmailAddress) == []
++
++    Repo.query!(backfill_sql())
++
++    assert Repo.get!(Person, alice_id).email == " Alice@Example.COM "
++    assert Repo.get!(Person, bob_id).email == "bob@example.com"
++
++    assert [
++             %PersonEmailAddress{
++               person_id: ^alice_id,
++               email: "Alice@Example.COM",
++               normalized_email: "alice@example.com",
++               is_primary: true
++             },
++             %PersonEmailAddress{
++               person_id: ^bob_id,
++               email: "bob@example.com",
++               normalized_email: "bob@example.com",
++               is_primary: true
++             }
++           ] =
++             PersonEmailAddress
++             |> order_by([email_address], asc: email_address.normalized_email)
++             |> Repo.all()
++  end
++
+   test "person email address projection rows can be persisted and read" do
+     person_id = Ecto.UUID.generate()
+ 
+@@ -95,4 +143,12 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
+ 
+     assert Repo.get(PersonEmailAddress, email_address.id) == nil
+   end
++
++  defp backfill_sql do
++    unless Code.ensure_loaded?(@backfill_migration) do
++      Code.compile_file(@backfill_migration_path)
++    end
++
++    apply(@backfill_migration, :backfill_sql, [])
++  end
+ end
