@@ -6,7 +6,6 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
@@ -62,9 +61,9 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
 
   test "Memba staff email delivery projection keeps detailed statuses and reason text" do
     %{message_id: message_id, recipients: recipients} =
-      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin", "Frank"])
+      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin"])
 
-    [_alice, bob, carol, dana, erin, frank] = recipients
+    [_alice, bob, carol, dana, erin] = recipients
 
     assert :ok =
              App.dispatch(
@@ -105,24 +104,6 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
                consistency: :strong
              )
 
-    assert :ok =
-             App.dispatch(
-               %ReportEmailDeliveryDelivered{
-                 message_id: message_id,
-                 delivery_id: frank.delivery_id
-               },
-               consistency: :strong
-             )
-
-    assert :ok =
-             App.dispatch(
-               %ReportEmailDeliveryOpened{
-                 message_id: message_id,
-                 delivery_id: frank.delivery_id
-               },
-               consistency: :strong
-             )
-
     email_deliveries_by_recipient =
       message_id
       |> Messaging.list_operator_email_deliveries()
@@ -133,8 +114,7 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
              "Bob" => {"delivered", nil},
              "Carol" => {"delayed", "recipient server is temporarily unavailable"},
              "Dana" => {"bounced", "mailbox does not exist"},
-             "Erin" => {"spam complaint", "recipient marked the message as spam"},
-             "Frank" => {"opened", nil}
+             "Erin" => {"spam complaint", "recipient marked the message as spam"}
            }
   end
 

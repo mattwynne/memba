@@ -46,8 +46,6 @@ defmodule MembaWeb.ResendWebhookController do
     case normalize_token(event_value(params, [:type, "type", :event, "event"])) do
       "emaildelivered" -> {:ok, :delivered}
       "delivered" -> {:ok, :delivered}
-      "emailopened" -> {:ok, :opened}
-      "opened" -> {:ok, :opened}
       "emailbounced" -> {:ok, :bounced}
       "bounced" -> {:ok, :bounced}
       "emailcomplained" -> {:ok, :spam_complaint}
@@ -85,9 +83,6 @@ defmodule MembaWeb.ResendWebhookController do
 
   defp report_status(attrs, :spam_complaint),
     do: Messaging.report_email_delivery_spam_complaint(attrs)
-
-  defp report_status(attrs, :opened),
-    do: Messaging.report_email_delivery_opened(attrs)
 
   defp normalize_dispatch_result(:ok), do: :ok
   defp normalize_dispatch_result({:ok, _result}), do: :ok

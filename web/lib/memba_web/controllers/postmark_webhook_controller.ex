@@ -34,8 +34,6 @@ defmodule MembaWeb.PostmarkWebhookController do
          ) do
       "delivery" -> {:ok, :delivered}
       "delivered" -> {:ok, :delivered}
-      "open" -> {:ok, :opened}
-      "opened" -> {:ok, :opened}
       "delayed" -> {:ok, :delayed}
       "delay" -> {:ok, :delayed}
       "bounced" -> {:ok, :bounced}
@@ -81,9 +79,6 @@ defmodule MembaWeb.PostmarkWebhookController do
 
   defp report_status(attrs, :spam_complaint),
     do: Messaging.report_email_delivery_spam_complaint(attrs)
-
-  defp report_status(attrs, :opened),
-    do: Messaging.report_email_delivery_opened(attrs)
 
   defp normalize_dispatch_result(:ok), do: :ok
   defp normalize_dispatch_result({:ok, _result}), do: :ok
