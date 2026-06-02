@@ -95,7 +95,8 @@ defmodule Memba.Accounts do
 
         case attrs |> SignInToken.create_changeset() |> Repo.insert() do
           {:ok, %SignInToken{} = sign_in_token} ->
-            {:ok, %{email: sign_in_token.email, token: token, expires_at: sign_in_token.expires_at}}
+            {:ok,
+             %{email: sign_in_token.email, token: token, expires_at: sign_in_token.expires_at}}
 
           {:error, changeset} ->
             {:error, changeset}

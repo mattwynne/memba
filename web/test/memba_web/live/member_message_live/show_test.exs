@@ -358,7 +358,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            )
   end
 
-  test "expanded member email delivery rows do not expose Memba-staff-only delivery fields", %{conn: conn} do
+  test "expanded member email delivery rows do not expose Memba-staff-only delivery fields", %{
+    conn: conn
+  } do
     alice =
       create_active_member(
         email: "alice@example.com",

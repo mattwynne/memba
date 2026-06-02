@@ -84,9 +84,10 @@ defmodule MembaWeb.MemberMessageDetailTest do
   end
 
   describe "member-facing email delivery presentation on message detail" do
-    test "renders every member email delivery status with its member-facing label and Heroicon", %{
-      conn: conn
-    } do
+    test "renders every member email delivery status with its member-facing label and Heroicon",
+         %{
+           conn: conn
+         } do
       alice =
         create_member(
           email: "alice@example.com",
@@ -177,7 +178,9 @@ defmodule MembaWeb.MemberMessageDetailTest do
       end)
     end
 
-    test "does not expose Memba-staff-only delivery fields on member message detail", %{conn: conn} do
+    test "does not expose Memba-staff-only delivery fields on member message detail", %{
+      conn: conn
+    } do
       alice =
         create_member(
           email: "alice@example.com",

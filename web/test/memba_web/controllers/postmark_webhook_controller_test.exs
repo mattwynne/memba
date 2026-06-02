@@ -30,7 +30,9 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
 
     assert_eventually(fn ->
       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "opened"
-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status == "opened"
+
+      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
+               "opened"
     end)
   end
 
@@ -54,7 +56,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       assert Messaging.get_member_email_delivery(message_id, bob.person_id).status ==
                "delivery problem"
 
-      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status == "delayed"
+      assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
+               "delayed"
 
       assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).reason ==
                "recipient server is temporarily unavailable"

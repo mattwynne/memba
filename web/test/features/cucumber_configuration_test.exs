@@ -39,15 +39,12 @@ defmodule Memba.CucumberConfigurationTest do
         27},
        {"And", "Dana has opened the email for \"Trip planning night\"", 28},
        {"When", "Alice views the message \"Trip planning night\"", 29},
-       {"Then",
-        "Alice should see Bob's status for \"Trip planning night\" as \"Delivered\"", 30},
+       {"Then", "Alice should see Bob's status for \"Trip planning night\" as \"Delivered\"", 30},
        {"And",
         "Alice should see Carol's status for \"Trip planning night\" as \"Delivery problem\"",
         31},
-       {"And", "Alice should see Dana's status for \"Trip planning night\" as \"Opened\"",
-        32},
-       {"And",
-        "Alice should see Alice's status for \"Trip planning night\" as \"Sending\"", 33}
+       {"And", "Alice should see Dana's status for \"Trip planning night\" as \"Opened\"", 32},
+       {"And", "Alice should see Alice's status for \"Trip planning night\" as \"Sending\"", 33}
      ]},
     {"Bob sees the same shared statuses",
      [
@@ -59,13 +56,10 @@ defmodule Memba.CucumberConfigurationTest do
         "Carol's email for \"Trip planning night\" has been reported as delayed because \"recipient server is temporarily unavailable\"",
         38},
        {"When", "Bob views the message \"Trip planning night\"", 39},
-       {"Then",
-        "Bob should see Alice's status for \"Trip planning night\" as \"Sending\"", 40},
-       {"And", "Bob should see Bob's status for \"Trip planning night\" as \"Delivered\"",
-        41},
+       {"Then", "Bob should see Alice's status for \"Trip planning night\" as \"Sending\"", 40},
+       {"And", "Bob should see Bob's status for \"Trip planning night\" as \"Delivered\"", 41},
        {"And",
-        "Bob should see Carol's status for \"Trip planning night\" as \"Delivery problem\"",
-        42}
+        "Bob should see Carol's status for \"Trip planning night\" as \"Delivery problem\"", 42}
      ]},
     {"Alice is told a failed message was not sent",
      [
@@ -99,13 +93,13 @@ defmodule Memba.CucumberConfigurationTest do
        {"And",
         "Carol's email for \"Avalanche bulletin\" is reported as bounced because \"mailbox does not exist\"",
         16},
-       {"Then", "Memba staff should see Bob's delivery for \"Trip planning night\" as \"delayed\"",
-        17},
+       {"Then",
+        "Memba staff should see Bob's delivery for \"Trip planning night\" as \"delayed\"", 17},
        {"And",
         "Memba staff should see Bob's delivery reason \"recipient server is temporarily unavailable\"",
         18},
-       {"And", "Memba staff should see Carol's delivery for \"Avalanche bulletin\" as \"bounced\"",
-        19},
+       {"And",
+        "Memba staff should see Carol's delivery for \"Avalanche bulletin\" as \"bounced\"", 19},
        {"And", "Memba staff should see Carol's delivery reason \"mailbox does not exist\"", 20}
      ]},
     {"Spam complaints keep the provider reason",
@@ -120,7 +114,8 @@ defmodule Memba.CucumberConfigurationTest do
         "Memba staff should see Bob's delivery for \"Trip planning night\" as \"spam complaint\"",
         25},
        {"And",
-        "Memba staff should see Bob's delivery reason \"recipient marked the message as spam\"", 26}
+        "Memba staff should see Bob's delivery reason \"recipient marked the message as spam\"",
+        26}
      ]},
     {"Opens are visible after delivery",
      [

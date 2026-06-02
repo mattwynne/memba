@@ -50,7 +50,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkConfig do
   """
   def from_application_env do
     mailer_config = Application.get_env(:memba, Memba.Mailer, [])
-    provider_config = Application.get_env(:memba, Memba.Messaging.EmailDeliveryProviders.Postmark, [])
+
+    provider_config =
+      Application.get_env(:memba, Memba.Messaging.EmailDeliveryProviders.Postmark, [])
 
     validate(
       %{

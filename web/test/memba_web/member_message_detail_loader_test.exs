@@ -52,12 +52,13 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     assert assigns.sender_name == "Alice Adams"
     assert assigns.member_email_delivery_count == 1
 
-    assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) == [
-             {"opened", 0, 0},
-             {"delivered", 1, 100},
-             {"sent", 0, 0},
-             {"delivery problem", 0, 0}
-           ]
+    assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) ==
+             [
+               {"opened", 0, 0},
+               {"delivered", 1, 100},
+               {"sent", 0, 0},
+               {"delivery problem", 0, 0}
+             ]
 
     assert [%{status: "delivered", status_label: "Delivered", count: 1}] =
              assigns.member_email_delivery_groups

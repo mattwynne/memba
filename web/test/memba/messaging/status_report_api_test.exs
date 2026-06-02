@@ -77,7 +77,8 @@ defmodule Memba.Messaging.StatusReportApiTest do
     assert Messaging.get_member_email_delivery(message_id, carol.person_id).status ==
              "delivery problem"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).status == "delayed"
+    assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).status ==
+             "delayed"
 
     assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).reason ==
              "recipient server is temporarily unavailable"
@@ -85,7 +86,9 @@ defmodule Memba.Messaging.StatusReportApiTest do
     assert Messaging.get_member_email_delivery(message_id, dana.person_id).status ==
              "delivery problem"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status == "bounced"
+    assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
+             "bounced"
+
     assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status == "opened"
 
     assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status ==
