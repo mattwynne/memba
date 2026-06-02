@@ -1,7 +1,7 @@
 # Remove email open tracking
 
 Date: 2026-06-01
-Status: validated
+Status: implementing
 
 ## Goal
 
