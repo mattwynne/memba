@@ -50,6 +50,29 @@ defmodule MembaWeb.IdentityAuthTest do
       assert club_id == club.club_id
       assert conn.assigns.current_identity_clubs == conn.assigns.current_identity.active_clubs
     end
+
+    test "assigns active clubs for a signed-in alternate known member email", %{conn: conn} do
+      club =
+        create_active_member(
+          email: "alice@example.com",
+          alternate_emails: ["Alice.Work@Example.COM"],
+          club_name: "Kootenay"
+        )
+
+      conn =
+        conn
+        |> init_test_session(%{"current_identity_email" => " alice.work@example.com "})
+        |> IdentityAuth.fetch_current_identity([])
+
+      assert conn.assigns.current_identity.email == "alice.work@example.com"
+      assert conn.assigns.current_identity.staff? == false
+
+      assert [%Club{club_id: club_id, name: "Kootenay"}] =
+               conn.assigns.current_identity.active_clubs
+
+      assert club_id == club.club_id
+      assert conn.assigns.current_identity_clubs == conn.assigns.current_identity.active_clubs
+    end
   end
 
   describe "session helpers" do
@@ -145,6 +168,22 @@ defmodule MembaWeb.IdentityAuthTest do
       refute conn.halted
     end
 
+    test "continues for signed-in active members using an alternate known email", %{conn: conn} do
+      club =
+        create_active_member(
+          email: "alice@example.com",
+          alternate_emails: ["Alice.Work@Example.COM"]
+        )
+
+      conn =
+        %{conn | query_params: %{"club_id" => club.club_id}}
+        |> init_test_session(%{"current_identity_email" => " alice.work@example.com "})
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_active_club_member([])
+
+      refute conn.halted
+    end
+
     test "forbids signed-in identities that are not active members of the requested club", %{
       conn: conn
     } do
@@ -209,6 +248,16 @@ defmodule MembaWeb.IdentityAuthTest do
       person_id: person.person_id,
       active: true
     })
+
+    attrs
+    |> Keyword.get(:alternate_emails, [])
+    |> Enum.each(fn email ->
+      insert_membership_person_email_address!(
+        person_id: person.person_id,
+        email: email,
+        is_primary: false
+      )
+    end)
 
     club
   end
