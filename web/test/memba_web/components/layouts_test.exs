@@ -17,6 +17,11 @@ defmodule MembaWeb.LayoutsTest do
       """)
 
     assert_selector(html, "a[aria-label='Memba home'][href='/']")
+    assert_selector(html, "nav[aria-label='Public navigation'] a[href='/']")
+    assert_text(html, "nav[aria-label='Public navigation']", "Home")
+    assert_selector(html, "nav[aria-label='Public navigation'] a[href='/about']")
+    assert_selector(html, "nav[aria-label='Public navigation'] a[href='/auth']")
+    assert_selector(html, "nav[aria-label='Public navigation'] a[href='/get-started']")
     assert_selector(html, "#public-layout-slot")
     refute_selector(html, "#admin-layout")
     refute_selector(html, "#club-site-layout")

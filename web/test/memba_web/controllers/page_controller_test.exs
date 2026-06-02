@@ -492,13 +492,17 @@ defmodule MembaWeb.PageControllerTest do
     assert html_response(conn, 200) =~ "Membership software for clubs that run on trust."
   end
 
-  test "GET /get-started shows invite-only contact page", %{conn: conn} do
+  test "GET /get-started shows invite-only contact page with public navigation", %{conn: conn} do
     conn = get(conn, ~p"/get-started")
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Memba is invite-only right now."
     assert response =~ "Want to try Memba with your club?"
+
+    assert html
+           |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
+           |> Enum.any?()
 
     assert html
            |> LazyHTML.query("a#contact-us-link[href^='mailto:hello@memba.io']")
