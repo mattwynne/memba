@@ -15,7 +15,8 @@ defmodule Memba.Membership.Projectors.Club do
   project(%ClubCreated{} = event, fn multi ->
     Ecto.Multi.insert(multi, :membership_club, %ClubProjection{
       club_id: event.club_id,
-      name: event.name
+      name: event.name,
+      slug: event.slug
     })
   end)
 end

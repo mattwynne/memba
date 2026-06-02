@@ -8,7 +8,7 @@ defmodule Memba.Membership.Projections.Club do
   @primary_key {:club_id, :binary_id, autogenerate: false}
   schema "membership_clubs" do
     field :name, :string
-    field :slug, :string, virtual: true
+    field :slug, :string
 
     timestamps(type: :utc_datetime_usec)
   end

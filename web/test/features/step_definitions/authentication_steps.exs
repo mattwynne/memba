@@ -7,6 +7,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   alias Memba.Accounts
   alias Memba.Accounts.MagicToken
   alias Memba.Membership
+  alias Memba.Membership.Slug
   alias Memba.Repo
 
   step "{word} is a member of Kootenay Mountaineering Club", %{args: [person_name]} = context do
@@ -193,9 +194,13 @@ defmodule Memba.Cucumber.AuthenticationSteps do
       context
     else
       club_id = Ecto.UUID.generate()
+      slug = scenario_slug(context, club_name)
 
       assert :ok =
-               Membership.create_club(%{club_id: club_id, name: club_name}, consistency: :strong)
+               Membership.create_club(
+                 %{club_id: club_id, name: club_name, slug: slug},
+                 consistency: :strong
+               )
 
       update_context_map(context, :clubs, club_name, club_id)
     end
@@ -303,6 +308,24 @@ defmodule Memba.Cucumber.AuthenticationSteps do
 
   defp default_email_for("Pat"), do: "pat@memba.io"
   defp default_email_for(person_name), do: email_for(person_name)
+
+  defp scenario_slug(context, club_name) do
+    suffix =
+      {Map.get(context, :scenario_name, "scenario"), club_name}
+      |> :erlang.phash2(1_000_000)
+      |> Integer.to_string(36)
+      |> String.downcase()
+
+    max_base_length = Slug.max_length() - String.length(suffix) - 1
+
+    base =
+      club_name
+      |> Slug.default_from_name()
+      |> String.slice(0, max_base_length)
+      |> String.trim("-")
+
+    "#{base}-#{suffix}"
+  end
 
   defp email_for(name) do
     normalized_name =

@@ -30,14 +30,16 @@ defmodule Memba.Membership.ClubProjectionTest do
              App.dispatch(
                %CreateClub{
                  club_id: club_id,
-                 name: "Kootenay Mountaineering Club"
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
                },
                consistency: :strong
              )
 
     assert %ClubProjection{
              club_id: ^club_id,
-             name: "Kootenay Mountaineering Club"
+             name: "Kootenay Mountaineering Club",
+             slug: "kmc"
            } = Membership.get_club(club_id)
   end
 
