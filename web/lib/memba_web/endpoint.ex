@@ -4,12 +4,18 @@ defmodule MembaWeb.Endpoint do
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.
+  @session_cookie_domain Application.compile_env(:memba, :session_cookie_domain)
+
   @session_options [
-    store: :cookie,
-    key: "_memba_key",
-    signing_salt: "9ayol9zC",
-    same_site: "Lax"
-  ]
+                     store: :cookie,
+                     key: "_memba_key",
+                     signing_salt: "9ayol9zC",
+                     same_site: "Lax"
+                   ] ++
+                     if(is_binary(@session_cookie_domain),
+                       do: [domain: @session_cookie_domain],
+                       else: []
+                     )
 
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [session: @session_options]],

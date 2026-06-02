@@ -30,6 +30,10 @@ config :memba, :club_site,
   scheme: "https",
   port: 443
 
+# Share the signed-in browser session between memba.io and club subdomains so
+# "My clubs" links can land members directly on their club dashboard.
+config :memba, :session_cookie_domain, ".memba.io"
+
 # Do not print debug messages in production
 config :logger, level: :info
 
