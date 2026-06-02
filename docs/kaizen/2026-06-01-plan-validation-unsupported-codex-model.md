@@ -94,3 +94,22 @@ Future validations can fail for infrastructure reasons while appearing to fail a
 - Make infrastructure/model failures report a distinct outcome from plan `NOT READY`.
 - Replace unsupported hard-coded models with supported ones, or route through a project-level model alias that can be updated centrally.
 - Document a supported emergency retry path that does not require copying and editing the workflow by hand.
+
+## Resolution
+
+Date: 2026-06-01
+
+Root cause: The plan-validation workflow pinned `codex_review` and `codex_update` to `gpt-5.3-codex`, but the remote Fabro server/account rejects that model. The node-level model stylesheet overrode the CLI `--model` retry option, so the standard validation command could not recover from the unsupported model.
+
+Fix applied:
+
+- `.fabro/workflows/plan-validation/workflow.fabro`: changed `codex_review` and `codex_update` from `gpt-5.3-codex` to `gpt-5.5`, matching the workflow default and the temporary validation run that successfully published iteration 016.
+
+Validation:
+
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed; workflow graph is valid.
+- `dev check` — passed; 262 ExUnit tests, 0 failures.
+
+Remaining follow-up:
+
+- This fix removes the immediate unsupported-model dependency. A broader Fabro preflight or clearer infrastructure-failure outcome would still help prevent similar model-routing failures in other workflows.
