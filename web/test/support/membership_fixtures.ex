@@ -3,7 +3,10 @@ defmodule Memba.MembershipFixtures do
   Shared fixtures for Membership projection tests.
   """
 
+  alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.Person
+  alias Memba.Membership.Projections.PersonEmailAddress
   alias Memba.Membership.Slug
   alias Memba.Repo
 
@@ -48,5 +51,62 @@ defmodule Memba.MembershipFixtures do
       name: attrs.name,
       slug: attrs.slug
     })
+  end
+
+  def membership_person_attrs(attrs \\ []) when is_list(attrs) do
+    person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
+
+    %{
+      person_id: person_id,
+      name: Keyword.get(attrs, :name, "Test Member"),
+      email: Keyword.fetch!(attrs, :email)
+    }
+  end
+
+  def insert_membership_person!(attrs) when is_list(attrs) do
+    attrs = membership_person_attrs(attrs)
+
+    case existing_membership_person(attrs.email) do
+      nil ->
+        person =
+          Repo.insert!(%Person{
+            person_id: attrs.person_id,
+            name: attrs.name,
+            email: attrs.email
+          })
+
+        insert_membership_person_email_address!(
+          person_id: attrs.person_id,
+          email: attrs.email,
+          is_primary: true
+        )
+
+        person
+
+      %Person{} = person ->
+        person
+    end
+  end
+
+  def insert_membership_person_email_address!(attrs) when is_list(attrs) do
+    attrs = Map.new(attrs)
+
+    %PersonEmailAddress{}
+    |> PersonEmailAddress.changeset(%{
+      person_id: Map.fetch!(attrs, :person_id),
+      email: Map.fetch!(attrs, :email),
+      is_primary: Map.get(attrs, :is_primary, false)
+    })
+    |> Repo.insert!()
+  end
+
+  defp existing_membership_person(email) do
+    with {:ok, %{normalized_email: normalized_email}} <- EmailAddresses.normalize_email(email),
+         %PersonEmailAddress{person_id: person_id} <-
+           Repo.get_by(PersonEmailAddress, normalized_email: normalized_email) do
+      Repo.get!(Person, person_id)
+    else
+      _not_found -> nil
+    end
   end
 end
