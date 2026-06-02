@@ -6,14 +6,13 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   alias Memba.Messaging
 
   @empty_club %{"name" => "", "slug" => ""}
-  @empty_person %{"name" => "", "email" => ""}
   @empty_membership %{"person_id" => ""}
   @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
     club = Membership.get_club(club_id)
-    people = Membership.list_people()
+    people = Membership.list_people() |> people_with_email_summaries()
     members = Membership.list_active_members_of_club(club_id)
     messages = Messaging.list_messages_for_club(club_id)
 
@@ -63,35 +62,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
          |> put_flash(:error, "Could not update club: #{format_reason(reason)}")
          |> assign(:club_form, to_form(club_params, as: :club))
          |> assign_club_slug_feedback(Map.get(club_params, "slug"))}
-    end
-  end
-
-  def handle_event("create_person", %{"person" => person_params}, socket) do
-    attrs =
-      person_params
-      |> Map.take(["name", "email"])
-      |> Map.put("person_id", Ecto.UUID.generate())
-
-    case Membership.create_person(attrs, consistency: :strong) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Person created")
-         |> assign(:person_form, to_form(@empty_person, as: :person))
-         |> refresh_people()}
-
-      {:ok, _result} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Person created")
-         |> assign(:person_form, to_form(@empty_person, as: :person))
-         |> refresh_people()}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Could not create person: #{format_reason(reason)}")
-         |> assign(:person_form, to_form(person_params, as: :person))}
     end
   end
 
@@ -251,34 +221,23 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
           <div class="grid gap-6 lg:grid-cols-2">
             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-              <h2 class="text-lg font-semibold text-zinc-900">Create a person</h2>
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-semibold text-zinc-900">People</h2>
+                  <p class="mt-1 text-sm text-zinc-600">
+                    Manage staff-created people and their primary email address.
+                  </p>
+                </div>
 
-              <.form
-                for={@person_form}
-                id="new-person-form"
-                aria-label="Create a person"
-                class="mt-4 space-y-4"
-                phx-submit="create_person"
-              >
-                <.input
-                  field={@person_form[:name]}
-                  id="person-name-input"
-                  label="Name"
-                  aria-label="Person name"
-                  required
-                />
-                <.input
-                  field={@person_form[:email]}
-                  id="person-email-input"
-                  label="Email"
-                  type="email"
-                  aria-label="Person email"
-                  required
-                />
-                <.button id="create-person-button" type="submit" aria-label="Create person">
-                  Create person
-                </.button>
-              </.form>
+                <.link
+                  id="new-person-link"
+                  navigate={~p"/admin/clubs/#{@club_id}/people/new"}
+                  aria-label="New person"
+                  class="inline-flex shrink-0 rounded-full bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800"
+                >
+                  New person
+                </.link>
+              </div>
 
               <div
                 id="people"
@@ -296,10 +255,36 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                   data-person-id={person.person_id}
                   data-person-name={person.name}
                   aria-label={"Person #{person.name}"}
-                  class="py-3"
+                  class="flex items-start justify-between gap-4 py-3"
                 >
-                  <p class="font-medium text-zinc-900">{person.name}</p>
-                  <p class="text-sm text-zinc-500">{person.email}</p>
+                  <div class="min-w-0 space-y-1">
+                    <p class="font-medium text-zinc-900">{person.name}</p>
+                    <p
+                      id={"person-primary-email-#{person.person_id}"}
+                      data-testid="person-primary-email"
+                      class="text-sm text-zinc-600"
+                    >
+                      Primary: <span class="font-medium text-zinc-800">{person.primary_email}</span>
+                    </p>
+                    <p
+                      id={"person-alternate-summary-#{person.person_id}"}
+                      data-testid="person-alternate-summary"
+                      data-alternate-count={person.alternate_count}
+                      class="text-sm text-zinc-500"
+                    >
+                      {alternate_email_summary(person)}
+                    </p>
+                  </div>
+
+                  <.link
+                    id={"edit-person-link-#{person.person_id}"}
+                    navigate={~p"/admin/clubs/#{@club_id}/people/#{person.person_id}/edit"}
+                    data-testid="edit-person-link"
+                    aria-label={"Edit #{person.name}"}
+                    class="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:border-blue-300 hover:text-blue-700"
+                  >
+                    Edit
+                  </.link>
                 </div>
               </div>
             </section>
@@ -447,7 +432,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   defp assign_forms(socket) do
     socket
     |> assign(:club_form, to_form(club_form_params(socket.assigns.club), as: :club))
-    |> assign(:person_form, to_form(@empty_person, as: :person))
     |> assign(:membership_form, to_form(@empty_membership, as: :membership))
     |> assign(:message_form, to_form(@empty_message, as: :message))
   end
@@ -459,14 +443,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
     |> assign(:club, club)
     |> assign(:club_form, to_form(club_form_params(club), as: :club))
     |> assign_club_slug_feedback(current_club_slug(club))
-  end
-
-  defp refresh_people(socket) do
-    people = Membership.list_people()
-
-    socket
-    |> assign(:person_options, person_options(people))
-    |> stream(:people, people, reset: true, dom_id: &"person-#{&1.person_id}")
   end
 
   defp refresh_members(socket) do
@@ -487,6 +463,30 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   defp person_options(people), do: Enum.map(people, &{&1.name, &1.person_id})
 
   defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
+
+  defp people_with_email_summaries(people) do
+    Enum.map(people, fn person ->
+      alternate_emails = Membership.list_person_alternate_emails(person.person_id)
+
+      %{
+        person_id: person.person_id,
+        name: person.name,
+        primary_email: person.email,
+        alternate_emails: alternate_emails,
+        alternate_count: length(alternate_emails)
+      }
+    end)
+  end
+
+  defp alternate_email_summary(%{alternate_count: 0}), do: "No alternate emails"
+
+  defp alternate_email_summary(%{alternate_count: 1, alternate_emails: [email]}) do
+    "1 alternate email: #{email}"
+  end
+
+  defp alternate_email_summary(%{alternate_count: count, alternate_emails: emails}) do
+    "#{count} alternate emails: #{Enum.join(emails, ", ")}"
+  end
 
   defp club_form_params(nil), do: @empty_club
 

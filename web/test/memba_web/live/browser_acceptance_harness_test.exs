@@ -1,6 +1,7 @@
 defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   use MembaWeb.FeatureCase, async: false
 
+  alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.App, as: MessagingApp
   alias Memba.Messaging.Commands.SendMessage
@@ -36,10 +37,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
       "#staff-club-home-link[aria-label='Open Kootenay Mountaineering Club home page']"
     )
     |> assert_has("#staff-club-home-link[href^='/?club_id=']")
-    |> assert_has("#new-person-form[aria-label='Create a person']")
-    |> assert_has("#person-name-input[aria-label='Person name']")
-    |> assert_has("#person-email-input[aria-label='Person email']")
-    |> assert_has("#create-person-button[aria-label='Create person']")
+    |> assert_has("#new-person-link[aria-label='New person'][href^='/admin/clubs/']")
+    |> refute_has("#new-person-form")
     |> assert_has("#people[aria-label='People']")
     |> assert_has("#add-member-form[aria-label='Add a member']")
     |> assert_has("#member-person-select[aria-label='Person to add as member']")
@@ -206,13 +205,20 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   end
 
   defp create_person(session, name) do
+    current_path = PhoenixTest.Driver.current_path(session)
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: Ecto.UUID.generate(),
+                 name: name,
+                 email: email_for(name)
+               },
+               consistency: :strong
+             )
+
     session
-    |> within("#new-person-form", fn session ->
-      session
-      |> fill_in("Name", with: name)
-      |> fill_in("Email", with: email_for(name))
-      |> click_button("Create person")
-    end)
+    |> visit(current_path)
     |> assert_has("#people [data-testid='person-row']", name)
   end
 

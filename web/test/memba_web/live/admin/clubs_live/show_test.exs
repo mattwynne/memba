@@ -134,6 +134,50 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     refute has_element?(view, "#update-club-button[disabled]")
   end
 
+  test "people list links to dedicated create and edit pages and summarizes email addresses", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+
+    insert_membership_person_email_address!(
+      person_id: person.person_id,
+      email: "alice@work.example",
+      is_primary: false
+    )
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    refute has_element?(view, "#new-person-form")
+    assert has_element?(view, "#new-person-link[href='/admin/clubs/#{club.club_id}/people/new']")
+
+    assert has_element?(
+             view,
+             "#person-#{person.person_id} [data-testid='person-primary-email']",
+             "alice@example.com"
+           )
+
+    assert has_element?(
+             view,
+             "#person-#{person.person_id} [data-testid='person-alternate-summary'][data-alternate-count='1']",
+             "1 alternate email"
+           )
+
+    assert has_element?(
+             view,
+             "#person-#{person.person_id} [data-testid='person-alternate-summary']",
+             "alice@work.example"
+           )
+
+    assert has_element?(
+             view,
+             "#edit-person-link-#{person.person_id}[href='/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit']"
+           )
+  end
+
   defp input_value(html, selector) do
     values =
       html
