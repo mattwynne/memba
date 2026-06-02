@@ -29,5 +29,6 @@ Local copies of upstream documentation that are useful while working on Memba.
 
 - `devenv/` — devenv documentation used for local development environment setup.
 - `fabro/` — Fabro documentation used by the iteration workflow.
+- `fly.md` — Memba production Fly.io operations policy and diagnostics guidance.
 
 Each imported directory has a `SOURCE.md` file recording the upstream repository, ref, commit, fetch date, and included files.
