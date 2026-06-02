@@ -1,0 +1,98 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index f9a1024..6fac93b 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -7,6 +7,6 @@
+ - [x] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+ - [x] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+ - [x] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+-- [ ] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
++- [x] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
+ - [ ] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
+ - [ ] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.
+diff --git a/web/lib/memba_web/live/admin/deliveries_live/index.ex b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+index 1c54079..2fa9aeb 100644
+--- a/web/lib/memba_web/live/admin/deliveries_live/index.ex
++++ b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+@@ -144,7 +144,6 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   defp status_class("delayed"), do: "bg-amber-100 text-amber-800"
+   defp status_class("bounced"), do: "bg-red-100 text-red-800"
+   defp status_class("spam complaint"), do: "bg-red-100 text-red-800"
+-  defp status_class("opened"), do: "bg-emerald-100 text-emerald-800"
+   defp status_class("delivered"), do: "bg-blue-100 text-blue-800"
+   defp status_class(_status), do: "bg-zinc-100 text-zinc-700"
+ end
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index 04ba712..28142b1 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -4,7 +4,9 @@ defmodule MembaWeb.DeliveriesLiveTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
+   alias Memba.Messaging.Recipient
++  alias Memba.Repo
+ 
+   test "operators can review deliveries from multiple messages with problem reasons", %{
+     conn: conn
+@@ -77,6 +79,43 @@ defmodule MembaWeb.DeliveriesLiveTest do
+     ])
+   end
+ 
++  test "operators see historic opened delivery rows as delivered, never opened", %{
++    conn: conn
++  } do
++    %{
++      subject: subject,
++      recipients: [recipient]
++    } =
++      send_projected_message(
++        subject: "Privacy policy update",
++        recipients: ["Dana"]
++      )
++
++    set_operator_delivery_status(recipient.delivery_id, status: "opened", reason: "legacy open")
++
++    conn
++    |> sign_in_staff()
++    |> visit("/admin/deliveries")
++    |> assert_path("/admin/deliveries")
++    |> assert_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", count: 1)
++    |> assert_has(
++      "[data-test-id='delivery-row-#{recipient.delivery_id}'][data-delivery-status='delivered']"
++    )
++    |> refute_has(
++      "[data-test-id='delivery-row-#{recipient.delivery_id}'][data-delivery-status='opened']"
++    )
++    |> assert_delivery_row(recipient.delivery_id, [
++      subject,
++      recipient.name,
++      recipient.email,
++      "email",
++      "delivered",
++      "—"
++    ])
++    |> refute_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", "opened")
++    |> refute_has("[data-test-id='delivery-row-#{recipient.delivery_id}']", "legacy open")
++  end
++
+   defp send_projected_message(opts) do
+     subject = Keyword.fetch!(opts, :subject)
+     recipient_names = Keyword.fetch!(opts, :recipients)
+@@ -120,6 +159,15 @@ defmodule MembaWeb.DeliveriesLiveTest do
+     %{message_id: message_id, subject: subject, recipients: recipients}
+   end
+ 
++  defp set_operator_delivery_status(delivery_id, attrs) do
++    delivery = Repo.get!(MembaStaffEmailDeliveryProjection, delivery_id)
++
++    assert {:ok, _delivery} =
++             delivery
++             |> Ecto.Changeset.change(attrs)
++             |> Repo.update()
++  end
++
+   defp assert_delivery_row(session, delivery_id, expected_texts) do
+     row_selector = "[data-test-id='delivery-row-#{delivery_id}']"
+ 
