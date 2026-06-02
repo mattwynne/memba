@@ -1,0 +1,1056 @@
+{
+  "title": "Validate that an iteration plan is ready for implementation and mark it validated without startin...",
+  "spec": {
+    "run_id": "01KT2Z7GKC2G7YKDBCDTEC407E",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {
+          "publish": "true",
+          "plan_path": "--help"
+        },
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.5",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "auto"
+        },
+        "checkpoint": {
+          "exclude_globs": [],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "default",
+          "provider": "docker",
+          "image": {
+            "ref": "buildpack-deps:noble",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": 2,
+            "memory": "4GB",
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "PlanValidation",
+      "nodes": {
+        "opus_recheck": {
+          "id": "opus_recheck",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are Claude Opus performing the post-fix readiness check for an iteration plan.\n\nUse the context from:\n\n- The original chunked plan read stages\n- The three independent model reviews\n- Your Opus Synthesis & Repair Brief\n- Codex Plan Update\n- The updated plan text from the latest chunked `Read Updated Plan ...` stages\n- Any previous recheck reports if this is a later loop pass\n\nYour job is to check the updated plan, decide whether it is ready, and decide whether another Codex edit pass is justified.\n\nReadiness standard:\n\nA plan is READY only if an engineer can begin implementation without first resolving material product/business decisions or material technical design decisions, and if a reviewer can objectively validate success at the end.\n\nA plan is NOT READY if any of these are true:\n\n- The goal is materially ambiguous.\n- The scope is too broad or lacks a smallest useful slice.\n- Acceptance criteria are not concrete/testable enough.\n- The plan does not classify the iteration as behaviour-facing or technical/engineering.\n- A behaviour-facing or domain-policy plan lacks an `## Acceptance Scenarios / Feature Files` section with either named shared Cucumber feature file(s)/scenarios or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples.\n- Important business decisions remain open.\n- Implementation steps require major technical choices that are not made.\n- The expected new capability or success validation is unclear.\n\nCorrection policy:\n\nOnly request another Codex pass for obvious editorial/structural edits that do not require judgment calls. Examples: tightening wording, reorganizing existing content, converting already-stated expectations into objective acceptance criteria, or making clearly implied boundaries explicit.\n\nDo not ask Codex to invent product policy, scope, UX, domain, data-model, integration, or technical-design decisions. If remaining issues need Matt's judgment, fail the validation and list the questions for Matt.\n\nRecheck instructions:\n\n1. Compare the updated plan against your repair brief.\n2. Verify that Codex actually updated the plan file, not just described changes.\n3. Do not penalize the plan for non-blocking polish.\n4. If remaining problems are only obvious edits, set `plan_needs_fix` to true and give Codex exact follow-up instructions.\n5. If remaining problems require Matt's input, set `plan_needs_fix` to false and explain the unresolved decisions/questions.\n6. If the plan is ready, set `plan_ready` to true and `plan_needs_fix` to false.\n\nReturn a concise Markdown report with:\n\n1. Decision: READY or NOT READY\n2. Confidence: High, Medium, or Low\n3. What Codex fixed successfully\n4. Remaining blocking gaps, if any\n5. Follow-up repair instructions for Codex, only if another obvious edit pass is worthwhile\n6. Questions for Matt, if any\n7. Final validation plan: how we will know the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response.\n\nIf READY:\n\n{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}\n\nIf NOT READY but another obvious Codex edit pass should be attempted:\n\n{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":true,\"plan_needs_human\":false}}\n\nIf NOT READY because remaining gaps require Matt's input or should stop the loop:\n\n{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}\n"
+            },
+            "label": {
+              "String": "Opus Recheck"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "claude_review": {
+          "id": "claude_review",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Claude Review"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "model": {
+              "String": "claude-sonnet-4-5"
+            },
+            "provider": {
+              "String": "anthropic"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers. Do not assume any missing details. Be strict, practical, and specific.\n\nIf a chunk says the plan exceeds the chunk limit, or if required chunks are missing/omitted from context, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria, BDD scenario decision, and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Does the plan classify the iteration as behaviour-facing or technical/engineering?\n   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.\n\nUse these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:\n\n- `claude_review_decision`: `READY` or `NOT READY`\n- `claude_review_confidence`: `High`, `Medium`, or `Low`\n- `claude_review_blocking_gap_count`: integer count of blocking gaps\n- `claude_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`\n- `claude_review_required_edits`: concise semicolon-separated required edits, or `None`\n\nExamples:\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n\n{\"context_updates\":{\"claude_review_decision\":\"NOT READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":2,\"claude_review_blocking_gaps\":\"Ordering is not decided; Acceptance criteria omit visible table columns\",\"claude_review_required_edits\":\"State ordering; Define table columns and row identity\"}}\n"
+            }
+          }
+        },
+        "publish_ready": {
+          "id": "publish_ready",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '--help'"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "label": {
+              "String": "Publish Validated Plan"
+            }
+          }
+        },
+        "codex_review": {
+          "id": "codex_review",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.3-codex"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Codex/GPT Review"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers. Do not assume any missing details. Be strict, practical, and specific.\n\nIf a chunk says the plan exceeds the chunk limit, or if required chunks are missing/omitted from context, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria, BDD scenario decision, and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Does the plan classify the iteration as behaviour-facing or technical/engineering?\n   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.\n\nUse these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:\n\n- `codex_review_decision`: `READY` or `NOT READY`\n- `codex_review_confidence`: `High`, `Medium`, or `Low`\n- `codex_review_blocking_gap_count`: integer count of blocking gaps\n- `codex_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`\n- `codex_review_required_edits`: concise semicolon-separated required edits, or `None`\n\nExamples:\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Ordering is not decided; Acceptance criteria omit visible table columns\",\"codex_review_required_edits\":\"State ordering; Define table columns and row identity\"}}\n"
+            }
+          }
+        },
+        "read_updated_plan_241_300": {
+          "id": "read_updated_plan_241_300",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 241 300 360 'updated plan chunk 241-300'"
+            },
+            "label": {
+              "String": "Read Updated Plan 241-300"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "read_plan_121_180": {
+          "id": "read_plan_121_180",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 121 180 360 'original plan chunk 121-180'"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "label": {
+              "String": "Read Plan 121-180"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "synthesis_gate": {
+          "id": "synthesis_gate",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "diamond"
+            },
+            "label": {
+              "String": "Obvious fixes?"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "codex_update": {
+          "id": "codex_update",
+          "attrs": {
+            "prompt": {
+              "String": "You are Codex updating an iteration plan file after Opus has identified obvious fixes.\n\nUse the context from:\n\n- The original plan read stage\n- Gemini review\n- Claude review\n- Codex/GPT review\n- Opus Synthesis & Repair Brief\n- Any previous Opus Recheck stages if this is a later loop pass\n\nEdit the plan file at `--help` directly.\n\nRules:\n\n1. Make only the obvious edits Opus requested.\n2. Preserve the author's intent and structure where possible.\n3. Do not invent product policy, scope, UX, domain, data-model, integration, or technical-design decisions.\n4. Do not add speculative answers to open questions.\n5. Do not edit app code or unrelated files.\n6. If an Opus instruction cannot be applied without making a judgment call, leave the plan unchanged for that point and report that it needs Matt.\n7. Do not change the plan `Status:` to `validated`. Only the deterministic `publish_ready` stage may mark a plan validated after the final ready gate succeeds.\n\nGood edits include tightening wording, reorganizing existing content, converting already-stated expectations into objective acceptance criteria, making clearly implied boundaries explicit, and removing obvious duplication or contradiction.\n\nAfter editing, return a Markdown report with:\n\n- Files changed\n- Summary of edits\n- Which Opus instructions were applied\n- Any instructions you skipped because they require Matt's judgment\n- Anything Opus should pay special attention to in the recheck"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.3-codex"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Codex Updates Plan"
+            }
+          }
+        },
+        "recheck_gate": {
+          "id": "recheck_gate",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "shape": {
+              "String": "diamond"
+            },
+            "label": {
+              "String": "Plan ready?"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "read_updated_plan_001_060": {
+          "id": "read_updated_plan_001_060",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 1 60 360 'updated plan chunk 001-060'"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Read Updated Plan 001-060"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            }
+          }
+        },
+        "read_plan_001_060": {
+          "id": "read_plan_001_060",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Read Plan 001-060"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 1 60 360 'original plan chunk 001-060'"
+            }
+          }
+        },
+        "not_ready": {
+          "id": "not_ready",
+          "attrs": {
+            "script": {
+              "String": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Fail: Plan Not Ready"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "read_updated_plan_301_360": {
+          "id": "read_updated_plan_301_360",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Read Updated Plan 301-360"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 301 360 360 'updated plan chunk 301-360'"
+            }
+          }
+        },
+        "read_plan_301_360": {
+          "id": "read_plan_301_360",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "label": {
+              "String": "Read Plan 301-360"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 301 360 360 'original plan chunk 301-360'"
+            }
+          }
+        },
+        "read_failed": {
+          "id": "read_failed",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": "echo 'Plan validation failed: the plan file could not be read completely. Fix plan_path, make the plan visible to the sandbox, or extend the chunked read coverage before retrying.' >&2\nexit 1"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Fail: Plan Missing or Too Long"
+            }
+          }
+        },
+        "read_plan_241_300": {
+          "id": "read_plan_241_300",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Read Plan 241-300"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 241 300 360 'original plan chunk 241-300'"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "gemini_review": {
+          "id": "gemini_review",
+          "attrs": {
+            "provider": {
+              "String": "gemini"
+            },
+            "model": {
+              "String": "gemini-3.1-pro-preview"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "prompt": {
+              "String": "You are independently reviewing an iteration plan before implementation.\n\nUse the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers. Do not assume any missing details. Be strict, practical, and specific.\n\nIf a chunk says the plan exceeds the chunk limit, or if required chunks are missing/omitted from context, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.\n\nReview the plan against these readiness questions:\n\n1. Goal clarity\n   - Is the goal clearly articulated?\n   - Does it state the user/business outcome, not just tasks?\n   - Is the intended beneficiary or actor clear?\n\n2. Scope focus\n   - Is the scope focused on one coherent outcome?\n   - Could the iteration be any smaller while still useful?\n   - Are non-goals and boundaries clear?\n\n3. Acceptance criteria, BDD scenario decision, and business decisions\n   - Are acceptance criteria concrete, clear, complete, and objectively testable?\n   - Do they cover happy paths, important edge cases, permissions, error states, and data/state changes where relevant?\n   - Does the plan classify the iteration as behaviour-facing or technical/engineering?\n   - For behaviour-facing or domain-policy changes, does the plan include an `## Acceptance Scenarios / Feature Files` section naming the shared Cucumber feature file(s)/scenarios that will express the rules, or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples?\n   - Are any business, product, policy, copy, workflow, or domain decisions still unresolved?\n\n4. Implementation plan and technical decisions\n   - Are implementation steps clear, ordered, and specific?\n   - Are likely files, modules, migrations, tests, interfaces, and integration points named where useful?\n   - Are data model, API, UI, workflow, integration, and background-job changes clear enough?\n   - Are any technical decisions still unresolved?\n\n5. Expected capability and validation\n   - What should we be able to do after this iteration that we cannot do now?\n   - How will we prove success?\n   - Is there a clear stop condition?\n\nReturn a Markdown report with:\n\n- Decision: READY or NOT READY\n- Confidence: High, Medium, or Low\n- Blocking gaps: numbered list\n- Non-blocking improvements: numbered list\n- Smallest viable iteration: your recommended smallest useful slice\n- Required plan edits: concrete edits the author should make\n- Validation plan: how to prove the iteration succeeded\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response and must not be wrapped in a Markdown code fence.\n\nUse these keys exactly so the synthesis stage can fail closed if reviewer findings are not visible in context:\n\n- `gemini_review_decision`: `READY` or `NOT READY`\n- `gemini_review_confidence`: `High`, `Medium`, or `Low`\n- `gemini_review_blocking_gap_count`: integer count of blocking gaps\n- `gemini_review_blocking_gaps`: concise semicolon-separated blocking gaps, or `None`\n- `gemini_review_required_edits`: concise semicolon-separated required edits, or `None`\n\nExamples:\n\n{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}\n\n{\"context_updates\":{\"gemini_review_decision\":\"NOT READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":2,\"gemini_review_blocking_gaps\":\"Ordering is not decided; Acceptance criteria omit visible table columns\",\"gemini_review_required_edits\":\"State ordering; Define table columns and row identity\"}}\n"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "label": {
+              "String": "Gemini Review"
+            }
+          }
+        },
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "label": {
+              "String": "Start"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "label": {
+              "String": "Exit"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "Msquare"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            }
+          }
+        },
+        "read_plan_181_240": {
+          "id": "read_plan_181_240",
+          "attrs": {
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "label": {
+              "String": "Read Plan 181-240"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 181 240 360 'original plan chunk 181-240'"
+            }
+          }
+        },
+        "synthesize": {
+          "id": "synthesize",
+          "attrs": {
+            "prompt": {
+              "String": "You are Claude Opus acting as the repair coordinator for an iteration plan validation loop.\n\nUse the plan text and the three model reviews in context.\n\nThe reviewer stages must have exposed both their Markdown reports and these routing context fields. The reviewers run as separate model-review stages so these fields are visible to synthesis:\n\n- Gemini: `gemini_review_decision`, `gemini_review_confidence`, `gemini_review_blocking_gap_count`, `gemini_review_blocking_gaps`, `gemini_review_required_edits`\n- Claude: `claude_review_decision`, `claude_review_confidence`, `claude_review_blocking_gap_count`, `claude_review_blocking_gaps`, `claude_review_required_edits`\n- Codex/GPT: `codex_review_decision`, `codex_review_confidence`, `codex_review_blocking_gap_count`, `codex_review_blocking_gaps`, `codex_review_required_edits`\n\nFail closed if you cannot see all three reviewer decisions and blocking-gap summaries. Missing reviewer evidence is a workflow/tooling failure for this validation pass, not proof that the plan is ready.\n\nYour job in this stage is to decide whether the plan is ready, needs only obvious editorial/structural correction, or needs human product/technical decisions before it can be ready.\n\nReadiness standard:\n\nA plan is READY only if an engineer can begin implementation without first resolving material product/business decisions or material technical design decisions, and if a reviewer can objectively validate success at the end.\n\nA plan is NOT READY if any of these are true:\n\n- The goal is materially ambiguous.\n- The scope is too broad or lacks a smallest useful slice.\n- Acceptance criteria are not concrete/testable enough.\n- The plan does not classify the iteration as behaviour-facing or technical/engineering.\n- A behaviour-facing or domain-policy plan lacks an `## Acceptance Scenarios / Feature Files` section with either named shared Cucumber feature file(s)/scenarios or an explicit rationale for why Gherkin would not add useful stakeholder-readable examples.\n- Important business decisions remain open.\n- Implementation steps require major technical choices that are not made.\n- The expected new capability or success validation is unclear.\n- The plan expects shared acceptance `.feature` file edits but lacks a `## Allowed acceptance feature changes` section naming each exact file, the allowed kind of change, the reason, and how coverage is preserved or intentionally changed.\n\nCorrection policy:\n\nCodex may only be asked to make obvious plan edits that do not require judgment calls, such as:\n\n- tightening wording without changing meaning\n- reorganizing existing content into clearer sections\n- turning already-stated expectations into objective acceptance criteria\n- making implicit boundaries explicit when the plan already clearly implies them\n- removing duplication or contradiction when the intended meaning is obvious\n\nDo not ask Codex to invent product policy, scope, UX, domain, data-model, integration, or technical-design decisions. If the plan needs those decisions, fail the validation and raise them for Matt.\n\nSynthesis instructions:\n\n1. First verify that all three reviewer decisions and blocking-gap summaries are visible in context. If any are missing, route to Matt/human input and explain that validation evidence was incomplete.\n2. Compare the three reviews.\n3. Include a reviewer decision table with each reviewer's decision, confidence, blocking gap count, and notes.\n4. Identify consensus findings.\n5. Correct reviewer findings that are wrong, too vague, duplicated, or not actually blocking.\n6. Decide whether the plan is already ready, needs only obvious edits, or needs Matt's input.\n7. If only obvious edits are needed, produce a concrete repair brief for Codex.\n8. If Matt's input is needed, do not produce a repair brief as if Codex can solve it; list the decisions/questions clearly.\n\nVoting/consensus guardrails:\n\n- If two or more reviewers say NOT READY, you must not publish READY unless you explicitly quote or summarize each NOT READY blocker and explain why it is wrong or non-blocking.\n- If any reviewer says NOT READY, include a `Reviewer objections addressed` section that accounts for every blocking gap from that reviewer.\n- Do not treat successful reviewer node execution as readiness. Only the reviewer decision and findings content can support readiness.\n- If your response cannot include a real synthesis report with the sections below, route to Matt/human input rather than READY.\n\nReturn a Markdown report with:\n\n1. Provisional decision: READY, OBVIOUS FIXES NEEDED, or NEEDS MATT\n2. Reviewer decision table: Reviewer, Decision, Confidence, Blocking gaps count, Notes\n3. Consensus findings: 3-6 bullets\n4. Reviewer objections addressed: account for every NOT READY blocking gap, or \"No reviewer returned NOT READY\"\n5. Corrected findings: reviewer findings you changed, downgraded, combined, or rejected\n6. Blocking gaps: numbered list, each with why it blocks implementation\n7. Codex repair brief: exact instructions for obvious edits only, or \"None\"\n8. Questions for Matt: decisions that need human input, or \"None\"\n9. Validation checklist: what to check after any Codex update\n\nAt the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response.\n\nIf the plan is already READY:\n\n{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}\n\nIf the plan is NOT READY but Codex should apply only obvious fixes:\n\n{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":true,\"plan_needs_human\":false}}\n\nIf the plan is NOT READY because Matt needs to answer questions or make decisions:\n\n{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}\n"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "shape": {
+              "String": "tab"
+            },
+            "output_schema": {
+              "String": "routing"
+            },
+            "reasoning_effort": {
+              "String": "high"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Opus Synthesis & Repair Brief"
+            }
+          }
+        },
+        "read_updated_plan_061_120": {
+          "id": "read_updated_plan_061_120",
+          "attrs": {
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "label": {
+              "String": "Read Updated Plan 061-120"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 61 120 360 'updated plan chunk 061-120'"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "read_updated_plan_121_180": {
+          "id": "read_updated_plan_121_180",
+          "attrs": {
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 121 180 360 'updated plan chunk 121-180'"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Read Updated Plan 121-180"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        },
+        "read_updated_plan_181_240": {
+          "id": "read_updated_plan_181_240",
+          "attrs": {
+            "shape": {
+              "String": "parallelogram"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            },
+            "label": {
+              "String": "Read Updated Plan 181-240"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "provider": {
+              "String": "openai"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 181 240 360 'updated plan chunk 181-240'"
+            }
+          }
+        },
+        "read_plan_061_120": {
+          "id": "read_plan_061_120",
+          "attrs": {
+            "provider": {
+              "String": "openai"
+            },
+            "label": {
+              "String": "Read Plan 061-120"
+            },
+            "reasoning_effort": {
+              "String": "low"
+            },
+            "shape": {
+              "String": "parallelogram"
+            },
+            "script": {
+              "String": ".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '--help' 61 120 360 'original plan chunk 061-120'"
+            },
+            "model": {
+              "String": "gpt-5.5"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "read_plan_001_060",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan_001_060",
+          "to": "read_plan_061_120",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan_001_060",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan_061_120",
+          "to": "read_plan_121_180",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan_061_120",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan_121_180",
+          "to": "read_plan_181_240",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan_121_180",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan_181_240",
+          "to": "read_plan_241_300",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan_181_240",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan_241_300",
+          "to": "read_plan_301_360",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan_241_300",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_plan_301_360",
+          "to": "gemini_review",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_plan_301_360",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_failed",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "gemini_review",
+          "to": "claude_review",
+          "attrs": {}
+        },
+        {
+          "from": "claude_review",
+          "to": "codex_review",
+          "attrs": {}
+        },
+        {
+          "from": "codex_review",
+          "to": "synthesize",
+          "attrs": {}
+        },
+        {
+          "from": "synthesize",
+          "to": "synthesis_gate",
+          "attrs": {}
+        },
+        {
+          "from": "synthesis_gate",
+          "to": "publish_ready",
+          "attrs": {
+            "label": {
+              "String": "Already ready"
+            },
+            "condition": {
+              "String": "plan_ready=true"
+            }
+          }
+        },
+        {
+          "from": "synthesis_gate",
+          "to": "codex_update",
+          "attrs": {
+            "condition": {
+              "String": "plan_needs_fix=true"
+            },
+            "label": {
+              "String": "Apply obvious fixes"
+            }
+          }
+        },
+        {
+          "from": "synthesis_gate",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "Needs human input"
+            }
+          }
+        },
+        {
+          "from": "codex_update",
+          "to": "read_updated_plan_001_060",
+          "attrs": {}
+        },
+        {
+          "from": "read_updated_plan_001_060",
+          "to": "read_updated_plan_061_120",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_updated_plan_001_060",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_updated_plan_061_120",
+          "to": "read_updated_plan_121_180",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_updated_plan_061_120",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_updated_plan_121_180",
+          "to": "read_updated_plan_181_240",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_updated_plan_121_180",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_updated_plan_181_240",
+          "to": "read_updated_plan_241_300",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_updated_plan_181_240",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_updated_plan_241_300",
+          "to": "read_updated_plan_301_360",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_updated_plan_241_300",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "read_updated_plan_301_360",
+          "to": "opus_recheck",
+          "attrs": {
+            "condition": {
+              "String": "outcome=succeeded"
+            }
+          }
+        },
+        {
+          "from": "read_updated_plan_301_360",
+          "to": "read_failed",
+          "attrs": {}
+        },
+        {
+          "from": "opus_recheck",
+          "to": "recheck_gate",
+          "attrs": {}
+        },
+        {
+          "from": "recheck_gate",
+          "to": "publish_ready",
+          "attrs": {
+            "condition": {
+              "String": "plan_ready=true"
+            },
+            "label": {
+              "String": "Ready"
+            }
+          }
+        },
+        {
+          "from": "recheck_gate",
+          "to": "codex_update",
+          "attrs": {
+            "label": {
+              "String": "Fix again"
+            },
+            "condition": {
+              "String": "plan_needs_fix=true && context.internal.node_visit_count < 3"
+            }
+          }
+        },
+        {
+          "from": "recheck_gate",
+          "to": "not_ready",
+          "attrs": {
+            "label": {
+              "String": "Not ready"
+            }
+          }
+        },
+        {
+          "from": "publish_ready",
+          "to": "exit",
+          "attrs": {}
+        },
+        {
+          "from": "not_ready",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation"
+        },
+        "rankdir": {
+          "String": "LR"
+        },
+        "model_stylesheet": {
+          "String": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        "
+        },
+        "default_fidelity": {
+          "String": "summary:high"
+        }
+      }
+    },
+    "graph_source": "digraph PlanValidation {\n    graph [\n        goal=\"Rigorously validate the iteration plan at {{ inputs.plan_path }} and mark it validated when it is ready for future implementation\",\n        default_fidelity=\"summary:high\",\n        model_stylesheet=\"\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.3-codex; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.3-codex; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        \"\n    ]\n    rankdir=LR\n\n    start [shape=Mdiamond, label=\"Start\"]\n    exit  [shape=Msquare, label=\"Exit\"]\n\n    read_plan_001_060 [\n        label=\"Read Plan 001-060\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 1 60 360 'original plan chunk 001-060'\"\n    ]\n\n    read_plan_061_120 [\n        label=\"Read Plan 061-120\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 61 120 360 'original plan chunk 061-120'\"\n    ]\n\n    read_plan_121_180 [\n        label=\"Read Plan 121-180\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 121 180 360 'original plan chunk 121-180'\"\n    ]\n\n    read_plan_181_240 [\n        label=\"Read Plan 181-240\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 181 240 360 'original plan chunk 181-240'\"\n    ]\n\n    read_plan_241_300 [\n        label=\"Read Plan 241-300\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 241 300 360 'original plan chunk 241-300'\"\n    ]\n\n    read_plan_301_360 [\n        label=\"Read Plan 301-360\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 301 360 360 'original plan chunk 301-360'\"\n    ]\n\n    read_failed [\n        label=\"Fail: Plan Missing or Too Long\",\n        shape=parallelogram,\n        script=\"echo 'Plan validation failed: the plan file could not be read completely. Fix plan_path, make the plan visible to the sandbox, or extend the chunked read coverage before retrying.' >&2\\nexit 1\"\n    ]\n\n    gemini_review [\n        label=\"Gemini Review\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/gemini_review.md\"\n    ]\n\n    claude_review [\n        label=\"Claude Review\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/claude_review.md\"\n    ]\n\n    codex_review [\n        label=\"Codex/GPT Review\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/codex_review.md\"\n    ]\n\n    synthesize [\n        label=\"Opus Synthesis & Repair Brief\",\n        shape=tab,\n        output_schema=\"routing\",\n        prompt=\"@prompts/synthesize.md\"\n    ]\n\n    synthesis_gate [shape=diamond, label=\"Obvious fixes?\"]\n\n    codex_update [\n        label=\"Codex Updates Plan\",\n        prompt=\"@prompts/apply_fixes.md\"\n    ]\n\n    read_updated_plan_001_060 [\n        label=\"Read Updated Plan 001-060\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 1 60 360 'updated plan chunk 001-060'\"\n    ]\n\n    read_updated_plan_061_120 [\n        label=\"Read Updated Plan 061-120\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 61 120 360 'updated plan chunk 061-120'\"\n    ]\n\n    read_updated_plan_121_180 [\n        label=\"Read Updated Plan 121-180\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 121 180 360 'updated plan chunk 121-180'\"\n    ]\n\n    read_updated_plan_181_240 [\n        label=\"Read Updated Plan 181-240\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 181 240 360 'updated plan chunk 181-240'\"\n    ]\n\n    read_updated_plan_241_300 [\n        label=\"Read Updated Plan 241-300\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 241 300 360 'updated plan chunk 241-300'\"\n    ]\n\n    read_updated_plan_301_360 [\n        label=\"Read Updated Plan 301-360\",\n        shape=parallelogram,\n        script=\".fabro/workflows/plan-validation/scripts/print_plan_chunk.sh '{{ inputs.plan_path }}' 301 360 360 'updated plan chunk 301-360'\"\n    ]\n\n    opus_recheck [\n        label=\"Opus Recheck\",\n        shape=tab,\n        prompt=\"@prompts/recheck.md\"\n    ]\n\n    recheck_gate [shape=diamond, label=\"Plan ready?\"]\n\n    publish_ready [\n        label=\"Publish Validated Plan\",\n        shape=parallelogram,\n        script=\"if [ '{{ inputs.publish }}' = 'false' ]; then\\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\\n  exit 0\\nfi\\n.fabro/workflows/plan-validation/scripts/publish_ready.sh '{{ inputs.plan_path }}'\"\n    ]\n\n    not_ready [\n        label=\"Fail: Plan Not Ready\",\n        shape=parallelogram,\n        script=\"echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\\nexit 1\"\n    ]\n\n    start -> read_plan_001_060\n    read_plan_001_060 -> read_plan_061_120 [condition=\"outcome=succeeded\"]\n    read_plan_001_060 -> read_failed\n    read_plan_061_120 -> read_plan_121_180 [condition=\"outcome=succeeded\"]\n    read_plan_061_120 -> read_failed\n    read_plan_121_180 -> read_plan_181_240 [condition=\"outcome=succeeded\"]\n    read_plan_121_180 -> read_failed\n    read_plan_181_240 -> read_plan_241_300 [condition=\"outcome=succeeded\"]\n    read_plan_181_240 -> read_failed\n    read_plan_241_300 -> read_plan_301_360 [condition=\"outcome=succeeded\"]\n    read_plan_241_300 -> read_failed\n    read_plan_301_360 -> gemini_review [condition=\"outcome=succeeded\"]\n    read_plan_301_360 -> read_failed\n    read_failed -> exit\n    gemini_review -> claude_review\n    claude_review -> codex_review\n    codex_review -> synthesize\n    synthesize -> synthesis_gate\n    synthesis_gate -> publish_ready [label=\"Already ready\", condition=\"plan_ready=true\"]\n    synthesis_gate -> codex_update [label=\"Apply obvious fixes\", condition=\"plan_needs_fix=true\"]\n    synthesis_gate -> not_ready [label=\"Needs human input\"]\n    codex_update -> read_updated_plan_001_060\n    read_updated_plan_001_060 -> read_updated_plan_061_120 [condition=\"outcome=succeeded\"]\n    read_updated_plan_001_060 -> read_failed\n    read_updated_plan_061_120 -> read_updated_plan_121_180 [condition=\"outcome=succeeded\"]\n    read_updated_plan_061_120 -> read_failed\n    read_updated_plan_121_180 -> read_updated_plan_181_240 [condition=\"outcome=succeeded\"]\n    read_updated_plan_121_180 -> read_failed\n    read_updated_plan_181_240 -> read_updated_plan_241_300 [condition=\"outcome=succeeded\"]\n    read_updated_plan_181_240 -> read_failed\n    read_updated_plan_241_300 -> read_updated_plan_301_360 [condition=\"outcome=succeeded\"]\n    read_updated_plan_241_300 -> read_failed\n    read_updated_plan_301_360 -> opus_recheck [condition=\"outcome=succeeded\"]\n    read_updated_plan_301_360 -> read_failed\n    opus_recheck -> recheck_gate\n    recheck_gate -> publish_ready [label=\"Ready\", condition=\"plan_ready=true\"]\n    recheck_gate -> codex_update [label=\"Fix again\", condition=\"plan_needs_fix=true && context.internal.node_visit_count < 3\"]\n    recheck_gate -> not_ready [label=\"Not ready\"]\n    publish_ready -> exit\n    not_ready -> exit\n}\n",
+    "workflow_slug": "plan-validation",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.245.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "8d9aa5f87356b9e24a042e27baeab4eea9b597269f74b09d0b5639b832a87f53",
+    "definition_blob": "c13574b80d15e75734404c983156580bf523093f36f417109fe8fa8b9674ae22",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "a620a12f11caf9455f1515a6d1019c1ecdda68e6",
+      "dirty": "dirty",
+      "push_outcome": {
+        "type": "not_attempted"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KT2Z7GKC2G7YKDBCDTEC407E",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-06-02T01:30:05.398013897Z",
+  "last_event_at": "2026-06-02T01:30:08.231990724Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "buildpack-deps:noble",
+    "runtime": {
+      "id": "2c804a14af60ed3a9f26ad5bd37295ee17e5b27031a28481dc700b9754b34ea4",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}
