@@ -101,3 +101,23 @@ If this happens after real customer data exists, manually renaming or truncating
 - Add or repair migrations rather than editing migration files after they may have run anywhere.
 - Add a release task for safe non-customer-data environment reset that drops/recreates schemas from migrations.
 - Include `/auth` sign-in token creation in post-deploy smoke testing, using a controlled test address.
+
+## Resolution
+
+Date: 2026-06-01
+
+Root cause: The auth token migration was edited in place after its version had already been deployed. Production had version `20260531184305` recorded in `schema_migrations`, so the release migration command correctly skipped it even though the physical table still used the earlier `auth_magic_tokens` name. The release workflow had no post-migration schema-shape check, so the drift reached the sign-in flow.
+
+Fix applied:
+
+- `web/lib/memba/release.ex`: after release migrations, verify that the public database has the tables and columns required by the current Ecto schemas and projection bookkeeping. The release command now fails with an operator-facing schema-drift error instead of allowing a user-facing 500.
+- `web/test/memba/release_test.exs`: added coverage for the release schema verification, including the specific old-auth-table drift case.
+- `web/priv/repo/migrations/20260531184305_create_auth_sign_in_tokens.exs`: renamed the migration file to match the table it now creates while preserving the deployed migration version.
+
+Validation:
+
+- `./bin/dev check` — passed, 315 tests, 0 failures.
+
+Remaining follow-up:
+
+- Consider adding a production smoke command that runs `Memba.Release.verify_schema!()` explicitly after deploy and before manual sign-in smoke tests.
