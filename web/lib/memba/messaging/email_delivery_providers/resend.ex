@@ -15,6 +15,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
 
   @behaviour EmailDeliveryProvider
 
+  @sender_name "Memba"
+
   @impl EmailDeliveryProvider
   def deliver(%EmailDeliveryRequest{channel: :email} = request) do
     case ResendConfig.from_application_env() do
@@ -33,7 +35,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
 
   defp email(%EmailDeliveryRequest{} = request, %ResendConfig{} = config) do
     new()
-    |> from(config.from)
+    |> from({@sender_name, config.from})
     |> maybe_reply_to(config.reply_to)
     |> to({request.recipient_name, request.recipient_address})
     |> subject(request.subject)

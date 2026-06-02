@@ -35,7 +35,7 @@ defmodule Memba.Accounts.AuthEmailTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"", "auth@mail.memba.io"}
+    assert email.from == {"Memba", "auth@mail.memba.io"}
     assert email.to == [{"", "alice@example.com"}]
     assert email.subject == "Sign in to Memba"
 
@@ -67,7 +67,7 @@ defmodule Memba.Accounts.AuthEmailTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"", "auth@mail.memba.io"}
+    assert email.from == {"Memba", "auth@mail.memba.io"}
     assert email.to == [{"", "alice@example.com"}]
 
     assert email.provider_options == %{
@@ -93,7 +93,7 @@ defmodule Memba.Accounts.AuthEmailTest do
              )
 
     assert_received {:email, %Swoosh.Email{} = email}
-    assert email.from == {"", "auth@mail.memba.local"}
+    assert email.from == {"Memba", "auth@mail.memba.local"}
     assert email.to == [{"", "matt@memba.io"}]
     assert email.provider_options == %{message_stream: "development-auth"}
   end

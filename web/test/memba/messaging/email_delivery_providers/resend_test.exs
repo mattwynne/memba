@@ -35,7 +35,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"", "messages@mail.memba.io"}
+    assert email.from == {"Memba", "messages@mail.memba.io"}
     assert email.reply_to == {"", "help@memba.io"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
     assert email.subject == "Trip planning night"
