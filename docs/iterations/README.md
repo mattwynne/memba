@@ -25,7 +25,7 @@ green than before.
 | 013 | 2026-06-01 | merged | Member compose LiveView flow | [plan](013-member-compose-liveview-flow/plan.md) |
 | 014 | 2026-06-01 | merged | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
 | 015 | 2026-06-01 | merged | Club slugs and public club subdomains | [plan](015-club-slugs/plan.md) |
-| 016 | 2026-06-01 | validated | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
+| 016 | 2026-06-01 | implementing | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
 
 Status notes:
 
