@@ -1,0 +1,89 @@
+diff --git a/web/test/event_sourced_setup_test.exs b/web/test/event_sourced_setup_test.exs
+index 2fa3a93..45b9e85 100644
+--- a/web/test/event_sourced_setup_test.exs
++++ b/web/test/event_sourced_setup_test.exs
+@@ -41,7 +41,7 @@ defmodule Memba.EventSourcedSetupTest do
+   end
+ 
+   test "membership club slugs are required, deterministic, and unique" do
+-    Memba.EventSourcedCase.reset_event_sourced_storage!()
++    Memba.EventSourcedCase.reset_event_sourced_system!()
+ 
+     try do
+       assert [["NO", "text"]] =
+@@ -94,12 +94,12 @@ defmodule Memba.EventSourcedSetupTest do
+ 
+       assert duplicate_error.postgres.constraint == "membership_clubs_slug_index"
+     after
+-      Memba.EventSourcedCase.reset_event_sourced_storage!()
++      Memba.EventSourcedCase.reset_event_sourced_system!()
+     end
+   end
+ 
+   test "event-sourced test helper resets EventStore and projection rows" do
+-    Memba.EventSourcedCase.reset_event_sourced_storage!()
++    Memba.EventSourcedCase.reset_event_sourced_system!()
+ 
+     if is_nil(Process.whereis(Memba.EventStore)) do
+       start_supervised!(Memba.EventStore)
+@@ -155,7 +155,7 @@ defmodule Memba.EventSourcedSetupTest do
+     assert [[1]] = query!("SELECT count(*) FROM membership_memberships").rows
+     assert [[1]] = query!("SELECT count(*) FROM membership_people").rows
+ 
+-    Memba.EventSourcedCase.reset_event_sourced_storage!()
++    Memba.EventSourcedCase.reset_event_sourced_system!()
+ 
+     assert [[0]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
+     assert [[0]] = query!("SELECT count(*) FROM projection_versions").rows
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 7d2ce23..453c7ba 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -19,6 +19,7 @@ defmodule Memba.EventSourcedCase do
+     Memba.Messaging.Projectors.MemberEmailDelivery,
+     Memba.Messaging.Projectors.MembaStaffEmailDelivery
+   ]
++  @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
+ 
+   using do
+     quote do
+@@ -46,11 +47,28 @@ defmodule Memba.EventSourcedCase do
+ 
+     projector_child_ids = stop_event_sourced_projectors!()
+     reset_event_sourced_storage!()
++    reset_commanded_subscription_acks!()
+     Memba.DataCase.setup_sandbox(tags)
+     start_event_sourced_projectors!(projector_child_ids)
+     :ok
+   end
+ 
++  @doc """
++  Reset shared event-sourced storage while keeping projector subscriptions coherent.
++
++  Use this from tests that are not using `Memba.EventSourcedCase` but need to
++  truncate EventStore/projection state. Resetting the tables while projectors
++  remain subscribed can leave later strong-consistency dispatches waiting for
++  acknowledgements that will never arrive.
++  """
++  def reset_event_sourced_system! do
++    projector_child_ids = stop_event_sourced_projectors!()
++    reset_event_sourced_storage!()
++    reset_commanded_subscription_acks!()
++    start_event_sourced_projectors!(projector_child_ids)
++    :ok
++  end
++
+   @doc """
+   Reset persistent event-sourced storage used by tests.
+ 
+@@ -85,6 +103,10 @@ defmodule Memba.EventSourcedCase do
+     end)
+   end
+ 
++  defp reset_commanded_subscription_acks! do
++    Enum.each(@commanded_apps, &Commanded.Subscriptions.reset/1)
++  end
++
+   defp reset_event_store!(conn) do
+     schema = event_store_schema()
+ 
