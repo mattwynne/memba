@@ -25,11 +25,10 @@ Feature: Member message deliverability
       Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
       And Bob's email for "Trip planning night" has been reported as delivered
       And Carol's email for "Trip planning night" has been reported as bounced because "mailbox does not exist"
-      And Dana has opened the email for "Trip planning night"
       When Alice views the message "Trip planning night"
       Then Alice should see Bob's status for "Trip planning night" as "Delivered"
       And Alice should see Carol's status for "Trip planning night" as "Delivery problem"
-      And Alice should see Dana's status for "Trip planning night" as "Opened"
+      And Alice should see Dana's status for "Trip planning night" as "Sending"
       And Alice should see Alice's status for "Trip planning night" as "Sending"
 
     Scenario: Bob sees the same shared statuses

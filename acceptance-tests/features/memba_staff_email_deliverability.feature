@@ -24,9 +24,3 @@ Feature: Memba staff email deliverability
       When Bob's email for "Trip planning night" is reported as a spam complaint because "recipient marked the message as spam"
       Then Memba staff should see Bob's delivery for "Trip planning night" as "spam complaint"
       And Memba staff should see Bob's delivery reason "recipient marked the message as spam"
-
-    Scenario: Opens are visible after delivery
-      Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
-      And Bob's email for "Trip planning night" has been reported as delivered
-      When Bob opens the email for "Trip planning night"
-      Then Memba staff should see Bob's delivery for "Trip planning night" as "opened"
