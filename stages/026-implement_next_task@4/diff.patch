@@ -1,0 +1,443 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index 6f525bd..a81f734 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect current opened references in `web/lib`, `web/test`, `acceptance-tests/features`, active docs, and Postmark delivery code. Exclude old `docs/iterations/**` design/prototype artifacts from cleanup unless they are active validation inputs.
+ - [x] 002 Update shared acceptance feature expectations to remove opened receipts.
+ - [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:
+-- [ ] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
++- [x] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+ - [ ] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+ - [ ] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+ - [ ] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index ef7687e..563247d 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -149,7 +149,9 @@ defmodule Memba.Messaging do
+   """
+   def get_member_email_delivery(delivery_id) do
+     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+-      Repo.get(MemberEmailDeliveryProjection, delivery_id)
++      MemberEmailDeliveryProjection
++      |> Repo.get(delivery_id)
++      |> normalize_member_email_delivery()
+     else
+       :error -> nil
+     end
+@@ -168,6 +170,7 @@ defmodule Memba.Messaging do
+         message_id: message_id,
+         recipient_id: recipient_id
+       )
++      |> normalize_member_email_delivery()
+     else
+       :error -> nil
+     end
+@@ -186,6 +189,7 @@ defmodule Memba.Messaging do
+       |> where([receipt], receipt.message_id == ^message_id)
+       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
+       |> Repo.all()
++      |> Enum.map(&normalize_member_email_delivery/1)
+     else
+       :error -> []
+     end
+@@ -198,7 +202,9 @@ defmodule Memba.Messaging do
+   """
+   def get_memba_staff_email_delivery(delivery_id) do
+     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+-      Repo.get(MembaStaffEmailDeliveryProjection, delivery_id)
++      MembaStaffEmailDeliveryProjection
++      |> Repo.get(delivery_id)
++      |> normalize_memba_staff_email_delivery()
+     else
+       :error -> nil
+     end
+@@ -217,6 +223,7 @@ defmodule Memba.Messaging do
+         message_id: message_id,
+         recipient_id: recipient_id
+       )
++      |> normalize_memba_staff_email_delivery()
+     else
+       :error -> nil
+     end
+@@ -234,6 +241,7 @@ defmodule Memba.Messaging do
+     if is_list(opts) do
+       with {:ok, query} <- operator_deliveries_query(opts) do
+         Repo.all(query)
++        |> Enum.map(&normalize_memba_staff_email_delivery/1)
+       else
+         :error -> []
+       end
+@@ -258,11 +266,32 @@ defmodule Memba.Messaging do
+         asc: deliverability.recipient_id
+       )
+       |> Repo.all()
++      |> Enum.map(&normalize_memba_staff_email_delivery/1)
+     else
+       :error -> []
+     end
+   end
+ 
++  defp normalize_member_email_delivery(nil), do: nil
++
++  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{status: "opened"} = receipt) do
++    %{receipt | status: "delivered"}
++  end
++
++  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{} = receipt), do: receipt
++
++  defp normalize_memba_staff_email_delivery(nil), do: nil
++
++  defp normalize_memba_staff_email_delivery(
++         %MembaStaffEmailDeliveryProjection{status: "opened"} = delivery
++       ) do
++    %{delivery | status: "delivered", reason: nil}
++  end
++
++  defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
++    delivery
++  end
++
+   defp operator_deliveries_query(opts) do
+     query =
+       from deliverability in MembaStaffEmailDeliveryProjection,
+diff --git a/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex b/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex
+index 8773d81..88f07c1 100644
+--- a/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/memba_staff_email_delivery.ex
+@@ -56,7 +56,7 @@ defmodule Memba.Messaging.Projectors.MembaStaffEmailDelivery do
+   end)
+ 
+   project(%EmailDeliveryOpened{} = event, fn multi ->
+-    update_deliverability(multi, event.delivery_id, status: "opened", reason: nil)
++    update_deliverability(multi, event.delivery_id, status: "delivered", reason: nil)
+   end)
+ 
+   defp update_deliverability(multi, delivery_id, attrs) do
+diff --git a/web/lib/memba/messaging/projectors/member_email_delivery.ex b/web/lib/memba/messaging/projectors/member_email_delivery.ex
+index 264f87f..c055aef 100644
+--- a/web/lib/memba/messaging/projectors/member_email_delivery.ex
++++ b/web/lib/memba/messaging/projectors/member_email_delivery.ex
+@@ -46,7 +46,7 @@ defmodule Memba.Messaging.Projectors.MemberEmailDelivery do
+   end)
+ 
+   project(%EmailDeliveryOpened{} = event, fn multi ->
+-    update_status(multi, event.delivery_id, "opened")
++    update_status(multi, event.delivery_id, "delivered")
+   end)
+ 
+   defp update_status(multi, delivery_id, status) do
+diff --git a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+index 109650d..7250529 100644
+--- a/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/memba_staff_email_delivery_projection_test.exs
+@@ -8,6 +8,8 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.EmailDeliveryOpened
++  alias Memba.Messaging.Projectors.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjector
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
+   alias Memba.Messaging.Recipient
+ 
+@@ -118,6 +120,57 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
+            }
+   end
+ 
++  test "Memba staff email delivery projection maps historic opened events to delivered" do
++    %{message_id: message_id, recipients: [_alice, bob]} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    assert :ok =
++             MembaStaffEmailDeliveryProjector.handle(
++               %EmailDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id
++               },
++               %{
++                 handler_name: "memba-staff-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
++                 event_number: 10_000
++               }
++             )
++
++    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
++             Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
++  end
++
++  test "Memba staff email delivery queries normalize historic opened rows to delivered" do
++    %{message_id: message_id, recipients: [_alice, bob]} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    MembaStaffEmailDeliveryProjection
++    |> where([delivery], delivery.delivery_id == ^bob.delivery_id)
++    |> Repo.update_all(set: [status: "opened", reason: "legacy open"])
++
++    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
++             Messaging.get_memba_staff_email_delivery(bob.delivery_id)
++
++    assert %MembaStaffEmailDeliveryProjection{status: "delivered", reason: nil} =
++             Messaging.get_memba_staff_email_delivery(message_id, bob.person_id)
++
++    assert %{"Bob" => {"delivered", nil}} =
++             message_id
++             |> Messaging.list_operator_email_deliveries()
++             |> Map.new(&{&1.recipient_name, {&1.status, &1.reason}})
++
++    assert [
++             %MembaStaffEmailDeliveryProjection{
++               recipient_name: "Bob",
++               status: "delivered",
++               reason: nil
++             }
++           ] =
++             [message_id: message_id]
++             |> Messaging.list_operator_deliveries()
++             |> Enum.filter(&(&1.recipient_name == "Bob"))
++  end
++
+   test "Memba staff email delivery clears prior delay reason when delivery recovers" do
+     %{message_id: message_id, recipients: [_alice, bob]} =
+       send_message_with_recipients(["Alice", "Bob"])
+diff --git a/web/test/memba/messaging/member_email_delivery_projection_test.exs b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+index d7afa02..af098f7 100644
+--- a/web/test/memba/messaging/member_email_delivery_projection_test.exs
++++ b/web/test/memba/messaging/member_email_delivery_projection_test.exs
+@@ -8,6 +8,8 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Events.EmailDeliveryOpened
++  alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+   alias Memba.Messaging.Recipient
+ 
+@@ -110,6 +112,46 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
+            }
+   end
+ 
++  test "member email delivery projection maps historic opened events to delivered" do
++    %{message_id: message_id, recipients: [_alice, bob]} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    assert :ok =
++             MemberEmailDeliveryProjector.handle(
++               %EmailDeliveryOpened{
++                 message_id: message_id,
++                 delivery_id: bob.delivery_id
++               },
++               %{
++                 handler_name: "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
++                 event_number: 10_000
++               }
++             )
++
++    assert %MemberEmailDeliveryProjection{status: "delivered"} =
++             Messaging.get_member_email_delivery(message_id, bob.person_id)
++  end
++
++  test "member email delivery queries normalize historic opened rows to delivered" do
++    %{message_id: message_id, recipients: [_alice, bob]} =
++      send_message_with_recipients(["Alice", "Bob"])
++
++    MemberEmailDeliveryProjection
++    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
++    |> Repo.update_all(set: [status: "opened"])
++
++    assert %MemberEmailDeliveryProjection{status: "delivered"} =
++             Messaging.get_member_email_delivery(bob.delivery_id)
++
++    assert %MemberEmailDeliveryProjection{status: "delivered"} =
++             Messaging.get_member_email_delivery(message_id, bob.person_id)
++
++    assert %{"Bob" => "delivered"} =
++             message_id
++             |> Messaging.list_member_email_deliverys()
++             |> Map.new(&{&1.recipient_name, &1.status})
++  end
++
+   test "member email delivery queries return empty results for missing or invalid IDs" do
+     assert is_nil(Messaging.get_member_email_delivery(Ecto.UUID.generate()))
+     assert is_nil(Messaging.get_member_email_delivery(nil))
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index b621e4c..64fd473 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -128,11 +128,17 @@ defmodule MembaWeb.MemberMessageDetailTest do
+       receipt_cases = [
+         {alice, "sent", "Sending", "hero-clock"},
+         {bob, "delivered", "Delivered", "hero-check-circle"},
+-        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"},
+-        {dana, "opened", "Opened", "hero-envelope-open"}
++        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"}
+       ]
+ 
+-      Enum.each(receipt_cases, fn {member, status, _label, _icon} ->
++      seeded_receipt_cases = [
++        {alice, "sent"},
++        {bob, "delivered"},
++        {carol, "delivery problem"},
++        {dana, "opened"}
++      ]
++
++      Enum.each(seeded_receipt_cases, fn {member, status} ->
+         create_member_email_delivery(
+           message_id: message.message_id,
+           recipient_id: member.person_id,
+@@ -166,7 +172,14 @@ defmodule MembaWeb.MemberMessageDetailTest do
+         )
+ 
+         assert_text_in(html, "#{group_selector} h3", label)
+-        assert_exact_text(html, "#{group_selector} [data-testid='receipt-group-count']", "1")
++        expected_count = if status == "delivered", do: "2", else: "1"
++
++        assert_exact_text(
++          html,
++          "#{group_selector} [data-testid='receipt-group-count']",
++          expected_count
++        )
++
+         assert_selector_exists(html, "#{group_selector} .#{icon}")
+ 
+         refute html
+@@ -175,6 +188,12 @@ defmodule MembaWeb.MemberMessageDetailTest do
+                )
+                |> Enum.any?()
+       end)
++
++      refute html
++             |> LazyHTML.query(
++               "[data-testid='member-receipt-group'][data-receipt-status='opened']"
++             )
++             |> Enum.any?()
+     end
+ 
+     test "does not expose Memba-staff-only delivery fields on member message detail", %{
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 5420a48..718822b 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -113,13 +113,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+     assert has_element?(
+              view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened'][data-receipt-count='1'][data-receipt-percentage='33']",
+-             "read it"
+-           )
+-
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='1'][data-receipt-percentage='33']",
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
+              "arrived, not opened yet"
+            )
+ 
+@@ -135,16 +129,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "we couldn't reach them"
+            )
+ 
+-    assert has_element?(
+-             view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='opened']",
+-             "Opened"
+-           )
+-
+     assert has_element?(
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='delivered']",
+-             "33%"
++             "67%"
+            )
+ 
+     assert has_element?(
+@@ -157,6 +145,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='delivery problem']"
+            )
++
++    refute has_element?(
++             view,
++             "[data-testid='member-receipt-group'][data-receipt-status='opened']"
++           )
+   end
+ 
+   test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
+@@ -209,33 +202,32 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
+ 
+-    opened_toggle = "#member-receipt-group-toggle-opened"
+-    opened_rows = "#member-receipts-opened"
++    delivered_toggle = "#member-receipt-group-toggle-delivered"
++    delivered_rows = "#member-receipts-delivered"
+ 
+-    opened_recipient =
+-      "#{opened_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
++    delivered_recipient =
++      "#{delivered_rows} [data-testid='member-receipt'][data-recipient-name='Bob Builder']"
+ 
+-    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
+-    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
+-    refute has_element?(view, opened_rows)
+-    refute has_element?(view, opened_recipient)
++    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
++    refute has_element?(view, "#member-receipt-group-toggle-opened")
++    refute has_element?(view, delivered_rows)
++    refute has_element?(view, delivered_recipient)
+ 
+     view
+-    |> element(opened_toggle)
++    |> element(delivered_toggle)
+     |> render_click()
+ 
+-    assert has_element?(view, "#{opened_toggle}[aria-expanded='true']")
+-    assert has_element?(view, "#member-receipt-group-toggle-delivered[aria-expanded='false']")
+-    assert has_element?(view, opened_rows)
+-    assert has_element?(view, opened_recipient, "Bob Builder")
++    assert has_element?(view, "#{delivered_toggle}[aria-expanded='true']")
++    assert has_element?(view, delivered_rows)
++    assert has_element?(view, delivered_recipient, "Bob Builder")
+ 
+     view
+-    |> element(opened_toggle)
++    |> element(delivered_toggle)
+     |> render_click()
+ 
+-    assert has_element?(view, "#{opened_toggle}[aria-expanded='false']")
+-    refute has_element?(view, opened_rows)
+-    refute has_element?(view, opened_recipient)
++    assert has_element?(view, "#{delivered_toggle}[aria-expanded='false']")
++    refute has_element?(view, delivered_rows)
++    refute has_element?(view, delivered_recipient)
+   end
+ 
+   test "zero-count statuses render in the summary only and not as empty groups", %{conn: conn} do
+@@ -268,14 +260,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(
+              view,
+              "[data-testid='member-receipt-summary-status']" <>
+-               "[data-receipt-status='opened']" <>
++               "[data-receipt-status='delivered']" <>
+                "[data-receipt-count='1']" <>
+                "[data-receipt-percentage='100']",
+-             "Opened"
++             "Delivered"
+            )
+ 
+     for {status, label} <- [
+-          {"delivered", "Delivered"},
++          {"opened", "Opened"},
+           {"sent", "Sending"},
+           {"delivery problem", "Delivery problem"}
+         ] do
+@@ -300,8 +292,8 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+     assert has_element?(
+              view,
+-             "[data-testid='member-receipt-group'][data-receipt-status='opened'] " <>
+-               "#member-receipt-group-toggle-opened[aria-expanded='false']",
++             "[data-testid='member-receipt-group'][data-receipt-status='delivered'] " <>
++               "#member-receipt-group-toggle-delivered[aria-expanded='false']",
+              "100%"
+            )
+   end
