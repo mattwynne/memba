@@ -1,0 +1,539 @@
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index d26be59..ffdf119 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -81,10 +81,15 @@ async function ensureMember(world, personName, clubName) {
+ 
+ async function recordNonMember(world, personName) {
+   ensureState(world);
++  const email = authEmailFor(personName);
++
+   world.people[personName] = world.people[personName] || {
+-    email: authEmailFor(personName),
++    alternateEmails: [],
++    email,
++    emailAddresses: [{ email, isPrimary: true }],
+     name: personName,
+-    personId: null
++    personId: null,
++    primaryEmail: email
+   };
+ }
+ 
+diff --git a/acceptance-tests/features/support/member_harness.js b/acceptance-tests/features/support/member_harness.js
+index d0bda0e..0debafa 100644
+--- a/acceptance-tests/features/support/member_harness.js
++++ b/acceptance-tests/features/support/member_harness.js
+@@ -105,8 +105,9 @@ async function signInStaff(world) {
+ 
+ async function signInMember(world, memberName) {
+   const person = personFromWorld(world, memberName);
++  const email = signInEmailForPerson(person);
+ 
+-  await signInByMagicLink(world, person.email, memberName);
++  await signInByMagicLink(world, email, memberName);
+   assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
+ }
+ 
+@@ -196,11 +197,18 @@ function personFromWorld(world, memberName) {
+   const person = world.people[memberName];
+ 
+   assert.ok(person, `Expected ${memberName} to be known in the scenario`);
+-  assert.ok(person.email, `Expected ${memberName} to have an email address for member sign-in`);
++  assert.ok(
++    signInEmailForPerson(person),
++    `Expected ${memberName} to have a primary email address for member sign-in`
++  );
+ 
+   return person;
+ }
+ 
++function signInEmailForPerson(person) {
++  return person.email || person.primaryEmail;
++}
++
+ function signInEmailMatches(email, recipientEmail) {
+   return (
+     email.subject === signInSubject &&
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 32b5594..7843778 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -497,7 +497,7 @@ async function createPeople(world, names, { expect = playwrightExpect } = {}) {
+   await openClub(world, kootenayClubName, { expect });
+ 
+   for (const name of names) {
+-    await createPersonOnCurrentClubPage(world, name, { expect });
++    await createPersonOnCurrentClubPage(world, name, kootenayClubName, { expect });
+   }
+ 
+   return world;
+@@ -507,18 +507,36 @@ async function createPerson(world, name, clubName = kootenayClubName, { email, e
+   ensureState(world);
+ 
+   await openClub(world, clubName, { expect });
+-  await createPersonOnCurrentClubPage(world, name, { email, expect });
++  await createPersonOnCurrentClubPage(world, name, clubName, { email, expect });
+ 
+   return world;
+ }
+ 
+-async function createPersonOnCurrentClubPage(world, name, { email = emailFor(name), expect = playwrightExpect } = {}) {
++async function createPersonOnCurrentClubPage(
++  world,
++  name,
++  clubName,
++  { email = emailFor(name), expect = playwrightExpect, timeoutMs } = {}
++) {
++  const club = world.clubs[clubName];
++  assert.ok(club, `Expected ${clubName} to have been created before creating ${name}`);
++
+   const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
+   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
+ 
++  await browserInteraction(`visit create-person page for ${name}`, () =>
++    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/people/new`))
++  );
++  await waitForProjectedVisible(
++    world,
++    world.page.getByRole("heading", { name: "New person" }),
++    `new person heading for ${clubName}`,
++    { expect, timeoutMs }
++  );
++
+   await browserInteraction(`submit person creation form for ${name}`, async () => {
+     await world.page.getByLabel("Person name").fill(name);
+-    await world.page.getByLabel("Person email").fill(email);
++    await world.page.getByLabel("Email address 0").fill(email);
+     await world.page.getByRole("button", { name: "Create person" }).click();
+   });
+   await waitForProjectedCount(
+@@ -542,7 +560,18 @@ async function createPersonOnCurrentClubPage(world, name, { email = emailFor(nam
+     { expect }
+   );
+ 
+-  world.people[name] = { email, name, personId };
++  world.people[name] = personState({ email, name, personId });
++}
++
++function personState({ email, name, personId }) {
++  return {
++    alternateEmails: [],
++    email,
++    emailAddresses: [{ email, isPrimary: true }],
++    name,
++    personId,
++    primaryEmail: email
++  };
+ }
+ 
+ async function addMembers(world, personNames, clubName, { expect = playwrightExpect } = {}) {
+diff --git a/acceptance-tests/test/member_harness.test.js b/acceptance-tests/test/member_harness.test.js
+index 04e0c2d..47bf597 100644
+--- a/acceptance-tests/test/member_harness.test.js
++++ b/acceptance-tests/test/member_harness.test.js
+@@ -127,7 +127,16 @@ function worldWithBrowser() {
+         slug: "kootenay-mountaineering-club"
+       }
+     },
+-    people: { Alice: { email: "alice@example.test", name: "Alice", personId: "person-alice" } }
++    people: {
++      Alice: {
++        alternateEmails: [],
++        email: "alice@example.test",
++        emailAddresses: [{ email: "alice@example.test", isPrimary: true }],
++        name: "Alice",
++        personId: "person-alice",
++        primaryEmail: "alice@example.test"
++      }
++    }
+   };
+ }
+ 
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index b6a41f4..c5fa120 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -545,9 +545,12 @@ test("creating people and members uses accessible form labels and keeps browser
+   await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
+ 
+   assert.deepEqual(world.people.Alice, {
++    alternateEmails: [],
+     email: "alice@example.test",
++    emailAddresses: [{ email: "alice@example.test", isPrimary: true }],
+     name: "Alice",
+-    personId: "person-alice-1"
++    personId: "person-alice-1",
++    primaryEmail: "alice@example.test"
+   });
+   assert.deepEqual(world.memberships[`${kootenayClubName}:Bob`], {
+     clubName: kootenayClubName,
+@@ -557,9 +560,20 @@ test("creating people and members uses accessible form labels and keeps browser
+   assert.ok(
+     page.actions.some(
+       (action) =>
+-        action[0] === "select" &&
+-        action[1] === "Person to add as member" &&
+-        action[2] === "person-alice-1"
++        action[0] === "goto" &&
++        action[1] === "http://127.0.0.1:4444/admin/clubs/club-1/people/new"
++    )
++  );
++  assert.ok(
++    page.actions.some(
++      (action) =>
++        action[0] === "fill" && action[1] === "Email address 0" && action[2] === "alice@example.test"
++    )
++  );
++  assert.ok(
++    page.actions.some(
++      (action) =>
++        action[0] === "select" && action[1] === "Person to add as member" && action[2] === "person-alice-1"
+     )
+   );
+   assert.ok(
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 15ce716..08adcde 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -16,6 +16,6 @@
+ - [x] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+ - [x] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+ - [x] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+-- [ ] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
++- [x] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+ - [ ] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+ - [ ] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
+diff --git a/web/priv/repo/seeds.exs b/web/priv/repo/seeds.exs
+index 9949621..239e684 100644
+--- a/web/priv/repo/seeds.exs
++++ b/web/priv/repo/seeds.exs
+@@ -9,12 +9,15 @@
+ alias Memba.Membership.Projections.Club
+ alias Memba.Membership.Projections.Membership
+ alias Memba.Membership.Projections.Person
++alias Memba.Membership.Projections.PersonEmailAddress
+ alias Memba.Messaging.Projections.EmailDelivery
+ alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+ alias Memba.Messaging.Projections.MemberEmailDelivery
+ alias Memba.Messaging.Projections.Message
+ alias Memba.Repo
+ 
++import Ecto.Query
++
+ now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+ one_hour_ago = DateTime.add(now, -60 * 60, :second)
+ two_days_ago = DateTime.add(now, -2 * 24 * 60 * 60, :second)
+@@ -72,6 +75,63 @@ people = [
+   }
+ ]
+ 
++person_email_addresses = [
++  %{
++    id: "20000000-0000-0000-0000-000000000001",
++    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
++    email: "alice@example.com",
++    normalized_email: "alice@example.com",
++    is_primary: true,
++    inserted_at: two_days_ago,
++    updated_at: now
++  },
++  %{
++    id: "20000000-0000-0000-0000-000000000002",
++    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
++    email: "alice@work.example",
++    normalized_email: "alice@work.example",
++    is_primary: false,
++    inserted_at: two_days_ago,
++    updated_at: now
++  },
++  %{
++    id: "20000000-0000-0000-0000-000000000003",
++    person_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
++    email: "bob@example.com",
++    normalized_email: "bob@example.com",
++    is_primary: true,
++    inserted_at: two_days_ago,
++    updated_at: now
++  },
++  %{
++    id: "20000000-0000-0000-0000-000000000004",
++    person_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
++    email: "carol@example.com",
++    normalized_email: "carol@example.com",
++    is_primary: true,
++    inserted_at: two_days_ago,
++    updated_at: now
++  },
++  %{
++    id: "20000000-0000-0000-0000-000000000005",
++    person_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
++    email: "dana@example.com",
++    normalized_email: "dana@example.com",
++    is_primary: true,
++    inserted_at: two_days_ago,
++    updated_at: now
++  },
++  %{
++    id: "20000000-0000-0000-0000-000000000006",
++    person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
++    email: "pat@memba.io",
++    normalized_email: "pat@memba.io",
++    is_primary: true,
++    inserted_at: two_days_ago,
++    updated_at: now
++  }
++]
++
+ memberships = [
+   %{
+     membership_id: "10000000-0000-0000-0000-000000000001",
+@@ -253,6 +313,17 @@ Repo.insert_all(Person, people,
+   conflict_target: :person_id
+ )
+ 
++seed_person_ids = Enum.map(people, & &1.person_id)
++
++Repo.delete_all(
++  from(email_address in PersonEmailAddress, where: email_address.person_id in ^seed_person_ids)
++)
++
++Repo.insert_all(PersonEmailAddress, person_email_addresses,
++  on_conflict: {:replace_all_except, [:id]},
++  conflict_target: :id
++)
++
+ Repo.insert_all(Membership, memberships,
+   on_conflict: {:replace_all_except, [:membership_id]},
+   conflict_target: :membership_id
+@@ -280,4 +351,5 @@ Repo.insert_all(MembaStaffEmailDelivery, memba_staff_email_deliveries,
+ 
+ IO.puts("Seeded representative Memba data.")
+ IO.puts("Member sign-in emails: alice@example.com, bob@example.com, carol@example.com")
++IO.puts("Alice alternate sign-in email: alice@work.example")
+ IO.puts("Memba staff sign-in email: pat@memba.io")
+diff --git a/web/test/features/step_definitions/authentication_steps.exs b/web/test/features/step_definitions/authentication_steps.exs
+index 0de6957..162e1ef 100644
+--- a/web/test/features/step_definitions/authentication_steps.exs
++++ b/web/test/features/step_definitions/authentication_steps.exs
+@@ -217,10 +217,19 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+ 
+       assert :ok =
+                Membership.create_person(
+-                 %{person_id: person_id, name: person_name, email: email},
++                 %{
++                   person_id: person_id,
++                   name: person_name,
++                   email: email,
++                   email_addresses: [%{email: email, is_primary: true}]
++                 },
+                  consistency: :strong
+                )
+ 
++      assert [
++               %{email: ^email, normalized_email: ^email, primary?: true}
++             ] = Membership.list_person_email_addresses(person_id)
++
+       update_context_map(context, :people, person_name, %{person_id: person_id, email: email})
+     end
+   end
+diff --git a/web/test/features/step_definitions/membership_steps.exs b/web/test/features/step_definitions/membership_steps.exs
+index e9ac82d..47df4ec 100644
+--- a/web/test/features/step_definitions/membership_steps.exs
++++ b/web/test/features/step_definitions/membership_steps.exs
+@@ -109,13 +109,22 @@ defmodule Memba.Cucumber.MembershipSteps do
+ 
+       assert :ok =
+                App.dispatch(
+-                 %CreatePerson{person_id: person_id, name: name, email: email},
++                 %CreatePerson{
++                   person_id: person_id,
++                   name: name,
++                   email: email,
++                   email_addresses: [%{email: email, is_primary: true}]
++                 },
+                  consistency: :strong
+                )
+ 
+       assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
+                Membership.get_person(person_id)
+ 
++      assert [
++               %{email: ^email, normalized_email: ^email, primary?: true}
++             ] = Membership.list_person_email_addresses(person_id)
++
+       update_context_map(context, :people, name, person_id)
+     end
+   end
+diff --git a/web/test/memba/accounts_test.exs b/web/test/memba/accounts_test.exs
+index b2ab74e..74fe2fb 100644
+--- a/web/test/memba/accounts_test.exs
++++ b/web/test/memba/accounts_test.exs
+@@ -200,7 +200,12 @@ defmodule Memba.AccountsTest do
+         Map.put(base_attrs, :email_addresses, email_addresses)
+ 
+       :error ->
+-        Map.put(base_attrs, :email, Keyword.fetch!(attrs, :email))
++        email = Keyword.fetch!(attrs, :email)
++
++        Map.merge(base_attrs, %{
++          email: email,
++          email_addresses: [%{email: email, is_primary: true}]
++        })
+     end
+   end
+ end
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index a928d76..1d78f54 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -320,12 +320,13 @@ defmodule Memba.Membership.QueryTest do
+   end
+ 
+   defp create_person(attrs) do
+-    email_addresses = Keyword.get(attrs, :email_addresses)
++    email = Keyword.fetch!(attrs, :email)
++    email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
+ 
+     person = %{
+       person_id: Ecto.UUID.generate(),
+       name: Keyword.fetch!(attrs, :name),
+-      email: Keyword.fetch!(attrs, :email),
++      email: email,
+       email_addresses: email_addresses
+     }
+ 
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index 3116cc6..597217e 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -286,12 +286,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   end
+ 
+   defp create_person(attrs) do
+-    email_addresses = Keyword.get(attrs, :email_addresses)
++    email = Keyword.fetch!(attrs, :email)
++    email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
+ 
+     person = %{
+       person_id: Ecto.UUID.generate(),
+       name: Keyword.fetch!(attrs, :name),
+-      email: Keyword.fetch!(attrs, :email),
++      email: email,
+       email_addresses: email_addresses
+     }
+ 
+diff --git a/web/test/memba_web/live/admin_people_live_test.exs b/web/test/memba_web/live/admin_people_live_test.exs
+index 8fa2be9..923ef0b 100644
+--- a/web/test/memba_web/live/admin_people_live_test.exs
++++ b/web/test/memba_web/live/admin_people_live_test.exs
+@@ -105,7 +105,8 @@ defmodule MembaWeb.AdminPeopleLiveTest do
+                %{
+                  person_id: Ecto.UUID.generate(),
+                  name: "Existing Alice",
+-                 email: "alice@example.com"
++                 email: "alice@example.com",
++                 email_addresses: [%{email: "alice@example.com", is_primary: true}]
+                },
+                consistency: :strong
+              )
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 78b0560..646fabe 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -206,13 +206,15 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+ 
+   defp create_person(session, name) do
+     current_path = PhoenixTest.Driver.current_path(session)
++    email = email_for(name)
+ 
+     assert :ok =
+              Membership.create_person(
+                %{
+                  person_id: Ecto.UUID.generate(),
+                  name: name,
+-                 email: email_for(name)
++                 email: email,
++                 email_addresses: [%{email: email, is_primary: true}]
+                },
+                consistency: :strong
+              )
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index a342ed2..93a52fe 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -171,6 +171,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+ 
+   defp create_active_member(club_id, attrs) do
+     person_id = Ecto.UUID.generate()
++    email = Keyword.fetch!(attrs, :email)
+ 
+     if is_nil(Membership.get_club(club_id)) do
+       assert :ok =
+@@ -185,7 +186,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+                %{
+                  person_id: person_id,
+                  name: Keyword.fetch!(attrs, :name),
+-                 email: Keyword.fetch!(attrs, :email)
++                 email: email,
++                 email_addresses: [%{email: email, is_primary: true}]
+                },
+                consistency: :strong
+              )
+diff --git a/web/test/support/membership_fixtures.ex b/web/test/support/membership_fixtures.ex
+index 684f142..477288e 100644
+--- a/web/test/support/membership_fixtures.ex
++++ b/web/test/support/membership_fixtures.ex
+@@ -56,10 +56,16 @@ defmodule Memba.MembershipFixtures do
+   def membership_person_attrs(attrs \\ []) when is_list(attrs) do
+     person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
+ 
++    email_addresses =
++      Keyword.get_lazy(attrs, :email_addresses, fn -> primary_email_addresses(attrs) end)
++
++    primary_email_address = primary_email_address!(email_addresses)
++
+     %{
+       person_id: person_id,
+       name: Keyword.get(attrs, :name, "Test Member"),
+-      email: Keyword.fetch!(attrs, :email)
++      email: Keyword.get(attrs, :email, primary_email_address.email),
++      email_addresses: email_addresses
+     }
+   end
+ 
+@@ -75,11 +81,13 @@ defmodule Memba.MembershipFixtures do
+             email: attrs.email
+           })
+ 
+-        insert_membership_person_email_address!(
+-          person_id: attrs.person_id,
+-          email: attrs.email,
+-          is_primary: true
+-        )
++        Enum.each(attrs.email_addresses, fn email_address ->
++          insert_membership_person_email_address!(
++            person_id: attrs.person_id,
++            email: email_address.email,
++            is_primary: email_address.is_primary
++          )
++        end)
+ 
+         person
+ 
+@@ -109,4 +117,15 @@ defmodule Memba.MembershipFixtures do
+       _not_found -> nil
+     end
+   end
++
++  defp primary_email_addresses(attrs) do
++    email = Keyword.fetch!(attrs, :email)
++
++    [%{email: email, is_primary: true}]
++  end
++
++  defp primary_email_address!(email_addresses) do
++    Enum.find(email_addresses, & &1.is_primary) ||
++      raise ArgumentError, "membership person fixture requires exactly one primary email address"
++  end
+ end
