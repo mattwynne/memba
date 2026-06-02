@@ -11,6 +11,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
+  alias Memba.Membership.EmailAddresses
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
@@ -52,7 +53,9 @@ defmodule Memba.Membership do
   `"person_id"`.
   """
   def create_person(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- create_person_command(attrs) do
+    with {:ok, command} <- create_person_command(attrs),
+         {:ok, email_addresses} <- normalize_command_email_addresses(command),
+         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -66,7 +69,9 @@ defmodule Memba.Membership do
   """
   def replace_person_email_addresses(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- replace_person_email_addresses_command(attrs) do
+    with {:ok, command} <- replace_person_email_addresses_command(attrs),
+         {:ok, email_addresses} <- normalize_command_email_addresses(command),
+         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -386,6 +391,39 @@ defmodule Memba.Membership do
     end
   end
 
+  defp normalize_command_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
+    with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
+      {:ok, [%{normalized_email: normalized_email}]}
+    end
+  end
+
+  defp normalize_command_email_addresses(%CreatePerson{email_addresses: email_addresses}) do
+    EmailAddresses.validate_set(email_addresses)
+  end
+
+  defp normalize_command_email_addresses(%ReplacePersonEmailAddresses{
+         email_addresses: email_addresses
+       }) do
+    EmailAddresses.validate_set(email_addresses)
+  end
+
+  defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
+    with {:ok, person_id} <- cast_person_id(person_id) do
+      normalized_emails = Enum.map(email_addresses, & &1.normalized_email)
+
+      PersonEmailAddress
+      |> where([email_address], email_address.normalized_email in ^normalized_emails)
+      |> where([email_address], email_address.person_id != ^person_id)
+      |> select([email_address], email_address.normalized_email)
+      |> limit(1)
+      |> Repo.one()
+      |> case do
+        nil -> :ok
+        _normalized_email -> {:error, :email_address_taken}
+      end
+    end
+  end
+
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
       :ok -> :ok
@@ -436,6 +474,13 @@ defmodule Memba.Membership do
     case Ecto.UUID.cast(club_id) do
       {:ok, club_id} -> {:ok, club_id}
       :error -> {:error, :invalid_club_id}
+    end
+  end
+
+  defp cast_person_id(person_id) do
+    case Ecto.UUID.cast(person_id) do
+      {:ok, person_id} -> {:ok, person_id}
+      :error -> {:error, :invalid_person_id}
     end
   end
 
