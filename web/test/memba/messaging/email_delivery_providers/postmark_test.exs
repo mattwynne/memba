@@ -23,7 +23,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     :ok
   end
 
-  test "builds and sends a multipart email with Postmark correlation metadata and open tracking" do
+  test "builds and sends a multipart email with Postmark correlation metadata and no open tracking" do
     Application.put_env(:memba, Postmark,
       from: "messages@mail.memba.io",
       reply_to: "help@memba.io"
@@ -51,9 +51,10 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
                "memba_message_id" => request.message_id,
                "memba_delivery_id" => request.delivery_id,
                "memba_club_id" => request.club_id
-             },
-             track_opens: true
+             }
            }
+
+    refute Map.has_key?(email.provider_options, :track_opens)
   end
 
   test "uses the verified Memba sender address even when no provider reply-to is configured" do
