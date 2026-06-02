@@ -9,6 +9,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -51,6 +52,20 @@ defmodule Memba.Membership do
   """
   def create_person(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- create_person_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Atomically replace a person's primary and alternate email addresses.
+
+  The caller supplies the person aggregate identity as `:person_id` or
+  `"person_id"`. The submitted `:email_addresses` or `"email_addresses"` value
+  must be a non-empty list with exactly one primary address.
+  """
+  def replace_person_email_addresses(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- replace_person_email_addresses_command(attrs) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -256,8 +271,15 @@ defmodule Memba.Membership do
   defp create_person_command(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, name} <- fetch_required(attrs, :name),
-         {:ok, email} <- fetch_required(attrs, :email) do
-      {:ok, %CreatePerson{person_id: person_id, name: name, email: email}}
+         {:ok, email_attrs} <- create_person_email_attrs(attrs) do
+      {:ok, struct!(CreatePerson, Map.merge(%{person_id: person_id, name: name}, email_attrs))}
+    end
+  end
+
+  defp replace_person_email_addresses_command(attrs) do
+    with {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, email_addresses} <- fetch_required(attrs, :email_addresses) do
+      {:ok, %ReplacePersonEmailAddresses{person_id: person_id, email_addresses: email_addresses}}
     end
   end
 
@@ -317,6 +339,24 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> :error
+    end
+  end
+
+  defp create_person_email_attrs(attrs) do
+    case fetch_optional(attrs, :email_addresses) do
+      {:ok, email_addresses} ->
+        email_attrs =
+          case fetch_optional(attrs, :email) do
+            {:ok, email} -> %{email: email, email_addresses: email_addresses}
+            :error -> %{email_addresses: email_addresses}
+          end
+
+        {:ok, email_attrs}
+
+      :error ->
+        with {:ok, email} <- fetch_required(attrs, :email) do
+          {:ok, %{email: email}}
+        end
     end
   end
 
