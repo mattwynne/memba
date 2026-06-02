@@ -6,6 +6,7 @@ defmodule Memba.Membership.Club do
   alias Commanded.Aggregates.Aggregate
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Slug
 
   @behaviour Aggregate
 
@@ -14,8 +15,9 @@ defmodule Memba.Membership.Club do
   @impl Aggregate
   def execute(%__MODULE__{club_id: nil}, %CreateClub{} = command) do
     with :ok <- validate_club_id(command.club_id),
-         {:ok, name} <- normalize_name(command.name) do
-      %ClubCreated{club_id: command.club_id, name: name, slug: command.slug}
+         {:ok, name} <- normalize_name(command.name),
+         {:ok, slug} <- Slug.validate(command.slug) do
+      %ClubCreated{club_id: command.club_id, name: name, slug: slug}
     end
   end
 

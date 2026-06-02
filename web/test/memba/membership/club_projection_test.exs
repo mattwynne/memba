@@ -4,6 +4,8 @@ defmodule Memba.Membership.ClubProjectionTest do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
   test "club projection struct exposes the public slug attribute" do
@@ -41,6 +43,25 @@ defmodule Memba.Membership.ClubProjectionTest do
              name: "Kootenay Mountaineering Club",
              slug: "kmc"
            } = Membership.get_club(club_id)
+  end
+
+  test "slug-less ClubCreated events are not replay-compatible" do
+    club_id = Ecto.UUID.generate()
+
+    assert {:error, {:invalid_club_created_slug, :invalid_format}} =
+             ClubProjector.handle(
+               %ClubCreated{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: nil
+               },
+               %{
+                 handler_name: "Memba.Membership.Projectors.Club.slugless-replay-test",
+                 event_number: 1
+               }
+             )
+
+    assert is_nil(Membership.get_club(club_id))
   end
 
   test "get_club/1 returns nil for missing or invalid club IDs" do

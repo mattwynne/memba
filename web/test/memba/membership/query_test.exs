@@ -9,6 +9,7 @@ defmodule Memba.Membership.QueryTest do
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Slug
 
   describe "list_active_members_of_club/1" do
     test "returns active members of the given club and excludes members of other clubs" do
@@ -150,7 +151,8 @@ defmodule Memba.Membership.QueryTest do
              App.dispatch(
                %CreateClub{
                  club_id: club.club_id,
-                 name: club.name
+                 name: club.name,
+                 slug: slug_for(name)
                },
                consistency: :strong
              )
@@ -176,6 +178,10 @@ defmodule Memba.Membership.QueryTest do
              )
 
     person
+  end
+
+  defp slug_for(name) do
+    Slug.default_from_name(name)
   end
 
   defp add_member(club_id, person_id) do

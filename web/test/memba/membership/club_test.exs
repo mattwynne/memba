@@ -41,6 +41,14 @@ defmodule Memba.Membership.ClubTest do
                Club.execute(%Club{}, %CreateClub{club_id: Ecto.UUID.generate(), name: "  "})
     end
 
+    test "rejects missing club slugs" do
+      assert {:error, :invalid_format} =
+               Club.execute(%Club{}, %CreateClub{
+                 club_id: Ecto.UUID.generate(),
+                 name: "Kootenay Mountaineering Club"
+               })
+    end
+
     test "rejects creating the same aggregate twice" do
       club_id = Ecto.UUID.generate()
 

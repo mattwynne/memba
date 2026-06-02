@@ -45,7 +45,8 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   test "Membership app rejects a duplicate CreateClub for the same aggregate identity" do
     command = %CreateClub{
       club_id: Ecto.UUID.generate(),
-      name: "Kootenay Mountaineering Club"
+      name: "Kootenay Mountaineering Club",
+      slug: "kmc"
     }
 
     assert :ok = App.dispatch(command, consistency: :strong)
