@@ -1,0 +1,423 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index 25843ae..f9a1024 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+ - [x] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+ - [x] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+-- [ ] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
++- [x] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+ - [ ] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
+ - [ ] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
+ - [ ] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 03b1ba7..26f6cd2 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -54,19 +54,16 @@ defmodule MembaWeb.PageHTML do
+ 
+   defp receipt_group_expanded?(_expanded_groups, _status), do: false
+ 
+-  defp status_bg_class("opened"), do: "bg-emerald-500"
+   defp status_bg_class("delivered"), do: "bg-sky-500"
+   defp status_bg_class("sent"), do: "bg-slate-400"
+   defp status_bg_class("delivery problem"), do: "bg-amber-500"
+   defp status_bg_class(_status), do: "bg-slate-300"
+ 
+-  defp status_text_class("opened"), do: "text-emerald-700"
+   defp status_text_class("delivered"), do: "text-sky-700"
+   defp status_text_class("sent"), do: "text-slate-600"
+   defp status_text_class("delivery problem"), do: "text-amber-700"
+   defp status_text_class(_status), do: "text-slate-600"
+ 
+-  defp status_tint_class("opened"), do: "bg-emerald-50 text-emerald-700 ring-emerald-200"
+   defp status_tint_class("delivered"), do: "bg-sky-50 text-sky-700 ring-sky-200"
+   defp status_tint_class("sent"), do: "bg-slate-100 text-slate-600 ring-slate-200"
+ 
+diff --git a/web/lib/memba_web/controllers/page_html/message.html.heex b/web/lib/memba_web/controllers/page_html/message.html.heex
+index 08ba166..0c3cafa 100644
+--- a/web/lib/memba_web/controllers/page_html/message.html.heex
++++ b/web/lib/memba_web/controllers/page_html/message.html.heex
+@@ -107,7 +107,7 @@
+         <div>
+           <h2 class="text-base font-semibold text-[var(--club-site-ink)]">Everyone, by status</h2>
+           <p class="mt-1 text-sm text-[var(--club-site-muted)]">
+-            Receipt groups are ordered by opened, delivered, sending, then delivery problems.
++            Receipt groups are ordered by delivered, sending, then delivery problems.
+           </p>
+         </div>
+       </div>
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index c834a60..8d75491 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -196,14 +196,14 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   defp receipt_glance_copy(_summary, 0), do: nil
+ 
+   defp receipt_glance_copy(summary, total_count) do
+-    opened_count =
++    delivered_count =
+       summary
+       |> Enum.find_value(0, fn
+-        %{status: "opened", count: count} -> count
++        %{status: "delivered", count: count} -> count
+         _status -> false
+       end)
+ 
+-    "#{opened_count} of #{total_count} opened"
++    "#{delivered_count} of #{total_count} delivered"
+   end
+ 
+   defp sent_at_label(%DateTime{} = sent_at), do: Calendar.strftime(sent_at, "%b %d, %Y")
+diff --git a/web/lib/memba_web/member_email_delivery_presentation.ex b/web/lib/memba_web/member_email_delivery_presentation.ex
+index 4cc80ae..cd8ada0 100644
+--- a/web/lib/memba_web/member_email_delivery_presentation.ex
++++ b/web/lib/memba_web/member_email_delivery_presentation.ex
+@@ -8,18 +8,16 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   """
+ 
+   @fallback_status "sent"
+-  @status_order ["opened", "delivered", "sent", "delivery problem"]
++  @status_order ["delivered", "sent", "delivery problem"]
+ 
+   @presentations %{
+     "sent" => %{label: "Sending", icon: "hero-clock"},
+     "delivered" => %{label: "Delivered", icon: "hero-check-circle"},
+-    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"},
+-    "opened" => %{label: "Opened", icon: "hero-envelope-open"}
++    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"}
+   }
+ 
+   @descriptions %{
+-    "opened" => "read it",
+-    "delivered" => "arrived, not opened yet",
++    "delivered" => "delivered to their inbox",
+     "sent" => "on its way",
+     "delivery problem" => "we couldn't reach them"
+   }
+@@ -56,7 +54,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   @doc """
+   Builds the LiveView receipt presentation model for a message.
+ 
+-  The summary always includes the four member-facing statuses in the design
++  The summary always includes the three member-facing statuses in the design
+   order, even when a status has no receipts. Groups are built from the same
+   status models but only include statuses with at least one receipt.
+   """
+@@ -87,7 +85,11 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
+   end
+ 
+   defp normalize_status(status) when is_binary(status) do
+-    if status == "", do: @fallback_status, else: status
++    case status do
++      "" -> @fallback_status
++      "opened" -> "delivered"
++      status -> status
++    end
+   end
+ 
+   defp normalize_status(_status), do: @fallback_status
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 64fd473..b5bfc99 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -194,6 +194,15 @@ defmodule MembaWeb.MemberMessageDetailTest do
+                "[data-testid='member-receipt-group'][data-receipt-status='opened']"
+              )
+              |> Enum.any?()
++
++      refute html
++             |> LazyHTML.query(
++               "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
++             )
++             |> Enum.any?()
++
++      refute response =~ "Opened"
++      refute response =~ "not opened"
+     end
+ 
+     test "does not expose Memba-staff-only delivery fields on member message detail", %{
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 7393b4e..d0bebaf 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -131,12 +131,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#member-message-#{message.message_id} [data-testid='message-receipt-glance']",
+-             "1 of 2 opened"
++             "1 of 2 delivered"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='opened'][data-receipt-percentage='50']"
++             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-percentage='50']"
++           )
++
++    refute has_element?(
++             view,
++             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
+            )
+ 
+     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
+@@ -240,17 +245,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     assert has_element?(
+              view,
+              "#{message_selector} [data-testid='message-receipt-glance']",
+-             "1 of 4 opened"
++             "2 of 4 delivered"
+            )
+ 
+-    assert has_element?(
++    refute has_element?(
+              view,
+-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened'][data-receipt-label='Opened'][data-receipt-count='1']"
++             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
+            )
+ 
+     assert has_element?(
+              view,
+-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='1']"
++             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='2']"
+            )
+ 
+     assert has_element?(
+@@ -265,6 +270,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     html = render(view)
+ 
++    refute html =~ "Opened"
++    refute html =~ "opened"
+     refute html =~ dana_delivery_id
+     refute html =~ "dana.operator@example.net"
+     refute html =~ "postmark-webhook"
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 718822b..438fe31 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -114,7 +114,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+     assert has_element?(
+              view,
+              "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
+-             "arrived, not opened yet"
++             "delivered to their inbox"
+            )
+ 
+     assert has_element?(
+@@ -150,6 +150,14 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='opened']"
+            )
++
++    refute has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
++           )
++
++    refute render(view) =~ "Opened"
++    refute render(view) =~ "not opened"
+   end
+ 
+   test "receipt groups are collapsed by default and toggle recipient rows", %{conn: conn} do
+@@ -266,11 +274,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+              "Delivered"
+            )
+ 
+-    for {status, label} <- [
+-          {"opened", "Opened"},
+-          {"sent", "Sending"},
+-          {"delivery problem", "Delivery problem"}
+-        ] do
++    for {status, label} <- [{"sent", "Sending"}, {"delivery problem", "Delivery problem"}] do
+       assert has_element?(
+                view,
+                "[data-testid='member-receipt-summary-status']" <>
+@@ -290,6 +294,13 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+       refute has_element?(view, "#member-receipt-group-toggle-#{status_slug}")
+     end
+ 
++    refute has_element?(
++             view,
++             "[data-testid='member-receipt-summary-status'][data-receipt-status='opened']"
++           )
++
++    refute has_element?(view, "#member-receipt-group-toggle-opened")
++
+     assert has_element?(
+              view,
+              "[data-testid='member-receipt-group'][data-receipt-status='delivered'] " <>
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 8c23ffe..2dbcec0 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -101,15 +101,13 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert newer_row.receipt_count == 2
+ 
+     assert newer_row.status_counts == %{
+-             "opened" => 1,
+-             "delivered" => 0,
++             "delivered" => 1,
+              "sent" => 1,
+              "delivery problem" => 0
+            }
+ 
+     assert Enum.map(newer_row.receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
+-             {"opened", 1, 50},
+-             {"delivered", 0, 0},
++             {"delivered", 1, 50},
+              {"sent", 1, 50},
+              {"delivery problem", 0, 0}
+            ]
+@@ -118,11 +116,11 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+              newer_row.receipt_segments,
+              &{&1.status, &1.status_label, &1.count, &1.width_percentage}
+            ) == [
+-             {"opened", "Opened", 1, 50},
++             {"delivered", "Delivered", 1, 50},
+              {"sent", "Sending", 1, 50}
+            ]
+ 
+-    assert newer_row.receipt_glance_copy == "1 of 2 opened"
++    assert newer_row.receipt_glance_copy == "1 of 2 delivered"
+     assert newer_row.has_receipt_glance?
+ 
+     assert older_row.message_id == older_message.message_id
+diff --git a/web/test/memba_web/member_email_delivery_presentation_test.exs b/web/test/memba_web/member_email_delivery_presentation_test.exs
+index b68676a..9d24dac 100644
+--- a/web/test/memba_web/member_email_delivery_presentation_test.exs
++++ b/web/test/memba_web/member_email_delivery_presentation_test.exs
+@@ -24,9 +24,9 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+              }
+ 
+       assert MemberEmailDeliveryPresentation.present_status("opened") == %{
+-               status: "opened",
+-               label: "Opened",
+-               icon: "hero-envelope-open"
++               status: "delivered",
++               label: "Delivered",
++               icon: "hero-check-circle"
+              }
+     end
+ 
+@@ -46,7 +46,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+   end
+ 
+   describe "present_receipt/1" do
+-    test "keeps the raw projection status while adding display label and icon" do
++    test "maps the projection status to current member-facing receipt data" do
+       receipt = %{
+         recipient_id: "person-123",
+         recipient_name: "Alice Adams",
+@@ -61,6 +61,22 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                status_icon: "hero-check-circle"
+              }
+     end
++
++    test "folds historic opened receipts into Delivered instead of exposing opened" do
++      receipt = %{
++        recipient_id: "person-456",
++        recipient_name: "Historic Recipient",
++        status: "opened"
++      }
++
++      assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
++               recipient_id: "person-456",
++               recipient_name: "Historic Recipient",
++               status: "delivered",
++               status_label: "Delivered",
++               status_icon: "hero-check-circle"
++             }
++    end
+   end
+ 
+   describe "present_receipts/1" do
+@@ -72,7 +88,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+           recipient_name: "Delivered Member One",
+           status: "delivered"
+         },
+-        %{recipient_id: "opened-1", recipient_name: "Opened Member", status: "opened"},
++        %{recipient_id: "opened-1", recipient_name: "Historic Opened Member", status: "opened"},
+         %{
+           recipient_id: "delivered-2",
+           recipient_name: "Delivered Member Two",
+@@ -90,26 +106,18 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+       assert Enum.map(presented_receipts, & &1.status) == [
+                "sent",
+                "delivered",
+-               "opened",
++               "delivered",
+                "delivered"
+              ]
+ 
+       assert summary == [
+-               %{
+-                 status: "opened",
+-                 status_label: "Opened",
+-                 status_icon: "hero-envelope-open",
+-                 description: "read it",
+-                 count: 1,
+-                 percentage: 25
+-               },
+                %{
+                  status: "delivered",
+                  status_label: "Delivered",
+                  status_icon: "hero-check-circle",
+-                 description: "arrived, not opened yet",
+-                 count: 2,
+-                 percentage: 50
++                 description: "delivered to their inbox",
++                 count: 3,
++                 percentage: 75
+                },
+                %{
+                  status: "sent",
+@@ -129,15 +137,12 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                }
+              ]
+ 
+-      assert Enum.map(groups, & &1.status) == ["opened", "delivered", "sent"]
++      assert Enum.map(groups, & &1.status) == ["delivered", "sent"]
+       refute Enum.any?(groups, &(&1.status == "delivery problem"))
+ 
+-      assert [
+-               %{recipient_name: "Opened Member", status_label: "Opened"}
+-             ] = Enum.find(groups, &(&1.status == "opened")).receipts
+-
+       assert [
+                %{recipient_name: "Delivered Member One", status_label: "Delivered"},
++               %{recipient_name: "Historic Opened Member", status_label: "Delivered"},
+                %{recipient_name: "Delivered Member Two", status_label: "Delivered"}
+              ] = Enum.find(groups, &(&1.status == "delivered")).receipts
+     end
+@@ -152,8 +157,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+       model = MemberEmailDeliveryPresentation.present_receipts(receipts)
+ 
+       assert Enum.map(model.summary, &{&1.status, &1.percentage}) == [
+-               {"opened", 33},
+-               {"delivered", 0},
++               {"delivered", 33},
+                {"sent", 67},
+                {"delivery problem", 0}
+              ]
+@@ -165,7 +169,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
+                receipts: [],
+                groups: [],
+                summary: [
+-                 %{status: "opened", count: 0, percentage: 0},
+                  %{status: "delivered", count: 0, percentage: 0},
+                  %{status: "sent", count: 0, percentage: 0},
+                  %{status: "delivery problem", count: 0, percentage: 0}
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index 374fc25..d6ff308 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -53,7 +53,6 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+ 
+     assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) ==
+              [
+-               {"opened", 0, 0},
+                {"delivered", 1, 100},
+                {"sent", 0, 0},
+                {"delivery problem", 0, 0}
