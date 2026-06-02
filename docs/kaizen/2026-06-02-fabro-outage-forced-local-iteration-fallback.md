@@ -123,6 +123,7 @@ Suspected system weaknesses:
 - The wrapper could restore the plan status after a failed launch, but it could not resolve or quarantine the ambiguous remote run branch.
 - There is no explicit standard for when it is acceptable to switch from Fabro delivery to a local Pi-agent fallback, or how to label that fallback so it cannot be mistaken for a delivered iteration.
 - Health checks surfaced only “server health check failed” from the client perspective, without enough local context to distinguish remote service outage, routing/proxy failure, store lockup, or a long-running request bottleneck.
+- The Fabro run sandbox could spawn enough repeated test processes to starve the Fabro service itself inside the same LXC, so one runaway run could make the control plane unable to inspect, steer, or stop that same run.
 
 ## Observations
 
@@ -133,6 +134,61 @@ Suspected system weaknesses:
 - A local Pi subagent could still implement product changes, so the product work itself was not the blocking constraint; the delivery machinery was.
 - The working tree contained uncommitted iteration 018 product changes after the fallback implementation.
 
+## Later infrastructure findings
+
+A Pi subagent investigated from `~/git/mattwynne/hub.local/` and found that the public endpoint, LAN endpoint, and reverse proxy evidence pointed to Fabro's LXC being alive but starved:
+
+- `fabro.home.wynne.family` connected through TLS but timed out with no bytes.
+- `http://192.168.1.201:32276/api/v1/health` also connected and then timed out.
+- `https://proxy.home.wynne.family/` returned `200`, so the proxy itself was healthy.
+- Proxmox showed LXC `115` named `fabro` running at `192.168.1.201/24` with `memory 2048`.
+- The host load average was about `55`.
+- The Fabro cgroup was at its 2 GB memory ceiling:
+
+```text
+memory.current 2132377600
+memory.max     2147483648
+```
+
+- Pressure metrics were severe:
+
+```text
+cpu.pressure some avg10=100.00
+memory.pressure some avg10=100.00 full avg10=91.14
+io.pressure some avg10≈70
+```
+
+- The Fabro subtree had about `1088` processes.
+- The dominant process pattern was repeated test processes:
+
+```text
+517 bash /workspace/memba/bin/mix test test/memba_web/club_site_config_test.exs
+517 bash /repos/mattwynne/memba/bin/mix test test/memba_web/club_site_config_test.exs
+```
+
+- Those processes were inside Docker scope for the iteration 018 run container:
+
+```text
+/sys/fs/cgroup/lxc/115/ns/system.slice/docker-b746df316...scope
+/fabro-run-01KT3V4FSC1YK21HH9ZZJVYR7Q
+```
+
+- The Fabro server process was still present:
+
+```text
+fabro server start --foreground --bind 0.0.0.0:32276
+```
+
+- Server logs showed very slow responses before unresponsiveness and a store warning:
+
+```text
+HTTP response ... /events status=200 latency_ms=33858
+HTTP response ... /events status=200 latency_ms=20207
+WARN ... Failed to write run event error=worker lost canonical run store during append run event
+```
+
+These findings make the likely immediate cause more specific: a runaway active run container for `01KT3V4FSC1YK21HH9ZZJVYR7Q` spawned roughly a thousand repeated `mix test test/memba_web/club_site_config_test.exs` processes, exhausting the 2 GB Fabro LXC and starving the control plane.
+
 ## Why this matters
 
 Fabro is the standard delivery factory for these iterations. If it can stall, report contradictory task completion evidence, and then become unavailable to inspection/recovery, the operator has to choose between stopping delivery entirely or bypassing the factory. Either path creates waste and increases the chance that iteration state, code state, review evidence, and production expectations drift apart.
@@ -140,7 +196,8 @@ Fabro is the standard delivery factory for these iterations. If it can stall, re
 ## Open questions
 
 - Why did run `01KT3V4FSC1YK21HH9ZZJVYR7Q` reach an `all_tasks_done` checkpoint while `todo.md` still had unchecked tasks?
-- Was the timeout caused by the remote Fabro service, a home-network/proxy path, a server-side store/lock issue, or something else?
+- What caused the run container to spawn hundreds of duplicate `mix test test/memba_web/club_site_config_test.exs` processes?
+- Why were sandbox resource limits or process supervision unable to stop the runaway test loop before it starved the Fabro control plane?
 - Does Fabro have enough run-local evidence to reconstruct what happened without the API being healthy?
 - Should local fallback implementation be explicitly forbidden, allowed only with a named salvage branch, or wrapped in a documented recovery workflow?
 
@@ -150,4 +207,6 @@ Fabro is the standard delivery factory for these iterations. If it can stall, re
 - Add a delivery-wrapper preflight that checks Fabro health before marking an iteration `implementing`.
 - Add an offline or degraded-mode run inspection command that can read enough local/remote run evidence to classify stalled runs when the API is unhealthy.
 - Add a documented “Fabro unavailable” recovery standard that says whether to pause, create a salvage branch, or use a local agent fallback, and how to keep the iteration status unambiguous.
-- Improve health-check diagnostics so operators can tell remote outage, proxy timeout, local server issue, and store warmup/lockup apart quickly.
+- Isolate Fabro's control plane from run-container resource exhaustion, or give run containers strict process, CPU, memory, and timeout limits.
+- Add a watchdog for runaway repeated commands inside a run container, especially when the same focused test command appears hundreds of times.
+- Improve health-check diagnostics so operators can tell remote outage, proxy timeout, local server issue, store warmup/lockup, and sandbox resource starvation apart quickly.
