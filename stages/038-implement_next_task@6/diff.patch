@@ -1,0 +1,442 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index a790b03..e895427 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
+ - [x] 004 Add database constraints and matching changeset/command validation:
+ - [x] 005 Evolve Membership commands/events using an atomic replace-all model:
+-- [ ] 006 Add projector handling so:
++- [x] 006 Add projector handling so:
+ - [ ] 007 Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.
+ - [ ] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
+ - [ ] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
+diff --git a/web/lib/memba/membership/projectors/person.ex b/web/lib/memba/membership/projectors/person.ex
+index 7a59546..c2663c3 100644
+--- a/web/lib/memba/membership/projectors/person.ex
++++ b/web/lib/memba/membership/projectors/person.ex
+@@ -9,14 +9,87 @@ defmodule Memba.Membership.Projectors.Person do
+     name: "Memba.Membership.Projectors.Person",
+     consistency: :strong
+ 
++  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Projections.PersonEmailAddress
+ 
+   project(%PersonCreated{} = event, fn multi ->
+-    Ecto.Multi.insert(multi, :membership_person, %PersonProjection{
++    multi
++    |> Ecto.Multi.insert(:membership_person, %PersonProjection{
+       person_id: event.person_id,
+       name: event.name,
+       email: event.email
+     })
++    |> upsert_legacy_primary_email_address(event)
+   end)
++
++  project(%PersonEmailAddressesReplaced{} = event, fn multi ->
++    multi
++    |> Ecto.Multi.update_all(
++      :membership_person_primary_email,
++      person_query(event.person_id),
++      set: [email: event.primary_email, updated_at: DateTime.utc_now()]
++    )
++    |> Ecto.Multi.delete_all(
++      :membership_person_email_addresses_deleted,
++      email_addresses_query(event.person_id)
++    )
++    |> insert_email_addresses(event.person_id, event.email_addresses)
++  end)
++
++  defp upsert_legacy_primary_email_address(multi, %PersonCreated{} = event) do
++    changeset =
++      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
++        person_id: event.person_id,
++        email: event.email,
++        is_primary: true
++      })
++
++    Ecto.Multi.insert(
++      multi,
++      :membership_person_primary_email_address,
++      changeset,
++      on_conflict: {:replace, [:email, :normalized_email, :is_primary, :updated_at]},
++      conflict_target: {:unsafe_fragment, "(person_id) WHERE is_primary = true"}
++    )
++  end
++
++  defp insert_email_addresses(multi, person_id, email_addresses) do
++    Enum.reduce(email_addresses, multi, fn email_address, multi ->
++      attrs = email_address_attrs(person_id, email_address)
++
++      Ecto.Multi.insert(
++        multi,
++        {:membership_person_email_address, attrs.normalized_email},
++        PersonEmailAddress.changeset(%PersonEmailAddress{}, attrs)
++      )
++    end)
++  end
++
++  defp email_address_attrs(person_id, email_address) do
++    %{
++      person_id: person_id,
++      email: field(email_address, :email),
++      normalized_email: field(email_address, :normalized_email),
++      is_primary: field(email_address, :is_primary)
++    }
++  end
++
++  defp field(email_address, key) when is_map(email_address) do
++    case Map.fetch(email_address, key) do
++      {:ok, value} -> value
++      :error -> Map.get(email_address, Atom.to_string(key))
++    end
++  end
++
++  defp person_query(person_id) do
++    Ecto.Query.from(person in PersonProjection, where: person.person_id == ^person_id)
++  end
++
++  defp email_addresses_query(person_id) do
++    Ecto.Query.from(email_address in PersonEmailAddress,
++      where: email_address.person_id == ^person_id
++    )
++  end
+ end
+diff --git a/web/test/features/step_definitions/authentication_steps.exs b/web/test/features/step_definitions/authentication_steps.exs
+index a769366..0de6957 100644
+--- a/web/test/features/step_definitions/authentication_steps.exs
++++ b/web/test/features/step_definitions/authentication_steps.exs
+@@ -19,7 +19,9 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+   end
+ 
+   step "{word} is not a member of any club", %{args: [person_name]} = context do
+-    update_context_map(context, :people, person_name, %{email: default_email_for(person_name)})
++    update_context_map(context, :people, person_name, %{
++      email: default_email_for(context, person_name)
++    })
+   end
+ 
+   step "{word} requests a sign-in link for their email address",
+@@ -211,7 +213,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+       context
+     else
+       person_id = Ecto.UUID.generate()
+-      email = default_email_for(person_name)
++      email = default_email_for(context, person_name)
+ 
+       assert :ok =
+                Membership.create_person(
+@@ -306,8 +308,8 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+     context
+   end
+ 
+-  defp default_email_for("Pat"), do: "pat@memba.io"
+-  defp default_email_for(person_name), do: email_for(person_name)
++  defp default_email_for(_context, "Pat"), do: "pat@memba.io"
++  defp default_email_for(context, person_name), do: email_for(context, person_name)
+ 
+   defp scenario_slug(context, club_name) do
+     suffix =
+@@ -327,14 +329,22 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+     "#{base}-#{suffix}"
+   end
+ 
+-  defp email_for(name) do
++  defp email_for(context, name) do
+     normalized_name =
+       name
+       |> String.downcase()
+       |> String.replace(~r/[^a-z0-9]+/, ".")
+       |> String.trim(".")
+ 
+-    "#{normalized_name}@example.test"
++    "#{normalized_name}-#{scenario_email_suffix(context)}@example.test"
++  end
++
++  defp scenario_email_suffix(context) do
++    context
++    |> Map.get(:scenario_name, "scenario")
++    |> :erlang.phash2(1_000_000)
++    |> Integer.to_string(36)
++    |> String.downcase()
+   end
+ 
+   defp fetch_from_context!(context, collection_key, item_key) do
+diff --git a/web/test/features/step_definitions/membership_steps.exs b/web/test/features/step_definitions/membership_steps.exs
+index ba2f259..e9ac82d 100644
+--- a/web/test/features/step_definitions/membership_steps.exs
++++ b/web/test/features/step_definitions/membership_steps.exs
+@@ -101,19 +101,23 @@ defmodule Memba.Cucumber.MembershipSteps do
+   end
+ 
+   defp create_person(context, name) do
+-    person_id = Ecto.UUID.generate()
+-    email = email_for(name)
++    if get_in(context, [:people, name]) do
++      context
++    else
++      person_id = Ecto.UUID.generate()
++      email = email_for(context, name)
+ 
+-    assert :ok =
+-             App.dispatch(
+-               %CreatePerson{person_id: person_id, name: name, email: email},
+-               consistency: :strong
+-             )
++      assert :ok =
++               App.dispatch(
++                 %CreatePerson{person_id: person_id, name: name, email: email},
++                 consistency: :strong
++               )
+ 
+-    assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
+-             Membership.get_person(person_id)
++      assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
++               Membership.get_person(person_id)
+ 
+-    update_context_map(context, :people, name, person_id)
++      update_context_map(context, :people, name, person_id)
++    end
+   end
+ 
+   defp add_members(context, person_names, club_name) do
+@@ -170,13 +174,21 @@ defmodule Memba.Cucumber.MembershipSteps do
+     Map.put(context, collection_key, collection)
+   end
+ 
+-  defp email_for(name) do
++  defp email_for(context, name) do
+     normalized_name =
+       name
+       |> String.downcase()
+       |> String.replace(~r/[^a-z0-9]+/, ".")
+       |> String.trim(".")
+ 
+-    "#{normalized_name}@example.test"
++    "#{normalized_name}-#{scenario_email_suffix(context)}@example.test"
++  end
++
++  defp scenario_email_suffix(context) do
++    context
++    |> Map.get(:scenario_name, "scenario")
++    |> :erlang.phash2(1_000_000)
++    |> Integer.to_string(36)
++    |> String.downcase()
+   end
+ end
+diff --git a/web/test/memba/accounts_test.exs b/web/test/memba/accounts_test.exs
+index 27a6b43..c7f03dc 100644
+--- a/web/test/memba/accounts_test.exs
++++ b/web/test/memba/accounts_test.exs
+@@ -99,7 +99,13 @@ defmodule Memba.AccountsTest do
+           email: "alice@example.com"
+         )
+ 
+-      nelson = create_active_member(club_name: "Nelson Cycling Club", email: "Alice@Example.COM")
++      nelson =
++        create_active_member(
++          club_name: "Nelson Cycling Club",
++          person_id: kootenay.person_id,
++          email: "alice@example.com"
++        )
++
+       _other = create_active_member(club_name: "Other Club", email: "other@example.com")
+ 
+       assert [
+@@ -131,7 +137,7 @@ defmodule Memba.AccountsTest do
+ 
+   defp create_active_member(attrs) do
+     club_id = Ecto.UUID.generate()
+-    person_id = Ecto.UUID.generate()
++    person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
+ 
+     assert :ok =
+              Membership.create_club(
+@@ -139,15 +145,17 @@ defmodule Memba.AccountsTest do
+                consistency: :strong
+              )
+ 
+-    assert :ok =
+-             Membership.create_person(
+-               %{
+-                 person_id: person_id,
+-                 name: "Test Member",
+-                 email: Keyword.fetch!(attrs, :email)
+-               },
+-               consistency: :strong
+-             )
++    unless Membership.get_person(person_id) do
++      assert :ok =
++               Membership.create_person(
++                 %{
++                   person_id: person_id,
++                   name: "Test Member",
++                   email: Keyword.fetch!(attrs, :email)
++                 },
++                 consistency: :strong
++               )
++    end
+ 
+     assert :ok =
+              Membership.add_member(
+diff --git a/web/test/memba/membership/person_projection_test.exs b/web/test/memba/membership/person_projection_test.exs
+index ce19617..27d5ffa 100644
+--- a/web/test/memba/membership/person_projection_test.exs
++++ b/web/test/memba/membership/person_projection_test.exs
+@@ -4,7 +4,9 @@ defmodule Memba.Membership.PersonProjectionTest do
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Projections.PersonEmailAddress
+ 
+   test "CreatePerson is projected into the public Membership person query API" do
+     person_id = Ecto.UUID.generate()
+@@ -28,9 +30,127 @@ defmodule Memba.Membership.PersonProjectionTest do
+            } = Membership.get_person(person_id)
+   end
+ 
++  test "legacy CreatePerson projects one primary email-address row" do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: "Alice",
++                 email: " Alice@Example.COM "
++               },
++               consistency: :strong
++             )
++
++    assert %PersonProjection{
++             person_id: ^person_id,
++             email: "alice@example.com"
++           } = Membership.get_person(person_id)
++
++    assert [
++             %PersonEmailAddress{
++               person_id: ^person_id,
++               email: "alice@example.com",
++               normalized_email: "alice@example.com",
++               is_primary: true
++             }
++           ] = email_addresses_for(person_id)
++  end
++
++  test "CreatePerson with multiple email addresses replaces the legacy primary projection" do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: "Alice",
++                 email_addresses: [
++                   %{email: " Alice@Example.COM ", is_primary: true},
++                   %{email: " Alice@Work.Example ", is_primary: false}
++                 ]
++               },
++               consistency: :strong
++             )
++
++    assert %PersonProjection{
++             person_id: ^person_id,
++             email: "Alice@Example.COM"
++           } = Membership.get_person(person_id)
++
++    assert [
++             %PersonEmailAddress{
++               person_id: ^person_id,
++               email: "Alice@Example.COM",
++               normalized_email: "alice@example.com",
++               is_primary: true
++             },
++             %PersonEmailAddress{
++               person_id: ^person_id,
++               email: "Alice@Work.Example",
++               normalized_email: "alice@work.example",
++               is_primary: false
++             }
++           ] = email_addresses_for(person_id)
++  end
++
++  test "ReplacePersonEmailAddresses atomically replaces rows and updates denormalized primary email" do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{
++                 person_id: person_id,
++                 name: "Alice",
++                 email: "alice@example.com"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %ReplacePersonEmailAddresses{
++                 person_id: person_id,
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: false},
++                   %{email: "alice@work.example", is_primary: true}
++                 ]
++               },
++               consistency: :strong
++             )
++
++    assert %PersonProjection{
++             person_id: ^person_id,
++             email: "alice@work.example"
++           } = Membership.get_person(person_id)
++
++    assert [
++             %PersonEmailAddress{
++               person_id: ^person_id,
++               email: "alice@example.com",
++               normalized_email: "alice@example.com",
++               is_primary: false
++             },
++             %PersonEmailAddress{
++               person_id: ^person_id,
++               email: "alice@work.example",
++               normalized_email: "alice@work.example",
++               is_primary: true
++             }
++           ] = email_addresses_for(person_id)
++  end
++
+   test "get_person/1 returns nil for missing or invalid person IDs" do
+     assert is_nil(Membership.get_person(Ecto.UUID.generate()))
+     assert is_nil(Membership.get_person(nil))
+     assert is_nil(Membership.get_person("not-a-uuid"))
+   end
++
++  defp email_addresses_for(person_id) do
++    PersonEmailAddress
++    |> where([email_address], email_address.person_id == ^person_id)
++    |> order_by([email_address], asc: email_address.normalized_email)
++    |> Repo.all()
++  end
+ end
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 0a96367..f61a663 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -122,11 +122,10 @@ defmodule Memba.Membership.QueryTest do
+       inactive_club_id = Ecto.UUID.generate()
+ 
+       alice = create_person(name: "Alice", email: "alice@example.com")
+-      uppercase_alice = create_person(name: "Alice Upper", email: "Alice@Example.COM")
+       other_person = create_person(name: "Other", email: "other@example.com")
+ 
+       add_member(kootenay.club_id, alice.person_id)
+-      add_member(nelson.club_id, uppercase_alice.person_id)
++      add_member(nelson.club_id, alice.person_id)
+       add_member(other_club.club_id, other_person.person_id)
+ 
+       insert_membership_club!(club_id: inactive_club_id, name: "Inactive Club")
