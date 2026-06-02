@@ -37,14 +37,13 @@ defmodule Memba.CucumberConfigurationTest do
        {"And",
         "Carol's email for \"Trip planning night\" has been reported as bounced because \"mailbox does not exist\"",
         27},
-       {"And", "Dana has opened the email for \"Trip planning night\"", 28},
-       {"When", "Alice views the message \"Trip planning night\"", 29},
-       {"Then", "Alice should see Bob's status for \"Trip planning night\" as \"Delivered\"", 30},
+       {"When", "Alice views the message \"Trip planning night\"", 28},
+       {"Then", "Alice should see Bob's status for \"Trip planning night\" as \"Delivered\"", 29},
        {"And",
         "Alice should see Carol's status for \"Trip planning night\" as \"Delivery problem\"",
-        31},
-       {"And", "Alice should see Dana's status for \"Trip planning night\" as \"Opened\"", 32},
-       {"And", "Alice should see Alice's status for \"Trip planning night\" as \"Sending\"", 33}
+        30},
+       {"And", "Alice should see Dana's status for \"Trip planning night\" as \"Sending\"", 31},
+       {"And", "Alice should see Alice's status for \"Trip planning night\" as \"Sending\"", 32}
      ]},
     {"Bob sees the same shared statuses",
      [
@@ -116,16 +115,6 @@ defmodule Memba.CucumberConfigurationTest do
        {"And",
         "Memba staff should see Bob's delivery reason \"recipient marked the message as spam\"",
         26}
-     ]},
-    {"Opens are visible after delivery",
-     [
-       {"Given",
-        "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
-        29},
-       {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 30},
-       {"When", "Bob opens the email for \"Trip planning night\"", 31},
-       {"Then", "Memba staff should see Bob's delivery for \"Trip planning night\" as \"opened\"",
-        32}
      ]}
   ]
 
@@ -319,8 +308,6 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} email for {string} is reported as bounced because {string}",
     "{word} email for {string} has been reported as bounced because {string}",
     "{word} email for {string} is reported as a spam complaint because {string}",
-    "{word} opens the email for {string}",
-    "{word} has opened the email for {string}",
     "{word} status for {string} should be {string}",
     "{word} should see the message {string} in Kootenay Mountaineering Club",
     "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
