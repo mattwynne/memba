@@ -14,6 +14,7 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
                "MEMBA_POSTMARK_SERVER_TOKEN" -> "  server-token  "
                "MEMBA_AUTH_EMAIL_FROM_ADDRESS" -> " auth@mail.memba.io "
                "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" -> " outbound-authentication "
+               "MEMBA_RESEND_API_KEY" -> nil
              end)
   end
 
@@ -23,9 +24,10 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
                "MEMBA_POSTMARK_SERVER_TOKEN" -> "  "
                "MEMBA_AUTH_EMAIL_FROM_ADDRESS" -> nil
                "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" -> ""
+               "MEMBA_RESEND_API_KEY" -> nil
              end)
 
-    assert message =~ "Auth email Postmark delivery is enabled"
+    assert message =~ "Auth email delivery is enabled"
     assert message =~ "required environment configuration is missing"
     assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
     assert message =~ "MEMBA_AUTH_EMAIL_FROM_ADDRESS"
@@ -49,16 +51,35 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
             }} = AuthEmailConfig.from_application_env()
   end
 
-  test "selects Postmark auth email delivery only when explicitly configured" do
+  test "reads required auth email Resend settings from environment" do
+    assert {:ok,
+            %AuthEmailConfig{
+              provider: :resend,
+              api_key: "resend-key",
+              from: "auth@mail.memba.io",
+              message_stream: "auth"
+            }} =
+             AuthEmailConfig.from_env(:resend, fn
+               "MEMBA_RESEND_API_KEY" -> "  resend-key  "
+               "MEMBA_AUTH_EMAIL_FROM_ADDRESS" -> " auth@mail.memba.io "
+               "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" -> " auth "
+               "MEMBA_POSTMARK_SERVER_TOKEN" -> nil
+             end)
+  end
+
+  test "selects auth email delivery provider only when explicitly configured" do
     assert AuthEmailConfig.provider_override(nil) == :default
     assert AuthEmailConfig.provider_override("") == :default
     assert AuthEmailConfig.provider_override("   ") == :default
     assert AuthEmailConfig.provider_override("postmark") == {:ok, :postmark}
     assert AuthEmailConfig.provider_override("POSTMARK") == {:ok, :postmark}
+    assert AuthEmailConfig.provider_override("resend") == {:ok, :resend}
+    assert AuthEmailConfig.provider_override("RESEND") == {:ok, :resend}
 
     assert {:error, message} = AuthEmailConfig.provider_override("smtp")
     assert message =~ "Unsupported MEMBA_AUTH_EMAIL_PROVIDER"
     assert message =~ "postmark"
+    assert message =~ "resend"
   end
 
   defp with_application_env(key, value) do

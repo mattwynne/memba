@@ -9,11 +9,13 @@ defmodule Memba.Messaging.EmailDeliveryProviderConfig do
 
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+  alias Memba.Messaging.EmailDeliveryProviders.Resend
 
   @provider_env "MEMBA_MESSAGING_DELIVERY_PROVIDER"
   @providers %{
     "fake" => Fake,
-    "postmark" => Postmark
+    "postmark" => Postmark,
+    "resend" => Resend
   }
 
   @doc """

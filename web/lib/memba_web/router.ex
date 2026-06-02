@@ -80,6 +80,7 @@ defmodule MembaWeb.Router do
     pipe_through :api
 
     post "/postmark", PostmarkWebhookController, :create
+    post "/resend", ResendWebhookController, :create
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
