@@ -1034,7 +1034,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T04:16:00.889251096Z",
-  "last_event_at": "2026-06-02T04:21:48.555418414Z",
+  "last_event_at": "2026-06-02T04:21:51.722056211Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3238,9 +3238,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 137,
       "checkpoint": {
-        "timestamp": "2026-06-02T04:21:48.562097385Z",
+        "timestamp": "2026-06-02T04:21:51.721856758Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -3259,218 +3259,75 @@
         ],
         "node_retries": {},
         "context_values": {
-          "gemini_review_confidence": "High",
-          "last_stage": "synthesize",
-          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "gemini_review_blocking_gaps": "None",
-          "claude_review_required_edits": "None",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "thread.gemini_review.current_node": "claude_review",
-          "plan_needs_fix": false,
-          "internal.retry_count.gemini_review": 0,
-          "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation\",\n    \"codex_review_required_edits\": \"Provide or rerun complete unomitted plan chunks before marking the plan validated\"\n  }\n}",
-          "internal.retry_count.publish_ready": 0,
-          "claude_review_confidence": "High",
-          "gemini_review_decision": "READY",
-          "codex_review_blocking_gaps": "Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation",
-          "internal.retry_count.read_plan_181_240": 0,
-          "internal.fidelity": "summary:high",
-          "thread.codex_review.current_node": "synthesize",
-          "internal.node_visit_count": 1,
-          "failure_signature": "",
-          "thread.read_plan_181_240.current_node": "read_plan_241_300",
-          "claude_review_blocking_gaps": "None",
-          "thread.read_plan_301_360.current_node": "gemini_review",
-          "internal.retry_count.codex_review": 0,
-          "thread.start.current_node": "read_plan_001_060",
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.retry_count.read_plan_061_120": 0,
-          "current_node": "publish_ready",
-          "codex_review_blocking_gap_count": 1,
-          "outcome": "succeeded",
-          "codex_review_confidence": "High",
-          "graph.default_fidelity": "summary:high",
-          "gemini_review_blocking_gap_count": 0,
-          "graph.rankdir": "LR",
-          "claude_review_decision": "READY",
-          "plan_needs_human": false,
           "thread.synthesis_gate.current_node": "publish_ready",
-          "internal.retry_count.read_plan_241_300": 0,
-          "internal.retry_count.claude_review": 0,
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "response.claude_review": "# Iteration Plan Review: Remove Open Tracking\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Add explicit goal statement**: While the goal is inferable from context, adding a dedicated `## Goal` section at the top (before Background/Context) would improve clarity: \"Remove pixel-based email open tracking from Memba's delivery model to simplify product vocabulary and avoid implying that Memba observes whether recipients read messages.\"\n\n2. **Specify unsupported webhook response format**: The plan says open events should be \"rejected as unsupported\" but doesn't specify the expected HTTP response (status code, body structure). Clarifying whether this follows existing unsupported-event response patterns would help implementation consistency.\n\n3. **Name specific Messaging modules**: Step 3 of the implementation plan mentions \"delete or stop routing `ReportEmailDeliveryOpened` command handling\" but could be more specific about which modules/files contain the command handler, event module, and aggregate transition logic.\n\n4. **Clarify event store compatibility**: Implementation notes mention \"keeping a compatibility shim\" for historic opened events but could be more explicit about whether old event deserialization must work or if it's acceptable to have unopened events that cannot replay (depending on local dev/test data needs).\n\n## Smallest Viable Iteration\n\nThe plan is already appropriately scoped. While you could theoretically split this into:\n- Part 1: Backend changes (domain model, projections, webhook, Postmark config)\n- Part 2: UI changes (member views, staff views, copy)\n\nRemoving a feature completely in one iteration makes sense to avoid shipping an inconsistent partial state where backend supports opened but UI doesn't, or vice versa. The current scope is the right atomic unit.\n\n## Required Plan Edits\n\nNone required. The plan is implementable as written.\n\nThe non-blocking improvements above would strengthen clarity but are not necessary to begin implementation safely.\n\n## Validation Plan\n\nThe plan includes a comprehensive validation approach:\n\n**Pre-implementation:**\n- All plan sections are complete (goal, scope, acceptance criteria, implementation steps, validation)\n- BDD decision is explicit (Required) with named feature files\n- Business and technical decisions are resolved\n\n**During implementation:**\n- Feature files updated first to guide TDD\n- Layer-by-layer testing (domain → projections → webhooks → UI)\n- Targeted test runs after each layer change\n\n**Completion verification:**\n1. Shared acceptance harness passes with only Sending/Delivered/Delivery problem states\n2. Messaging domain tests cover delivered/delayed/bounced/spam complaint (no opened)\n3. Postmark provider tests prove `track_opens` is not set\n4. Postmark webhook tests prove open events are rejected without state mutation\n5. Member LiveView tests show no opened groups/counts/copy\n6. Staff LiveView tests show no opened status (other statuses preserved)\n7. Documentation search (`rg \"opened|track_opens|open tracking\"`) shows only historical/irrelevant matches\n8. `dev check` passes completely\n\n**Success criteria:**\n- All 14 acceptance criteria from the plan are demonstrably true\n- No regression in existing delivery problem handling (delayed, bounced, spam)\n- Clean separation: opened is neither emitted by current code nor exposed in current model/UI\n- Stakeholder-readable acceptance features accurately describe new behavior\n\nThe validation plan is thorough and matches the scope. Implementation can proceed.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "thread.read_plan_001_060.current_node": "read_plan_061_120",
-          "claude_review_blocking_gap_count": 0,
-          "thread.read_plan_121_180.current_node": "read_plan_181_240",
-          "failure_class": "",
-          "internal.work_dir": "/workspace/memba",
+          "plan_needs_human": false,
+          "command.output": "blob://sha256/92b485f17b3b257b8befe9e024cc6080c812bda4054ec5442d7c10bad21f1956",
+          "internal.node_visit_count": 1,
+          "claude_review_decision": "READY",
+          "gemini_review_required_edits": "None",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.retry_count.codex_review": 0,
           "internal.retry_count.read_plan_121_180": 0,
+          "failure_class": "",
+          "gemini_review_blocking_gaps": "None",
+          "claude_review_blocking_gaps": "None",
+          "failure_signature": "",
+          "internal.retry_count.start": 0,
+          "claude_review_confidence": "High",
+          "internal.retry_count.read_plan_061_120": 0,
+          "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_decision": "NOT READY",
+          "internal.thread_id": "synthesis_gate",
+          "thread.codex_review.current_node": "synthesize",
+          "current_node": "publish_ready",
+          "internal.run_id": "01KT38Q6SGV9GJMTAT35GE06HS",
+          "internal.work_dir": "/workspace/memba",
           "thread.read_plan_061_120.current_node": "read_plan_121_180",
           "thread.read_plan_241_300.current_node": "read_plan_301_360",
-          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
-          "internal.thread_id": "synthesis_gate",
-          "codex_review_decision": "NOT READY",
-          "gemini_review_required_edits": "None",
+          "thread.read_plan_001_060.current_node": "read_plan_061_120",
+          "outcome": "succeeded",
+          "thread.read_plan_181_240.current_node": "read_plan_241_300",
+          "codex_review_blocking_gaps": "Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation",
+          "graph.default_fidelity": "summary:high",
+          "codex_review_confidence": "High",
+          "claude_review_required_edits": "None",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "thread.claude_review.current_node": "codex_review",
-          "plan_ready": true,
-          "internal.retry_count.synthesis_gate": 0,
+          "thread.start.current_node": "read_plan_001_060",
+          "thread.read_plan_121_180.current_node": "read_plan_181_240",
+          "graph.rankdir": "LR",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "internal.retry_count.read_plan_301_360": 0,
-          "internal.retry_count.synthesize": 0,
+          "gemini_review_blocking_gap_count": 0,
+          "gemini_review_decision": "READY",
+          "internal.fidelity": "summary:high",
           "internal.retry_count.read_plan_001_060": 0,
-          "internal.run_id": "01KT38Q6SGV9GJMTAT35GE06HS",
-          "internal.retry_count.start": 0,
-          "command.output": "blob://sha256/92b485f17b3b257b8befe9e024cc6080c812bda4054ec5442d7c10bad21f1956",
-          "codex_review_required_edits": "Provide or rerun complete unomitted plan chunks before marking the plan validated"
+          "plan_needs_fix": false,
+          "internal.retry_count.synthesize": 0,
+          "gemini_review_confidence": "High",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.read_plan_181_240": 0,
+          "internal.retry_count.read_plan_301_360": 0,
+          "last_stage": "synthesize",
+          "internal.retry_count.gemini_review": 0,
+          "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation\",\n    \"codex_review_required_edits\": \"Provide or rerun complete unomitted plan chunks before marking the plan validated\"\n  }\n}",
+          "codex_review_blocking_gap_count": 1,
+          "internal.retry_count.publish_ready": 0,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.read_plan_241_300": 0,
+          "claude_review_blocking_gap_count": 0,
+          "thread.gemini_review.current_node": "claude_review",
+          "thread.read_plan_301_360.current_node": "gemini_review",
+          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+          "codex_review_required_edits": "Provide or rerun complete unomitted plan chunks before marking the plan validated",
+          "plan_ready": true,
+          "response.claude_review": "# Iteration Plan Review: Remove Open Tracking\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-blocking Improvements\n\n1. **Add explicit goal statement**: While the goal is inferable from context, adding a dedicated `## Goal` section at the top (before Background/Context) would improve clarity: \"Remove pixel-based email open tracking from Memba's delivery model to simplify product vocabulary and avoid implying that Memba observes whether recipients read messages.\"\n\n2. **Specify unsupported webhook response format**: The plan says open events should be \"rejected as unsupported\" but doesn't specify the expected HTTP response (status code, body structure). Clarifying whether this follows existing unsupported-event response patterns would help implementation consistency.\n\n3. **Name specific Messaging modules**: Step 3 of the implementation plan mentions \"delete or stop routing `ReportEmailDeliveryOpened` command handling\" but could be more specific about which modules/files contain the command handler, event module, and aggregate transition logic.\n\n4. **Clarify event store compatibility**: Implementation notes mention \"keeping a compatibility shim\" for historic opened events but could be more explicit about whether old event deserialization must work or if it's acceptable to have unopened events that cannot replay (depending on local dev/test data needs).\n\n## Smallest Viable Iteration\n\nThe plan is already appropriately scoped. While you could theoretically split this into:\n- Part 1: Backend changes (domain model, projections, webhook, Postmark config)\n- Part 2: UI changes (member views, staff views, copy)\n\nRemoving a feature completely in one iteration makes sense to avoid shipping an inconsistent partial state where backend supports opened but UI doesn't, or vice versa. The current scope is the right atomic unit.\n\n## Required Plan Edits\n\nNone required. The plan is implementable as written.\n\nThe non-blocking improvements above would strengthen clarity but are not necessary to begin implementation safely.\n\n## Validation Plan\n\nThe plan includes a comprehensive validation approach:\n\n**Pre-implementation:**\n- All plan sections are complete (goal, scope, acceptance criteria, implementation steps, validation)\n- BDD decision is explicit (Required) with named feature files\n- Business and technical decisions are resolved\n\n**During implementation:**\n- Feature files updated first to guide TDD\n- Layer-by-layer testing (domain → projections → webhooks → UI)\n- Targeted test runs after each layer change\n\n**Completion verification:**\n1. Shared acceptance harness passes with only Sending/Delivered/Delivery problem states\n2. Messaging domain tests cover delivered/delayed/bounced/spam complaint (no opened)\n3. Postmark provider tests prove `track_opens` is not set\n4. Postmark webhook tests prove open events are rejected without state mutation\n5. Member LiveView tests show no opened groups/counts/copy\n6. Staff LiveView tests show no opened status (other statuses preserved)\n7. Documentation search (`rg \"opened|track_opens|open tracking\"`) shows only historical/irrelevant matches\n8. `dev check` passes completely\n\n**Success criteria:**\n- All 14 acceptance criteria from the plan are demonstrably true\n- No regression in existing delivery problem handling (delayed, bounced, spam)\n- Clean separation: opened is neither emitted by current code nor exposed in current model/UI\n- Stakeholder-readable acceptance features accurately describe new behavior\n\nThe validation plan is thorough and matches the scope. Implementation can proceed.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}"
         },
         "node_outcomes": {
-          "gemini_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_response": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemin",
-              "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
-              "gemini_review_blocking_gaps": "None",
-              "gemini_review_decision": "READY",
-              "last_stage": "gemini_review",
-              "gemini_review_confidence": "High",
-              "gemini_review_required_edits": "None",
-              "gemini_review_blocking_gap_count": 0
-            },
-            "notes": "Stage completed: gemini_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "gemini",
-                    "model_id": "gemini-3.1-pro-preview"
-                  },
-                  "tokens": {
-                    "input_tokens": 8518,
-                    "output_tokens": 90,
-                    "reasoning_tokens": 2011,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "gemini",
-                  "storage_segments": []
-                }
-              },
-              "total_usd_micros": 42248
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 102399,
-              "tool_time_ms": 0,
-              "active_time_ms": 102399
-            }
-          },
-          "codex_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_response": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Plan evidence is ",
-              "codex_review_confidence": "High",
-              "codex_review_decision": "NOT READY",
-              "codex_review_blocking_gaps": "Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation",
-              "last_stage": "codex_review",
-              "codex_review_blocking_gap_count": 1,
-              "codex_review_required_edits": "Provide or rerun complete unomitted plan chunks before marking the plan validated",
-              "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation\",\n    \"codex_review_required_edits\": \"Provide or rerun complete unomitted plan chunks before marking the plan validated\"\n  }\n}"
-            },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 4881,
-                    "output_tokens": 126,
-                    "reasoning_tokens": 1034,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 59205
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 21706,
-              "tool_time_ms": 0,
-              "active_time_ms": 21706
-            }
-          },
           "synthesis_gate": {
             "status": "succeeded",
             "notes": "Conditional node evaluated: synthesis_gate",
             "usage": null
-          },
-          "read_plan_301_360": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/7f02067079fa9061f0b148125f1df77dd1bda3726a450ce83b91ad7017f26fca"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 301 360 360 'original plan chunk 301-360'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 152,
-              "active_time_ms": 152
-            }
-          },
-          "publish_ready": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/92b485f17b3b257b8befe9e024cc6080c812bda4054ec5442d7c10bad21f1956"
-            },
-            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 2129,
-              "active_time_ms": 2129
-            }
-          },
-          "start": {
-            "status": "succeeded",
-            "usage": null
-          },
-          "read_plan_121_180": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/fcf8ea7f8d97bad956dca3699ed4a58a077133504f070a41c4f42f48de4d32e9"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 121 180 360 'original plan chunk 121-180'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 160,
-              "active_time_ms": 160
-            }
-          },
-          "read_plan_061_120": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/8e75f75001ff7b960e965ed0c0f22b78fac4ad9972cc2038e36ba36caffe2613"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 61 120 360 'original plan chunk 061-120'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 159,
-              "active_time_ms": 159
-            }
           },
           "synthesize": {
             "status": "succeeded",
@@ -3525,34 +3382,6 @@
               "active_time_ms": 156
             }
           },
-          "read_plan_181_240": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/5366f6ba67c642243b20b7b167ca0beb71e5246492ca2f96beb80193f487e2ee"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 181 240 360 'original plan chunk 181-240'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 152,
-              "active_time_ms": 152
-            }
-          },
-          "read_plan_241_300": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/b15e886fee620cd505a57805eb1b4e0d7e59bea69fb57f3ccb0daa17151599db"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 241 300 360 'original plan chunk 241-300'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 155,
-              "active_time_ms": 155
-            }
-          },
           "claude_review": {
             "status": "succeeded",
             "context_updates": {
@@ -3595,29 +3424,378 @@
               "tool_time_ms": 0,
               "active_time_ms": 63902
             }
+          },
+          "publish_ready": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/92b485f17b3b257b8befe9e024cc6080c812bda4054ec5442d7c10bad21f1956"
+            },
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2129,
+              "active_time_ms": 2129
+            }
+          },
+          "read_plan_061_120": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8e75f75001ff7b960e965ed0c0f22b78fac4ad9972cc2038e36ba36caffe2613"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 61 120 360 'original plan chunk 061-120'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "read_plan_121_180": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fcf8ea7f8d97bad956dca3699ed4a58a077133504f070a41c4f42f48de4d32e9"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 121 180 360 'original plan chunk 121-180'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 160,
+              "active_time_ms": 160
+            }
+          },
+          "read_plan_241_300": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b15e886fee620cd505a57805eb1b4e0d7e59bea69fb57f3ccb0daa17151599db"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 241 300 360 'original plan chunk 241-300'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemin",
+              "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_decision": "READY",
+              "last_stage": "gemini_review",
+              "gemini_review_confidence": "High",
+              "gemini_review_required_edits": "None",
+              "gemini_review_blocking_gap_count": 0
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 8518,
+                    "output_tokens": 90,
+                    "reasoning_tokens": 2011,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 42248
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 102399,
+              "tool_time_ms": 0,
+              "active_time_ms": 102399
+            }
+          },
+          "read_plan_301_360": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7f02067079fa9061f0b148125f1df77dd1bda3726a450ce83b91ad7017f26fca"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 301 360 360 'original plan chunk 301-360'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Plan evidence is ",
+              "codex_review_confidence": "High",
+              "codex_review_decision": "NOT READY",
+              "codex_review_blocking_gaps": "Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation",
+              "last_stage": "codex_review",
+              "codex_review_blocking_gap_count": 1,
+              "codex_review_required_edits": "Provide or rerun complete unomitted plan chunks before marking the plan validated",
+              "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Plan evidence is incomplete: read_plan_001_060 and read_plan_061_120 explicitly contain omitted lines, so the complete plan text is not visible for validation\",\n    \"codex_review_required_edits\": \"Provide or rerun complete unomitted plan chunks before marking the plan validated\"\n  }\n}"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 4881,
+                    "output_tokens": 126,
+                    "reasoning_tokens": 1034,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 59205
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 21706,
+              "tool_time_ms": 0,
+              "active_time_ms": 21706
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan_181_240": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5366f6ba67c642243b20b7b167ca0beb71e5246492ca2f96beb80193f487e2ee"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/017-remove-open-tracking/plan.md' 181 240 360 'original plan chunk 181-240'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 152,
+              "active_time_ms": 152
+            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "c10cecfccb36d76a4313a207b04b434f95cd2da9",
         "node_visits": {
+          "codex_review": 1,
+          "read_plan_121_180": 1,
+          "publish_ready": 1,
+          "read_plan_181_240": 1,
           "read_plan_001_060": 1,
           "synthesis_gate": 1,
-          "start": 1,
-          "read_plan_121_180": 1,
-          "codex_review": 1,
-          "read_plan_061_120": 1,
+          "synthesize": 1,
           "claude_review": 1,
-          "read_plan_181_240": 1,
-          "read_plan_241_300": 1,
           "gemini_review": 1,
           "read_plan_301_360": 1,
-          "synthesize": 1,
-          "publish_ready": 1
+          "start": 1,
+          "read_plan_061_120": 1,
+          "read_plan_241_300": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/017-remove-open-tracking/plan.md b/docs/iterations/017-remove-open-tracking/plan.md\nindex 0e36f80..0e78794 100644\n--- a/docs/iterations/017-remove-open-tracking/plan.md\n+++ b/docs/iterations/017-remove-open-tracking/plan.md\n@@ -1,7 +1,7 @@\n # Remove email open tracking\n \n Date: 2026-06-01\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex 90bdb54..5eb890e 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -26,7 +26,7 @@ green than before.\n | 014 | 2026-06-01 | merged | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |\n | 015 | 2026-06-01 | merged | Club slugs and public club subdomains | [plan](015-club-slugs/plan.md) |\n | 016 | 2026-06-01 | implementing | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |\n-| 017 | 2026-06-01 | ready | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |\n+| 017 | 2026-06-01 | validated | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |\n \n Status notes:\n \n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-02T04:21:51.741054973Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 350843,
+      "inference_time_ms": 306294,
+      "tool_time_ms": 3063,
+      "active_time_ms": 309357
+    },
+    "final_git_commit_sha": "c10cecfccb36d76a4313a207b04b434f95cd2da9",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_001_060",
+        "stage_label": "read_plan_001_060",
+        "timing": {
+          "wall_time_ms": 159,
+          "inference_time_ms": 0,
+          "tool_time_ms": 156,
+          "active_time_ms": 156
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_061_120",
+        "stage_label": "read_plan_061_120",
+        "timing": {
+          "wall_time_ms": 168,
+          "inference_time_ms": 0,
+          "tool_time_ms": 159,
+          "active_time_ms": 159
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_121_180",
+        "stage_label": "read_plan_121_180",
+        "timing": {
+          "wall_time_ms": 165,
+          "inference_time_ms": 0,
+          "tool_time_ms": 160,
+          "active_time_ms": 160
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_181_240",
+        "stage_label": "read_plan_181_240",
+        "timing": {
+          "wall_time_ms": 157,
+          "inference_time_ms": 0,
+          "tool_time_ms": 152,
+          "active_time_ms": 152
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_241_300",
+        "stage_label": "read_plan_241_300",
+        "timing": {
+          "wall_time_ms": 159,
+          "inference_time_ms": 0,
+          "tool_time_ms": 155,
+          "active_time_ms": 155
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_301_360",
+        "stage_label": "read_plan_301_360",
+        "timing": {
+          "wall_time_ms": 157,
+          "inference_time_ms": 0,
+          "tool_time_ms": 152,
+          "active_time_ms": 152
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 102497,
+          "inference_time_ms": 102399,
+          "tool_time_ms": 0,
+          "active_time_ms": 102399
+        },
+        "billing_usd_micros": 42248,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 63950,
+          "inference_time_ms": 63902,
+          "tool_time_ms": 0,
+          "active_time_ms": 63902
+        },
+        "billing_usd_micros": 50757,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 21788,
+          "inference_time_ms": 21706,
+          "tool_time_ms": 0,
+          "active_time_ms": 21706
+        },
+        "billing_usd_micros": 59205,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 118328,
+          "inference_time_ms": 118287,
+          "tool_time_ms": 0,
+          "active_time_ms": 118287
+        },
+        "billing_usd_micros": 167500,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 2136,
+          "inference_time_ms": 0,
+          "tool_time_ms": 2129,
+          "active_time_ms": 2129
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 23581,
+      "output_tokens": 2708,
+      "total_tokens": 33958,
+      "reasoning_tokens": 7669,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 319710
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -3861,6 +4039,40 @@
       },
       "state": "succeeded"
     },
+    "exit@1": {
+      "first_event_seq": 140,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-02T04:21:51.722056211Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T04:21:51.722042268Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "synthesis_gate@1": {
       "first_event_seq": 122,
       "prompt": null,
@@ -3981,7 +4193,12 @@
       "first_event_seq": 130,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/017-remove-open-tracking/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T04:21:48.555569777Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -4004,6 +4221,12 @@
       "termination": "exited",
       "started_at": "2026-06-02T04:21:46.418981024Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 2136,
+        "inference_time_ms": 0,
+        "tool_time_ms": 2129,
+        "active_time_ms": 2129
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -4012,7 +4235,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "read_plan_301_360@1": {
       "first_event_seq": 72,
