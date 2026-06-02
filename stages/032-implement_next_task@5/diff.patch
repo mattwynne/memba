@@ -1,0 +1,63 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index a81f734..ba8a79c 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Update shared acceptance feature expectations to remove opened receipts.
+ - [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:
+ - [x] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+-- [ ] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
++- [x] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+ - [ ] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+ - [ ] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+ - [ ] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 96818f4..ee98321 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -45,7 +45,6 @@ config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
+   from: {"Memba", "messages@mail.memba.io"},
+   reply_to: {"Matt Wynne", "matt@mattwynne.net"},
+   message_stream: "outbound-member-broadcasts",
+-  track_opens: true,
+   track_links: "None"
+ 
+ config :commanded_ecto_projections, schema_prefix: nil
+diff --git a/web/lib/memba/messaging/email_delivery_providers/postmark.ex b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+index c673af5..a2eb92e 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+@@ -40,7 +40,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
+     |> text_body(request.body)
+     |> html_body(html_body(request.body))
+     |> put_provider_option(:metadata, metadata(request))
+-    |> put_provider_option(:track_opens, true)
+   end
+ 
+   defp sender_display_name(%EmailDeliveryRequest{} = request) do
+diff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+index d3a09a3..8c8c74b 100644
+--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+@@ -23,7 +23,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     :ok
+   end
+ 
+-  test "builds and sends a multipart email with Postmark correlation metadata and open tracking" do
++  test "builds and sends a multipart email with Postmark correlation metadata and no open tracking" do
+     Application.put_env(:memba, Postmark,
+       from: "messages@mail.memba.io",
+       reply_to: "help@memba.io"
+@@ -51,9 +51,10 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+                "memba_message_id" => request.message_id,
+                "memba_delivery_id" => request.delivery_id,
+                "memba_club_id" => request.club_id
+-             },
+-             track_opens: true
++             }
+            }
++
++    refute Map.has_key?(email.provider_options, :track_opens)
+   end
+ 
+   test "uses the verified Memba sender address even when no provider reply-to is configured" do
