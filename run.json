@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T02:24:55.246131743Z",
-  "last_event_at": "2026-06-02T03:04:02.112935258Z",
+  "last_event_at": "2026-06-02T03:04:05.714902686Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -7380,9 +7380,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1382,
       "checkpoint": {
-        "timestamp": "2026-06-02T03:04:02.129398920Z",
+        "timestamp": "2026-06-02T03:04:05.691012070Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -7415,11 +7415,330 @@
         "node_retries": {},
         "context_values": {
           "graph.default_fidelity": "summary:high",
+          "internal.retry_count.task_gate": 0,
+          "internal.node_visit_count": 4,
+          "internal.retry_count.sync_task_list": 0,
+          "last_stage": "implement_next_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.validate_task": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.read_plan": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "graph.max_node_visits": "300",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.start.current_node": "read_plan",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.start": 0,
+          "command.output": "blob://sha256/88938bb07645d4c4a784f3a1c63121a02d86db72581dd109b55279f26dca8983",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "current_node": "implement_next_task",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "internal.work_dir": "/workspace/memba",
+          "graph.rankdir": "LR",
+          "task_list_complete": false,
+          "task_valid": true,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "task_list_needs_human": false,
+          "internal.retry_count.implement_next_task": 0,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean tree at implement checkpoint `93d4c58`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `93d4c58 fabro(...): implement_next_task (succeeded)` followed by `b59fae5 ... pre_validate_snapshot`.\n  - `93d4c58` changes exactly one ordinary todo line: task `003` from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001` and `002` checked, making task `003` the first unchecked task.\n\n- Implementation artifacts found:\n  - Added `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`.\n  - Migration inserts one row into `membership_person_email_addresses` for each existing `membership_people` row, using:\n    - `person.person_id`\n    - trimmed `email`\n    - lowercased trimmed `normalized_email`\n    - `is_primary = TRUE`\n    - generated UUID and timestamps\n  - It does not update `membership_people.email`, preserving the denormalized primary email field.\n  - Updated `web/test/memba/membership/person_email_address_projection_test.exs` with focused backfill coverage.\n\n- Tests run/results found:\n  - Implementation summary reports:\n    - `mix format ...` passed.\n    - Focused test passed: `mix test test/memba/membership/person_email_address_projection_test.exs` with `4 tests, 0 failures`.\n    - `git diff --check` passed.\n    - Full `dev check` passed with `302 tests, 0 failures`.\n  - I also verified `git diff --check 93d4c58^ 93d4c58` passes.\n  - My attempted local focused rerun could not connect to Postgres because the sandbox Postgres socket was absent; this is not live evidence of a code failure and does not contradict the recorded successful validation.\n\n- ADR/plan conformance notes:\n  - Work matches plan task `003` and does not prematurely implement constraints, command/event changes, query changes, Accounts, Messaging, or UI work reserved for later tasks.\n  - ADR 0002/0009 respected: this remains projection/read-model persistence work, not a CRUD domain workflow.\n  - ADR 0011 respected: `person_id` remains the stable person identity; email is not used as an aggregate identity.\n  - ADR 0010 / acceptance-feature gate respected: no `.feature` or `acceptance-tests/` files were changed.\n  - Checkpoint is small, focused, and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "failure_signature": "",
+          "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Add database constraints and matching changeset/command validation:`\n\n2. **Changes made**\n   - Added migration:\n     - `web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs`\n     - Enforces:\n       - `person_id`, `email`, `normalized_email` as non-null.\n       - Global unique index on `normalized_email`.\n       - Partial unique index on `person_id WHERE is_primary = true`.\n   - Added shared Membership email-address validation:\n     - `web/lib/memba/membership/email_addresses.ex`\n     - Validates/normalizes address sets:\n       - at least one address;\n       - exactly one primary;\n       - trimmed display email;\n       - lowercase trimmed normalized email;\n       - malformed/blank rejection;\n       - duplicate normalized emails within the submitted set.\n   - Updated legacy `CreatePerson` aggregate validation to use the shared email-address validator while preserving existing single-email command/event behaviour.\n   - Added `PersonEmailAddress.changeset/2` with normalization, required fields, malformed-address validation, FK constraint, unique normalized-email constraint, and one-primary constraint handling.\n   - Added/updated tests for:\n     - email-address set validation;\n     - legacy primary-email command validation;\n     - projection changeset normalization and constraint errors;\n     - DB non-null constraints;\n     - global duplicate normalized-email DB constraint;\n     - at-most-one-primary DB constraint.\n\n3. **Focused validation run**\n   - `cd web && mix format --check-formatted ...` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev postgres` — started Postgres for focused tests.\n   - `cd web && PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 mix test test/memba/membership/email_addresses_test.exs test/memba/membership/person_test.exs test/memba/membership/person_email_address_projection_test.exs`\n     - Passed: `19 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `311 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add database constraints and matching changeset/command validation:`\n   - To:\n     - `- [x] 004 Add database constraints and matching changeset/command validation:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0002: Kept validation in the Membership command/aggregate path and projection changeset; no CRUD workflow introduced.\n   - ADR 0007: Did not change Messaging internals or make Messaging depend on Membership storage.\n   - ADR 0011: Preserved `person_id` as the stable aggregate identity; email remains mutable data, not identity.\n   - ADR 0010 / acceptance gate: Did not edit acceptance feature files.",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.wip_gate": 0,
+          "internal.retry_count.resume_gate": 0,
+          "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Add database constraints and matching changeset/command validation:`\n\n2. **Changes made**\n   - Added migration:\n     - `web/pr",
+          "internal.run_id": "01KT329V7X61YAG1PJ00TCBH59",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.fidelity": "summary:high",
+          "failure_class": "",
+          "task_retry_available": false,
+          "internal.thread_id": "all_tasks_done",
+          "thread.all_tasks_done.current_node": "implement_next_task"
+        },
+        "node_outcomes": {
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1f1d8b3ccea14b9b1bf53d2c5ed6ffafda3cde0f5d923d030ef4daa451b2b127"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 180,
+              "active_time_ms": 180
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean tree at implement checkpoint `93d4c58`.\n  - Live `git status --s",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean tree at implement checkpoint `93d4c58`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `93d4c58 fabro(...): implement_next_task (succeeded)` followed by `b59fae5 ... pre_validate_snapshot`.\n  - `93d4c58` changes exactly one ordinary todo line: task `003` from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001` and `002` checked, making task `003` the first unchecked task.\n\n- Implementation artifacts found:\n  - Added `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`.\n  - Migration inserts one row into `membership_person_email_addresses` for each existing `membership_people` row, using:\n    - `person.person_id`\n    - trimmed `email`\n    - lowercased trimmed `normalized_email`\n    - `is_primary = TRUE`\n    - generated UUID and timestamps\n  - It does not update `membership_people.email`, preserving the denormalized primary email field.\n  - Updated `web/test/memba/membership/person_email_address_projection_test.exs` with focused backfill coverage.\n\n- Tests run/results found:\n  - Implementation summary reports:\n    - `mix format ...` passed.\n    - Focused test passed: `mix test test/memba/membership/person_email_address_projection_test.exs` with `4 tests, 0 failures`.\n    - `git diff --check` passed.\n    - Full `dev check` passed with `302 tests, 0 failures`.\n  - I also verified `git diff --check 93d4c58^ 93d4c58` passes.\n  - My attempted local focused rerun could not connect to Postgres because the sandbox Postgres socket was absent; this is not live evidence of a code failure and does not contradict the recorded successful validation.\n\n- ADR/plan conformance notes:\n  - Work matches plan task `003` and does not prematurely implement constraints, command/event changes, query changes, Accounts, Messaging, or UI work reserved for later tasks.\n  - ADR 0002/0009 respected: this remains projection/read-model persistence work, not a CRUD domain workflow.\n  - ADR 0011 respected: `person_id` remains the stable person identity; email is not used as an aggregate identity.\n  - ADR 0010 / acceptance-feature gate respected: no `.feature` or `acceptance-tests/` files were changed.\n  - Checkpoint is small, focused, and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 230393,
+                    "output_tokens": 2466,
+                    "reasoning_tokens": 1727,
+                    "cache_read_tokens": 320000,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1437755
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 127060,
+              "tool_time_ms": 7994,
+              "active_time_ms": 135054
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/632d29dc59cd71cbe9da7694637f82f4bbc550e63a7b3e7d82058dffc3031368"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 164,
+              "active_time_ms": 164
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Add database constraints and matching changeset/command validation:`\n\n2. **Changes made**\n   - Added migration:\n     - `web/pr",
+              "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `004 Add database constraints and matching changeset/command validation:`\n\n2. **Changes made**\n   - Added migration:\n     - `web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs`\n     - Enforces:\n       - `person_id`, `email`, `normalized_email` as non-null.\n       - Global unique index on `normalized_email`.\n       - Partial unique index on `person_id WHERE is_primary = true`.\n   - Added shared Membership email-address validation:\n     - `web/lib/memba/membership/email_addresses.ex`\n     - Validates/normalizes address sets:\n       - at least one address;\n       - exactly one primary;\n       - trimmed display email;\n       - lowercase trimmed normalized email;\n       - malformed/blank rejection;\n       - duplicate normalized emails within the submitted set.\n   - Updated legacy `CreatePerson` aggregate validation to use the shared email-address validator while preserving existing single-email command/event behaviour.\n   - Added `PersonEmailAddress.changeset/2` with normalization, required fields, malformed-address validation, FK constraint, unique normalized-email constraint, and one-primary constraint handling.\n   - Added/updated tests for:\n     - email-address set validation;\n     - legacy primary-email command validation;\n     - projection changeset normalization and constraint errors;\n     - DB non-null constraints;\n     - global duplicate normalized-email DB constraint;\n     - at-most-one-primary DB constraint.\n\n3. **Focused validation run**\n   - `cd web && mix format --check-formatted ...` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev postgres` — started Postgres for focused tests.\n   - `cd web && PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 mix test test/memba/membership/email_addresses_test.exs test/memba/membership/person_test.exs test/memba/membership/person_email_address_projection_test.exs`\n     - Passed: `19 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `311 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 004 Add database constraints and matching changeset/command validation:`\n   - To:\n     - `- [x] 004 Add database constraints and matching changeset/command validation:`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0002: Kept validation in the Membership command/aggregate path and projection changeset; no CRUD workflow introduced.\n   - ADR 0007: Did not change Messaging internals or make Messaging depend on Membership storage.\n   - ADR 0011: Preserved `person_id` as the stable aggregate identity; email remains mutable data, not identity.\n   - ADR 0010 / acceptance gate: Did not edit acceptance feature files."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 763189,
+                    "output_tokens": 11638,
+                    "reasoning_tokens": 6275,
+                    "cache_read_tokens": 3347968,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6027319
+            },
+            "files_touched": [
+              "/workspace/memba/web/lib/memba/membership/email_addresses.ex",
+              "/workspace/memba/web/test/memba/membership/email_addresses_test.exs"
+            ],
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 528967,
+              "tool_time_ms": 121910,
+              "active_time_ms": 650877
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/700c6321eeba8146e00c56da29c71ce56189d2633e22ee3e4f2816c265e80067"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 207,
+              "active_time_ms": 207
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/88938bb07645d4c4a784f3a1c63121a02d86db72581dd109b55279f26dca8983"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 175,
+              "active_time_ms": 175
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "task_list_needs_human": false,
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 15356,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 70,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 79720
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3311,
+              "tool_time_ms": 0,
+              "active_time_ms": 3311
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a3750add5d6ded98a5bdd88bf5ecefde85cd0b9feefa467c9204d8088e5ba45c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 8395,
+              "active_time_ms": 8395
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9b567c0b81293855e7083617dc66244e18bf37a03936f3dcc752c155455a86b0"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 161449,
+              "active_time_ms": 161449
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "a371f84a635a87b1ac0533ac4bd4cdcb3c17a9e0",
+        "node_visits": {
+          "read_plan": 1,
+          "resume_gate": 1,
+          "start": 1,
+          "all_tasks_done": 4,
+          "pre_validate_snapshot": 3,
+          "wip_gate": 1,
+          "preflight_sandbox": 1,
+          "sync_task_list": 4,
+          "task_gate": 3,
+          "validate_task": 3,
+          "implement_next_task": 4
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md\nindex f13bdbf..12fc678 100644\n--- a/docs/iterations/016-person-email-addresses/todo.md\n+++ b/docs/iterations/016-person-email-addresses/todo.md\n@@ -3,7 +3,7 @@\n - [x] 001 Inspect current Membership person command/event/aggregate/projector/projection code, Accounts lookup code, Messaging recipient resolution, seeds, fixtures, staff/admin LiveViews, and acceptance support that assume a single `email` field.\n - [x] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:\n - [x] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.\n-- [ ] 004 Add database constraints and matching changeset/command validation:\n+- [x] 004 Add database constraints and matching changeset/command validation:\n - [ ] 005 Evolve Membership commands/events using an atomic replace-all model:\n - [ ] 006 Add projector handling so:\n - [ ] 007 Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.\ndiff --git a/web/lib/memba/membership/email_addresses.ex b/web/lib/memba/membership/email_addresses.ex\nnew file mode 100644\nindex 0000000..63941bb\n--- /dev/null\n+++ b/web/lib/memba/membership/email_addresses.ex\n@@ -0,0 +1,128 @@\n+defmodule Memba.Membership.EmailAddresses do\n+  @moduledoc \"\"\"\n+  Normalization and validation for the set of email addresses attached to a\n+  Membership person.\n+  \"\"\"\n+\n+  @type normalized_address :: %{\n+          email: String.t(),\n+          normalized_email: String.t(),\n+          is_primary: boolean()\n+        }\n+\n+  @doc \"\"\"\n+  Validate and normalize a replace-all email-address set.\n+\n+  The returned addresses contain a trimmed display `:email`, a lowercase trimmed\n+  `:normalized_email`, and the submitted `:is_primary` flag. A valid set has at\n+  least one address, exactly one primary address, no malformed addresses, and no\n+  duplicate normalized addresses within the set.\n+  \"\"\"\n+  @spec validate_set(term()) :: {:ok, [normalized_address()]} | {:error, atom()}\n+  def validate_set(email_addresses) when is_list(email_addresses) do\n+    with :ok <- require_at_least_one(email_addresses),\n+         {:ok, email_addresses} <- normalize_entries(email_addresses),\n+         :ok <- require_exactly_one_primary(email_addresses),\n+         :ok <- reject_duplicate_normalized_emails(email_addresses) do\n+      {:ok, email_addresses}\n+    end\n+  end\n+\n+  def validate_set(_email_addresses), do: {:error, :invalid_email_addresses}\n+\n+  @doc \"\"\"\n+  Validate and normalize a single legacy primary email address.\n+  \"\"\"\n+  @spec normalize_primary_email(term()) :: {:ok, String.t()} | {:error, atom()}\n+  def normalize_primary_email(email) do\n+    with {:ok, [%{normalized_email: normalized_email}]} <-\n+           validate_set([%{email: email, is_primary: true}]) do\n+      {:ok, normalized_email}\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Validate and normalize one email address value.\n+  \"\"\"\n+  @spec normalize_email(term()) ::\n+          {:ok, %{email: String.t(), normalized_email: String.t()}} | {:error, :invalid_email}\n+  def normalize_email(email) when is_binary(email) do\n+    email = String.trim(email)\n+    normalized_email = String.downcase(email)\n+\n+    if valid_email?(normalized_email) do\n+      {:ok, %{email: email, normalized_email: normalized_email}}\n+    else\n+      {:error, :invalid_email}\n+    end\n+  end\n+\n+  def normalize_email(_email), do: {:error, :invalid_email}\n+\n+  defp require_at_least_one([]), do: {:error, :email_address_required}\n+  defp require_at_least_one(_email_addresses), do: :ok\n+\n+  defp normalize_entries(email_addresses) do\n+    email_addresses\n+    |> Enum.reduce_while({:ok, []}, fn email_address, {:ok, normalized_email_addresses} ->\n+      case normalize_entry(email_address) do\n+        {:ok, normalized_email_address} ->\n+          {:cont, {:ok, [normalized_email_address | normalized_email_addresses]}}\n+\n+        {:error, reason} ->\n+          {:halt, {:error, reason}}\n+      end\n+    end)\n+    |> case do\n+      {:ok, normalized_email_addresses} -> {:ok, Enum.reverse(normalized_email_addresses)}\n+      {:error, reason} -> {:error, reason}\n+    end\n+  end\n+\n+  defp normalize_entry(email_address) when is_map(email_address) do\n+    with {:ok, email} <- fetch_email(email_address),\n+         {:ok, is_primary} <- fetch_primary(email_address),\n+         {:ok, normalized_email} <- normalize_email(email) do\n+      {:ok, Map.put(normalized_email, :is_primary, is_primary)}\n+    end\n+  end\n+\n+  defp normalize_entry(_email_address), do: {:error, :invalid_email_address}\n+\n+  defp fetch_email(%{email: email}), do: {:ok, email}\n+  defp fetch_email(%{\"email\" => email}), do: {:ok, email}\n+  defp fetch_email(_email_address), do: {:error, :invalid_email}\n+\n+  defp fetch_primary(%{is_primary: is_primary}), do: cast_primary(is_primary)\n+  defp fetch_primary(%{\"is_primary\" => is_primary}), do: cast_primary(is_primary)\n+  defp fetch_primary(_email_address), do: {:ok, false}\n+\n+  defp cast_primary(is_primary) when is_boolean(is_primary), do: {:ok, is_primary}\n+  defp cast_primary(\"true\"), do: {:ok, true}\n+  defp cast_primary(\"false\"), do: {:ok, false}\n+  defp cast_primary(_is_primary), do: {:error, :invalid_primary_email}\n+\n+  defp require_exactly_one_primary(email_addresses) do\n+    primary_count = Enum.count(email_addresses, & &1.is_primary)\n+\n+    if primary_count == 1 do\n+      :ok\n+    else\n+      {:error, :exactly_one_primary_email_required}\n+    end\n+  end\n+\n+  defp reject_duplicate_normalized_emails(email_addresses) do\n+    normalized_emails = Enum.map(email_addresses, & &1.normalized_email)\n+\n+    if Enum.uniq(normalized_emails) == normalized_emails do\n+      :ok\n+    else\n+      {:error, :duplicate_email_address}\n+    end\n+  end\n+\n+  defp valid_email?(email) do\n+    Regex.match?(~r/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/, email)\n+  end\n+end\ndiff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex\nindex 6f50f14..e12e8d2 100644\n--- a/web/lib/memba/membership/person.ex\n+++ b/web/lib/memba/membership/person.ex\n@@ -5,6 +5,7 @@ defmodule Memba.Membership.Person do\n \n   alias Commanded.Aggregates.Aggregate\n   alias Memba.Membership.Commands.CreatePerson\n+  alias Memba.Membership.EmailAddresses\n   alias Memba.Membership.Events.PersonCreated\n \n   @behaviour Aggregate\n@@ -15,7 +16,7 @@ defmodule Memba.Membership.Person do\n   def execute(%__MODULE__{person_id: nil}, %CreatePerson{} = command) do\n     with :ok <- validate_person_id(command.person_id),\n          {:ok, name} <- normalize_name(command.name),\n-         {:ok, email} <- normalize_email(command.email) do\n+         {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do\n       %PersonCreated{person_id: command.person_id, name: name, email: email}\n     end\n   end\n@@ -42,23 +43,4 @@ defmodule Memba.Membership.Person do\n   end\n \n   defp normalize_name(_name), do: {:error, :invalid_name}\n-\n-  defp normalize_email(email) when is_binary(email) do\n-    email = email |> String.trim() |> String.downcase()\n-\n-    if valid_email?(email) do\n-      {:ok, email}\n-    else\n-      {:error, :invalid_email}\n-    end\n-  end\n-\n-  defp normalize_email(_email), do: {:error, :invalid_email}\n-\n-  defp valid_email?(email) do\n-    case String.split(email, \"@\") do\n-      [local, domain] -> local != \"\" and domain != \"\" and String.contains?(domain, \".\")\n-      _other -> false\n-    end\n-  end\n end\ndiff --git a/web/lib/memba/membership/projections/person_email_address.ex b/web/lib/memba/membership/projections/person_email_address.ex\nindex 09f7cba..a7c72ee 100644\n--- a/web/lib/memba/membership/projections/person_email_address.ex\n+++ b/web/lib/memba/membership/projections/person_email_address.ex\n@@ -5,6 +5,10 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do\n \n   use Ecto.Schema\n \n+  import Ecto.Changeset\n+\n+  alias Memba.Membership.EmailAddresses\n+\n   @primary_key {:id, :binary_id, autogenerate: true}\n   schema \"membership_person_email_addresses\" do\n     field :person_id, :binary_id\n@@ -14,4 +18,38 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do\n \n     timestamps(type: :utc_datetime_usec)\n   end\n+\n+  def changeset(email_address, attrs) do\n+    email_address\n+    |> cast(attrs, [:person_id, :email, :is_primary])\n+    |> validate_required([:person_id, :email, :is_primary])\n+    |> normalize_email()\n+    |> validate_required([:normalized_email])\n+    |> foreign_key_constraint(:person_id)\n+    |> unique_constraint(:normalized_email,\n+      name: :membership_person_email_addresses_normalized_email_index\n+    )\n+    |> unique_constraint(:person_id,\n+      name: :membership_person_email_addresses_one_primary_per_person_index,\n+      message: \"already has a primary email address\"\n+    )\n+  end\n+\n+  defp normalize_email(changeset) do\n+    case get_field(changeset, :email) do\n+      nil ->\n+        changeset\n+\n+      email ->\n+        case EmailAddresses.normalize_email(email) do\n+          {:ok, %{email: email, normalized_email: normalized_email}} ->\n+            changeset\n+            |> put_change(:email, email)\n+            |> put_change(:normalized_email, normalized_email)\n+\n+          {:error, :invalid_email} ->\n+            add_error(changeset, :email, \"is invalid\")\n+        end\n+    end\n+  end\n end\ndiff --git a/web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs b/web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs\nnew file mode 100644\nindex 0000000..da8ea29\n--- /dev/null\n+++ b/web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs\n@@ -0,0 +1,20 @@\n+defmodule Memba.Repo.Migrations.AddConstraintsToMembershipPersonEmailAddresses do\n+  use Ecto.Migration\n+\n+  def change do\n+    alter table(:membership_person_email_addresses) do\n+      modify :person_id, :uuid, null: false\n+      modify :email, :text, null: false\n+      modify :normalized_email, :text, null: false\n+    end\n+\n+    create unique_index(:membership_person_email_addresses, [:normalized_email],\n+             name: :membership_person_email_addresses_normalized_email_index\n+           )\n+\n+    create unique_index(:membership_person_email_addresses, [:person_id],\n+             name: :membership_person_email_addresses_one_primary_per_person_index,\n+             where: \"is_primary = true\"\n+           )\n+  end\n+end\ndiff --git a/web/test/memba/membership/email_addresses_test.exs b/web/test/memba/membership/email_addresses_test.exs\nnew file mode 100644\nindex 0000000..60231fe\n--- /dev/null\n+++ b/web/test/memba/membership/email_addresses_test.exs\n@@ -0,0 +1,69 @@\n+defmodule Memba.Membership.EmailAddressesTest do\n+  use ExUnit.Case, async: true\n+\n+  alias Memba.Membership.EmailAddresses\n+\n+  describe \"validate_set/1\" do\n+    test \"normalizes trimmed display email, lowercase lookup email, and primary flags\" do\n+      assert {:ok,\n+              [\n+                %{\n+                  email: \"Alice@Example.COM\",\n+                  normalized_email: \"alice@example.com\",\n+                  is_primary: true\n+                },\n+                %{\n+                  email: \"alice@work.example\",\n+                  normalized_email: \"alice@work.example\",\n+                  is_primary: false\n+                }\n+              ]} =\n+               EmailAddresses.validate_set([\n+                 %{email: \" Alice@Example.COM \", is_primary: true},\n+                 %{\"email\" => \"alice@work.example\", \"is_primary\" => \"false\"}\n+               ])\n+    end\n+\n+    test \"rejects an empty set before projection writes\" do\n+      assert {:error, :email_address_required} = EmailAddresses.validate_set([])\n+    end\n+\n+    test \"rejects sets without exactly one primary email address\" do\n+      assert {:error, :exactly_one_primary_email_required} =\n+               EmailAddresses.validate_set([\n+                 %{email: \"alice@example.com\", is_primary: false},\n+                 %{email: \"alice@work.example\", is_primary: false}\n+               ])\n+\n+      assert {:error, :exactly_one_primary_email_required} =\n+               EmailAddresses.validate_set([\n+                 %{email: \"alice@example.com\", is_primary: true},\n+                 %{email: \"alice@work.example\", is_primary: true}\n+               ])\n+    end\n+\n+    test \"rejects blank, malformed, and duplicated normalized email addresses\" do\n+      assert {:error, :invalid_email} =\n+               EmailAddresses.validate_set([%{email: \"  \", is_primary: true}])\n+\n+      assert {:error, :invalid_email} =\n+               EmailAddresses.validate_set([%{email: \"alice.example.com\", is_primary: true}])\n+\n+      assert {:error, :invalid_email} =\n+               EmailAddresses.validate_set([%{email: \"alice bob@example.com\", is_primary: true}])\n+\n+      assert {:error, :duplicate_email_address} =\n+               EmailAddresses.validate_set([\n+                 %{email: \"Alice@Example.COM\", is_primary: true},\n+                 %{email: \" alice@example.com \", is_primary: false}\n+               ])\n+    end\n+  end\n+\n+  test \"normalize_primary_email/1 validates the legacy single-email CreatePerson command shape\" do\n+    assert {:ok, \"alice@example.com\"} =\n+             EmailAddresses.normalize_primary_email(\" Alice@Example.COM \")\n+\n+    assert {:error, :invalid_email} = EmailAddresses.normalize_primary_email(\"alice.example.com\")\n+  end\n+end\ndiff --git a/web/test/memba/membership/person_email_address_projection_test.exs b/web/test/memba/membership/person_email_address_projection_test.exs\nindex dda7ecf..23e9fc3 100644\n--- a/web/test/memba/membership/person_email_address_projection_test.exs\n+++ b/web/test/memba/membership/person_email_address_projection_test.exs\n@@ -82,6 +82,78 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do\n     assert %DateTime{} = projection.updated_at\n   end\n \n+  test \"changeset trims display email, stores lowercase lookup email, and validates malformed addresses\" do\n+    person_id = Ecto.UUID.generate()\n+\n+    Repo.insert!(%Person{\n+      person_id: person_id,\n+      name: \"Alice\",\n+      email: \"alice@example.com\"\n+    })\n+\n+    assert %PersonEmailAddress{\n+             email: \"Alice@Example.COM\",\n+             normalized_email: \"alice@example.com\",\n+             is_primary: true\n+           } =\n+             %PersonEmailAddress{}\n+             |> PersonEmailAddress.changeset(%{\n+               person_id: person_id,\n+               email: \" Alice@Example.COM \",\n+               is_primary: true\n+             })\n+             |> Repo.insert!()\n+\n+    changeset =\n+      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{\n+        person_id: person_id,\n+        email: \"alice.example.com\",\n+        is_primary: false\n+      })\n+\n+    refute changeset.valid?\n+    assert %{email: [\"is invalid\"]} = errors_on(changeset)\n+  end\n+\n+  test \"changeset reports unique normalized-email and one-primary constraint errors\" do\n+    alice_id = Ecto.UUID.generate()\n+    bob_id = Ecto.UUID.generate()\n+\n+    Repo.insert!(%Person{person_id: alice_id, name: \"Alice\", email: \"alice@example.com\"})\n+    Repo.insert!(%Person{person_id: bob_id, name: \"Bob\", email: \"bob@example.com\"})\n+\n+    assert {:ok, _email_address} =\n+             %PersonEmailAddress{}\n+             |> PersonEmailAddress.changeset(%{\n+               person_id: alice_id,\n+               email: \"alice@example.com\",\n+               is_primary: true\n+             })\n+             |> Repo.insert()\n+\n+    assert {:error, duplicate_changeset} =\n+             %PersonEmailAddress{}\n+             |> PersonEmailAddress.changeset(%{\n+               person_id: bob_id,\n+               email: \" ALICE@EXAMPLE.COM \",\n+               is_primary: false\n+             })\n+             |> Repo.insert()\n+\n+    assert %{normalized_email: [\"has already been taken\"]} = errors_on(duplicate_changeset)\n+\n+    assert {:error, primary_changeset} =\n+             %PersonEmailAddress{}\n+             |> PersonEmailAddress.changeset(%{\n+               person_id: alice_id,\n+               email: \"alice@work.example\",\n+               is_primary: true\n+             })\n+             |> Repo.insert()\n+\n+    assert %{person_id: [\"already has a primary email address\"]} = errors_on(primary_changeset)\n+  end\n+\n   test \"is_primary defaults to false and is not nullable\" do\n     person_id = Ecto.UUID.generate()\n     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)\n@@ -120,6 +192,101 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do\n     end\n   end\n \n+  test \"database constraints require person_id, email, and normalized_email\" do\n+    person_id = Ecto.UUID.generate()\n+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)\n+\n+    Repo.insert!(%Person{person_id: person_id, name: \"Alice\", email: \"alice@example.com\"})\n+\n+    assert_raise Postgrex.Error, ~r/null value in column \"person_id\"/, fn ->\n+      Repo.insert_all(PersonEmailAddress, [\n+        %{\n+          id: Ecto.UUID.generate(),\n+          email: \"missing-person@example.com\",\n+          normalized_email: \"missing-person@example.com\",\n+          is_primary: true,\n+          inserted_at: now,\n+          updated_at: now\n+        }\n+      ])\n+    end\n+\n+    assert_raise Postgrex.Error, ~r/null value in column \"email\"/, fn ->\n+      Repo.insert_all(PersonEmailAddress, [\n+        %{\n+          id: Ecto.UUID.generate(),\n+          person_id: person_id,\n+          normalized_email: \"missing-email@example.com\",\n+          is_primary: true,\n+          inserted_at: now,\n+          updated_at: now\n+        }\n+      ])\n+    end\n+\n+    assert_raise Postgrex.Error, ~r/null value in column \"normalized_email\"/, fn ->\n+      Repo.insert_all(PersonEmailAddress, [\n+        %{\n+          id: Ecto.UUID.generate(),\n+          person_id: person_id,\n+          email: \"missing-normalized@example.com\",\n+          is_primary: true,\n+          inserted_at: now,\n+          updated_at: now\n+        }\n+      ])\n+    end\n+  end\n+\n+  test \"database constraints reject duplicate normalized email addresses and multiple primaries\" do\n+    person_id = Ecto.UUID.generate()\n+    other_person_id = Ecto.UUID.generate()\n+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)\n+\n+    Repo.insert!(%Person{person_id: person_id, name: \"Alice\", email: \"alice@example.com\"})\n+    Repo.insert!(%Person{person_id: other_person_id, name: \"Bob\", email: \"bob@example.com\"})\n+\n+    Repo.insert_all(PersonEmailAddress, [\n+      %{\n+        id: Ecto.UUID.generate(),\n+        person_id: person_id,\n+        email: \"alice@example.com\",\n+        normalized_email: \"alice@example.com\",\n+        is_primary: true,\n+        inserted_at: now,\n+        updated_at: now\n+      }\n+    ])\n+\n+    assert_raise Postgrex.Error, ~r/normalized_email_index/, fn ->\n+      Repo.insert_all(PersonEmailAddress, [\n+        %{\n+          id: Ecto.UUID.generate(),\n+          person_id: other_person_id,\n+          email: \"Alice Duplicate\",\n+          normalized_email: \"alice@example.com\",\n+          is_primary: false,\n+          inserted_at: now,\n+          updated_at: now\n+        }\n+      ])\n+    end\n+\n+    assert_raise Postgrex.Error, ~r/one_primary_per_person_index/, fn ->\n+      Repo.insert_all(PersonEmailAddress, [\n+        %{\n+          id: Ecto.UUID.generate(),\n+          person_id: person_id,\n+          email: \"alice@work.example\",\n+          normalized_email: \"alice@work.example\",\n+          is_primary: true,\n+          inserted_at: now,\n+          updated_at: now\n+        }\n+      ])\n+    end\n+  end\n+\n   test \"person email address rows are deleted when the person projection is deleted\" do\n     person_id = Ecto.UUID.generate()\n \n",
+        "summary": {
+          "files_changed": 11,
+          "additions": 819,
+          "deletions": 20
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T03:04:05.909218263Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.default_fidelity": "summary:high",
           "task_valid": true,
           "task_retry_available": false,
           "failure_signature": "",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.run_id": "01KT329V7X61YAG1PJ00TCBH59",
           "internal.retry_count.validate_task": 0,
           "task_list_needs_human": false,
@@ -7453,10 +7772,10 @@
           "internal.retry_count.start": 0,
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "internal.retry_count.all_tasks_done": 0,
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.preflight_sandbox": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean tree at implement checkpoint `93d4c58`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `93d4c58 fabro(...): implement_next_task (succeeded)` followed by `b59fae5 ... pre_validate_snapshot`.\n  - `93d4c58` changes exactly one ordinary todo line: task `003` from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001` and `002` checked, making task `003` the first unchecked task.\n\n- Implementation artifacts found:\n  - Added `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`.\n  - Migration inserts one row into `membership_person_email_addresses` for each existing `membership_people` row, using:\n    - `person.person_id`\n    - trimmed `email`\n    - lowercased trimmed `normalized_email`\n    - `is_primary = TRUE`\n    - generated UUID and timestamps\n  - It does not update `membership_people.email`, preserving the denormalized primary email field.\n  - Updated `web/test/memba/membership/person_email_address_projection_test.exs` with focused backfill coverage.\n\n- Tests run/results found:\n  - Implementation summary reports:\n    - `mix format ...` passed.\n    - Focused test passed: `mix test test/memba/membership/person_email_address_projection_test.exs` with `4 tests, 0 failures`.\n    - `git diff --check` passed.\n    - Full `dev check` passed with `302 tests, 0 failures`.\n  - I also verified `git diff --check 93d4c58^ 93d4c58` passes.\n  - My attempted local focused rerun could not connect to Postgres because the sandbox Postgres socket was absent; this is not live evidence of a code failure and does not contradict the recorded successful validation.\n\n- ADR/plan conformance notes:\n  - Work matches plan task `003` and does not prematurely implement constraints, command/event changes, query changes, Accounts, Messaging, or UI work reserved for later tasks.\n  - ADR 0002/0009 respected: this remains projection/read-model persistence work, not a CRUD domain workflow.\n  - ADR 0011 respected: `person_id` remains the stable person identity; email is not used as an aggregate identity.\n  - ADR 0010 / acceptance-feature gate respected: no `.feature` or `acceptance-tests/` files were changed.\n  - Checkpoint is small, focused, and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
-          "command.output": "blob://sha256/88938bb07645d4c4a784f3a1c63121a02d86db72581dd109b55279f26dca8983",
+          "command.output": "blob://sha256/3c0f6c2f3a06014b3aac9d5266d1910e0dfb5a52057ff0c60435604b22f0d586",
           "internal.retry_count.resume_gate": 0,
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "thread.read_plan.current_node": "wip_gate"
@@ -7538,15 +7857,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/1f1d8b3ccea14b9b1bf53d2c5ed6ffafda3cde0f5d923d030ef4daa451b2b127"
+              "command.output": "blob://sha256/3c0f6c2f3a06014b3aac9d5266d1910e0dfb5a52057ff0c60435604b22f0d586"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 180,
-              "active_time_ms": 180
+              "tool_time_ms": 184,
+              "active_time_ms": 184
             }
           },
           "sync_task_list": {
@@ -7672,7 +7991,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "wip_gate": 1,
           "implement_next_task": 4,
@@ -7681,7 +8000,7 @@
           "sync_task_list": 4,
           "read_plan": 1,
           "all_tasks_done": 4,
-          "pre_validate_snapshot": 3,
+          "pre_validate_snapshot": 4,
           "validate_task": 3,
           "task_gate": 3,
           "preflight_sandbox": 1
@@ -8877,7 +9196,12 @@
       "first_event_seq": 1094,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T03:04:02.126456846Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -8891,13 +9215,20 @@
       "output": null,
       "started_at": "2026-06-02T02:53:10.591952369Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 651534,
+        "inference_time_ms": 528967,
+        "tool_time_ms": 121910,
+        "active_time_ms": 650877
+      },
       "usage": {
         "input_tokens": 763189,
         "output_tokens": 11638,
         "total_tokens": 4129070,
         "reasoning_tokens": 6275,
         "cache_read_tokens": 3347968,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6027319
       },
       "model": {
         "provider": "openai",
@@ -9070,6 +9401,34 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@4": {
+      "first_event_seq": 1385,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T03:04:05.713231934Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "running"
     },

@@ -1,0 +1,532 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index f13bdbf..12fc678 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect current Membership person command/event/aggregate/projector/projection code, Accounts lookup code, Messaging recipient resolution, seeds, fixtures, staff/admin LiveViews, and acceptance support that assume a single `email` field.
+ - [x] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
+ - [x] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
+-- [ ] 004 Add database constraints and matching changeset/command validation:
++- [x] 004 Add database constraints and matching changeset/command validation:
+ - [ ] 005 Evolve Membership commands/events using an atomic replace-all model:
+ - [ ] 006 Add projector handling so:
+ - [ ] 007 Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.
+diff --git a/web/lib/memba/membership/email_addresses.ex b/web/lib/memba/membership/email_addresses.ex
+new file mode 100644
+index 0000000..63941bb
+--- /dev/null
++++ b/web/lib/memba/membership/email_addresses.ex
+@@ -0,0 +1,128 @@
++defmodule Memba.Membership.EmailAddresses do
++  @moduledoc """
++  Normalization and validation for the set of email addresses attached to a
++  Membership person.
++  """
++
++  @type normalized_address :: %{
++          email: String.t(),
++          normalized_email: String.t(),
++          is_primary: boolean()
++        }
++
++  @doc """
++  Validate and normalize a replace-all email-address set.
++
++  The returned addresses contain a trimmed display `:email`, a lowercase trimmed
++  `:normalized_email`, and the submitted `:is_primary` flag. A valid set has at
++  least one address, exactly one primary address, no malformed addresses, and no
++  duplicate normalized addresses within the set.
++  """
++  @spec validate_set(term()) :: {:ok, [normalized_address()]} | {:error, atom()}
++  def validate_set(email_addresses) when is_list(email_addresses) do
++    with :ok <- require_at_least_one(email_addresses),
++         {:ok, email_addresses} <- normalize_entries(email_addresses),
++         :ok <- require_exactly_one_primary(email_addresses),
++         :ok <- reject_duplicate_normalized_emails(email_addresses) do
++      {:ok, email_addresses}
++    end
++  end
++
++  def validate_set(_email_addresses), do: {:error, :invalid_email_addresses}
++
++  @doc """
++  Validate and normalize a single legacy primary email address.
++  """
++  @spec normalize_primary_email(term()) :: {:ok, String.t()} | {:error, atom()}
++  def normalize_primary_email(email) do
++    with {:ok, [%{normalized_email: normalized_email}]} <-
++           validate_set([%{email: email, is_primary: true}]) do
++      {:ok, normalized_email}
++    end
++  end
++
++  @doc """
++  Validate and normalize one email address value.
++  """
++  @spec normalize_email(term()) ::
++          {:ok, %{email: String.t(), normalized_email: String.t()}} | {:error, :invalid_email}
++  def normalize_email(email) when is_binary(email) do
++    email = String.trim(email)
++    normalized_email = String.downcase(email)
++
++    if valid_email?(normalized_email) do
++      {:ok, %{email: email, normalized_email: normalized_email}}
++    else
++      {:error, :invalid_email}
++    end
++  end
++
++  def normalize_email(_email), do: {:error, :invalid_email}
++
++  defp require_at_least_one([]), do: {:error, :email_address_required}
++  defp require_at_least_one(_email_addresses), do: :ok
++
++  defp normalize_entries(email_addresses) do
++    email_addresses
++    |> Enum.reduce_while({:ok, []}, fn email_address, {:ok, normalized_email_addresses} ->
++      case normalize_entry(email_address) do
++        {:ok, normalized_email_address} ->
++          {:cont, {:ok, [normalized_email_address | normalized_email_addresses]}}
++
++        {:error, reason} ->
++          {:halt, {:error, reason}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_email_addresses} -> {:ok, Enum.reverse(normalized_email_addresses)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_entry(email_address) when is_map(email_address) do
++    with {:ok, email} <- fetch_email(email_address),
++         {:ok, is_primary} <- fetch_primary(email_address),
++         {:ok, normalized_email} <- normalize_email(email) do
++      {:ok, Map.put(normalized_email, :is_primary, is_primary)}
++    end
++  end
++
++  defp normalize_entry(_email_address), do: {:error, :invalid_email_address}
++
++  defp fetch_email(%{email: email}), do: {:ok, email}
++  defp fetch_email(%{"email" => email}), do: {:ok, email}
++  defp fetch_email(_email_address), do: {:error, :invalid_email}
++
++  defp fetch_primary(%{is_primary: is_primary}), do: cast_primary(is_primary)
++  defp fetch_primary(%{"is_primary" => is_primary}), do: cast_primary(is_primary)
++  defp fetch_primary(_email_address), do: {:ok, false}
++
++  defp cast_primary(is_primary) when is_boolean(is_primary), do: {:ok, is_primary}
++  defp cast_primary("true"), do: {:ok, true}
++  defp cast_primary("false"), do: {:ok, false}
++  defp cast_primary(_is_primary), do: {:error, :invalid_primary_email}
++
++  defp require_exactly_one_primary(email_addresses) do
++    primary_count = Enum.count(email_addresses, & &1.is_primary)
++
++    if primary_count == 1 do
++      :ok
++    else
++      {:error, :exactly_one_primary_email_required}
++    end
++  end
++
++  defp reject_duplicate_normalized_emails(email_addresses) do
++    normalized_emails = Enum.map(email_addresses, & &1.normalized_email)
++
++    if Enum.uniq(normalized_emails) == normalized_emails do
++      :ok
++    else
++      {:error, :duplicate_email_address}
++    end
++  end
++
++  defp valid_email?(email) do
++    Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, email)
++  end
++end
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index 6f50f14..e12e8d2 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -5,6 +5,7 @@ defmodule Memba.Membership.Person do
+ 
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.EmailAddresses
+   alias Memba.Membership.Events.PersonCreated
+ 
+   @behaviour Aggregate
+@@ -15,7 +16,7 @@ defmodule Memba.Membership.Person do
+   def execute(%__MODULE__{person_id: nil}, %CreatePerson{} = command) do
+     with :ok <- validate_person_id(command.person_id),
+          {:ok, name} <- normalize_name(command.name),
+-         {:ok, email} <- normalize_email(command.email) do
++         {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do
+       %PersonCreated{person_id: command.person_id, name: name, email: email}
+     end
+   end
+@@ -42,23 +43,4 @@ defmodule Memba.Membership.Person do
+   end
+ 
+   defp normalize_name(_name), do: {:error, :invalid_name}
+-
+-  defp normalize_email(email) when is_binary(email) do
+-    email = email |> String.trim() |> String.downcase()
+-
+-    if valid_email?(email) do
+-      {:ok, email}
+-    else
+-      {:error, :invalid_email}
+-    end
+-  end
+-
+-  defp normalize_email(_email), do: {:error, :invalid_email}
+-
+-  defp valid_email?(email) do
+-    case String.split(email, "@") do
+-      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
+-      _other -> false
+-    end
+-  end
+ end
+diff --git a/web/lib/memba/membership/projections/person_email_address.ex b/web/lib/memba/membership/projections/person_email_address.ex
+index 09f7cba..a7c72ee 100644
+--- a/web/lib/memba/membership/projections/person_email_address.ex
++++ b/web/lib/memba/membership/projections/person_email_address.ex
+@@ -5,6 +5,10 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
+ 
+   use Ecto.Schema
+ 
++  import Ecto.Changeset
++
++  alias Memba.Membership.EmailAddresses
++
+   @primary_key {:id, :binary_id, autogenerate: true}
+   schema "membership_person_email_addresses" do
+     field :person_id, :binary_id
+@@ -14,4 +18,38 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
++
++  def changeset(email_address, attrs) do
++    email_address
++    |> cast(attrs, [:person_id, :email, :is_primary])
++    |> validate_required([:person_id, :email, :is_primary])
++    |> normalize_email()
++    |> validate_required([:normalized_email])
++    |> foreign_key_constraint(:person_id)
++    |> unique_constraint(:normalized_email,
++      name: :membership_person_email_addresses_normalized_email_index
++    )
++    |> unique_constraint(:person_id,
++      name: :membership_person_email_addresses_one_primary_per_person_index,
++      message: "already has a primary email address"
++    )
++  end
++
++  defp normalize_email(changeset) do
++    case get_field(changeset, :email) do
++      nil ->
++        changeset
++
++      email ->
++        case EmailAddresses.normalize_email(email) do
++          {:ok, %{email: email, normalized_email: normalized_email}} ->
++            changeset
++            |> put_change(:email, email)
++            |> put_change(:normalized_email, normalized_email)
++
++          {:error, :invalid_email} ->
++            add_error(changeset, :email, "is invalid")
++        end
++    end
++  end
+ end
+diff --git a/web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs b/web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs
+new file mode 100644
+index 0000000..da8ea29
+--- /dev/null
++++ b/web/priv/repo/migrations/20260602025515_add_constraints_to_membership_person_email_addresses.exs
+@@ -0,0 +1,20 @@
++defmodule Memba.Repo.Migrations.AddConstraintsToMembershipPersonEmailAddresses do
++  use Ecto.Migration
++
++  def change do
++    alter table(:membership_person_email_addresses) do
++      modify :person_id, :uuid, null: false
++      modify :email, :text, null: false
++      modify :normalized_email, :text, null: false
++    end
++
++    create unique_index(:membership_person_email_addresses, [:normalized_email],
++             name: :membership_person_email_addresses_normalized_email_index
++           )
++
++    create unique_index(:membership_person_email_addresses, [:person_id],
++             name: :membership_person_email_addresses_one_primary_per_person_index,
++             where: "is_primary = true"
++           )
++  end
++end
+diff --git a/web/test/memba/membership/email_addresses_test.exs b/web/test/memba/membership/email_addresses_test.exs
+new file mode 100644
+index 0000000..60231fe
+--- /dev/null
++++ b/web/test/memba/membership/email_addresses_test.exs
+@@ -0,0 +1,69 @@
++defmodule Memba.Membership.EmailAddressesTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Membership.EmailAddresses
++
++  describe "validate_set/1" do
++    test "normalizes trimmed display email, lowercase lookup email, and primary flags" do
++      assert {:ok,
++              [
++                %{
++                  email: "Alice@Example.COM",
++                  normalized_email: "alice@example.com",
++                  is_primary: true
++                },
++                %{
++                  email: "alice@work.example",
++                  normalized_email: "alice@work.example",
++                  is_primary: false
++                }
++              ]} =
++               EmailAddresses.validate_set([
++                 %{email: " Alice@Example.COM ", is_primary: true},
++                 %{"email" => "alice@work.example", "is_primary" => "false"}
++               ])
++    end
++
++    test "rejects an empty set before projection writes" do
++      assert {:error, :email_address_required} = EmailAddresses.validate_set([])
++    end
++
++    test "rejects sets without exactly one primary email address" do
++      assert {:error, :exactly_one_primary_email_required} =
++               EmailAddresses.validate_set([
++                 %{email: "alice@example.com", is_primary: false},
++                 %{email: "alice@work.example", is_primary: false}
++               ])
++
++      assert {:error, :exactly_one_primary_email_required} =
++               EmailAddresses.validate_set([
++                 %{email: "alice@example.com", is_primary: true},
++                 %{email: "alice@work.example", is_primary: true}
++               ])
++    end
++
++    test "rejects blank, malformed, and duplicated normalized email addresses" do
++      assert {:error, :invalid_email} =
++               EmailAddresses.validate_set([%{email: "  ", is_primary: true}])
++
++      assert {:error, :invalid_email} =
++               EmailAddresses.validate_set([%{email: "alice.example.com", is_primary: true}])
++
++      assert {:error, :invalid_email} =
++               EmailAddresses.validate_set([%{email: "alice bob@example.com", is_primary: true}])
++
++      assert {:error, :duplicate_email_address} =
++               EmailAddresses.validate_set([
++                 %{email: "Alice@Example.COM", is_primary: true},
++                 %{email: " alice@example.com ", is_primary: false}
++               ])
++    end
++  end
++
++  test "normalize_primary_email/1 validates the legacy single-email CreatePerson command shape" do
++    assert {:ok, "alice@example.com"} =
++             EmailAddresses.normalize_primary_email(" Alice@Example.COM ")
++
++    assert {:error, :invalid_email} = EmailAddresses.normalize_primary_email("alice.example.com")
++  end
++end
+diff --git a/web/test/memba/membership/person_email_address_projection_test.exs b/web/test/memba/membership/person_email_address_projection_test.exs
+index dda7ecf..23e9fc3 100644
+--- a/web/test/memba/membership/person_email_address_projection_test.exs
++++ b/web/test/memba/membership/person_email_address_projection_test.exs
+@@ -82,6 +82,78 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
+     assert %DateTime{} = projection.updated_at
+   end
+ 
++  test "changeset trims display email, stores lowercase lookup email, and validates malformed addresses" do
++    person_id = Ecto.UUID.generate()
++
++    Repo.insert!(%Person{
++      person_id: person_id,
++      name: "Alice",
++      email: "alice@example.com"
++    })
++
++    assert %PersonEmailAddress{
++             email: "Alice@Example.COM",
++             normalized_email: "alice@example.com",
++             is_primary: true
++           } =
++             %PersonEmailAddress{}
++             |> PersonEmailAddress.changeset(%{
++               person_id: person_id,
++               email: " Alice@Example.COM ",
++               is_primary: true
++             })
++             |> Repo.insert!()
++
++    changeset =
++      PersonEmailAddress.changeset(%PersonEmailAddress{}, %{
++        person_id: person_id,
++        email: "alice.example.com",
++        is_primary: false
++      })
++
++    refute changeset.valid?
++    assert %{email: ["is invalid"]} = errors_on(changeset)
++  end
++
++  test "changeset reports unique normalized-email and one-primary constraint errors" do
++    alice_id = Ecto.UUID.generate()
++    bob_id = Ecto.UUID.generate()
++
++    Repo.insert!(%Person{person_id: alice_id, name: "Alice", email: "alice@example.com"})
++    Repo.insert!(%Person{person_id: bob_id, name: "Bob", email: "bob@example.com"})
++
++    assert {:ok, _email_address} =
++             %PersonEmailAddress{}
++             |> PersonEmailAddress.changeset(%{
++               person_id: alice_id,
++               email: "alice@example.com",
++               is_primary: true
++             })
++             |> Repo.insert()
++
++    assert {:error, duplicate_changeset} =
++             %PersonEmailAddress{}
++             |> PersonEmailAddress.changeset(%{
++               person_id: bob_id,
++               email: " ALICE@EXAMPLE.COM ",
++               is_primary: false
++             })
++             |> Repo.insert()
++
++    assert %{normalized_email: ["has already been taken"]} = errors_on(duplicate_changeset)
++
++    assert {:error, primary_changeset} =
++             %PersonEmailAddress{}
++             |> PersonEmailAddress.changeset(%{
++               person_id: alice_id,
++               email: "alice@work.example",
++               is_primary: true
++             })
++             |> Repo.insert()
++
++    assert %{person_id: ["already has a primary email address"]} = errors_on(primary_changeset)
++  end
++
+   test "is_primary defaults to false and is not nullable" do
+     person_id = Ecto.UUID.generate()
+     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+@@ -120,6 +192,101 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
+     end
+   end
+ 
++  test "database constraints require person_id, email, and normalized_email" do
++    person_id = Ecto.UUID.generate()
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    Repo.insert!(%Person{person_id: person_id, name: "Alice", email: "alice@example.com"})
++
++    assert_raise Postgrex.Error, ~r/null value in column "person_id"/, fn ->
++      Repo.insert_all(PersonEmailAddress, [
++        %{
++          id: Ecto.UUID.generate(),
++          email: "missing-person@example.com",
++          normalized_email: "missing-person@example.com",
++          is_primary: true,
++          inserted_at: now,
++          updated_at: now
++        }
++      ])
++    end
++
++    assert_raise Postgrex.Error, ~r/null value in column "email"/, fn ->
++      Repo.insert_all(PersonEmailAddress, [
++        %{
++          id: Ecto.UUID.generate(),
++          person_id: person_id,
++          normalized_email: "missing-email@example.com",
++          is_primary: true,
++          inserted_at: now,
++          updated_at: now
++        }
++      ])
++    end
++
++    assert_raise Postgrex.Error, ~r/null value in column "normalized_email"/, fn ->
++      Repo.insert_all(PersonEmailAddress, [
++        %{
++          id: Ecto.UUID.generate(),
++          person_id: person_id,
++          email: "missing-normalized@example.com",
++          is_primary: true,
++          inserted_at: now,
++          updated_at: now
++        }
++      ])
++    end
++  end
++
++  test "database constraints reject duplicate normalized email addresses and multiple primaries" do
++    person_id = Ecto.UUID.generate()
++    other_person_id = Ecto.UUID.generate()
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    Repo.insert!(%Person{person_id: person_id, name: "Alice", email: "alice@example.com"})
++    Repo.insert!(%Person{person_id: other_person_id, name: "Bob", email: "bob@example.com"})
++
++    Repo.insert_all(PersonEmailAddress, [
++      %{
++        id: Ecto.UUID.generate(),
++        person_id: person_id,
++        email: "alice@example.com",
++        normalized_email: "alice@example.com",
++        is_primary: true,
++        inserted_at: now,
++        updated_at: now
++      }
++    ])
++
++    assert_raise Postgrex.Error, ~r/normalized_email_index/, fn ->
++      Repo.insert_all(PersonEmailAddress, [
++        %{
++          id: Ecto.UUID.generate(),
++          person_id: other_person_id,
++          email: "Alice Duplicate",
++          normalized_email: "alice@example.com",
++          is_primary: false,
++          inserted_at: now,
++          updated_at: now
++        }
++      ])
++    end
++
++    assert_raise Postgrex.Error, ~r/one_primary_per_person_index/, fn ->
++      Repo.insert_all(PersonEmailAddress, [
++        %{
++          id: Ecto.UUID.generate(),
++          person_id: person_id,
++          email: "alice@work.example",
++          normalized_email: "alice@work.example",
++          is_primary: true,
++          inserted_at: now,
++          updated_at: now
++        }
++      ])
++    end
++  end
++
+   test "person email address rows are deleted when the person projection is deleted" do
+     person_id = Ecto.UUID.generate()
+ 
