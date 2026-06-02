@@ -142,6 +142,95 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert [alice_delivery_id, bob_delivery_id, carol_delivery_id] == delivery_ids
   end
 
+  test "sends each active member once at the person's primary email address" do
+    club_id = Ecto.UUID.generate()
+
+    alice =
+      create_person(
+        name: "Alice",
+        email: "alice@example.com",
+        email_addresses: [
+          %{email: "alice@example.com", is_primary: true},
+          %{email: "alice@work.example", is_primary: false}
+        ]
+      )
+
+    bob =
+      create_person(
+        name: "Bob",
+        email: "bob@work.example",
+        email_addresses: [
+          %{email: "bob@example.com", is_primary: false},
+          %{email: "bob@work.example", is_primary: true}
+        ]
+      )
+
+    add_member(club_id, alice.person_id)
+    add_member(club_id, bob.person_id)
+
+    message_id = Ecto.UUID.generate()
+    alice_id = alice.person_id
+    bob_id = bob.person_id
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^message_id,
+              aggregate_version: 3,
+              events: [
+                %MessageSent{
+                  message_id: ^message_id,
+                  club_id: ^club_id,
+                  sender_id: ^alice_id,
+                  subject: "Trip planning night",
+                  body: "Bring route ideas."
+                },
+                %EmailDeliveryCreated{
+                  message_id: ^message_id,
+                  recipient_id: ^alice_id,
+                  recipient_name: "Alice",
+                  recipient_email: "alice@example.com"
+                },
+                %EmailDeliveryCreated{
+                  message_id: ^message_id,
+                  recipient_id: ^bob_id,
+                  recipient_name: "Bob",
+                  recipient_email: "bob@work.example"
+                }
+              ]
+            }} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert [
+             %EmailDeliveryRequest{
+               recipient_id: ^alice_id,
+               recipient_name: "Alice",
+               recipient_address: "alice@example.com"
+             },
+             %EmailDeliveryRequest{
+               recipient_id: ^bob_id,
+               recipient_name: "Bob",
+               recipient_address: "bob@work.example"
+             }
+           ] = Fake.deliveries()
+
+    delivered_addresses =
+      Fake.deliveries()
+      |> Enum.map(& &1.recipient_address)
+
+    refute "alice@work.example" in delivered_addresses
+    refute "bob@example.com" in delivered_addresses
+  end
+
   test "does not call the provider when the send command is rejected" do
     club_id = Ecto.UUID.generate()
     alice = create_person(name: "Alice", email: "alice@example.com")
@@ -197,19 +286,28 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   defp create_person(attrs) do
+    email_addresses = Keyword.get(attrs, :email_addresses)
+
     person = %{
       person_id: Ecto.UUID.generate(),
       name: Keyword.fetch!(attrs, :name),
-      email: Keyword.fetch!(attrs, :email)
+      email: Keyword.fetch!(attrs, :email),
+      email_addresses: email_addresses
     }
 
     assert :ok =
              MembershipApp.dispatch(
-               %CreatePerson{
-                 person_id: person.person_id,
-                 name: person.name,
-                 email: person.email
-               },
+               struct!(
+                 CreatePerson,
+                 %{
+                   person_id: person.person_id,
+                   name: person.name,
+                   email: person.email,
+                   email_addresses: person.email_addresses
+                 }
+                 |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+                 |> Map.new()
+               ),
                consistency: :strong
              )
 
