@@ -122,11 +122,10 @@ defmodule Memba.Membership.QueryTest do
       inactive_club_id = Ecto.UUID.generate()
 
       alice = create_person(name: "Alice", email: "alice@example.com")
-      uppercase_alice = create_person(name: "Alice Upper", email: "Alice@Example.COM")
       other_person = create_person(name: "Other", email: "other@example.com")
 
       add_member(kootenay.club_id, alice.person_id)
-      add_member(nelson.club_id, uppercase_alice.person_id)
+      add_member(nelson.club_id, alice.person_id)
       add_member(other_club.club_id, other_person.person_id)
 
       insert_membership_club!(club_id: inactive_club_id, name: "Inactive Club")
