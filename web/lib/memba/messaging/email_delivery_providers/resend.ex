@@ -33,8 +33,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
 
   defp email(%EmailDeliveryRequest{} = request, %ResendConfig{} = config) do
     new()
-    |> from({request.sender_name, request.sender_address})
-    |> maybe_reply_to(config.reply_to)
+    |> from({sender_display_name(request), config.from})
+    |> reply_to({request.sender_name, request.sender_address})
     |> to({request.recipient_name, request.recipient_address})
     |> subject(request.subject)
     |> text_body(request.body)
@@ -45,8 +45,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Resend do
     |> header("X-Memba-Club-ID", request.club_id)
   end
 
-  defp maybe_reply_to(email, nil), do: email
-  defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
+  defp sender_display_name(%EmailDeliveryRequest{} = request) do
+    "#{request.sender_name} via Memba"
+  end
 
   defp tags(%EmailDeliveryRequest{} = request) do
     [

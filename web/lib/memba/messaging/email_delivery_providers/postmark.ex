@@ -33,8 +33,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
 
   defp email(%EmailDeliveryRequest{} = request, %PostmarkConfig{} = config) do
     new()
-    |> from({request.sender_name, request.sender_address})
-    |> maybe_reply_to(config.reply_to)
+    |> from({sender_display_name(request), config.from})
+    |> reply_to({request.sender_name, request.sender_address})
     |> to({request.recipient_name, request.recipient_address})
     |> subject(request.subject)
     |> text_body(request.body)
@@ -43,8 +43,9 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
     |> put_provider_option(:track_opens, true)
   end
 
-  defp maybe_reply_to(email, nil), do: email
-  defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
+  defp sender_display_name(%EmailDeliveryRequest{} = request) do
+    "#{request.sender_name} via Memba"
+  end
 
   defp metadata(%EmailDeliveryRequest{} = request) do
     %{

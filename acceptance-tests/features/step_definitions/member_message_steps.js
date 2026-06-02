@@ -160,7 +160,7 @@ Then("each addressed member should receive the email in the test mailbox", async
   await withStaffHarness(this, (staff) => assertEachAddressedMemberReceivedEmailInTestMailbox(staff));
 });
 
-Then("each addressed member should receive an email from {word}", async function (senderName) {
+Then("each addressed member should receive an email from {word} via Memba", async function (senderName) {
   await withStaffHarness(this, (staff) => assertEachAddressedMemberReceivedEmailInTestMailbox(staff, { senderName }));
 });
 
