@@ -153,6 +153,7 @@ defmodule MembaWeb.ResendWebhookController do
     end)
   end
 
+  defp tags_metadata(tags) when is_map(tags), do: tags
   defp tags_metadata(_tags), do: %{}
 
   defp headers_metadata(headers) when is_list(headers) do
