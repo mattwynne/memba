@@ -126,33 +126,54 @@ Deferred decisions:
 ## Implementation Plan
 
 1. Inspect current Membership person command/event/aggregate/projector/projection code, Accounts lookup code, Messaging recipient resolution, seeds, fixtures, staff/admin LiveViews, and acceptance support that assume a single `email` field.
-2. Choose and implement the data shape for projected person email addresses. Suggested direction: a separate projected email-address table keyed by person and normalized email, with a global unique constraint on normalized email and a constraint/index that enforces exactly one primary address per person.
-3. Add migrations to create/backfill the email-address projection from existing `membership_people.email`, mark the backfilled address primary, enforce non-null/unique constraints, and preserve compatibility with the existing person projection during the transition.
-4. Update Membership person schemas/projections and public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address.
-5. Evolve person commands/events deliberately:
-   - support creating a person with one or more email addresses and exactly one primary;
-   - support editing a person's email addresses and primary selection from staff UI;
-   - handle legacy `PersonCreated` events containing only `email` during replay/backfill.
-6. Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and database constraints where practical.
-7. Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
-8. Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
-9. Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
-10. Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
-11. Add dedicated staff LiveViews/routes for person create and edit. Link to them from the existing admin club/person list. Keep the common one-email case easy by defaulting the first entered address as primary while still making the primary choice explicit and validated.
-12. Update staff/operator person displays to show primary and alternate addresses distinctly.
-13. Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
-14. Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
-15. Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
+2. Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
+   - `id` binary primary key;
+   - `person_id` foreign key to `membership_people.person_id` with `on_delete: :delete_all`;
+   - `email` for the trimmed address used for display and delivery;
+   - `normalized_email` for lowercase trimmed lookup;
+   - `is_primary` boolean, default `false`, null `false`;
+   - UTC timestamps.
+3. Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
+4. Add database constraints and matching changeset/command validation:
+   - unique index on `membership_person_email_addresses.normalized_email` for global duplicate prevention;
+   - partial unique index on `membership_person_email_addresses.person_id` where `is_primary = true` to enforce at most one primary address per person;
+   - non-null constraints on `person_id`, `email`, `normalized_email`, and `is_primary`;
+   - application/aggregate validation requiring at least one address and exactly one primary address before projection writes, because PostgreSQL cannot express “at least one primary child row” with a simple index.
+5. Evolve Membership commands/events using an atomic replace-all model:
+   - keep `Memba.Membership.Commands.CreatePerson` accepting the existing `email` field for current callers and add optional `email_addresses` entries shaped as `%{email: binary, is_primary: boolean}` for new staff create forms;
+   - keep `Memba.Membership.Events.PersonCreated` with `email` as the primary email for backward-compatible event replay;
+   - add `Memba.Membership.Commands.ReplacePersonEmailAddresses` with `person_id` and `email_addresses`;
+   - add `Memba.Membership.Events.PersonEmailAddressesReplaced` with `person_id`, normalized `email_addresses`, and `primary_email`;
+   - have staff create with multiple addresses emit `PersonCreated` followed by `PersonEmailAddressesReplaced`; have staff edits emit `PersonEmailAddressesReplaced`.
+6. Add projector handling so:
+   - legacy `PersonCreated` events create or upsert one primary `membership_person_email_addresses` row during replay;
+   - `PersonEmailAddressesReplaced` replaces that person's projected email-address rows atomically;
+   - `membership_people.email` is updated to the event's `primary_email` so old callers and outbound recipient reads continue to see the primary address.
+7. Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.
+8. Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
+9. Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
+10. Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
+11. Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+12. Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+13. Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+   - `live "/clubs/:club_id/people/new", PeopleLive.New` for creating a person and adding them to the club context shown by the route;
+   - `live "/clubs/:club_id/people/:person_id/edit", PeopleLive.Edit` for editing the person's name, email-address set, and primary selection.
+14. Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+15. Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+16. Update staff/operator person displays to show primary and alternate addresses distinctly.
+17. Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+18. Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+19. Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
 
-## Open Technical Decisions
+## Resolved Technical Decisions
 
-- Exact table/schema names for projected person email addresses.
-- Whether to keep `membership_people.email` as a denormalized primary-email field for compatibility/performance or replace reads with joins to the email-address projection.
-- Exact database constraint strategy for “exactly one primary per person”.
-- Exact command/event names for adding/removing/changing person email addresses.
-- Whether person email editing is implemented as one replace-all command or as separate add/remove/change-primary commands.
-- Legacy event replay strategy for old `PersonCreated` events that contain only `email`.
-- How much of the existing inline person creation form remains on the admin club show page versus becoming a link to the dedicated create LiveView.
+- Projected email-address table: `membership_person_email_addresses`.
+- Projection schema module: `Memba.Membership.Projections.PersonEmailAddress`.
+- `membership_people.email` remains as a denormalized primary-email field during this iteration. Known-address lookup reads from `membership_person_email_addresses`; primary-recipient reads may use either the primary email-address row or `membership_people.email`, but tests must prove they agree.
+- Database constraints: global unique index on `normalized_email`; partial unique index on `(person_id) WHERE is_primary = true`; non-null constraints on required columns. Aggregate/application validation enforces at least one address and exactly one primary address.
+- Command/event model: atomic replace-all, not separate add/remove/change-primary commands. Use `ReplacePersonEmailAddresses` and `PersonEmailAddressesReplaced`.
+- Legacy replay: `PersonCreated` with only `email` creates a single primary email-address row and keeps `membership_people.email` populated. New multi-address create emits `PersonCreated` plus `PersonEmailAddressesReplaced`.
+- Staff UI: the admin club show page keeps the people list but no longer owns inline person creation. It links to dedicated create/edit LiveViews at `/admin/clubs/:club_id/people/new` and `/admin/clubs/:club_id/people/:person_id/edit`.
 
 ## New Capability
 
