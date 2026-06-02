@@ -103,6 +103,40 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     end)
   end
 
+  test "maps Resend events with tag maps", %{conn: conn} do
+    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+
+    payload =
+      :delivered
+      |> realistic_resend_payload(message, bob)
+      |> put_in(["data", "tags"], %{
+        "memba_message_id" => message.message_id,
+        "memba_delivery_id" => bob.delivery_id,
+        "memba_club_id" => message.club_id,
+        "memba_email_kind" => "member_message"
+      })
+
+    conn = post_resend_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+    end)
+  end
+
+  test "accepts Resend open events before delivered events", %{conn: conn} do
+    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+
+    conn = post_resend_event(conn, realistic_resend_payload(:opened, message, bob))
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "opened"
+    end)
+  end
+
   test "returns an unprocessable response for unsupported Resend events", %{conn: conn} do
     conn =
       post_resend_event(conn, %{

@@ -306,7 +306,7 @@ defmodule Memba.Messaging.MessageTest do
     test "rejects invalid delivery status transitions" do
       {message, ids} = sent_message()
 
-      assert {:error, :invalid_delivery_status_transition} =
+      assert %EmailDeliveryOpened{} =
                Message.execute(message, %ReportEmailDeliveryOpened{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id

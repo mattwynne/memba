@@ -193,6 +193,7 @@ defmodule Memba.Messaging.Message do
   defp valid_transition?(:delayed, :bounced), do: true
   defp valid_transition?(:delayed, :spam_complaint), do: true
   defp valid_transition?(:delivered, :opened), do: true
+  defp valid_transition?(:sent, :opened), do: true
   defp valid_transition?(_current_status, _next_status), do: false
 
   defp put_delivery_status(%__MODULE__{} = message, delivery_id, status, reason \\ nil) do
