@@ -2,24 +2,24 @@ defmodule Memba.Messaging.Message do
   @moduledoc """
   Message aggregate for the Messaging bounded context.
 
-  One aggregate represents one club message and owns the per-recipient delivery
+  One aggregate represents one club message and owns the per-email delivery
   records created for that message.
   """
 
   alias Commanded.Aggregates.Aggregate
-  alias Memba.Messaging.Commands.ReportDeliveryBounced
-  alias Memba.Messaging.Commands.ReportDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
-  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
-  alias Memba.Messaging.Events.RecipientDeliveryBounced
-  alias Memba.Messaging.Events.RecipientDeliveryCreated
-  alias Memba.Messaging.Events.RecipientDeliveryDelayed
-  alias Memba.Messaging.Events.RecipientDeliveryDelivered
-  alias Memba.Messaging.Events.RecipientDeliveryOpened
-  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
+  alias Memba.Messaging.Events.EmailDeliveryBounced
+  alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Events.EmailDeliveryDelayed
+  alias Memba.Messaging.Events.EmailDeliveryDelivered
+  alias Memba.Messaging.Events.EmailDeliveryOpened
+  alias Memba.Messaging.Events.EmailDeliverySpamComplaint
   alias Memba.Messaging.Recipient
 
   @behaviour Aggregate
@@ -31,7 +31,7 @@ defmodule Memba.Messaging.Message do
     :subject,
     :body,
     delivery_statuses: %{},
-    recipient_delivery_ids: MapSet.new(),
+    email_delivery_ids: MapSet.new(),
     recipient_ids: MapSet.new()
   ]
 
@@ -52,31 +52,31 @@ defmodule Memba.Messaging.Message do
           subject: subject,
           body: body
         }
-        | Enum.map(recipients, &recipient_delivery_created(command.message_id, &1))
+        | Enum.map(recipients, &email_delivery_created(command.message_id, &1))
       ]
     end
   end
 
   def execute(%__MODULE__{}, %SendMessage{}), do: {:error, :already_sent}
 
-  def execute(%__MODULE__{} = message, %ReportDeliveryDelivered{} = command) do
-    report_status(message, command, :delivered, RecipientDeliveryDelivered)
+  def execute(%__MODULE__{} = message, %ReportEmailDeliveryDelivered{} = command) do
+    report_status(message, command, :delivered, EmailDeliveryDelivered)
   end
 
-  def execute(%__MODULE__{} = message, %ReportDeliveryDelayed{} = command) do
-    report_status_with_reason(message, command, :delayed, RecipientDeliveryDelayed)
+  def execute(%__MODULE__{} = message, %ReportEmailDeliveryDelayed{} = command) do
+    report_status_with_reason(message, command, :delayed, EmailDeliveryDelayed)
   end
 
-  def execute(%__MODULE__{} = message, %ReportDeliveryBounced{} = command) do
-    report_status_with_reason(message, command, :bounced, RecipientDeliveryBounced)
+  def execute(%__MODULE__{} = message, %ReportEmailDeliveryBounced{} = command) do
+    report_status_with_reason(message, command, :bounced, EmailDeliveryBounced)
   end
 
-  def execute(%__MODULE__{} = message, %ReportDeliverySpamComplaint{} = command) do
-    report_status_with_reason(message, command, :spam_complaint, RecipientDeliverySpamComplaint)
+  def execute(%__MODULE__{} = message, %ReportEmailDeliverySpamComplaint{} = command) do
+    report_status_with_reason(message, command, :spam_complaint, EmailDeliverySpamComplaint)
   end
 
-  def execute(%__MODULE__{} = message, %ReportDeliveryOpened{} = command) do
-    report_status(message, command, :opened, RecipientDeliveryOpened)
+  def execute(%__MODULE__{} = message, %ReportEmailDeliveryOpened{} = command) do
+    report_status(message, command, :opened, EmailDeliveryOpened)
   end
 
   @impl Aggregate
@@ -91,10 +91,10 @@ defmodule Memba.Messaging.Message do
     }
   end
 
-  def apply(%__MODULE__{} = message, %RecipientDeliveryCreated{} = event) do
+  def apply(%__MODULE__{} = message, %EmailDeliveryCreated{} = event) do
     %__MODULE__{
       message
-      | recipient_delivery_ids: MapSet.put(message.recipient_delivery_ids, event.delivery_id),
+      | email_delivery_ids: MapSet.put(message.email_delivery_ids, event.delivery_id),
         delivery_statuses:
           Map.put(message.delivery_statuses, event.delivery_id, %{
             status: :sent,
@@ -104,23 +104,23 @@ defmodule Memba.Messaging.Message do
     }
   end
 
-  def apply(%__MODULE__{} = message, %RecipientDeliveryDelivered{} = event) do
+  def apply(%__MODULE__{} = message, %EmailDeliveryDelivered{} = event) do
     put_delivery_status(message, event.delivery_id, :delivered)
   end
 
-  def apply(%__MODULE__{} = message, %RecipientDeliveryDelayed{} = event) do
+  def apply(%__MODULE__{} = message, %EmailDeliveryDelayed{} = event) do
     put_delivery_status(message, event.delivery_id, :delayed, event.reason)
   end
 
-  def apply(%__MODULE__{} = message, %RecipientDeliveryBounced{} = event) do
+  def apply(%__MODULE__{} = message, %EmailDeliveryBounced{} = event) do
     put_delivery_status(message, event.delivery_id, :bounced, event.reason)
   end
 
-  def apply(%__MODULE__{} = message, %RecipientDeliverySpamComplaint{} = event) do
+  def apply(%__MODULE__{} = message, %EmailDeliverySpamComplaint{} = event) do
     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
   end
 
-  def apply(%__MODULE__{} = message, %RecipientDeliveryOpened{} = event) do
+  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{} = event) do
     put_delivery_status(message, event.delivery_id, :opened)
   end
 
@@ -159,7 +159,7 @@ defmodule Memba.Messaging.Message do
   defp validate_message_identity(%__MODULE__{}, _message_id), do: {:error, :message_id_mismatch}
 
   defp validate_known_delivery(%__MODULE__{} = message, delivery_id) do
-    if MapSet.member?(message.recipient_delivery_ids, delivery_id) do
+    if MapSet.member?(message.email_delivery_ids, delivery_id) do
       :ok
     else
       {:error, :unknown_delivery}
@@ -206,8 +206,8 @@ defmodule Memba.Messaging.Message do
     }
   end
 
-  defp recipient_delivery_created(message_id, %Recipient{} = recipient) do
-    %RecipientDeliveryCreated{
+  defp email_delivery_created(message_id, %Recipient{} = recipient) do
+    %EmailDeliveryCreated{
       message_id: message_id,
       delivery_id: recipient.delivery_id,
       recipient_id: recipient.person_id,

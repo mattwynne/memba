@@ -10,7 +10,7 @@ defmodule MembaWeb.MemberMessageDetail do
 
   alias Memba.Membership
   alias Memba.Messaging
-  alias MembaWeb.MemberReceiptPresentation
+  alias MembaWeb.MemberEmailDeliveryPresentation
 
   @doc """
   Load the selected club message detail for a signed-in member.
@@ -64,8 +64,8 @@ defmodule MembaWeb.MemberMessageDetail do
   defp detail_assigns(selected_club, message) do
     receipt_model =
       message.message_id
-      |> Messaging.list_member_receipts()
-      |> MemberReceiptPresentation.present_receipts()
+      |> Messaging.list_member_email_deliverys()
+      |> MemberEmailDeliveryPresentation.present_receipts()
 
     sender = Membership.get_person(message.sender_id)
 
@@ -74,10 +74,10 @@ defmodule MembaWeb.MemberMessageDetail do
       selected_club: selected_club,
       message: message,
       sender_name: sender_name(sender),
-      member_receipts: receipt_model.receipts,
-      member_receipt_count: receipt_model.total_count,
-      member_receipt_summary: receipt_model.summary,
-      member_receipt_groups: receipt_model.groups
+      member_email_deliverys: receipt_model.receipts,
+      member_email_delivery_count: receipt_model.total_count,
+      member_email_delivery_summary: receipt_model.summary,
+      member_email_delivery_groups: receipt_model.groups
     }
   end
 

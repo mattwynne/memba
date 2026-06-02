@@ -54,7 +54,7 @@ defmodule MembaWeb.Layouts do
   end
 
   @doc """
-  Renders the staff admin layout.
+  Renders the Memba staff layout.
 
   The admin surface keeps Memba branding visible while using a compact,
   utilitarian navigation bar for internal operations.
@@ -75,17 +75,17 @@ defmodule MembaWeb.Layouts do
           <a
             href={~p"/admin/clubs"}
             class="inline-flex w-fit items-center gap-3"
-            aria-label="Memba admin home"
+            aria-label="Memba staff home"
           >
             <.logo />
             <span class="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-600">
-              Admin
+              Memba staff
             </span>
           </a>
 
           <nav
             class="flex flex-wrap items-center gap-2 text-sm font-medium"
-            aria-label="Staff admin navigation"
+            aria-label="Memba staff navigation"
           >
             <.link
               navigate={~p"/admin/clubs"}
@@ -134,7 +134,7 @@ defmodule MembaWeb.Layouts do
   This layout is intentionally not wired into production routes yet. It provides
   neutral slate defaults via CSS custom properties so a later white-label slice
   can pass resolved club theme values without extracting layout structure from
-  the staff admin surface.
+  the Memba staff surface.
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
   attr :club_name, :string, default: "Club", doc: "the club name shown in the site chrome"

@@ -5,7 +5,7 @@ defmodule MembaWeb.AuthController do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   @neutral_notice "Thanks. You should have an email in your inbox with a sign-in link."
   @invalid_link_notice "That sign-in link is invalid or has expired."
@@ -17,7 +17,7 @@ defmodule MembaWeb.AuthController do
   def create(conn, params) do
     params
     |> email_param()
-    |> request_and_deliver_magic_link(conn)
+    |> request_and_deliver_sign_in_link(conn)
 
     conn
     |> put_flash(:info, @neutral_notice)
@@ -25,12 +25,12 @@ defmodule MembaWeb.AuthController do
   end
 
   def callback(conn, %{"token" => token}) do
-    return_to = get_session(conn, UserAuth.return_to_session_key())
+    return_to = get_session(conn, IdentityAuth.return_to_session_key())
 
-    case Accounts.consume_magic_token(token) do
+    case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->
         conn
-        |> UserAuth.log_in_identity(email)
+        |> IdentityAuth.log_in_identity(email)
         |> put_flash(:info, "Signed in.")
         |> redirect(to: safe_return_to(return_to) || default_after_sign_in_path(email))
 
@@ -38,17 +38,17 @@ defmodule MembaWeb.AuthController do
         if signed_in?(conn) do
           redirect(conn, to: ~p"/")
         else
-          reject_magic_link(conn, :consumed)
+          reject_sign_in_link(conn, :consumed)
         end
 
       {:error, reason} ->
-        reject_magic_link(conn, reason)
+        reject_sign_in_link(conn, reason)
     end
   end
 
   def delete(conn, _params) do
     conn
-    |> UserAuth.log_out_identity()
+    |> IdentityAuth.log_out_identity()
     |> put_flash(:info, "Signed out.")
     |> redirect(to: ~p"/")
   end
@@ -63,33 +63,33 @@ defmodule MembaWeb.AuthController do
   defp email_param(%{"auth" => %{"email" => email}}), do: email
   defp email_param(_params), do: nil
 
-  defp request_and_deliver_magic_link(email, conn) do
-    case Accounts.request_magic_link(email) do
+  defp request_and_deliver_sign_in_link(email, conn) do
+    case Accounts.request_sign_in_link(email) do
       {:ok, %{email: recipient_email, token: token}} ->
-        deliver_magic_link(recipient_email, token, conn)
+        deliver_sign_in_link(recipient_email, token, conn)
 
       {:ok, nil} ->
         :ok
 
       {:error, reason} ->
-        Logger.warning("Could not create auth magic link: #{inspect(reason)}")
+        Logger.warning("Could not create auth sign-in link: #{inspect(reason)}")
     end
   end
 
-  defp deliver_magic_link(recipient_email, token, conn) do
-    callback_url = url(conn, ~p"/auth/magic/#{token}")
+  defp deliver_sign_in_link(recipient_email, token, conn) do
+    callback_url = url(conn, ~p"/auth/sign-in/#{token}")
 
-    case AuthEmail.deliver_magic_link(recipient_email, callback_url) do
+    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
       :ok ->
         :ok
 
       {:error, reason} ->
-        Logger.warning("Could not deliver auth magic link email: #{inspect(reason)}")
+        Logger.warning("Could not deliver auth sign-in link email: #{inspect(reason)}")
     end
   end
 
-  defp reject_magic_link(conn, reason) do
-    Logger.warning("Rejected auth magic link callback: #{inspect(reason)}")
+  defp reject_sign_in_link(conn, reason) do
+    Logger.warning("Rejected auth sign-in link callback: #{inspect(reason)}")
 
     conn
     |> put_flash(:error, @invalid_link_notice)

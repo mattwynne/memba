@@ -16,7 +16,7 @@ Operators still need the detailed status and reason so they can diagnose deliver
 
 ## Decision
 
-Map detailed delivery statuses to a small member-facing receipt vocabulary:
+Map detailed delivery statuses to a small member-facing status vocabulary:
 
 | Domain status | Member-facing status |
 | --- | --- |
@@ -27,7 +27,7 @@ Map detailed delivery statuses to a small member-facing receipt vocabulary:
 | `spam_complaint` | `delivery problem` |
 | `opened` | `opened` |
 
-The operator deliverability view keeps the detailed status and provider/channel reason.
+The Memba staff email delivery view keeps the detailed status and provider/channel reason.
 
 ## Consequences
 

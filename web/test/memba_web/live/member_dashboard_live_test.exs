@@ -6,12 +6,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
-  alias Memba.Messaging.Projections.OperatorDeliverability
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
   alias MembaWeb.MemberDashboardPresentation
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   test "routed club home renders signed-in active members through the dashboard LiveView", %{
     conn: conn
@@ -36,7 +36,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -77,23 +77,23 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         inserted_at: sent_at
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      receipt_status: "opened"
+      status: "opened"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "sent"
+      status: "sent"
     )
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     assert has_element?(view, "#member-dashboard-hero", "Hello, Alice.")
@@ -151,7 +151,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
-  test "dashboard receipt glance uses member vocabulary and does not leak operator-only fields",
+  test "dashboard receipt glance uses member vocabulary and does not leak Memba-staff-only fields",
        %{conn: conn} do
     alice =
       create_active_member(
@@ -191,36 +191,36 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         subject: "Weekend conditions"
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      receipt_status: "opened"
+      status: "opened"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "delivered"
+      status: "delivered"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: carol.person_id,
       recipient_name: "Carol Canoe",
-      receipt_status: "sent"
+      status: "sent"
     )
 
     dana_delivery_id =
-      create_member_receipt(
+      create_member_email_delivery(
         message_id: message.message_id,
         recipient_id: dana.person_id,
         recipient_name: "Dana Downhill",
-        receipt_status: "delivery problem"
+        status: "delivery problem"
       ).delivery_id
 
-    create_operator_deliverability(
+    create_memba_staff_email_delivery(
       delivery_id: dana_delivery_id,
       message_id: message.message_id,
       recipient_id: dana.person_id,
@@ -233,7 +233,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     message_selector = "#member-message-#{message.message_id}"
@@ -335,7 +335,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -380,7 +380,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -408,7 +408,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     assert has_element?(view, "#member-message-list-empty", "No messages yet")
@@ -431,7 +431,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -460,7 +460,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
-  test "logged-out club home still renders the public club marketing experience", %{conn: conn} do
+  test "logged-out club home still renders the public club page", %{conn: conn} do
     club = create_club(name: "Alpine Club")
 
     conn = get(conn, ~p"/?club_id=#{club.club_id}")
@@ -468,7 +468,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     html = LazyHTML.from_fragment(response)
 
     assert html
-           |> LazyHTML.query("#club-marketing-page[data-club-id='#{club.club_id}']")
+           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
            |> Enum.any?()
 
     refute html
@@ -481,7 +481,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "pat@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
       |> get(~p"/?club_id=#{alice.club_id}")
 
     assert response(conn, 403) == "Forbidden"
@@ -498,7 +498,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/?club_id=#{inactive_alice.club_id}")
 
     assert response(conn, 403) == "Forbidden"
@@ -561,18 +561,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     })
   end
 
-  defp create_member_receipt(attrs) do
-    Repo.insert!(%MemberReceipt{
+  defp create_member_email_delivery(attrs) do
+    Repo.insert!(%MemberEmailDelivery{
       delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+      status: Keyword.fetch!(attrs, :status)
     })
   end
 
-  defp create_operator_deliverability(attrs) do
-    Repo.insert!(%OperatorDeliverability{
+  defp create_memba_staff_email_delivery(attrs) do
+    Repo.insert!(%MembaStaffEmailDelivery{
       delivery_id: Keyword.fetch!(attrs, :delivery_id),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),

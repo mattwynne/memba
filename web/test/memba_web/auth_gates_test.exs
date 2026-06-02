@@ -5,22 +5,22 @@ defmodule MembaWeb.AuthGatesTest do
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
-  describe "staff admin routes" do
+  describe "Memba staff routes" do
     test "redirect unauthenticated browsers to sign in and preserve the return path" do
       conn =
         build_conn(:get, "/admin/clubs?filter=recent")
         |> get("/admin/clubs?filter=recent")
 
       assert redirected_to(conn) == ~p"/auth"
-      assert get_session(conn, UserAuth.return_to_session_key()) == "/admin/clubs?filter=recent"
+      assert get_session(conn, IdentityAuth.return_to_session_key()) == "/admin/clubs?filter=recent"
     end
 
     test "forbid signed-in non-staff browsers", %{conn: conn} do
       conn =
         conn
-        |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
         |> get(~p"/admin/clubs")
 
       assert response(conn, 403) == "Forbidden"
@@ -29,7 +29,7 @@ defmodule MembaWeb.AuthGatesTest do
     test "allow signed-in Memba staff browsers", %{conn: conn} do
       conn =
         conn
-        |> init_test_session(%{UserAuth.identity_session_key() => "pat@memba.io"})
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
         |> get(~p"/admin/clubs")
 
       assert html_response(conn, 200) =~ ~s(id="clubs-index")
@@ -37,7 +37,7 @@ defmodule MembaWeb.AuthGatesTest do
   end
 
   describe "club_id member routes" do
-    test "allow unauthenticated browsers to see the public club marketing page" do
+    test "allow unauthenticated browsers to see the public public club page" do
       club = create_club(name: "Alpine Club")
 
       conn =
@@ -49,7 +49,7 @@ defmodule MembaWeb.AuthGatesTest do
       assert response =~ "Welcome to Alpine Club"
       assert response =~ "Sign in to continue"
       assert response =~ "Powered by"
-      assert get_session(conn, UserAuth.return_to_session_key()) == nil
+      assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
 
     test "forbid signed-in browsers without active membership in the requested club", %{
@@ -59,7 +59,7 @@ defmodule MembaWeb.AuthGatesTest do
 
       conn =
         conn
-        |> init_test_session(%{UserAuth.identity_session_key() => "other@example.com"})
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "other@example.com"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
       assert response(conn, 403) == "Forbidden"
@@ -72,7 +72,7 @@ defmodule MembaWeb.AuthGatesTest do
 
       conn =
         conn
-        |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
       assert response(conn, 403) == "Forbidden"
@@ -83,7 +83,7 @@ defmodule MembaWeb.AuthGatesTest do
 
       conn =
         conn
-        |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
         |> get(~p"/?#{[club_id: club.club_id]}")
 
       response = html_response(conn, 200)

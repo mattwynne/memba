@@ -1,7 +1,7 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const {
   addMembers,
-  assertEveryAddressedMemberReceiptStatus,
+  assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
@@ -9,7 +9,7 @@ const {
   assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
   assertMemberMessageNotAddressedTo,
-  assertMemberReceiptStatus,
+  assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
@@ -132,10 +132,10 @@ Then("{word} should not see {word} in the addressed members", async function (vi
 });
 
 Then(
-  "{word} should see every addressed member's receipt status as {string}",
+  "{word} should see every addressed member's status as {string}",
   async function (viewerName, expectedStatus) {
     await withMemberHarness(this, viewerName, (member) =>
-      assertEveryAddressedMemberReceiptStatus(member, member.lastMessageSubject, expectedStatus)
+      assertEveryAddressedMemberEmailDeliveryStatus(member, member.lastMessageSubject, expectedStatus)
     );
   }
 );
@@ -148,7 +148,7 @@ Then("the message should not be addressed to {word}", async function (personName
   await withStaffHarness(this, (staff) => assertLastMessageNotAddressedTo(staff, personName));
 });
 
-Then("each addressed member should have a separate delivery record", async function () {
+Then("each addressed member should have a separate email delivery", async function () {
   await withStaffHarness(this, (staff) => assertEachAddressedMemberHasSeparateDeliveryRecord(staff));
 });
 
@@ -161,10 +161,10 @@ Then("each addressed member should receive the email in the test mailbox", async
 });
 
 Then(
-  "{word}'s receipt status for {string} should be {string}",
+  "{word}'s status for {string} should be {string}",
   async function (viewerName, subject, expectedStatus) {
     await withMemberHarness(this, viewerName, (member) =>
-      assertMemberReceiptStatus(member, viewerName, subject, expectedStatus)
+      assertMemberEmailDeliveryStatus(member, viewerName, subject, expectedStatus)
     );
   }
 );
@@ -174,10 +174,10 @@ When("{word} views the message {string}", async function (viewerName, subject) {
 });
 
 Then(
-  "{word} should see {word}'s receipt status for {string} as {string}",
+  "{word} should see {word}'s status for {string} as {string}",
   async function (viewerName, recipientName, subject, expectedStatus) {
     await withMemberHarness(this, viewerName, (member) =>
-      assertMemberReceiptStatus(member, recipientName, subject, expectedStatus)
+      assertMemberEmailDeliveryStatus(member, recipientName, subject, expectedStatus)
     );
   }
 );
@@ -240,14 +240,14 @@ Given("{word} has opened the email for {string}", async function (recipientName,
 });
 
 Then(
-  "operators should see {word}'s delivery for {string} as {string}",
+  "Memba staff should see {word}'s delivery for {string} as {string}",
   async function (recipientName, subject, expectedStatus) {
     await withStaffHarness(this, (staff) => assertOperatorDeliveryStatus(staff, recipientName, subject, expectedStatus));
   }
 );
 
 Then(
-  "operators should see {word}'s delivery reason {string}",
+  "Memba staff should see {word}'s delivery reason {string}",
   async function (recipientName, expectedReason) {
     await withStaffHarness(this, (staff) => assertOperatorDeliveryReason(staff, recipientName, expectedReason));
   }

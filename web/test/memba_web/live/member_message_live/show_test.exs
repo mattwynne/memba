@@ -6,11 +6,11 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
-  alias Memba.Messaging.Projections.OperatorDeliverability
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   test "renders a member message detail LiveView shell in the club site layout", %{conn: conn} do
     {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberMessageLive.Show)
@@ -38,7 +38,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     assert has_element?(
@@ -83,30 +83,30 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         body: "Bring your maps."
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      receipt_status: "sent"
+      status: "sent"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "opened"
+      status: "opened"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: carol.person_id,
       recipient_name: "Carol Clark",
-      receipt_status: "delivered"
+      status: "delivered"
     )
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     assert has_element?(view, "#member-receipt-summary", "Who got this")
@@ -191,23 +191,23 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         subject: "Trip planning night"
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "opened"
+      status: "opened"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: carol.person_id,
       recipient_name: "Carol Clark",
-      receipt_status: "delivered"
+      status: "delivered"
     )
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     opened_toggle = "#member-receipt-group-toggle-opened"
@@ -254,16 +254,16 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         subject: "Trip planning night"
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      receipt_status: "opened"
+      status: "opened"
     )
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     assert has_element?(
@@ -330,16 +330,16 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
         subject: "Trip planning night"
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "delivered"
+      status: "delivered"
     )
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     view
@@ -358,7 +358,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
            )
   end
 
-  test "expanded member receipt rows do not expose operator-only delivery fields", %{conn: conn} do
+  test "expanded member email delivery rows do not expose Memba-staff-only delivery fields", %{conn: conn} do
     alice =
       create_active_member(
         email: "alice@example.com",
@@ -384,15 +384,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     delivery_id = Ecto.UUID.generate()
     provider_reason = "Postmark webhook reported SpamComplaint from mx.example.invalid"
 
-    create_member_receipt(
+    create_member_email_delivery(
       delivery_id: delivery_id,
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "delivery problem"
+      status: "delivery problem"
     )
 
-    create_operator_deliverability(
+    create_memba_staff_email_delivery(
       delivery_id: delivery_id,
       message_id: message.message_id,
       recipient_id: bob.person_id,
@@ -405,7 +405,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     html =
@@ -429,7 +429,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute html =~ provider_reason
     refute html =~ "Postmark webhook"
     refute html =~ "Provider reason"
-    refute html =~ "Delivery records"
+    refute html =~ "Email deliveries"
     refute html =~ ~s(href="/admin/)
   end
 
@@ -473,18 +473,18 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     })
   end
 
-  defp create_member_receipt(attrs) do
-    Repo.insert!(%MemberReceipt{
+  defp create_member_email_delivery(attrs) do
+    Repo.insert!(%MemberEmailDelivery{
       delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+      status: Keyword.fetch!(attrs, :status)
     })
   end
 
-  defp create_operator_deliverability(attrs) do
-    Repo.insert!(%OperatorDeliverability{
+  defp create_memba_staff_email_delivery(attrs) do
+    Repo.insert!(%MembaStaffEmailDelivery{
       delivery_id: Keyword.fetch!(attrs, :delivery_id),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),

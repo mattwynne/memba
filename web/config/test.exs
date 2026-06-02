@@ -54,7 +54,7 @@ config :memba, MembaWeb.Endpoint,
 config :memba, dev_routes: true
 
 if System.get_env("MEMBA_ACCEPTANCE_LOCAL_EMAIL") == "true" do
-  config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Local
+  config :memba, :messaging_email_delivery_provider, Memba.Messaging.EmailDeliveryProviders.Local
 
   config :memba, Memba.Mailer,
     adapter: Swoosh.Adapters.Local,

@@ -7,7 +7,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   test "renders a member message compose LiveView shell in the club site layout", %{conn: conn} do
     {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberMessageLive.New)
@@ -26,7 +26,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/new?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -62,7 +62,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/new?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -115,7 +115,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/new?club_id=#{alice.club_id}")
 
     assert has_element?(
@@ -184,7 +184,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     conn = get(conn, return_path)
 
     assert redirected_to(conn) == ~p"/auth"
-    assert get_session(conn, UserAuth.return_to_session_key()) == return_path
+    assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
   end
 
   test "routed GET forbids a signed-in identity when the selected club is missing", %{
@@ -199,7 +199,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/messages/new")
 
     assert response(conn, 403) == "Forbidden"
@@ -215,7 +215,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "pat@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
       |> get(~p"/messages/new?club_id=#{alice.club_id}")
 
     assert response(conn, 403) == "Forbidden"

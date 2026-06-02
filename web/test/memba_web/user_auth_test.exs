@@ -1,18 +1,18 @@
-defmodule MembaWeb.UserAuthTest do
+defmodule MembaWeb.IdentityAuthTest do
   use MembaWeb.ConnCase, async: false
 
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   describe "fetch_current_identity/2" do
     test "assigns no current identity when the session has no signed-in email", %{conn: conn} do
       conn =
         conn
         |> init_test_session(%{})
-        |> UserAuth.fetch_current_identity([])
+        |> IdentityAuth.fetch_current_identity([])
 
       assert conn.assigns.current_identity == nil
       assert conn.assigns.current_identity_email == nil
@@ -24,7 +24,7 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => " Pat@Memba.IO "})
-        |> UserAuth.fetch_current_identity([])
+        |> IdentityAuth.fetch_current_identity([])
 
       assert conn.assigns.current_identity.email == "pat@memba.io"
       assert conn.assigns.current_identity.staff? == true
@@ -40,7 +40,7 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => " alice@example.com "})
-        |> UserAuth.fetch_current_identity([])
+        |> IdentityAuth.fetch_current_identity([])
 
       assert conn.assigns.current_identity.email == "alice@example.com"
       assert conn.assigns.current_identity.staff? == false
@@ -58,7 +58,7 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"identity_return_to" => "/admin/clubs"})
-        |> UserAuth.log_in_identity(" Pat@Memba.IO ")
+        |> IdentityAuth.log_in_identity(" Pat@Memba.IO ")
 
       assert get_session(conn, "current_identity_email") == "pat@memba.io"
       assert get_session(conn, "identity_return_to") == nil
@@ -68,7 +68,7 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => "pat@memba.io"})
-        |> UserAuth.log_out_identity()
+        |> IdentityAuth.log_out_identity()
 
       assert get_session(conn, "current_identity_email") == nil
     end
@@ -79,8 +79,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => "pat@memba.io"})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_authenticated_identity([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_authenticated_identity([])
 
       refute conn.halted
     end
@@ -89,8 +89,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         build_conn(:get, "/admin/clubs?club_id=club-123")
         |> init_test_session(%{})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_authenticated_identity([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_authenticated_identity([])
 
       assert redirected_to(conn) == "/auth"
       assert get_session(conn, "identity_return_to") == "/admin/clubs?club_id=club-123"
@@ -103,8 +103,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => "pat@memba.io"})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_staff_identity([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_staff_identity([])
 
       refute conn.halted
     end
@@ -113,8 +113,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => "alice@example.com"})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_staff_identity([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_staff_identity([])
 
       assert response(conn, 403) == "Forbidden"
       assert conn.halted
@@ -124,8 +124,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         build_conn(:get, "/admin/clubs")
         |> init_test_session(%{})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_staff_identity([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_staff_identity([])
 
       assert redirected_to(conn) == "/auth"
       assert get_session(conn, "identity_return_to") == "/admin/clubs"
@@ -140,8 +140,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         %{conn | query_params: %{"club_id" => club.club_id}}
         |> init_test_session(%{"current_identity_email" => "alice@example.com"})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_active_club_member([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_active_club_member([])
 
       refute conn.halted
     end
@@ -154,8 +154,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         %{conn | query_params: %{"club_id" => club.club_id}}
         |> init_test_session(%{"current_identity_email" => "other@example.com"})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_active_club_member([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_active_club_member([])
 
       assert response(conn, 403) == "Forbidden"
       assert conn.halted
@@ -165,8 +165,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         conn
         |> init_test_session(%{"current_identity_email" => "alice@example.com"})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_active_club_member([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_active_club_member([])
 
       assert response(conn, 403) == "Forbidden"
       assert conn.halted
@@ -178,8 +178,8 @@ defmodule MembaWeb.UserAuthTest do
       conn =
         build_conn(:get, "/member-area?club_id=#{club_id}")
         |> init_test_session(%{})
-        |> UserAuth.fetch_current_identity([])
-        |> UserAuth.require_active_club_member([])
+        |> IdentityAuth.fetch_current_identity([])
+        |> IdentityAuth.require_active_club_member([])
 
       assert redirected_to(conn) == "/auth"
       assert get_session(conn, "identity_return_to") == "/member-area?club_id=#{club_id}"

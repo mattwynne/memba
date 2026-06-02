@@ -6,14 +6,14 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Recipient
 
-  test "admin message detail keeps diagnostic sections and raw receipt values", %{conn: conn} do
+  test "Memba staff message detail keeps diagnostic sections and raw status values", %{conn: conn} do
     %{message_id: message_id, recipients: [alice, bob]} =
       send_projected_message_with_recipients(["Alice", "Bob"])
 
     reason = "recipient server is temporarily unavailable"
 
     assert :ok =
-             Messaging.report_delivery_delayed(
+             Messaging.report_email_delivery_delayed(
                %{message_id: message_id, delivery_id: bob.delivery_id, reason: reason},
                consistency: :strong
              )
@@ -36,8 +36,8 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     assert_selector_exists(html, "#admin-layout[data-surface='admin']")
     assert_selector_exists(html, "#message-show")
     assert_selector_exists(html, "#addressed-recipients[aria-label='Addressed recipients']")
-    assert_selector_exists(html, "#delivery-records[aria-label='Delivery records']")
-    assert_selector_exists(html, "#member-receipts[aria-label='Member receipt statuses']")
+    assert_selector_exists(html, "#delivery-records[aria-label='Email deliveries']")
+    assert_selector_exists(html, "#member-receipts[aria-label='Member email delivery statuses']")
 
     assert_selector_exists(
       html,
@@ -71,7 +71,7 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     refute response =~ "Delivery problem"
   end
 
-  test "admin deliveries overview keeps detailed operator statuses and provider reasons", %{
+  test "Memba staff email deliveries overview keeps detailed Memba staff statuses and provider reasons", %{
     conn: conn
   } do
     %{message_id: message_id, recipients: [recipient]} =
@@ -80,7 +80,7 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     reason = "recipient marked the message as spam"
 
     assert :ok =
-             Messaging.report_delivery_spam_complaint(
+             Messaging.report_email_delivery_spam_complaint(
                %{message_id: message_id, delivery_id: recipient.delivery_id, reason: reason},
                consistency: :strong
              )
@@ -103,7 +103,7 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
 
     assert_selector_exists(html, "#admin-layout[data-surface='admin']")
     assert_selector_exists(html, "#deliveries-overview")
-    assert_selector_exists(html, "#deliveries-table[aria-label='Delivery records']")
+    assert_selector_exists(html, "#deliveries-table[aria-label='Email deliveries']")
 
     assert_selector_exists(
       html,

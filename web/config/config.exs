@@ -16,9 +16,9 @@ config :memba,
     :membership_memberships,
     :membership_people,
     :messaging_messages,
-    :messaging_recipient_deliveries,
-    :messaging_member_receipts,
-    :messaging_operator_deliverabilities
+    :messaging_email_deliveries,
+    :messaging_member_email_deliveries,
+    :messaging_memba_staff_email_deliveries
   ],
   generators: [timestamp_type: :utc_datetime]
 
@@ -38,9 +38,9 @@ config :memba, Memba.Messaging.App,
   pubsub: :local,
   registry: :local
 
-config :memba, :messaging_delivery_provider, Memba.Messaging.DeliveryProviders.Fake
+config :memba, :messaging_email_delivery_provider, Memba.Messaging.EmailDeliveryProviders.Fake
 
-config :memba, Memba.Messaging.DeliveryProviders.Postmark,
+config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
   from: {"Memba", "messages@mail.memba.io"},
   reply_to: {"Matt Wynne", "matt@mattwynne.net"},
   message_stream: "outbound-member-broadcasts",

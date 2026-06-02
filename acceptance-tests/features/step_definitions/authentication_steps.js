@@ -79,7 +79,7 @@ Given("the sign-in link has expired", async function () {
   await expireSignInLink(this, "Alice");
 });
 
-Given("{word} has tried to open the staff-only area", async function (_personName) {
+Given("{word} has tried to open the Memba staff area", async function (_personName) {
   await tryOpenStaffOnlyArea(this);
 });
 
@@ -119,7 +119,7 @@ Then("{word} should see they are signed in on the club page", async function (pe
   await assertSignedInOnClubPage(this, personName);
 });
 
-Then("{word} should see the Kootenay Mountaineering Club marketing page", async function (_personName) {
+Then("{word} should see the Kootenay Mountaineering Public club page", async function (_personName) {
   await assertClubMarketingPage(this, "Kootenay Mountaineering Club");
 });
 
@@ -131,7 +131,7 @@ Then("{word} should be on the homepage", async function (_personName) {
   await assertOnHomepage(this);
 });
 
-Then("{word} should be on the staff-only homepage", async function (_personName) {
+Then("{word} should be on the Memba staff home", async function (_personName) {
   await assertOnStaffOnlyHomepage(this);
 });
 

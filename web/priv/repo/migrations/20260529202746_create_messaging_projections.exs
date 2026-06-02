@@ -15,7 +15,7 @@ defmodule Memba.Repo.Migrations.CreateMessagingProjections do
     create index(:messaging_messages, [:club_id])
     create index(:messaging_messages, [:sender_id])
 
-    create table(:messaging_recipient_deliveries, primary_key: false) do
+    create table(:messaging_email_deliveries, primary_key: false) do
       add :delivery_id, :uuid, primary_key: true
       add :message_id, :uuid, null: false
       add :recipient_id, :uuid, null: false
@@ -27,8 +27,8 @@ defmodule Memba.Repo.Migrations.CreateMessagingProjections do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:messaging_recipient_deliveries, [:message_id])
-    create index(:messaging_recipient_deliveries, [:recipient_id])
-    create unique_index(:messaging_recipient_deliveries, [:message_id, :recipient_id])
+    create index(:messaging_email_deliveries, [:message_id])
+    create index(:messaging_email_deliveries, [:recipient_id])
+    create unique_index(:messaging_email_deliveries, [:message_id, :recipient_id])
   end
 end

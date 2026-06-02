@@ -10,7 +10,7 @@ defmodule MembaWeb.MemberDashboardLive do
 
   alias Memba.Accounts
   alias MembaWeb.MemberDashboardPresentation
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   @impl Phoenix.LiveView
   def mount(_params, session, socket) do
@@ -36,7 +36,7 @@ defmodule MembaWeb.MemberDashboardLive do
 
   defp current_identity_from_session(session) do
     session
-    |> Map.get(UserAuth.identity_session_key())
+    |> Map.get(IdentityAuth.identity_session_key())
     |> Accounts.normalize_email()
     |> case do
       nil ->

@@ -7,7 +7,7 @@ defmodule MembaWeb.RouterTest do
     "/deliveries"
   ]
 
-  describe "staff admin LiveView routes" do
+  describe "Memba staff LiveView routes" do
     test "routes /admin/clubs through the staff browser pipeline to the clubs index LiveView" do
       assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
     end

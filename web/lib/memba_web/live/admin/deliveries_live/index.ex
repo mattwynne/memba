@@ -20,11 +20,11 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
       <main id="deliveries-overview" class="mx-auto max-w-7xl space-y-6 p-6">
         <section class="space-y-2">
           <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Operator overview
+            Memba staff overview
           </p>
           <h1 class="text-3xl font-bold tracking-tight text-zinc-900">Deliveries</h1>
           <p id="deliveries-summary" class="max-w-3xl text-zinc-600">
-            Review detailed delivery records across messages, including provider reason text for
+            Review detailed email deliveries across messages, including provider reason text for
             delayed, bounced, and spam complaint reports.
           </p>
         </section>
@@ -32,9 +32,9 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
         <section class="rounded-xl border border-zinc-200 bg-white shadow-sm">
           <div class="flex flex-col gap-2 border-b border-zinc-200 p-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 class="text-lg font-semibold text-zinc-900">Delivery records</h2>
+              <h2 class="text-lg font-semibold text-zinc-900">Email deliveries</h2>
               <p class="mt-1 text-sm text-zinc-500">
-                Showing {@deliveries_count} delivery record{if(@deliveries_count == 1,
+                Showing {@deliveries_count} email delivery{if(@deliveries_count == 1,
                   do: "",
                   else: "s"
                 )}.
@@ -46,7 +46,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
           <div class="overflow-x-auto">
             <table
               id="deliveries-table"
-              aria-label="Delivery records"
+              aria-label="Email deliveries"
               class="min-w-full divide-y divide-zinc-200 text-left text-sm"
             >
               <thead class="bg-zinc-50 text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -67,7 +67,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
               >
                 <tr id="deliveries-empty" class="hidden only:table-row">
                   <td colspan="7" class="px-4 py-6 text-center text-sm text-zinc-500">
-                    No delivery records.
+                    No email deliveries.
                   </td>
                 </tr>
                 <tr

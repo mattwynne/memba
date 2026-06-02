@@ -6,11 +6,11 @@ defmodule Memba.Messaging.Router do
   use Commanded.Commands.Router
 
   alias Memba.Messaging.Message
-  alias Memba.Messaging.Commands.ReportDeliveryBounced
-  alias Memba.Messaging.Commands.ReportDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
-  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
 
   identify(Message, by: :message_id)
@@ -18,11 +18,11 @@ defmodule Memba.Messaging.Router do
   dispatch(
     [
       SendMessage,
-      ReportDeliveryDelivered,
-      ReportDeliveryDelayed,
-      ReportDeliveryBounced,
-      ReportDeliverySpamComplaint,
-      ReportDeliveryOpened
+      ReportEmailDeliveryDelivered,
+      ReportEmailDeliveryDelayed,
+      ReportEmailDeliveryBounced,
+      ReportEmailDeliverySpamComplaint,
+      ReportEmailDeliveryOpened
     ],
     to: Message
   )

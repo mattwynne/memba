@@ -6,15 +6,15 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.App
-  alias Memba.Messaging.Commands.ReportDeliveryBounced
-  alias Memba.Messaging.Commands.ReportDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
-  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
-  alias Memba.Messaging.DeliveryProviders.Fake
-  alias Memba.Messaging.DeliveryProviders.Unavailable
-  alias Memba.Messaging.DeliveryRequest
-  alias Memba.Messaging.Projections.RecipientDelivery
+  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+  alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.Projections.EmailDelivery
 
   step "{word} sends the message {string} to Kootenay Mountaineering Club members",
        %{args: [sender_name, subject]} = context do
@@ -31,10 +31,10 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step "club message sending is unavailable", context do
-    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
-    Application.put_env(:memba, :messaging_delivery_provider, Unavailable)
+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+    Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
 
-    Map.put(context, :messaging_delivery_provider_before_unavailable, original_provider)
+    Map.put(context, :messaging_email_delivery_provider_before_unavailable, original_provider)
   end
 
   step "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
@@ -56,52 +56,52 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   step "{word} email for {string} is reported as delivered",
        %{args: [recipient_name, subject]} = context do
-    report_delivery_status(context, recipient_name, subject, :delivered)
+    report_email_delivery_status(context, recipient_name, subject, :delivered)
   end
 
   step "{word} email for {string} has been reported as delivered",
        %{args: [recipient_name, subject]} = context do
-    report_delivery_status(context, recipient_name, subject, :delivered)
+    report_email_delivery_status(context, recipient_name, subject, :delivered)
   end
 
   step "{word} has opened the email for {string}", %{args: [recipient_name, subject]} = context do
-    report_delivery_status(context, recipient_name, subject, :opened)
+    report_email_delivery_status(context, recipient_name, subject, :opened)
   end
 
   step "{word} email for {string} is reported as delayed because {string}",
        %{args: [recipient_name, subject, reason]} = context do
-    report_delivery_status(context, recipient_name, subject, :delayed, reason)
+    report_email_delivery_status(context, recipient_name, subject, :delayed, reason)
   end
 
   step "{word} email for {string} has been reported as delayed because {string}",
        %{args: [recipient_name, subject, reason]} = context do
-    report_delivery_status(context, recipient_name, subject, :delayed, reason)
+    report_email_delivery_status(context, recipient_name, subject, :delayed, reason)
   end
 
   step "{word} email for {string} is reported as bounced because {string}",
        %{args: [recipient_name, subject, reason]} = context do
-    report_delivery_status(context, recipient_name, subject, :bounced, reason)
+    report_email_delivery_status(context, recipient_name, subject, :bounced, reason)
   end
 
   step "{word} email for {string} has been reported as bounced because {string}",
        %{args: [recipient_name, subject, reason]} = context do
-    report_delivery_status(context, recipient_name, subject, :bounced, reason)
+    report_email_delivery_status(context, recipient_name, subject, :bounced, reason)
   end
 
   step "{word} email for {string} is reported as a spam complaint because {string}",
        %{args: [recipient_name, subject, reason]} = context do
-    report_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
+    report_email_delivery_status(context, recipient_name, subject, :spam_complaint, reason)
   end
 
   step "{word} opens the email for {string}", %{args: [recipient_name, subject]} = context do
-    report_delivery_status(context, recipient_name, subject, :opened)
+    report_email_delivery_status(context, recipient_name, subject, :opened)
   end
 
-  step "{word} receipt status for {string} should be {string}",
+  step "{word} status for {string} should be {string}",
        %{args: [recipient_name, subject, expected_status]} = context do
-    receipt = member_receipt_for!(context, recipient_name, subject)
+    receipt = member_email_delivery_for!(context, recipient_name, subject)
 
-    assert receipt.receipt_status == expected_status
+    assert receipt.status == expected_status
 
     context
   end
@@ -136,16 +136,16 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
-  step "{word} should see every addressed member's receipt status as {string}",
+  step "{word} should see every addressed member's status as {string}",
        %{args: [viewer_name, expected_status_label]} = context do
     assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
-    expected_status = member_receipt_status_for_label(expected_status_label)
+    expected_status = member_email_delivery_status_for_label(expected_status_label)
 
     context
     |> Map.fetch!(:addressed_member_names)
     |> Enum.each(fn recipient_name ->
-      receipt = member_receipt_for!(context, recipient_name, context.sent_message.subject)
-      assert receipt.receipt_status == expected_status
+      receipt = member_email_delivery_for!(context, recipient_name, context.sent_message.subject)
+      assert receipt.status == expected_status
     end)
 
     context
@@ -161,48 +161,48 @@ defmodule Memba.Cucumber.MessagingSteps do
     Map.put(context, :viewed_message_subject, subject)
   end
 
-  step "{word} should see {word} receipt status for {string} as {string}",
+  step "{word} should see {word} status for {string} as {string}",
        %{args: [viewer_name, recipient_name, subject, expected_status_label]} = context do
     assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
 
-    receipt = member_receipt_for!(context, recipient_name, subject)
-    assert receipt.receipt_status == member_receipt_status_for_label(expected_status_label)
+    receipt = member_email_delivery_for!(context, recipient_name, subject)
+    assert receipt.status == member_email_delivery_status_for_label(expected_status_label)
 
     context
   end
 
-  step "{word} operator deliverability status should be {string}",
+  step "{word} Memba staff email delivery status should be {string}",
        %{args: [recipient_name, expected_status]} = context do
-    deliverability = operator_deliverability_for!(context, recipient_name)
+    deliverability = memba_staff_email_delivery_for!(context, recipient_name)
 
     assert deliverability.status == expected_status
 
     context
   end
 
-  step "{word} operator deliverability reason should be {string}",
+  step "{word} Memba staff email delivery reason should be {string}",
        %{args: [recipient_name, expected_reason]} = context do
-    deliverability = operator_deliverability_for!(context, recipient_name)
+    deliverability = memba_staff_email_delivery_for!(context, recipient_name)
 
     assert deliverability.reason == expected_reason
 
     context
   end
 
-  step "operators should see {word} delivery for {string} as {string}",
+  step "Memba staff should see {word} delivery for {string} as {string}",
        %{args: [recipient_name, subject, expected_status]} = context do
-    deliverability = operator_deliverability_for!(context, recipient_name, subject)
+    deliverability = memba_staff_email_delivery_for!(context, recipient_name, subject)
 
     assert deliverability.status == expected_status
 
-    Map.put(context, :current_operator_deliverability, deliverability)
+    Map.put(context, :current_memba_staff_email_delivery, deliverability)
   end
 
-  step "operators should see {word} delivery reason {string}",
+  step "Memba staff should see {word} delivery reason {string}",
        %{args: [recipient_name, expected_reason]} = context do
     deliverability =
-      Map.get_lazy(context, :current_operator_deliverability, fn ->
-        operator_deliverability_for!(context, recipient_name)
+      Map.get_lazy(context, :current_memba_staff_email_delivery, fn ->
+        memba_staff_email_delivery_for!(context, recipient_name)
       end)
 
     assert deliverability.reason == expected_reason
@@ -224,7 +224,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
   end
 
-  step "each addressed member should have a separate delivery record", context do
+  step "each addressed member should have a separate email delivery", context do
     deliveries = deliveries_for_last_message!(context)
     addressed_member_ids = Map.fetch!(context, :addressed_member_ids)
 
@@ -233,7 +233,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert_unique(Enum.map(deliveries, & &1.delivery_id))
     assert_unique(Enum.map(deliveries, & &1.recipient_id))
 
-    assert Enum.all?(deliveries, fn %RecipientDelivery{} = delivery ->
+    assert Enum.all?(deliveries, fn %EmailDelivery{} = delivery ->
              delivery.channel == "email" and delivery.status == "sent"
            end)
 
@@ -250,7 +250,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert_unique(Enum.map(provider_deliveries, & &1.delivery_id))
 
     Enum.zip(deliveries, provider_deliveries)
-    |> Enum.each(fn {%RecipientDelivery{} = delivery, %DeliveryRequest{} = request} ->
+    |> Enum.each(fn {%EmailDelivery{} = delivery, %EmailDeliveryRequest{} = request} ->
       assert request.message_id == delivery.message_id
       assert request.club_id == context.sent_message.club_id
       assert request.delivery_id == delivery.delivery_id
@@ -323,8 +323,8 @@ defmodule Memba.Cucumber.MessagingSteps do
         )
       after
         context
-        |> Map.get(:messaging_delivery_provider_before_unavailable, :missing)
-        |> restore_messaging_delivery_provider()
+        |> Map.get(:messaging_email_delivery_provider_before_unavailable, :missing)
+        |> restore_messaging_email_delivery_provider()
       end
 
     context
@@ -338,7 +338,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     })
   end
 
-  defp report_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
+  defp report_email_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
     recipient_name = normalize_person_name(recipient_name)
     message = fetch_from_context!(context, :messages, subject)
     delivery = delivery_for!(context, recipient_name, subject)
@@ -346,7 +346,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     if status == :opened && delivery.status == "sent" do
       assert :ok =
                App.dispatch(
-                 %ReportDeliveryDelivered{
+                 %ReportEmailDeliveryDelivered{
                    message_id: message.message_id,
                    delivery_id: delivery.delivery_id
                  },
@@ -357,34 +357,34 @@ defmodule Memba.Cucumber.MessagingSteps do
     command =
       case status do
         :delivered ->
-          %ReportDeliveryDelivered{
+          %ReportEmailDeliveryDelivered{
             message_id: message.message_id,
             delivery_id: delivery.delivery_id
           }
 
         :delayed ->
-          %ReportDeliveryDelayed{
+          %ReportEmailDeliveryDelayed{
             message_id: message.message_id,
             delivery_id: delivery.delivery_id,
             reason: reason
           }
 
         :bounced ->
-          %ReportDeliveryBounced{
+          %ReportEmailDeliveryBounced{
             message_id: message.message_id,
             delivery_id: delivery.delivery_id,
             reason: reason
           }
 
         :spam_complaint ->
-          %ReportDeliverySpamComplaint{
+          %ReportEmailDeliverySpamComplaint{
             message_id: message.message_id,
             delivery_id: delivery.delivery_id,
             reason: reason
           }
 
         :opened ->
-          %ReportDeliveryOpened{
+          %ReportEmailDeliveryOpened{
             message_id: message.message_id,
             delivery_id: delivery.delivery_id
           }
@@ -410,26 +410,26 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> Map.put(:addressed_member_ids, expected_recipient_ids)
   end
 
-  defp member_receipt_for!(context, recipient_name, subject) do
+  defp member_email_delivery_for!(context, recipient_name, subject) do
     recipient_name = normalize_person_name(recipient_name)
     message = fetch_from_context!(context, :messages, subject)
     recipient_id = fetch_from_context!(context, :people, recipient_name)
 
-    Messaging.get_member_receipt(message.message_id, recipient_id) ||
-      flunk("Expected a member receipt for #{recipient_name} and #{inspect(subject)}")
+    Messaging.get_member_email_delivery(message.message_id, recipient_id) ||
+      flunk("Expected a member email delivery for #{recipient_name} and #{inspect(subject)}")
   end
 
-  defp operator_deliverability_for!(context, recipient_name) do
-    operator_deliverability_for!(context, recipient_name, context.sent_message.subject)
+  defp memba_staff_email_delivery_for!(context, recipient_name) do
+    memba_staff_email_delivery_for!(context, recipient_name, context.sent_message.subject)
   end
 
-  defp operator_deliverability_for!(context, recipient_name, subject) do
+  defp memba_staff_email_delivery_for!(context, recipient_name, subject) do
     recipient_name = normalize_person_name(recipient_name)
     message = fetch_from_context!(context, :messages, subject)
     recipient_id = fetch_from_context!(context, :people, recipient_name)
 
-    Messaging.get_operator_deliverability(message.message_id, recipient_id) ||
-      flunk("Expected operator deliverability for #{recipient_name} and #{inspect(subject)}")
+    Messaging.get_memba_staff_email_delivery(message.message_id, recipient_id) ||
+      flunk("Expected Memba staff email delivery for #{recipient_name} and #{inspect(subject)}")
   end
 
   defp delivery_for!(context, recipient_name, subject) do
@@ -440,7 +440,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     |> Messaging.list_recipient_deliveries()
     |> Enum.find(&(&1.recipient_id == recipient_id))
     |> case do
-      %RecipientDelivery{} = delivery ->
+      %EmailDelivery{} = delivery ->
         delivery
 
       nil ->
@@ -461,11 +461,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert Membership.active_member_of_club?(club_id, person_id)
   end
 
-  defp member_receipt_status_for_label("Sending"), do: "sent"
-  defp member_receipt_status_for_label("Delivered"), do: "delivered"
-  defp member_receipt_status_for_label("Delivery problem"), do: "delivery problem"
-  defp member_receipt_status_for_label("Opened"), do: "opened"
-  defp member_receipt_status_for_label(status), do: status
+  defp member_email_delivery_status_for_label("Sending"), do: "sent"
+  defp member_email_delivery_status_for_label("Delivered"), do: "delivered"
+  defp member_email_delivery_status_for_label("Delivery problem"), do: "delivery problem"
+  defp member_email_delivery_status_for_label("Opened"), do: "opened"
+  defp member_email_delivery_status_for_label(status), do: status
 
   defp fetch_from_context!(context, collection_key, item_key) do
     context
@@ -497,11 +497,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert Enum.uniq(values) == values
   end
 
-  defp restore_messaging_delivery_provider(:missing), do: :ok
+  defp restore_messaging_email_delivery_provider(:missing), do: :ok
 
-  defp restore_messaging_delivery_provider(nil),
-    do: Application.delete_env(:memba, :messaging_delivery_provider)
+  defp restore_messaging_email_delivery_provider(nil),
+    do: Application.delete_env(:memba, :messaging_email_delivery_provider)
 
-  defp restore_messaging_delivery_provider(provider),
-    do: Application.put_env(:memba, :messaging_delivery_provider, provider)
+  defp restore_messaging_email_delivery_provider(provider),
+    do: Application.put_env(:memba, :messaging_email_delivery_provider, provider)
 end

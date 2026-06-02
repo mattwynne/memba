@@ -26,9 +26,9 @@ defmodule Memba.CucumberConfigurationTest do
         17},
        {"And", "Alice should see the message was addressed to Alice, Bob, Carol, and Dana", 18},
        {"And", "Alice should not see Pat in the addressed members", 19},
-       {"And", "Alice should see every addressed member's receipt status as \"Sending\"", 20}
+       {"And", "Alice should see every addressed member's status as \"Sending\"", 20}
      ]},
-    {"Alice sees different receipt statuses for different members",
+    {"Alice sees different statuses for different members",
      [
        {"Given",
         "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
@@ -40,16 +40,16 @@ defmodule Memba.CucumberConfigurationTest do
        {"And", "Dana has opened the email for \"Trip planning night\"", 28},
        {"When", "Alice views the message \"Trip planning night\"", 29},
        {"Then",
-        "Alice should see Bob's receipt status for \"Trip planning night\" as \"Delivered\"", 30},
+        "Alice should see Bob's status for \"Trip planning night\" as \"Delivered\"", 30},
        {"And",
-        "Alice should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
+        "Alice should see Carol's status for \"Trip planning night\" as \"Delivery problem\"",
         31},
-       {"And", "Alice should see Dana's receipt status for \"Trip planning night\" as \"Opened\"",
+       {"And", "Alice should see Dana's status for \"Trip planning night\" as \"Opened\"",
         32},
        {"And",
-        "Alice should see Alice's receipt status for \"Trip planning night\" as \"Sending\"", 33}
+        "Alice should see Alice's status for \"Trip planning night\" as \"Sending\"", 33}
      ]},
-    {"Bob sees the same shared receipt statuses",
+    {"Bob sees the same shared statuses",
      [
        {"Given",
         "Alice has sent the message \"Trip planning night\" to Kootenay Mountaineering Club members",
@@ -60,11 +60,11 @@ defmodule Memba.CucumberConfigurationTest do
         38},
        {"When", "Bob views the message \"Trip planning night\"", 39},
        {"Then",
-        "Bob should see Alice's receipt status for \"Trip planning night\" as \"Sending\"", 40},
-       {"And", "Bob should see Bob's receipt status for \"Trip planning night\" as \"Delivered\"",
+        "Bob should see Alice's status for \"Trip planning night\" as \"Sending\"", 40},
+       {"And", "Bob should see Bob's status for \"Trip planning night\" as \"Delivered\"",
         41},
        {"And",
-        "Bob should see Carol's receipt status for \"Trip planning night\" as \"Delivery problem\"",
+        "Bob should see Carol's status for \"Trip planning night\" as \"Delivery problem\"",
         42}
      ]},
     {"Alice is told a failed message was not sent",
@@ -99,14 +99,14 @@ defmodule Memba.CucumberConfigurationTest do
        {"And",
         "Carol's email for \"Avalanche bulletin\" is reported as bounced because \"mailbox does not exist\"",
         16},
-       {"Then", "operators should see Bob's delivery for \"Trip planning night\" as \"delayed\"",
+       {"Then", "Memba staff should see Bob's delivery for \"Trip planning night\" as \"delayed\"",
         17},
        {"And",
-        "operators should see Bob's delivery reason \"recipient server is temporarily unavailable\"",
+        "Memba staff should see Bob's delivery reason \"recipient server is temporarily unavailable\"",
         18},
-       {"And", "operators should see Carol's delivery for \"Avalanche bulletin\" as \"bounced\"",
+       {"And", "Memba staff should see Carol's delivery for \"Avalanche bulletin\" as \"bounced\"",
         19},
-       {"And", "operators should see Carol's delivery reason \"mailbox does not exist\"", 20}
+       {"And", "Memba staff should see Carol's delivery reason \"mailbox does not exist\"", 20}
      ]},
     {"Spam complaints keep the provider reason",
      [
@@ -117,10 +117,10 @@ defmodule Memba.CucumberConfigurationTest do
         "Bob's email for \"Trip planning night\" is reported as a spam complaint because \"recipient marked the message as spam\"",
         24},
        {"Then",
-        "operators should see Bob's delivery for \"Trip planning night\" as \"spam complaint\"",
+        "Memba staff should see Bob's delivery for \"Trip planning night\" as \"spam complaint\"",
         25},
        {"And",
-        "operators should see Bob's delivery reason \"recipient marked the message as spam\"", 26}
+        "Memba staff should see Bob's delivery reason \"recipient marked the message as spam\"", 26}
      ]},
     {"Opens are visible after delivery",
      [
@@ -129,17 +129,17 @@ defmodule Memba.CucumberConfigurationTest do
         29},
        {"And", "Bob's email for \"Trip planning night\" has been reported as delivered", 30},
        {"When", "Bob opens the email for \"Trip planning night\"", 31},
-       {"Then", "operators should see Bob's delivery for \"Trip planning night\" as \"opened\"",
+       {"Then", "Memba staff should see Bob's delivery for \"Trip planning night\" as \"opened\"",
         32}
      ]}
   ]
 
   @authentication_scenarios [
-    {"Logged-out visitor sees a club marketing page",
+    {"Logged-out visitor sees a public club page",
      [
        {"Given", "Alice is a member of Kootenay Mountaineering Club", 7},
        {"When", "Robin opens the Kootenay Mountaineering Club page", 8},
-       {"Then", "Robin should see the Kootenay Mountaineering Club marketing page", 9},
+       {"Then", "Robin should see the Kootenay Mountaineering Public club page", 9},
        {"And", "the club page should show Powered by Memba in the footer", 10}
      ]},
     {"A club member signs in and sees their club",
@@ -172,7 +172,7 @@ defmodule Memba.CucumberConfigurationTest do
        {"Then", "Pat should receive a sign-in link", 40},
        {"When", "Pat follows the sign-in link", 41},
        {"Then", "Pat should be signed in as Memba staff", 42},
-       {"And", "Pat should be on the staff-only homepage", 43}
+       {"And", "Pat should be on the Memba staff home", 43}
      ]},
     {"Memba staff who are also club members can use both kinds of access",
      [
@@ -181,7 +181,7 @@ defmodule Memba.CucumberConfigurationTest do
        {"Then", "Pat should receive a sign-in link", 48},
        {"When", "Pat follows the sign-in link", 49},
        {"Then", "Pat should be signed in as Memba staff", 50},
-       {"And", "Pat should be on the staff-only homepage", 51},
+       {"And", "Pat should be on the Memba staff home", 51},
        {"And", "Pat should be able to see Kootenay Mountaineering Club in their clubs", 52}
      ]},
     {"Unknown person requests a sign-in link",
@@ -221,15 +221,15 @@ defmodule Memba.CucumberConfigurationTest do
        {"When", "Robin follows a sign-in link that Memba did not issue", 91},
        {"Then", "Robin should not be signed in", 92}
      ]},
-    {"Staff signs in after trying to open the staff-only area",
+    {"Staff signs in after trying to open the Memba staff area",
      [
        {"Given", "Pat is not a member of any club", 97},
-       {"And", "Pat has tried to open the staff-only area", 98},
+       {"And", "Pat has tried to open the Memba staff area", 98},
        {"When", "Pat requests a sign-in link for \"pat@memba.io\"", 99},
        {"Then", "Pat should receive a sign-in link", 100},
        {"When", "Pat follows the sign-in link", 101},
        {"Then", "Pat should be signed in as Memba staff", 102},
-       {"And", "Pat should be on the staff-only homepage", 103}
+       {"And", "Pat should be on the Memba staff home", 103}
      ]},
     {"Staff signs out",
      [
@@ -293,17 +293,17 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} has already followed the sign-in link",
     "{word} has signed out",
     "the sign-in link has expired",
-    "{word} has tried to open the staff-only area",
+    "{word} has tried to open the Memba staff area",
     "{word} should be signed in",
     "{word} should be signed in as Memba staff",
     "{word} should not be signed in",
     "{word} should still be signed in",
     "{word} should see they are signed in on the club page",
-    "{word} should see the Kootenay Mountaineering Club marketing page",
+    "{word} should see the Kootenay Mountaineering Public club page",
     "the club page should show Powered by Memba in the footer",
     "{word} signs out",
     "{word} should be signed out",
-    "{word} should be on the staff-only homepage",
+    "{word} should be on the Memba staff home",
     "{word} should be on the homepage",
     "{word} should see Kootenay Mountaineering Club in their clubs",
     "{word} should see Nelson Paddling Club in their clubs",
@@ -326,20 +326,20 @@ defmodule Memba.CucumberConfigurationTest do
     "{word} email for {string} is reported as a spam complaint because {string}",
     "{word} opens the email for {string}",
     "{word} has opened the email for {string}",
-    "{word} receipt status for {string} should be {string}",
+    "{word} status for {string} should be {string}",
     "{word} should see the message {string} in Kootenay Mountaineering Club",
     "{word} should see the message was addressed to Alice, Bob, Carol, and Dana",
     "{word} should not see {word} in the addressed members",
-    "{word} should see every addressed member's receipt status as {string}",
+    "{word} should see every addressed member's status as {string}",
     "{word} views the message {string}",
-    "{word} should see {word} receipt status for {string} as {string}",
-    "{word} operator deliverability status should be {string}",
-    "{word} operator deliverability reason should be {string}",
-    "operators should see {word} delivery for {string} as {string}",
-    "operators should see {word} delivery reason {string}",
+    "{word} should see {word} status for {string} as {string}",
+    "{word} Memba staff email delivery status should be {string}",
+    "{word} Memba staff email delivery reason should be {string}",
+    "Memba staff should see {word} delivery for {string} as {string}",
+    "Memba staff should see {word} delivery reason {string}",
     "the message should be addressed to Alice, Bob, and Carol",
     "the message should not be addressed to {word}",
-    "each addressed member should have a separate delivery record",
+    "each addressed member should have a separate email delivery",
     "each delivery should be sent through the email provider"
   ]
 
@@ -370,11 +370,11 @@ defmodule Memba.CucumberConfigurationTest do
   test "domain Cucumber configuration excludes only wip planning scenarios" do
     assert Application.fetch_env!(:cucumber, :tags) == "not @wip"
 
-    operator_feature_file =
+    memba_staff_feature_file =
       configured_feature_paths()
-      |> feature_file_named!("operator_email_deliverability.feature")
+      |> feature_file_named!("memba_staff_email_deliverability.feature")
 
-    refute File.read!(operator_feature_file) =~ ~r/^\s*@todo-web\s*\n\s*Feature:/m
+    refute File.read!(memba_staff_feature_file) =~ ~r/^\s*@todo-web\s*\n\s*Feature:/m
   end
 
   test "all member message deliverability scenarios pass through Cucumber runtime" do
@@ -409,13 +409,13 @@ defmodule Memba.CucumberConfigurationTest do
     end
   end
 
-  test "all operator email deliverability scenarios pass through Cucumber runtime" do
+  test "all Memba staff email deliverability scenarios pass through Cucumber runtime" do
     %Discovery.DiscoveryResult{} = discovery = discover_steps()
 
     shared_feature_paths = configured_feature_paths()
 
     operator_feature_file =
-      feature_file_named!(shared_feature_paths, "operator_email_deliverability.feature")
+      feature_file_named!(shared_feature_paths, "memba_staff_email_deliverability.feature")
 
     Enum.each(@operator_scenarios, fn {scenario_name, scenario_steps} ->
       operator_context =

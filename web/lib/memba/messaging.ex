@@ -5,18 +5,18 @@ defmodule Memba.Messaging do
 
   alias Memba.Membership
   alias Memba.Messaging.App
-  alias Memba.Messaging.Commands.ReportDeliveryBounced
-  alias Memba.Messaging.Commands.ReportDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
-  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
-  alias Memba.Messaging.DeliveryProvider
-  alias Memba.Messaging.DeliveryRequest
-  alias Memba.Messaging.Projections.MemberReceipt, as: MemberReceiptProjection
+  alias Memba.Messaging.EmailDeliveryProvider
+  alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
-  alias Memba.Messaging.Projections.OperatorDeliverability, as: OperatorDeliverabilityProjection
-  alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
+  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
   alias Memba.Repo
 
@@ -39,33 +39,33 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Report that a recipient delivery was accepted by the recipient server.
+  Report that a email delivery was accepted by the recipient server.
   """
-  def report_delivery_delivered(attrs, dispatch_opts \\ [])
+  def report_email_delivery_delivered(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_delivery_delivered_command(attrs),
+    with {:ok, command} <- report_email_delivery_delivered_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
   end
 
   @doc """
-  Report that a recipient delivery was temporarily delayed.
+  Report that a email delivery was temporarily delayed.
   """
-  def report_delivery_delayed(attrs, dispatch_opts \\ [])
+  def report_email_delivery_delayed(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_delivery_delayed_command(attrs),
+    with {:ok, command} <- report_email_delivery_delayed_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
   end
 
   @doc """
-  Report that a recipient delivery bounced.
+  Report that a email delivery bounced.
   """
-  def report_delivery_bounced(attrs, dispatch_opts \\ [])
+  def report_email_delivery_bounced(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_delivery_bounced_command(attrs),
+    with {:ok, command} <- report_email_delivery_bounced_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -74,9 +74,9 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient marked a delivery as spam.
   """
-  def report_delivery_spam_complaint(attrs, dispatch_opts \\ [])
+  def report_email_delivery_spam_complaint(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_delivery_spam_complaint_command(attrs),
+    with {:ok, command} <- report_email_delivery_spam_complaint_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -85,9 +85,9 @@ defmodule Memba.Messaging do
   @doc """
   Report that a recipient opened a delivery.
   """
-  def report_delivery_opened(attrs, dispatch_opts \\ [])
+  def report_email_delivery_opened(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_delivery_opened_command(attrs),
+    with {:ok, command} <- report_email_delivery_opened_command(attrs),
          {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
       dispatch_result
     end
@@ -124,20 +124,20 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Fetch a projected recipient delivery read model by caller-generated UUID.
+  Fetch a projected email delivery read model by caller-generated UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
-  def get_recipient_delivery(delivery_id) do
+  def get_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(RecipientDeliveryProjection, delivery_id)
+      Repo.get(EmailDeliveryProjection, delivery_id)
     else
       :error -> nil
     end
   end
 
   @doc """
-  List recipient delivery records for a projected message.
+  List email email deliveries for a projected message.
 
   Invalid or missing message IDs return an empty list. Results are ordered by
   recipient name and ID to provide deterministic assertions for acceptance
@@ -145,7 +145,7 @@ defmodule Memba.Messaging do
   """
   def list_recipient_deliveries(message_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
-      RecipientDeliveryProjection
+      EmailDeliveryProjection
       |> where([delivery], delivery.message_id == ^message_id)
       |> order_by([delivery], asc: delivery.recipient_name, asc: delivery.recipient_id)
       |> Repo.all()
@@ -155,43 +155,43 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Fetch a member-facing receipt read model by delivery UUID.
+  Fetch a member-facing email delivery read model by delivery UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
-  def get_member_receipt(delivery_id) do
+  def get_member_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MemberReceiptProjection, delivery_id)
+      Repo.get(MemberEmailDeliveryProjection, delivery_id)
     else
       :error -> nil
     end
   end
 
   @doc """
-  Fetch a member-facing receipt for a recipient on a message.
+  Fetch a member-facing email delivery for a recipient on a message.
 
-  Invalid or missing IDs return `nil`. The receipt status uses ADR 0006's
+  Invalid or missing IDs return `nil`. The status uses ADR 0006's
   simplified member vocabulary: sent, delivered, delivery problem, or opened.
   """
-  def get_member_receipt(message_id, recipient_id) do
+  def get_member_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
          {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
-      Repo.get_by(MemberReceiptProjection, message_id: message_id, recipient_id: recipient_id)
+      Repo.get_by(MemberEmailDeliveryProjection, message_id: message_id, recipient_id: recipient_id)
     else
       :error -> nil
     end
   end
 
   @doc """
-  List member-facing receipt records for a projected message.
+  List member-facing email email deliveries for a projected message.
 
   Invalid or missing message IDs return an empty list. Results are ordered by
   recipient name and ID to provide deterministic assertions for acceptance
   plumbing.
   """
-  def list_member_receipts(message_id) do
+  def list_member_email_deliverys(message_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
-      MemberReceiptProjection
+      MemberEmailDeliveryProjection
       |> where([receipt], receipt.message_id == ^message_id)
       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
       |> Repo.all()
@@ -201,28 +201,28 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Fetch an operator deliverability read model by delivery UUID.
+  Fetch an Memba staff email delivery read model by delivery UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
-  def get_operator_deliverability(delivery_id) do
+  def get_memba_staff_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(OperatorDeliverabilityProjection, delivery_id)
+      Repo.get(MembaStaffEmailDeliveryProjection, delivery_id)
     else
       :error -> nil
     end
   end
 
   @doc """
-  Fetch an operator deliverability record for a recipient on a message.
+  Fetch an Memba staff email email delivery for a recipient on a message.
 
   Invalid or missing IDs return `nil`. This view keeps detailed delivery status
   and reason text for delayed, bounced, and spam complaint reports.
   """
-  def get_operator_deliverability(message_id, recipient_id) do
+  def get_memba_staff_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
          {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
-      Repo.get_by(OperatorDeliverabilityProjection,
+      Repo.get_by(MembaStaffEmailDeliveryProjection,
         message_id: message_id,
         recipient_id: recipient_id
       )
@@ -232,7 +232,7 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  List operator-facing delivery records for the deliveries overview.
+  List Memba-staff-facing email deliveries for the deliveries overview.
 
   Results include message subject and event timestamp fields populated from the
   messaging projections and are ordered newest event first. Pass
@@ -252,15 +252,15 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  List operator deliverability records for a projected message.
+  List Memba staff email email deliveries for a projected message.
 
   Invalid or missing message IDs return an empty list. Results are ordered by
   recipient name and ID to provide deterministic assertions for acceptance
   plumbing.
   """
-  def list_operator_deliverabilities(message_id) do
+  def list_operator_email_deliveries(message_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
-      OperatorDeliverabilityProjection
+      MembaStaffEmailDeliveryProjection
       |> where([deliverability], deliverability.message_id == ^message_id)
       |> order_by([deliverability],
         asc: deliverability.recipient_name,
@@ -274,7 +274,7 @@ defmodule Memba.Messaging do
 
   defp operator_deliveries_query(opts) do
     query =
-      from deliverability in OperatorDeliverabilityProjection,
+      from deliverability in MembaStaffEmailDeliveryProjection,
         join: message in MessageProjection,
         on: message.message_id == deliverability.message_id,
         order_by: [desc: deliverability.updated_at, desc: deliverability.delivery_id],
@@ -323,19 +323,19 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp report_delivery_delivered_command(attrs) do
+  defp report_email_delivery_delivered_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
-      {:ok, %ReportDeliveryDelivered{message_id: message_id, delivery_id: delivery_id}}
+      {:ok, %ReportEmailDeliveryDelivered{message_id: message_id, delivery_id: delivery_id}}
     end
   end
 
-  defp report_delivery_delayed_command(attrs) do
+  defp report_email_delivery_delayed_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
          {:ok, reason} <- fetch_required(attrs, :reason) do
       {:ok,
-       %ReportDeliveryDelayed{
+       %ReportEmailDeliveryDelayed{
          message_id: message_id,
          delivery_id: delivery_id,
          reason: reason
@@ -343,12 +343,12 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp report_delivery_bounced_command(attrs) do
+  defp report_email_delivery_bounced_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
          {:ok, reason} <- fetch_required(attrs, :reason) do
       {:ok,
-       %ReportDeliveryBounced{
+       %ReportEmailDeliveryBounced{
          message_id: message_id,
          delivery_id: delivery_id,
          reason: reason
@@ -356,12 +356,12 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp report_delivery_spam_complaint_command(attrs) do
+  defp report_email_delivery_spam_complaint_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id),
          {:ok, reason} <- fetch_required(attrs, :reason) do
       {:ok,
-       %ReportDeliverySpamComplaint{
+       %ReportEmailDeliverySpamComplaint{
          message_id: message_id,
          delivery_id: delivery_id,
          reason: reason
@@ -369,10 +369,10 @@ defmodule Memba.Messaging do
     end
   end
 
-  defp report_delivery_opened_command(attrs) do
+  defp report_email_delivery_opened_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),
          {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
-      {:ok, %ReportDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}
+      {:ok, %ReportEmailDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}
     end
   end
 
@@ -403,15 +403,15 @@ defmodule Memba.Messaging do
 
   defp deliver_to_provider(%SendMessage{} = command) do
     Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->
-      case DeliveryProvider.deliver(delivery_request(command, recipient)) do
+      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient)) do
         :ok -> {:cont, :ok}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
   end
 
-  defp delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
-    %DeliveryRequest{
+  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
+    %EmailDeliveryRequest{
       message_id: command.message_id,
       club_id: command.club_id,
       delivery_id: recipient.delivery_id,

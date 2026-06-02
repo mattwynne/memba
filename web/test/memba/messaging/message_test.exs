@@ -1,24 +1,24 @@
 defmodule Memba.Messaging.MessageTest do
   use ExUnit.Case, async: true
 
-  alias Memba.Messaging.Commands.ReportDeliveryBounced
-  alias Memba.Messaging.Commands.ReportDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
-  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
-  alias Memba.Messaging.Events.RecipientDeliveryBounced
-  alias Memba.Messaging.Events.RecipientDeliveryCreated
-  alias Memba.Messaging.Events.RecipientDeliveryDelayed
-  alias Memba.Messaging.Events.RecipientDeliveryDelivered
-  alias Memba.Messaging.Events.RecipientDeliveryOpened
-  alias Memba.Messaging.Events.RecipientDeliverySpamComplaint
+  alias Memba.Messaging.Events.EmailDeliveryBounced
+  alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Events.EmailDeliveryDelayed
+  alias Memba.Messaging.Events.EmailDeliveryDelivered
+  alias Memba.Messaging.Events.EmailDeliveryOpened
+  alias Memba.Messaging.Events.EmailDeliverySpamComplaint
   alias Memba.Messaging.Message
   alias Memba.Messaging.Recipient
 
   describe "execute/2 SendMessage" do
-    test "emits MessageSent and one RecipientDeliveryCreated per resolved recipient" do
+    test "emits MessageSent and one EmailDeliveryCreated per resolved recipient" do
       message_id = Ecto.UUID.generate()
       club_id = Ecto.UUID.generate()
       sender_id = Ecto.UUID.generate()
@@ -56,14 +56,14 @@ defmodule Memba.Messaging.MessageTest do
                  subject: "Trail day",
                  body: "Meet at 9am."
                },
-               %RecipientDeliveryCreated{
+               %EmailDeliveryCreated{
                  message_id: ^message_id,
                  delivery_id: ^alice_delivery_id,
                  recipient_id: ^sender_id,
                  recipient_name: "Alice Sender",
                  recipient_email: "alice@example.com"
                },
-               %RecipientDeliveryCreated{
+               %EmailDeliveryCreated{
                  message_id: ^message_id,
                  delivery_id: ^bob_delivery_id,
                  recipient_id: ^bob_id,
@@ -173,43 +173,43 @@ defmodule Memba.Messaging.MessageTest do
     test "emits delivered, delayed, bounced, spam complaint, and opened events" do
       {message, ids} = sent_message()
 
-      assert %RecipientDeliveryDelivered{
+      assert %EmailDeliveryDelivered{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              } ==
-               Message.execute(message, %ReportDeliveryDelivered{
+               Message.execute(message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
 
-      assert %RecipientDeliveryDelayed{
+      assert %EmailDeliveryDelayed{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id,
                reason: "recipient server is temporarily unavailable"
              } ==
-               Message.execute(message, %ReportDeliveryDelayed{
+               Message.execute(message, %ReportEmailDeliveryDelayed{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: " recipient server is temporarily unavailable "
                })
 
-      assert %RecipientDeliveryBounced{
+      assert %EmailDeliveryBounced{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id,
                reason: "mailbox does not exist"
              } ==
-               Message.execute(message, %ReportDeliveryBounced{
+               Message.execute(message, %ReportEmailDeliveryBounced{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "mailbox does not exist"
                })
 
-      assert %RecipientDeliverySpamComplaint{
+      assert %EmailDeliverySpamComplaint{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id,
                reason: "recipient marked the message as spam"
              } ==
-               Message.execute(message, %ReportDeliverySpamComplaint{
+               Message.execute(message, %ReportEmailDeliverySpamComplaint{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "recipient marked the message as spam"
@@ -218,14 +218,14 @@ defmodule Memba.Messaging.MessageTest do
       delivered_message =
         Message.apply(
           message,
-          %RecipientDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
+          %EmailDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
         )
 
-      assert %RecipientDeliveryOpened{
+      assert %EmailDeliveryOpened{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              } ==
-               Message.execute(delivered_message, %ReportDeliveryOpened{
+               Message.execute(delivered_message, %ReportEmailDeliveryOpened{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
@@ -235,38 +235,38 @@ defmodule Memba.Messaging.MessageTest do
       {message, ids} = sent_message()
 
       assert {:error, :invalid_message_id} =
-               Message.execute(message, %ReportDeliveryDelivered{
+               Message.execute(message, %ReportEmailDeliveryDelivered{
                  message_id: nil,
                  delivery_id: ids.delivery_id
                })
 
       assert {:error, :invalid_delivery_id} =
-               Message.execute(message, %ReportDeliveryDelivered{
+               Message.execute(message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: "not-a-uuid"
                })
 
       assert {:error, :invalid_reason} =
-               Message.execute(message, %ReportDeliveryDelayed{
+               Message.execute(message, %ReportEmailDeliveryDelayed{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "  "
                })
 
       assert {:error, :message_not_sent} =
-               Message.execute(%Message{}, %ReportDeliveryDelivered{
+               Message.execute(%Message{}, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
 
       assert {:error, :message_id_mismatch} =
-               Message.execute(message, %ReportDeliveryDelivered{
+               Message.execute(message, %ReportEmailDeliveryDelivered{
                  message_id: Ecto.UUID.generate(),
                  delivery_id: ids.delivery_id
                })
 
       assert {:error, :unknown_delivery} =
-               Message.execute(message, %ReportDeliveryDelivered{
+               Message.execute(message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: Ecto.UUID.generate()
                })
@@ -276,27 +276,27 @@ defmodule Memba.Messaging.MessageTest do
       {message, ids} = sent_message()
 
       delayed_message =
-        Message.apply(message, %RecipientDeliveryDelayed{
+        Message.apply(message, %EmailDeliveryDelayed{
           message_id: ids.message_id,
           delivery_id: ids.delivery_id,
           reason: "recipient server is temporarily unavailable"
         })
 
-      assert %RecipientDeliveryDelivered{} =
-               Message.execute(delayed_message, %ReportDeliveryDelivered{
+      assert %EmailDeliveryDelivered{} =
+               Message.execute(delayed_message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
 
-      assert %RecipientDeliveryBounced{} =
-               Message.execute(delayed_message, %ReportDeliveryBounced{
+      assert %EmailDeliveryBounced{} =
+               Message.execute(delayed_message, %ReportEmailDeliveryBounced{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "mailbox does not exist"
                })
 
-      assert %RecipientDeliverySpamComplaint{} =
-               Message.execute(delayed_message, %ReportDeliverySpamComplaint{
+      assert %EmailDeliverySpamComplaint{} =
+               Message.execute(delayed_message, %ReportEmailDeliverySpamComplaint{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "recipient marked the message as spam"
@@ -307,7 +307,7 @@ defmodule Memba.Messaging.MessageTest do
       {message, ids} = sent_message()
 
       assert {:error, :invalid_delivery_status_transition} =
-               Message.execute(message, %ReportDeliveryOpened{
+               Message.execute(message, %ReportEmailDeliveryOpened{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
@@ -315,11 +315,11 @@ defmodule Memba.Messaging.MessageTest do
       delivered_message =
         Message.apply(
           message,
-          %RecipientDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
+          %EmailDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
         )
 
       assert {:error, :invalid_delivery_status_transition} =
-               Message.execute(delivered_message, %ReportDeliveryDelayed{
+               Message.execute(delivered_message, %ReportEmailDeliveryDelayed{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "recipient server is temporarily unavailable"
@@ -328,24 +328,24 @@ defmodule Memba.Messaging.MessageTest do
       opened_message =
         Message.apply(
           delivered_message,
-          %RecipientDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
+          %EmailDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
         )
 
       assert {:error, :invalid_delivery_status_transition} =
-               Message.execute(opened_message, %ReportDeliveryDelivered{
+               Message.execute(opened_message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
 
       bounced_message =
-        Message.apply(message, %RecipientDeliveryBounced{
+        Message.apply(message, %EmailDeliveryBounced{
           message_id: ids.message_id,
           delivery_id: ids.delivery_id,
           reason: "mailbox does not exist"
         })
 
       assert {:error, :invalid_delivery_status_transition} =
-               Message.execute(bounced_message, %ReportDeliveryDelivered{
+               Message.execute(bounced_message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
@@ -357,31 +357,31 @@ defmodule Memba.Messaging.MessageTest do
       delivered_message =
         Message.apply(
           message,
-          %RecipientDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
+          %EmailDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
         )
 
       assert [] =
-               Message.execute(delivered_message, %ReportDeliveryDelivered{
+               Message.execute(delivered_message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
 
       delayed_message =
-        Message.apply(message, %RecipientDeliveryDelayed{
+        Message.apply(message, %EmailDeliveryDelayed{
           message_id: ids.message_id,
           delivery_id: ids.delivery_id,
           reason: "recipient server is temporarily unavailable"
         })
 
       assert [] =
-               Message.execute(delayed_message, %ReportDeliveryDelayed{
+               Message.execute(delayed_message, %ReportEmailDeliveryDelayed{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "recipient server is temporarily unavailable"
                })
 
       assert {:error, :conflicting_delivery_status_reason} =
-               Message.execute(delayed_message, %ReportDeliveryDelayed{
+               Message.execute(delayed_message, %ReportEmailDeliveryDelayed{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "different temporary failure"
@@ -390,18 +390,18 @@ defmodule Memba.Messaging.MessageTest do
       opened_message =
         Message.apply(
           delivered_message,
-          %RecipientDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
+          %EmailDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
         )
 
       assert [] =
-               Message.execute(opened_message, %ReportDeliveryOpened{
+               Message.execute(opened_message, %ReportEmailDeliveryOpened{
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id
                })
     end
   end
 
-  test "apply/2 records message identity and recipient delivery state" do
+  test "apply/2 records message identity and email delivery state" do
     message_id = Ecto.UUID.generate()
     club_id = Ecto.UUID.generate()
     sender_id = Ecto.UUID.generate()
@@ -416,7 +416,7 @@ defmodule Memba.Messaging.MessageTest do
         subject: "Trail day",
         body: "Meet at 9am."
       })
-      |> Message.apply(%RecipientDeliveryCreated{
+      |> Message.apply(%EmailDeliveryCreated{
         message_id: message_id,
         delivery_id: delivery_id,
         recipient_id: sender_id,
@@ -429,11 +429,11 @@ defmodule Memba.Messaging.MessageTest do
              club_id: ^club_id,
              sender_id: ^sender_id,
              delivery_statuses: delivery_statuses,
-             recipient_delivery_ids: recipient_delivery_ids,
+             email_delivery_ids: email_delivery_ids,
              recipient_ids: recipient_ids
            } = message
 
-    assert MapSet.equal?(recipient_delivery_ids, MapSet.new([delivery_id]))
+    assert MapSet.equal?(email_delivery_ids, MapSet.new([delivery_id]))
     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id]))
     assert delivery_statuses == %{delivery_id => %{status: :sent, reason: nil}}
   end
@@ -444,7 +444,7 @@ defmodule Memba.Messaging.MessageTest do
 
     assert %{^delivery_id => %{status: :delivered, reason: nil}} =
              message
-             |> Message.apply(%RecipientDeliveryDelivered{
+             |> Message.apply(%EmailDeliveryDelivered{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              })
@@ -452,7 +452,7 @@ defmodule Memba.Messaging.MessageTest do
 
     assert %{^delivery_id => %{status: :delayed, reason: "temporary failure"}} =
              message
-             |> Message.apply(%RecipientDeliveryDelayed{
+             |> Message.apply(%EmailDeliveryDelayed{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id,
                reason: "temporary failure"
@@ -461,11 +461,11 @@ defmodule Memba.Messaging.MessageTest do
 
     assert %{^delivery_id => %{status: :opened, reason: nil}} =
              message
-             |> Message.apply(%RecipientDeliveryDelivered{
+             |> Message.apply(%EmailDeliveryDelivered{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              })
-             |> Message.apply(%RecipientDeliveryOpened{
+             |> Message.apply(%EmailDeliveryOpened{
                message_id: ids.message_id,
                delivery_id: ids.delivery_id
              })
@@ -507,7 +507,7 @@ defmodule Memba.Messaging.MessageTest do
         subject: "Trail day",
         body: "Meet at 9am."
       })
-      |> Message.apply(%RecipientDeliveryCreated{
+      |> Message.apply(%EmailDeliveryCreated{
         message_id: message_id,
         delivery_id: delivery_id,
         recipient_id: sender_id,

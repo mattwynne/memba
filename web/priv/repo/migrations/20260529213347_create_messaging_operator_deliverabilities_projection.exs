@@ -2,7 +2,7 @@ defmodule Memba.Repo.Migrations.CreateMessagingOperatorDeliverabilitiesProjectio
   use Ecto.Migration
 
   def change do
-    create table(:messaging_operator_deliverabilities, primary_key: false) do
+    create table(:messaging_memba_staff_email_deliveries, primary_key: false) do
       add :delivery_id, :uuid, primary_key: true
       add :message_id, :uuid, null: false
       add :recipient_id, :uuid, null: false
@@ -15,8 +15,8 @@ defmodule Memba.Repo.Migrations.CreateMessagingOperatorDeliverabilitiesProjectio
       timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:messaging_operator_deliverabilities, [:message_id])
-    create index(:messaging_operator_deliverabilities, [:recipient_id])
-    create unique_index(:messaging_operator_deliverabilities, [:message_id, :recipient_id])
+    create index(:messaging_memba_staff_email_deliveries, [:message_id])
+    create index(:messaging_memba_staff_email_deliveries, [:recipient_id])
+    create unique_index(:messaging_memba_staff_email_deliveries, [:message_id, :recipient_id])
   end
 end

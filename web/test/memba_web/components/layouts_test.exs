@@ -33,9 +33,9 @@ defmodule MembaWeb.LayoutsTest do
       """)
 
     assert_selector(html, "#admin-layout[data-surface='admin']")
-    assert_selector(html, "a[aria-label='Memba admin home'][href='/admin/clubs']")
-    assert_selector(html, "nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
-    assert_selector(html, "nav[aria-label='Staff admin navigation'] a[href='/admin/deliveries']")
+    assert_selector(html, "a[aria-label='Memba staff home'][href='/admin/clubs']")
+    assert_selector(html, "nav[aria-label='Memba staff navigation'] a[href='/admin/clubs']")
+    assert_selector(html, "nav[aria-label='Memba staff navigation'] a[href='/admin/deliveries']")
     assert_selector(html, "form#admin-sign-out-form[action='/auth'][method='post']")
     assert_selector(html, "input[name='_method'][value='delete']")
     assert_selector(html, "button#admin-sign-out-button[type='submit']")

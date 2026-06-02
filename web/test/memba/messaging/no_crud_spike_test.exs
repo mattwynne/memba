@@ -9,13 +9,13 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert source =~ "def send_club_message("
     assert source =~ "def get_message("
     assert source =~ "def list_messages_for_club("
-    assert source =~ "def get_recipient_delivery("
-    assert source =~ "def get_member_receipt("
-    assert source =~ "def get_operator_deliverability("
+    assert source =~ "def get_email_delivery("
+    assert source =~ "def get_member_email_delivery("
+    assert source =~ "def get_memba_staff_email_delivery("
     assert source =~ "def list_recipient_deliveries("
-    assert source =~ "def list_member_receipts("
+    assert source =~ "def list_member_email_deliverys("
     assert source =~ "def list_operator_deliveries("
-    assert source =~ "def list_operator_deliverabilities("
+    assert source =~ "def list_operator_email_deliveries("
 
     list_functions =
       ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/
@@ -25,9 +25,9 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert list_functions == [
              "list_messages_for_club",
              "list_recipient_deliveries",
-             "list_member_receipts",
+             "list_member_email_deliverys",
              "list_operator_deliveries",
-             "list_operator_deliverabilities"
+             "list_operator_email_deliveries"
            ]
 
     refute source =~ ~r/\bdef\s+(create|update|delete|change)_[a-zA-Z0-9_]+\b/
@@ -58,17 +58,17 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
 
     assert Enum.any?(
              migration_sources,
-             &String.contains?(&1, "create table(:messaging_recipient_deliveries")
+             &String.contains?(&1, "create table(:messaging_email_deliveries")
            )
 
     assert Enum.any?(
              migration_sources,
-             &String.contains?(&1, "create table(:messaging_member_receipts")
+             &String.contains?(&1, "create table(:messaging_member_email_deliveries")
            )
 
     assert Enum.any?(
              migration_sources,
-             &String.contains?(&1, "create table(:messaging_operator_deliverabilities")
+             &String.contains?(&1, "create table(:messaging_memba_staff_email_deliveries")
            )
 
     refute Enum.any?(migration_sources, fn source ->

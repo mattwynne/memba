@@ -22,15 +22,15 @@ defmodule Memba.Accounts.AuthEmailTest do
     :ok
   end
 
-  test "builds and sends a Postmark-streamed magic-link email" do
+  test "builds and sends a Postmark-streamed sign-in-link email" do
     Application.put_env(:memba, AuthEmail,
       from: "auth@mail.memba.io",
       message_stream: "outbound-authentication"
     )
 
-    callback_url = "https://app.memba.io/auth/magic/token-123?return_to=%2Fadmin"
+    callback_url = "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin"
 
-    assert :ok = AuthEmail.deliver_magic_link(" ALICE@EXAMPLE.COM ", callback_url)
+    assert :ok = AuthEmail.deliver_sign_in_link(" ALICE@EXAMPLE.COM ", callback_url)
 
     assert_received {:email, %Swoosh.Email{} = email}
 
@@ -43,7 +43,7 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert email.text_body =~ "This link expires in 15 minutes."
 
     assert email.html_body =~ "Sign in to Memba"
-    assert email.html_body =~ "https://app.memba.io/auth/magic/token-123?return_to=%2Fadmin"
+    assert email.html_body =~ "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin"
     assert email.html_body =~ "This link expires in 15 minutes."
 
     assert email.provider_options == %{
@@ -60,9 +60,9 @@ defmodule Memba.Accounts.AuthEmailTest do
     )
 
     assert :ok =
-             AuthEmail.deliver_magic_link(
+             AuthEmail.deliver_sign_in_link(
                "matt@memba.io",
-               "http://localhost:4000/auth/magic/token"
+               "http://localhost:4000/auth/sign-in/token"
              )
 
     assert_received {:email, %Swoosh.Email{} = email}
@@ -76,9 +76,9 @@ defmodule Memba.Accounts.AuthEmailTest do
     Application.put_env(:memba, AuthEmail, from: "auth@mail.memba.io")
 
     assert {:error, {:auth_email_configuration_error, message}} =
-             AuthEmail.deliver_magic_link(
+             AuthEmail.deliver_sign_in_link(
                "alice@example.com",
-               "https://app.memba.io/auth/magic/token"
+               "https://app.memba.io/auth/sign-in/token"
              )
 
     assert message =~ "Auth email Postmark delivery is enabled"
@@ -102,9 +102,9 @@ defmodule Memba.Accounts.AuthEmailTest do
     )
 
     assert {:error, {:auth_email_delivery_error, {401, %{"Message" => "Invalid server token"}}}} =
-             AuthEmail.deliver_magic_link(
+             AuthEmail.deliver_sign_in_link(
                "alice@example.com",
-               "https://app.memba.io/auth/magic/token"
+               "https://app.memba.io/auth/sign-in/token"
              )
 
     assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
@@ -117,10 +117,10 @@ defmodule Memba.Accounts.AuthEmailTest do
     )
 
     assert {:error, :invalid_email} =
-             AuthEmail.deliver_magic_link("  ", "https://app.memba.io/auth/magic/token")
+             AuthEmail.deliver_sign_in_link("  ", "https://app.memba.io/auth/sign-in/token")
 
     assert {:error, :invalid_callback_url} =
-             AuthEmail.deliver_magic_link("alice@example.com", "  ")
+             AuthEmail.deliver_sign_in_link("alice@example.com", "  ")
 
     assert_no_email_sent()
   end

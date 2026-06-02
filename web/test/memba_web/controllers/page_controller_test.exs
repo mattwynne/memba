@@ -4,22 +4,30 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
-  alias Memba.Messaging.Projections.OperatorDeliverability
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)
 
-    assert response =~ "Run your club, not your spreadsheet."
-    assert response =~ "Red Donkey Technology Corp"
-    assert response =~ "https://donkey.red"
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Volunteering shouldn’t feel like work."
+    assert response =~ "Kootenay Mountaineering Club"
+    assert response =~ "Built with"
+    assert response =~ "in Nelson, BC."
+    refute response =~ "❤️"
+    refute response =~ "rehearsal-room door"
+    refute response =~ "One price, paid yearly."
+
+    assert html |> LazyHTML.query("a[href='/get-started']") |> Enum.any?()
   end
 
-  test "GET / presents sign-in links instead of staff admin entry points", %{conn: conn} do
+  test "GET / presents sign-in links instead of Memba staff entry points", %{conn: conn} do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
@@ -29,10 +37,11 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.empty?()
 
     assert html |> LazyHTML.query("header a[href='/auth']") |> Enum.any?()
-    assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.any?()
+    assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.empty?()
+    assert html |> LazyHTML.query("main a[href='/get-started']") |> Enum.any?()
     assert response =~ "Sign in"
-    refute response =~ "Internal staff admin"
-    refute response =~ "Open internal staff admin"
+    refute response =~ "Internal Memba staff"
+    refute response =~ "Open internal Memba staff"
     refute response =~ ~s(href="/admin/clubs")
     refute response =~ ~s(href="/clubs")
   end
@@ -43,7 +52,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/")
 
     response = html_response(conn, 200)
@@ -53,7 +62,7 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "You’re a member of 2 clubs"
     assert response =~ "Alpine Club"
     assert response =~ "Bridge Club"
-    refute response =~ "Run your club, not your spreadsheet."
+    refute response =~ "Volunteering shouldn’t feel like work."
 
     for club <- [first_club, second_club] do
       assert html
@@ -81,7 +90,7 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
   end
 
-  test "GET / with a club_id shows a public club marketing page to logged-out visitors", %{
+  test "GET / with a club_id shows a public public club page to logged-out visitors", %{
     conn: conn
   } do
     club = create_club(name: "Alpine Club")
@@ -95,10 +104,10 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Members can sign in to see club updates"
 
     assert html
-           |> LazyHTML.query("#club-marketing-page[data-club-id='#{club.club_id}']")
+           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
            |> Enum.any?()
 
-    assert html |> LazyHTML.query("a#club-marketing-sign-in-link[href='/auth']") |> Enum.any?()
+    assert html |> LazyHTML.query("a#public-club-page-sign-in-link[href='/auth']") |> Enum.any?()
     refute response =~ "Send a club message"
     refute response =~ "Signed in as"
   end
@@ -124,7 +133,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/?#{[club_id: club.club_id]}")
 
     response = html_response(conn, 200)
@@ -231,22 +240,22 @@ defmodule MembaWeb.PageControllerTest do
       )
 
     alice_receipt =
-      create_member_receipt(
+      create_member_email_delivery(
         message_id: message.message_id,
         recipient_id: alice.person_id,
         recipient_name: "Alice Adams",
-        receipt_status: "sent"
+        status: "sent"
       )
 
     bob_receipt =
-      create_member_receipt(
+      create_member_email_delivery(
         message_id: message.message_id,
         recipient_id: bob.person_id,
         recipient_name: "Bob Builder",
-        receipt_status: "delivered"
+        status: "delivered"
       )
 
-    create_operator_deliverability(
+    create_memba_staff_email_delivery(
       delivery_id: bob_receipt.delivery_id,
       message_id: message.message_id,
       recipient_id: bob.person_id,
@@ -258,7 +267,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
     response = html_response(conn, 200)
@@ -331,7 +340,7 @@ defmodule MembaWeb.PageControllerTest do
     conn = get(conn, return_path)
 
     assert redirected_to(conn) == ~p"/auth"
-    assert get_session(conn, UserAuth.return_to_session_key()) == return_path
+    assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
   end
 
   test "GET /messages/:message_id forbids signed-in users outside the requested club", %{
@@ -350,7 +359,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "pat@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@example.com"})
       |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
 
     assert response(conn, 403) == "Forbidden"
@@ -374,7 +383,7 @@ defmodule MembaWeb.PageControllerTest do
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> get(~p"/messages/#{message.message_id}?#{[club_id: club.club_id]}")
 
     response = html_response(conn, 404)
@@ -383,10 +392,10 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "This should stay hidden"
   end
 
-  test "GET / shows an Admin link for signed-in Memba staff", %{conn: conn} do
+  test "GET / shows a Memba staff link for signed-in Memba staff", %{conn: conn} do
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "Pat@Memba.IO"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "Pat@Memba.IO"})
       |> get(~p"/")
 
     response = html_response(conn, 200)
@@ -399,12 +408,12 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
   end
 
-  test "GET / shows both clubs and Admin for signed-in staff members", %{conn: conn} do
+  test "GET / shows both clubs and Memba staff access for signed-in staff members", %{conn: conn} do
     club = create_active_member(email: "pat@memba.io", club_name: "Staff Tennis Club")
 
     conn =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "pat@memba.io"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
       |> get(~p"/")
 
     response = html_response(conn, 200)
@@ -425,6 +434,19 @@ defmodule MembaWeb.PageControllerTest do
   test "GET /about", %{conn: conn} do
     conn = get(conn, ~p"/about")
     assert html_response(conn, 200) =~ "Membership software for clubs that run on trust."
+  end
+
+  test "GET /get-started shows invite-only contact page", %{conn: conn} do
+    conn = get(conn, ~p"/get-started")
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Memba is invite-only right now."
+    assert response =~ "Want to try Memba with your club?"
+
+    assert html
+           |> LazyHTML.query("a#contact-us-link[href^='mailto:hello@memba.io']")
+           |> Enum.any?()
   end
 
   test "GET /terms", %{conn: conn} do
@@ -484,18 +506,18 @@ defmodule MembaWeb.PageControllerTest do
     })
   end
 
-  defp create_member_receipt(attrs) do
-    Repo.insert!(%MemberReceipt{
+  defp create_member_email_delivery(attrs) do
+    Repo.insert!(%MemberEmailDelivery{
       delivery_id: Ecto.UUID.generate(),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+      status: Keyword.fetch!(attrs, :status)
     })
   end
 
-  defp create_operator_deliverability(attrs) do
-    Repo.insert!(%OperatorDeliverability{
+  defp create_memba_staff_email_delivery(attrs) do
+    Repo.insert!(%MembaStaffEmailDelivery{
       delivery_id: Keyword.fetch!(attrs, :delivery_id),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
