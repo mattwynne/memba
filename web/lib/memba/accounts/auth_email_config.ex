@@ -8,15 +8,18 @@ defmodule Memba.Accounts.AuthEmailConfig do
   """
 
   @enforce_keys [:from, :message_stream]
-  defstruct [:server_token, :from, :message_stream]
+  defstruct [:provider, :api_key, :server_token, :from, :message_stream]
 
   @provider_env "MEMBA_AUTH_EMAIL_PROVIDER"
   @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
+  @resend_api_key_env "MEMBA_RESEND_API_KEY"
   @from_address_env "MEMBA_AUTH_EMAIL_FROM_ADDRESS"
   @message_stream_env "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
 
   @type t :: %__MODULE__{
-          server_token: String.t(),
+          provider: :postmark | :resend | nil,
+          api_key: String.t() | nil,
+          server_token: String.t() | nil,
           from: String.t(),
           message_stream: String.t()
         }
@@ -30,6 +33,7 @@ defmodule Memba.Accounts.AuthEmailConfig do
     case value |> String.trim() |> String.downcase() do
       "" -> :default
       "postmark" -> {:ok, :postmark}
+      "resend" -> {:ok, :resend}
       provider -> {:error, unsupported_provider_message(provider)}
     end
   end
@@ -52,13 +56,23 @@ defmodule Memba.Accounts.AuthEmailConfig do
   Read and validate required auth email Postmark settings from environment.
   """
   def from_env(get_env \\ &System.get_env/1) when is_function(get_env, 1) do
+    from_env(:postmark, get_env)
+  end
+
+  @doc """
+  Read and validate required auth email settings for a provider from environment.
+  """
+  def from_env(provider, get_env)
+      when provider in [:postmark, :resend] and is_function(get_env, 1) do
     validate(
       %{
         @server_token_env => get_env.(@server_token_env),
+        @resend_api_key_env => get_env.(@resend_api_key_env),
         @from_address_env => get_env.(@from_address_env),
         @message_stream_env => get_env.(@message_stream_env)
       },
-      required: postmark_config_keys(),
+      provider: provider,
+      required: provider_config_keys(provider),
       source: :environment
     )
   end
@@ -67,7 +81,12 @@ defmodule Memba.Accounts.AuthEmailConfig do
   Read and validate required auth email Postmark settings from environment or raise.
   """
   def from_env!(get_env \\ &System.get_env/1) when is_function(get_env, 1) do
-    case from_env(get_env) do
+    from_env!(:postmark, get_env)
+  end
+
+  def from_env!(provider, get_env)
+      when provider in [:postmark, :resend] and is_function(get_env, 1) do
+    case from_env(provider, get_env) do
       {:ok, config} -> config
       {:error, message} -> raise ArgumentError, message
     end
@@ -83,9 +102,11 @@ defmodule Memba.Accounts.AuthEmailConfig do
     validate(
       %{
         @server_token_env => Keyword.get(mailer_config, :api_key),
+        @resend_api_key_env => Keyword.get(mailer_config, :api_key),
         @from_address_env => Keyword.get(auth_email_config, :from),
         @message_stream_env => Keyword.get(auth_email_config, :message_stream)
       },
+      provider: Keyword.get(auth_email_config, :provider),
       required: email_config_keys(),
       source: :application
     )
@@ -120,6 +141,8 @@ defmodule Memba.Accounts.AuthEmailConfig do
       [] ->
         {:ok,
          %__MODULE__{
+           provider: opts[:provider],
+           api_key: Map.get(normalized_values, @resend_api_key_env),
            server_token: Map.get(normalized_values, @server_token_env),
            from: Map.fetch!(normalized_values, @from_address_env),
            message_stream: Map.fetch!(normalized_values, @message_stream_env)
@@ -139,11 +162,12 @@ defmodule Memba.Accounts.AuthEmailConfig do
 
   defp normalize(_value), do: nil
 
-  defp postmark_config_keys, do: [@server_token_env | email_config_keys()]
+  defp provider_config_keys(:postmark), do: [@server_token_env | email_config_keys()]
+  defp provider_config_keys(:resend), do: [@resend_api_key_env | email_config_keys()]
   defp email_config_keys, do: [@from_address_env, @message_stream_env]
 
   defp missing_config_message(missing, required_config_keys, source) do
-    "Auth email Postmark delivery is enabled, but required #{source_label(source)} " <>
+    "Auth email delivery is enabled, but required #{source_label(source)} " <>
       "configuration is missing: #{Enum.join(missing, ", ")}. " <>
       "Set #{Enum.join(required_config_keys, ", ")}, or leave " <>
       "#{@provider_env} unset to skip real auth email delivery."
@@ -154,6 +178,6 @@ defmodule Memba.Accounts.AuthEmailConfig do
 
   defp unsupported_provider_message(provider) do
     "Unsupported #{@provider_env}=#{inspect(provider)}. Set #{@provider_env}=postmark " <>
-      "to enable real auth email delivery, or leave it unset."
+      "or #{@provider_env}=resend to enable real auth email delivery, or leave it unset."
   end
 end

@@ -45,6 +45,25 @@ case Memba.Messaging.EmailDeliveryProviderConfig.provider_override!(
     config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark, postmark_provider_config
     config :swoosh, :api_client, Swoosh.ApiClient.Req
 
+  Memba.Messaging.EmailDeliveryProviders.Resend = email_delivery_provider ->
+    resend_config = Memba.Messaging.EmailDeliveryProviders.ResendConfig.from_env!()
+
+    config :memba, :messaging_email_delivery_provider, email_delivery_provider
+
+    config :memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Resend,
+      api_key: resend_config.api_key
+
+    resend_provider_config =
+      if resend_config.reply_to do
+        [from: resend_config.from, reply_to: resend_config.reply_to]
+      else
+        [from: resend_config.from]
+      end
+
+    config :memba, Memba.Messaging.EmailDeliveryProviders.Resend, resend_provider_config
+    config :swoosh, :api_client, Swoosh.ApiClient.Req
+
   email_delivery_provider ->
     config :memba, :messaging_email_delivery_provider, email_delivery_provider
 end
@@ -56,13 +75,28 @@ case Memba.Accounts.AuthEmailConfig.provider_override!(
     :ok
 
   :postmark ->
-    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!()
+    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!(:postmark, &System.get_env/1)
 
     config :memba, Memba.Mailer,
       adapter: Swoosh.Adapters.Postmark,
       api_key: auth_email_config.server_token
 
     config :memba, Memba.Accounts.AuthEmail,
+      provider: :postmark,
+      from: auth_email_config.from,
+      message_stream: auth_email_config.message_stream
+
+    config :swoosh, :api_client, Swoosh.ApiClient.Req
+
+  :resend ->
+    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!(:resend, &System.get_env/1)
+
+    config :memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Resend,
+      api_key: auth_email_config.api_key
+
+    config :memba, Memba.Accounts.AuthEmail,
+      provider: :resend,
       from: auth_email_config.from,
       message_stream: auth_email_config.message_stream
 

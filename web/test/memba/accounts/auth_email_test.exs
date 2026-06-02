@@ -24,6 +24,7 @@ defmodule Memba.Accounts.AuthEmailTest do
 
   test "builds and sends a Postmark-streamed sign-in-link email" do
     Application.put_env(:memba, AuthEmail,
+      provider: :postmark,
       from: "auth@mail.memba.io",
       message_stream: "outbound-authentication"
     )
@@ -48,6 +49,32 @@ defmodule Memba.Accounts.AuthEmailTest do
 
     assert email.provider_options == %{
              message_stream: "outbound-authentication"
+           }
+  end
+
+  test "builds and sends a Resend-tagged sign-in-link email" do
+    Application.put_env(:memba, AuthEmail,
+      provider: :resend,
+      from: "auth@mail.memba.io",
+      message_stream: "auth"
+    )
+
+    assert :ok =
+             AuthEmail.deliver_sign_in_link(
+               " ALICE@EXAMPLE.COM ",
+               "https://app.memba.io/auth/sign-in/token-123"
+             )
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.from == {"", "auth@mail.memba.io"}
+    assert email.to == [{"", "alice@example.com"}]
+
+    assert email.provider_options == %{
+             tags: [
+               %{name: "memba_email_kind", value: "auth_sign_in_link"},
+               %{name: "memba_auth_email_stream", value: "auth"}
+             ]
            }
   end
 
@@ -81,7 +108,7 @@ defmodule Memba.Accounts.AuthEmailTest do
                "https://app.memba.io/auth/sign-in/token"
              )
 
-    assert message =~ "Auth email Postmark delivery is enabled"
+    assert message =~ "Auth email delivery is enabled"
     assert message =~ "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
     refute message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
 

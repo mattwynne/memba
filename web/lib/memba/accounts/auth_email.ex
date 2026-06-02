@@ -2,8 +2,8 @@ defmodule Memba.Accounts.AuthEmail do
   @moduledoc """
   Sign-in-link authentication email delivery.
 
-  Builds concise text and HTML sign-in-link emails, assigns the configured
-  Postmark message stream, and hands delivery to `Memba.Mailer`.
+  Builds concise text and HTML sign-in-link emails, assigns provider-specific
+  categorisation, and hands delivery to `Memba.Mailer`.
   """
 
   import Swoosh.Email
@@ -56,7 +56,18 @@ defmodule Memba.Accounts.AuthEmail do
     |> subject(@subject)
     |> text_body(text_body(callback_url))
     |> html_body(html_body(callback_url))
-    |> put_provider_option(:message_stream, config.message_stream)
+    |> put_provider_options(config)
+  end
+
+  defp put_provider_options(email, %AuthEmailConfig{provider: :resend}) do
+    put_provider_option(email, :tags, [
+      %{name: "memba_email_kind", value: "auth_sign_in_link"},
+      %{name: "memba_auth_email_stream", value: "auth"}
+    ])
+  end
+
+  defp put_provider_options(email, %AuthEmailConfig{} = config) do
+    put_provider_option(email, :message_stream, config.message_stream)
   end
 
   defp text_body(callback_url) do
