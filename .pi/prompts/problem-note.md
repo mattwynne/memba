@@ -35,7 +35,8 @@ Guidelines:
 - Keep the note factual and user-facing.
 - Do not design the full solution unless the supplied problem already includes obvious expected outcomes.
 - If the supplied context is enough, write the note without asking follow-up questions.
-- If essential facts are missing, ask only for those facts.
+- If the supplied problem is unclear, ambiguous, or lacks enough user-facing context to write a factual note, ask for clarification before creating the file.
+- Ask only for essential missing facts or context; do not invent details.
 - Do not edit application code.
 - Do not run `dev check` for this docs-only note.
 - Commit only the new problem note. Leave unrelated working-tree changes untouched.
