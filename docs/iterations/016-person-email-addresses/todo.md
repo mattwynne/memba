@@ -18,4 +18,4 @@
 - [x] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
 - [x] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
 - [x] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
-- [ ] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
+- [x] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
