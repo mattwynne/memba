@@ -1034,7 +1034,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T22:22:07.167077251Z",
-  "last_event_at": "2026-06-02T22:22:42.465962865Z",
+  "last_event_at": "2026-06-02T22:24:38.636964241Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1938,9 +1938,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 99,
       "checkpoint": {
-        "timestamp": "2026-06-02T22:24:35.515143370Z",
+        "timestamp": "2026-06-02T22:24:38.611139617Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -1955,6 +1955,269 @@
         ],
         "node_retries": {},
         "context_values": {
+          "response.claude_review": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan could make more explicit which Postmark capabilities are already implemented (outbound member messages from iteration 008), which need implementation (inbound email), and which need verification/testing (auth email, rejection email paths). This is inferable from \"verify or add\" language but not completely explicit.\n\n2. **Dependency precision**: The plan says \"start after iteration 019\" but could be more explicit: \"This iteration cannot start until iteration 019 is delivered AND inbound email with Resend has been observed working in production.\" The background implies this, but stating it explicitly in the implementation plan would remove ambiguity.\n\n3. **Effort indication**: The plan doesn't include an estimate or complexity signal. This appears to be a 2-4 day technical slice but isn't stated.\n\nThese improvements would enhance clarity but do not block implementation.\n\n## Smallest Viable Iteration\n\n**This plan already represents the smallest viable iteration for the stated goal.**\n\nThe goal is enabling Matt to cut production email over to Postmark with a documented runbook and rollback path. To achieve this safely, the iteration must:\n\n- Add Postmark inbound email support (the main new capability)\n- Verify Postmark outbound member messages still work correctly\n- Verify Postmark auth email configuration and behavior\n- Verify rejection emails work through Postmark\n- Keep Resend as a tested fallback\n- Document the complete cutover and rollback procedures\n\nAny smaller scope would leave an incomplete migration that cannot be safely executed. You cannot migrate only some email types while maintaining the member-facing address `<club-slug>@clubs.memba.io`.\n\nThe plan correctly excludes actual production changes (out of scope for delivery) and new features (out of scope for this migration).\n\n## Required Plan Edits\n\n**None.**\n\nThe plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe plan includes a comprehensive validation strategy (lines 121-147):\n\n**Automated validation:**\n- Focused tests for Postmark inbound parsing/translation\n- Regression tests for provider-neutral API (iteration 019)\n- Regression tests for Resend fallback\n- Tests for Postmark outbound metadata and delivery-status correlation\n- Tests for Postmark auth configuration and error handling\n- `dev check` passing\n\n**Manual validation:**\nA 7-step smoke test covering:\n1. Postmark dashboard/DNS/webhook configuration verification\n2. Production secrets correctly set for Postmark\n3. Magic-link auth email delivery and sign-in flow\n4. Outbound member message delivery and delivery-status webhook updates\n5. Inbound club messages from active members\n6. Rejection emails for unsupported senders/attachments\n7. Rollback path verification (Resend secrets/webhooks still available)\n\nThis validation plan is sufficient to prove:\n- All email types work through Postmark\n- Existing behavior is preserved\n- Resend fallback remains functional\n- Matt can safely perform the production cutover\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✓\n\n**Goal:** \"After this iteration, Matt can manually cut production over to Postmark for member-message outbound delivery, inbound club-message email, rejection emails, and magic-link authentication using a documented runbook, while keeping Resend available as a rollback/fallback provider.\"\n\n- Clear beneficiary: Matt (operator)\n- Clear outcome: Can perform manual production cutover\n- Explicit about what is enabled vs. executed\n- User-facing behavior unchanged (technical/engineering iteration)\n\n### 2. Scope Focus ✓\n\n**In scope:**\n- Postmark inbound email support for club messages\n- Provider-neutral translation of Postmark payloads\n- Preservation of iteration 019 behaviors (authorization, rejection, idempotency)\n- Outbound member-message delivery via Postmark (verification)\n- Magic-link auth via Postmark (verification)\n- Rejection email handling via Postmark\n- Complete operational documentation and runbook\n- Automated tests\n- Resend fallback preservation\n\n**Out of scope:**\n- Actual production cutover (Matt performs manually)\n- Business rule changes\n- New inbound email features\n- Removing Resend support\n- Webhook authentication expansion\n\nThe scope is coherent, focused on migration enablement, and appropriately sized. It addresses all email types in a single slice to enable a complete migration while keeping behavior unchanged.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n\n**Acceptance criteria** (lines 61-120): Concrete, testable, and comprehensive:\n- Postmark inbound parsing/translation works\n- Sender authorization preserved\n- Attachments/non-plain-text rejected appropriately\n- Idempotency handling works\n- Provider selection configurable for all email types\n- Configuration failures are clear\n- Resend remains selectable for rollback\n- Documentation specifies exact variables/secrets/setup\n- Manual smoke tests documented\n- Local dev remains deterministic\n- `dev check` passes\n\nCovers happy paths, edge cases, error states, configuration, and rollback.\n\n**BDD decision** (lines 001-060): Explicitly addressed with clear rationale:\n- Iteration type: Technical/engineering\n- User behavior unchanged\n- Existing acceptance scenarios (iteration 019) already express the behavior\n- Provider plumbing better tested with integration/unit tests\n- No new Gherkin scenarios needed\n\nThis decision is appropriate and well-justified.\n\n**Business decisions** (lines 061-120): All resolved during planning:\n- Migrate all email paths to Postmark (not just club messages)\n- Keep `<club-slug>@clubs.memba.io` unchanged\n- Delivery prepares code/docs only; Matt performs cutover manually\n- Preserve Resend as tested fallback\n\n### 4. Implementation Plan and Technical Decisions ✓\n\n**Implementation plan** (lines 061-120): 16 detailed, ordered steps:\n1. Start after iteration 019 completion and observation\n2. Inspect iteration 019's provider-neutral API/idempotency/tests\n3. Inspect existing Postmark capabilities\n4. Determine Postmark inbound routing approach\n5. Add Postmark inbound parser/controller\n6. Reuse provider-neutral command/API\n7. Add Postmark idempotency support\n8. Add tests for Postmark inbound\n9. Verify/add tests for Postmark outbound metadata\n10. Verify/add tests for Postmark auth configuration\n11. Verify rejection email delivery\n12. Update `docs/postmark-email.md`\n13. Update/add runbook documentation\n14. Update ADRs as needed\n15. Run targeted tests\n16. Run `dev check`\n\nNames specific files (`docs/postmark-email.md`, `docs/human-todo.md`), modules (inbound parser/controller, provider-neutral API), and integration points (delivery-status webhooks, auth email configuration).\n\n**Technical decisions** (lines 121-180): Appropriately scoped as implementation-time investigation questions:\n- Postmark inbound payload shape and idempotency field\n- Routing approach (separate vs. dispatching webhook route)\n- Domain/MX setup for `clubs.memba.io`\n- Attachment metadata availability\n- Provider-specific inbound authentication (if available and non-disruptive)\n\nThese are discovery questions requiring Postmark API inspection, not blocking design decisions.\n\n### 5. Expected Capability and Validation ✓\n\n**New capability** (lines 121-180):\n\"Memba can receive, send, and operationally validate all production email paths through Postmark while preserving Resend as a fallback. Matt has a concrete runbook for a manual production cutover and rollback.\"\n\nClear before/after state:\n- Before: Resend for inbound; Postmark for outbound but not fully validated/documented\n- After: All email paths work with Postmark, fully tested and documented with cutover runbook\n\n**Stop condition:** Clear - all tests pass, runbook documented, `dev check` green.\n\n### Risks/Follow-ups\n\nThe plan acknowledges realistic risks (lines 121-180):\n- Postmark payload differences may require API adjustments\n- DNS/MX setup requires manual work\n- Production cutover risks (mitigated by runbook/rollback)\n- Webhook authentication remains a follow-up concern\n- Dual-provider maintenance cost (accepted as valuable during provider validation)\n\nThoughtful and realistic risk assessment with documented mitigations.\n\n## Alignment with Gemini Review\n\nThe Gemini review reached the same conclusion: READY with High confidence and 0 blocking gaps. Both reviews agree this plan is thorough, well-structured, and ready for implementation.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.read_plan_241_300": 0,
+          "internal.node_visit_count": 1,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.read_plan_121_180": 0,
+          "thread.read_plan_121_180.current_node": "read_plan_181_240",
+          "thread.read_plan_241_300.current_node": "read_plan_301_360",
+          "claude_review_confidence": "High",
+          "failure_signature": "",
+          "graph.default_fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "gemini_review_blocking_gaps": "None",
+          "internal.retry_count.read_plan_001_060": 0,
+          "internal.retry_count.read_plan_301_360": 0,
+          "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+          "thread.read_plan_061_120.current_node": "read_plan_121_180",
+          "claude_review_decision": "READY",
+          "gemini_review_blocking_gap_count": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "gemini_review_required_edits": "None",
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.read_plan_181_240": 0,
+          "claude_review_blocking_gaps": "None",
+          "thread.read_plan_001_060.current_node": "read_plan_061_120",
+          "claude_review_blocking_gap_count": 0,
+          "current_node": "claude_review",
+          "thread.read_plan_181_240.current_node": "read_plan_241_300",
+          "claude_review_required_edits": "None",
+          "thread.start.current_node": "read_plan_001_060",
+          "last_response": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan co",
+          "command.output": "blob://sha256/2989a24fdaf4685dda3d948b0175a6d655f15700d8e527b4330f90303d2dd465",
+          "internal.run_id": "01KT56VXDXGHN5GF62XH24BAJK",
+          "gemini_review_confidence": "High",
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.read_plan_061_120": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.read_plan_301_360.current_node": "gemini_review",
+          "thread.gemini_review.current_node": "claude_review",
+          "gemini_review_decision": "READY",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.thread_id": "gemini_review",
+          "last_stage": "claude_review",
+          "outcome": "succeeded",
+          "failure_class": ""
+        },
+        "node_outcomes": {
+          "read_plan_181_240": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/90c1706a59ae60185673898d3a31fab903ed2ea27604d2da20e66c4755f6ae37"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 181 240 360 'original plan chunk 181-240'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 158,
+              "active_time_ms": 158
+            }
+          },
+          "read_plan_301_360": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2989a24fdaf4685dda3d948b0175a6d655f15700d8e527b4330f90303d2dd465"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 301 360 360 'original plan chunk 301-360'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 156,
+              "active_time_ms": 156
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "claude_review_blocking_gap_count": 0,
+              "response.claude_review": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan could make more explicit which Postmark capabilities are already implemented (outbound member messages from iteration 008), which need implementation (inbound email), and which need verification/testing (auth email, rejection email paths). This is inferable from \"verify or add\" language but not completely explicit.\n\n2. **Dependency precision**: The plan says \"start after iteration 019\" but could be more explicit: \"This iteration cannot start until iteration 019 is delivered AND inbound email with Resend has been observed working in production.\" The background implies this, but stating it explicitly in the implementation plan would remove ambiguity.\n\n3. **Effort indication**: The plan doesn't include an estimate or complexity signal. This appears to be a 2-4 day technical slice but isn't stated.\n\nThese improvements would enhance clarity but do not block implementation.\n\n## Smallest Viable Iteration\n\n**This plan already represents the smallest viable iteration for the stated goal.**\n\nThe goal is enabling Matt to cut production email over to Postmark with a documented runbook and rollback path. To achieve this safely, the iteration must:\n\n- Add Postmark inbound email support (the main new capability)\n- Verify Postmark outbound member messages still work correctly\n- Verify Postmark auth email configuration and behavior\n- Verify rejection emails work through Postmark\n- Keep Resend as a tested fallback\n- Document the complete cutover and rollback procedures\n\nAny smaller scope would leave an incomplete migration that cannot be safely executed. You cannot migrate only some email types while maintaining the member-facing address `<club-slug>@clubs.memba.io`.\n\nThe plan correctly excludes actual production changes (out of scope for delivery) and new features (out of scope for this migration).\n\n## Required Plan Edits\n\n**None.**\n\nThe plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe plan includes a comprehensive validation strategy (lines 121-147):\n\n**Automated validation:**\n- Focused tests for Postmark inbound parsing/translation\n- Regression tests for provider-neutral API (iteration 019)\n- Regression tests for Resend fallback\n- Tests for Postmark outbound metadata and delivery-status correlation\n- Tests for Postmark auth configuration and error handling\n- `dev check` passing\n\n**Manual validation:**\nA 7-step smoke test covering:\n1. Postmark dashboard/DNS/webhook configuration verification\n2. Production secrets correctly set for Postmark\n3. Magic-link auth email delivery and sign-in flow\n4. Outbound member message delivery and delivery-status webhook updates\n5. Inbound club messages from active members\n6. Rejection emails for unsupported senders/attachments\n7. Rollback path verification (Resend secrets/webhooks still available)\n\nThis validation plan is sufficient to prove:\n- All email types work through Postmark\n- Existing behavior is preserved\n- Resend fallback remains functional\n- Matt can safely perform the production cutover\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✓\n\n**Goal:** \"After this iteration, Matt can manually cut production over to Postmark for member-message outbound delivery, inbound club-message email, rejection emails, and magic-link authentication using a documented runbook, while keeping Resend available as a rollback/fallback provider.\"\n\n- Clear beneficiary: Matt (operator)\n- Clear outcome: Can perform manual production cutover\n- Explicit about what is enabled vs. executed\n- User-facing behavior unchanged (technical/engineering iteration)\n\n### 2. Scope Focus ✓\n\n**In scope:**\n- Postmark inbound email support for club messages\n- Provider-neutral translation of Postmark payloads\n- Preservation of iteration 019 behaviors (authorization, rejection, idempotency)\n- Outbound member-message delivery via Postmark (verification)\n- Magic-link auth via Postmark (verification)\n- Rejection email handling via Postmark\n- Complete operational documentation and runbook\n- Automated tests\n- Resend fallback preservation\n\n**Out of scope:**\n- Actual production cutover (Matt performs manually)\n- Business rule changes\n- New inbound email features\n- Removing Resend support\n- Webhook authentication expansion\n\nThe scope is coherent, focused on migration enablement, and appropriately sized. It addresses all email types in a single slice to enable a complete migration while keeping behavior unchanged.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n\n**Acceptance criteria** (lines 61-120): Concrete, testable, and comprehensive:\n- Postmark inbound parsing/translation works\n- Sender authorization preserved\n- Attachments/non-plain-text rejected appropriately\n- Idempotency handling works\n- Provider selection configurable for all email types\n- Configuration failures are clear\n- Resend remains selectable for rollback\n- Documentation specifies exact variables/secrets/setup\n- Manual smoke tests documented\n- Local dev remains deterministic\n- `dev check` passes\n\nCovers happy paths, edge cases, error states, configuration, and rollback.\n\n**BDD decision** (lines 001-060): Explicitly addressed with clear rationale:\n- Iteration type: Technical/engineering\n- User behavior unchanged\n- Existing acceptance scenarios (iteration 019) already express the behavior\n- Provider plumbing better tested with integration/unit tests\n- No new Gherkin scenarios needed\n\nThis decision is appropriate and well-justified.\n\n**Business decisions** (lines 061-120): All resolved during planning:\n- Migrate all email paths to Postmark (not just club messages)\n- Keep `<club-slug>@clubs.memba.io` unchanged\n- Delivery prepares code/docs only; Matt performs cutover manually\n- Preserve Resend as tested fallback\n\n### 4. Implementation Plan and Technical Decisions ✓\n\n**Implementation plan** (lines 061-120): 16 detailed, ordered steps:\n1. Start after iteration 019 completion and observation\n2. Inspect iteration 019's provider-neutral API/idempotency/tests\n3. Inspect existing Postmark capabilities\n4. Determine Postmark inbound routing approach\n5. Add Postmark inbound parser/controller\n6. Reuse provider-neutral command/API\n7. Add Postmark idempotency support\n8. Add tests for Postmark inbound\n9. Verify/add tests for Postmark outbound metadata\n10. Verify/add tests for Postmark auth configuration\n11. Verify rejection email delivery\n12. Update `docs/postmark-email.md`\n13. Update/add runbook documentation\n14. Update ADRs as needed\n15. Run targeted tests\n16. Run `dev check`\n\nNames specific files (`docs/postmark-email.md`, `docs/human-todo.md`), modules (inbound parser/controller, provider-neutral API), and integration points (delivery-status webhooks, auth email configuration).\n\n**Technical decisions** (lines 121-180): Appropriately scoped as implementation-time investigation questions:\n- Postmark inbound payload shape and idempotency field\n- Routing approach (separate vs. dispatching webhook route)\n- Domain/MX setup for `clubs.memba.io`\n- Attachment metadata availability\n- Provider-specific inbound authentication (if available and non-disruptive)\n\nThese are discovery questions requiring Postmark API inspection, not blocking design decisions.\n\n### 5. Expected Capability and Validation ✓\n\n**New capability** (lines 121-180):\n\"Memba can receive, send, and operationally validate all production email paths through Postmark while preserving Resend as a fallback. Matt has a concrete runbook for a manual production cutover and rollback.\"\n\nClear before/after state:\n- Before: Resend for inbound; Postmark for outbound but not fully validated/documented\n- After: All email paths work with Postmark, fully tested and documented with cutover runbook\n\n**Stop condition:** Clear - all tests pass, runbook documented, `dev check` green.\n\n### Risks/Follow-ups\n\nThe plan acknowledges realistic risks (lines 121-180):\n- Postmark payload differences may require API adjustments\n- DNS/MX setup requires manual work\n- Production cutover risks (mitigated by runbook/rollback)\n- Webhook authentication remains a follow-up concern\n- Dual-provider maintenance cost (accepted as valuable during provider validation)\n\nThoughtful and realistic risk assessment with documented mitigations.\n\n## Alignment with Gemini Review\n\nThe Gemini review reached the same conclusion: READY with High confidence and 0 blocking gaps. Both reviews agree this plan is thorough, well-structured, and ready for implementation.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+              "claude_review_required_edits": "None",
+              "claude_review_decision": "READY",
+              "last_response": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan co",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_confidence": "High"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5654,
+                    "output_tokens": 5857,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 104817
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 112998,
+              "tool_time_ms": 0,
+              "active_time_ms": 112998
+            }
+          },
+          "read_plan_241_300": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/72bc7f9094acc725af588bdd99a2e6d7f32d41d0ee9a6183857c88c70632578c"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 241 300 360 'original plan chunk 241-300'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 150,
+              "active_time_ms": 150
+            }
+          },
+          "read_plan_061_120": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/123e20fd13ac3f143d9554227b4cc6a8dad4fcf9f9cc20a18e88b34e49a80815"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 61 120 360 'original plan chunk 061-120'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 159,
+              "active_time_ms": 159
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_blocking_gaps": "None",
+              "gemini_review_blocking_gap_count": 0,
+              "gemini_review_required_edits": "None",
+              "gemini_review_confidence": "High",
+              "gemini_review_decision": "READY",
+              "last_stage": "gemini_review",
+              "last_response": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
+              "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 5182,
+                    "output_tokens": 60,
+                    "reasoning_tokens": 1021,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 23336
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 10771,
+              "tool_time_ms": 0,
+              "active_time_ms": 10771
+            }
+          },
+          "read_plan_001_060": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0772a32579592a2ed973bc1ad027259412ac5bd05dc597afea94d9c9c52312f7"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 1 60 360 'original plan chunk 001-060'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 166,
+              "active_time_ms": 166
+            }
+          },
+          "read_plan_121_180": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6872b20239012a62ff0fcef2e1991f2f3dc38382a333ee5243418eb479e829a8"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/020-migrate-production-email-to-postmark/plan.md' 121 180 360 'original plan chunk 121-180'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 155,
+              "active_time_ms": 155
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "2706308689d115e96af62ac79d6d9216805ff1e8",
+        "node_visits": {
+          "read_plan_121_180": 1,
+          "read_plan_061_120": 1,
+          "read_plan_181_240": 1,
+          "read_plan_001_060": 1,
+          "read_plan_241_300": 1,
+          "read_plan_301_360": 1,
+          "start": 1,
+          "claude_review": 1,
+          "gemini_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T22:24:51.939834045Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan_001_060",
+          "read_plan_061_120",
+          "read_plan_121_180",
+          "read_plan_181_240",
+          "read_plan_241_300",
+          "read_plan_301_360",
+          "gemini_review",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "codex_review_decision": "NOT READY",
           "outcome": "succeeded",
           "thread.read_plan_121_180.current_node": "read_plan_181_240",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
@@ -1965,26 +2228,30 @@
           "failure_class": "",
           "internal.fidelity": "summary:high",
           "internal.node_visit_count": 1,
-          "current_node": "claude_review",
+          "current_node": "codex_review",
           "claude_review_blocking_gaps": "None",
           "gemini_review_blocking_gaps": "None",
+          "codex_review_confidence": "High",
           "thread.gemini_review.current_node": "claude_review",
           "internal.retry_count.read_plan_181_240": 0,
           "internal.retry_count.read_plan_061_120": 0,
-          "last_response": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan co",
+          "last_response": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence",
+          "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation\",\n    \"codex_review_required_edits\": \"Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated\"\n  }\n}",
           "failure_signature": "",
+          "codex_review_required_edits": "Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated",
           "claude_review_required_edits": "None",
           "thread.read_plan_241_300.current_node": "read_plan_301_360",
           "internal.retry_count.gemini_review": 0,
           "internal.retry_count.start": 0,
           "response.claude_review": "# Independent Plan Review: Iteration 020\n\n## Decision: READY\n\n## Confidence: High\n\n## Blocking Gaps\n\nNone.\n\n## Non-Blocking Improvements\n\n1. **Clarity on existing vs. new implementation**: The plan could make more explicit which Postmark capabilities are already implemented (outbound member messages from iteration 008), which need implementation (inbound email), and which need verification/testing (auth email, rejection email paths). This is inferable from \"verify or add\" language but not completely explicit.\n\n2. **Dependency precision**: The plan says \"start after iteration 019\" but could be more explicit: \"This iteration cannot start until iteration 019 is delivered AND inbound email with Resend has been observed working in production.\" The background implies this, but stating it explicitly in the implementation plan would remove ambiguity.\n\n3. **Effort indication**: The plan doesn't include an estimate or complexity signal. This appears to be a 2-4 day technical slice but isn't stated.\n\nThese improvements would enhance clarity but do not block implementation.\n\n## Smallest Viable Iteration\n\n**This plan already represents the smallest viable iteration for the stated goal.**\n\nThe goal is enabling Matt to cut production email over to Postmark with a documented runbook and rollback path. To achieve this safely, the iteration must:\n\n- Add Postmark inbound email support (the main new capability)\n- Verify Postmark outbound member messages still work correctly\n- Verify Postmark auth email configuration and behavior\n- Verify rejection emails work through Postmark\n- Keep Resend as a tested fallback\n- Document the complete cutover and rollback procedures\n\nAny smaller scope would leave an incomplete migration that cannot be safely executed. You cannot migrate only some email types while maintaining the member-facing address `<club-slug>@clubs.memba.io`.\n\nThe plan correctly excludes actual production changes (out of scope for delivery) and new features (out of scope for this migration).\n\n## Required Plan Edits\n\n**None.**\n\nThe plan is ready for implementation as written.\n\n## Validation Plan Assessment\n\nThe plan includes a comprehensive validation strategy (lines 121-147):\n\n**Automated validation:**\n- Focused tests for Postmark inbound parsing/translation\n- Regression tests for provider-neutral API (iteration 019)\n- Regression tests for Resend fallback\n- Tests for Postmark outbound metadata and delivery-status correlation\n- Tests for Postmark auth configuration and error handling\n- `dev check` passing\n\n**Manual validation:**\nA 7-step smoke test covering:\n1. Postmark dashboard/DNS/webhook configuration verification\n2. Production secrets correctly set for Postmark\n3. Magic-link auth email delivery and sign-in flow\n4. Outbound member message delivery and delivery-status webhook updates\n5. Inbound club messages from active members\n6. Rejection emails for unsupported senders/attachments\n7. Rollback path verification (Resend secrets/webhooks still available)\n\nThis validation plan is sufficient to prove:\n- All email types work through Postmark\n- Existing behavior is preserved\n- Resend fallback remains functional\n- Matt can safely perform the production cutover\n\n## Detailed Assessment\n\n### 1. Goal Clarity ✓\n\n**Goal:** \"After this iteration, Matt can manually cut production over to Postmark for member-message outbound delivery, inbound club-message email, rejection emails, and magic-link authentication using a documented runbook, while keeping Resend available as a rollback/fallback provider.\"\n\n- Clear beneficiary: Matt (operator)\n- Clear outcome: Can perform manual production cutover\n- Explicit about what is enabled vs. executed\n- User-facing behavior unchanged (technical/engineering iteration)\n\n### 2. Scope Focus ✓\n\n**In scope:**\n- Postmark inbound email support for club messages\n- Provider-neutral translation of Postmark payloads\n- Preservation of iteration 019 behaviors (authorization, rejection, idempotency)\n- Outbound member-message delivery via Postmark (verification)\n- Magic-link auth via Postmark (verification)\n- Rejection email handling via Postmark\n- Complete operational documentation and runbook\n- Automated tests\n- Resend fallback preservation\n\n**Out of scope:**\n- Actual production cutover (Matt performs manually)\n- Business rule changes\n- New inbound email features\n- Removing Resend support\n- Webhook authentication expansion\n\nThe scope is coherent, focused on migration enablement, and appropriately sized. It addresses all email types in a single slice to enable a complete migration while keeping behavior unchanged.\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✓\n\n**Acceptance criteria** (lines 61-120): Concrete, testable, and comprehensive:\n- Postmark inbound parsing/translation works\n- Sender authorization preserved\n- Attachments/non-plain-text rejected appropriately\n- Idempotency handling works\n- Provider selection configurable for all email types\n- Configuration failures are clear\n- Resend remains selectable for rollback\n- Documentation specifies exact variables/secrets/setup\n- Manual smoke tests documented\n- Local dev remains deterministic\n- `dev check` passes\n\nCovers happy paths, edge cases, error states, configuration, and rollback.\n\n**BDD decision** (lines 001-060): Explicitly addressed with clear rationale:\n- Iteration type: Technical/engineering\n- User behavior unchanged\n- Existing acceptance scenarios (iteration 019) already express the behavior\n- Provider plumbing better tested with integration/unit tests\n- No new Gherkin scenarios needed\n\nThis decision is appropriate and well-justified.\n\n**Business decisions** (lines 061-120): All resolved during planning:\n- Migrate all email paths to Postmark (not just club messages)\n- Keep `<club-slug>@clubs.memba.io` unchanged\n- Delivery prepares code/docs only; Matt performs cutover manually\n- Preserve Resend as tested fallback\n\n### 4. Implementation Plan and Technical Decisions ✓\n\n**Implementation plan** (lines 061-120): 16 detailed, ordered steps:\n1. Start after iteration 019 completion and observation\n2. Inspect iteration 019's provider-neutral API/idempotency/tests\n3. Inspect existing Postmark capabilities\n4. Determine Postmark inbound routing approach\n5. Add Postmark inbound parser/controller\n6. Reuse provider-neutral command/API\n7. Add Postmark idempotency support\n8. Add tests for Postmark inbound\n9. Verify/add tests for Postmark outbound metadata\n10. Verify/add tests for Postmark auth configuration\n11. Verify rejection email delivery\n12. Update `docs/postmark-email.md`\n13. Update/add runbook documentation\n14. Update ADRs as needed\n15. Run targeted tests\n16. Run `dev check`\n\nNames specific files (`docs/postmark-email.md`, `docs/human-todo.md`), modules (inbound parser/controller, provider-neutral API), and integration points (delivery-status webhooks, auth email configuration).\n\n**Technical decisions** (lines 121-180): Appropriately scoped as implementation-time investigation questions:\n- Postmark inbound payload shape and idempotency field\n- Routing approach (separate vs. dispatching webhook route)\n- Domain/MX setup for `clubs.memba.io`\n- Attachment metadata availability\n- Provider-specific inbound authentication (if available and non-disruptive)\n\nThese are discovery questions requiring Postmark API inspection, not blocking design decisions.\n\n### 5. Expected Capability and Validation ✓\n\n**New capability** (lines 121-180):\n\"Memba can receive, send, and operationally validate all production email paths through Postmark while preserving Resend as a fallback. Matt has a concrete runbook for a manual production cutover and rollback.\"\n\nClear before/after state:\n- Before: Resend for inbound; Postmark for outbound but not fully validated/documented\n- After: All email paths work with Postmark, fully tested and documented with cutover runbook\n\n**Stop condition:** Clear - all tests pass, runbook documented, `dev check` green.\n\n### Risks/Follow-ups\n\nThe plan acknowledges realistic risks (lines 121-180):\n- Postmark payload differences may require API adjustments\n- DNS/MX setup requires manual work\n- Production cutover risks (mitigated by runbook/rollback)\n- Webhook authentication remains a follow-up concern\n- Dual-provider maintenance cost (accepted as valuable during provider validation)\n\nThoughtful and realistic risk assessment with documented mitigations.\n\n## Alignment with Gemini Review\n\nThe Gemini review reached the same conclusion: READY with High confidence and 0 blocking gaps. Both reviews agree this plan is thorough, well-structured, and ready for implementation.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "last_stage": "claude_review",
+          "internal.retry_count.codex_review": 0,
+          "last_stage": "codex_review",
           "thread.read_plan_301_360.current_node": "gemini_review",
           "response.gemini_review": "{\"context_updates\":{\"gemini_review_decision\":\"READY\",\"gemini_review_confidence\":\"High\",\"gemini_review_blocking_gap_count\":0,\"gemini_review_blocking_gaps\":\"None\",\"gemini_review_required_edits\":\"None\"}}",
           "claude_review_blocking_gap_count": 0,
           "internal.run_id": "01KT56VXDXGHN5GF62XH24BAJK",
           "thread.read_plan_181_240.current_node": "read_plan_241_300",
-          "internal.thread_id": "gemini_review",
+          "internal.thread_id": "claude_review",
           "internal.retry_count.read_plan_001_060": 0,
           "internal.retry_count.read_plan_241_300": 0,
           "graph.default_fidelity": "summary:high",
@@ -1995,11 +2262,14 @@
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "claude_review_decision": "READY",
           "claude_review_confidence": "High",
+          "thread.claude_review.current_node": "codex_review",
           "gemini_review_confidence": "High",
           "internal.retry_count.read_plan_121_180": 0,
           "graph.rankdir": "LR",
           "internal.work_dir": "/workspace/memba",
-          "internal.retry_count.read_plan_301_360": 0
+          "internal.retry_count.read_plan_301_360": 0,
+          "codex_review_blocking_gaps": "Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation",
+          "codex_review_blocking_gap_count": 1
         },
         "node_outcomes": {
           "gemini_review": {
@@ -2042,6 +2312,47 @@
               "inference_time_ms": 10771,
               "tool_time_ms": 0,
               "active_time_ms": 10771
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "codex_review_blocking_gaps": "Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation",
+              "last_response": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence",
+              "codex_review_blocking_gap_count": 1,
+              "codex_review_decision": "NOT READY",
+              "response.codex_review": "{\n  \"context_updates\": {\n    \"codex_review_decision\": \"NOT READY\",\n    \"codex_review_confidence\": \"High\",\n    \"codex_review_blocking_gap_count\": 1,\n    \"codex_review_blocking_gaps\": \"Workflow evidence incomplete: required plan chunks 001-060 and 061-120 contain omitted lines, so the complete plan text is not visible for independent validation\",\n    \"codex_review_required_edits\": \"Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated\"\n  }\n}",
+              "codex_review_required_edits": "Re-run plan-validation with complete, non-omitted plan chunks in context before marking validated",
+              "last_stage": "codex_review",
+              "codex_review_confidence": "High"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7039,
+                    "output_tokens": 127,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 54485
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 13254,
+              "tool_time_ms": 0,
+              "active_time_ms": 13254
             }
           },
           "read_plan_241_300": {
@@ -2176,9 +2487,10 @@
             }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "synthesize",
         "node_visits": {
           "read_plan_061_120": 1,
+          "codex_review": 1,
           "read_plan_301_360": 1,
           "read_plan_121_180": 1,
           "read_plan_241_300": 1,
@@ -2212,6 +2524,34 @@
   "superseded_by": null,
   "pending_interviews": {},
   "stages": {
+    "codex_review@1": {
+      "first_event_seq": 102,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T22:24:38.630211932Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "start@1": {
       "first_event_seq": 18,
       "prompt": null,
@@ -2582,7 +2922,12 @@
       "first_event_seq": 92,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T22:24:35.512144884Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -2596,15 +2941,26 @@
       "output": null,
       "started_at": "2026-06-02T22:22:42.459795846Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 113052,
+        "inference_time_ms": 112998,
+        "tool_time_ms": 0,
+        "active_time_ms": 112998
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
+        "input_tokens": 5654,
+        "output_tokens": 5857,
+        "total_tokens": 11511,
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 104817
       },
-      "state": "running"
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
+      },
+      "state": "succeeded"
     }
   }
 }
