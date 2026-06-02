@@ -1,0 +1,215 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index 8e3d6bc..783a6e8 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add `slug` to `CreateClub`, `ClubCreated`, `Memba.Membership.Club`, and `Memba.Membership.Projections.Club`.
+ - [x] 004 Implement slug generation and validation in a small Membership slug module or equivalent domain helper:
+ - [x] 005 Update `Membership.create_club/2` and relevant forms to use the generated default slug while allowing staff override.
+-- [ ] 006 Add a migration to add `slug` to `membership_clubs`, backfill existing rows deterministically, set non-null, and create a unique index.
++- [x] 006 Add a migration to add `slug` to `membership_clubs`, backfill existing rows deterministically, set non-null, and create a unique index.
+ - [ ] 007 Update the club projector to write `slug` from `ClubCreated` events.
+ - [ ] 008 Do not support replay of old slug-less `ClubCreated` events. There is no live data yet; development/test event stores may be reset or backfilled as needed.
+ - [ ] 009 Add `Membership.get_club_by_slug/1`, using normalized lookup input only where safe and returning `nil` for invalid/unknown values.
+diff --git a/web/priv/repo/migrations/20260602001447_add_slug_to_membership_clubs.exs b/web/priv/repo/migrations/20260602001447_add_slug_to_membership_clubs.exs
+new file mode 100644
+index 0000000..fec2102
+--- /dev/null
++++ b/web/priv/repo/migrations/20260602001447_add_slug_to_membership_clubs.exs
+@@ -0,0 +1,127 @@
++defmodule Memba.Repo.Migrations.AddSlugToMembershipClubs do
++  use Ecto.Migration
++
++  def up do
++    execute("""
++    CREATE FUNCTION memba_membership_club_slug_base(club_name text)
++    RETURNS text
++    LANGUAGE plpgsql
++    IMMUTABLE
++    AS $$
++    DECLARE
++      generated_slug text;
++    BEGIN
++      generated_slug :=
++        btrim(
++          substring(
++            btrim(
++              regexp_replace(lower(btrim(club_name)), '[^a-z0-9]+', '-', 'g'),
++              '-'
++            )
++            from 1 for 32
++          ),
++          '-'
++        );
++
++      IF generated_slug IS NULL OR generated_slug = '' THEN
++        RETURN 'club';
++      END IF;
++
++      RETURN generated_slug;
++    END;
++    $$;
++    """)
++
++    alter table(:membership_clubs) do
++      add :slug, :text
++    end
++
++    execute("""
++    WITH slug_sources AS (
++      SELECT
++        club_id,
++        memba_membership_club_slug_base(name) AS base_slug
++      FROM membership_clubs
++    ),
++    numbered_slugs AS (
++      SELECT
++        club_id,
++        base_slug,
++        row_number() OVER (PARTITION BY base_slug ORDER BY club_id) AS slug_number
++      FROM slug_sources
++    )
++    UPDATE membership_clubs AS club
++    SET slug =
++      CASE
++        WHEN numbered.slug_number = 1 THEN numbered.base_slug
++        ELSE
++          left(
++            numbered.base_slug,
++            32 - length('-' || numbered.slug_number::text)
++          ) || '-' || numbered.slug_number::text
++      END
++    FROM numbered_slugs AS numbered
++    WHERE club.club_id = numbered.club_id;
++    """)
++
++    alter table(:membership_clubs) do
++      modify :slug, :text, null: false
++    end
++
++    create unique_index(:membership_clubs, [:slug], name: :membership_clubs_slug_index)
++
++    execute("""
++    CREATE FUNCTION memba_membership_clubs_set_slug()
++    RETURNS trigger
++    LANGUAGE plpgsql
++    AS $$
++    DECLARE
++      base_slug text;
++      candidate_slug text;
++      suffix_number integer := 1;
++      suffix text;
++    BEGIN
++      IF NEW.slug IS NULL OR NEW.slug = '' THEN
++        base_slug := memba_membership_club_slug_base(NEW.name);
++        candidate_slug := base_slug;
++
++        WHILE EXISTS (
++          SELECT 1
++          FROM membership_clubs
++          WHERE slug = candidate_slug
++            AND club_id <> NEW.club_id
++        ) LOOP
++          suffix_number := suffix_number + 1;
++          suffix := '-' || suffix_number::text;
++          candidate_slug := left(base_slug, 32 - length(suffix)) || suffix;
++        END LOOP;
++
++        NEW.slug := candidate_slug;
++      END IF;
++
++      RETURN NEW;
++    END;
++    $$;
++    """)
++
++    execute("""
++    CREATE TRIGGER membership_clubs_set_slug
++    BEFORE INSERT OR UPDATE OF name, slug ON membership_clubs
++    FOR EACH ROW
++    EXECUTE FUNCTION memba_membership_clubs_set_slug();
++    """)
++  end
++
++  def down do
++    drop_if_exists index(:membership_clubs, [:slug], name: :membership_clubs_slug_index)
++
++    execute("DROP TRIGGER IF EXISTS membership_clubs_set_slug ON membership_clubs;")
++    execute("DROP FUNCTION IF EXISTS memba_membership_clubs_set_slug();")
++
++    alter table(:membership_clubs) do
++      remove :slug
++    end
++
++    execute("DROP FUNCTION IF EXISTS memba_membership_club_slug_base(text);")
++  end
++end
+diff --git a/web/test/event_sourced_setup_test.exs b/web/test/event_sourced_setup_test.exs
+index 95bdf89..2fa3a93 100644
+--- a/web/test/event_sourced_setup_test.exs
++++ b/web/test/event_sourced_setup_test.exs
+@@ -40,6 +40,64 @@ defmodule Memba.EventSourcedSetupTest do
+     assert [[true]] = query!("SELECT to_regclass('public.membership_people') IS NOT NULL").rows
+   end
+ 
++  test "membership club slugs are required, deterministic, and unique" do
++    Memba.EventSourcedCase.reset_event_sourced_storage!()
++
++    try do
++      assert [["NO", "text"]] =
++               query!("""
++               SELECT is_nullable, data_type
++               FROM information_schema.columns
++               WHERE table_schema = 'public'
++                 AND table_name = 'membership_clubs'
++                 AND column_name = 'slug'
++               """).rows
++
++      assert [[true]] =
++               query!("""
++               SELECT index_definition.index_is_unique
++               FROM (
++                 SELECT indexes.indisunique AS index_is_unique
++                 FROM pg_class tables
++                 JOIN pg_index indexes ON indexes.indrelid = tables.oid
++                 JOIN pg_class index_names ON index_names.oid = indexes.indexrelid
++                 WHERE tables.relname = 'membership_clubs'
++                   AND index_names.relname = 'membership_clubs_slug_index'
++               ) AS index_definition
++               """).rows
++
++      club_id = Ecto.UUID.generate()
++
++      query!("""
++      INSERT INTO membership_clubs (club_id, name, inserted_at, updated_at)
++      VALUES ('#{club_id}', 'Kootenay Mountaineering Club', now(), now())
++      """)
++
++      assert [["kootenay-mountaineering-club"]] =
++               query!("SELECT slug FROM membership_clubs WHERE club_id = '#{club_id}'").rows
++
++      duplicate_error =
++        assert_raise Postgrex.Error, fn ->
++          duplicate_club_id = Ecto.UUID.generate()
++
++          query!("""
++          INSERT INTO membership_clubs (club_id, name, slug, inserted_at, updated_at)
++          VALUES (
++            '#{duplicate_club_id}',
++            'Duplicate Slug Club',
++            'kootenay-mountaineering-club',
++            now(),
++            now()
++          )
++          """)
++        end
++
++      assert duplicate_error.postgres.constraint == "membership_clubs_slug_index"
++    after
++      Memba.EventSourcedCase.reset_event_sourced_storage!()
++    end
++  end
++
+   test "event-sourced test helper resets EventStore and projection rows" do
+     Memba.EventSourcedCase.reset_event_sourced_storage!()
+ 
