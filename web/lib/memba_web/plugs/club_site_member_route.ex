@@ -13,8 +13,14 @@ defmodule MembaWeb.Plugs.ClubSiteMemberRoute do
 
   def live_session(conn) do
     case conn.private do
-      %{memba_club_id_source: :host} -> %{"club_id_source" => "host"}
-      _private -> %{}
+      %{memba_club_id_source: :host, memba_host_selected_club: %{club_id: club_id}} ->
+        %{"club_id_source" => "host", "club_id" => club_id}
+
+      %{memba_club_id_source: :host} ->
+        %{"club_id_source" => "host"}
+
+      _private ->
+        %{}
     end
   end
 

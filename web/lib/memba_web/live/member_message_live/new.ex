@@ -15,36 +15,35 @@ defmodule MembaWeb.MemberMessageLive.New do
   alias Memba.Messaging
 
   @impl Phoenix.LiveView
-  def mount(%{"club_id" => club_id} = params, session, socket) do
-    params = put_club_id_source(params, session)
+  def mount(params, session, socket) when is_map(params) do
+    params = put_session_club_id(params, session) |> put_club_id_source(session)
     socket = ensure_identity_assigns(socket)
 
-    case compose_context(
-           club_id,
-           socket.assigns.current_identity,
-           socket.assigns.current_identity_clubs
-         ) do
-      {:ok, compose_assigns} ->
+    case params do
+      %{"club_id" => club_id} ->
+        case compose_context(
+               club_id,
+               socket.assigns.current_identity,
+               socket.assigns.current_identity_clubs
+             ) do
+          {:ok, compose_assigns} ->
+            {:ok,
+             socket
+             |> assign(:route_params, params)
+             |> assign(compose_assigns)
+             |> assign_initial_send_state()
+             |> assign(:message_form, message_form())}
+
+          {:error, :forbidden} ->
+            forbidden!(socket)
+        end
+
+      _params ->
         {:ok,
          socket
          |> assign(:route_params, params)
-         |> assign(compose_assigns)
-         |> assign_initial_send_state()
-         |> assign(:message_form, message_form())}
-
-      {:error, :forbidden} ->
-        forbidden!(socket)
+         |> assign_empty_compose_context()}
     end
-  end
-
-  def mount(params, session, socket) when is_map(params) do
-    params = put_club_id_source(params, session)
-
-    {:ok,
-     socket
-     |> ensure_identity_assigns()
-     |> assign(:route_params, params)
-     |> assign_empty_compose_context()}
   end
 
   def mount(_params, _session, socket) do
@@ -405,6 +404,13 @@ defmodule MembaWeb.MemberMessageLive.New do
     |> Map.put_new("subject", "")
     |> Map.put_new("body", "")
     |> to_form(as: :message)
+  end
+
+  defp put_session_club_id(params, session) do
+    case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
+      {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
+      _club_id_present_or_missing -> params
+    end
   end
 
   defp put_club_id_source(params, session) do

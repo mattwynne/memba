@@ -11,29 +11,30 @@ defmodule MembaWeb.MemberMessageLive.Show do
   alias MembaWeb.MemberMessageDetail
 
   @impl Phoenix.LiveView
-  def mount(%{"club_id" => _club_id, "message_id" => _message_id} = params, session, socket) do
-    params = put_club_id_source(params, session)
+  def mount(params, session, socket) when is_map(params) do
+    params = put_session_club_id(params, session) |> put_club_id_source(session)
     socket = ensure_identity_assigns(socket)
 
-    case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
-      {:ok, detail_assigns} ->
-        {:ok,
-         socket
-         |> assign(:route_params, params)
-         |> assign(detail_assigns)
-         |> assign(:expanded_receipt_groups, MapSet.new())}
+    case params do
+      %{"club_id" => _club_id, "message_id" => _message_id} ->
+        case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
+          {:ok, detail_assigns} ->
+            {:ok,
+             socket
+             |> assign(:route_params, params)
+             |> assign(detail_assigns)
+             |> assign(:expanded_receipt_groups, MapSet.new())}
 
-      {:error, :forbidden} ->
-        forbidden!(socket)
+          {:error, :forbidden} ->
+            forbidden!(socket)
 
-      {:error, :not_found} ->
-        not_found!(socket)
+          {:error, :not_found} ->
+            not_found!(socket)
+        end
+
+      _params ->
+        {:ok, assign(socket, :route_params, params)}
     end
-  end
-
-  def mount(params, session, socket) when is_map(params) do
-    params = put_club_id_source(params, session)
-    {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, params)}
   end
 
   def mount(_params, _session, socket) do
@@ -77,6 +78,13 @@ defmodule MembaWeb.MemberMessageLive.Show do
       </div>
     </Layouts.club_site>
     """
+  end
+
+  defp put_session_club_id(params, session) do
+    case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
+      {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
+      _club_id_present_or_missing -> params
+    end
   end
 
   defp put_club_id_source(params, session) do
