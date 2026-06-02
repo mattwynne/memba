@@ -69,6 +69,71 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
              Membership.get_club(club_id)
   end
 
+  test "slug validation feedback updates live while editing", %{conn: conn} do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club_id}")
+
+    view
+    |> form("#edit-club-form", club: %{name: "KMC", slug: "kmc club!"})
+    |> render_change()
+
+    assert has_element?(view, "#edit-club-slug-feedback[data-status='invalid']")
+    assert has_element?(view, "#update-club-button[disabled]")
+
+    view
+    |> form("#edit-club-form", club: %{name: "KMC", slug: "kmc-alpine"})
+    |> render_change()
+
+    assert has_element?(view, "#edit-club-slug-feedback[data-status='available']")
+    refute has_element?(view, "#update-club-button[disabled]")
+  end
+
+  test "slug availability feedback updates live while editing", %{conn: conn} do
+    club_id = Ecto.UUID.generate()
+    other_club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: other_club_id, name: "Alpine Club", slug: "alpine"},
+               consistency: :strong
+             )
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club_id}")
+
+    view
+    |> form("#edit-club-form", club: %{name: "KMC", slug: "alpine"})
+    |> render_change()
+
+    assert has_element?(view, "#edit-club-slug-feedback[data-status='taken']")
+    assert has_element?(view, "#update-club-button[disabled]")
+
+    view
+    |> form("#edit-club-form", club: %{name: "KMC", slug: "kmc"})
+    |> render_change()
+
+    assert has_element?(view, "#edit-club-slug-feedback[data-status='available']")
+    refute has_element?(view, "#update-club-button[disabled]")
+  end
+
   defp input_value(html, selector) do
     values =
       html
