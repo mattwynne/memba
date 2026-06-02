@@ -1,0 +1,46 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index 1d22245..aea24aa 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect current opened references in `web/lib`, `web/test`, `acceptance-tests/features`, active docs, and Postmark delivery code. Exclude old `docs/iterations/**` design/prototype artifacts from cleanup unless they are active validation inputs.
+-- [ ] 002 Update shared acceptance feature expectations to remove opened receipts.
++- [x] 002 Update shared acceptance feature expectations to remove opened receipts.
+ - [ ] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:
+ - [ ] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+ - [ ] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index 0b44f87..de433f6 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -118,6 +118,11 @@ defmodule Memba.CucumberConfigurationTest do
+      ]}
+   ]
+ 
++  @deliverability_feature_names [
++    "member_message_deliverability.feature",
++    "memba_staff_email_deliverability.feature"
++  ]
++
+   @authentication_scenarios [
+     {"Logged-out visitor sees a public club page",
+      [
+@@ -359,6 +364,16 @@ defmodule Memba.CucumberConfigurationTest do
+     refute File.read!(memba_staff_feature_file) =~ ~r/^\s*@todo-web\s*\n\s*Feature:/m
+   end
+ 
++  test "shared deliverability features do not describe opened receipts" do
++    configured_feature_paths()
++    |> Enum.filter(&(Path.basename(&1) in @deliverability_feature_names))
++    |> Enum.each(fn deliverability_feature_file ->
++      feature_text = File.read!(deliverability_feature_file)
++
++      refute feature_text =~ ~r/\b(opened|opens|open tracking|track_opens)\b/i
++    end)
++  end
++
+   test "all member message deliverability scenarios pass through Cucumber runtime" do
+     %Discovery.DiscoveryResult{} = discovery = discover_steps()
+ 
