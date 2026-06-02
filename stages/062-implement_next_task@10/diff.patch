@@ -1,0 +1,828 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index 83ff23a..b03567d 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Update the club projector to write `slug` from `ClubCreated` events.
+ - [x] 008 Do not support replay of old slug-less `ClubCreated` events. There is no live data yet; development/test event stores may be reset or backfilled as needed.
+ - [x] 009 Add `Membership.get_club_by_slug/1`, using normalized lookup input only where safe and returning `nil` for invalid/unknown values.
+-- [ ] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
++- [x] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
+ - [ ] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
+ - [ ] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
+ - [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 0109cd8..0878879 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -9,6 +9,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+@@ -27,6 +28,20 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Update a club's staff-managed display name and public slug.
++
++  The caller supplies the club aggregate identity as `:club_id` or
++  `"club_id"`. Slugs must already be valid address-safe values and must not be
++  used by another projected club.
++  """
++  def update_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- update_club_command(attrs),
++         :ok <- prevent_duplicate_club_slug(command) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Create a person through the Membership Commanded application.
+ 
+@@ -227,6 +242,16 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp update_club_command(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, club_id} <- cast_club_id(club_id),
++         {:ok, name} <- fetch_required(attrs, :name),
++         {:ok, slug} <- fetch_required(attrs, :slug),
++         {:ok, slug} <- Slug.validate(slug) do
++      {:ok, %UpdateClub{club_id: club_id, name: name, slug: slug}}
++    end
++  end
++
+   defp create_person_command(attrs) do
+     with {:ok, person_id} <- fetch_required(attrs, :person_id),
+          {:ok, name} <- fetch_required(attrs, :name),
+@@ -251,6 +276,14 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp prevent_duplicate_club_slug(%UpdateClub{} = command) do
++    case Repo.get_by(Club, slug: command.slug) do
++      nil -> :ok
++      %Club{club_id: club_id} when club_id == command.club_id -> :ok
++      %Club{} -> {:error, :slug_taken}
++    end
++  end
++
+   defp dispatch(command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> :ok
+@@ -279,6 +312,13 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp cast_club_id(club_id) do
++    case Ecto.UUID.cast(club_id) do
++      {:ok, club_id} -> {:ok, club_id}
++      :error -> {:error, :invalid_club_id}
++    end
++  end
++
+   defp club_slug(attrs, name) do
+     case fetch_optional(attrs, :slug) do
+       {:ok, ""} -> Slug.default_from_name(name) |> Slug.validate()
+diff --git a/web/lib/memba/membership/club.ex b/web/lib/memba/membership/club.ex
+index b789db3..49ce7b4 100644
+--- a/web/lib/memba/membership/club.ex
++++ b/web/lib/memba/membership/club.ex
+@@ -5,7 +5,9 @@ defmodule Memba.Membership.Club do
+ 
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Slug
+ 
+   @behaviour Aggregate
+@@ -23,11 +25,25 @@ defmodule Memba.Membership.Club do
+ 
+   def execute(%__MODULE__{}, %CreateClub{}), do: {:error, :already_created}
+ 
++  def execute(%__MODULE__{club_id: nil}, %UpdateClub{}), do: {:error, :not_created}
++
++  def execute(%__MODULE__{} = club, %UpdateClub{} = command) do
++    with :ok <- validate_existing_club_id(club, command.club_id),
++         {:ok, name} <- normalize_name(command.name),
++         {:ok, slug} <- Slug.validate(command.slug) do
++      %ClubUpdated{club_id: command.club_id, name: name, slug: slug}
++    end
++  end
++
+   @impl Aggregate
+   def apply(%__MODULE__{} = club, %ClubCreated{} = event) do
+     %__MODULE__{club | club_id: event.club_id, name: event.name, slug: event.slug}
+   end
+ 
++  def apply(%__MODULE__{} = club, %ClubUpdated{} = event) do
++    %__MODULE__{club | name: event.name, slug: event.slug}
++  end
++
+   defp validate_club_id(club_id) do
+     case Ecto.UUID.cast(club_id) do
+       {:ok, ^club_id} -> :ok
+@@ -35,6 +51,9 @@ defmodule Memba.Membership.Club do
+     end
+   end
+ 
++  defp validate_existing_club_id(%__MODULE__{club_id: club_id}, club_id), do: :ok
++  defp validate_existing_club_id(%__MODULE__{}, _club_id), do: {:error, :invalid_club_id}
++
+   defp normalize_name(name) when is_binary(name) do
+     case String.trim(name) do
+       "" -> {:error, :invalid_name}
+diff --git a/web/lib/memba/membership/commands/update_club.ex b/web/lib/memba/membership/commands/update_club.ex
+new file mode 100644
+index 0000000..147c7cc
+--- /dev/null
++++ b/web/lib/memba/membership/commands/update_club.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.UpdateClub do
++  @moduledoc """
++  Command to update a club's staff-managed display name and public slug.
++  """
++
++  @enforce_keys [:club_id, :name, :slug]
++  defstruct [:club_id, :name, :slug]
++end
+diff --git a/web/lib/memba/membership/events/club_updated.ex b/web/lib/memba/membership/events/club_updated.ex
+new file mode 100644
+index 0000000..3af5da4
+--- /dev/null
++++ b/web/lib/memba/membership/events/club_updated.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.ClubUpdated do
++  @moduledoc """
++  Event raised when a club's staff-managed display name or public slug changes.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:club_id, :name, :slug]
++  defstruct [:club_id, :name, :slug]
++end
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index cf03e94..355b575 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -10,6 +10,7 @@ defmodule Memba.Membership.Projectors.Club do
+     consistency: :strong
+ 
+   alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Slug
+ 
+@@ -23,10 +24,32 @@ defmodule Memba.Membership.Projectors.Club do
+     end
+   end)
+ 
++  project(%ClubUpdated{} = event, fn multi ->
++    with {:ok, slug} <- projected_slug(event) do
++      Ecto.Multi.update_all(
++        multi,
++        :membership_club,
++        club_query(event.club_id),
++        set: [name: event.name, slug: slug, updated_at: DateTime.utc_now()]
++      )
++    end
++  end)
++
+   defp projected_slug(%ClubCreated{} = event) do
+     case Slug.validate(event.slug) do
+       {:ok, slug} -> {:ok, slug}
+       {:error, reason} -> {:error, {:invalid_club_created_slug, reason}}
+     end
+   end
++
++  defp projected_slug(%ClubUpdated{} = event) do
++    case Slug.validate(event.slug) do
++      {:ok, slug} -> {:ok, slug}
++      {:error, reason} -> {:error, {:invalid_club_updated_slug, reason}}
++    end
++  end
++
++  defp club_query(club_id) do
++    Ecto.Query.from(club in ClubProjection, where: club.club_id == ^club_id)
++  end
+ end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index 826bb67..d6de430 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.UpdateClub
+ 
+   identify(Club, by: :club_id)
+   identify(Membership, by: :membership_id)
+@@ -19,4 +20,5 @@ defmodule Memba.Membership.Router do
+   dispatch(AddMember, to: Membership)
+   dispatch(CreateClub, to: Club)
+   dispatch(CreatePerson, to: Person)
++  dispatch(UpdateClub, to: Club)
+ end
+diff --git a/web/lib/memba_web/live/admin/clubs_live/index.ex b/web/lib/memba_web/live/admin/clubs_live/index.ex
+index 4277242..8381cbc 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/index.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/index.ex
+@@ -129,6 +129,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
+               data-testid="club-row"
+               data-club-id={club.club_id}
+               data-club-name={club.name}
++              data-club-slug={club.slug}
+               aria-label={"Club #{club.name}"}
+               class="flex items-center justify-between gap-4 py-3"
+             >
+@@ -142,6 +143,9 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
+                 >
+                   {club.name}
+                 </.link>
++                <p class="mt-1 text-xs text-zinc-500">
++                  Slug: <span class="font-mono">{club.slug}</span>
++                </p>
+               </div>
+               <span class="text-xs text-zinc-500">{club.club_id}</span>
+             </div>
+diff --git a/web/lib/memba_web/live/admin/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+index 55148de..6b42284 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -2,8 +2,10 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
++  alias Memba.Membership.Slug
+   alias Memba.Messaging
+ 
++  @empty_club %{"name" => "", "slug" => ""}
+   @empty_person %{"name" => "", "email" => ""}
+   @empty_membership %{"person_id" => ""}
+   @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
+@@ -28,6 +30,33 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   end
+ 
+   @impl Phoenix.LiveView
++  def handle_event("update_club", %{"club" => club_params}, socket) do
++    attrs =
++      club_params
++      |> Map.take(["name", "slug"])
++      |> Map.put("club_id", socket.assigns.club_id)
++
++    case Membership.update_club(attrs, consistency: :strong) do
++      :ok ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Club updated")
++         |> refresh_club()}
++
++      {:ok, _result} ->
++        {:noreply,
++         socket
++         |> put_flash(:info, "Club updated")
++         |> refresh_club()}
++
++      {:error, reason} ->
++        {:noreply,
++         socket
++         |> put_flash(:error, "Could not update club: #{format_reason(reason)}")
++         |> assign(:club_form, to_form(club_params, as: :club))}
++    end
++  end
++
+   def handle_event("create_person", %{"person" => person_params}, socket) do
+     attrs =
+       person_params
+@@ -139,11 +168,50 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+           <section class="space-y-2">
+             <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
+             <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
++            <p id="club-slug-display" class="text-sm font-medium text-zinc-600">
++              Slug: <span class="font-mono">{@club.slug}</span>
++            </p>
+             <p class="text-zinc-600">
+               Add people to this club, then send a message to the active members.
+             </p>
+           </section>
+ 
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h2 class="text-lg font-semibold text-zinc-900">Edit club</h2>
++
++            <.form
++              for={@club_form}
++              id="edit-club-form"
++              aria-label="Edit club"
++              class="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
++              phx-submit="update_club"
++            >
++              <.input
++                field={@club_form[:name]}
++                id="edit-club-name-input"
++                label="Name"
++                aria-label="Club name"
++                required
++              />
++              <div>
++                <.input
++                  field={@club_form[:slug]}
++                  id="edit-club-slug-input"
++                  label="Slug"
++                  aria-label="Club slug"
++                  maxlength={Slug.max_length()}
++                  required
++                />
++                <p id="edit-club-slug-help" class="mt-1 text-xs text-zinc-500">
++                  Use lowercase letters, numbers, and hyphens.
++                </p>
++              </div>
++              <.button id="update-club-button" type="submit" aria-label="Save club">
++                Save club
++              </.button>
++            </.form>
++          </section>
++
+           <div class="grid gap-6 lg:grid-cols-2">
+             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+               <h2 class="text-lg font-semibold text-zinc-900">Create a person</h2>
+@@ -341,11 +409,20 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+ 
+   defp assign_forms(socket) do
+     socket
++    |> assign(:club_form, to_form(club_form_params(socket.assigns.club), as: :club))
+     |> assign(:person_form, to_form(@empty_person, as: :person))
+     |> assign(:membership_form, to_form(@empty_membership, as: :membership))
+     |> assign(:message_form, to_form(@empty_message, as: :message))
+   end
+ 
++  defp refresh_club(socket) do
++    club = Membership.get_club(socket.assigns.club_id)
++
++    socket
++    |> assign(:club, club)
++    |> assign(:club_form, to_form(club_form_params(club), as: :club))
++  end
++
+   defp refresh_people(socket) do
+     people = Membership.list_people()
+ 
+@@ -373,5 +450,11 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+ 
+   defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
+ 
++  defp club_form_params(nil), do: @empty_club
++
++  defp club_form_params(club) do
++    %{"name" => club.name, "slug" => club.slug}
++  end
++
+   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
+ end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 3bf0368..456fbd6 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
+   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Membership.Projectors.Person, as: PersonProjector
+@@ -45,7 +46,7 @@ defmodule Memba.Membership.AppTest do
+   end
+ 
+   test "Membership Commanded app includes the Membership router" do
+-    expected_commands = MapSet.new([AddMember, CreateClub, CreatePerson])
++    expected_commands = MapSet.new([AddMember, CreateClub, CreatePerson, UpdateClub])
+ 
+     assert MapSet.new(App.__registered_commands__()) == expected_commands
+     assert MapSet.new(Router.__registered_commands__()) == expected_commands
+diff --git a/web/test/memba/membership/club_projection_test.exs b/web/test/memba/membership/club_projection_test.exs
+index 9ccd859..eac44aa 100644
+--- a/web/test/memba/membership/club_projection_test.exs
++++ b/web/test/memba/membership/club_projection_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Membership.ClubProjectionTest do
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+@@ -45,6 +46,39 @@ defmodule Memba.Membership.ClubProjectionTest do
+            } = Membership.get_club(club_id)
+   end
+ 
++  test "UpdateClub updates the projected club name and slug" do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             App.dispatch(
++               %UpdateClub{
++                 club_id: club_id,
++                 name: "KMC Alpine Club",
++                 slug: "kmc-alpine"
++               },
++               consistency: :strong
++             )
++
++    assert %ClubProjection{
++             club_id: ^club_id,
++             name: "KMC Alpine Club",
++             slug: "kmc-alpine"
++           } = Membership.get_club(club_id)
++
++    assert %ClubProjection{club_id: ^club_id} = Membership.get_club_by_slug("kmc-alpine")
++    assert is_nil(Membership.get_club_by_slug("kmc"))
++  end
++
+   test "slug-less ClubCreated events are not replay-compatible" do
+     club_id = Ecto.UUID.generate()
+ 
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index 6c13e63..e216c79 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -3,7 +3,9 @@ defmodule Memba.Membership.ClubTest do
+ 
+   alias Memba.Membership.Club
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.ClubUpdated
+ 
+   describe "execute/2 CreateClub" do
+     test "emits ClubCreated using the caller-supplied UUID identity" do
+@@ -67,6 +69,64 @@ defmodule Memba.Membership.ClubTest do
+     end
+   end
+ 
++  describe "execute/2 UpdateClub" do
++    test "emits ClubUpdated for an existing club" do
++      club_id = Ecto.UUID.generate()
++
++      club =
++        Club.apply(%Club{}, %ClubCreated{
++          club_id: club_id,
++          name: "Kootenay Mountaineering Club",
++          slug: "kmc"
++        })
++
++      assert %ClubUpdated{
++               club_id: ^club_id,
++               name: "KMC Alpine Club",
++               slug: "kmc-alpine"
++             } =
++               Club.execute(club, %UpdateClub{
++                 club_id: club_id,
++                 name: " KMC Alpine Club ",
++                 slug: "kmc-alpine"
++               })
++    end
++
++    test "rejects updating a club that has not been created" do
++      assert {:error, :not_created} =
++               Club.execute(%Club{}, %UpdateClub{
++                 club_id: Ecto.UUID.generate(),
++                 name: "KMC Alpine Club",
++                 slug: "kmc-alpine"
++               })
++    end
++
++    test "rejects invalid updated club names and slugs" do
++      club_id = Ecto.UUID.generate()
++
++      club =
++        Club.apply(%Club{}, %ClubCreated{
++          club_id: club_id,
++          name: "Kootenay Mountaineering Club",
++          slug: "kmc"
++        })
++
++      assert {:error, :invalid_name} =
++               Club.execute(club, %UpdateClub{
++                 club_id: club_id,
++                 name: " ",
++                 slug: "kmc-alpine"
++               })
++
++      assert {:error, :invalid_format} =
++               Club.execute(club, %UpdateClub{
++                 club_id: club_id,
++                 name: "KMC Alpine Club",
++                 slug: "KMC Alpine!"
++               })
++    end
++  end
++
+   test "apply/2 records the created club identity and name" do
+     club_id = Ecto.UUID.generate()
+ 
+@@ -81,4 +141,26 @@ defmodule Memba.Membership.ClubTest do
+                slug: "kmc"
+              })
+   end
++
++  test "apply/2 records updated club name and slug" do
++    club_id = Ecto.UUID.generate()
++
++    club =
++      Club.apply(%Club{}, %ClubCreated{
++        club_id: club_id,
++        name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      })
++
++    assert %Club{
++             club_id: ^club_id,
++             name: "KMC Alpine Club",
++             slug: "kmc-alpine"
++           } =
++             Club.apply(club, %ClubUpdated{
++               club_id: club_id,
++               name: "KMC Alpine Club",
++               slug: "kmc-alpine"
++             })
++  end
+ end
+diff --git a/web/test/memba/membership/create_club_dispatch_test.exs b/web/test/memba/membership/create_club_dispatch_test.exs
+index 3e56605..7e44b88 100644
+--- a/web/test/memba/membership/create_club_dispatch_test.exs
++++ b/web/test/memba/membership/create_club_dispatch_test.exs
+@@ -5,7 +5,9 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+   alias Memba.Membership.App
+   alias Memba.Membership.Club
+   alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.ClubUpdated
+ 
+   test "Membership app dispatch routes CreateClub to the Club aggregate" do
+     club_id = Ecto.UUID.generate()
+@@ -52,4 +54,42 @@ defmodule Memba.Membership.CreateClubDispatchTest do
+     assert :ok = App.dispatch(command, consistency: :strong)
+     assert {:error, :already_created} = App.dispatch(command)
+   end
++
++  test "Membership app dispatch routes UpdateClub to the Club aggregate" do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    command = %UpdateClub{
++      club_id: club_id,
++      name: "KMC Alpine Club",
++      slug: "kmc-alpine"
++    }
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              aggregate_version: 2,
++              events: [
++                %ClubUpdated{
++                  club_id: ^club_id,
++                  name: "KMC Alpine Club",
++                  slug: "kmc-alpine"
++                }
++              ],
++              aggregate_state: %Club{
++                club_id: ^club_id,
++                name: "KMC Alpine Club",
++                slug: "kmc-alpine"
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++  end
+ end
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index 0ae2202..ac1c55e 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     source = read_source!("lib/memba/membership.ex")
+ 
+     assert source =~ "def create_club("
++    assert source =~ "def update_club("
+     assert source =~ "def create_person("
+     assert source =~ "def add_member("
+     assert source =~ "def get_club("
+@@ -34,7 +35,14 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+       |> List.flatten()
+ 
+     assert create_functions == ["create_club", "create_person"]
+-    refute source =~ ~r/\bdef\s+(update|delete|change)_[a-zA-Z0-9_]+\b/
++
++    update_functions =
++      ~r/\bdef\s+(update_[a-zA-Z0-9_]+)\b/
++      |> Regex.scan(source, capture: :all_but_first)
++      |> List.flatten()
++
++    assert update_functions == ["update_club"]
++    refute source =~ ~r/\bdef\s+(delete|change)_[a-zA-Z0-9_]+\b/
+     refute source =~ ~r/\bRepo\.(insert|update|delete)\b/
+   end
+ 
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index a863948..ee73c08 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership
+   alias Memba.Membership.Events.ClubCreated
++  alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.MemberAdded
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+@@ -61,6 +62,74 @@ defmodule Memba.Membership.PublicApiTest do
+              })
+   end
+ 
++  test "update_club/2 edits a projected club name and slug" do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^club_id,
++              events: [
++                %ClubUpdated{
++                  club_id: ^club_id,
++                  name: "KMC Alpine Club",
++                  slug: "kmc-alpine"
++                }
++              ]
++            }} =
++             Membership.update_club(
++               %{
++                 "club_id" => club_id,
++                 "name" => " KMC Alpine Club ",
++                 "slug" => "kmc-alpine"
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert %ClubProjection{
++             club_id: ^club_id,
++             name: "KMC Alpine Club",
++             slug: "kmc-alpine"
++           } = Membership.get_club(club_id)
++  end
++
++  test "update_club/2 rejects invalid and duplicate slugs" do
++    kootenay_id = Ecto.UUID.generate()
++    nelson_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: kootenay_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: nelson_id, name: "Nelson Cycling Club", slug: "nelson-cycling"},
++               consistency: :strong
++             )
++
++    assert {:error, :invalid_format} =
++             Membership.update_club(%{
++               club_id: kootenay_id,
++               name: "Kootenay Mountaineering Club",
++               slug: "KMC Club!"
++             })
++
++    assert {:error, :slug_taken} =
++             Membership.update_club(%{
++               club_id: kootenay_id,
++               name: "Kootenay Mountaineering Club",
++               slug: "nelson-cycling"
++             })
++  end
++
+   test "create_person/2 dispatches CreatePerson through the Membership context" do
+     person_id = Ecto.UUID.generate()
+ 
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+new file mode 100644
+index 0000000..be6f7c7
+--- /dev/null
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -0,0 +1,82 @@
++defmodule MembaWeb.Admin.ClubsLive.ShowTest do
++  use MembaWeb.FeatureCase, async: false
++
++  import Phoenix.LiveViewTest
++
++  alias Memba.Membership
++  alias Memba.Membership.Projections.Club, as: ClubProjection
++
++  test "edit form displays and saves a club name and slug", %{conn: conn} do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    {:ok, view, initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club_id}")
++
++    assert has_element?(view, "#edit-club-form[aria-label='Edit club']")
++    assert input_value(initial_html, "#edit-club-name-input") == "Kootenay Mountaineering Club"
++    assert input_value(initial_html, "#edit-club-slug-input") == "kmc"
++
++    view
++    |> form("#edit-club-form", club: %{name: "KMC Alpine Club", slug: "kmc-alpine"})
++    |> render_submit()
++
++    assert has_element?(view, "#club-show", "KMC Alpine Club")
++
++    updated_html = render(view)
++    assert input_value(updated_html, "#edit-club-name-input") == "KMC Alpine Club"
++    assert input_value(updated_html, "#edit-club-slug-input") == "kmc-alpine"
++
++    assert %ClubProjection{name: "KMC Alpine Club", slug: "kmc-alpine"} =
++             Membership.get_club(club_id)
++
++    assert %ClubProjection{club_id: ^club_id} = Membership.get_club_by_slug("kmc-alpine")
++    assert is_nil(Membership.get_club_by_slug("kmc"))
++  end
++
++  test "invalid edit submissions leave the form editable without changing the projection", %{
++    conn: conn
++  } do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club_id}")
++
++    view
++    |> form("#edit-club-form", club: %{name: "KMC Alpine Club", slug: "KMC Club!"})
++    |> render_submit()
++
++    invalid_html = render(view)
++    assert input_value(invalid_html, "#edit-club-name-input") == "KMC Alpine Club"
++    assert input_value(invalid_html, "#edit-club-slug-input") == "KMC Club!"
++
++    assert %ClubProjection{name: "Kootenay Mountaineering Club", slug: "kmc"} =
++             Membership.get_club(club_id)
++  end
++
++  defp input_value(html, selector) do
++    values =
++      html
++      |> LazyHTML.from_fragment()
++      |> LazyHTML.query(selector)
++      |> LazyHTML.attribute("value")
++
++    assert [value] = values
++    value
++  end
++end
