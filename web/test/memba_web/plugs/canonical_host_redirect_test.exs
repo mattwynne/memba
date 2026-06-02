@@ -19,7 +19,7 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
       |> Map.put(:host, "memba.io")
       |> get("/")
 
-    assert html_response(conn, 200) =~ "Keep every member in the loop."
+    assert html_response(conn, 200) =~ "Run your club, not your spreadsheet."
     assert get_resp_header(conn, "location") == []
   end
 end

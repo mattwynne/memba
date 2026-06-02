@@ -102,7 +102,9 @@ async function requestSignInLinkForEmail(world, email, personName = email) {
   await world.page.goto(appUrl(world.baseUrl, "/auth"));
   await world.page.getByLabel("Email address").fill(email);
   await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await playwrightExpect(world.page.getByText("If we know that email, we sent a sign-in link.")).toBeVisible();
+  await playwrightExpect(
+    world.page.getByText("Thanks. You should have an email in your inbox with a sign-in link.")
+  ).toBeVisible();
 
   world.signInRequests[personName] = { email, previousEmails };
 }
@@ -245,7 +247,7 @@ async function assertSignedOut(world) {
   await playwrightExpect(world.page).toHaveURL(/\/$/);
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toHaveCount(0);
   await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
-  await playwrightExpect(world.page.getByRole("link", { name: "Sign In" }).first()).toBeVisible();
+  await playwrightExpect(world.page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
 }
 
 async function assertOnStaffOnlyHomepage(world) {

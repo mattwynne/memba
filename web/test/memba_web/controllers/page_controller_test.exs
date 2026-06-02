@@ -14,7 +14,7 @@ defmodule MembaWeb.PageControllerTest do
     conn = get(conn, ~p"/")
     response = html_response(conn, 200)
 
-    assert response =~ "Keep every member in the loop."
+    assert response =~ "Run your club, not your spreadsheet."
     assert response =~ "Red Donkey Technology Corp"
     assert response =~ "https://donkey.red"
   end
@@ -26,18 +26,18 @@ defmodule MembaWeb.PageControllerTest do
 
     assert html
            |> LazyHTML.query("nav[aria-label='Main navigation'] a[href='/auth']")
-           |> Enum.any?()
+           |> Enum.empty?()
 
-    assert html |> LazyHTML.query("header > a[href='/auth']") |> Enum.any?()
+    assert html |> LazyHTML.query("header a[href='/auth']") |> Enum.any?()
     assert html |> LazyHTML.query("main a[href='/auth']") |> Enum.any?()
-    assert response =~ "Sign In"
+    assert response =~ "Sign in"
     refute response =~ "Internal staff admin"
     refute response =~ "Open internal staff admin"
     refute response =~ ~s(href="/admin/clubs")
     refute response =~ ~s(href="/clubs")
   end
 
-  test "GET / shows My clubs with query-string club links for signed-in members", %{conn: conn} do
+  test "GET / shows Your clubs with query-string club links for signed-in members", %{conn: conn} do
     first_club = create_active_member(email: "alice@example.com", club_name: "Alpine Club")
     second_club = create_active_member(email: "ALICE@example.com", club_name: "Bridge Club")
 
@@ -49,15 +49,21 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "My clubs"
+    assert response =~ "Your clubs"
+    assert response =~ "You’re a member of 2 clubs"
     assert response =~ "Alpine Club"
     assert response =~ "Bridge Club"
-    refute response =~ "Keep every member in the loop."
+    refute response =~ "Run your club, not your spreadsheet."
 
     for club <- [first_club, second_club] do
       assert html
              |> LazyHTML.query("a[data-testid='my-club-link'][href='/?club_id=#{club.club_id}']")
              |> Enum.any?()
+
+      refute html
+             |> LazyHTML.query("a[data-testid='my-club-link'][href='/?club_id=#{club.club_id}']")
+             |> LazyHTML.text()
+             |> String.contains?(club.club_id)
     end
 
     refute html |> LazyHTML.query("a#admin-home-link") |> Enum.any?()
@@ -195,7 +201,7 @@ defmodule MembaWeb.PageControllerTest do
            )
            |> Enum.any?()
 
-    refute response =~ "My clubs"
+    refute response =~ "Your clubs"
   end
 
   test "GET /messages/:message_id shows member message detail to active club members", %{
@@ -386,7 +392,7 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "My clubs"
+    assert response =~ "Your clubs"
 
     assert html
            |> LazyHTML.query("a#admin-home-link[href='/admin/clubs']")
@@ -404,7 +410,7 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "My clubs"
+    assert response =~ "Your clubs"
     assert response =~ "Staff Tennis Club"
 
     assert html

@@ -7,7 +7,7 @@ defmodule MembaWeb.AuthController do
   alias Memba.Accounts.AuthEmail
   alias MembaWeb.UserAuth
 
-  @neutral_notice "If we know that email, we sent a sign-in link."
+  @neutral_notice "Thanks. You should have an email in your inbox with a sign-in link."
   @invalid_link_notice "That sign-in link is invalid or has expired."
 
   def new(conn, _params) do
