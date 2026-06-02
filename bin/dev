@@ -40,6 +40,57 @@ devenv_with_postgres_port() {
   fi
 }
 
+memba_started_services=0
+
+stop_started_services() {
+  if [ "$memba_started_services" -eq 1 ]; then
+    down
+  fi
+}
+
+wait_for_postgres_shutdown() {
+  local data_dir="$repo_root/.devenv/state/postgres"
+  local pid_file="$data_dir/postmaster.pid"
+
+  if [ ! -f "$pid_file" ]; then
+    return
+  fi
+
+  local pid
+  pid="$(sed -n '1p' "$pid_file")"
+
+  for _ in $(seq 1 60); do
+    if [ ! -f "$pid_file" ]; then
+      return
+    fi
+
+    if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
+      return
+    fi
+
+    sleep 1
+  done
+
+  if command -v pg_ctl >/dev/null 2>&1; then
+    pg_ctl -D "$data_dir" stop -m fast >/dev/null 2>&1 || true
+  fi
+
+  for _ in $(seq 1 20); do
+    if [ ! -f "$pid_file" ]; then
+      return
+    fi
+
+    if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
+      return
+    fi
+
+    sleep 1
+  done
+
+  echo "Postgres did not shut down cleanly; stale process may still hold $data_dir" >&2
+  return 1
+}
+
 adopt_running_postgres() {
   local pid_file="$repo_root/.devenv/state/postgres/postmaster.pid"
 
@@ -72,6 +123,8 @@ adopt_running_postgres() {
 }
 
 start_services() {
+  memba_started_services=0
+
   if adopt_running_postgres; then
     return
   fi
@@ -85,7 +138,9 @@ start_services() {
   # the current shell is not accepting connections, so reset stale processes
   # before starting one shared development/test Postgres.
   devenv_with_postgres_port processes down >/dev/null 2>&1 || true
+  wait_for_postgres_shutdown
   DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
+  memba_started_services=1
   devenv_with_postgres_port processes wait --timeout 120
 
   if adopt_running_postgres; then
@@ -119,13 +174,14 @@ migrate_databases() {
 up() {
   start_services
   migrate_databases
-  trap down EXIT
+  trap stop_started_services EXIT
   (cd "$repo_root/web" && mix phx.server)
 }
 
 # @cmd Stop development services
 down() {
   devenv_with_postgres_port processes down || true
+  wait_for_postgres_shutdown
 }
 
 precommit() {
@@ -135,14 +191,14 @@ precommit() {
 # @cmd Run the standard local quality gate with required services
 ci() {
   start_services
-  trap down EXIT
+  trap stop_started_services EXIT
   precommit
 }
 
 # @cmd Run the standard local quality gate
 check() {
   start_services
-  trap down EXIT
+  trap stop_started_services EXIT
   precommit
 }
 
@@ -183,7 +239,7 @@ sandbox_check() {
   done
 
   start_services
-  trap down EXIT
+  trap stop_started_services EXIT
 
   echo "Starting test dependency compile smoke test..."
   (cd "$repo_root/web" && MIX_ENV=test mix deps.compile --force)
