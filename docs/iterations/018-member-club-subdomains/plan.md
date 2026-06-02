@@ -1,7 +1,7 @@
 # Member-facing club subdomains
 
 Date: 2026-06-01
-Status: validated
+Status: implementing
 
 ## Goal
 
