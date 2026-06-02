@@ -1,0 +1,87 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 205df8f..20406fe 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
+ - [x] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
+ - [x] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
+-- [ ] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
++- [x] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+ - [ ] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+ - [ ] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+ - [ ] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+diff --git a/web/test/memba_web/user_auth_test.exs b/web/test/memba_web/user_auth_test.exs
+index 82bcde9..a60001a 100644
+--- a/web/test/memba_web/user_auth_test.exs
++++ b/web/test/memba_web/user_auth_test.exs
+@@ -50,6 +50,29 @@ defmodule MembaWeb.IdentityAuthTest do
+       assert club_id == club.club_id
+       assert conn.assigns.current_identity_clubs == conn.assigns.current_identity.active_clubs
+     end
++
++    test "assigns active clubs for a signed-in alternate known member email", %{conn: conn} do
++      club =
++        create_active_member(
++          email: "alice@example.com",
++          alternate_emails: ["Alice.Work@Example.COM"],
++          club_name: "Kootenay"
++        )
++
++      conn =
++        conn
++        |> init_test_session(%{"current_identity_email" => " alice.work@example.com "})
++        |> IdentityAuth.fetch_current_identity([])
++
++      assert conn.assigns.current_identity.email == "alice.work@example.com"
++      assert conn.assigns.current_identity.staff? == false
++
++      assert [%Club{club_id: club_id, name: "Kootenay"}] =
++               conn.assigns.current_identity.active_clubs
++
++      assert club_id == club.club_id
++      assert conn.assigns.current_identity_clubs == conn.assigns.current_identity.active_clubs
++    end
+   end
+ 
+   describe "session helpers" do
+@@ -145,6 +168,22 @@ defmodule MembaWeb.IdentityAuthTest do
+       refute conn.halted
+     end
+ 
++    test "continues for signed-in active members using an alternate known email", %{conn: conn} do
++      club =
++        create_active_member(
++          email: "alice@example.com",
++          alternate_emails: ["Alice.Work@Example.COM"]
++        )
++
++      conn =
++        %{conn | query_params: %{"club_id" => club.club_id}}
++        |> init_test_session(%{"current_identity_email" => " alice.work@example.com "})
++        |> IdentityAuth.fetch_current_identity([])
++        |> IdentityAuth.require_active_club_member([])
++
++      refute conn.halted
++    end
++
+     test "forbids signed-in identities that are not active members of the requested club", %{
+       conn: conn
+     } do
+@@ -210,6 +249,16 @@ defmodule MembaWeb.IdentityAuthTest do
+       active: true
+     })
+ 
++    attrs
++    |> Keyword.get(:alternate_emails, [])
++    |> Enum.each(fn email ->
++      insert_membership_person_email_address!(
++        person_id: person.person_id,
++        email: email,
++        is_primary: false
++      )
++    end)
++
+     club
+   end
+ end
