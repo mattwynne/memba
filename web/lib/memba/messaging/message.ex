@@ -10,7 +10,6 @@ defmodule Memba.Messaging.Message do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
@@ -75,10 +74,6 @@ defmodule Memba.Messaging.Message do
     report_status_with_reason(message, command, :spam_complaint, EmailDeliverySpamComplaint)
   end
 
-  def execute(%__MODULE__{} = message, %ReportEmailDeliveryOpened{} = command) do
-    report_status(message, command, :opened, EmailDeliveryOpened)
-  end
-
   @impl Aggregate
   def apply(%__MODULE__{} = message, %MessageSent{} = event) do
     %__MODULE__{
@@ -120,8 +115,8 @@ defmodule Memba.Messaging.Message do
     put_delivery_status(message, event.delivery_id, :spam_complaint, event.reason)
   end
 
-  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{} = event) do
-    put_delivery_status(message, event.delivery_id, :opened)
+  def apply(%__MODULE__{} = message, %EmailDeliveryOpened{}) do
+    message
   end
 
   defp report_status(%__MODULE__{} = message, command, next_status, event_module) do
@@ -192,8 +187,6 @@ defmodule Memba.Messaging.Message do
   defp valid_transition?(:delayed, :delivered), do: true
   defp valid_transition?(:delayed, :bounced), do: true
   defp valid_transition?(:delayed, :spam_complaint), do: true
-  defp valid_transition?(:delivered, :opened), do: true
-  defp valid_transition?(:sent, :opened), do: true
   defp valid_transition?(_current_status, _next_status), do: false
 
   defp put_delivery_status(%__MODULE__{} = message, delivery_id, status, reason \\ nil) do

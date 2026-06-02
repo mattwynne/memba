@@ -6,7 +6,7 @@ defmodule Memba.Messaging.StatusReportApiTest do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Recipient
 
-  test "public status reporting APIs dispatch delivery status commands" do
+  test "public status reporting APIs dispatch supported delivery status commands" do
     message_id = Ecto.UUID.generate()
     recipients = recipients(["Alice", "Bob", "Carol", "Dana", "Erin"])
     [alice, bob, carol, dana, erin] = recipients
@@ -56,7 +56,7 @@ defmodule Memba.Messaging.StatusReportApiTest do
                consistency: :strong
              )
 
-    assert :ok =
+    assert {:error, :unsupported_delivery_status} =
              Messaging.report_email_delivery_opened(
                %{message_id: message_id, delivery_id: erin.delivery_id},
                consistency: :strong
@@ -89,7 +89,8 @@ defmodule Memba.Messaging.StatusReportApiTest do
     assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
              "bounced"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status == "opened"
+    assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status ==
+             "delivered"
 
     assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status ==
              "spam complaint"

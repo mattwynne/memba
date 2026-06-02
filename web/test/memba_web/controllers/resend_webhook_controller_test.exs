@@ -8,7 +8,9 @@ defmodule MembaWeb.ResendWebhookControllerTest do
 
   import Plug.Conn
 
-  test "maps realistic Resend delivery and open events with outbound tags", %{conn: conn} do
+  test "maps realistic Resend delivery events and rejects open events without mutation", %{
+    conn: conn
+  } do
     %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
 
     conn = post_resend_event(conn, realistic_resend_payload(:delivered, message, bob))
@@ -25,13 +27,14 @@ defmodule MembaWeb.ResendWebhookControllerTest do
       |> recycle()
       |> post_resend_event(realistic_resend_payload(:opened, message, bob))
 
-    assert %{"status" => "accepted"} = json_response(conn, 202)
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+    assert detail =~ ":unsupported_delivery_status"
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "opened"
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
 
       assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
-               "opened"
+               "delivered"
     end)
   end
 

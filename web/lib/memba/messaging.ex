@@ -8,7 +8,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
@@ -82,15 +81,10 @@ defmodule Memba.Messaging do
     end
   end
 
-  @doc """
-  Report that a recipient opened a delivery.
-  """
+  @doc false
   def report_email_delivery_opened(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_email_delivery_opened_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
-    end
+    {:error, :unsupported_delivery_status}
   end
 
   @doc """
@@ -170,8 +164,8 @@ defmodule Memba.Messaging do
   @doc """
   Fetch a member-facing email delivery for a recipient on a message.
 
-  Invalid or missing IDs return `nil`. The status uses ADR 0006's
-  simplified member vocabulary: sent, delivered, delivery problem, or opened.
+  Invalid or missing IDs return `nil`. The status uses the simplified member
+  vocabulary: sent, delivered, or delivery problem.
   """
   def get_member_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
@@ -369,13 +363,6 @@ defmodule Memba.Messaging do
          delivery_id: delivery_id,
          reason: reason
        }}
-    end
-  end
-
-  defp report_email_delivery_opened_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
-      {:ok, %ReportEmailDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}
     end
   end
 

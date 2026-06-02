@@ -9,7 +9,6 @@ defmodule Memba.Messaging.Router do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
 
@@ -21,8 +20,7 @@ defmodule Memba.Messaging.Router do
       ReportEmailDeliveryDelivered,
       ReportEmailDeliveryDelayed,
       ReportEmailDeliveryBounced,
-      ReportEmailDeliverySpamComplaint,
-      ReportEmailDeliveryOpened
+      ReportEmailDeliverySpamComplaint
     ],
     to: Message
   )

@@ -6,7 +6,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -106,15 +105,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
                consistency: :strong
              )
 
-    assert :ok =
-             App.dispatch(
-               %ReportEmailDeliveryOpened{
-                 message_id: message_id,
-                 delivery_id: frank.delivery_id
-               },
-               consistency: :strong
-             )
-
     receipts_by_recipient =
       message_id
       |> Messaging.list_member_email_deliverys()
@@ -126,7 +116,7 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
              "Carol" => "delivery problem",
              "Dana" => "delivery problem",
              "Erin" => "delivery problem",
-             "Frank" => "opened"
+             "Frank" => "delivered"
            }
   end
 

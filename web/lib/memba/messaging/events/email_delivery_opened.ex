@@ -1,6 +1,8 @@
 defmodule Memba.Messaging.Events.EmailDeliveryOpened do
   @moduledoc """
-  Event raised when a email delivery has been opened at least once.
+  Legacy event kept for deserializing historic event-store data.
+
+  Current Messaging behaviour does not emit opened delivery events.
   """
 
   @derive Jason.Encoder

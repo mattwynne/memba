@@ -1,6 +1,9 @@
 defmodule Memba.Messaging.Commands.ReportEmailDeliveryOpened do
   @moduledoc """
-  Command to report that a recipient opened an email delivery at least once.
+  Legacy command kept only so historic/test-support code can compile.
+
+  Current Messaging behaviour does not route, dispatch, or emit opened delivery
+  reports.
   """
 
   @enforce_keys [:message_id, :delivery_id]
