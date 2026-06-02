@@ -41,7 +41,7 @@ defmodule Memba.EventSourcedSetupTest do
   end
 
   test "membership club slugs are required, deterministic, and unique" do
-    Memba.EventSourcedCase.reset_event_sourced_storage!()
+    Memba.EventSourcedCase.reset_event_sourced_system!()
 
     try do
       assert [["NO", "text"]] =
@@ -94,12 +94,12 @@ defmodule Memba.EventSourcedSetupTest do
 
       assert duplicate_error.postgres.constraint == "membership_clubs_slug_index"
     after
-      Memba.EventSourcedCase.reset_event_sourced_storage!()
+      Memba.EventSourcedCase.reset_event_sourced_system!()
     end
   end
 
   test "event-sourced test helper resets EventStore and projection rows" do
-    Memba.EventSourcedCase.reset_event_sourced_storage!()
+    Memba.EventSourcedCase.reset_event_sourced_system!()
 
     if is_nil(Process.whereis(Memba.EventStore)) do
       start_supervised!(Memba.EventStore)
@@ -155,7 +155,7 @@ defmodule Memba.EventSourcedSetupTest do
     assert [[1]] = query!("SELECT count(*) FROM membership_memberships").rows
     assert [[1]] = query!("SELECT count(*) FROM membership_people").rows
 
-    Memba.EventSourcedCase.reset_event_sourced_storage!()
+    Memba.EventSourcedCase.reset_event_sourced_system!()
 
     assert [[0]] = query!(~S|SELECT count(*) FROM "event_store"."events"|).rows
     assert [[0]] = query!("SELECT count(*) FROM projection_versions").rows

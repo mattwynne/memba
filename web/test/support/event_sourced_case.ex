@@ -19,6 +19,7 @@ defmodule Memba.EventSourcedCase do
     Memba.Messaging.Projectors.MemberEmailDelivery,
     Memba.Messaging.Projectors.MembaStaffEmailDelivery
   ]
+  @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
 
   using do
     quote do
@@ -46,7 +47,24 @@ defmodule Memba.EventSourcedCase do
 
     projector_child_ids = stop_event_sourced_projectors!()
     reset_event_sourced_storage!()
+    reset_commanded_subscription_acks!()
     Memba.DataCase.setup_sandbox(tags)
+    start_event_sourced_projectors!(projector_child_ids)
+    :ok
+  end
+
+  @doc """
+  Reset shared event-sourced storage while keeping projector subscriptions coherent.
+
+  Use this from tests that are not using `Memba.EventSourcedCase` but need to
+  truncate EventStore/projection state. Resetting the tables while projectors
+  remain subscribed can leave later strong-consistency dispatches waiting for
+  acknowledgements that will never arrive.
+  """
+  def reset_event_sourced_system! do
+    projector_child_ids = stop_event_sourced_projectors!()
+    reset_event_sourced_storage!()
+    reset_commanded_subscription_acks!()
     start_event_sourced_projectors!(projector_child_ids)
     :ok
   end
@@ -83,6 +101,10 @@ defmodule Memba.EventSourcedCase do
         {:error, :running} -> :ok
       end
     end)
+  end
+
+  defp reset_commanded_subscription_acks! do
+    Enum.each(@commanded_apps, &Commanded.Subscriptions.reset/1)
   end
 
   defp reset_event_store!(conn) do
