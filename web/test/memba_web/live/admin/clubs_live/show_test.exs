@@ -134,7 +134,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     refute has_element?(view, "#update-club-button[disabled]")
   end
 
-  test "people list links to dedicated create and edit pages and summarizes email addresses", %{
+  test "people and member lists show primary and alternate email addresses distinctly", %{
     conn: conn
   } do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
@@ -145,6 +145,16 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
       email: "alice@work.example",
       is_primary: false
     )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Ecto.UUID.generate(),
+                 club_id: club.club_id,
+                 person_id: person.person_id
+               },
+               consistency: :strong
+             )
 
     {:ok, view, _initial_html} =
       conn
@@ -162,19 +172,37 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
 
     assert has_element?(
              view,
-             "#person-#{person.person_id} [data-testid='person-alternate-summary'][data-alternate-count='1']",
-             "1 alternate email"
+             "#person-#{person.person_id} [data-testid='person-alternate-emails'][data-alternate-count='1']",
+             "Alternate email addresses"
            )
 
     assert has_element?(
              view,
-             "#person-#{person.person_id} [data-testid='person-alternate-summary']",
+             "#person-#{person.person_id} [data-testid='person-alternate-email']",
              "alice@work.example"
            )
 
     assert has_element?(
              view,
              "#edit-person-link-#{person.person_id}[href='/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit']"
+           )
+
+    assert has_element?(
+             view,
+             "#member-#{person.person_id} [data-testid='member-primary-email']",
+             "alice@example.com"
+           )
+
+    assert has_element?(
+             view,
+             "#member-#{person.person_id} [data-testid='member-alternate-emails'][data-alternate-count='1']",
+             "Alternate email addresses"
+           )
+
+    assert has_element?(
+             view,
+             "#member-#{person.person_id} [data-testid='member-alternate-email']",
+             "alice@work.example"
            )
   end
 
