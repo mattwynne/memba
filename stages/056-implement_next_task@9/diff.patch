@@ -1,0 +1,128 @@
+diff --git a/docs/human-todo.md b/docs/human-todo.md
+index 8af8d70..071eae5 100644
+--- a/docs/human-todo.md
++++ b/docs/human-todo.md
+@@ -30,8 +30,9 @@ and webhook details.
+ ### Webhook configuration
+ 
+ - [x] In Postmark, configure the webhook URL for the deployed Memba environment: `https://memba.io/webhooks/postmark`.
+-- [x] Enable webhook events needed by Memba: delivered, opened, bounced, and spam complaint. Postmark delivery-delay events arrive through the bounce/delayed shape handled by the app.
+-- [x] Enable open tracking for the outbound member broadcast stream/domain.
++- [x] Enable webhook events needed by Memba: delivered, bounced, and spam complaint. Postmark delivery-delay events arrive through the bounce/delayed shape handled by the app.
++- [ ] Disable/remove Postmark open webhook events if they were previously enabled. Memba rejects open events as unsupported and does not change delivery status from them.
++- [ ] Keep Postmark open tracking disabled for the outbound member broadcast stream/domain. Memba does not request or consume open-tracking signals.
+ - [x] Confirm Postmark webhook payloads include metadata/custom fields so Memba can receive `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ 
+ ### Deployment configuration
+@@ -50,7 +51,6 @@ and webhook details.
+ - [ ] Send one member broadcast from an explicitly configured environment.
+ - [ ] Confirm Postmark accepts the email.
+ - [ ] Confirm the email arrives from the configured From address and has the configured Reply-To address.
+-- [ ] Open the HTML email and confirm an opened event reaches Memba.
+ - [ ] Trigger or observe delivered/problem webhook events and confirm Memba updates delivery status.
+ 
+ Notes:
+@@ -68,7 +68,7 @@ the exact runtime configuration and smoke-test steps.
+ 
+ - [ ] Create a dedicated Postmark Transactional Message Stream for authentication email: `outbound-authentication`.
+ - [ ] Keep auth email separate from the member broadcast stream `outbound-member-broadcasts`.
+-- [ ] Do not point auth-stream delivery/open/bounce events at `POST /webhooks/postmark` unless the app is later extended to process auth-email webhook events.
++- [ ] Do not point auth-stream delivery or delivery-problem events at `POST /webhooks/postmark` unless the app is later extended to process auth-email webhook events.
+ 
+ ### Auth sender address
+ 
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index 6fac93b..6e2f187 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -8,5 +8,5 @@
+ - [x] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+ - [x] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+ - [x] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
+-- [ ] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
++- [x] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
+ - [ ] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.
+diff --git a/docs/postmark-email.md b/docs/postmark-email.md
+index e4d32e5..533da20 100644
+--- a/docs/postmark-email.md
++++ b/docs/postmark-email.md
+@@ -148,12 +148,14 @@ The route is `POST /webhooks/postmark` and accepts JSON webhook payloads. Enable
+ the Postmark events that Memba currently maps onto delivery state:
+ 
+ - `Delivery`
+-- `Open`
+ - `Bounce` for both transient/delayed and hard bounce outcomes
+ - `SpamComplaint`
+ 
+ Memba returns `202 Accepted` with `{"status":"accepted"}` when a webhook event is
+ processed. Unsupported or incomplete events return `422 Unprocessable Entity`.
++Do not enable Postmark `Open`/`Opened` webhook events for Memba. Memba does not
++track email opens; if a provider sends an open event anyway, Memba rejects it as
++unsupported and does not change delivery status.
+ 
+ Webhook signature verification is not part of this slice, so production exposure
+ should account for that follow-up security work.
+@@ -164,16 +166,16 @@ For Resend, configure this webhook URL:
+ https://<memba-host>/webhooks/resend
+ ```
+ 
+-Enable Resend events for delivered, opened, bounced, complained/spam complaint,
+-and delivery-delayed events where available. Memba correlates member-message
+-Resend events using the `memba_message_id` and `memba_delivery_id` tags/headers
+-on outbound email.
++Enable Resend events for delivered, bounced, complained/spam complaint, and
++delivery-delayed events where available. Do not enable Resend opened/open events
++for Memba. Memba correlates member-message Resend events using the
++`memba_message_id` and `memba_delivery_id` tags/headers on outbound email.
+ 
+ The shared magic-link auth stream does not require a Memba webhook route. Keep
+-provider webhooks configured for member-message delivery/open/bounce events only.
+-Do not point auth-stream delivery events at these routes unless the webhook
+-handler is later extended to handle auth-email events without member-message
+-metadata.
++provider webhooks configured for member-message delivery and delivery-problem
++events only. Do not point auth-stream delivery events at these routes unless the
++webhook handler is later extended to handle auth-email events without
++member-message metadata.
+ 
+ ## Correlation metadata
+ 
+@@ -201,7 +203,7 @@ For member-message email, the Postmark provider:
+   escaped HTML body;
+ - sets the configured sender/from address;
+ - sets the configured reply-to address when present;
+-- enables Postmark open tracking per email;
++- does not request Postmark open tracking;
+ - sends through `Memba.Mailer` using Swoosh's Postmark adapter.
+ 
+ Postmark API, authentication, transport, configuration, or unexpected Swoosh
+@@ -223,8 +225,7 @@ For a controlled environment only:
+ 4. Send one member message to a controlled inbox.
+ 5. Confirm Postmark accepts the email and the inbox receives it from the
+    configured sender with the configured reply-to address.
+-6. Open the HTML email and confirm an open webhook reaches Memba.
+-7. Trigger or observe delivery/problem webhooks and confirm the message receipt
++6. Trigger or observe delivery/problem webhooks and confirm the message receipt
+    and `/deliveries` overview update through Memba's delivery records.
+ 
+ For a controlled magic-link auth smoke test:
+diff --git a/docs/problem-domain-audit-2026-06-01.md b/docs/problem-domain-audit-2026-06-01.md
+index 0fc9767..8b7da25 100644
+--- a/docs/problem-domain-audit-2026-06-01.md
++++ b/docs/problem-domain-audit-2026-06-01.md
+@@ -60,7 +60,6 @@ Current code models the concept as email delivery:
+ - `EmailDeliveryDelayed`
+ - `EmailDeliveryBounced`
+ - `EmailDeliverySpamComplaint`
+-- `EmailDeliveryOpened`
+ - `Memba.Messaging.Projections.EmailDelivery`
+ - `messaging_recipient_deliveries`
+ - fields and docs using `email_delivery`
+@@ -74,7 +73,6 @@ Recommendation:
+   - `EmailDeliveryDelayed`
+   - `EmailDeliveryBounced`
+   - `EmailDeliverySpamComplaintReceived`
+-  - `EmailDeliveryOpened`
+ - Keep recipient/person fields as attributes of an email delivery.
+ 
+ ### 4. Revisit “member email delivery” naming
