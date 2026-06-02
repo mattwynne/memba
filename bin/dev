@@ -40,123 +40,12 @@ devenv_with_postgres_port() {
   fi
 }
 
-memba_started_services=0
-
-stop_started_services() {
-  if [ "$memba_started_services" -eq 1 ]; then
-    down
-  fi
-}
-
-wait_for_postgres_shutdown() {
-  local data_dir="$repo_root/.devenv/state/postgres"
-  local pid_file="$data_dir/postmaster.pid"
-
-  if [ ! -f "$pid_file" ]; then
-    return
+start_postgres() {
+  if ! devenv_with_postgres_port processes status postgres >/dev/null 2>&1; then
+    DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
   fi
 
-  local pid
-  pid="$(sed -n '1p' "$pid_file")"
-
-  for _ in $(seq 1 60); do
-    if [ ! -f "$pid_file" ]; then
-      return
-    fi
-
-    if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
-      return
-    fi
-
-    sleep 1
-  done
-
-  if command -v pg_ctl >/dev/null 2>&1; then
-    pg_ctl -D "$data_dir" stop -m fast >/dev/null 2>&1 || true
-  fi
-
-  for _ in $(seq 1 20); do
-    if [ ! -f "$pid_file" ]; then
-      return
-    fi
-
-    if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
-      return
-    fi
-
-    sleep 1
-  done
-
-  echo "Postgres did not shut down cleanly; stale process may still hold $data_dir" >&2
-  return 1
-}
-
-adopt_running_postgres() {
-  local pid_file="$repo_root/.devenv/state/postgres/postmaster.pid"
-
-  if [ ! -f "$pid_file" ]; then
-    return 1
-  fi
-
-  local pid port socket_dir
-  pid="$(sed -n '1p' "$pid_file")"
-  port="$(sed -n '4p' "$pid_file")"
-  socket_dir="$(sed -n '5p' "$pid_file")"
-
-  if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
-    return 1
-  fi
-
-  if [ -n "$socket_dir" ] && pg_isready -h "$socket_dir" -p "$port" >/dev/null 2>&1; then
-    export PGHOST="$socket_dir"
-    export PGPORT="$port"
-    return 0
-  fi
-
-  if [ -n "$port" ] && pg_isready -h localhost -p "$port" >/dev/null 2>&1; then
-    export PGHOST=localhost
-    export PGPORT="$port"
-    return 0
-  fi
-
-  return 1
-}
-
-start_services() {
-  memba_started_services=0
-
-  if adopt_running_postgres; then
-    return
-  fi
-
-  if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
-    return
-  fi
-
-  # Use devenv's process-compose backend directly. A previous run can leave
-  # process-compose thinking postgres is "ready" even though the socket/port in
-  # the current shell is not accepting connections, so reset stale processes
-  # before starting one shared development/test Postgres.
-  devenv_with_postgres_port processes down >/dev/null 2>&1 || true
-  wait_for_postgres_shutdown
-  DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
-  memba_started_services=1
   devenv_with_postgres_port processes wait --timeout 120
-
-  if adopt_running_postgres; then
-    return
-  fi
-
-  if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
-    devenv_with_postgres_port processes logs -n 100 postgres >&2 || true
-    echo "Postgres did not become ready at PGHOST=$PGHOST PGPORT=$PGPORT" >&2
-    exit 1
-  fi
-}
-
-# @cmd Start Postgres and exit once it is ready
-postgres() {
-  start_services
 }
 
 migrate_databases() {
@@ -172,16 +61,15 @@ migrate_databases() {
 
 # @cmd Start Postgres and the Phoenix web app
 up() {
-  start_services
+  start_postgres
   migrate_databases
-  trap stop_started_services EXIT
+  trap down EXIT
   (cd "$repo_root/web" && mix phx.server)
 }
 
 # @cmd Stop development services
 down() {
   devenv_with_postgres_port processes down || true
-  wait_for_postgres_shutdown
 }
 
 precommit() {
@@ -190,15 +78,13 @@ precommit() {
 
 # @cmd Run the standard local quality gate with required services
 ci() {
-  start_services
-  trap stop_started_services EXIT
+  start_postgres
   precommit
 }
 
 # @cmd Run the standard local quality gate
 check() {
-  start_services
-  trap stop_started_services EXIT
+  start_postgres
   precommit
 }
 
@@ -238,8 +124,7 @@ sandbox_check() {
     rm -f "$probe"
   done
 
-  start_services
-  trap stop_started_services EXIT
+  start_postgres
 
   echo "Starting test dependency compile smoke test..."
   (cd "$repo_root/web" && MIX_ENV=test mix deps.compile --force)

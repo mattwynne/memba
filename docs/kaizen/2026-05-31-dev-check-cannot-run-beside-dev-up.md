@@ -87,17 +87,18 @@ Developers and agents often need a browser session open while running tests or c
 
 Date: 2026-06-01
 
-Root cause: `bin/dev` treated every command that called `start_services` as the owner of Postgres. When `dev check` adopted an already-running Postgres from `dev up`, its `EXIT` trap still called `down`, so the quality gate could stop the shared service. Separately, `devenv processes down` can return while Postgres is still shutting down, leaving `postmaster.pid` in `.devenv/state/postgres`; an immediate restart then hits the low-level lock-file failure.
+Root cause: `bin/dev` was partially reimplementing process-compose ownership and readiness. `dev check` used a custom adoption path plus an `EXIT` trap that could stop a Postgres service it had not started, and the script reset process-compose before starting Postgres instead of asking process-compose for the `postgres` service state.
 
 Fix applied:
 
-- `bin/dev`: track whether the current command actually started the Postgres service, and only stop services on exit when it did. Commands that adopt an existing healthy Postgres now leave it running.
-- `bin/dev`: wait for the Postgres `postmaster.pid`/process to disappear after `processes down` before trying to start a new service, with a `pg_ctl stop -m fast` fallback for stale shutdowns.
-- `docs/kaizen/2026-05-31-dev-check-cannot-run-beside-dev-up.md`: recorded the root cause, fix, validation, and follow-up.
+- `bin/dev`: simplified Postgres startup to use `devenv processes status postgres`, `devenv processes up -d postgres`, and `devenv processes wait`; removed custom pid-file adoption, owner tracking, `pg_ctl` fallback, and the public `dev postgres` command.
+- `bin/dev`: `dev check`, `dev ci`, and `sandbox-check` now ensure Postgres is running but do not stop process-compose services when they finish; `dev up` remains the command that starts Postgres plus Phoenix and stops services on exit.
+- `docs/kaizen/2026-05-31-dev-check-cannot-run-beside-dev-up.md`: recorded the root cause, simplification, validation, and follow-up.
 
 Validation:
 
-- `./bin/dev postgres; ./bin/dev check` — passed, 315 tests, 0 failures; the Postgres PID was unchanged after `dev check`, proving the quality gate adopted the existing service and did not stop it.
+- `./bin/dev check` — passed, 315 tests, 0 failures.
+- Running `./bin/dev check` again with Postgres already managed by process-compose — passed, 315 tests, 0 failures; process-compose kept the same Postgres PID.
 
 Remaining follow-up:
 
