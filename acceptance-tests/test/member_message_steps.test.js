@@ -644,12 +644,12 @@ test("member send flow opens compose from club home and stores the new message",
     subject: "Trip planning night"
   });
   assert.deepEqual(page.actions, [
-    ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
+    ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
     ["click", "locator", "#member-send-message-link"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
     ["click", "button", { name: "Send to all members" }],
-    ["goto", "http://127.0.0.1:4444/?club_id=club-1"]
+    ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"]
   ]);
   assert.equal(
     page.actions.some((action) => action[0] === "goto" && String(action[1]).startsWith("http://127.0.0.1:4444/admin")),
@@ -689,7 +689,7 @@ test("member failed-send flow stays on compose failure state with support guidan
   assert.equal(page.composeState, "send_failed");
   assert.equal(page.rows.clubMessages.length, 0);
   assert.deepEqual(page.actions, [
-    ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
+    ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
     ["click", "locator", "#member-send-message-link"],
     ["fill", "Subject", "Trip planning night"],
     ["fill", "Message", "Trip planning night details."],
@@ -720,7 +720,7 @@ test("member club home opening waits on the stable member home container", async
 
   await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });
 
-  assert.deepEqual(page.actions, [["goto", "http://127.0.0.1:4444/?club_id=club-1"]]);
+  assert.deepEqual(page.actions, [["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"]]);
   assert.ok(
     expectations.some(
       (expectation) =>
@@ -732,7 +732,7 @@ test("member club home opening waits on the stable member home container", async
   );
 });
 
-test("member message opening uses the member-facing message route with club_id", async () => {
+test("member message opening uses the member-facing club subdomain route", async () => {
   const page = new FakePage();
   const world = worldWithPage(page);
   world.messages = {
@@ -746,7 +746,7 @@ test("member message opening uses the member-facing message route with club_id",
   await openMemberMessage(world, "Trip planning night", { expect: fakeExpect([]) });
 
   assert.deepEqual(page.actions, [
-    ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"]
+    ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"]
   ]);
 });
 
@@ -889,11 +889,11 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
   assert.deepEqual(
     page.actions.filter((action) => action[0] === "goto"),
     [
-      ["goto", "http://127.0.0.1:4444/?club_id=club-1"],
-      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
-      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
-      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"],
-      ["goto", "http://127.0.0.1:4444/messages/message-1?club_id=club-1"]
+      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
+      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"],
+      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"],
+      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"],
+      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"]
     ]
   );
   assert.ok(

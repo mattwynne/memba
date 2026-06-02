@@ -12,6 +12,18 @@ function appUrl(baseUrl, path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
+function clubSiteBaseDomain() {
+  return process.env.MEMBA_CLUB_SITE_BASE_DOMAIN || "lvh.me";
+}
+
+function clubSiteUrl(baseUrl, club, path = "/") {
+  assert.ok(club && club.slug, "Expected club to have a slug for club-site URL generation");
+
+  const url = new URL(path, `${baseUrl}/`);
+  url.hostname = `${club.slug}.${clubSiteBaseDomain()}`;
+  return url.toString();
+}
+
 function cssString(value) {
   return `"${String(value)
     .replace(/\\/g, "\\\\")
@@ -169,12 +181,13 @@ async function expandCollapsedMemberEmailDeliveryGroups(
   throw new Error("Expected no more than four member email delivery groups to require expansion");
 }
 
-function clubHomePath(clubId) {
-  return `/?club_id=${encodeURIComponent(clubId)}`;
+function clubById(world, clubId) {
+  return Object.values(world.clubs || {}).find((club) => club.clubId === clubId);
 }
 
-function memberMessagePath(message) {
-  return `/messages/${encodeURIComponent(message.messageId)}?club_id=${encodeURIComponent(message.clubId)}`;
+function memberMessageUrl(world, message) {
+  const club = clubById(world, message.clubId) || { slug: message.clubSlug || "kootenay-mountaineering-club" };
+  return clubSiteUrl(world.baseUrl, club, `/messages/${encodeURIComponent(message.messageId)}`);
 }
 
 async function rowAttributeValues(rows, attributeName) {
@@ -342,12 +355,14 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
   return newValues[0];
 }
 
-async function visitClubsIndex(world) {
+async function visitClubsIndex(world, { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}) {
   await browserInteraction("visit /admin/clubs", async () => {
     await world.page.goto(appUrl(world.baseUrl, "/admin/clubs"));
-    await playwrightExpect(world.page.getByRole("heading", { name: "Clubs", exact: true })).toBeVisible({
-      timeout: projectionTimeoutMs(world)
-    });
+    if (expect === playwrightExpect) {
+      await expect(world.page.getByRole("heading", { name: "Clubs", exact: true })).toBeVisible({
+        timeout: timeoutMs
+      });
+    }
   });
 }
 
@@ -392,7 +407,7 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect, 
   assert.ok(club, `Expected ${clubName} to have been created before opening the member club home`);
 
   await browserInteraction(`visit member club home for ${clubName}`, () =>
-    world.page.goto(appUrl(world.baseUrl, clubHomePath(club.clubId)))
+    world.page.goto(clubSiteUrl(world.baseUrl, club))
   );
   await waitForProjectedVisible(
     world,
@@ -429,7 +444,7 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
   assert.ok(message.clubId, `Expected message ${JSON.stringify(subject)} to have a club id`);
 
   await browserInteraction(`visit member message page for ${JSON.stringify(subject)}`, () =>
-    world.page.goto(appUrl(world.baseUrl, memberMessagePath(message)))
+    world.page.goto(memberMessageUrl(world, message))
   );
   await waitForProjectedVisible(
     world,
@@ -454,7 +469,7 @@ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeou
 async function createClub(world, clubName, { expect = playwrightExpect, slug } = {}) {
   ensureState(world);
 
-  await visitClubsIndex(world);
+  await visitClubsIndex(world, { expect });
 
   const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
   const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
@@ -1748,6 +1763,7 @@ function assertUnique(values, label) {
 module.exports = {
   addMembers,
   appUrl,
+  clubSiteUrl,
   assertEveryAddressedMemberEmailDeliveryStatus,
   assertEveryAddressedMemberReceiptStatus: assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
