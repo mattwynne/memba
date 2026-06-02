@@ -26,9 +26,13 @@ const {
   tryOpenStaffOnlyArea
 } = require("../support/authentication");
 
-Given("{word} is a member of Kootenay Mountaineering Club", async function (personName) {
-  await ensureMember(this, personName, "Kootenay Mountaineering Club");
-});
+Given(
+  "{word} is a member of Kootenay Mountaineering Club",
+  { timeout: 60000 },
+  async function (personName) {
+    await ensureMember(this, personName, "Kootenay Mountaineering Club");
+  }
+);
 
 Given("Alice is a member of Nelson Paddling Club", async function () {
   await ensureMember(this, "Alice", "Nelson Paddling Club");

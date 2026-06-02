@@ -127,7 +127,16 @@ function worldWithBrowser() {
         slug: "kootenay-mountaineering-club"
       }
     },
-    people: { Alice: { email: "alice@example.test", name: "Alice", personId: "person-alice" } }
+    people: {
+      Alice: {
+        alternateEmails: [],
+        email: "alice@example.test",
+        emailAddresses: [{ email: "alice@example.test", isPrimary: true }],
+        name: "Alice",
+        personId: "person-alice",
+        primaryEmail: "alice@example.test"
+      }
+    }
   };
 }
 

@@ -105,18 +105,24 @@ async function signInStaff(world) {
 }
 
 async function completeStaffOnboardingIfNeeded(world) {
-  if (!currentPageUrl(world.page).includes("/auth/onboard")) {
+  await world.page.waitForLoadState("networkidle").catch(() => {});
+
+  const nameField = world.page.getByLabel("Your name");
+
+  if (!currentPageUrl(world.page).includes("/auth/onboard") && (await nameField.count()) === 0) {
     return;
   }
 
-  await world.page.getByLabel("Your name").fill("Acceptance Staff");
+  await nameField.fill("Acceptance Staff");
   await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
+  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
 }
 
 async function signInMember(world, memberName) {
   const person = personFromWorld(world, memberName);
+  const email = signInEmailForPerson(person);
 
-  await signInByMagicLink(world, person.email, memberName);
+  await signInByMagicLink(world, email, memberName);
   assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
 }
 
@@ -206,9 +212,16 @@ function personFromWorld(world, memberName) {
   const person = world.people[memberName];
 
   assert.ok(person, `Expected ${memberName} to be known in the scenario`);
-  assert.ok(person.email, `Expected ${memberName} to have an email address for member sign-in`);
+  assert.ok(
+    signInEmailForPerson(person),
+    `Expected ${memberName} to have a primary email address for member sign-in`
+  );
 
   return person;
+}
+
+function signInEmailForPerson(person) {
+  return person.email || person.primaryEmail;
 }
 
 function signInEmailMatches(email, recipientEmail) {

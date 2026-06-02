@@ -82,10 +82,15 @@ async function ensureMember(world, personName, clubName) {
 
 async function recordNonMember(world, personName) {
   ensureState(world);
+  const email = authEmailFor(personName);
+
   world.people[personName] = world.people[personName] || {
-    email: authEmailFor(personName),
+    alternateEmails: [],
+    email,
+    emailAddresses: [{ email, isPrimary: true }],
     name: personName,
-    personId: null
+    personId: null,
+    primaryEmail: email
   };
 }
 
@@ -191,7 +196,7 @@ async function tryOpenStaffOnlyArea(world) {
 
 async function assertSignedIn(world, personName) {
   const person = personFromWorld(world, personName);
-  await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${person.email}`);
+  await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${signedInEmailFor(world, personName, person)}`);
 }
 
 async function assertStillSignedIn(world, personName) {
@@ -205,12 +210,17 @@ async function assertSignedInAsStaff(world, _personName) {
 }
 
 async function completeStaffOnboardingIfNeeded(world) {
-  if (!currentPageUrl(world.page).includes("/auth/onboard")) {
+  await world.page.waitForLoadState("networkidle").catch(() => {});
+
+  const nameField = world.page.getByLabel("Your name");
+
+  if (!currentPageUrl(world.page).includes("/auth/onboard") && (await nameField.count()) === 0) {
     return;
   }
 
-  await world.page.getByLabel("Your name").fill("Acceptance Staff");
+  await nameField.fill("Acceptance Staff");
   await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
+  await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
 }
 
 async function openClubPage(world, clubName) {
@@ -229,7 +239,7 @@ async function assertSignedInOnClubPage(world, personName) {
   const person = personFromWorld(world, personName);
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
   await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(
-    `Signed in as ${person.email}`
+    `Signed in as ${signedInEmailFor(world, personName, person)}`
   );
   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
 }
@@ -292,6 +302,12 @@ function signInRequestFor(world, personName) {
   const request = world.signInRequests && world.signInRequests[personName];
   assert.ok(request, `Expected ${personName} to have requested a sign-in link`);
   return request;
+}
+
+function signedInEmailFor(world, personName, person) {
+  const request = world.signInRequests && world.signInRequests[personName];
+
+  return (request && request.email) || person.email;
 }
 
 function signInLinkFor(world, personName) {

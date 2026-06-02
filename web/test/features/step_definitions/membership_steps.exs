@@ -109,12 +109,21 @@ defmodule Memba.Cucumber.MembershipSteps do
 
       assert :ok =
                App.dispatch(
-                 %CreatePerson{person_id: person_id, name: name, email: email},
+                 %CreatePerson{
+                   person_id: person_id,
+                   name: name,
+                   email: email,
+                   email_addresses: [%{email: email, is_primary: true}]
+                 },
                  consistency: :strong
                )
 
       assert %PersonProjection{person_id: ^person_id, name: ^name, email: ^email} =
                Membership.get_person(person_id)
+
+      assert [
+               %{email: ^email, normalized_email: ^email, primary?: true}
+             ] = Membership.list_person_email_addresses(person_id)
 
       update_context_map(context, :people, name, person_id)
     end
