@@ -9,4 +9,4 @@
 - [x] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
 - [x] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
 - [x] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
-- [ ] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.
+- [x] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.
