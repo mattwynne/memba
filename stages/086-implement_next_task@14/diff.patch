@@ -1,0 +1,132 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index b030b7a..b0bbe75 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -13,5 +13,5 @@
+ - [x] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
+ - [x] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
+ - [x] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
+-- [ ] 014 Add tests for:
++- [x] 014 Add tests for:
+ - [ ] 015 Run `dev check`.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 0878879..aeb3bd2 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -23,7 +23,8 @@ defmodule Memba.Membership do
+   `"club_id"`.
+   """
+   def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+-    with {:ok, command} <- create_club_command(attrs) do
++    with {:ok, command} <- create_club_command(attrs),
++         :ok <- prevent_duplicate_club_slug(command) do
+       dispatch(command, dispatch_opts)
+     end
+   end
+@@ -276,6 +277,13 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp prevent_duplicate_club_slug(%CreateClub{} = command) do
++    case Repo.get_by(Club, slug: command.slug) do
++      nil -> :ok
++      %Club{} -> {:error, :slug_taken}
++    end
++  end
++
+   defp prevent_duplicate_club_slug(%UpdateClub{} = command) do
+     case Repo.get_by(Club, slug: command.slug) do
+       nil -> :ok
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 3424625..4f0a5e8 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -62,6 +62,32 @@ defmodule Memba.Membership.PublicApiTest do
+              })
+   end
+ 
++  test "create_club/2 rejects duplicate slugs before dispatching a new club" do
++    existing_club_id = Ecto.UUID.generate()
++    duplicate_club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: existing_club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    assert {:error, :slug_taken} =
++             Membership.create_club(
++               %{
++                 club_id: duplicate_club_id,
++                 name: "KMC Duplicate Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    assert %ClubProjection{club_id: ^existing_club_id, slug: "kmc"} =
++             Membership.get_club_by_slug("kmc")
++
++    assert is_nil(Membership.get_club(duplicate_club_id))
++  end
++
+   test "update_club/2 edits a projected club name and slug" do
+     club_id = Ecto.UUID.generate()
+ 
+diff --git a/web/test/memba_web/live/admin/clubs_live/index_test.exs b/web/test/memba_web/live/admin/clubs_live/index_test.exs
+index 7ee619b..09ac842 100644
+--- a/web/test/memba_web/live/admin/clubs_live/index_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/index_test.exs
+@@ -3,6 +3,9 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
+ 
+   import Phoenix.LiveViewTest
+ 
++  alias Memba.Membership
++  alias Memba.Membership.Projections.Club, as: ClubProjection
++
+   test "create form suggests a generated slug and allows staff override", %{conn: conn} do
+     {:ok, view, initial_html} =
+       conn
+@@ -37,6 +40,41 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
+            )
+   end
+ 
++  test "duplicate slug create submissions show a server error and keep the form editable", %{
++    conn: conn
++  } do
++    existing_club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: existing_club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs")
++
++    view
++    |> form("#new-club-form", club: %{name: "KMC Duplicate Club", slug: "kmc"})
++    |> render_submit()
++
++    duplicate_html = render(view)
++
++    assert has_element?(view, "#flash-error", "Could not create club: :slug taken")
++    assert input_value(duplicate_html, "#club-name-input") == "KMC Duplicate Club"
++    assert input_value(duplicate_html, "#club-slug-input") == "kmc"
++
++    assert %ClubProjection{club_id: ^existing_club_id, slug: "kmc"} =
++             Membership.get_club_by_slug("kmc")
++
++    assert [^existing_club_id] =
++             Membership.list_clubs()
++             |> Enum.filter(&(&1.slug == "kmc"))
++             |> Enum.map(& &1.club_id)
++  end
++
+   defp input_value(html, selector) do
+     values =
+       html
