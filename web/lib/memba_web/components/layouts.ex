@@ -35,11 +35,45 @@ defmodule MembaWeb.Layouts do
 
   def app(assigns) do
     ~H"""
-    <header class="navbar border-b border-base-300 bg-base-100 px-4 sm:px-6 lg:px-8">
-      <div class="flex-1">
-        <a href="/" class="w-fit" aria-label="Memba home">
+    <header class="border-b border-line bg-paper px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto flex max-w-7xl flex-col gap-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <a
+          href={~p"/"}
+          class="w-fit transition duration-200 hover:opacity-80"
+          aria-label="Memba home"
+        >
           <.logo />
         </a>
+
+        <nav
+          class="flex flex-wrap items-center gap-3 text-sm font-medium"
+          aria-label="Public navigation"
+        >
+          <a
+            href={~p"/"}
+            class="rounded-full px-3 py-2 text-ink-2 transition duration-200 hover:bg-cream hover:text-ink"
+          >
+            Home
+          </a>
+          <a
+            href={~p"/about"}
+            class="rounded-full px-3 py-2 text-ink-2 transition duration-200 hover:bg-cream hover:text-ink"
+          >
+            About
+          </a>
+          <a
+            href={~p"/auth"}
+            class="rounded-full border border-line-strong bg-paper px-4 py-2 text-ink transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+          >
+            Sign in
+          </a>
+          <a
+            href={~p"/get-started"}
+            class="rounded-full border border-sage-600 bg-sage-600 px-4 py-2 font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+          >
+            Get started
+          </a>
+        </nav>
       </div>
     </header>
 
