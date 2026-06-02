@@ -48,6 +48,39 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     assert has_element?(view, "a#back-to-club-home-link[href='/?club_id=#{alice.club_id}']")
   end
 
+  test "club subdomain routed mount keeps the host-selected message after LiveView connects", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    message =
+      create_message(
+        club_id: alice.club_id,
+        sender_id: alice.person_id,
+        subject: "Trip planning night"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/#{message.message_id}")
+
+    assert has_element?(
+             view,
+             "#member-message-detail[data-club-id='#{alice.club_id}'][data-message-id='#{message.message_id}']"
+           )
+
+    assert has_element?(view, "a#back-to-club-home-link[href='/']")
+    refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
+  end
+
   test "routed message detail renders the Who got this summary and polished group headers", %{
     conn: conn
   } do
@@ -444,10 +477,9 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
 
     club =
       Repo.get(Club, club_id) ||
-        insert_membership_club!(
-          club_id: club_id,
-          name: club_name
-        )
+        attrs
+        |> club_attrs(club_id, club_name)
+        |> insert_membership_club!()
 
     person =
       insert_membership_person!(
@@ -466,6 +498,15 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     club
     |> Map.from_struct()
     |> Map.put(:person_id, person.person_id)
+  end
+
+  defp club_attrs(attrs, club_id, club_name) do
+    base = [club_id: club_id, name: club_name]
+
+    case Keyword.fetch(attrs, :slug) do
+      {:ok, slug} -> Keyword.put(base, :slug, slug)
+      :error -> base
+    end
   end
 
   defp create_message(attrs) do

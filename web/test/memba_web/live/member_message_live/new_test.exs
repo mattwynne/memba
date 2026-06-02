@@ -34,6 +34,41 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
            )
   end
 
+  test "club subdomain routed mount keeps the host-selected club after LiveView connects", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    _bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Kootenay Mountaineering Club",
+        club_id: alice.club_id,
+        slug: "kmc"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/new")
+
+    assert has_element?(
+             view,
+             "#member-message-compose[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='2']"
+           )
+
+    assert has_element?(view, "#member-compose-club-home-link[href='/']")
+    refute has_element?(view, "#member-compose-club-home-link[href*='club_id=']")
+  end
+
   test "routed mount derives compose context from the signed-in member and selected club", %{
     conn: conn
   } do
@@ -225,10 +260,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     person_id = Ecto.UUID.generate()
 
     Repo.get(Club, club_id) ||
-      insert_membership_club!(
-        club_id: club_id,
-        name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
-      )
+      attrs
+      |> club_attrs(club_id)
+      |> insert_membership_club!()
 
     person =
       insert_membership_person!(
@@ -245,5 +279,17 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     })
 
     %{club_id: club_id, person_id: person.person_id}
+  end
+
+  defp club_attrs(attrs, club_id) do
+    base = [
+      club_id: club_id,
+      name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+    ]
+
+    case Keyword.fetch(attrs, :slug) do
+      {:ok, slug} -> Keyword.put(base, :slug, slug)
+      :error -> base
+    end
   end
 end

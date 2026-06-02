@@ -89,6 +89,26 @@ defmodule MembaWeb.AuthControllerTest do
       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
     end
 
+    test "creates club-subdomain callback URL emails when sign-in is requested on a club host", %{
+      conn: conn
+    } do
+      configure_auth_email()
+      create_active_member(email: "alice@example.com")
+
+      assert conn
+             |> Map.put(:host, "kmc.lvh.me")
+             |> submit_sign_in_link_request(" ALICE@EXAMPLE.COM ") =~
+               "We’ve sent your sign-in link"
+
+      assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
+      assert_received {:email, %Swoosh.Email{} = email}
+
+      assert email.to == [{"", "alice@example.com"}]
+      assert email.text_body =~ "http://kmc.lvh.me/auth/sign-in/"
+      assert email.html_body =~ "http://kmc.lvh.me/auth/sign-in/"
+      refute email.text_body =~ "http://localhost:4000/auth/sign-in/"
+    end
+
     test "creates a token and delivers the link to the requested alternate email, not the primary",
          %{conn: conn} do
       configure_auth_email()
@@ -186,6 +206,42 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
                "/admin/clubs?club_id=club-123"
+    end
+
+    test "same-host magic-link flow preserves a private club subdomain return URL", %{conn: conn} do
+      configure_auth_email()
+
+      create_active_member(
+        email: "alice@example.com",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+      conn =
+        conn
+        |> Map.put(:host, "kmc.lvh.me")
+        |> get(~p"/messages/new")
+
+      assert redirected_to(conn) == ~p"/auth"
+
+      assert get_session(conn, IdentityAuth.return_to_session_key()) ==
+               "http://kmc.lvh.me/messages/new"
+
+      {:ok, view, _html} = live(conn, ~p"/auth")
+
+      view
+      |> form("#sign-in-link-form", auth: %{email: "alice@example.com"})
+      |> render_submit()
+
+      assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
+      assert_received {:email, %Swoosh.Email{} = email}
+      assert [_, token] = Regex.run(~r{/auth/sign-in/([^\s"<]+)}, email.text_body)
+      assert email.text_body =~ "http://kmc.lvh.me/auth/sign-in/#{token}"
+
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
+
+      assert redirected_to(conn) == "http://kmc.lvh.me/messages/new"
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "alice@example.com"
     end
 
     test "rejects unknown tokens without signing in", %{conn: conn} do
@@ -355,10 +411,9 @@ defmodule MembaWeb.AuthControllerTest do
     club_id = Ecto.UUID.generate()
     person_id = Ecto.UUID.generate()
 
-    insert_membership_club!(
-      club_id: club_id,
-      name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
-    )
+    attrs
+    |> club_attrs(club_id)
+    |> insert_membership_club!()
 
     person =
       case Keyword.fetch(attrs, :email_addresses) do
@@ -396,5 +451,19 @@ defmodule MembaWeb.AuthControllerTest do
       person_id: person.person_id,
       active: true
     })
+
+    %{club_id: club_id, person_id: person.person_id}
+  end
+
+  defp club_attrs(attrs, club_id) do
+    base = [
+      club_id: club_id,
+      name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+    ]
+
+    case Keyword.fetch(attrs, :slug) do
+      {:ok, slug} -> Keyword.put(base, :slug, slug)
+      :error -> base
+    end
   end
 end
