@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect current Membership person command/event/aggregate/projector/projection code, Accounts lookup code, Messaging recipient resolution, seeds, fixtures, staff/admin LiveViews, and acceptance support that assume a single `email` field.
-- [ ] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
+- [x] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
 - [ ] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
 - [ ] 004 Add database constraints and matching changeset/command validation:
 - [ ] 005 Evolve Membership commands/events using an atomic replace-all model:
