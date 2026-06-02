@@ -31,7 +31,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
     second_reason = "mailbox does not exist"
 
     assert :ok =
-             Messaging.report_delivery_delayed(
+             Messaging.report_email_delivery_delayed(
                %{
                  message_id: first_recipient.message_id,
                  delivery_id: first_recipient.delivery_id,
@@ -41,7 +41,7 @@ defmodule MembaWeb.DeliveriesLiveTest do
              )
 
     assert :ok =
-             Messaging.report_delivery_bounced(
+             Messaging.report_email_delivery_bounced(
                %{
                  message_id: second_recipient.message_id,
                  delivery_id: second_recipient.delivery_id,
@@ -55,9 +55,9 @@ defmodule MembaWeb.DeliveriesLiveTest do
     |> visit("/admin/deliveries")
     |> assert_path("/admin/deliveries")
     |> assert_has("#admin-layout[data-surface='admin']")
-    |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/deliveries']")
+    |> assert_has("nav[aria-label='Memba staff navigation'] a[href='/admin/deliveries']")
     |> assert_has("#deliveries-overview")
-    |> assert_has("#deliveries-table[aria-label='Delivery records']")
+    |> assert_has("#deliveries-table[aria-label='Email deliveries']")
     |> assert_has("[data-test-id^='delivery-row-']", count: 2)
     |> assert_delivery_row(first_recipient.delivery_id, [
       first_subject,

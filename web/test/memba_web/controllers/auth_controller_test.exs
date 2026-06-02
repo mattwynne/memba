@@ -5,12 +5,12 @@ defmodule MembaWeb.AuthControllerTest do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
-  alias Memba.Accounts.MagicToken
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   setup do
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
@@ -32,18 +32,18 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert response =~ "Sign in to your club"
       assert response =~ "Enter your email address and we’ll send you a link to sign in."
-      refute response =~ "magic link"
+      refute response =~ "sign-in link"
       refute response =~ "signs up anyone with a memba.io email as Memba staff"
 
       assert html
-             |> LazyHTML.query("form#magic-link-form[action='/auth'][method='post']")
+             |> LazyHTML.query("form#sign-in-link-form[action='/auth'][method='post']")
              |> Enum.any?()
 
       assert html
              |> LazyHTML.query("input#auth_email_input[name='auth[email]'][type='email']")
              |> Enum.any?()
 
-      assert html |> LazyHTML.query("button#request-magic-link-button") |> Enum.any?()
+      assert html |> LazyHTML.query("button#request-sign-in-link-button") |> Enum.any?()
     end
   end
 
@@ -64,7 +64,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert flash(unknown_conn, :info) == neutral_notice()
     end
 
-    test "creates a magic token and sends a callback URL email for known member recipients", %{
+    test "creates a sign-in token and sends a callback URL email for known member recipients", %{
       conn: conn
     } do
       configure_auth_email()
@@ -73,15 +73,15 @@ defmodule MembaWeb.AuthControllerTest do
       conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE@EXAMPLE.COM "}})
 
       assert redirected_to(conn) == ~p"/auth"
-      assert [%MagicToken{email: "alice@example.com"}] = Repo.all(MagicToken)
+      assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
       assert email.to == [{"", "alice@example.com"}]
-      assert email.text_body =~ "http://localhost:4000/auth/magic/"
-      assert email.html_body =~ "http://localhost:4000/auth/magic/"
+      assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
+      assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
     end
 
-    test "creates a magic token and sends a callback URL email for new Memba staff", %{
+    test "creates a sign-in token and sends a callback URL email for new Memba staff", %{
       conn: conn
     } do
       configure_auth_email()
@@ -89,12 +89,12 @@ defmodule MembaWeb.AuthControllerTest do
       conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " New.Staff@Memba.IO "}})
 
       assert redirected_to(conn) == ~p"/auth"
-      assert [%MagicToken{email: "new.staff@memba.io"}] = Repo.all(MagicToken)
+      assert [%SignInToken{email: "new.staff@memba.io"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
       assert email.to == [{"", "new.staff@memba.io"}]
-      assert email.text_body =~ "http://localhost:4000/auth/magic/"
-      assert email.html_body =~ "http://localhost:4000/auth/magic/"
+      assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
+      assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
     end
 
     test "does not create a token or send email for unknown recipients", %{conn: conn} do
@@ -103,45 +103,45 @@ defmodule MembaWeb.AuthControllerTest do
       conn = post(conn, ~p"/auth", %{"auth" => %{"email" => "unknown@example.com"}})
 
       assert redirected_to(conn) == ~p"/auth"
-      assert Repo.all(MagicToken) == []
+      assert Repo.all(SignInToken) == []
       assert_no_email_sent()
     end
   end
 
-  describe "GET /auth/magic/:token" do
-    test "consumes a valid staff token, signs the browser in, and redirects to admin", %{
+  describe "GET /auth/sign-in/:token" do
+    test "consumes a valid Memba staff token, signs the browser in, and redirects to the Memba staff area", %{
       conn: conn
     } do
-      assert {:ok, %{token: token}} = Accounts.request_magic_link("Pat@Memba.IO")
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("Pat@Memba.IO")
 
-      conn = get(conn, ~p"/auth/magic/#{token}")
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == ~p"/admin/clubs"
-      assert get_session(conn, UserAuth.identity_session_key()) == "pat@memba.io"
-      assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
+      assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
 
     test "redirects to a safe stored return path after sign-in" do
-      assert {:ok, %{token: token}} = Accounts.request_magic_link("pat@memba.io")
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("pat@memba.io")
 
       conn =
-        build_conn(:get, "/auth/magic/#{token}")
+        build_conn(:get, "/auth/sign-in/#{token}")
         |> init_test_session(%{
-          UserAuth.return_to_session_key() => "/admin/clubs?club_id=club-123"
+          IdentityAuth.return_to_session_key() => "/admin/clubs?club_id=club-123"
         })
-        |> get("/auth/magic/#{token}")
+        |> get("/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == "/admin/clubs?club_id=club-123"
-      assert get_session(conn, UserAuth.identity_session_key()) == "pat@memba.io"
-      assert get_session(conn, UserAuth.return_to_session_key()) == nil
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
+      assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
 
     test "rejects unknown tokens without signing in", %{conn: conn} do
-      conn = get(conn, ~p"/auth/magic/unknown-token")
+      conn = get(conn, ~p"/auth/sign-in/unknown-token")
 
       assert redirected_to(conn) == ~p"/auth"
       assert flash(conn, :error) == "That sign-in link is invalid or has expired."
-      assert get_session(conn, UserAuth.identity_session_key()) == nil
+      assert get_session(conn, IdentityAuth.identity_session_key()) == nil
     end
 
     test "rejects expired tokens without signing in", %{conn: conn} do
@@ -149,42 +149,42 @@ defmodule MembaWeb.AuthControllerTest do
       expired_at = DateTime.add(requested_at, 16 * 60, :second)
 
       assert {:ok, %{token: token}} =
-               Accounts.request_magic_link("pat@memba.io", now: requested_at)
+               Accounts.request_sign_in_link("pat@memba.io", now: requested_at)
 
-      conn = get(conn, ~p"/auth/magic/#{token}")
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == ~p"/auth"
       assert flash(conn, :error) == "That sign-in link is invalid or has expired."
-      assert get_session(conn, UserAuth.identity_session_key()) == nil
-      assert [%MagicToken{consumed_at: nil}] = Repo.all(MagicToken)
-      assert {:error, :expired} = Accounts.consume_magic_token(token, now: expired_at)
+      assert get_session(conn, IdentityAuth.identity_session_key()) == nil
+      assert [%SignInToken{consumed_at: nil}] = Repo.all(SignInToken)
+      assert {:error, :expired} = Accounts.consume_sign_in_token(token, now: expired_at)
     end
 
     test "rejects already-consumed tokens without signing in", %{conn: conn} do
-      assert {:ok, %{token: token}} = Accounts.request_magic_link("pat@memba.io")
-      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_magic_token(token)
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("pat@memba.io")
+      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_sign_in_token(token)
 
-      conn = get(conn, ~p"/auth/magic/#{token}")
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == ~p"/auth"
       assert flash(conn, :error) == "That sign-in link is invalid or has expired."
-      assert get_session(conn, UserAuth.identity_session_key()) == nil
-      assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
+      assert get_session(conn, IdentityAuth.identity_session_key()) == nil
+      assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
 
     test "redirects already-signed-in browsers home when reopening an already-consumed link" do
-      assert {:ok, %{token: token}} = Accounts.request_magic_link("pat@memba.io")
-      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_magic_token(token)
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("pat@memba.io")
+      assert {:ok, %{email: "pat@memba.io"}} = Accounts.consume_sign_in_token(token)
 
       conn =
-        build_conn(:get, "/auth/magic/#{token}")
-        |> init_test_session(%{UserAuth.identity_session_key() => "pat@memba.io"})
-        |> get("/auth/magic/#{token}")
+        build_conn(:get, "/auth/sign-in/#{token}")
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get("/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == ~p"/"
       assert flash(conn, :error) == nil
-      assert get_session(conn, UserAuth.identity_session_key()) == "pat@memba.io"
-      assert [%MagicToken{consumed_at: %DateTime{}}] = Repo.all(MagicToken)
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
+      assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
   end
 
@@ -192,11 +192,11 @@ defmodule MembaWeb.AuthControllerTest do
     test "signs the browser out", %{conn: conn} do
       conn =
         conn
-        |> init_test_session(%{UserAuth.identity_session_key() => "pat@memba.io"})
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
         |> delete(~p"/auth")
 
       assert redirected_to(conn) == ~p"/"
-      assert get_session(conn, UserAuth.identity_session_key()) == nil
+      assert get_session(conn, IdentityAuth.identity_session_key()) == nil
       assert flash(conn, :info) == "Signed out."
     end
   end

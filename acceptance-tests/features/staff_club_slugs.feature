@@ -35,7 +35,7 @@ Feature: Staff club slugs
     Scenario: Robin opens a club public page on its subdomain
       Given Kootenay Mountaineering Club has the slug "kmc"
       When Robin opens "kmc.clubs.memba.io"
-      Then Robin should see the Kootenay Mountaineering Club marketing page
+      Then Robin should see the Kootenay Mountaineering Public club page
       And the club page should show Powered by Memba in the footer
 
     Scenario: Robin opens an unknown club subdomain

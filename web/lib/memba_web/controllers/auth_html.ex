@@ -1,6 +1,6 @@
 defmodule MembaWeb.AuthHTML do
   @moduledoc """
-  HTML views for shared magic-link authentication.
+  HTML views for shared sign-in-link authentication.
   """
   use MembaWeb, :html
 

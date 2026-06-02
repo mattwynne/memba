@@ -25,13 +25,13 @@ defmodule Memba.Messaging.StatusReportApiTest do
              )
 
     assert :ok =
-             Messaging.report_delivery_delivered(
+             Messaging.report_email_delivery_delivered(
                %{"message_id" => message_id, "delivery_id" => bob.delivery_id},
                consistency: :strong
              )
 
     assert :ok =
-             Messaging.report_delivery_delayed(
+             Messaging.report_email_delivery_delayed(
                %{
                  message_id: message_id,
                  delivery_id: carol.delivery_id,
@@ -41,7 +41,7 @@ defmodule Memba.Messaging.StatusReportApiTest do
              )
 
     assert :ok =
-             Messaging.report_delivery_bounced(
+             Messaging.report_email_delivery_bounced(
                %{
                  message_id: message_id,
                  delivery_id: dana.delivery_id,
@@ -51,19 +51,19 @@ defmodule Memba.Messaging.StatusReportApiTest do
              )
 
     assert :ok =
-             Messaging.report_delivery_delivered(
+             Messaging.report_email_delivery_delivered(
                %{message_id: message_id, delivery_id: erin.delivery_id},
                consistency: :strong
              )
 
     assert :ok =
-             Messaging.report_delivery_opened(
+             Messaging.report_email_delivery_opened(
                %{message_id: message_id, delivery_id: erin.delivery_id},
                consistency: :strong
              )
 
     assert :ok =
-             Messaging.report_delivery_spam_complaint(
+             Messaging.report_email_delivery_spam_complaint(
                %{
                  message_id: message_id,
                  delivery_id: alice.delivery_id,
@@ -72,29 +72,29 @@ defmodule Memba.Messaging.StatusReportApiTest do
                consistency: :strong
              )
 
-    assert Messaging.get_member_receipt(message_id, bob.person_id).receipt_status == "delivered"
+    assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
 
-    assert Messaging.get_member_receipt(message_id, carol.person_id).receipt_status ==
+    assert Messaging.get_member_email_delivery(message_id, carol.person_id).status ==
              "delivery problem"
 
-    assert Messaging.get_operator_deliverability(message_id, carol.person_id).status == "delayed"
+    assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).status == "delayed"
 
-    assert Messaging.get_operator_deliverability(message_id, carol.person_id).reason ==
+    assert Messaging.get_memba_staff_email_delivery(message_id, carol.person_id).reason ==
              "recipient server is temporarily unavailable"
 
-    assert Messaging.get_member_receipt(message_id, dana.person_id).receipt_status ==
+    assert Messaging.get_member_email_delivery(message_id, dana.person_id).status ==
              "delivery problem"
 
-    assert Messaging.get_operator_deliverability(message_id, dana.person_id).status == "bounced"
-    assert Messaging.get_operator_deliverability(message_id, erin.person_id).status == "opened"
+    assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status == "bounced"
+    assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status == "opened"
 
-    assert Messaging.get_operator_deliverability(message_id, alice.person_id).status ==
+    assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status ==
              "spam complaint"
   end
 
   test "public status reporting APIs surface aggregate validation errors" do
     assert {:error, :message_not_sent} =
-             Messaging.report_delivery_delivered(%{
+             Messaging.report_email_delivery_delivered(%{
                message_id: Ecto.UUID.generate(),
                delivery_id: Ecto.UUID.generate()
              })

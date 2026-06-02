@@ -14,7 +14,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> visit("/admin/clubs")
     |> assert_path("/admin/clubs")
     |> assert_has("#admin-layout[data-surface='admin']")
-    |> assert_has("nav[aria-label='Staff admin navigation'] a[href='/admin/clubs']")
+    |> assert_has("nav[aria-label='Memba staff navigation'] a[href='/admin/clubs']")
     |> assert_has("#clubs-index")
     |> assert_has("#new-club-form[aria-label='Create a club']")
     |> assert_has("#club-name-input[aria-label='Club name']")
@@ -66,14 +66,14 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has(
       "#addressed-recipients [data-testid='addressed-recipient'][data-recipient-name='Alice']"
     )
-    |> assert_has("#delivery-records[aria-label='Delivery records']")
+    |> assert_has("#delivery-records[aria-label='Email deliveries']")
     |> assert_has(
       "#delivery-records [data-testid='delivery-record'][data-recipient-name='Alice']"
     )
     |> assert_has(
       "#delivery-records [data-testid='delivery-status'][data-delivery-status='sent']"
     )
-    |> assert_has("#member-receipts[aria-label='Member receipt statuses']")
+    |> assert_has("#member-receipts[aria-label='Member email delivery statuses']")
     |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")
     |> assert_has("#member-receipts [data-testid='receipt-status'][data-receipt-status='sent']")
   end
@@ -107,12 +107,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> refute_has("#addressed-recipients [data-testid='addressed-recipient']", "Pat")
     |> assert_has("#delivery-records [data-testid='delivery-record']", count: 3)
     |> assert_has("#member-receipts [data-testid='member-receipt']", count: 3)
-    |> assert_member_receipt("Alice", "sent")
-    |> assert_member_receipt("Bob", "sent")
-    |> assert_member_receipt("Carol", "sent")
+    |> assert_member_email_delivery("Alice", "sent")
+    |> assert_member_email_delivery("Bob", "sent")
+    |> assert_member_email_delivery("Carol", "sent")
   end
 
-  test "member receipt statuses refresh after delivery status reports are invoked", %{
+  test "member email delivery statuses refresh after delivery status reports are invoked", %{
     conn: conn
   } do
     %{message_id: message_id, recipients: recipients} =
@@ -125,43 +125,43 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> visit("/admin/messages/#{message_id}")
     |> assert_path("/admin/messages/*")
     |> assert_has("#message-show", "Trip planning night")
-    |> assert_member_receipt("Alice", "sent")
+    |> assert_member_email_delivery("Alice", "sent")
 
     assert :ok =
-             report_delivery_delivered(%{
+             report_email_delivery_delivered(%{
                message_id: message_id,
                delivery_id: delivery_ids_by_name["Bob"]
              })
 
     assert :ok =
-             report_delivery_delayed(%{
+             report_email_delivery_delayed(%{
                message_id: message_id,
                delivery_id: delivery_ids_by_name["Carol"],
                reason: "recipient server is temporarily unavailable"
              })
 
     assert :ok =
-             report_delivery_bounced(%{
+             report_email_delivery_bounced(%{
                message_id: message_id,
                delivery_id: delivery_ids_by_name["Dana"],
                reason: "mailbox does not exist"
              })
 
     assert :ok =
-             report_delivery_spam_complaint(%{
+             report_email_delivery_spam_complaint(%{
                message_id: message_id,
                delivery_id: delivery_ids_by_name["Erin"],
                reason: "recipient marked the message as spam"
              })
 
     assert :ok =
-             report_delivery_delivered(%{
+             report_email_delivery_delivered(%{
                message_id: message_id,
                delivery_id: delivery_ids_by_name["Frank"]
              })
 
     assert :ok =
-             report_delivery_opened(%{
+             report_email_delivery_opened(%{
                message_id: message_id,
                delivery_id: delivery_ids_by_name["Frank"]
              })
@@ -170,12 +170,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> sign_in_staff()
     |> visit("/admin/messages/#{message_id}")
     |> assert_path("/admin/messages/*")
-    |> assert_member_receipt("Alice", "sent")
-    |> assert_member_receipt("Bob", "delivered")
-    |> assert_member_receipt("Carol", "delivery problem")
-    |> assert_member_receipt("Dana", "delivery problem")
-    |> assert_member_receipt("Erin", "delivery problem")
-    |> assert_member_receipt("Frank", "opened")
+    |> assert_member_email_delivery("Alice", "sent")
+    |> assert_member_email_delivery("Bob", "delivered")
+    |> assert_member_email_delivery("Carol", "delivery problem")
+    |> assert_member_email_delivery("Dana", "delivery problem")
+    |> assert_member_email_delivery("Erin", "delivery problem")
+    |> assert_member_email_delivery("Frank", "opened")
   end
 
   defp create_club(session, name) do
@@ -225,28 +225,28 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     assert_has(session, "#addressed-recipients [data-recipient-name='#{name}']", name)
   end
 
-  defp assert_member_receipt(session, name, status) do
+  defp assert_member_email_delivery(session, name, status) do
     assert_has(session, "#member-receipts [data-recipient-name='#{name}']", status)
   end
 
-  defp report_delivery_delivered(attrs) do
-    apply(Messaging, :report_delivery_delivered, [attrs, [consistency: :strong]])
+  defp report_email_delivery_delivered(attrs) do
+    apply(Messaging, :report_email_delivery_delivered, [attrs, [consistency: :strong]])
   end
 
-  defp report_delivery_delayed(attrs) do
-    apply(Messaging, :report_delivery_delayed, [attrs, [consistency: :strong]])
+  defp report_email_delivery_delayed(attrs) do
+    apply(Messaging, :report_email_delivery_delayed, [attrs, [consistency: :strong]])
   end
 
-  defp report_delivery_bounced(attrs) do
-    apply(Messaging, :report_delivery_bounced, [attrs, [consistency: :strong]])
+  defp report_email_delivery_bounced(attrs) do
+    apply(Messaging, :report_email_delivery_bounced, [attrs, [consistency: :strong]])
   end
 
-  defp report_delivery_spam_complaint(attrs) do
-    apply(Messaging, :report_delivery_spam_complaint, [attrs, [consistency: :strong]])
+  defp report_email_delivery_spam_complaint(attrs) do
+    apply(Messaging, :report_email_delivery_spam_complaint, [attrs, [consistency: :strong]])
   end
 
-  defp report_delivery_opened(attrs) do
-    apply(Messaging, :report_delivery_opened, [attrs, [consistency: :strong]])
+  defp report_email_delivery_opened(attrs) do
+    apply(Messaging, :report_email_delivery_opened, [attrs, [consistency: :strong]])
   end
 
   defp send_projected_message_with_recipients(names) do

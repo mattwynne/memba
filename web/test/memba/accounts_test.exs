@@ -2,7 +2,7 @@ defmodule Memba.AccountsTest do
   use Memba.EventSourcedCase, async: false
 
   alias Memba.Accounts
-  alias Memba.Accounts.MagicToken
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership
   alias Memba.Repo
 
@@ -24,25 +24,25 @@ defmodule Memba.AccountsTest do
     end
   end
 
-  describe "request_magic_link/2" do
+  describe "request_sign_in_link/2" do
     test "creates a single-use expiring hashed token for staff email addresses" do
       now = ~U[2026-05-31 12:00:00.000000Z]
 
       assert {:ok, %{email: "pat@memba.io", token: token, expires_at: expires_at}} =
-               Accounts.request_magic_link(" Pat@Memba.IO ", now: now)
+               Accounts.request_sign_in_link(" Pat@Memba.IO ", now: now)
 
       assert is_binary(token)
       assert byte_size(token) >= 32
       assert expires_at == DateTime.add(now, 15 * 60, :second)
 
-      assert %MagicToken{
+      assert %SignInToken{
                email: "pat@memba.io",
                token_hash: token_hash,
                expires_at: ^expires_at,
                consumed_at: nil
-             } = Repo.one(MagicToken)
+             } = Repo.one(SignInToken)
 
-      assert token_hash == Accounts.hash_magic_token(token)
+      assert token_hash == Accounts.hash_sign_in_token(token)
       refute token_hash == token
     end
 
@@ -51,43 +51,43 @@ defmodule Memba.AccountsTest do
       create_active_member(club_name: "Kootenay Mountaineering Club", email: "alice@example.com")
 
       assert {:ok, %{email: "alice@example.com"}} =
-               Accounts.request_magic_link(" ALICE@EXAMPLE.COM ", now: now)
+               Accounts.request_sign_in_link(" ALICE@EXAMPLE.COM ", now: now)
 
-      assert {:ok, nil} = Accounts.request_magic_link("unknown@example.com", now: now)
+      assert {:ok, nil} = Accounts.request_sign_in_link("unknown@example.com", now: now)
 
       assert ["alice@example.com"] =
-               MagicToken
-               |> select([magic_token], magic_token.email)
+               SignInToken
+               |> select([sign_in_token], sign_in_token.email)
                |> Repo.all()
     end
   end
 
-  describe "consume_magic_token/2" do
+  describe "consume_sign_in_token/2" do
     test "consumes a valid token once and stores the consumption timestamp" do
       requested_at = ~U[2026-05-31 12:00:00.000000Z]
       consumed_at = ~U[2026-05-31 12:05:00.000000Z]
 
       assert {:ok, %{token: token}} =
-               Accounts.request_magic_link("pat@memba.io", now: requested_at)
+               Accounts.request_sign_in_link("pat@memba.io", now: requested_at)
 
       assert {:ok, %{email: "pat@memba.io"}} =
-               Accounts.consume_magic_token(token, now: consumed_at)
+               Accounts.consume_sign_in_token(token, now: consumed_at)
 
-      assert %MagicToken{consumed_at: ^consumed_at} = Repo.one(MagicToken)
-      assert {:error, :consumed} = Accounts.consume_magic_token(token, now: consumed_at)
+      assert %SignInToken{consumed_at: ^consumed_at} = Repo.one(SignInToken)
+      assert {:error, :consumed} = Accounts.consume_sign_in_token(token, now: consumed_at)
     end
 
     test "rejects unknown and expired tokens without consuming rows" do
       requested_at = ~U[2026-05-31 12:00:00.000000Z]
       expired_at = ~U[2026-05-31 12:16:00.000000Z]
 
-      assert {:error, :not_found} = Accounts.consume_magic_token("unknown", now: requested_at)
+      assert {:error, :not_found} = Accounts.consume_sign_in_token("unknown", now: requested_at)
 
       assert {:ok, %{token: token}} =
-               Accounts.request_magic_link("pat@memba.io", now: requested_at)
+               Accounts.request_sign_in_link("pat@memba.io", now: requested_at)
 
-      assert {:error, :expired} = Accounts.consume_magic_token(token, now: expired_at)
-      assert %MagicToken{consumed_at: nil} = Repo.one(MagicToken)
+      assert {:error, :expired} = Accounts.consume_sign_in_token(token, now: expired_at)
+      assert %SignInToken{consumed_at: nil} = Repo.one(SignInToken)
     end
   end
 

@@ -1,6 +1,6 @@
 defmodule Memba.Accounts.AuthEmailConfig do
   @moduledoc """
-  Runtime configuration for shared magic-link auth emails.
+  Runtime configuration for shared sign-in-link auth emails.
 
   Auth email delivery is enabled explicitly with `MEMBA_AUTH_EMAIL_PROVIDER`.
   When Postmark delivery is enabled, the shared Postmark server token, auth

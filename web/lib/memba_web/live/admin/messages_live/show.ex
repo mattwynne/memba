@@ -7,7 +7,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   def mount(%{"message_id" => message_id}, _session, socket) do
     message = Messaging.get_message(message_id)
     deliveries = Messaging.list_recipient_deliveries(message_id)
-    receipts = Messaging.list_member_receipts(message_id)
+    receipts = Messaging.list_member_email_deliverys(message_id)
 
     {:ok,
      socket
@@ -17,7 +17,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
        dom_id: &"addressed-recipient-#{&1.delivery_id}"
      )
      |> stream(:delivery_records, deliveries, dom_id: &"delivery-record-#{&1.delivery_id}")
-     |> stream(:member_receipts, receipts, dom_id: &"member-receipt-#{&1.delivery_id}")}
+     |> stream(:member_email_deliverys, receipts, dom_id: &"member-receipt-#{&1.delivery_id}")}
   end
 
   @impl Phoenix.LiveView
@@ -68,15 +68,15 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
           </section>
 
           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Delivery records</h2>
+            <h2 class="text-lg font-semibold text-zinc-900">Email deliveries</h2>
             <div
               id="delivery-records"
-              aria-label="Delivery records"
+              aria-label="Email deliveries"
               class="mt-4 divide-y divide-zinc-100"
               phx-update="stream"
             >
               <p id="delivery-records-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
-                No delivery records.
+                No email deliveries.
               </p>
               <div
                 :for={{dom_id, delivery} <- @streams.delivery_records}
@@ -85,7 +85,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                 data-delivery-id={delivery.delivery_id}
                 data-recipient-id={delivery.recipient_id}
                 data-recipient-name={delivery.recipient_name}
-                aria-label={"Delivery record for #{delivery.recipient_name}"}
+                aria-label={"Email delivery for #{delivery.recipient_name}"}
                 class="grid gap-2 py-3 sm:grid-cols-4"
               >
                 <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
@@ -105,35 +105,35 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
           </section>
 
           <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Member receipt statuses</h2>
+            <h2 class="text-lg font-semibold text-zinc-900">Member email delivery statuses</h2>
             <div
               id="member-receipts"
-              aria-label="Member receipt statuses"
+              aria-label="Member email delivery statuses"
               class="mt-4 divide-y divide-zinc-100"
               phx-update="stream"
             >
               <p id="member-receipts-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
-                No member receipts.
+                No member email deliveries.
               </p>
               <div
-                :for={{dom_id, receipt} <- @streams.member_receipts}
+                :for={{dom_id, receipt} <- @streams.member_email_deliverys}
                 id={dom_id}
                 data-testid="member-receipt"
                 data-delivery-id={receipt.delivery_id}
                 data-recipient-id={receipt.recipient_id}
                 data-recipient-name={receipt.recipient_name}
-                aria-label={"Member receipt for #{receipt.recipient_name}"}
+                aria-label={"Member email delivery for #{receipt.recipient_name}"}
                 class="flex items-center justify-between gap-4 py-3"
               >
                 <p class="font-medium text-zinc-900">{receipt.recipient_name}</p>
                 <p
                   id={"receipt-status-#{receipt.delivery_id}"}
                   data-testid="receipt-status"
-                  data-receipt-status={receipt.receipt_status}
-                  aria-label={"Receipt status for #{receipt.recipient_name}: #{receipt.receipt_status}"}
+                  data-receipt-status={receipt.status}
+                  aria-label={"Status for #{receipt.recipient_name}: #{receipt.status}"}
                   class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
                 >
-                  {receipt.receipt_status}
+                  {receipt.status}
                 </p>
               </div>
             </div>

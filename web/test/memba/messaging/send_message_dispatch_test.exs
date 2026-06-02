@@ -3,13 +3,13 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging.App
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
-  alias Memba.Messaging.Events.RecipientDeliveryCreated
-  alias Memba.Messaging.Events.RecipientDeliveryDelivered
-  alias Memba.Messaging.Events.RecipientDeliveryOpened
+  alias Memba.Messaging.Events.EmailDeliveryCreated
+  alias Memba.Messaging.Events.EmailDeliveryDelivered
+  alias Memba.Messaging.Events.EmailDeliveryOpened
   alias Memba.Messaging.Message
   alias Memba.Messaging.Recipient
 
@@ -55,14 +55,14 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
                   subject: "Trail day",
                   body: "Meet at 9am."
                 },
-                %RecipientDeliveryCreated{
+                %EmailDeliveryCreated{
                   message_id: ^message_id,
                   delivery_id: ^alice_delivery_id,
                   recipient_id: ^sender_id,
                   recipient_name: "Alice Sender",
                   recipient_email: "alice@example.com"
                 },
-                %RecipientDeliveryCreated{
+                %EmailDeliveryCreated{
                   message_id: ^message_id,
                   delivery_id: ^bob_delivery_id,
                   recipient_id: ^bob_id,
@@ -74,19 +74,19 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
                 message_id: ^message_id,
                 club_id: ^club_id,
                 sender_id: ^sender_id,
-                recipient_delivery_ids: recipient_delivery_ids,
+                email_delivery_ids: email_delivery_ids,
                 recipient_ids: recipient_ids
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
 
-    assert MapSet.equal?(recipient_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
+    assert MapSet.equal?(email_delivery_ids, MapSet.new([alice_delivery_id, bob_delivery_id]))
     assert MapSet.equal?(recipient_ids, MapSet.new([sender_id, bob_id]))
 
     assert %Message{
              message_id: ^message_id,
              club_id: ^club_id,
              sender_id: ^sender_id,
-             recipient_delivery_ids: persisted_delivery_ids,
+             email_delivery_ids: persisted_delivery_ids,
              recipient_ids: persisted_recipient_ids
            } = App.aggregate_state(Message, message_id)
 
@@ -134,7 +134,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
               aggregate_uuid: ^message_id,
               aggregate_version: 3,
               events: [
-                %RecipientDeliveryDelivered{
+                %EmailDeliveryDelivered{
                   message_id: ^message_id,
                   delivery_id: ^delivery_id
                 }
@@ -146,7 +146,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
               }
             }} =
              App.dispatch(
-               %ReportDeliveryDelivered{
+               %ReportEmailDeliveryDelivered{
                  message_id: message_id,
                  delivery_id: delivery_id
                },
@@ -159,7 +159,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
               aggregate_uuid: ^message_id,
               aggregate_version: 4,
               events: [
-                %RecipientDeliveryOpened{
+                %EmailDeliveryOpened{
                   message_id: ^message_id,
                   delivery_id: ^delivery_id
                 }
@@ -171,7 +171,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
               }
             }} =
              App.dispatch(
-               %ReportDeliveryOpened{
+               %ReportEmailDeliveryOpened{
                  message_id: message_id,
                  delivery_id: delivery_id
                },
@@ -186,7 +186,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
               events: []
             }} =
              App.dispatch(
-               %ReportDeliveryOpened{
+               %ReportEmailDeliveryOpened{
                  message_id: message_id,
                  delivery_id: delivery_id
                },

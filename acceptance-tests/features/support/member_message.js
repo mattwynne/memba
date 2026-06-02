@@ -103,7 +103,7 @@ function allRows(page, containerId, testId) {
   return page.locator(`#${containerId} [data-testid=${cssString(testId)}]`);
 }
 
-async function expandCollapsedMemberReceiptGroups(
+async function expandCollapsedMemberEmailDeliveryGroups(
   world,
   { expect = playwrightExpect, timeoutMs } = {}
 ) {
@@ -128,19 +128,19 @@ async function expandCollapsedMemberReceiptGroups(
     const toggle = collapsedToggles.first();
     const toggleId = await toggle.getAttribute("id");
 
-    await browserInteraction("expand collapsed member receipt group", () => toggle.click());
+    await browserInteraction("expand collapsed member email delivery group", () => toggle.click());
 
     if (toggleId) {
       await waitForProjectedVisible(
         world,
         world.page.locator(`[id=${cssString(toggleId)}][aria-expanded="true"]`),
-        `expanded member receipt group ${toggleId}`,
+        `expanded member email delivery group ${toggleId}`,
         { expect, timeoutMs }
       );
     }
   }
 
-  throw new Error("Expected no more than four member receipt groups to require expansion");
+  throw new Error("Expected no more than four member email delivery groups to require expansion");
 }
 
 function clubHomePath(clubId) {
@@ -237,7 +237,7 @@ async function waitForProjectedCount(
   );
 }
 
-async function waitForExpandedMemberReceiptCount(
+async function waitForExpandedMemberEmailDeliveryCount(
   world,
   locator,
   expectedCount,
@@ -251,7 +251,7 @@ async function waitForExpandedMemberReceiptCount(
     const assertionTimeoutMs = Math.max(1, Math.min(1000, deadline - Date.now()));
 
     try {
-      await expandCollapsedMemberReceiptGroups(world, {
+      await expandCollapsedMemberEmailDeliveryGroups(world, {
         expect,
         timeoutMs: assertionTimeoutMs
       });
@@ -273,7 +273,7 @@ async function waitForExpandedMemberReceiptCount(
   } while (Date.now() <= deadline);
 
   throw new Error(
-    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for expanded member receipt rows: ` +
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for expanded member email delivery rows: ` +
       `${description} should have count ${expectedCount}.\nLast projection error: ${
         lastError ? errorMessage(lastError) : "(none)"
       }`
@@ -650,7 +650,7 @@ async function trySendMemberMessageToKootenayMembers(
   return world;
 }
 
-async function configureMessagingDeliveryProvider(world, provider) {
+async function configureMessagingEmailDeliveryProvider(world, provider) {
   const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
   assert.ok(
     request && typeof request.post === "function",
@@ -690,7 +690,7 @@ async function configureMessagingDeliveryProvider(world, provider) {
 }
 
 async function makeClubMessageSendingUnavailable(world) {
-  await configureMessagingDeliveryProvider(world, "unavailable");
+  await configureMessagingEmailDeliveryProvider(world, "unavailable");
   world.clubMessageSendingWasConfigured = true;
 
   return world;
@@ -701,7 +701,7 @@ async function restoreClubMessageSending(world) {
     return world;
   }
 
-  await configureMessagingDeliveryProvider(world, "local");
+  await configureMessagingEmailDeliveryProvider(world, "local");
   world.clubMessageSendingWasConfigured = false;
 
   return world;
@@ -819,10 +819,10 @@ async function assertMemberMessageAddressedTo(
   { expect = playwrightExpect } = {}
 ) {
   await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberReceiptGroups(world, { expect });
+  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
 
   const rows = allRows(world.page, "member-receipts", "member-receipt");
-  await waitForExpandedMemberReceiptCount(
+  await waitForExpandedMemberEmailDeliveryCount(
     world,
     rows,
     expectedNames.length,
@@ -852,7 +852,7 @@ async function assertMemberMessageNotAddressedTo(
   { expect = playwrightExpect } = {}
 ) {
   await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberReceiptGroups(world, { expect });
+  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
 
   const rows = allRows(world.page, "member-receipts", "member-receipt");
   const actualNames = await rowDatasetValues(rows, "recipientName");
@@ -928,7 +928,7 @@ async function assertEachAddressedMemberHasSeparateDeliveryRecord(
   const expectedIds = world.addressedMemberIds || [];
   assert.ok(
     expectedIds.length > 0,
-    "Expected addressed members to be asserted before checking delivery records"
+    "Expected addressed members to be asserted before checking email deliveries"
   );
 
   const rows = allRows(world.page, "delivery-records", "delivery-record");
@@ -936,7 +936,7 @@ async function assertEachAddressedMemberHasSeparateDeliveryRecord(
     world,
     rows,
     expectedIds.length,
-    `delivery records for ${JSON.stringify(world.lastMessageSubject)}`,
+    `email deliveries for ${JSON.stringify(world.lastMessageSubject)}`,
     { expect }
   );
 
@@ -973,7 +973,7 @@ async function assertEachDeliverySentThroughEmailProvider(
   const deliveryNames = Object.keys(world.deliveries[world.lastMessageSubject] || {});
   assert.ok(
     deliveryNames.length > 0,
-    "Expected delivery records to be asserted before checking email-provider delivery"
+    "Expected email deliveries to be asserted before checking email-provider delivery"
   );
 
   for (const recipientName of deliveryNames) {
@@ -1042,7 +1042,7 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
   return world;
 }
 
-async function assertEveryAddressedMemberReceiptStatus(
+async function assertEveryAddressedMemberEmailDeliveryStatus(
   world,
   subject,
   expectedLabel,
@@ -1053,20 +1053,20 @@ async function assertEveryAddressedMemberReceiptStatus(
   const addressedMemberNames = world.addressedMemberNames || [];
   assert.ok(
     addressedMemberNames.length > 0,
-    "Expected addressed members to be asserted before checking every member receipt status"
+    "Expected addressed members to be asserted before checking every member email delivery status"
   );
 
   await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberReceiptGroups(world, { expect });
+  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
 
   for (const recipientName of addressedMemberNames) {
-    await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+    await assertMemberEmailDeliveryStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
   }
 
   return world;
 }
 
-async function assertMemberReceiptStatus(
+async function assertMemberEmailDeliveryStatus(
   world,
   recipientName,
   subject,
@@ -1074,13 +1074,13 @@ async function assertMemberReceiptStatus(
   { expect = playwrightExpect } = {}
 ) {
   await openMemberMessage(world, subject, { expect });
-  await expandCollapsedMemberReceiptGroups(world, { expect });
-  await assertMemberReceiptStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
+  await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
+  await assertMemberEmailDeliveryStatusOnCurrentPage(world, recipientName, subject, expectedLabel, { expect });
 
   return world;
 }
 
-async function assertMemberReceiptStatusOnCurrentPage(
+async function assertMemberEmailDeliveryStatusOnCurrentPage(
   world,
   recipientName,
   subject,
@@ -1091,14 +1091,14 @@ async function assertMemberReceiptStatusOnCurrentPage(
   await waitForProjectedVisible(
     world,
     row,
-    `${recipientName}'s member-facing receipt row for ${JSON.stringify(subject)}`,
+    `${recipientName}'s member-facing email delivery row for ${JSON.stringify(subject)}`,
     { expect }
   );
   await waitForProjectedText(
     world,
     row.locator("[data-testid=\"receipt-status\"]"),
     expectedLabel,
-    `${recipientName}'s member-facing receipt status label for ${JSON.stringify(subject)}`,
+    `${recipientName}'s member-facing status label for ${JSON.stringify(subject)}`,
     { expect }
   );
 
@@ -1107,12 +1107,12 @@ async function assertMemberReceiptStatusOnCurrentPage(
   await waitForProjectedVisible(
     world,
     icon,
-    `${recipientName}'s member-facing receipt status icon for ${JSON.stringify(subject)}`,
+    `${recipientName}'s member-facing status icon for ${JSON.stringify(subject)}`,
     { expect }
   );
 
   const actualIcon = await icon.getAttribute("data-icon-name");
-  assertFinalBrowserState(`${recipientName}'s member-facing receipt icon for ${JSON.stringify(subject)}`, () =>
+  assertFinalBrowserState(`${recipientName}'s member-facing email delivery icon for ${JSON.stringify(subject)}`, () =>
     assert.equal(actualIcon, expectedIcon)
   );
 
@@ -1133,7 +1133,7 @@ async function assertReceiptStatus(world, recipientName, subject, expectedStatus
     world,
     row.locator("[data-testid=\"receipt-status\"]"),
     expectedStatus,
-    `${recipientName}'s receipt status for ${JSON.stringify(subject)}`,
+    `${recipientName}'s status for ${JSON.stringify(subject)}`,
     { expect }
   );
 
@@ -1153,14 +1153,14 @@ async function assertOperatorDeliveryStatus(
   await waitForProjectedVisible(
     world,
     row,
-    `${recipientName}'s operator delivery row for ${JSON.stringify(subject)}`,
+    `${recipientName}'s Memba staff email delivery row for ${JSON.stringify(subject)}`,
     { expect }
   );
   await waitForProjectedText(
     world,
     row.locator("[data-test-id=\"delivery-status\"]"),
     expectedStatus,
-    `${recipientName}'s operator delivery status for ${JSON.stringify(subject)}`,
+    `${recipientName}'s Memba staff email delivery status for ${JSON.stringify(subject)}`,
     { expect }
   );
 
@@ -1180,12 +1180,12 @@ async function assertOperatorDeliveryReason(
   const currentDelivery = world.currentOperatorDelivery;
   assert.ok(
     currentDelivery,
-    "Expected an operator delivery status assertion before checking its reason"
+    "Expected an Memba staff email delivery status assertion before checking its reason"
   );
   assert.equal(
     currentDelivery.recipientName,
     recipientName,
-    `Expected current operator delivery to belong to ${recipientName}`
+    `Expected current Memba staff email delivery to belong to ${recipientName}`
   );
 
   await openDeliveriesOverview(world, { expect });
@@ -1194,14 +1194,14 @@ async function assertOperatorDeliveryReason(
   await waitForProjectedVisible(
     world,
     row,
-    `${recipientName}'s operator delivery row for ${JSON.stringify(currentDelivery.subject)}`,
+    `${recipientName}'s Memba staff email delivery row for ${JSON.stringify(currentDelivery.subject)}`,
     { expect }
   );
   await waitForProjectedText(
     world,
     row.locator("[data-test-id=\"delivery-reason\"]"),
     expectedReason,
-    `${recipientName}'s operator delivery reason for ${JSON.stringify(currentDelivery.subject)}`,
+    `${recipientName}'s Memba staff email delivery reason for ${JSON.stringify(currentDelivery.subject)}`,
     { expect }
   );
 
@@ -1240,7 +1240,7 @@ function memberReceiptStatusForEventType(eventType) {
       return "delivery problem";
 
     default:
-      throw new Error(`Unsupported browser receipt projection status event: ${eventType}`);
+      throw new Error(`Unsupported browser member email delivery projection status event: ${eventType}`);
   }
 }
 
@@ -1259,7 +1259,7 @@ function memberReceiptIconForLabel(label) {
       return "hero-envelope-open";
 
     default:
-      throw new Error(`Unsupported member-facing receipt label: ${label}`);
+      throw new Error(`Unsupported member-facing email delivery label: ${label}`);
   }
 }
 
@@ -1291,7 +1291,7 @@ async function waitForProjectedReceiptStatus(
         world,
         row.locator("[data-testid=\"receipt-status\"]"),
         expectedStatus,
-        `${recipientName}'s projected receipt status for ${JSON.stringify(subject)}`,
+        `${recipientName}'s projected status for ${JSON.stringify(subject)}`,
         { expect, timeoutMs: assertionTimeoutMs }
       );
 
@@ -1308,7 +1308,7 @@ async function waitForProjectedReceiptStatus(
   } while (Date.now() <= deadline);
 
   throw new Error(
-    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for projected receipt status: ` +
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for projected status: ` +
       `${recipientName}'s receipt for ${JSON.stringify(subject)} should become ${JSON.stringify(
         expectedStatus
       )}.\nLast projection error: ${lastError ? errorMessage(lastError) : "(none)"}`
@@ -1399,14 +1399,14 @@ async function deliveryForRecipient(
   await waitForProjectedVisible(
     world,
     row,
-    `${recipientName}'s delivery record for ${JSON.stringify(subject)}`,
+    `${recipientName}'s email delivery for ${JSON.stringify(subject)}`,
     { expect }
   );
 
   const deliveryId = await row.getAttribute("data-delivery-id");
   assert.ok(
     deliveryId,
-    `Expected delivery record for ${recipientName} and ${JSON.stringify(subject)} to expose data-delivery-id`
+    `Expected email delivery for ${recipientName} and ${JSON.stringify(subject)} to expose data-delivery-id`
   );
 
   const recipientId = await row.getAttribute("data-recipient-id");
@@ -1559,7 +1559,7 @@ function assertUnique(values, label) {
 module.exports = {
   addMembers,
   appUrl,
-  assertEveryAddressedMemberReceiptStatus,
+  assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachDeliverySentThroughEmailProvider,
@@ -1567,7 +1567,7 @@ module.exports = {
   assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
   assertMemberMessageNotAddressedTo,
-  assertMemberReceiptStatus,
+  assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,

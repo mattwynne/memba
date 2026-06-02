@@ -2,14 +2,14 @@ defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
   alias Memba.Membership
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   def home(%{assigns: %{current_identity: identity}} = conn, %{"club_id" => club_id})
       when not is_nil(identity) do
     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
       session: %{
         "club_id" => club_id,
-        UserAuth.identity_session_key() => identity.email
+        IdentityAuth.identity_session_key() => identity.email
       }
     )
   end
@@ -20,7 +20,7 @@ defmodule MembaWeb.PageController do
         not_found(conn)
 
       _club ->
-        Phoenix.LiveView.Controller.live_render(conn, MembaWeb.ClubMarketingLive,
+        Phoenix.LiveView.Controller.live_render(conn, MembaWeb.PublicClubPageLive,
           session: %{"club_id" => club_id}
         )
     end
@@ -31,7 +31,7 @@ defmodule MembaWeb.PageController do
       if conn.assigns.current_identity do
         "Your clubs"
       else
-        "Run your club, not your spreadsheet"
+        "Volunteering shouldn’t feel like work"
       end
 
     conn
@@ -43,6 +43,12 @@ defmodule MembaWeb.PageController do
     conn
     |> assign(:page_title, "About")
     |> render(:about)
+  end
+
+  def get_started(conn, _params) do
+    conn
+    |> assign(:page_title, "Get started")
+    |> render(:get_started)
   end
 
   def terms(conn, _params) do

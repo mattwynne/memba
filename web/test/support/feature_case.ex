@@ -33,7 +33,7 @@ defmodule MembaWeb.FeatureCase do
 
   def sign_in_staff(conn, email \\ "pat@memba.io") do
     Plug.Test.init_test_session(conn, %{
-      MembaWeb.UserAuth.identity_session_key() => email
+      MembaWeb.IdentityAuth.identity_session_key() => email
     })
   end
 

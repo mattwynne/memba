@@ -71,19 +71,19 @@ defmodule MembaWeb.PostmarkWebhookController do
   end
 
   defp report_status(attrs, :delivered),
-    do: Messaging.report_delivery_delivered(attrs)
+    do: Messaging.report_email_delivery_delivered(attrs)
 
   defp report_status(attrs, :delayed),
-    do: Messaging.report_delivery_delayed(attrs)
+    do: Messaging.report_email_delivery_delayed(attrs)
 
   defp report_status(attrs, :bounced),
-    do: Messaging.report_delivery_bounced(attrs)
+    do: Messaging.report_email_delivery_bounced(attrs)
 
   defp report_status(attrs, :spam_complaint),
-    do: Messaging.report_delivery_spam_complaint(attrs)
+    do: Messaging.report_email_delivery_spam_complaint(attrs)
 
   defp report_status(attrs, :opened),
-    do: Messaging.report_delivery_opened(attrs)
+    do: Messaging.report_email_delivery_opened(attrs)
 
   defp normalize_dispatch_result(:ok), do: :ok
   defp normalize_dispatch_result({:ok, _result}), do: :ok

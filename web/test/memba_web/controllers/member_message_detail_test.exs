@@ -4,11 +4,11 @@ defmodule MembaWeb.MemberMessageDetailTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
-  alias Memba.Messaging.Projections.OperatorDeliverability
+  alias Memba.Messaging.Projections.MembaStaffEmailDelivery
   alias Memba.Repo
-  alias MembaWeb.UserAuth
+  alias MembaWeb.IdentityAuth
 
   describe "member message route authorization" do
     test "forbids signed-in inactive members and does not leak message details", %{conn: conn} do
@@ -83,8 +83,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
     end
   end
 
-  describe "member-facing receipt presentation on message detail" do
-    test "renders every member receipt status with its member-facing label and Heroicon", %{
+  describe "member-facing email delivery presentation on message detail" do
+    test "renders every member email delivery status with its member-facing label and Heroicon", %{
       conn: conn
     } do
       alice =
@@ -122,7 +122,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
         create_message(
           club_id: alice.club_id,
           sender_id: alice.person_id,
-          subject: "Receipt status check"
+          subject: "Status check"
         )
 
       receipt_cases = [
@@ -133,11 +133,11 @@ defmodule MembaWeb.MemberMessageDetailTest do
       ]
 
       Enum.each(receipt_cases, fn {member, status, _label, _icon} ->
-        create_member_receipt(
+        create_member_email_delivery(
           message_id: message.message_id,
           recipient_id: member.person_id,
           recipient_name: member.name,
-          receipt_status: status
+          status: status
         )
       end)
 
@@ -177,7 +177,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
       end)
     end
 
-    test "does not expose operator-only delivery fields on member message detail", %{conn: conn} do
+    test "does not expose Memba-staff-only delivery fields on member message detail", %{conn: conn} do
       alice =
         create_member(
           email: "alice@example.com",
@@ -204,15 +204,15 @@ defmodule MembaWeb.MemberMessageDetailTest do
       delivery_id = Ecto.UUID.generate()
       provider_reason = "Postmark webhook reported SpamComplaint from mx.example.invalid"
 
-      create_member_receipt(
+      create_member_email_delivery(
         delivery_id: delivery_id,
         message_id: message.message_id,
         recipient_id: bob.person_id,
         recipient_name: bob.name,
-        receipt_status: "delivery problem"
+        status: "delivery problem"
       )
 
-      create_operator_deliverability(
+      create_memba_staff_email_delivery(
         delivery_id: delivery_id,
         message_id: message.message_id,
         recipient_id: bob.person_id,
@@ -243,14 +243,14 @@ defmodule MembaWeb.MemberMessageDetailTest do
       refute response =~ "spam complaint"
       refute response =~ provider_reason
       refute response =~ "Postmark webhook"
-      refute response =~ "Delivery records"
+      refute response =~ "Email deliveries"
       refute response =~ "Provider reason"
       refute response =~ ~s(href="/admin/)
     end
   end
 
   defp sign_in_as(conn, email) do
-    init_test_session(conn, %{UserAuth.identity_session_key() => email})
+    init_test_session(conn, %{IdentityAuth.identity_session_key() => email})
   end
 
   defp create_member(attrs) do
@@ -294,18 +294,18 @@ defmodule MembaWeb.MemberMessageDetailTest do
     })
   end
 
-  defp create_member_receipt(attrs) do
-    Repo.insert!(%MemberReceipt{
+  defp create_member_email_delivery(attrs) do
+    Repo.insert!(%MemberEmailDelivery{
       delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+      status: Keyword.fetch!(attrs, :status)
     })
   end
 
-  defp create_operator_deliverability(attrs) do
-    Repo.insert!(%OperatorDeliverability{
+  defp create_memba_staff_email_delivery(attrs) do
+    Repo.insert!(%MembaStaffEmailDelivery{
       delivery_id: Keyword.fetch!(attrs, :delivery_id),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),

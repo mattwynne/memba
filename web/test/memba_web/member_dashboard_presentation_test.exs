@@ -4,7 +4,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias MembaWeb.MemberDashboardPresentation
 
@@ -49,18 +49,18 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
         inserted_at: now
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: newer_message.message_id,
       recipient_id: alice.person_id,
       recipient_name: "Alice Adams",
-      receipt_status: "opened"
+      status: "opened"
     )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: newer_message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "sent"
+      status: "sent"
     )
 
     assert {:ok, assigns} =
@@ -101,7 +101,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert newer_row.sent_at_label == Calendar.strftime(newer_message.inserted_at, "%b %d, %Y")
     assert newer_row.receipt_count == 2
 
-    assert newer_row.receipt_status_counts == %{
+    assert newer_row.status_counts == %{
              "opened" => 1,
              "delivered" => 0,
              "sent" => 1,
@@ -226,13 +226,13 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     })
   end
 
-  defp create_member_receipt(attrs) do
-    Repo.insert!(%MemberReceipt{
+  defp create_member_email_delivery(attrs) do
+    Repo.insert!(%MemberEmailDelivery{
       delivery_id: Ecto.UUID.generate(),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+      status: Keyword.fetch!(attrs, :status)
     })
   end
 end

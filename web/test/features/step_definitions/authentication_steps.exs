@@ -5,7 +5,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   import ExUnit.Assertions
 
   alias Memba.Accounts
-  alias Memba.Accounts.MagicToken
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership
   alias Memba.Repo
 
@@ -53,7 +53,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   end
 
   step "{word} follows a sign-in link that Memba did not issue", context do
-    assert {:error, :not_found} = Accounts.consume_magic_token("not-issued-by-memba")
+    assert {:error, :not_found} = Accounts.consume_sign_in_token("not-issued-by-memba")
     Map.put(context, :signed_in_identity, nil)
   end
 
@@ -90,7 +90,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     %{email: email} = fetch_from_context!(context, :sign_in_links, "Alice")
     expired_at = DateTime.add(DateTime.utc_now(:microsecond), -60, :second)
 
-    MagicToken
+    SignInToken
     |> where([token], token.email == ^Accounts.normalize_email(email))
     |> order_by([token], desc: token.inserted_at)
     |> limit(1)
@@ -101,7 +101,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
-  step "{word} has tried to open the staff-only area", context do
+  step "{word} has tried to open the Memba staff area", context do
     Map.put(context, :return_to, :staff_only_homepage)
   end
 
@@ -146,7 +146,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
-  step "{word} should see the Kootenay Mountaineering Club marketing page", context do
+  step "{word} should see the Kootenay Mountaineering Public club page", context do
     assert Map.get(context, :current_page) == :club_page
     assert Map.get(context, :signed_in_identity) == nil
     context
@@ -157,7 +157,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     context
   end
 
-  step "{word} should be on the staff-only homepage", context do
+  step "{word} should be on the Memba staff home", context do
     identity = Map.fetch!(context, :signed_in_identity)
     assert identity.staff? == true
     assert Map.get(context, :current_page) == :staff_only_homepage
@@ -236,7 +236,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   end
 
   defp request_sign_in_link(context, person_name, email) do
-    case Accounts.request_magic_link(email) do
+    case Accounts.request_sign_in_link(email) do
       {:ok, %{token: token, email: normalized_email}} ->
         update_context_map(context, :sign_in_links, person_name, %{
           token: token,
@@ -254,7 +254,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
   defp follow_sign_in_link(context, person_name) do
     %{token: token} = fetch_from_context!(context, :sign_in_links, person_name)
 
-    case Accounts.consume_magic_token(token) do
+    case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->
         sign_in(context, email)
 

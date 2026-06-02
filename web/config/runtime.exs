@@ -20,16 +20,16 @@ if System.get_env("PHX_SERVER") do
   config :memba, MembaWeb.Endpoint, server: true
 end
 
-case Memba.Messaging.DeliveryProviderConfig.provider_override!(
+case Memba.Messaging.EmailDeliveryProviderConfig.provider_override!(
        System.get_env("MEMBA_MESSAGING_DELIVERY_PROVIDER")
      ) do
   :default ->
     :ok
 
-  Memba.Messaging.DeliveryProviders.Postmark = delivery_provider ->
-    postmark_config = Memba.Messaging.DeliveryProviders.PostmarkConfig.from_env!()
+  Memba.Messaging.EmailDeliveryProviders.Postmark = email_delivery_provider ->
+    postmark_config = Memba.Messaging.EmailDeliveryProviders.PostmarkConfig.from_env!()
 
-    config :memba, :messaging_delivery_provider, delivery_provider
+    config :memba, :messaging_email_delivery_provider, email_delivery_provider
 
     config :memba, Memba.Mailer,
       adapter: Swoosh.Adapters.Postmark,
@@ -42,11 +42,11 @@ case Memba.Messaging.DeliveryProviderConfig.provider_override!(
         [from: postmark_config.from]
       end
 
-    config :memba, Memba.Messaging.DeliveryProviders.Postmark, postmark_provider_config
+    config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark, postmark_provider_config
     config :swoosh, :api_client, Swoosh.ApiClient.Req
 
-  delivery_provider ->
-    config :memba, :messaging_delivery_provider, delivery_provider
+  email_delivery_provider ->
+    config :memba, :messaging_email_delivery_provider, email_delivery_provider
 end
 
 case Memba.Accounts.AuthEmailConfig.provider_override!(

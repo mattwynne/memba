@@ -166,7 +166,7 @@ async function followSignInLinkForEmail(world, email) {
 }
 
 async function followUnissuedSignInLink(world) {
-  await followSignInLinkUrl(world, appUrl(world.baseUrl, "/auth/magic/not-issued-by-memba"));
+  await followSignInLinkUrl(world, appUrl(world.baseUrl, "/auth/sign-in/not-issued-by-memba"));
 }
 
 async function followSignInLinkUrl(world, url) {
@@ -226,8 +226,8 @@ async function assertSignedInOnClubPage(world, personName) {
 async function assertClubMarketingPage(world, clubName) {
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to be known in the scenario`);
-  await playwrightExpect(world.page.locator("#club-marketing-page")).toBeVisible();
-  await playwrightExpect(world.page.locator("#club-marketing-page")).toHaveAttribute("data-club-id", club.clubId);
+  await playwrightExpect(world.page.locator("#public-club-page-page")).toBeVisible();
+  await playwrightExpect(world.page.locator("#public-club-page-page")).toHaveAttribute("data-club-id", club.clubId);
   await playwrightExpect(world.page.getByRole("heading", { name: `Welcome to ${clubName}` })).toBeVisible();
   await playwrightExpect(world.page.getByRole("link", { name: "Sign in to continue" })).toBeVisible();
   await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");

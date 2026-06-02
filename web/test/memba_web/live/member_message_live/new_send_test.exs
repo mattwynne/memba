@@ -7,18 +7,18 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
   alias Memba.Membership
   alias Memba.Messaging
-  alias Memba.Messaging.DeliveryProviders.Fake
-  alias Memba.Messaging.DeliveryProviders.Unavailable
-  alias MembaWeb.UserAuth
+  alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Unavailable
+  alias MembaWeb.IdentityAuth
 
   setup do
-    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
 
-    Application.put_env(:memba, :messaging_delivery_provider, Fake)
+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Fake.reset()
 
     on_exit(fn ->
-      restore_env(:messaging_delivery_provider, original_provider)
+      restore_env(:messaging_email_delivery_provider, original_provider)
       Fake.reset()
     end)
 
@@ -35,7 +35,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/new?club_id=#{club_id}")
 
     view
@@ -55,9 +55,9 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert message.body == "Bring route ideas."
 
     assert [
-             %{recipient_id: alice_recipient_id, receipt_status: "sent"},
-             %{recipient_id: bob_recipient_id, receipt_status: "sent"}
-           ] = Messaging.list_member_receipts(message.message_id)
+             %{recipient_id: alice_recipient_id, status: "sent"},
+             %{recipient_id: bob_recipient_id, status: "sent"}
+           ] = Messaging.list_member_email_deliverys(message.message_id)
 
     assert [alice_recipient_id, bob_recipient_id] == [alice.person_id, bob.person_id]
 
@@ -105,7 +105,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   test "send failure renders an incident state with support guidance and retry actions", %{
     conn: conn
   } do
-    Application.put_env(:memba, :messaging_delivery_provider, Unavailable)
+    Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
 
     club_id = Ecto.UUID.generate()
     _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
@@ -113,7 +113,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
     {:ok, view, _html} =
       conn
-      |> init_test_session(%{UserAuth.identity_session_key() => "alice@example.com"})
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/new?club_id=#{club_id}")
 
     log =

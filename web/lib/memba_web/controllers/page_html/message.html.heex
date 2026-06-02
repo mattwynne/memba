@@ -28,8 +28,8 @@
       <p id="member-message-meta" class="mt-4 text-sm leading-6 text-[var(--club-site-muted)]">
         From <span class="font-semibold text-[var(--club-site-ink)]">{@sender_name}</span>
         · to
-        <span class="font-semibold text-[var(--club-site-ink)]">{@member_receipt_count}</span>
-        member{if(@member_receipt_count == 1, do: "", else: "s")}
+        <span class="font-semibold text-[var(--club-site-ink)]">{@member_email_delivery_count}</span>
+        member{if(@member_email_delivery_count == 1, do: "", else: "s")}
       </p>
       <p
         id="member-message-body"
@@ -47,10 +47,10 @@
           </h2>
           <p
             id="member-receipts-summary"
-            data-receipt-count={@member_receipt_count}
+            data-receipt-count={@member_email_delivery_count}
             class="w-fit rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-3 py-1 text-sm font-semibold text-[var(--club-site-muted)]"
           >
-            {@member_receipt_count} member{if(@member_receipt_count == 1, do: "", else: "s")}
+            {@member_email_delivery_count} member{if(@member_email_delivery_count == 1, do: "", else: "s")}
           </p>
         </div>
 
@@ -60,26 +60,26 @@
           aria-hidden="true"
         >
           <span
-            :for={status <- @member_receipt_summary}
+            :for={status <- @member_email_delivery_summary}
             data-testid="member-receipt-summary-bar-segment"
             data-receipt-status={status.status}
             data-receipt-count={status.count}
             data-receipt-percentage={status.percentage}
-            class={["block h-full", receipt_status_bg_class(status.status)]}
+            class={["block h-full", status_bg_class(status.status)]}
             style={receipt_bar_width(status)}
           />
         </div>
 
         <div id="member-receipt-summary-legend" class="mt-5 grid gap-3 sm:grid-cols-2">
           <div
-            :for={status <- @member_receipt_summary}
+            :for={status <- @member_email_delivery_summary}
             data-testid="member-receipt-summary-status"
             data-receipt-status={status.status}
             data-receipt-count={status.count}
             data-receipt-percentage={status.percentage}
             class="flex items-center gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3"
           >
-            <span class={["size-2.5 rounded-[0.2rem]", receipt_status_bg_class(status.status)]} />
+            <span class={["size-2.5 rounded-[0.2rem]", status_bg_class(status.status)]} />
             <span class="min-w-0 flex-1 text-sm text-[var(--club-site-muted)]">
               <span class="block font-semibold text-[var(--club-site-ink)]">
                 {status.status_label}
@@ -109,7 +109,7 @@
 
       <div id="member-receipts" class="mt-5 space-y-3">
         <p
-          :if={@member_receipt_groups == []}
+          :if={@member_email_delivery_groups == []}
           id="member-receipts-empty"
           class="rounded-2xl border border-dashed border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-5 text-sm text-[var(--club-site-muted)]"
         >
@@ -117,8 +117,8 @@
         </p>
 
         <section
-          :for={group <- @member_receipt_groups}
-          id={"member-receipt-group-#{receipt_status_slug(group.status)}"}
+          :for={group <- @member_email_delivery_groups}
+          id={"member-receipt-group-#{status_slug(group.status)}"}
           data-testid="member-receipt-group"
           data-receipt-status={group.status}
           class="overflow-hidden rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] shadow-sm"
@@ -126,18 +126,18 @@
           <header>
             <button
               type="button"
-              id={"member-receipt-group-toggle-#{receipt_status_slug(group.status)}"}
+              id={"member-receipt-group-toggle-#{status_slug(group.status)}"}
               phx-click="toggle_receipt_group"
               phx-value-status={group.status}
               aria-expanded={
                 to_string(receipt_group_expanded?(@expanded_receipt_groups, group.status))
               }
-              aria-controls={"member-receipts-#{receipt_status_slug(group.status)}"}
+              aria-controls={"member-receipts-#{status_slug(group.status)}"}
               class="flex w-full items-center gap-3 px-5 py-4 text-left transition duration-200 hover:bg-[var(--club-site-bg)]"
             >
               <span class={[
                 "grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
-                receipt_status_tint_class(group.status)
+                status_tint_class(group.status)
               ]}>
                 <.icon name={group.status_icon} class="size-5" />
               </span>
@@ -173,7 +173,7 @@
 
           <div
             :if={receipt_group_expanded?(@expanded_receipt_groups, group.status)}
-            id={"member-receipts-#{receipt_status_slug(group.status)}"}
+            id={"member-receipts-#{status_slug(group.status)}"}
             class="divide-y divide-[var(--club-site-line)] border-t border-[var(--club-site-line)] px-5 py-1"
           >
             <div
@@ -188,7 +188,7 @@
               <div class="flex min-w-0 items-center gap-3">
                 <span class={[
                   "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold ring-1 ring-inset",
-                  receipt_status_tint_class(receipt.status)
+                  status_tint_class(receipt.status)
                 ]}>
                   {receipt_recipient_initial(receipt.recipient_name)}
                 </span>
@@ -201,14 +201,14 @@
                 data-receipt-status={receipt.status}
                 class={[
                   "inline-flex w-fit items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset",
-                  receipt_status_tint_class(receipt.status)
+                  status_tint_class(receipt.status)
                 ]}
               >
                 <.icon
                   name={receipt.status_icon}
                   data-testid="receipt-status-icon"
                   data-icon-name={receipt.status_icon}
-                  class={["size-4", receipt_status_text_class(receipt.status)]}
+                  class={["size-4", status_text_class(receipt.status)]}
                 />
                 <span>{receipt.status_label}</span>
               </p>

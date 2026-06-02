@@ -8,7 +8,7 @@ accepted
 
 ## Context
 
-Memba needs read models for event-sourced workflows. The first message deliverability slice needs projections for clubs, people, memberships, messages, recipient deliveries, member-facing receipt queries, and operator deliverability queries.
+Memba needs read models for event-sourced workflows. The first message deliverability slice needs projections for clubs, people, memberships, messages, email deliveries, member-facing email delivery queries, and Memba staff email delivery queries.
 
 We could write custom Commanded event handlers that manually update Ecto tables. However, projections need idempotency, position tracking, and predictable replay behaviour.
 

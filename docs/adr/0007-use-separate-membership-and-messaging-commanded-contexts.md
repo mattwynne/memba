@@ -33,8 +33,8 @@ Use two Commanded contexts from the start:
 2. **Messaging context**
    - Commanded application: `Memba.Messaging.App`.
    - Router: `Memba.Messaging.Router`.
-   - Owns the Message aggregate and recipient delivery state for each message.
-   - Owns projections/read models for messages, recipient deliveries, member-facing receipts, and operator deliverability details.
+   - Owns the Message aggregate and email delivery state for each message.
+   - Owns projections/read models for messages, email deliveries, member-facing email deliveries, and Memba staff email delivery details.
 
 The messaging application service resolves recipients by calling a Membership context query API. For the first slice, recipients are all active members of the message's club at send time, including the sending member.
 

@@ -1,7 +1,7 @@
 defmodule MembaWeb.Router do
   use MembaWeb, :router
 
-  import MembaWeb.UserAuth
+  import MembaWeb.IdentityAuth
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -45,7 +45,7 @@ defmodule MembaWeb.Router do
   scope "/", MembaWeb do
     pipe_through [:browser, :club_member_required]
 
-    live_session :club_member, on_mount: [{MembaWeb.UserAuth, :mount_current_identity}] do
+    live_session :club_member, on_mount: [{MembaWeb.IdentityAuth, :mount_current_identity}] do
       live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
     end
@@ -56,9 +56,10 @@ defmodule MembaWeb.Router do
 
     get "/auth", AuthController, :new
     post "/auth", AuthController, :create
-    get "/auth/magic/:token", AuthController, :callback
+    get "/auth/sign-in/:token", AuthController, :callback
     delete "/auth", AuthController, :delete
     get "/about", PageController, :about
+    get "/get-started", PageController, :get_started
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
   end
@@ -66,7 +67,7 @@ defmodule MembaWeb.Router do
   scope "/admin", MembaWeb.Admin do
     pipe_through :staff_browser
 
-    live_session :staff_admin, on_mount: [{MembaWeb.UserAuth, :require_staff_identity}] do
+    live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
       live "/clubs", ClubsLive.Index
       live "/clubs/:club_id", ClubsLive.Show
       live "/deliveries", DeliveriesLive.Index
@@ -103,7 +104,7 @@ defmodule MembaWeb.Router do
 
       post "/messaging-delivery-provider",
            DevTestSupportController,
-           :configure_messaging_delivery_provider
+           :configure_messaging_email_delivery_provider
     end
   end
 end

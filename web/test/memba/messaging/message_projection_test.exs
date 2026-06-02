@@ -5,7 +5,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Projections.Message, as: MessageProjection
-  alias Memba.Messaging.Projections.RecipientDelivery, as: RecipientDeliveryProjection
+  alias Memba.Messaging.Projections.EmailDelivery, as: EmailDeliveryProjection
   alias Memba.Messaging.Recipient
 
   test "SendMessage is projected into public Messaging message and delivery queries" do
@@ -54,7 +54,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
            } = Messaging.get_message(message_id)
 
     assert [
-             %RecipientDeliveryProjection{
+             %EmailDeliveryProjection{
                delivery_id: ^alice_delivery_id,
                message_id: ^message_id,
                recipient_id: ^sender_id,
@@ -63,7 +63,7 @@ defmodule Memba.Messaging.MessageProjectionTest do
                channel: "email",
                status: "sent"
              },
-             %RecipientDeliveryProjection{
+             %EmailDeliveryProjection{
                delivery_id: ^bob_delivery_id,
                message_id: ^message_id,
                recipient_id: ^bob_id,
@@ -74,11 +74,11 @@ defmodule Memba.Messaging.MessageProjectionTest do
              }
            ] = Messaging.list_recipient_deliveries(message_id)
 
-    assert %RecipientDeliveryProjection{
+    assert %EmailDeliveryProjection{
              delivery_id: ^bob_delivery_id,
              message_id: ^message_id,
              recipient_id: ^bob_id
-           } = Messaging.get_recipient_delivery(bob_delivery_id)
+           } = Messaging.get_email_delivery(bob_delivery_id)
   end
 
   test "message and delivery queries return empty results for missing or invalid IDs" do
@@ -86,9 +86,9 @@ defmodule Memba.Messaging.MessageProjectionTest do
     assert is_nil(Messaging.get_message(nil))
     assert is_nil(Messaging.get_message("not-a-uuid"))
 
-    assert is_nil(Messaging.get_recipient_delivery(Ecto.UUID.generate()))
-    assert is_nil(Messaging.get_recipient_delivery(nil))
-    assert is_nil(Messaging.get_recipient_delivery("not-a-uuid"))
+    assert is_nil(Messaging.get_email_delivery(Ecto.UUID.generate()))
+    assert is_nil(Messaging.get_email_delivery(nil))
+    assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
 
     assert Messaging.list_recipient_deliveries(Ecto.UUID.generate()) == []
     assert Messaging.list_recipient_deliveries(nil) == []

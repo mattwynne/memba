@@ -6,21 +6,21 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Messaging
-  alias Memba.Messaging.DeliveryProviders.Fake
-  alias Memba.Messaging.DeliveryProviders.Postmark
-  alias Memba.Messaging.DeliveryRequest
+  alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Postmark
+  alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.MessageSent
-  alias Memba.Messaging.Events.RecipientDeliveryCreated
+  alias Memba.Messaging.Events.EmailDeliveryCreated
 
   setup do
-    original_provider = Application.get_env(:memba, :messaging_delivery_provider)
+    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
 
     Fake.reset()
 
     on_exit(fn ->
-      restore_env(:messaging_delivery_provider, original_provider)
+      restore_env(:messaging_email_delivery_provider, original_provider)
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
       Fake.reset()
@@ -75,19 +75,19 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert sender_id == alice.person_id
 
     assert [
-             %RecipientDeliveryCreated{
+             %EmailDeliveryCreated{
                message_id: ^message_id,
                recipient_id: alice_id,
                recipient_name: "Alice",
                recipient_email: "alice@example.com"
              },
-             %RecipientDeliveryCreated{
+             %EmailDeliveryCreated{
                message_id: ^message_id,
                recipient_id: bob_id,
                recipient_name: "Bob",
                recipient_email: "bob@example.com"
              },
-             %RecipientDeliveryCreated{
+             %EmailDeliveryCreated{
                message_id: ^message_id,
                recipient_id: carol_id,
                recipient_name: "Carol",
@@ -104,7 +104,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert Enum.uniq(delivery_ids) == delivery_ids
 
     assert [
-             %DeliveryRequest{
+             %EmailDeliveryRequest{
                message_id: ^message_id,
                club_id: ^kootenay_club_id,
                delivery_id: alice_delivery_id,
@@ -115,7 +115,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                subject: "Trip planning night",
                body: "Bring route ideas."
              },
-             %DeliveryRequest{
+             %EmailDeliveryRequest{
                message_id: ^message_id,
                club_id: ^kootenay_club_id,
                delivery_id: bob_delivery_id,
@@ -126,7 +126,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
                subject: "Trip planning night",
                body: "Bring route ideas."
              },
-             %DeliveryRequest{
+             %EmailDeliveryRequest{
                message_id: ^message_id,
                club_id: ^kootenay_club_id,
                delivery_id: carol_delivery_id,
@@ -160,7 +160,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   test "surfaces Postmark handoff failures without treating them as recipient outcomes" do
-    Application.put_env(:memba, :messaging_delivery_provider, Postmark)
+    Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
 
     Application.put_env(:memba, Memba.Mailer,
       adapter: Memba.TestSupport.FailingSwooshAdapter,
@@ -192,8 +192,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert_received {:failing_swoosh_adapter_deliver, %Swoosh.Email{}}
     assert Fake.deliveries() == []
 
-    assert Messaging.get_member_receipt(message_id, alice.person_id).receipt_status == "sent"
-    assert Messaging.get_operator_deliverability(message_id, alice.person_id).status == "sent"
+    assert Messaging.get_member_email_delivery(message_id, alice.person_id).status == "sent"
+    assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status == "sent"
   end
 
   defp create_person(attrs) do

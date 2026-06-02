@@ -4,7 +4,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Repo
   alias MembaWeb.MemberMessageDetail
@@ -33,11 +33,11 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
         body: "Bring your maps."
       )
 
-    create_member_receipt(
+    create_member_email_delivery(
       message_id: message.message_id,
       recipient_id: bob.person_id,
       recipient_name: "Bob Builder",
-      receipt_status: "delivered"
+      status: "delivered"
     )
 
     assert {:ok, assigns} =
@@ -50,9 +50,9 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     assert assigns.selected_club.club_id == alice.club_id
     assert assigns.message.message_id == message.message_id
     assert assigns.sender_name == "Alice Adams"
-    assert assigns.member_receipt_count == 1
+    assert assigns.member_email_delivery_count == 1
 
-    assert Enum.map(assigns.member_receipt_summary, &{&1.status, &1.count, &1.percentage}) == [
+    assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) == [
              {"opened", 0, 0},
              {"delivered", 1, 100},
              {"sent", 0, 0},
@@ -60,7 +60,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
            ]
 
     assert [%{status: "delivered", status_label: "Delivered", count: 1}] =
-             assigns.member_receipt_groups
+             assigns.member_email_delivery_groups
   end
 
   test "forbids missing, invalid, or unauthorized selected clubs" do
@@ -161,13 +161,13 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
     })
   end
 
-  defp create_member_receipt(attrs) do
-    Repo.insert!(%MemberReceipt{
+  defp create_member_email_delivery(attrs) do
+    Repo.insert!(%MemberEmailDelivery{
       delivery_id: Ecto.UUID.generate(),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
-      receipt_status: Keyword.fetch!(attrs, :receipt_status)
+      status: Keyword.fetch!(attrs, :status)
     })
   end
 end

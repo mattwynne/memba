@@ -61,7 +61,7 @@ test("homepage assertion step checks browser-visible homepage content", async ()
       .filter((expectation) => expectation.matcher === "toBeVisible")
       .map((expectation) => expectation.target),
     [
-      { role: "heading", options: { name: "Run your club, not your spreadsheet." } },
+      { role: "heading", options: { name: "Volunteering shouldn’t feel like work." } },
       { role: "link", options: { name: "Sign in" } }
     ]
   );

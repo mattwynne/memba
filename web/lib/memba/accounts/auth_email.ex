@@ -1,8 +1,8 @@
 defmodule Memba.Accounts.AuthEmail do
   @moduledoc """
-  Magic-link authentication email delivery.
+  Sign-in-link authentication email delivery.
 
-  Builds concise text and HTML magic-link emails, assigns the configured
+  Builds concise text and HTML sign-in-link emails, assigns the configured
   Postmark message stream, and hands delivery to `Memba.Mailer`.
   """
 
@@ -14,14 +14,14 @@ defmodule Memba.Accounts.AuthEmail do
   @subject "Sign in to Memba"
 
   @doc """
-  Deliver a magic-link sign-in email to a normalized recipient address.
+  Deliver a sign-in-link sign-in email to a normalized recipient address.
   """
-  def deliver_magic_link(email, callback_url) do
+  def deliver_sign_in_link(email, callback_url) do
     with {:ok, recipient_email} <- normalize_recipient_email(email),
          {:ok, callback_url} <- normalize_callback_url(callback_url),
          {:ok, %AuthEmailConfig{} = config} <- auth_email_config() do
       recipient_email
-      |> magic_link_email(callback_url, config)
+      |> sign_in_link_email(callback_url, config)
       |> deliver_email()
     end
   end
@@ -49,7 +49,7 @@ defmodule Memba.Accounts.AuthEmail do
     end
   end
 
-  defp magic_link_email(recipient_email, callback_url, %AuthEmailConfig{} = config) do
+  defp sign_in_link_email(recipient_email, callback_url, %AuthEmailConfig{} = config) do
     new()
     |> from(config.from)
     |> to(recipient_email)

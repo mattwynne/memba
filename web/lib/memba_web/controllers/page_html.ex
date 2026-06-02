@@ -24,8 +24,8 @@ defmodule MembaWeb.PageHTML do
   defp active_member_count_label(1), do: "1 active member"
   defp active_member_count_label(count), do: "#{count} active members"
 
-  defp receipt_status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
-  defp receipt_status_slug(_status), do: "unknown"
+  defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
+  defp status_slug(_status), do: "unknown"
 
   defp receipt_bar_width(%{percentage: percentage}) when is_integer(percentage) do
     "width: #{max(percentage, 0)}%;"
@@ -54,24 +54,24 @@ defmodule MembaWeb.PageHTML do
 
   defp receipt_group_expanded?(_expanded_groups, _status), do: false
 
-  defp receipt_status_bg_class("opened"), do: "bg-emerald-500"
-  defp receipt_status_bg_class("delivered"), do: "bg-sky-500"
-  defp receipt_status_bg_class("sent"), do: "bg-slate-400"
-  defp receipt_status_bg_class("delivery problem"), do: "bg-amber-500"
-  defp receipt_status_bg_class(_status), do: "bg-slate-300"
+  defp status_bg_class("opened"), do: "bg-emerald-500"
+  defp status_bg_class("delivered"), do: "bg-sky-500"
+  defp status_bg_class("sent"), do: "bg-slate-400"
+  defp status_bg_class("delivery problem"), do: "bg-amber-500"
+  defp status_bg_class(_status), do: "bg-slate-300"
 
-  defp receipt_status_text_class("opened"), do: "text-emerald-700"
-  defp receipt_status_text_class("delivered"), do: "text-sky-700"
-  defp receipt_status_text_class("sent"), do: "text-slate-600"
-  defp receipt_status_text_class("delivery problem"), do: "text-amber-700"
-  defp receipt_status_text_class(_status), do: "text-slate-600"
+  defp status_text_class("opened"), do: "text-emerald-700"
+  defp status_text_class("delivered"), do: "text-sky-700"
+  defp status_text_class("sent"), do: "text-slate-600"
+  defp status_text_class("delivery problem"), do: "text-amber-700"
+  defp status_text_class(_status), do: "text-slate-600"
 
-  defp receipt_status_tint_class("opened"), do: "bg-emerald-50 text-emerald-700 ring-emerald-200"
-  defp receipt_status_tint_class("delivered"), do: "bg-sky-50 text-sky-700 ring-sky-200"
-  defp receipt_status_tint_class("sent"), do: "bg-slate-100 text-slate-600 ring-slate-200"
+  defp status_tint_class("opened"), do: "bg-emerald-50 text-emerald-700 ring-emerald-200"
+  defp status_tint_class("delivered"), do: "bg-sky-50 text-sky-700 ring-sky-200"
+  defp status_tint_class("sent"), do: "bg-slate-100 text-slate-600 ring-slate-200"
 
-  defp receipt_status_tint_class("delivery problem"),
+  defp status_tint_class("delivery problem"),
     do: "bg-amber-50 text-amber-700 ring-amber-200"
 
-  defp receipt_status_tint_class(_status), do: "bg-slate-100 text-slate-600 ring-slate-200"
+  defp status_tint_class(_status), do: "bg-slate-100 text-slate-600 ring-slate-200"
 end

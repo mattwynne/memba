@@ -3,10 +3,10 @@ Feature: Authentication
 
   Rule: Club pages are public until member-only access is needed
 
-    Scenario: Logged-out visitor sees a club marketing page
+    Scenario: Logged-out visitor sees a public club page
       Given Alice is a member of Kootenay Mountaineering Club
       When Robin opens the Kootenay Mountaineering Club page
-      Then Robin should see the Kootenay Mountaineering Club marketing page
+      Then Robin should see the Kootenay Mountaineering Public club page
       And the club page should show Powered by Memba in the footer
 
   Rule: Known club members can sign in
@@ -40,7 +40,7 @@ Feature: Authentication
       Then Pat should receive a sign-in link
       When Pat follows the sign-in link
       Then Pat should be signed in as Memba staff
-      And Pat should be on the staff-only homepage
+      And Pat should be on the Memba staff home
 
     Scenario: Memba staff who are also club members can use both kinds of access
       Given Pat is a member of Kootenay Mountaineering Club
@@ -48,7 +48,7 @@ Feature: Authentication
       Then Pat should receive a sign-in link
       When Pat follows the sign-in link
       Then Pat should be signed in as Memba staff
-      And Pat should be on the staff-only homepage
+      And Pat should be on the Memba staff home
       And Pat should be able to see Kootenay Mountaineering Club in their clubs
 
   Rule: People who are neither club members nor Memba staff cannot sign in
@@ -93,14 +93,14 @@ Feature: Authentication
 
   Rule: Signing in can continue an interrupted journey
 
-    Scenario: Staff signs in after trying to open the staff-only area
+    Scenario: Staff signs in after trying to open the Memba staff area
       Given Pat is not a member of any club
-      And Pat has tried to open the staff-only area
+      And Pat has tried to open the Memba staff area
       When Pat requests a sign-in link for "pat@memba.io"
       Then Pat should receive a sign-in link
       When Pat follows the sign-in link
       Then Pat should be signed in as Memba staff
-      And Pat should be on the staff-only homepage
+      And Pat should be on the Memba staff home
 
   Rule: Signed-in people can sign out
 

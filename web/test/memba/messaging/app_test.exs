@@ -4,11 +4,11 @@ defmodule Memba.Messaging.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Messaging.App
-  alias Memba.Messaging.Commands.ReportDeliveryBounced
-  alias Memba.Messaging.Commands.ReportDeliveryDelayed
-  alias Memba.Messaging.Commands.ReportDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportDeliveryOpened
-  alias Memba.Messaging.Commands.ReportDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+  alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
+  alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Router
 
@@ -27,11 +27,11 @@ defmodule Memba.Messaging.AppTest do
     expected_commands =
       MapSet.new([
         SendMessage,
-        ReportDeliveryDelivered,
-        ReportDeliveryDelayed,
-        ReportDeliveryBounced,
-        ReportDeliverySpamComplaint,
-        ReportDeliveryOpened
+        ReportEmailDeliveryDelivered,
+        ReportEmailDeliveryDelayed,
+        ReportEmailDeliveryBounced,
+        ReportEmailDeliverySpamComplaint,
+        ReportEmailDeliveryOpened
       ])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands

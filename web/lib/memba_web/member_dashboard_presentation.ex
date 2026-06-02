@@ -12,9 +12,9 @@ defmodule MembaWeb.MemberDashboardPresentation do
   alias Memba.Accounts
   alias Memba.Membership
   alias Memba.Messaging
-  alias Memba.Messaging.Projections.MemberReceipt
+  alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Repo
-  alias MembaWeb.MemberReceiptPresentation
+  alias MembaWeb.MemberEmailDeliveryPresentation
 
   @doc """
   Load dashboard assigns for a signed-in active member of the selected club.
@@ -97,8 +97,8 @@ defmodule MembaWeb.MemberDashboardPresentation do
   @doc """
   Shapes recent-message projection rows for dashboard rendering.
 
-  The row data keeps member-facing receipt vocabulary from
-  `MemberReceiptPresentation`, adds compact mini-bar segment data, and uses the
+  The row data keeps member-facing status vocabulary from
+  `MemberEmailDeliveryPresentation`, adds compact mini-bar segment data, and uses the
   message projection `inserted_at` value for dashboard "when" metadata. Rows
   without `inserted_at` intentionally leave the label empty instead of inventing
   placeholder copy.
@@ -111,7 +111,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
       receipt_model =
         message.message_id
         |> then(&Map.get(receipts_by_message_id, &1, []))
-        |> MemberReceiptPresentation.present_receipts()
+        |> MemberEmailDeliveryPresentation.present_receipts()
 
       sender_name = Map.get(member_names_by_id, message.sender_id, "Club member")
       receipt_count = receipt_model.total_count
@@ -128,7 +128,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
         sent_at_label: sent_at_label(message.inserted_at),
         receipt_count: receipt_count,
         receipt_summary: receipt_model.summary,
-        receipt_status_counts: receipt_status_counts(receipt_model.summary),
+        status_counts: status_counts(receipt_model.summary),
         receipt_segments: receipt_segments(receipt_model.summary),
         receipt_glance_copy: receipt_glance_copy(receipt_model.summary, receipt_count),
         has_receipt_glance?: receipt_count > 0,
@@ -144,7 +144,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp receipts_by_message_id(messages) do
     message_ids = Enum.map(messages, & &1.message_id)
 
-    MemberReceipt
+    MemberEmailDelivery
     |> where([receipt], receipt.message_id in ^message_ids)
     |> order_by([receipt],
       asc: receipt.message_id,
@@ -176,7 +176,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
 
   defp initials(_name), do: "?"
 
-  defp receipt_status_counts(summary) do
+  defp status_counts(summary) do
     Map.new(summary, fn status -> {status.status, status.count} end)
   end
 
