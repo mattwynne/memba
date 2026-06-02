@@ -71,6 +71,8 @@ defmodule MembaWeb.Router do
     live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
       live "/clubs", ClubsLive.Index
       live "/clubs/:club_id", ClubsLive.Show
+      live "/clubs/:club_id/people/new", PeopleLive.New
+      live "/clubs/:club_id/people/:person_id/edit", PeopleLive.Edit
       live "/deliveries", DeliveriesLive.Index
       live "/messages/:message_id", MessagesLive.Show
     end

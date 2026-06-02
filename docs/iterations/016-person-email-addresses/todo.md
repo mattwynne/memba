@@ -12,7 +12,7 @@
 - [x] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
 - [x] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
 - [x] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
-- [ ] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+- [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
 - [ ] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
 - [ ] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
 - [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
