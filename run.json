@@ -1208,7 +1208,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T08:58:00.904601472Z",
-  "last_event_at": "2026-06-02T09:07:25.642025227Z",
+  "last_event_at": "2026-06-02T09:08:37.052186946Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -2729,9 +2729,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 138,
       "checkpoint": {
-        "timestamp": "2026-06-02T09:07:25.816436848Z",
+        "timestamp": "2026-06-02T09:07:29.750557619Z",
         "current_node": "snapshot_before_review_repair",
         "completed_nodes": [
           "start",
@@ -2748,6 +2748,310 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.default_fidelity": "summary:high",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.review_fork": 0,
+          "internal.retry_count.start": 0,
+          "last_response": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"polish-deprecated-opened-command-moduledoc\",\"title\":\"Clarify deprecated opened command modul",
+          "failure_class": "",
+          "last_stage": "synthesize_review",
+          "parallel.branch_count": 3,
+          "internal.retry_count.review_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "parallel.fan_in.best_head_sha": "2ad36e36fb7262fa0908500f265f482d4cdab747",
+          "parallel.results": [
+            {
+              "id": "claude_review",
+              "status": "succeeded",
+              "head_sha": "2ad36e36fb7262fa0908500f265f482d4cdab747"
+            },
+            {
+              "id": "codex_review",
+              "status": "succeeded",
+              "head_sha": "3f1af06e44775b18526ad3630520b6f7c31a88a9"
+            },
+            {
+              "id": "",
+              "status": "failed"
+            }
+          ],
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.retry_count.preflight_sandbox": 0,
+          "parallel.fan_in.best_id": "claude_review",
+          "internal.run_id": "01KT3RSHJ7DQJYFQHXAMQ3Q8MY",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.review_fork.current_node": "claude_review",
+          "internal.thread_id": "review_gate",
+          "internal.retry_count.read_plan": 0,
+          "parallel.fan_in.best_outcome": "succeeded",
+          "internal.retry_count.dev_check": 0,
+          "graph.max_node_visits": "160",
+          "internal.retry_count.claude_review": 0,
+          "graph.rankdir": "LR",
+          "outcome": "succeeded",
+          "thread.review_merge.current_node": "synthesize_review",
+          "internal.retry_count.review_merge": 0,
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "response.claude_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (Use Commanded for CQRS/ES)**: Command/event modules follow Commanded patterns. Router properly excludes deprecated command dispatch. Event deserialization warning is appropriate.\n- **ADR-003 (Projection Schema Design)**: `MemberEmailDelivery` projection updated to three-status enum with schema validation enforcing constraint.\n- **ADR-004 (Email Delivery via Postmark)**: Still uses Postmark. Explicitly sets `track_opens: false` in `OutboundEmail.new/1`. Webhook controller rejects open events with 400 \"unsupported event type\".\n- **ADR-007 (Acceptance Testing Strategy)**: Acceptance feature files updated to remove opened scenarios while maintaining domain acceptance criteria for delivered/problem statuses.\n- **ADR-009 (Remove Email Open Tracking)**: Newly created and correctly implemented throughout the codebase.\n\n### Evidence\n- `web/lib/memba/postmark/outbound_email.ex:17`: `track_opens: false` hardcoded\n- `web/lib/memba/postmark/webhook_controller.ex`: Open events return `400` with `\"unsupported event type\"`\n- `web/lib/memba/messaging/router.ex`: `ReportEmailDeliveryOpened` dispatch removed\n- `web/lib/memba/messaging/projections/member_email_delivery.ex:12-13`: Status enum limited to `[:sending, :delivered, :delivery_problem]`\n- `web/test/memba/postmark/outbound_email_test.exs:18`: Explicit test `assert email.track_opens == false`\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\n\n1. **LiveView status helper duplication**: Both `MemberDeliveriesLive` and `Staff.ClubDeliveriesLive` duplicate `status_badge_class/1` and `format_status/1`. Extract to shared module:\n   - Create `web/lib/memba_web/components/delivery_status.ex` or similar\n   - Move both helpers to shared module\n   - Import in both LiveViews\n   - Update tests if needed\n\n2. **Deprecated command moduledoc inaccuracy**: `ReportEmailDeliveryOpened` moduledoc claims \"will return an error if used\" but there's no handler—dispatch would raise `Commanded.Router.UnregisteredCommandError`. Fix moduledoc:\n   ```elixir\n   @moduledoc \"\"\"\n   DEPRECATED: Open tracking has been removed from Memba.\n   This command is retained for backwards compatibility with historic event data\n   but is no longer routed. Attempting to dispatch this command will raise an error.\n   See ADR 009: Remove Email Open Tracking.\n   \"\"\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Deprecated module lifecycle policy**\n   - **Files**: `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, `web/lib/memba/messaging/events/email_delivery_opened.ex`\n   - **Smell**: No documented timeline or policy for eventual removal of deprecated event/command modules\n   - **Why judgement-worthy**: If deprecated modules accumulate without a removal strategy, technical debt grows. May warrant a project-wide policy: e.g., \"deprecated event modules retained indefinitely for replay compatibility; deprecated command modules removed after N months if never dispatched.\" Not urgent since this is the first deprecated command, but worth establishing precedent.\n\n2. **File rename without migration guide**\n   - **Files**: `web/lib/memba/postmark/email.ex` (deleted) → `web/lib/memba/postmark/outbound_email.ex` (created); same for test files\n   - **Smell**: Simple rename but no inline comment explaining relationship to old module name\n   - **Why judgement-worthy**: Future developers searching for `Postmark.Email` references won't find breadcrumbs. Consider adding brief comment in `OutboundEmail` moduledoc: \"Replaces deprecated `Postmark.Email` module.\" Low risk since git history is clear.\n\n3. **Status formatting repetition across member/staff contexts**\n   - **Files**: `web/lib/memba_web/live/member_deliveries_live.ex`, `web/lib/memba_web/live/staff/club_deliveries_live.ex`\n   - **Smell**: Beyond the DRY issue flagged above, the status display logic is duplicated across member and staff contexts with identical semantics\n   - **Why judgement-worthy**: If status formatting rules diverge in future (e.g., staff sees different labels or colors), current duplication makes that harder. Shared component would make divergence explicit. However, premature abstraction may be worse if contexts truly are independent. Judgement call on component extraction strategy.\n\n## Suggested Fixes\n\n### If Bounded-Safe Fixes Applied\n\n**Fix 1: Extract status helpers to shared module**\n\nCreate `web/lib/memba_web/components/delivery_status_helpers.ex`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpers do\n  @moduledoc \"\"\"\n  Shared helper functions for formatting email delivery statuses.\n  \"\"\"\n\n  @doc \"\"\"\n  Returns Tailwind classes for status badge based on delivery status.\n  \"\"\"\n  def status_badge_class(:sending), do: \"px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800\"\n  def status_badge_class(:delivered), do: \"px-3 py-1 rounded-full text-sm bg-green-100 text-green-800\"\n  def status_badge_class(:delivery_problem), do: \"px-3 py-1 rounded-full text-sm bg-red-100 text-red-800\"\n\n  @doc \"\"\"\n  Formats delivery status atom as human-readable string.\n  \"\"\"\n  def format_status(:sending), do: \"Sending\"\n  def format_status(:delivered), do: \"Delivered\"\n  def format_status(:delivery_problem), do: \"Delivery problem\"\nend\n```\n\nUpdate `web/lib/memba_web/live/member_deliveries_live.ex`:\n```elixir\ndefmodule MembaWeb.MemberDeliveriesLive do\n  use MembaWeb, :live_view\n\n  alias Memba.Messaging\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  # ... rest unchanged, remove duplicated helper functions\nend\n```\n\nUpdate `web/lib/memba_web/live/staff/club_deliveries_live.ex` similarly.\n\nAdd test in `web/test/memba_web/components/delivery_status_helpers_test.exs`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpersTest do\n  use ExUnit.Case, async: true\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  describe \"status_badge_class/1\" do\n    test \"returns correct classes for each status\" do\n      assert status_badge_class(:sending) =~ \"bg-blue-100\"\n      assert status_badge_class(:delivered) =~ \"bg-green-100\"\n      assert status_badge_class(:delivery_problem) =~ \"bg-red-100\"\n    end\n  end\n\n  describe \"format_status/1\" do\n    test \"formats status atoms as strings\" do\n      assert format_status(:sending) == \"Sending\"\n      assert format_status(:delivered) == \"Delivered\"\n      assert format_status(:delivery_problem) == \"Delivery problem\"\n    end\n  end\nend\n```\n\n**Fix 2: Correct deprecated command moduledoc**\n\nIn `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, replace moduledoc:\n```elixir\n@moduledoc \"\"\"\nDEPRECATED: Open tracking has been removed from Memba.\nThis command struct is retained for backwards compatibility with historic event data\nbut is no longer routed by the Messaging.Router. Attempting to dispatch this command\nwill raise Commanded.Router.UnregisteredCommandError.\nSee ADR 009: Remove Email Open Tracking.\n\"\"\"\n```\n\n## Validation Notes\n\n### Tests/Checks Confirming Correctness\n\n1. **Dev check passed**: 380 tests, 0 failures, including:\n   - Postmark provider tests verify `track_opens: false` explicitly\n   - Webhook controller tests verify open events rejected with 400\n   - LiveView tests verify \"Opened\" status absent from UI\n   - Projection tests validate three-status-only schema\n\n2. **Acceptance test updates**: Both `member-deliverability.feature` and `staff-deliverability.feature` removed opened scenarios; remaining scenarios cover delivered and delivery_problem paths.\n\n3. **Domain behaviour**: \n   - `MessageOutbox` aggregate no longer transitions to opened state\n   - Projection schema `validate_inclusion` rejects `:opened`\n   - Messaging context functions work with three statuses only\n\n4. **Integration coverage**:\n   - `web/test/memba/postmark/outbound_email_test.exs` explicitly asserts `email.track_opens == false`\n   - `web/test/memba/postmark/webhook_controller_test.exs` verifies open webhook returns 400\n   - `web/test/memba_web/live/member_deliveries_live_test.exs:36` uses `refute has_element?(view, \"span\", \"Opened\")`\n   - `web/test/memba_web/live/staff/club_deliveries_live_test.exs:57` similarly refutes opened display\n\n5. **Documentation updated**: `docs/email-delivery.md` explicitly states open tracking disabled and references ADR-009.\n\n### Manual Checks Performed\n\n- Verified ADR-009 created with correct status, context, decision, and consequences\n- Confirmed deprecated event has `__after_deserialize__/1` callback with warning\n- Confirmed router excludes `ReportEmailDeliveryOpened` from dispatch list\n- Verified `OutboundEmail` typespec hardcodes `track_opens: false`\n\n### Remaining Risks\n\n- **Historic event compatibility**: Deprecated modules retained for event store replay. No migration added. Per plan: \"Do not add a data migration/backfill unless implementation discovers the app cannot boot or replay without one.\" Since dev check passed and app boots, this appears safe.\n- **Third-party tracking**: Plan notes \"Third-party provider dashboards may still report opens independently if a stream was configured outside Memba.\" Documentation correctly states Memba does not request or consume open signals, mitigating this risk.\n\n---\n\n**Conclusion**: Clean, thorough implementation. Bounded-safe fixes are optional polish. Judgement-worthy findings are low-priority observations for future policy decisions. Ready to merge.",
+          "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+          "internal.node_visit_count": 1,
+          "review_blockers": [
+            {
+              "id": "polish-deprecated-opened-command-moduledoc",
+              "title": "Clarify deprecated opened command moduledoc",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "implementation_accepted": false,
+          "internal.retry_count.synthesize_review": 0,
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"polish-deprecated-opened-command-moduledoc\",\"title\":\"Clarify deprecated opened command moduledoc\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}",
+          "thread.collect_implementation_evidence.current_node": "review_fork",
+          "internal.fidelity": "summary:high",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "thread.claude_review.current_node": "review_merge",
+          "thread.synthesize_review.current_node": "review_gate",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "failure_signature": "",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.start.current_node": "read_plan",
+          "current_node": "snapshot_before_review_repair",
+          "review_fixes_available": true
+        },
+        "node_outcomes": {
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3838c06086da927d84da25128b4f99834176adb57d39f987f2be701924a8b758"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 32524,
+              "active_time_ms": 32524
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 167,
+              "active_time_ms": 167
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "implementation_accepted": false,
+              "review_fixes_available": true,
+              "review_blockers": [
+                {
+                  "id": "polish-deprecated-opened-command-moduledoc",
+                  "title": "Clarify deprecated opened command moduledoc",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"polish-deprecated-opened-command-moduledoc\",\"title\":\"Clarify deprecated opened command modul",
+              "last_stage": "synthesize_review",
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"polish-deprecated-opened-command-moduledoc\",\"title\":\"Clarify deprecated opened command moduledoc\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 14709,
+                    "output_tokens": 256,
+                    "reasoning_tokens": 1022,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 111885
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 27862,
+              "tool_time_ms": 0,
+              "active_time_ms": 27862
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/25c77911b820073bb182567cbd85d33d0ba5bd73ff1c8eb3c8ef0a8ab10d4f4c"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/017-remove-open-tracking/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 199,
+              "active_time_ms": 199
+            }
+          },
+          "review_merge": {
+            "status": "succeeded",
+            "context_updates": {
+              "parallel.fan_in.best_outcome": "succeeded",
+              "parallel.fan_in.best_id": "claude_review",
+              "parallel.fan_in.best_head_sha": "2ad36e36fb7262fa0908500f265f482d4cdab747"
+            },
+            "notes": "Selected best candidate: claude_review",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 0,
+              "active_time_ms": 0
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3ef440cf893c391c059a206c9b18c26c4a4531c73cc3ad3b458401dfe920c9ce"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='9bf6d3c8c1134c4cda5bc94c2d9d4f4033b7948e'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 281,
+              "active_time_ms": 281
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (Use Commanded for CQRS/ES)**: Command/event modules follow Commanded patterns. Router properly excludes deprecated command dispatch. Event deserialization warning is appropriate.\n- **ADR-003 (Projection Schema Design)**: `MemberEmailDelivery` projection updated to three-status enum with schema validation enforcing constraint.\n- **ADR-004 (Email Delivery via Postmark)**: Still uses Postmark. Explicitly sets `track_opens: false` in `OutboundEmail.new/1`. Webhook controller rejects open events with 400 \"unsupported event type\".\n- **ADR-007 (Acceptance Testing Strategy)**: Acceptance feature files updated to remove opened scenarios while maintaining domain acceptance criteria for delivered/problem statuses.\n- **ADR-009 (Remove Email Open Tracking)**: Newly created and correctly implemented throughout the codebase.\n\n### Evidence\n- `web/lib/memba/postmark/outbound_email.ex:17`: `track_opens: false` hardcoded\n- `web/lib/memba/postmark/webhook_controller.ex`: Open events return `400` with `\"unsupported event type\"`\n- `web/lib/memba/messaging/router.ex`: `ReportEmailDeliveryOpened` dispatch removed\n- `web/lib/memba/messaging/projections/member_email_delivery.ex:12-13`: Status enum limited to `[:sending, :delivered, :delivery_problem]`\n- `web/test/memba/postmark/outbound_email_test.exs:18`: Explicit test `assert email.track_opens == false`\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\n\n1. **LiveView status helper duplication**: Both `MemberDeliveriesLive` and `Staff.ClubDeliveriesLive` duplicate `status_badge_class/1` and `format_status/1`. Extract to shared module:\n   - Create `web/lib/memba_web/components/delivery_status.ex` or similar\n   - Move both helpers to shared module\n   - Import in both LiveViews\n   - Update tests if needed\n\n2. **Deprecated command moduledoc inaccuracy**: `ReportEmailDeliveryOpened` moduledoc claims \"will return an error if used\" but there's no handler—dispatch would raise `Commanded.Router.UnregisteredCommandError`. Fix moduledoc:\n   ```elixir\n   @moduledoc \"\"\"\n   DEPRECATED: Open tracking has been removed from Memba.\n   This command is retained for backwards compatibility with historic event data\n   but is no longer routed. Attempting to dispatch this command will raise an error.\n   See ADR 009: Remove Email Open Tracking.\n   \"\"\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Deprecated module lifecycle policy**\n   - **Files**: `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, `web/lib/memba/messaging/events/email_delivery_opened.ex`\n   - **Smell**: No documented timeline or policy for eventual removal of deprecated event/command modules\n   - **Why judgement-worthy**: If deprecated modules accumulate without a removal strategy, technical debt grows. May warrant a project-wide policy: e.g., \"deprecated event modules retained indefinitely for replay compatibility; deprecated command modules removed after N months if never dispatched.\" Not urgent since this is the first deprecated command, but worth establishing precedent.\n\n2. **File rename without migration guide**\n   - **Files**: `web/lib/memba/postmark/email.ex` (deleted) → `web/lib/memba/postmark/outbound_email.ex` (created); same for test files\n   - **Smell**: Simple rename but no inline comment explaining relationship to old module name\n   - **Why judgement-worthy**: Future developers searching for `Postmark.Email` references won't find breadcrumbs. Consider adding brief comment in `OutboundEmail` moduledoc: \"Replaces deprecated `Postmark.Email` module.\" Low risk since git history is clear.\n\n3. **Status formatting repetition across member/staff contexts**\n   - **Files**: `web/lib/memba_web/live/member_deliveries_live.ex`, `web/lib/memba_web/live/staff/club_deliveries_live.ex`\n   - **Smell**: Beyond the DRY issue flagged above, the status display logic is duplicated across member and staff contexts with identical semantics\n   - **Why judgement-worthy**: If status formatting rules diverge in future (e.g., staff sees different labels or colors), current duplication makes that harder. Shared component would make divergence explicit. However, premature abstraction may be worse if contexts truly are independent. Judgement call on component extraction strategy.\n\n## Suggested Fixes\n\n### If Bounded-Safe Fixes Applied\n\n**Fix 1: Extract status helpers to shared module**\n\nCreate `web/lib/memba_web/components/delivery_status_helpers.ex`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpers do\n  @moduledoc \"\"\"\n  Shared helper functions for formatting email delivery statuses.\n  \"\"\"\n\n  @doc \"\"\"\n  Returns Tailwind classes for status badge based on delivery status.\n  \"\"\"\n  def status_badge_class(:sending), do: \"px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800\"\n  def status_badge_class(:delivered), do: \"px-3 py-1 rounded-full text-sm bg-green-100 text-green-800\"\n  def status_badge_class(:delivery_problem), do: \"px-3 py-1 rounded-full text-sm bg-red-100 text-red-800\"\n\n  @doc \"\"\"\n  Formats delivery status atom as human-readable string.\n  \"\"\"\n  def format_status(:sending), do: \"Sending\"\n  def format_status(:delivered), do: \"Delivered\"\n  def format_status(:delivery_problem), do: \"Delivery problem\"\nend\n```\n\nUpdate `web/lib/memba_web/live/member_deliveries_live.ex`:\n```elixir\ndefmodule MembaWeb.MemberDeliveriesLive do\n  use MembaWeb, :live_view\n\n  alias Memba.Messaging\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  # ... rest unchanged, remove duplicated helper functions\nend\n```\n\nUpdate `web/lib/memba_web/live/staff/club_deliveries_live.ex` similarly.\n\nAdd test in `web/test/memba_web/components/delivery_status_helpers_test.exs`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpersTest do\n  use ExUnit.Case, async: true\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  describe \"status_badge_class/1\" do\n    test \"returns correct classes for each status\" do\n      assert status_badge_class(:sending) =~ \"bg-blue-100\"\n      assert status_badge_class(:delivered) =~ \"bg-green-100\"\n      assert status_badge_class(:delivery_problem) =~ \"bg-red-100\"\n    end\n  end\n\n  describe \"format_status/1\" do\n    test \"formats status atoms as strings\" do\n      assert format_status(:sending) == \"Sending\"\n      assert format_status(:delivered) == \"Delivered\"\n      assert format_status(:delivery_problem) == \"Delivery problem\"\n    end\n  end\nend\n```\n\n**Fix 2: Correct deprecated command moduledoc**\n\nIn `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, replace moduledoc:\n```elixir\n@moduledoc \"\"\"\nDEPRECATED: Open tracking has been removed from Memba.\nThis command struct is retained for backwards compatibility with historic event data\nbut is no longer routed by the Messaging.Router. Attempting to dispatch this command\nwill raise Commanded.Router.UnregisteredCommandError.\nSee ADR 009: Remove Email Open Tracking.\n\"\"\"\n```\n\n## Validation Notes\n\n### Tests/Checks Confirming Correctness\n\n1. **Dev check passed**: 380 tests, 0 failures, including:\n   - Postmark provider tests verify `track_opens: false` explicitly\n   - Webhook controller tests verify open events rejected with 400\n   - LiveView tests verify \"Opened\" status absent from UI\n   - Projection tests validate three-status-only schema\n\n2. **Acceptance test updates**: Both `member-deliverability.feature` and `staff-deliverability.feature` removed opened scenarios; remaining scenarios cover delivered and delivery_problem paths.\n\n3. **Domain behaviour**: \n   - `MessageOutbox` aggregate no longer transitions to opened state\n   - Projection schema `validate_inclusion` rejects `:opened`\n   - Messaging context functions work with three statuses only\n\n4. **Integration coverage**:\n   - `web/test/memba/postmark/outbound_email_test.exs` explicitly asserts `email.track_opens == false`\n   - `web/test/memba/postmark/webhook_controller_test.exs` verifies open webhook returns 400\n   - `web/test/memba_web/live/member_deliveries_live_test.exs:36` uses `refute has_element?(view, \"span\", \"Opened\")`\n   - `web/test/memba_web/live/staff/club_deliveries_live_test.exs:57` similarly refutes opened display\n\n5. **Documentation updated**: `docs/email-delivery.md` explicitly states open tracking disabled and references ADR-009.\n\n### Manual Checks Performed\n\n- Verified ADR-009 created with correct status, context, decision, and consequences\n- Confirmed deprecated event has `__after_deserialize__/1` callback with warning\n- Confirmed router excludes `ReportEmailDeliveryOpened` from dispatch list\n- Verified `OutboundEmail` typespec hardcodes `track_opens: false`\n\n### Remaining Risks\n\n- **Historic event compatibility**: Deprecated modules retained for event store replay. No migration added. Per plan: \"Do not add a data migration/backfill unless implementation discovers the app cannot boot or replay without one.\" Since dev check passed and app boots, this appears safe.\n- **Third-party tracking**: Plan notes \"Third-party provider dashboards may still report opens independently if a stream was configured outside Memba.\" Documentation correctly states Memba does not request or consume open signals, mitigating this risk.\n\n---\n\n**Conclusion**: Clean, thorough implementation. Bounded-safe fixes are optional polish. Judgement-worthy findings are low-priority observations for future policy decisions. Ready to merge.",
+              "last_response": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (U"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5567,
+                    "output_tokens": 11908,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 195321
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 200742,
+              "tool_time_ms": 0,
+              "active_time_ms": 200742
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/db1321317bbbb8b1e2f965f3905bcb73b615dfe58c3a794b1e8a8c079f58fd48"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137630,
+              "active_time_ms": 137630
+            }
+          },
+          "review_fork": {
+            "status": "partially_succeeded",
+            "notes": "Parallel node dispatched 3 branches (2 succeeded, 1 failed)",
+            "usage": null
+          }
+        },
+        "next_node_id": "apply_review_fixes",
+        "git_commit_sha": "0ce7e8e3bca4f1cd9c8a7c40e5be761a347a47cd",
+        "node_visits": {
+          "review_merge": 1,
+          "snapshot_before_review_repair": 1,
+          "claude_review": 1,
+          "collect_implementation_evidence": 1,
+          "dev_check": 1,
+          "preflight_sandbox": 1,
+          "review_gate": 1,
+          "review_fork": 1,
+          "start": 1,
+          "synthesize_review": 1,
+          "read_plan": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 1,
+          "additions": 1,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T09:08:37.060285686Z",
+        "current_node": "apply_review_fixes",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "review_fork",
+          "claude_review",
+          "review_merge",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.read_plan": 0,
           "internal.node_visit_count": 1,
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
@@ -2758,14 +3062,17 @@
           "parallel.branch_count": 3,
           "internal.retry_count.review_fork": 0,
           "internal.retry_count.start": 0,
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "internal.retry_count.apply_review_fixes": 0,
           "response.claude_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n### ADR Violations\nNone.\n\nThe implementation correctly adheres to all relevant ADRs:\n\n- **ADR-001 (Use Commanded for CQRS/ES)**: Command/event modules follow Commanded patterns. Router properly excludes deprecated command dispatch. Event deserialization warning is appropriate.\n- **ADR-003 (Projection Schema Design)**: `MemberEmailDelivery` projection updated to three-status enum with schema validation enforcing constraint.\n- **ADR-004 (Email Delivery via Postmark)**: Still uses Postmark. Explicitly sets `track_opens: false` in `OutboundEmail.new/1`. Webhook controller rejects open events with 400 \"unsupported event type\".\n- **ADR-007 (Acceptance Testing Strategy)**: Acceptance feature files updated to remove opened scenarios while maintaining domain acceptance criteria for delivered/problem statuses.\n- **ADR-009 (Remove Email Open Tracking)**: Newly created and correctly implemented throughout the codebase.\n\n### Evidence\n- `web/lib/memba/postmark/outbound_email.ex:17`: `track_opens: false` hardcoded\n- `web/lib/memba/postmark/webhook_controller.ex`: Open events return `400` with `\"unsupported event type\"`\n- `web/lib/memba/messaging/router.ex`: `ReportEmailDeliveryOpened` dispatch removed\n- `web/lib/memba/messaging/projections/member_email_delivery.ex:12-13`: Status enum limited to `[:sending, :delivered, :delivery_problem]`\n- `web/test/memba/postmark/outbound_email_test.exs:18`: Explicit test `assert email.track_opens == false`\n\n## Blocking Issues\nNone.\n\n## Bounded-Safe Fixes\n\n1. **LiveView status helper duplication**: Both `MemberDeliveriesLive` and `Staff.ClubDeliveriesLive` duplicate `status_badge_class/1` and `format_status/1`. Extract to shared module:\n   - Create `web/lib/memba_web/components/delivery_status.ex` or similar\n   - Move both helpers to shared module\n   - Import in both LiveViews\n   - Update tests if needed\n\n2. **Deprecated command moduledoc inaccuracy**: `ReportEmailDeliveryOpened` moduledoc claims \"will return an error if used\" but there's no handler—dispatch would raise `Commanded.Router.UnregisteredCommandError`. Fix moduledoc:\n   ```elixir\n   @moduledoc \"\"\"\n   DEPRECATED: Open tracking has been removed from Memba.\n   This command is retained for backwards compatibility with historic event data\n   but is no longer routed. Attempting to dispatch this command will raise an error.\n   See ADR 009: Remove Email Open Tracking.\n   \"\"\"\n   ```\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Deprecated module lifecycle policy**\n   - **Files**: `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, `web/lib/memba/messaging/events/email_delivery_opened.ex`\n   - **Smell**: No documented timeline or policy for eventual removal of deprecated event/command modules\n   - **Why judgement-worthy**: If deprecated modules accumulate without a removal strategy, technical debt grows. May warrant a project-wide policy: e.g., \"deprecated event modules retained indefinitely for replay compatibility; deprecated command modules removed after N months if never dispatched.\" Not urgent since this is the first deprecated command, but worth establishing precedent.\n\n2. **File rename without migration guide**\n   - **Files**: `web/lib/memba/postmark/email.ex` (deleted) → `web/lib/memba/postmark/outbound_email.ex` (created); same for test files\n   - **Smell**: Simple rename but no inline comment explaining relationship to old module name\n   - **Why judgement-worthy**: Future developers searching for `Postmark.Email` references won't find breadcrumbs. Consider adding brief comment in `OutboundEmail` moduledoc: \"Replaces deprecated `Postmark.Email` module.\" Low risk since git history is clear.\n\n3. **Status formatting repetition across member/staff contexts**\n   - **Files**: `web/lib/memba_web/live/member_deliveries_live.ex`, `web/lib/memba_web/live/staff/club_deliveries_live.ex`\n   - **Smell**: Beyond the DRY issue flagged above, the status display logic is duplicated across member and staff contexts with identical semantics\n   - **Why judgement-worthy**: If status formatting rules diverge in future (e.g., staff sees different labels or colors), current duplication makes that harder. Shared component would make divergence explicit. However, premature abstraction may be worse if contexts truly are independent. Judgement call on component extraction strategy.\n\n## Suggested Fixes\n\n### If Bounded-Safe Fixes Applied\n\n**Fix 1: Extract status helpers to shared module**\n\nCreate `web/lib/memba_web/components/delivery_status_helpers.ex`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpers do\n  @moduledoc \"\"\"\n  Shared helper functions for formatting email delivery statuses.\n  \"\"\"\n\n  @doc \"\"\"\n  Returns Tailwind classes for status badge based on delivery status.\n  \"\"\"\n  def status_badge_class(:sending), do: \"px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800\"\n  def status_badge_class(:delivered), do: \"px-3 py-1 rounded-full text-sm bg-green-100 text-green-800\"\n  def status_badge_class(:delivery_problem), do: \"px-3 py-1 rounded-full text-sm bg-red-100 text-red-800\"\n\n  @doc \"\"\"\n  Formats delivery status atom as human-readable string.\n  \"\"\"\n  def format_status(:sending), do: \"Sending\"\n  def format_status(:delivered), do: \"Delivered\"\n  def format_status(:delivery_problem), do: \"Delivery problem\"\nend\n```\n\nUpdate `web/lib/memba_web/live/member_deliveries_live.ex`:\n```elixir\ndefmodule MembaWeb.MemberDeliveriesLive do\n  use MembaWeb, :live_view\n\n  alias Memba.Messaging\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  # ... rest unchanged, remove duplicated helper functions\nend\n```\n\nUpdate `web/lib/memba_web/live/staff/club_deliveries_live.ex` similarly.\n\nAdd test in `web/test/memba_web/components/delivery_status_helpers_test.exs`:\n```elixir\ndefmodule MembaWeb.Components.DeliveryStatusHelpersTest do\n  use ExUnit.Case, async: true\n  import MembaWeb.Components.DeliveryStatusHelpers\n\n  describe \"status_badge_class/1\" do\n    test \"returns correct classes for each status\" do\n      assert status_badge_class(:sending) =~ \"bg-blue-100\"\n      assert status_badge_class(:delivered) =~ \"bg-green-100\"\n      assert status_badge_class(:delivery_problem) =~ \"bg-red-100\"\n    end\n  end\n\n  describe \"format_status/1\" do\n    test \"formats status atoms as strings\" do\n      assert format_status(:sending) == \"Sending\"\n      assert format_status(:delivered) == \"Delivered\"\n      assert format_status(:delivery_problem) == \"Delivery problem\"\n    end\n  end\nend\n```\n\n**Fix 2: Correct deprecated command moduledoc**\n\nIn `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`, replace moduledoc:\n```elixir\n@moduledoc \"\"\"\nDEPRECATED: Open tracking has been removed from Memba.\nThis command struct is retained for backwards compatibility with historic event data\nbut is no longer routed by the Messaging.Router. Attempting to dispatch this command\nwill raise Commanded.Router.UnregisteredCommandError.\nSee ADR 009: Remove Email Open Tracking.\n\"\"\"\n```\n\n## Validation Notes\n\n### Tests/Checks Confirming Correctness\n\n1. **Dev check passed**: 380 tests, 0 failures, including:\n   - Postmark provider tests verify `track_opens: false` explicitly\n   - Webhook controller tests verify open events rejected with 400\n   - LiveView tests verify \"Opened\" status absent from UI\n   - Projection tests validate three-status-only schema\n\n2. **Acceptance test updates**: Both `member-deliverability.feature` and `staff-deliverability.feature` removed opened scenarios; remaining scenarios cover delivered and delivery_problem paths.\n\n3. **Domain behaviour**: \n   - `MessageOutbox` aggregate no longer transitions to opened state\n   - Projection schema `validate_inclusion` rejects `:opened`\n   - Messaging context functions work with three statuses only\n\n4. **Integration coverage**:\n   - `web/test/memba/postmark/outbound_email_test.exs` explicitly asserts `email.track_opens == false`\n   - `web/test/memba/postmark/webhook_controller_test.exs` verifies open webhook returns 400\n   - `web/test/memba_web/live/member_deliveries_live_test.exs:36` uses `refute has_element?(view, \"span\", \"Opened\")`\n   - `web/test/memba_web/live/staff/club_deliveries_live_test.exs:57` similarly refutes opened display\n\n5. **Documentation updated**: `docs/email-delivery.md` explicitly states open tracking disabled and references ADR-009.\n\n### Manual Checks Performed\n\n- Verified ADR-009 created with correct status, context, decision, and consequences\n- Confirmed deprecated event has `__after_deserialize__/1` callback with warning\n- Confirmed router excludes `ReportEmailDeliveryOpened` from dispatch list\n- Verified `OutboundEmail` typespec hardcodes `track_opens: false`\n\n### Remaining Risks\n\n- **Historic event compatibility**: Deprecated modules retained for event store replay. No migration added. Per plan: \"Do not add a data migration/backfill unless implementation discovers the app cannot boot or replay without one.\" Since dev check passed and app boots, this appears safe.\n- **Third-party tracking**: Plan notes \"Third-party provider dashboards may still report opens independently if a stream was configured outside Memba.\" Documentation correctly states Memba does not request or consume open signals, mitigating this risk.\n\n---\n\n**Conclusion**: Clean, thorough implementation. Bounded-safe fixes are optional polish. Judgement-worthy findings are low-priority observations for future policy decisions. Ready to merge.",
           "implementation_accepted": false,
           "graph.rankdir": "LR",
-          "last_response": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"polish-deprecated-opened-command-moduledoc\",\"title\":\"Clarify deprecated opened command modul",
+          "last_response": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprec",
           "failure_signature": "",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "thread.collect_implementation_evidence.current_node": "review_fork",
           "internal.retry_count.snapshot_before_review_repair": 0,
+          "response.apply_review_fixes": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprecated `ReportEmailDeliveryOpened` command moduledoc needed clearer wording about its current lifecycle and dispatch behaviour.\n\n## 2. Changes made\n\nUpdated `web/lib/memba/messaging/commands/report_email_delivery_opened.ex` to clarify that:\n\n- open tracking has been removed;\n- the struct remains only for historic opened-report command data compatibility;\n- the command is no longer routed by `Memba.Messaging.Router`;\n- attempting to dispatch it will raise `Commanded.Router.UnregisteredCommandError`.\n\nNo product behaviour was changed.\n\n## 3. Files changed by issue\n\n### `polish-deprecated-opened-command-moduledoc`\n\n- `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`\n\n## 4. Tests run\n\nRan required validation:\n\n```sh\nPATH=\"$PWD/bin:$PATH\" dev check\n```\n\nResult:\n\n- Passed\n- 380 tests, 0 failures\n\n## 5. Remaining gaps or human questions\n\nNone.\n\nNote: working tree also shows the existing untracked `.fabro/tmp/` review artifacts from the pipeline. I did not modify or remove them.",
           "internal.fidelity": "summary:high",
           "graph.default_fidelity": "summary:high",
           "thread.read_plan.current_node": "preflight_sandbox",
@@ -2775,8 +3082,8 @@
           "thread.claude_review.current_node": "review_merge",
           "internal.retry_count.review_gate": 0,
           "internal.retry_count.review_merge": 0,
-          "last_stage": "synthesize_review",
-          "current_node": "snapshot_before_review_repair",
+          "last_stage": "apply_review_fixes",
+          "current_node": "apply_review_fixes",
           "thread.start.current_node": "read_plan",
           "parallel.fan_in.best_id": "claude_review",
           "thread.review_merge.current_node": "synthesize_review",
@@ -2817,10 +3124,46 @@
           "internal.retry_count.dev_check": 0,
           "thread.review_gate.current_node": "snapshot_before_review_repair",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "review_gate",
+          "internal.thread_id": "snapshot_before_review_repair",
           "internal.run_id": "01KT3RSHJ7DQJYFQHXAMQ3Q8MY"
         },
         "node_outcomes": {
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.apply_review_fixes": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprecated `ReportEmailDeliveryOpened` command moduledoc needed clearer wording about its current lifecycle and dispatch behaviour.\n\n## 2. Changes made\n\nUpdated `web/lib/memba/messaging/commands/report_email_delivery_opened.ex` to clarify that:\n\n- open tracking has been removed;\n- the struct remains only for historic opened-report command data compatibility;\n- the command is no longer routed by `Memba.Messaging.Router`;\n- attempting to dispatch it will raise `Commanded.Router.UnregisteredCommandError`.\n\nNo product behaviour was changed.\n\n## 3. Files changed by issue\n\n### `polish-deprecated-opened-command-moduledoc`\n\n- `web/lib/memba/messaging/commands/report_email_delivery_opened.ex`\n\n## 4. Tests run\n\nRan required validation:\n\n```sh\nPATH=\"$PWD/bin:$PATH\" dev check\n```\n\nResult:\n\n- Passed\n- 380 tests, 0 failures\n\n## 5. Remaining gaps or human questions\n\nNone.\n\nNote: working tree also shows the existing untracked `.fabro/tmp/` review artifacts from the pipeline. I did not modify or remove them.",
+              "last_response": "Applied the automatic repair brief for `docs/iterations/017-remove-open-tracking/plan.md`.\n\n## 1. Review issue from gate\n\n### `polish-deprecated-opened-command-moduledoc`\n**Status:** Fixed\n\nThe deprec",
+              "last_stage": "apply_review_fixes"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 81523,
+                    "output_tokens": 1061,
+                    "reasoning_tokens": 421,
+                    "cache_read_tokens": 11264,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 457707
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 45663,
+              "tool_time_ms": 21154,
+              "active_time_ms": 66817
+            }
+          },
           "snapshot_before_review_repair": {
             "status": "succeeded",
             "context_updates": {
@@ -3007,7 +3350,7 @@
             "usage": null
           }
         },
-        "next_node_id": "apply_review_fixes",
+        "next_node_id": "verify_review_repair",
         "node_visits": {
           "collect_implementation_evidence": 1,
           "start": 1,
@@ -3016,6 +3359,7 @@
           "synthesize_review": 1,
           "snapshot_before_review_repair": 1,
           "review_gate": 1,
+          "apply_review_fixes": 1,
           "review_merge": 1,
           "review_fork": 1,
           "claude_review": 1,
@@ -3078,6 +3422,236 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "apply_review_fixes@1": {
+      "first_event_seq": 141,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T09:07:29.774977393Z",
+      "handler": "agent",
+      "usage": {
+        "input_tokens": 81523,
+        "output_tokens": 1061,
+        "total_tokens": 94269,
+        "reasoning_tokens": 421,
+        "cache_read_tokens": 11264,
+        "cache_write_tokens": 0
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:3da87d8c-b4e2-4c75-bb29-39f6e60c2827",
+        "items": [
+          {
+            "id": "208eec8f38c22080",
+            "status": "completed",
+            "order": 0,
+            "subject": "Inspect repository instructions and target command module"
+          },
+          {
+            "id": "115c14cc3383ca38",
+            "status": "completed",
+            "order": 1,
+            "subject": "Update deprecated opened command moduledoc only"
+          },
+          {
+            "id": "f9d0e5b320267896",
+            "status": "completed",
+            "order": 2,
+            "subject": "Run required validation"
+          },
+          {
+            "id": "ac168b662381f69f",
+            "status": "completed",
+            "order": 3,
+            "subject": "Summarize issue-to-fix mapping and results"
+          }
+        ]
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 12962,
+        "usage_percent": 4.765441176470588,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-02T09:08:37.051918785Z",
+        "event_seq": 185,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 995,
+            "usage_percent": 0.36580882352941174
+          },
+          {
+            "category": "tools",
+            "tokens": 1404,
+            "usage_percent": 0.5161764705882353
+          },
+          {
+            "category": "memory",
+            "tokens": 310,
+            "usage_percent": 0.11397058823529412
+          },
+          {
+            "category": "conversation",
+            "tokens": 10247,
+            "usage_percent": 3.7672794117647057
+          },
+          {
+            "category": "other",
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
+          }
+        ],
+        "warnings": []
+      },
+      "state": "running"
     },
     "start@1": {
       "first_event_seq": 21,
@@ -3493,7 +4067,12 @@
       "first_event_seq": 131,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T09:07:25.814903257Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -3501,11 +4080,27 @@
         "command": "exec 2>&1\nset -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+        "exit_code": 0,
+        "duration_ms": 167,
+        "termination": "exited",
+        "output_bytes": 35,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 35,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-02T09:07:25.638768268Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 175,
+        "inference_time_ms": 0,
+        "tool_time_ms": 167,
+        "active_time_ms": 167
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -3514,7 +4109,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     }
   }
 }
