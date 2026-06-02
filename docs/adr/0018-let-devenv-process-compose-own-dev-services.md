@@ -18,7 +18,7 @@ The actual design mistake was treating Postgres as a process for `bin/dev` to ma
 
 Keep `bin/dev` as a thin command wrapper. Do not reimplement process-compose service ownership, readiness, restart, or pid-file handling in shell.
 
-Use devenv/process-compose primitives for development services:
+Use devenv/process-compose primitives for development services. Local devenv documentation is vendored under [`docs/tools/devenv/`](../tools/devenv/README.md); consult it before changing service orchestration.
 
 - `devenv processes up -d postgres` to start only the Postgres service when a command needs it.
 - `devenv processes status postgres` to ask whether process-compose already has the service running.
