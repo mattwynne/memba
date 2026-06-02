@@ -1,0 +1,201 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 686c106..c394ddd 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Evolve Membership commands/events using an atomic replace-all model:
+ - [x] 006 Add projector handling so:
+ - [x] 007 Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.
+-- [ ] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
++- [x] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
+ - [ ] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
+ - [ ] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
+ - [ ] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 5c9d886..374935a 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.UpdateClub
++  alias Memba.Membership.EmailAddresses
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+@@ -52,7 +53,9 @@ defmodule Memba.Membership do
+   `"person_id"`.
+   """
+   def create_person(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+-    with {:ok, command} <- create_person_command(attrs) do
++    with {:ok, command} <- create_person_command(attrs),
++         {:ok, email_addresses} <- normalize_command_email_addresses(command),
++         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
+       dispatch(command, dispatch_opts)
+     end
+   end
+@@ -66,7 +69,9 @@ defmodule Memba.Membership do
+   """
+   def replace_person_email_addresses(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+-    with {:ok, command} <- replace_person_email_addresses_command(attrs) do
++    with {:ok, command} <- replace_person_email_addresses_command(attrs),
++         {:ok, email_addresses} <- normalize_command_email_addresses(command),
++         :ok <- prevent_duplicate_person_email_addresses(command.person_id, email_addresses) do
+       dispatch(command, dispatch_opts)
+     end
+   end
+@@ -386,6 +391,39 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp normalize_command_email_addresses(%CreatePerson{email_addresses: nil, email: email}) do
++    with {:ok, normalized_email} <- EmailAddresses.normalize_primary_email(email) do
++      {:ok, [%{normalized_email: normalized_email}]}
++    end
++  end
++
++  defp normalize_command_email_addresses(%CreatePerson{email_addresses: email_addresses}) do
++    EmailAddresses.validate_set(email_addresses)
++  end
++
++  defp normalize_command_email_addresses(%ReplacePersonEmailAddresses{
++         email_addresses: email_addresses
++       }) do
++    EmailAddresses.validate_set(email_addresses)
++  end
++
++  defp prevent_duplicate_person_email_addresses(person_id, email_addresses) do
++    with {:ok, person_id} <- cast_person_id(person_id) do
++      normalized_emails = Enum.map(email_addresses, & &1.normalized_email)
++
++      PersonEmailAddress
++      |> where([email_address], email_address.normalized_email in ^normalized_emails)
++      |> where([email_address], email_address.person_id != ^person_id)
++      |> select([email_address], email_address.normalized_email)
++      |> limit(1)
++      |> Repo.one()
++      |> case do
++        nil -> :ok
++        _normalized_email -> {:error, :email_address_taken}
++      end
++    end
++  end
++
+   defp dispatch(command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> :ok
+@@ -439,6 +477,13 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp cast_person_id(person_id) do
++    case Ecto.UUID.cast(person_id) do
++      {:ok, person_id} -> {:ok, person_id}
++      :error -> {:error, :invalid_person_id}
++    end
++  end
++
+   defp club_slug(attrs, name) do
+     case fetch_optional(attrs, :slug) do
+       {:ok, ""} -> Slug.default_from_name(name) |> Slug.validate()
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index bc52bf6..5a6d940 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -225,6 +225,50 @@ defmodule Memba.Membership.PublicApiTest do
+              )
+   end
+ 
++  test "create_person/2 rejects globally duplicate normalized email addresses before dispatch" do
++    existing_person_id = Ecto.UUID.generate()
++    duplicate_person_id = Ecto.UUID.generate()
++    duplicate_alternate_person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: existing_person_id,
++                 name: "Alice",
++                 email: "Alice@Example.COM"
++               },
++               consistency: :strong
++             )
++
++    assert {:error, :email_address_taken} =
++             Membership.create_person(
++               %{
++                 person_id: duplicate_person_id,
++                 name: "Duplicate Alice",
++                 email: " alice@example.com "
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert {:error, :email_address_taken} =
++             Membership.create_person(
++               %{
++                 person_id: duplicate_alternate_person_id,
++                 name: "Duplicate Alternate Alice",
++                 email_addresses: [
++                   %{email: "duplicate@example.com", is_primary: true},
++                   %{email: " ALICE@EXAMPLE.COM ", is_primary: false}
++                 ]
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert is_nil(Membership.get_person(duplicate_person_id))
++    assert is_nil(Membership.get_person(duplicate_alternate_person_id))
++  end
++
+   test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
+     person_id = Ecto.UUID.generate()
+ 
+@@ -269,6 +313,44 @@ defmodule Memba.Membership.PublicApiTest do
+              )
+   end
+ 
++  test "replace_person_email_addresses/2 rejects addresses already attached to another person" do
++    alice_id = Ecto.UUID.generate()
++    bob_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: alice_id, name: "Alice", email: "Alice@Example.COM"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: bob_id, name: "Bob", email: "bob@example.com"},
++               consistency: :strong
++             )
++
++    assert {:error, :email_address_taken} =
++             Membership.replace_person_email_addresses(
++               %{
++                 person_id: bob_id,
++                 email_addresses: [
++                   %{email: "bob@example.com", is_primary: true},
++                   %{email: " alice@example.com ", is_primary: false}
++                 ]
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert Membership.list_person_email_addresses(bob_id) == [
++             %{
++               email: "bob@example.com",
++               normalized_email: "bob@example.com",
++               primary?: true
++             }
++           ]
++  end
++
+   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
+     club_id = Ecto.UUID.generate()
+     person_id = Ecto.UUID.generate()
