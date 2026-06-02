@@ -1,0 +1,68 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index ba8a79c..25843ae 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:
+ - [x] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+ - [x] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+-- [ ] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
++- [x] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+ - [ ] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+ - [ ] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
+ - [ ] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
+diff --git a/web/lib/memba_web/controllers/postmark_webhook_controller.ex b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+index 84f4c93..4c42283 100644
+--- a/web/lib/memba_web/controllers/postmark_webhook_controller.ex
++++ b/web/lib/memba_web/controllers/postmark_webhook_controller.ex
+@@ -39,6 +39,8 @@ defmodule MembaWeb.PostmarkWebhookController do
+       "bounced" -> {:ok, :bounced}
+       "spamcomplaint" -> {:ok, :spam_complaint}
+       "spam" -> {:ok, :spam_complaint}
++      "open" -> {:error, {:unsupported_record_type, "Open"}}
++      "opened" -> {:error, {:unsupported_record_type, "Opened"}}
+       "bounce" -> {:ok, bounce_event_type(params)}
+       record_type -> {:error, {:unsupported_record_type, record_type}}
+     end
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index 8360654..043e5b7 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -115,6 +115,37 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     end)
+   end
+ 
++  test "rejects Postmark open events before delivered events", %{conn: conn} do
++    %{message_id: message_id, recipients: [bob, carol]} =
++      message = send_message_to(["Bob", "Carol"])
++
++    conn = post_postmark_event(conn, realistic_postmark_payload(:opened, message, bob))
++
++    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
++    assert detail =~ "Unsupported Postmark webhook RecordType"
++
++    opened_payload =
++      :opened
++      |> realistic_postmark_payload(message, carol)
++      |> Map.put("RecordType", "Opened")
++
++    conn =
++      conn
++      |> recycle()
++      |> post_postmark_event(opened_payload)
++
++    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
++    assert detail =~ "Unsupported Postmark webhook RecordType"
++
++    assert_eventually(fn ->
++      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
++      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "sent"
++
++      assert Messaging.get_member_email_delivery(message_id, carol.person_id).status == "sent"
++      assert Messaging.get_memba_staff_email_delivery(carol.delivery_id).status == "sent"
++    end)
++  end
++
+   test "returns an unprocessable response for unsupported Postmark events", %{conn: conn} do
+     conn =
+       post_postmark_event(conn, %{
