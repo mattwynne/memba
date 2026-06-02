@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  assertHomepageFitsScreen,
   assertMembaHomepage,
   homepageUrl,
   visitHomepage
@@ -62,7 +63,41 @@ test("homepage assertion step checks browser-visible homepage content", async ()
       .map((expectation) => expectation.target),
     [
       { role: "heading", options: { name: "Volunteering shouldn’t feel like work." } },
+      { role: "link", options: { name: "Get started" } },
       { role: "link", options: { name: "Sign in" } }
     ]
   );
+});
+
+test("homepage fit assertion checks horizontal overflow", async () => {
+  const expectations = [];
+  const page = {
+    viewportSize() {
+      return { width: 390, height: 844 };
+    },
+    async evaluate(callback) {
+      const originalDocument = global.document;
+      global.document = {
+        body: { scrollWidth: 390 },
+        documentElement: { clientWidth: 390, scrollWidth: 390 }
+      };
+
+      try {
+        return callback();
+      } finally {
+        global.document = originalDocument;
+      }
+    }
+  };
+  const expect = (target) => ({
+    async toBeLessThanOrEqual(expected) {
+      expectations.push({ target, matcher: "toBeLessThanOrEqual", expected });
+    }
+  });
+
+  await assertHomepageFitsScreen({ page }, { expect });
+
+  assert.deepEqual(expectations, [
+    { target: 390, matcher: "toBeLessThanOrEqual", expected: 390 }
+  ]);
 });
