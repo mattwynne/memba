@@ -1,0 +1,156 @@
+diff --git a/docs/iterations/018-member-club-subdomains/inspection.md b/docs/iterations/018-member-club-subdomains/inspection.md
+new file mode 100644
+index 0000000..37efb6a
+--- /dev/null
++++ b/docs/iterations/018-member-club-subdomains/inspection.md
+@@ -0,0 +1,138 @@
++# Task 001 inspection notes
++
++Selected todo:
++
++- `001 Inspect current routing, PageController, member dashboard LiveView, member message routes, compose route, auth return-to handling, and URL generation helpers.`
++
++## Binding context
++
++- Plan references ADR 0019, which is accepted and requires:
++  - configurable club-site base domain;
++  - production default `clubs.memba.io`;
++  - local/test default `lvh.me`;
++  - normal member navigation via slug subdomains rather than `?club_id=<uuid>`;
++  - legacy `?club_id=<uuid>` retained only as a temporary fallback.
++
++## Current routing and host handling
++
++- `web/lib/memba_web/router.ex`
++  - `GET /` uses `[:browser, :club_member_context]` and `PageController.home/2`.
++  - `GET /messages/new` and `GET /messages/:message_id` are LiveView routes in the `:club_member` live session and use `[:browser, :club_member_required]`.
++  - Member message routes are path-only routes today; no host-specific routing or host-derived params are present.
++  - Staff/admin routes are under `/admin` with `:staff_browser`; public pages `/about`, `/get-started`, `/terms`, `/privacy` are in a separate `:browser` scope.
++
++- `web/lib/memba_web/controllers/page_controller.ex`
++  - Root host detection is currently hard-coded to `@public_club_host_suffix ".clubs.memba.io"`.
++  - `public_club_slug_from_host/1` lowercases/trims a trailing dot, checks the hard-coded suffix, and returns the left-most slug label.
++  - Known public club subdomain roots always render `PublicClubPageLive`, including signed-in active members. This must change later so active members get `MemberDashboardLive` at the subdomain root.
++  - Legacy `/?club_id=<uuid>` currently:
++    - renders `MemberDashboardLive` for signed-in active members;
++    - renders `PublicClubPageLive` for signed-out visitors;
++    - renders `PublicClubPageLive` for signed-in non-member staff due the router plug;
++    - is rejected as forbidden for signed-in non-staff non-members by the router plug.
++
++## Authentication, authorization, and return-to
++
++- `web/lib/memba_web/identity_auth.ex`
++  - `require_active_club_member/2` authorizes only from the `"club_id"` query parameter.
++  - `require_active_club_member_if_club_id_present/2` protects public fallback root URLs only when `club_id` is present.
++  - Signed-out protected GET requests store only `current_return_path/1`, which is path plus query string. The original host is not stored today.
++  - LiveView `on_mount(:require_active_club_member, ...)` also authorizes only from `"club_id"` params.
++
++- `web/lib/memba_web/controllers/auth_controller.ex`
++  - `safe_return_to/1` accepts only path-absolute local values (`"/..."`) and rejects `//...` and non-path values.
++  - Sign-in callback redirects with `redirect(to: path_after_sign_in(email, return_to))`.
++  - Returning to a different host is not currently possible, so later subdomain return-to work must preserve host safely without opening arbitrary external redirects.
++
++## Member dashboard and message LiveViews
++
++- `web/lib/memba_web/live/member_dashboard_live.ex`
++  - Receives `"club_id"` in the LiveView session from `PageController`.
++  - Uses `MemberDashboardPresentation.load/3`, which verifies the selected club is in the signed-in identity's active clubs.
++  - Renders `MembaWeb.PageHTML.club/1`.
++
++- `web/lib/memba_web/member_dashboard_presentation.ex`
++  - Casts/validates UUID `club_id`.
++  - Selects a club from `current_identity.active_clubs`.
++  - Loads active members and messages for the UUID-selected club.
++
++- `web/lib/memba_web/live/member_message_live/new.ex`
++  - Main mount clause requires `%{"club_id" => club_id}`.
++  - Compose context validates selected club against `current_identity_clubs` and finds the current member by email.
++  - Message send uses the selected club's UUID for recipient resolution.
++  - All local navigation helpers (`club_home_path/2`, `compose_path/2`, `message_detail_path/3`) currently generate `club_id` query-string URLs.
++
++- `web/lib/memba_web/live/member_message_live/show.ex`
++  - Main mount clause requires `%{"club_id" => _club_id, "message_id" => _message_id}`.
++  - Delegates to `MemberMessageDetail.load/2`, which verifies selected active club and message ownership by UUID.
++
++- `web/lib/memba_web/member_message_detail.ex`
++  - Casts `club_id` from params.
++  - Selects the club from active clubs.
++  - Returns not found when the message is missing or belongs to a different club.
++
++## Templates and generated URLs
++
++- `web/lib/memba_web/controllers/page_html/home.html.heex`
++  - Signed-in “My clubs” links currently use `href={~p"/?#{[club_id: club.club_id]}"}`.
++
++- `web/lib/memba_web/controllers/page_html/club.html.heex`
++  - Dashboard CTA, empty-message CTA, and message rows use `/messages/...?...club_id=...`.
++
++- `web/lib/memba_web/controllers/page_html/message.html.heex`
++  - Back link uses `/?club_id=...`.
++
++- There is no existing general web URL/host helper for configurable club subdomain URL generation.
++
++## Configuration and endpoint
++
++- `web/config/config.exs` sets `MembaWeb.Endpoint` URL host to `"localhost"`.
++- `web/config/dev.exs` and `web/config/test.exs` configure endpoint HTTP settings but no club-site base domain.
++- `web/config/runtime.exs` sets production endpoint URL from `PHX_HOST` and does not configure club-site base domain.
++- `MembaWeb.Endpoint` installs `MembaWeb.Plugs.CanonicalHostRedirect` before static and router plugs.
++- `CanonicalHostRedirect` only redirects `memba.fly.dev` to `https://memba.io`; it does not affect `*.clubs.memba.io` or `*.lvh.me`.
++
++## Membership/slug APIs available
++
++- `Memba.Membership.get_club_by_slug/1` normalizes lookup input with `Memba.Membership.Slug.normalize_for_lookup/1` and returns a projected club or `nil`.
++- Club projections include `club_id`, `name`, and `slug`.
++- `Memba.Accounts.list_active_clubs_for_email/1` returns active club projections for current identities.
++- `Memba.Accounts.active_member_of_club?/2` delegates to `Memba.Membership.active_member_of_club_by_email?/2`.
++
++## Current test/acceptance coverage landmarks
++
++- `web/test/memba_web/controllers/page_controller_test.exs`
++  - Covers main home page, signed-in `?club_id` links, public `?club_id`, hard-coded `kmc.clubs.memba.io` public root, unknown public subdomain 404, dashboard fallback, message detail fallback, fallback auth return path, forbidden non-member detail, and public/static pages.
++
++- `web/test/memba_web/auth_gates_test.exs`
++  - Covers staff auth return-to and current `club_id` gates, including public unauthenticated fallback and forbidden signed-in non-members.
++
++- `web/test/memba_web/live/member_dashboard_live_test.exs`
++  - Covers dashboard LiveView through `/?club_id=...` and asserts query-string links.
++
++- `web/test/memba_web/live/member_message_live/new_test.exs`
++  - Covers compose LiveView through `/messages/new?club_id=...`, auth redirect, and forbidden fallback cases.
++
++- `web/test/memba_web/live/member_message_live/show_test.exs`
++  - Covers detail LiveView through `/messages/:message_id?club_id=...`.
++
++- `web/test/memba_web/router_test.exs`
++  - Asserts message routes go through `[:browser, :club_member_required]`.
++
++- `acceptance-tests/features/member_club_subdomains.feature`
++  - Already exists and is tagged `@wip`, as required by the plan.
++
++- Acceptance JS support currently uses `club_id` paths:
++  - `clubHomePath(clubId) -> "/?club_id=..."`
++  - `memberMessagePath(message) -> "/messages/:id?club_id=..."`
++  - `openMemberClubHome` and `openMemberMessage` build URLs from `world.baseUrl` plus those paths.
++
++## Implications for subsequent tasks
++
++- A later helper module can centralize:
++  - configured base domain lookup;
++  - host suffix detection;
++  - left-most slug extraction;
++  - absolute club URL generation with endpoint scheme/port.
++- Host-selected private routes will need a way to supply the resolved UUID `club_id` to existing LiveViews or presentation loaders while avoiding query-string generation.
++- Auth return-to work must move beyond path-only session values for trusted/configured club hosts.
+diff --git a/docs/iterations/018-member-club-subdomains/todo.md b/docs/iterations/018-member-club-subdomains/todo.md
+index e0626fb..9313176 100644
+--- a/docs/iterations/018-member-club-subdomains/todo.md
++++ b/docs/iterations/018-member-club-subdomains/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect current routing, `PageController`, member dashboard LiveView, member message routes, compose route, auth return-to handling, and URL generation helpers.
++- [x] 001 Inspect current routing, `PageController`, member dashboard LiveView, member message routes, compose route, auth return-to handling, and URL generation helpers.
+ - [ ] 002 Add configuration for the club-site base domain and generated URL scheme/port where needed:
+ - [ ] 003 Add a small URL/host helper or equivalent web module that:
+ - [ ] 004 Update home-page “My clubs” link generation to use the helper and each club's slug.
