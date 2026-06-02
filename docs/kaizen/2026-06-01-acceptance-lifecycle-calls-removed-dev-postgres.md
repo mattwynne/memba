@@ -80,3 +80,25 @@ Acceptance tests are living documentation and the main guardrail for user-visibl
 - Add a regression test for `acceptance-tests/features/support/lifecycle.js` that fails if it references unsupported `bin/dev` subcommands.
 - Add a `bin/dev acceptance` preflight that validates its service lifecycle commands against the actual `bin/dev` interface before launching Cucumber.
 - Document which `bin/dev` subcommands are public workflow contracts versus private implementation details.
+
+## Resolution
+
+Date: 2026-06-01
+
+Root cause: The acceptance lifecycle kept a hard-coded call to the removed `bin/dev postgres` subcommand. The current `bin/dev` service-start contract starts Postgres through `devenv processes`, but the lifecycle never moved to that contract and its unit tests only asserted high-level step labels, not the command surface.
+
+Fix applied:
+
+- `acceptance-tests/features/support/lifecycle.js`: replaced the stale `buildDevCommand(currentConfig, "postgres")` call with a Postgres readiness command that uses `devenv processes status`, `devenv processes up --no-strict-ports -d postgres`, and `devenv processes wait --timeout 120` on the selected acceptance Postgres port.
+- `acceptance-tests/test/lifecycle.test.js`: added a regression check that Postgres readiness uses the `devenv processes` contract and does not call `bin/dev postgres`.
+
+Validation:
+
+- `cd acceptance-tests && node --test test/lifecycle.test.js` — passed, 6 tests.
+- `cd acceptance-tests && npx cucumber-js features/member_message_deliverability.feature --name "Alice sends a club message"` — passed Postgres readiness, database setup, asset build, and Phoenix startup; the scenario then failed in product/support behaviour because the sign-in email assertion did not match the current link format.
+- `./bin/dev check` — ran twice and failed both times with a repeatable PostgreSQL deadlock in `test/memba/membership/person_email_address_projection_test.exs:13`; the targeted test file passed with `cd web && mix test test/memba/membership/person_email_address_projection_test.exs`.
+
+Remaining follow-up:
+
+- Investigate the unrelated `dev check` deadlock in `Memba.Membership.PersonEmailAddressProjectionTest`.
+- Investigate the unrelated acceptance scenario failure around magic-link email parsing/sign-in copy.
