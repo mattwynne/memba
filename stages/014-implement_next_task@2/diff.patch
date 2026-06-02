@@ -1,0 +1,41 @@
+diff --git a/docs/iterations/017-remove-open-tracking/todo.md b/docs/iterations/017-remove-open-tracking/todo.md
+index 1d22245..aea24aa 100644
+--- a/docs/iterations/017-remove-open-tracking/todo.md
++++ b/docs/iterations/017-remove-open-tracking/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect current opened references in `web/lib`, `web/test`, `acceptance-tests/features`, active docs, and Postmark delivery code. Exclude old `docs/iterations/**` design/prototype artifacts from cleanup unless they are active validation inputs.
+-- [ ] 002 Update shared acceptance feature expectations to remove opened receipts.
++- [x] 002 Update shared acceptance feature expectations to remove opened receipts.
+ - [ ] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:
+ - [ ] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+ - [ ] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+diff --git a/web/test/features/cucumber_configuration_test.exs b/web/test/features/cucumber_configuration_test.exs
+index 0b44f87..d8d4f9d 100644
+--- a/web/test/features/cucumber_configuration_test.exs
++++ b/web/test/features/cucumber_configuration_test.exs
+@@ -349,6 +349,23 @@ defmodule Memba.CucumberConfigurationTest do
+     end)
+   end
+ 
++  test "shared deliverability features do not describe opened receipts" do
++    shared_feature_paths = configured_feature_paths()
++
++    for feature_name <- [
++          "member_message_deliverability.feature",
++          "memba_staff_email_deliverability.feature"
++        ] do
++      feature =
++        shared_feature_paths
++        |> feature_file_named!(feature_name)
++        |> File.read!()
++
++      refute feature =~ ~r/\bopened\b/i
++      refute feature =~ ~r/\bopens?\b/i
++    end
++  end
++
+   test "domain Cucumber configuration excludes only wip planning scenarios" do
+     assert Application.fetch_env!(:cucumber, :tags) == "not @wip"
+ 
