@@ -4,7 +4,6 @@ defmodule Memba.Messaging.MessageTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Events.MessageSent
@@ -170,7 +169,7 @@ defmodule Memba.Messaging.MessageTest do
   end
 
   describe "execute/2 delivery status reports" do
-    test "emits delivered, delayed, bounced, spam complaint, and opened events" do
+    test "emits delivered, delayed, bounced, and spam complaint events" do
       {message, ids} = sent_message()
 
       assert %EmailDeliveryDelivered{
@@ -213,21 +212,6 @@ defmodule Memba.Messaging.MessageTest do
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "recipient marked the message as spam"
-               })
-
-      delivered_message =
-        Message.apply(
-          message,
-          %EmailDeliveryDelivered{message_id: ids.message_id, delivery_id: ids.delivery_id}
-        )
-
-      assert %EmailDeliveryOpened{
-               message_id: ids.message_id,
-               delivery_id: ids.delivery_id
-             } ==
-               Message.execute(delivered_message, %ReportEmailDeliveryOpened{
-                 message_id: ids.message_id,
-                 delivery_id: ids.delivery_id
                })
     end
 
@@ -306,12 +290,6 @@ defmodule Memba.Messaging.MessageTest do
     test "rejects invalid delivery status transitions" do
       {message, ids} = sent_message()
 
-      assert {:error, :invalid_delivery_status_transition} =
-               Message.execute(message, %ReportEmailDeliveryOpened{
-                 message_id: ids.message_id,
-                 delivery_id: ids.delivery_id
-               })
-
       delivered_message =
         Message.apply(
           message,
@@ -323,18 +301,6 @@ defmodule Memba.Messaging.MessageTest do
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "recipient server is temporarily unavailable"
-               })
-
-      opened_message =
-        Message.apply(
-          delivered_message,
-          %EmailDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
-        )
-
-      assert {:error, :invalid_delivery_status_transition} =
-               Message.execute(opened_message, %ReportEmailDeliveryDelivered{
-                 message_id: ids.message_id,
-                 delivery_id: ids.delivery_id
                })
 
       bounced_message =
@@ -385,18 +351,6 @@ defmodule Memba.Messaging.MessageTest do
                  message_id: ids.message_id,
                  delivery_id: ids.delivery_id,
                  reason: "different temporary failure"
-               })
-
-      opened_message =
-        Message.apply(
-          delivered_message,
-          %EmailDeliveryOpened{message_id: ids.message_id, delivery_id: ids.delivery_id}
-        )
-
-      assert [] =
-               Message.execute(opened_message, %ReportEmailDeliveryOpened{
-                 message_id: ids.message_id,
-                 delivery_id: ids.delivery_id
                })
     end
   end
@@ -459,7 +413,7 @@ defmodule Memba.Messaging.MessageTest do
              })
              |> Map.fetch!(:delivery_statuses)
 
-    assert %{^delivery_id => %{status: :opened, reason: nil}} =
+    assert %{^delivery_id => %{status: :delivered, reason: nil}} =
              message
              |> Message.apply(%EmailDeliveryDelivered{
                message_id: ids.message_id,
