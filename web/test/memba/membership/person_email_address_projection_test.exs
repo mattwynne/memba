@@ -4,6 +4,54 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
 
+  @backfill_migration Memba.Repo.Migrations.BackfillMembershipPersonEmailAddresses
+  @backfill_migration_path Path.expand(
+                             "../../../priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs",
+                             __DIR__
+                           )
+
+  test "backfill migration creates one primary address row for each existing person email" do
+    alice_id = Ecto.UUID.generate()
+    bob_id = Ecto.UUID.generate()
+
+    Repo.insert!(%Person{
+      person_id: alice_id,
+      name: "Alice",
+      email: " Alice@Example.COM "
+    })
+
+    Repo.insert!(%Person{
+      person_id: bob_id,
+      name: "Bob",
+      email: "bob@example.com"
+    })
+
+    assert Repo.all(PersonEmailAddress) == []
+
+    Repo.query!(backfill_sql())
+
+    assert Repo.get!(Person, alice_id).email == " Alice@Example.COM "
+    assert Repo.get!(Person, bob_id).email == "bob@example.com"
+
+    assert [
+             %PersonEmailAddress{
+               person_id: ^alice_id,
+               email: "Alice@Example.COM",
+               normalized_email: "alice@example.com",
+               is_primary: true
+             },
+             %PersonEmailAddress{
+               person_id: ^bob_id,
+               email: "bob@example.com",
+               normalized_email: "bob@example.com",
+               is_primary: true
+             }
+           ] =
+             PersonEmailAddress
+             |> order_by([email_address], asc: email_address.normalized_email)
+             |> Repo.all()
+  end
+
   test "person email address projection rows can be persisted and read" do
     person_id = Ecto.UUID.generate()
 
@@ -94,5 +142,13 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     Repo.delete!(person)
 
     assert Repo.get(PersonEmailAddress, email_address.id) == nil
+  end
+
+  defp backfill_sql do
+    unless Code.ensure_loaded?(@backfill_migration) do
+      Code.compile_file(@backfill_migration_path)
+    end
+
+    apply(@backfill_migration, :backfill_sql, [])
   end
 end
