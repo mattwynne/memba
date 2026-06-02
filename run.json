@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-01T23:29:20.533226439Z",
-  "last_event_at": "2026-06-02T01:52:25.489647754Z",
+  "last_event_at": "2026-06-02T01:52:29.155547448Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -25752,9 +25752,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 4354,
       "checkpoint": {
-        "timestamp": "2026-06-02T01:52:25.525311792Z",
+        "timestamp": "2026-06-02T01:52:29.135415085Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -25840,6 +25840,375 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "thread.task_gate.current_node": "sync_task_list",
+          "current_node": "implement_next_task",
+          "internal.node_visit_count": 13,
+          "task_list_needs_human": false,
+          "graph.rankdir": "LR",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "task_list_complete": false,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.fidelity": "summary:high",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "command.output": "blob://sha256/70d098482491db439031aef0dccd45d4c07d26beb9285f21b74e57e4e2683534",
+          "internal.retry_count.wip_gate": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "internal.thread_id": "all_tasks_done",
+          "last_stage": "implement_next_task",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n\n2. **Changes made**\n   - Added `web/test/support/membership_fixtures.ex`:\n     - `membership_club_attrs/1`\n     - `membership_club_slug/2`\n     - `insert_membership_club!/1`\n     - Generates deterministic, valid, unique-ish fixture slugs from club name + club UUID.\n   - Imported the fixture helpers into:\n     - `Memba.DataCase`\n     - `Memba.EventSourcedCase`\n     - `MembaWeb.ConnCase`\n     - `MembaWeb.FeatureCase`\n   - Updated Elixir test helpers and setup paths that create projected clubs so they now supply/store slugs explicitly instead of relying on database defaults.\n   - Updated acceptance support:\n     - `createClub` now fills the “Club slug” field, stores the slug in `world.clubs`, and supports explicit slug overrides.\n     - Acceptance support tests now include slug-bearing club state.\n   - Updated Cucumber config unit expectations so `staff_club_slugs.feature` remains intentionally skipped via `@wip`.\n   - `web/priv/repo/seeds.exs` contains no seeded club creation, so there was no seed club to update.\n   - No acceptance feature files were modified.\n\n3. **Validation run**\n   - `cd web && mix format --check-formatted` — passed.\n   - `cd acceptance-tests && npm_config_cache=../.npm-cache node --test test/*.test.js` — passed: `40 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check` — passed: `291 tests, 0 failures`.\n   - `git diff --check` — passed.\n   - Note: npm dependencies were installed temporarily for the acceptance support unit tests and removed afterward; no dependency artifacts remain tracked.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n   - To:\n     - `- [x] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: stays within Phoenix/Elixir app and test stack.\n   - ADR 0003 / 0010: keeps shared Cucumber feature files untouched and confirms `staff_club_slugs.feature` remains deferred via `@wip`.\n   - ADR 0007: uses Membership-owned fixture helpers and public Membership APIs where event-sourced creation is needed.\n   - ADR 0011: preserves caller-generated UUID club identities; slugs are data attributes, not aggregate identities.\n   - ADR 0013: acceptance/browser support tests continue to exercise user-visible setup helpers and app-facing state.",
+          "internal.work_dir": "/workspace/memba",
+          "task_retry_available": false,
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.start.current_node": "read_plan",
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot after implementation, with implement checkpoint `16eedc2`.\n  - Live `git status --short` and `git diff --stat` are clean.\n  - Recent commits show `16eedc2 fabro(...): implement_next_task (succeeded)` followed by `7f1c1af ... pre_validate_snapshot`.\n  - `git diff 16eedc2^ 16eedc2 -- docs/iterations/015-club-slugs/todo.md` shows exactly one ordinary task changed:\n    - `012 Add host-based public club-page resolution for *.clubs.memba.io` from unchecked to checked.\n  - The parent todo state had tasks 001–011 checked and task 012 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/controllers/page_controller.ex`\n    - Adds host detection for `*.clubs.memba.io`.\n    - Extracts the left-most slug label.\n    - Uses `Membership.get_club_by_slug/1`.\n    - Renders the existing `ClubMarketingLive` public club page for found clubs.\n    - Returns 404 for unknown public club subdomain slugs.\n    - Preserves existing `club_id` query-param behavior.\n  - `web/test/memba_web/controllers/page_controller_test.exs`\n    - Adds a test for `kmc.clubs.memba.io` rendering Kootenay Mountaineering Club’s marketing page.\n    - Adds a test for `unknown.clubs.memba.io` returning 404.\n    - Existing `club_id` public/member route tests remain present.\n  - No `*.feature` or `acceptance-tests/` files were changed in the implement checkpoint.\n\n- Tests run/results found:\n  - I reran `PATH=\"$PWD/bin:$PATH\" dev check`.\n  - Result: passed — `291 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes:\n  - Directly satisfies implementation plan task 012’s bullets: extract slug from `clubs.memba.io`, look up by slug, render existing public page, and 404 unknown slugs.\n  - Stays within scope; no member route replacement or custom-domain/reserved-slug policy work was introduced.\n  - Uses the Membership public query API rather than reaching into projection storage directly, consistent with ADR 0007.\n  - Adds user-facing Phoenix controller coverage for host routing; lower-level ConnTest usage is appropriate for host/connection-specific routing behavior under ADR 0013.\n  - Reuses the existing LiveView-backed club page and preserves existing member `club_id` flows, consistent with ADR 0015.\n  - Task is small and independently checkpointed with a clear artifact trail.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.start": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "failure_class": "",
+          "internal.retry_count.read_plan": 0,
+          "graph.max_node_visits": "300",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.retry_count.resume_gate": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.task_gate": 0,
+          "internal.run_id": "01KT2R8D37ECKZHDN8S4TJ927A",
+          "task_valid": true,
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n\n2. **Changes made**\n   - A",
+          "outcome": "succeeded",
+          "failure_signature": ""
+        },
+        "node_outcomes": {
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/53fe85bf0858c7446f4f43542eedb0aae11b0b6dee5d9d03b95b1ea8de24a1ee"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 14793,
+              "active_time_ms": 14793
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1ccb83e9ffc02dcbc6f181e5af78c7d445624e0d70e07f5f0e6e6f3278d2f34a"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/015-club-slugs/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 199,
+              "active_time_ms": 199
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/70d098482491db439031aef0dccd45d4c07d26beb9285f21b74e57e4e2683534"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 211,
+              "active_time_ms": 211
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2af2815c4177e70f14d46c4c400bab644237b8bdb41d6273f8f7718db3a6a732"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 307,
+              "active_time_ms": 307
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false,
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 41380,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 100,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 210740
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4369,
+              "tool_time_ms": 0,
+              "active_time_ms": 4369
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5200911572739ac4725797dc1bafbac8be737c227761873ad5dfdadae9acba38"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 169171,
+              "active_time_ms": 169171
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f2e84a3bb89cc80891e4b922eb1ce8379162018bf564804418f9ff4b162783f2"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 172,
+              "active_time_ms": 172
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n\n2. **Changes made**\n   - Added `web/test/support/membership_fixtures.ex`:\n     - `membership_club_attrs/1`\n     - `membership_club_slug/2`\n     - `insert_membership_club!/1`\n     - Generates deterministic, valid, unique-ish fixture slugs from club name + club UUID.\n   - Imported the fixture helpers into:\n     - `Memba.DataCase`\n     - `Memba.EventSourcedCase`\n     - `MembaWeb.ConnCase`\n     - `MembaWeb.FeatureCase`\n   - Updated Elixir test helpers and setup paths that create projected clubs so they now supply/store slugs explicitly instead of relying on database defaults.\n   - Updated acceptance support:\n     - `createClub` now fills the “Club slug” field, stores the slug in `world.clubs`, and supports explicit slug overrides.\n     - Acceptance support tests now include slug-bearing club state.\n   - Updated Cucumber config unit expectations so `staff_club_slugs.feature` remains intentionally skipped via `@wip`.\n   - `web/priv/repo/seeds.exs` contains no seeded club creation, so there was no seed club to update.\n   - No acceptance feature files were modified.\n\n3. **Validation run**\n   - `cd web && mix format --check-formatted` — passed.\n   - `cd acceptance-tests && npm_config_cache=../.npm-cache node --test test/*.test.js` — passed: `40 tests, 0 failures`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check` — passed: `291 tests, 0 failures`.\n   - `git diff --check` — passed.\n   - Note: npm dependencies were installed temporarily for the acceptance support unit tests and removed afterward; no dependency artifacts remain tracked.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n   - To:\n     - `- [x] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: stays within Phoenix/Elixir app and test stack.\n   - ADR 0003 / 0010: keeps shared Cucumber feature files untouched and confirms `staff_club_slugs.feature` remains deferred via `@wip`.\n   - ADR 0007: uses Membership-owned fixture helpers and public Membership APIs where event-sourced creation is needed.\n   - ADR 0011: preserves caller-generated UUID club identities; slugs are data attributes, not aggregate identities.\n   - ADR 0013: acceptance/browser support tests continue to exercise user-visible setup helpers and app-facing state.",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.`\n\n2. **Changes made**\n   - A",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1426455,
+                    "output_tokens": 13348,
+                    "reasoning_tokens": 9146,
+                    "cache_read_tokens": 11930112,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 13772151
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 735639,
+              "tool_time_ms": 266844,
+              "active_time_ms": 1002483
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot after implementation, with implement checkpoint `16eedc2`.\n  - Live `git status --short` and `git diff --stat` are clean.\n  - Recent commits show `16eedc2 fabro(...): implement_next_task (succeeded)` followed by `7f1c1af ... pre_validate_snapshot`.\n  - `git diff 16eedc2^ 16eedc2 -- docs/iterations/015-club-slugs/todo.md` shows exactly one ordinary task changed:\n    - `012 Add host-based public club-page resolution for *.clubs.memba.io` from unchecked to checked.\n  - The parent todo state had tasks 001–011 checked and task 012 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/controllers/page_controller.ex`\n    - Adds host detection for `*.clubs.memba.io`.\n    - Extracts the left-most slug label.\n    - Uses `Membership.get_club_by_slug/1`.\n    - Renders the existing `ClubMarketingLive` public club page for found clubs.\n    - Returns 404 for unknown public club subdomain slugs.\n    - Preserves existing `club_id` query-param behavior.\n  - `web/test/memba_web/controllers/page_controller_test.exs`\n    - Adds a test for `kmc.clubs.memba.io` rendering Kootenay Mountaineering Club’s marketing page.\n    - Adds a test for `unknown.clubs.memba.io` returning 404.\n    - Existing `club_id` public/member route tests remain present.\n  - No `*.feature` or `acceptance-tests/` files were changed in the implement checkpoint.\n\n- Tests run/results found:\n  - I reran `PATH=\"$PWD/bin:$PATH\" dev check`.\n  - Result: passed — `291 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes:\n  - Directly satisfies implementation plan task 012’s bullets: extract slug from `clubs.memba.io`, look up by slug, render existing public page, and 404 unknown slugs.\n  - Stays within scope; no member route replacement or custom-domain/reserved-slug policy work was introduced.\n  - Uses the Membership public query API rather than reaching into projection storage directly, consistent with ADR 0007.\n  - Adds user-facing Phoenix controller coverage for host routing; lower-level ConnTest usage is appropriate for host/connection-specific routing behavior under ADR 0013.\n  - Reuses the existing LiveView-backed club page and preserves existing member `club_id` flows, consistent with ADR 0015.\n  - Task is small and independently checkpointed with a clear artifact trail.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found:\n  - `/tmp/fabro-pre-validate-snapshot.md` records a clean snapshot after implementation, with implement checkpoint `16",
+              "task_retry_available": false,
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 495025,
+                    "output_tokens": 2442,
+                    "reasoning_tokens": 1873,
+                    "cache_read_tokens": 567808,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2888479
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 115645,
+              "tool_time_ms": 65315,
+              "active_time_ms": 180960
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "76b83002f8b4abf3b859965fa39712c6b9fd3338",
+        "node_visits": {
+          "all_tasks_done": 13,
+          "pre_validate_snapshot": 12,
+          "implement_next_task": 13,
+          "resume_gate": 1,
+          "task_gate": 12,
+          "preflight_sandbox": 1,
+          "start": 1,
+          "read_plan": 1,
+          "sync_task_list": 13,
+          "validate_task": 12,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js\nindex c76e41c..6e85317 100644\n--- a/acceptance-tests/features/support/member_message.js\n+++ b/acceptance-tests/features/support/member_message.js\n@@ -4,6 +4,7 @@ const { expect: playwrightExpect } = require(\"@playwright/test\");\n \n const kootenayClubName = \"Kootenay Mountaineering Club\";\n const nelsonClubName = \"Nelson Paddling Club\";\n+const maxClubSlugLength = 32;\n const defaultProjectionPollIntervalMs = 250;\n const defaultProjectionTimeoutMs = 10000;\n \n@@ -27,6 +28,31 @@ function emailFor(name) {\n   return `${normalizedName}@example.test`;\n }\n \n+function defaultClubSlug(clubName) {\n+  return String(clubName || \"\")\n+    .trim()\n+    .toLowerCase()\n+    .replace(/[^a-z0-9]+/g, \"-\")\n+    .replace(/^-+|-+$/g, \"\")\n+    .slice(0, maxClubSlugLength)\n+    .replace(/^-+|-+$/g, \"\");\n+}\n+\n+function clubSlugForOccurrence(clubName, occurrence) {\n+  const base = defaultClubSlug(clubName) || \"club\";\n+\n+  if (occurrence <= 1) {\n+    return base;\n+  }\n+\n+  const suffix = `-${occurrence}`;\n+  const trimmedBase = base\n+    .slice(0, maxClubSlugLength - suffix.length)\n+    .replace(/^-+|-+$/g, \"\");\n+\n+  return `${trimmedBase || \"club\"}${suffix}`;\n+}\n+\n function postmarkPayloadForStatus({\n   deliveryId,\n   eventType,\n@@ -422,16 +448,18 @@ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeou\n   );\n }\n \n-async function createClub(world, clubName, { expect = playwrightExpect } = {}) {\n+async function createClub(world, clubName, { expect = playwrightExpect, slug } = {}) {\n   ensureState(world);\n \n   await visitClubsIndex(world);\n \n   const clubRows = rowsByData(world.page, \"club-row\", \"data-club-name\", clubName);\n   const previousClubIds = await rowAttributeValues(clubRows, \"data-club-id\");\n+  const requestedSlug = slug || clubSlugForOccurrence(clubName, previousClubIds.length + 1);\n \n   await browserInteraction(`submit club creation form for ${clubName}`, async () => {\n     await world.page.getByLabel(\"Club name\").fill(clubName);\n+    await world.page.getByLabel(\"Club slug\").fill(requestedSlug);\n     await world.page.getByRole(\"button\", { name: \"Create club\" }).click();\n   });\n   await waitForProjectedCount(\n@@ -454,8 +482,11 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {\n     `projected club row ${clubId}`,\n     { expect }\n   );\n+  const clubSlug =\n+    (await rowByData(world.page, \"club-row\", \"data-club-id\", clubId).getAttribute(\"data-club-slug\")) ||\n+    requestedSlug;\n \n-  world.clubs[clubName] = { clubId, name: clubName };\n+  world.clubs[clubName] = { clubId, name: clubName, slug: clubSlug };\n \n   return world;\n }\ndiff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js\nindex 4a84b56..5c48670 100644\n--- a/acceptance-tests/test/cucumber_config.test.js\n+++ b/acceptance-tests/test/cucumber_config.test.js\n@@ -27,7 +27,10 @@ test(\"default browser Cucumber profile selects all non-deferred web-backed share\n test(\"only explicitly deferred features are skipped from the browser run\", () => {\n   const skippedFeatures = browserSkippedFeatures();\n \n-  assert.deepEqual(skippedFeatures.map((feature) => feature.name), [\"person_email_addresses.feature\"]);\n+  assert.deepEqual(skippedFeatures.map((feature) => feature.name), [\n+    \"person_email_addresses.feature\",\n+    \"staff_club_slugs.feature\"\n+  ]);\n });\n \n function browserSelectedFeatureNames() {\ndiff --git a/acceptance-tests/test/member_harness.test.js b/acceptance-tests/test/member_harness.test.js\nindex 4685138..04e0c2d 100644\n--- a/acceptance-tests/test/member_harness.test.js\n+++ b/acceptance-tests/test/member_harness.test.js\n@@ -120,7 +120,13 @@ function worldWithBrowser() {\n   return {\n     baseUrl: \"http://127.0.0.1:4444\",\n     browser: new FakeBrowser(),\n-    clubs: { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } },\n+    clubs: {\n+      [kootenayClubName]: {\n+        clubId: \"club-1\",\n+        name: kootenayClubName,\n+        slug: \"kootenay-mountaineering-club\"\n+      }\n+    },\n     people: { Alice: { email: \"alice@example.test\", name: \"Alice\", personId: \"person-alice\" } }\n   };\n }\ndiff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js\nindex 40dd67a..b6a41f4 100644\n--- a/acceptance-tests/test/member_message_steps.test.js\n+++ b/acceptance-tests/test/member_message_steps.test.js\n@@ -206,10 +206,12 @@ class FakePage {\n   applyClickSideEffect(role, name) {\n     if (name === \"Create club\") {\n       const clubName = this.fields[\"Club name\"];\n+      const clubSlug = this.fields[\"Club slug\"];\n       const clubId = idFor(\"club\", clubName, this.rows.clubs.length + 1);\n       this.rows.clubs.push(rowWithAttrs({\n         \"data-club-id\": clubId,\n-        \"data-club-name\": clubName\n+        \"data-club-name\": clubName,\n+        \"data-club-slug\": clubSlug\n       }));\n     }\n \n@@ -449,7 +451,8 @@ test(\"creating a club drives /admin/clubs and stores the generated club id from\n   const page = new FakePage();\n   page.rows.clubs.push(rowWithAttrs({\n     \"data-club-id\": \"club-existing-1\",\n-    \"data-club-name\": kootenayClubName\n+    \"data-club-name\": kootenayClubName,\n+    \"data-club-slug\": \"kootenay-mountaineering-club\"\n   }));\n   const expectations = [];\n   const world = worldWithPage(page);\n@@ -459,15 +462,31 @@ test(\"creating a club drives /admin/clubs and stores the generated club id from\n   assert.deepEqual(page.actions, [\n     [\"goto\", \"http://127.0.0.1:4444/admin/clubs\"],\n     [\"fill\", \"Club name\", kootenayClubName],\n+    [\"fill\", \"Club slug\", \"kootenay-mountaineering-club-2\"],\n     [\"click\", \"button\", { name: \"Create club\" }]\n   ]);\n   assert.deepEqual(world.clubs[kootenayClubName], {\n     clubId: \"club-kootenay-mountaineering-club-2\",\n-    name: kootenayClubName\n+    name: kootenayClubName,\n+    slug: \"kootenay-mountaineering-club-2\"\n   });\n   assert.deepEqual(expectations.map((expectation) => expectation[0]), [\"count\", \"visible\"]);\n });\n \n+test(\"creating a club accepts and stores an explicit slug for acceptance setup\", async () => {\n+  const page = new FakePage();\n+  const world = worldWithPage(page);\n+\n+  await createClub(world, kootenayClubName, { expect: fakeExpect([]), slug: \"kmc\" });\n+\n+  assert.ok(page.actions.some((action) => action[0] === \"fill\" && action[1] === \"Club slug\" && action[2] === \"kmc\"));\n+  assert.deepEqual(world.clubs[kootenayClubName], {\n+    clubId: \"club-kootenay-mountaineering-club-1\",\n+    name: kootenayClubName,\n+    slug: \"kmc\"\n+  });\n+});\n+\n test(\"browser command projection waits use bounded Playwright assertion timeouts\", async () => {\n   const page = new FakePage();\n   const expectations = [];\n@@ -514,7 +533,13 @@ test(\"creating people and members uses accessible form labels and keeps browser\n   const page = new FakePage();\n   const expectations = [];\n   const world = worldWithPage(page);\n-  world.clubs = { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } };\n+  world.clubs = {\n+    [kootenayClubName]: {\n+      clubId: \"club-1\",\n+      name: kootenayClubName,\n+      slug: \"kootenay-mountaineering-club\"\n+    }\n+  };\n \n   await createPeople(world, [\"Alice\", \"Bob\"], { expect: fakeExpect(expectations) });\n   await addMembers(world, [\"Alice\", \"Bob\"], kootenayClubName, { expect: fakeExpect(expectations) });\n@@ -551,7 +576,13 @@ test(\"sending a Kootenay member message drives the club form and opens the real\n   const page = new FakePage();\n   const expectations = [];\n   const world = worldWithPage(page);\n-  world.clubs = { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } };\n+  world.clubs = {\n+    [kootenayClubName]: {\n+      clubId: \"club-1\",\n+      name: kootenayClubName,\n+      slug: \"kootenay-mountaineering-club\"\n+    }\n+  };\n   world.people = { Alice: { personId: \"person-alice-1\" } };\n \n   await sendMessageToKootenayMembers(world, \"Alice\", \"Trip planning night\", {\n@@ -578,7 +609,13 @@ test(\"member send flow opens compose from club home and stores the new message\",\n   const page = new FakePage();\n   const expectations = [];\n   const world = worldWithPage(page);\n-  world.clubs = { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } };\n+  world.clubs = {\n+    [kootenayClubName]: {\n+      clubId: \"club-1\",\n+      name: kootenayClubName,\n+      slug: \"kootenay-mountaineering-club\"\n+    }\n+  };\n   world.people = { Alice: { personId: \"person-alice-1\" } };\n \n   await sendMemberMessageToKootenayMembers(world, \"Alice\", \"Trip planning night\", {\n@@ -620,7 +657,13 @@ test(\"member failed-send flow stays on compose failure state with support guidan\n   const expectations = [];\n   const world = worldWithPage(page);\n   page.sendUnavailable = true;\n-  world.clubs = { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } };\n+  world.clubs = {\n+    [kootenayClubName]: {\n+      clubId: \"club-1\",\n+      name: kootenayClubName,\n+      slug: \"kootenay-mountaineering-club\"\n+    }\n+  };\n   world.people = { Alice: { personId: \"person-alice-1\" } };\n \n   await trySendMemberMessageToKootenayMembers(world, \"Alice\", \"Trip planning night\", {\n@@ -653,7 +696,13 @@ test(\"member club home opening waits on the stable member home container\", async\n   const page = new FakePage();\n   const expectations = [];\n   const world = worldWithPage(page);\n-  world.clubs = { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } };\n+  world.clubs = {\n+    [kootenayClubName]: {\n+      clubId: \"club-1\",\n+      name: kootenayClubName,\n+      slug: \"kootenay-mountaineering-club\"\n+    }\n+  };\n \n   await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });\n \n@@ -783,7 +832,13 @@ test(\"member assertions read member-facing recipient rows, labels, and Heroicon\n   );\n   const expectations = [];\n   const world = worldWithPage(page);\n-  world.clubs = { [kootenayClubName]: { clubId: \"club-1\", name: kootenayClubName } };\n+  world.clubs = {\n+    [kootenayClubName]: {\n+      clubId: \"club-1\",\n+      name: kootenayClubName,\n+      slug: \"kootenay-mountaineering-club\"\n+    }\n+  };\n   world.lastMessageSubject = \"Trip planning night\";\n   world.messages = {\n     \"Trip planning night\": { clubId: \"club-1\", messageId: \"message-1\", subject: \"Trip planning night\" }\ndiff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md\nindex 5002ef6..b030b7a 100644\n--- a/docs/iterations/015-club-slugs/todo.md\n+++ b/docs/iterations/015-club-slugs/todo.md\n@@ -12,6 +12,6 @@\n - [x] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.\n - [x] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.\n - [x] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:\n-- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.\n+- [x] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.\n - [ ] 014 Add tests for:\n - [ ] 015 Run `dev check`.\ndiff --git a/web/test/memba/accounts_test.exs b/web/test/memba/accounts_test.exs\nindex 64a22e3..9915d47 100644\n--- a/web/test/memba/accounts_test.exs\n+++ b/web/test/memba/accounts_test.exs\n@@ -135,7 +135,7 @@ defmodule Memba.AccountsTest do\n \n     assert :ok =\n              Membership.create_club(\n-               %{club_id: club_id, name: Keyword.fetch!(attrs, :club_name)},\n+               membership_club_attrs(club_id: club_id, name: Keyword.fetch!(attrs, :club_name)),\n                consistency: :strong\n              )\n \ndiff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs\nindex e216c79..44b67d3 100644\n--- a/web/test/memba/membership/club_test.exs\n+++ b/web/test/memba/membership/club_test.exs\n@@ -28,19 +28,25 @@ defmodule Memba.Membership.ClubTest do\n       assert {:error, :invalid_club_id} =\n                Club.execute(%Club{}, %CreateClub{\n                  club_id: nil,\n-                 name: \"Kootenay Mountaineering Club\"\n+                 name: \"Kootenay Mountaineering Club\",\n+                 slug: \"kmc\"\n                })\n \n       assert {:error, :invalid_club_id} =\n                Club.execute(%Club{}, %CreateClub{\n                  club_id: \"not-a-uuid\",\n-                 name: \"Kootenay Mountaineering Club\"\n+                 name: \"Kootenay Mountaineering Club\",\n+                 slug: \"kmc\"\n                })\n     end\n \n     test \"rejects blank club names\" do\n       assert {:error, :invalid_name} =\n-               Club.execute(%Club{}, %CreateClub{club_id: Ecto.UUID.generate(), name: \"  \"})\n+               Club.execute(%Club{}, %CreateClub{\n+                 club_id: Ecto.UUID.generate(),\n+                 name: \"  \",\n+                 slug: \"kmc\"\n+               })\n     end\n \n     test \"rejects missing club slugs\" do\n@@ -64,7 +70,8 @@ defmodule Memba.Membership.ClubTest do\n       assert {:error, :already_created} =\n                Club.execute(club, %CreateClub{\n                  club_id: club_id,\n-                 name: \"Kootenay Mountaineering Club\"\n+                 name: \"Kootenay Mountaineering Club\",\n+                 slug: \"kmc\"\n                })\n     end\n   end\ndiff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs\nindex ee73c08..3424625 100644\n--- a/web/test/memba/membership/public_api_test.exs\n+++ b/web/test/memba/membership/public_api_test.exs\n@@ -161,7 +161,7 @@ defmodule Memba.Membership.PublicApiTest do\n \n     assert :ok =\n              Membership.create_club(\n-               %{club_id: club_id, name: \"Kootenay Mountaineering Club\"},\n+               membership_club_attrs(club_id: club_id, name: \"Kootenay Mountaineering Club\"),\n                consistency: :strong\n              )\n \ndiff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs\nindex 2f0e9eb..0a96367 100644\n--- a/web/test/memba/membership/query_test.exs\n+++ b/web/test/memba/membership/query_test.exs\n@@ -129,10 +129,7 @@ defmodule Memba.Membership.QueryTest do\n       add_member(nelson.club_id, uppercase_alice.person_id)\n       add_member(other_club.club_id, other_person.person_id)\n \n-      Repo.insert!(%ClubProjection{\n-        club_id: inactive_club_id,\n-        name: \"Inactive Club\"\n-      })\n+      insert_membership_club!(club_id: inactive_club_id, name: \"Inactive Club\")\n \n       Repo.insert!(%MembershipProjection{\n         membership_id: Ecto.UUID.generate(),\ndiff --git a/web/test/memba_web/auth_gates_test.exs b/web/test/memba_web/auth_gates_test.exs\nindex bbb747a..8b3ccc9 100644\n--- a/web/test/memba_web/auth_gates_test.exs\n+++ b/web/test/memba_web/auth_gates_test.exs\n@@ -1,7 +1,6 @@\n defmodule MembaWeb.AuthGatesTest do\n   use MembaWeb.ConnCase, async: false\n \n-  alias Memba.Membership.Projections.Club\n   alias Memba.Membership.Projections.Membership\n   alias Memba.Membership.Projections.Person\n   alias Memba.Repo\n@@ -94,10 +93,7 @@ defmodule MembaWeb.AuthGatesTest do\n   end\n \n   defp create_club(attrs) do\n-    Repo.insert!(%Club{\n-      club_id: Ecto.UUID.generate(),\n-      name: Keyword.fetch!(attrs, :name)\n-    })\n+    insert_membership_club!(attrs)\n   end\n \n   defp create_active_member(attrs) do\n@@ -105,10 +101,10 @@ defmodule MembaWeb.AuthGatesTest do\n     person_id = Ecto.UUID.generate()\n \n     club =\n-      Repo.insert!(%Club{\n+      insert_membership_club!(\n         club_id: club_id,\n         name: Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\")\n-      })\n+      )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs\nindex 95b1354..29351d5 100644\n--- a/web/test/memba_web/controllers/auth_controller_test.exs\n+++ b/web/test/memba_web/controllers/auth_controller_test.exs\n@@ -6,7 +6,6 @@ defmodule MembaWeb.AuthControllerTest do\n   alias Memba.Accounts\n   alias Memba.Accounts.AuthEmail\n   alias Memba.Accounts.MagicToken\n-  alias Memba.Membership.Projections.Club\n   alias Memba.Membership.Projections.Membership\n   alias Memba.Membership.Projections.Person\n   alias Memba.Repo\n@@ -224,10 +223,10 @@ defmodule MembaWeb.AuthControllerTest do\n     club_id = Ecto.UUID.generate()\n     person_id = Ecto.UUID.generate()\n \n-    Repo.insert!(%Club{\n+    insert_membership_club!(\n       club_id: club_id,\n       name: Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\")\n-    })\n+    )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs\nindex 5d2aaf6..2b24104 100644\n--- a/web/test/memba_web/controllers/member_message_detail_test.exs\n+++ b/web/test/memba_web/controllers/member_message_detail_test.exs\n@@ -259,10 +259,10 @@ defmodule MembaWeb.MemberMessageDetailTest do\n \n     club =\n       Repo.get(Club, club_id) ||\n-        Repo.insert!(%Club{\n+        insert_membership_club!(\n           club_id: club_id,\n           name: Keyword.fetch!(attrs, :club_name)\n-        })\n+        )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs\nindex 60be47e..3744da3 100644\n--- a/web/test/memba_web/controllers/page_controller_test.exs\n+++ b/web/test/memba_web/controllers/page_controller_test.exs\n@@ -464,11 +464,7 @@ defmodule MembaWeb.PageControllerTest do\n   end\n \n   defp create_club(attrs) do\n-    Repo.insert!(%Club{\n-      club_id: Ecto.UUID.generate(),\n-      name: Keyword.fetch!(attrs, :name),\n-      slug: Keyword.get(attrs, :slug)\n-    })\n+    insert_membership_club!(attrs)\n   end\n \n   defp create_active_member(attrs) do\n@@ -478,10 +474,10 @@ defmodule MembaWeb.PageControllerTest do\n \n     club =\n       Repo.get(Club, club_id) ||\n-        Repo.insert!(%Club{\n+        insert_membership_club!(\n           club_id: club_id,\n           name: club_name\n-        })\n+        )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs\nindex 81329a9..21ff161 100644\n--- a/web/test/memba_web/live/member_dashboard_live_test.exs\n+++ b/web/test/memba_web/live/member_dashboard_live_test.exs\n@@ -505,10 +505,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do\n   end\n \n   defp create_club(attrs) do\n-    Repo.insert!(%Club{\n-      club_id: Ecto.UUID.generate(),\n-      name: Keyword.fetch!(attrs, :name)\n-    })\n+    insert_membership_club!(attrs)\n   end\n \n   defp create_active_member(attrs) do\n@@ -523,10 +520,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do\n     club_name = Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\")\n \n     Repo.get(Club, club_id) ||\n-      Repo.insert!(%Club{\n+      insert_membership_club!(\n         club_id: club_id,\n         name: club_name\n-      })\n+      )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs\nindex f95c68b..23a5a18 100644\n--- a/web/test/memba_web/live/member_message_live/new_send_test.exs\n+++ b/web/test/memba_web/live/member_message_live/new_send_test.exs\n@@ -175,7 +175,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do\n     if is_nil(Membership.get_club(club_id)) do\n       assert :ok =\n                Membership.create_club(\n-                 %{club_id: club_id, name: \"Kootenay Mountaineering Club\"},\n+                 membership_club_attrs(club_id: club_id, name: \"Kootenay Mountaineering Club\"),\n                  consistency: :strong\n                )\n     end\ndiff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs\nindex 4a1b54b..99ee180 100644\n--- a/web/test/memba_web/live/member_message_live/new_test.exs\n+++ b/web/test/memba_web/live/member_message_live/new_test.exs\n@@ -226,10 +226,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do\n     person_id = Ecto.UUID.generate()\n \n     Repo.get(Club, club_id) ||\n-      Repo.insert!(%Club{\n+      insert_membership_club!(\n         club_id: club_id,\n         name: Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\")\n-      })\n+      )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs\nindex 9cabf6c..0a9439f 100644\n--- a/web/test/memba_web/live/member_message_live/show_test.exs\n+++ b/web/test/memba_web/live/member_message_live/show_test.exs\n@@ -440,10 +440,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do\n \n     club =\n       Repo.get(Club, club_id) ||\n-        Repo.insert!(%Club{\n+        insert_membership_club!(\n           club_id: club_id,\n           name: club_name\n-        })\n+        )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs\nindex 75a5dc4..e3774dd 100644\n--- a/web/test/memba_web/member_dashboard_presentation_test.exs\n+++ b/web/test/memba_web/member_dashboard_presentation_test.exs\n@@ -187,10 +187,10 @@ defmodule MembaWeb.MemberDashboardPresentationTest do\n \n     club =\n       Repo.get(Club, club_id) ||\n-        Repo.insert!(%Club{\n+        insert_membership_club!(\n           club_id: club_id,\n           name: club_name\n-        })\n+        )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs\nindex e0a4577..c2bb64b 100644\n--- a/web/test/memba_web/member_message_detail_loader_test.exs\n+++ b/web/test/memba_web/member_message_detail_loader_test.exs\n@@ -115,10 +115,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do\n   end\n \n   defp create_club(attrs) do\n-    Repo.insert!(%Club{\n-      club_id: Ecto.UUID.generate(),\n-      name: Keyword.fetch!(attrs, :name)\n-    })\n+    insert_membership_club!(attrs)\n   end\n \n   defp create_active_member(attrs) do\n@@ -128,10 +125,10 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do\n \n     club =\n       Repo.get(Club, club_id) ||\n-        Repo.insert!(%Club{\n+        insert_membership_club!(\n           club_id: club_id,\n           name: club_name\n-        })\n+        )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/memba_web/user_auth_test.exs b/web/test/memba_web/user_auth_test.exs\nindex 01c7c6e..7afffb7 100644\n--- a/web/test/memba_web/user_auth_test.exs\n+++ b/web/test/memba_web/user_auth_test.exs\n@@ -192,10 +192,10 @@ defmodule MembaWeb.UserAuthTest do\n     person_id = Ecto.UUID.generate()\n \n     club =\n-      Repo.insert!(%Club{\n+      insert_membership_club!(\n         club_id: club_id,\n         name: Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\")\n-      })\n+      )\n \n     Repo.insert!(%Person{\n       person_id: person_id,\ndiff --git a/web/test/support/conn_case.ex b/web/test/support/conn_case.ex\nindex a3d82da..6c50177 100644\n--- a/web/test/support/conn_case.ex\n+++ b/web/test/support/conn_case.ex\n@@ -29,6 +29,7 @@ defmodule MembaWeb.ConnCase do\n       import Phoenix.ConnTest\n       import PhoenixTest\n       import MembaWeb.ConnCase\n+      import Memba.MembershipFixtures\n     end\n   end\n \ndiff --git a/web/test/support/data_case.ex b/web/test/support/data_case.ex\nindex fea3960..58dd8fe 100644\n--- a/web/test/support/data_case.ex\n+++ b/web/test/support/data_case.ex\n@@ -24,6 +24,7 @@ defmodule Memba.DataCase do\n       import Ecto.Changeset\n       import Ecto.Query\n       import Memba.DataCase\n+      import Memba.MembershipFixtures\n     end\n   end\n \ndiff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex\nindex 9366c25..3242584 100644\n--- a/web/test/support/event_sourced_case.ex\n+++ b/web/test/support/event_sourced_case.ex\n@@ -28,6 +28,7 @@ defmodule Memba.EventSourcedCase do\n       import Ecto.Changeset\n       import Ecto.Query\n       import Memba.EventSourcedCase\n+      import Memba.MembershipFixtures\n     end\n   end\n \ndiff --git a/web/test/support/feature_case.ex b/web/test/support/feature_case.ex\nindex 1d86c69..7adf6c5 100644\n--- a/web/test/support/feature_case.ex\n+++ b/web/test/support/feature_case.ex\n@@ -14,6 +14,7 @@ defmodule MembaWeb.FeatureCase do\n       import Phoenix.ConnTest\n       import PhoenixTest\n       import MembaWeb.FeatureCase\n+      import Memba.MembershipFixtures\n     end\n   end\n \ndiff --git a/web/test/support/membership_fixtures.ex b/web/test/support/membership_fixtures.ex\nnew file mode 100644\nindex 0000000..f98b33c\n--- /dev/null\n+++ b/web/test/support/membership_fixtures.ex\n@@ -0,0 +1,52 @@\n+defmodule Memba.MembershipFixtures do\n+  @moduledoc \"\"\"\n+  Shared fixtures for Membership projection tests.\n+  \"\"\"\n+\n+  alias Memba.Membership.Projections.Club\n+  alias Memba.Membership.Slug\n+  alias Memba.Repo\n+\n+  def membership_club_attrs(attrs \\\\ []) when is_list(attrs) do\n+    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)\n+\n+    name =\n+      Keyword.get(attrs, :name, Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\"))\n+\n+    %{\n+      club_id: club_id,\n+      name: name,\n+      slug: Keyword.get_lazy(attrs, :slug, fn -> membership_club_slug(name, club_id) end)\n+    }\n+  end\n+\n+  def membership_club_slug(name, club_id) when is_binary(name) and is_binary(club_id) do\n+    suffix =\n+      club_id\n+      |> String.replace(\"-\", \"\")\n+      |> String.slice(0, 8)\n+\n+    max_base_length = Slug.max_length() - String.length(suffix) - 1\n+\n+    base =\n+      name\n+      |> Slug.default_from_name()\n+      |> String.slice(0, max_base_length)\n+      |> String.trim(\"-\")\n+\n+    case base do\n+      \"\" -> suffix\n+      base -> \"#{base}-#{suffix}\"\n+    end\n+  end\n+\n+  def insert_membership_club!(attrs \\\\ []) when is_list(attrs) do\n+    attrs = membership_club_attrs(attrs)\n+\n+    Repo.insert!(%Club{\n+      club_id: attrs.club_id,\n+      name: attrs.name,\n+      slug: attrs.slug\n+    })\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 51,
+          "additions": 1883,
+          "deletions": 108
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-02T01:52:29.503025617Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.validate_task.current_node": "task_gate",
           "internal.retry_count.resume_gate": 0,
           "task_valid": true,
@@ -25854,7 +26223,7 @@
           "thread.task_gate.current_node": "sync_task_list",
           "task_retry_available": false,
           "internal.retry_count.all_tasks_done": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.work_dir": "/workspace/memba",
           "failure_class": "",
           "internal.retry_count.read_plan": 0,
@@ -25882,9 +26251,9 @@
           "internal.node_visit_count": 13,
           "thread.sync_task_list.current_node": "all_tasks_done",
           "graph.max_node_visits": "300",
-          "command.output": "blob://sha256/70d098482491db439031aef0dccd45d4c07d26beb9285f21b74e57e4e2683534",
+          "command.output": "blob://sha256/7beaff5d0f3ece109dea18e3dfa91cd8cb2c4a25f7abc85ec8d8215105ae2384",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "thread.preflight_sandbox.current_node": "resume_gate"
         },
         "node_outcomes": {
@@ -26004,15 +26373,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/2af2815c4177e70f14d46c4c400bab644237b8bdb41d6273f8f7718db3a6a732"
+              "command.output": "blob://sha256/7beaff5d0f3ece109dea18e3dfa91cd8cb2c4a25f7abc85ec8d8215105ae2384"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 307,
-              "active_time_ms": 307
+              "tool_time_ms": 319,
+              "active_time_ms": 319
             }
           },
           "resume_gate": {
@@ -26094,7 +26463,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "start": 1,
           "wip_gate": 1,
@@ -26103,7 +26472,7 @@
           "read_plan": 1,
           "all_tasks_done": 13,
           "resume_gate": 1,
-          "pre_validate_snapshot": 12,
+          "pre_validate_snapshot": 13,
           "validate_task": 12,
           "implement_next_task": 13,
           "task_gate": 12
@@ -27272,7 +27641,12 @@
       "first_event_seq": 3935,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T01:52:25.509751566Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -27286,13 +27660,20 @@
       "output": null,
       "started_at": "2026-06-02T01:35:42.109449121Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 1003396,
+        "inference_time_ms": 735639,
+        "tool_time_ms": 266844,
+        "active_time_ms": 1002483
+      },
       "usage": {
         "input_tokens": 1426455,
         "output_tokens": 13348,
         "total_tokens": 13379061,
         "reasoning_tokens": 9146,
         "cache_read_tokens": 11930112,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 13772151
       },
       "model": {
         "provider": "openai",
@@ -27508,7 +27889,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "all_tasks_done@12": {
       "first_event_seq": 3604,
@@ -32068,6 +32449,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@13": {
+      "first_event_seq": 4357,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/015-club-slugs/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-02T01:52:29.153870053Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "implement_next_task@3": {
       "first_event_seq": 613,

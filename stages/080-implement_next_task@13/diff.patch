@@ -1,0 +1,714 @@
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index c76e41c..6e85317 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -4,6 +4,7 @@ const { expect: playwrightExpect } = require("@playwright/test");
+ 
+ const kootenayClubName = "Kootenay Mountaineering Club";
+ const nelsonClubName = "Nelson Paddling Club";
++const maxClubSlugLength = 32;
+ const defaultProjectionPollIntervalMs = 250;
+ const defaultProjectionTimeoutMs = 10000;
+ 
+@@ -27,6 +28,31 @@ function emailFor(name) {
+   return `${normalizedName}@example.test`;
+ }
+ 
++function defaultClubSlug(clubName) {
++  return String(clubName || "")
++    .trim()
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, "-")
++    .replace(/^-+|-+$/g, "")
++    .slice(0, maxClubSlugLength)
++    .replace(/^-+|-+$/g, "");
++}
++
++function clubSlugForOccurrence(clubName, occurrence) {
++  const base = defaultClubSlug(clubName) || "club";
++
++  if (occurrence <= 1) {
++    return base;
++  }
++
++  const suffix = `-${occurrence}`;
++  const trimmedBase = base
++    .slice(0, maxClubSlugLength - suffix.length)
++    .replace(/^-+|-+$/g, "");
++
++  return `${trimmedBase || "club"}${suffix}`;
++}
++
+ function postmarkPayloadForStatus({
+   deliveryId,
+   eventType,
+@@ -422,16 +448,18 @@ async function openDeliveriesOverview(world, { expect = playwrightExpect, timeou
+   );
+ }
+ 
+-async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
++async function createClub(world, clubName, { expect = playwrightExpect, slug } = {}) {
+   ensureState(world);
+ 
+   await visitClubsIndex(world);
+ 
+   const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
+   const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
++  const requestedSlug = slug || clubSlugForOccurrence(clubName, previousClubIds.length + 1);
+ 
+   await browserInteraction(`submit club creation form for ${clubName}`, async () => {
+     await world.page.getByLabel("Club name").fill(clubName);
++    await world.page.getByLabel("Club slug").fill(requestedSlug);
+     await world.page.getByRole("button", { name: "Create club" }).click();
+   });
+   await waitForProjectedCount(
+@@ -454,8 +482,11 @@ async function createClub(world, clubName, { expect = playwrightExpect } = {}) {
+     `projected club row ${clubId}`,
+     { expect }
+   );
++  const clubSlug =
++    (await rowByData(world.page, "club-row", "data-club-id", clubId).getAttribute("data-club-slug")) ||
++    requestedSlug;
+ 
+-  world.clubs[clubName] = { clubId, name: clubName };
++  world.clubs[clubName] = { clubId, name: clubName, slug: clubSlug };
+ 
+   return world;
+ }
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 4a84b56..5c48670 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -27,7 +27,10 @@ test("default browser Cucumber profile selects all non-deferred web-backed share
+ test("only explicitly deferred features are skipped from the browser run", () => {
+   const skippedFeatures = browserSkippedFeatures();
+ 
+-  assert.deepEqual(skippedFeatures.map((feature) => feature.name), ["person_email_addresses.feature"]);
++  assert.deepEqual(skippedFeatures.map((feature) => feature.name), [
++    "person_email_addresses.feature",
++    "staff_club_slugs.feature"
++  ]);
+ });
+ 
+ function browserSelectedFeatureNames() {
+diff --git a/acceptance-tests/test/member_harness.test.js b/acceptance-tests/test/member_harness.test.js
+index 4685138..04e0c2d 100644
+--- a/acceptance-tests/test/member_harness.test.js
++++ b/acceptance-tests/test/member_harness.test.js
+@@ -120,7 +120,13 @@ function worldWithBrowser() {
+   return {
+     baseUrl: "http://127.0.0.1:4444",
+     browser: new FakeBrowser(),
+-    clubs: { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } },
++    clubs: {
++      [kootenayClubName]: {
++        clubId: "club-1",
++        name: kootenayClubName,
++        slug: "kootenay-mountaineering-club"
++      }
++    },
+     people: { Alice: { email: "alice@example.test", name: "Alice", personId: "person-alice" } }
+   };
+ }
+diff --git a/acceptance-tests/test/member_message_steps.test.js b/acceptance-tests/test/member_message_steps.test.js
+index 40dd67a..b6a41f4 100644
+--- a/acceptance-tests/test/member_message_steps.test.js
++++ b/acceptance-tests/test/member_message_steps.test.js
+@@ -206,10 +206,12 @@ class FakePage {
+   applyClickSideEffect(role, name) {
+     if (name === "Create club") {
+       const clubName = this.fields["Club name"];
++      const clubSlug = this.fields["Club slug"];
+       const clubId = idFor("club", clubName, this.rows.clubs.length + 1);
+       this.rows.clubs.push(rowWithAttrs({
+         "data-club-id": clubId,
+-        "data-club-name": clubName
++        "data-club-name": clubName,
++        "data-club-slug": clubSlug
+       }));
+     }
+ 
+@@ -449,7 +451,8 @@ test("creating a club drives /admin/clubs and stores the generated club id from
+   const page = new FakePage();
+   page.rows.clubs.push(rowWithAttrs({
+     "data-club-id": "club-existing-1",
+-    "data-club-name": kootenayClubName
++    "data-club-name": kootenayClubName,
++    "data-club-slug": "kootenay-mountaineering-club"
+   }));
+   const expectations = [];
+   const world = worldWithPage(page);
+@@ -459,15 +462,31 @@ test("creating a club drives /admin/clubs and stores the generated club id from
+   assert.deepEqual(page.actions, [
+     ["goto", "http://127.0.0.1:4444/admin/clubs"],
+     ["fill", "Club name", kootenayClubName],
++    ["fill", "Club slug", "kootenay-mountaineering-club-2"],
+     ["click", "button", { name: "Create club" }]
+   ]);
+   assert.deepEqual(world.clubs[kootenayClubName], {
+     clubId: "club-kootenay-mountaineering-club-2",
+-    name: kootenayClubName
++    name: kootenayClubName,
++    slug: "kootenay-mountaineering-club-2"
+   });
+   assert.deepEqual(expectations.map((expectation) => expectation[0]), ["count", "visible"]);
+ });
+ 
++test("creating a club accepts and stores an explicit slug for acceptance setup", async () => {
++  const page = new FakePage();
++  const world = worldWithPage(page);
++
++  await createClub(world, kootenayClubName, { expect: fakeExpect([]), slug: "kmc" });
++
++  assert.ok(page.actions.some((action) => action[0] === "fill" && action[1] === "Club slug" && action[2] === "kmc"));
++  assert.deepEqual(world.clubs[kootenayClubName], {
++    clubId: "club-kootenay-mountaineering-club-1",
++    name: kootenayClubName,
++    slug: "kmc"
++  });
++});
++
+ test("browser command projection waits use bounded Playwright assertion timeouts", async () => {
+   const page = new FakePage();
+   const expectations = [];
+@@ -514,7 +533,13 @@ test("creating people and members uses accessible form labels and keeps browser
+   const page = new FakePage();
+   const expectations = [];
+   const world = worldWithPage(page);
+-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.clubs = {
++    [kootenayClubName]: {
++      clubId: "club-1",
++      name: kootenayClubName,
++      slug: "kootenay-mountaineering-club"
++    }
++  };
+ 
+   await createPeople(world, ["Alice", "Bob"], { expect: fakeExpect(expectations) });
+   await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
+@@ -551,7 +576,13 @@ test("sending a Kootenay member message drives the club form and opens the real
+   const page = new FakePage();
+   const expectations = [];
+   const world = worldWithPage(page);
+-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.clubs = {
++    [kootenayClubName]: {
++      clubId: "club-1",
++      name: kootenayClubName,
++      slug: "kootenay-mountaineering-club"
++    }
++  };
+   world.people = { Alice: { personId: "person-alice-1" } };
+ 
+   await sendMessageToKootenayMembers(world, "Alice", "Trip planning night", {
+@@ -578,7 +609,13 @@ test("member send flow opens compose from club home and stores the new message",
+   const page = new FakePage();
+   const expectations = [];
+   const world = worldWithPage(page);
+-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.clubs = {
++    [kootenayClubName]: {
++      clubId: "club-1",
++      name: kootenayClubName,
++      slug: "kootenay-mountaineering-club"
++    }
++  };
+   world.people = { Alice: { personId: "person-alice-1" } };
+ 
+   await sendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
+@@ -620,7 +657,13 @@ test("member failed-send flow stays on compose failure state with support guidan
+   const expectations = [];
+   const world = worldWithPage(page);
+   page.sendUnavailable = true;
+-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.clubs = {
++    [kootenayClubName]: {
++      clubId: "club-1",
++      name: kootenayClubName,
++      slug: "kootenay-mountaineering-club"
++    }
++  };
+   world.people = { Alice: { personId: "person-alice-1" } };
+ 
+   await trySendMemberMessageToKootenayMembers(world, "Alice", "Trip planning night", {
+@@ -653,7 +696,13 @@ test("member club home opening waits on the stable member home container", async
+   const page = new FakePage();
+   const expectations = [];
+   const world = worldWithPage(page);
+-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.clubs = {
++    [kootenayClubName]: {
++      clubId: "club-1",
++      name: kootenayClubName,
++      slug: "kootenay-mountaineering-club"
++    }
++  };
+ 
+   await openMemberClubHome(world, kootenayClubName, { expect: fakeExpect(expectations) });
+ 
+@@ -783,7 +832,13 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon
+   );
+   const expectations = [];
+   const world = worldWithPage(page);
+-  world.clubs = { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } };
++  world.clubs = {
++    [kootenayClubName]: {
++      clubId: "club-1",
++      name: kootenayClubName,
++      slug: "kootenay-mountaineering-club"
++    }
++  };
+   world.lastMessageSubject = "Trip planning night";
+   world.messages = {
+     "Trip planning night": { clubId: "club-1", messageId: "message-1", subject: "Trip planning night" }
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index 5002ef6..b030b7a 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -12,6 +12,6 @@
+ - [x] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
+ - [x] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
+ - [x] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
+-- [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
++- [x] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
+ - [ ] 014 Add tests for:
+ - [ ] 015 Run `dev check`.
+diff --git a/web/test/memba/accounts_test.exs b/web/test/memba/accounts_test.exs
+index 64a22e3..9915d47 100644
+--- a/web/test/memba/accounts_test.exs
++++ b/web/test/memba/accounts_test.exs
+@@ -135,7 +135,7 @@ defmodule Memba.AccountsTest do
+ 
+     assert :ok =
+              Membership.create_club(
+-               %{club_id: club_id, name: Keyword.fetch!(attrs, :club_name)},
++               membership_club_attrs(club_id: club_id, name: Keyword.fetch!(attrs, :club_name)),
+                consistency: :strong
+              )
+ 
+diff --git a/web/test/memba/membership/club_test.exs b/web/test/memba/membership/club_test.exs
+index e216c79..44b67d3 100644
+--- a/web/test/memba/membership/club_test.exs
++++ b/web/test/memba/membership/club_test.exs
+@@ -28,19 +28,25 @@ defmodule Memba.Membership.ClubTest do
+       assert {:error, :invalid_club_id} =
+                Club.execute(%Club{}, %CreateClub{
+                  club_id: nil,
+-                 name: "Kootenay Mountaineering Club"
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
+                })
+ 
+       assert {:error, :invalid_club_id} =
+                Club.execute(%Club{}, %CreateClub{
+                  club_id: "not-a-uuid",
+-                 name: "Kootenay Mountaineering Club"
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
+                })
+     end
+ 
+     test "rejects blank club names" do
+       assert {:error, :invalid_name} =
+-               Club.execute(%Club{}, %CreateClub{club_id: Ecto.UUID.generate(), name: "  "})
++               Club.execute(%Club{}, %CreateClub{
++                 club_id: Ecto.UUID.generate(),
++                 name: "  ",
++                 slug: "kmc"
++               })
+     end
+ 
+     test "rejects missing club slugs" do
+@@ -64,7 +70,8 @@ defmodule Memba.Membership.ClubTest do
+       assert {:error, :already_created} =
+                Club.execute(club, %CreateClub{
+                  club_id: club_id,
+-                 name: "Kootenay Mountaineering Club"
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
+                })
+     end
+   end
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index ee73c08..3424625 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -161,7 +161,7 @@ defmodule Memba.Membership.PublicApiTest do
+ 
+     assert :ok =
+              Membership.create_club(
+-               %{club_id: club_id, name: "Kootenay Mountaineering Club"},
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+                consistency: :strong
+              )
+ 
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 2f0e9eb..0a96367 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -129,10 +129,7 @@ defmodule Memba.Membership.QueryTest do
+       add_member(nelson.club_id, uppercase_alice.person_id)
+       add_member(other_club.club_id, other_person.person_id)
+ 
+-      Repo.insert!(%ClubProjection{
+-        club_id: inactive_club_id,
+-        name: "Inactive Club"
+-      })
++      insert_membership_club!(club_id: inactive_club_id, name: "Inactive Club")
+ 
+       Repo.insert!(%MembershipProjection{
+         membership_id: Ecto.UUID.generate(),
+diff --git a/web/test/memba_web/auth_gates_test.exs b/web/test/memba_web/auth_gates_test.exs
+index bbb747a..8b3ccc9 100644
+--- a/web/test/memba_web/auth_gates_test.exs
++++ b/web/test/memba_web/auth_gates_test.exs
+@@ -1,7 +1,6 @@
+ defmodule MembaWeb.AuthGatesTest do
+   use MembaWeb.ConnCase, async: false
+ 
+-  alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Person
+   alias Memba.Repo
+@@ -94,10 +93,7 @@ defmodule MembaWeb.AuthGatesTest do
+   end
+ 
+   defp create_club(attrs) do
+-    Repo.insert!(%Club{
+-      club_id: Ecto.UUID.generate(),
+-      name: Keyword.fetch!(attrs, :name)
+-    })
++    insert_membership_club!(attrs)
+   end
+ 
+   defp create_active_member(attrs) do
+@@ -105,10 +101,10 @@ defmodule MembaWeb.AuthGatesTest do
+     person_id = Ecto.UUID.generate()
+ 
+     club =
+-      Repo.insert!(%Club{
++      insert_membership_club!(
+         club_id: club_id,
+         name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+-      })
++      )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 95b1354..29351d5 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -6,7 +6,6 @@ defmodule MembaWeb.AuthControllerTest do
+   alias Memba.Accounts
+   alias Memba.Accounts.AuthEmail
+   alias Memba.Accounts.MagicToken
+-  alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Membership.Projections.Person
+   alias Memba.Repo
+@@ -224,10 +223,10 @@ defmodule MembaWeb.AuthControllerTest do
+     club_id = Ecto.UUID.generate()
+     person_id = Ecto.UUID.generate()
+ 
+-    Repo.insert!(%Club{
++    insert_membership_club!(
+       club_id: club_id,
+       name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+-    })
++    )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/controllers/member_message_detail_test.exs b/web/test/memba_web/controllers/member_message_detail_test.exs
+index 5d2aaf6..2b24104 100644
+--- a/web/test/memba_web/controllers/member_message_detail_test.exs
++++ b/web/test/memba_web/controllers/member_message_detail_test.exs
+@@ -259,10 +259,10 @@ defmodule MembaWeb.MemberMessageDetailTest do
+ 
+     club =
+       Repo.get(Club, club_id) ||
+-        Repo.insert!(%Club{
++        insert_membership_club!(
+           club_id: club_id,
+           name: Keyword.fetch!(attrs, :club_name)
+-        })
++        )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 60be47e..3744da3 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -464,11 +464,7 @@ defmodule MembaWeb.PageControllerTest do
+   end
+ 
+   defp create_club(attrs) do
+-    Repo.insert!(%Club{
+-      club_id: Ecto.UUID.generate(),
+-      name: Keyword.fetch!(attrs, :name),
+-      slug: Keyword.get(attrs, :slug)
+-    })
++    insert_membership_club!(attrs)
+   end
+ 
+   defp create_active_member(attrs) do
+@@ -478,10 +474,10 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     club =
+       Repo.get(Club, club_id) ||
+-        Repo.insert!(%Club{
++        insert_membership_club!(
+           club_id: club_id,
+           name: club_name
+-        })
++        )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 81329a9..21ff161 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -505,10 +505,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+   end
+ 
+   defp create_club(attrs) do
+-    Repo.insert!(%Club{
+-      club_id: Ecto.UUID.generate(),
+-      name: Keyword.fetch!(attrs, :name)
+-    })
++    insert_membership_club!(attrs)
+   end
+ 
+   defp create_active_member(attrs) do
+@@ -523,10 +520,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+ 
+     Repo.get(Club, club_id) ||
+-      Repo.insert!(%Club{
++      insert_membership_club!(
+         club_id: club_id,
+         name: club_name
+-      })
++      )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/live/member_message_live/new_send_test.exs b/web/test/memba_web/live/member_message_live/new_send_test.exs
+index f95c68b..23a5a18 100644
+--- a/web/test/memba_web/live/member_message_live/new_send_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_send_test.exs
+@@ -175,7 +175,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
+     if is_nil(Membership.get_club(club_id)) do
+       assert :ok =
+                Membership.create_club(
+-                 %{club_id: club_id, name: "Kootenay Mountaineering Club"},
++                 membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+                  consistency: :strong
+                )
+     end
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 4a1b54b..99ee180 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -226,10 +226,10 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     person_id = Ecto.UUID.generate()
+ 
+     Repo.get(Club, club_id) ||
+-      Repo.insert!(%Club{
++      insert_membership_club!(
+         club_id: club_id,
+         name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+-      })
++      )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/live/member_message_live/show_test.exs b/web/test/memba_web/live/member_message_live/show_test.exs
+index 9cabf6c..0a9439f 100644
+--- a/web/test/memba_web/live/member_message_live/show_test.exs
++++ b/web/test/memba_web/live/member_message_live/show_test.exs
+@@ -440,10 +440,10 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
+ 
+     club =
+       Repo.get(Club, club_id) ||
+-        Repo.insert!(%Club{
++        insert_membership_club!(
+           club_id: club_id,
+           name: club_name
+-        })
++        )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 75a5dc4..e3774dd 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -187,10 +187,10 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+ 
+     club =
+       Repo.get(Club, club_id) ||
+-        Repo.insert!(%Club{
++        insert_membership_club!(
+           club_id: club_id,
+           name: club_name
+-        })
++        )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/member_message_detail_loader_test.exs b/web/test/memba_web/member_message_detail_loader_test.exs
+index e0a4577..c2bb64b 100644
+--- a/web/test/memba_web/member_message_detail_loader_test.exs
++++ b/web/test/memba_web/member_message_detail_loader_test.exs
+@@ -115,10 +115,7 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+   end
+ 
+   defp create_club(attrs) do
+-    Repo.insert!(%Club{
+-      club_id: Ecto.UUID.generate(),
+-      name: Keyword.fetch!(attrs, :name)
+-    })
++    insert_membership_club!(attrs)
+   end
+ 
+   defp create_active_member(attrs) do
+@@ -128,10 +125,10 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
+ 
+     club =
+       Repo.get(Club, club_id) ||
+-        Repo.insert!(%Club{
++        insert_membership_club!(
+           club_id: club_id,
+           name: club_name
+-        })
++        )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/memba_web/user_auth_test.exs b/web/test/memba_web/user_auth_test.exs
+index 01c7c6e..7afffb7 100644
+--- a/web/test/memba_web/user_auth_test.exs
++++ b/web/test/memba_web/user_auth_test.exs
+@@ -192,10 +192,10 @@ defmodule MembaWeb.UserAuthTest do
+     person_id = Ecto.UUID.generate()
+ 
+     club =
+-      Repo.insert!(%Club{
++      insert_membership_club!(
+         club_id: club_id,
+         name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+-      })
++      )
+ 
+     Repo.insert!(%Person{
+       person_id: person_id,
+diff --git a/web/test/support/conn_case.ex b/web/test/support/conn_case.ex
+index a3d82da..6c50177 100644
+--- a/web/test/support/conn_case.ex
++++ b/web/test/support/conn_case.ex
+@@ -29,6 +29,7 @@ defmodule MembaWeb.ConnCase do
+       import Phoenix.ConnTest
+       import PhoenixTest
+       import MembaWeb.ConnCase
++      import Memba.MembershipFixtures
+     end
+   end
+ 
+diff --git a/web/test/support/data_case.ex b/web/test/support/data_case.ex
+index fea3960..58dd8fe 100644
+--- a/web/test/support/data_case.ex
++++ b/web/test/support/data_case.ex
+@@ -24,6 +24,7 @@ defmodule Memba.DataCase do
+       import Ecto.Changeset
+       import Ecto.Query
+       import Memba.DataCase
++      import Memba.MembershipFixtures
+     end
+   end
+ 
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 9366c25..3242584 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -28,6 +28,7 @@ defmodule Memba.EventSourcedCase do
+       import Ecto.Changeset
+       import Ecto.Query
+       import Memba.EventSourcedCase
++      import Memba.MembershipFixtures
+     end
+   end
+ 
+diff --git a/web/test/support/feature_case.ex b/web/test/support/feature_case.ex
+index 1d86c69..7adf6c5 100644
+--- a/web/test/support/feature_case.ex
++++ b/web/test/support/feature_case.ex
+@@ -14,6 +14,7 @@ defmodule MembaWeb.FeatureCase do
+       import Phoenix.ConnTest
+       import PhoenixTest
+       import MembaWeb.FeatureCase
++      import Memba.MembershipFixtures
+     end
+   end
+ 
+diff --git a/web/test/support/membership_fixtures.ex b/web/test/support/membership_fixtures.ex
+new file mode 100644
+index 0000000..f98b33c
+--- /dev/null
++++ b/web/test/support/membership_fixtures.ex
+@@ -0,0 +1,52 @@
++defmodule Memba.MembershipFixtures do
++  @moduledoc """
++  Shared fixtures for Membership projection tests.
++  """
++
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Slug
++  alias Memba.Repo
++
++  def membership_club_attrs(attrs \\ []) when is_list(attrs) do
++    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
++
++    name =
++      Keyword.get(attrs, :name, Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club"))
++
++    %{
++      club_id: club_id,
++      name: name,
++      slug: Keyword.get_lazy(attrs, :slug, fn -> membership_club_slug(name, club_id) end)
++    }
++  end
++
++  def membership_club_slug(name, club_id) when is_binary(name) and is_binary(club_id) do
++    suffix =
++      club_id
++      |> String.replace("-", "")
++      |> String.slice(0, 8)
++
++    max_base_length = Slug.max_length() - String.length(suffix) - 1
++
++    base =
++      name
++      |> Slug.default_from_name()
++      |> String.slice(0, max_base_length)
++      |> String.trim("-")
++
++    case base do
++      "" -> suffix
++      base -> "#{base}-#{suffix}"
++    end
++  end
++
++  def insert_membership_club!(attrs \\ []) when is_list(attrs) do
++    attrs = membership_club_attrs(attrs)
++
++    Repo.insert!(%Club{
++      club_id: attrs.club_id,
++      name: attrs.name,
++      slug: attrs.slug
++    })
++  end
++end
