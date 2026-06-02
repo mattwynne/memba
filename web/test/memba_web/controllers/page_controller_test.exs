@@ -464,11 +464,7 @@ defmodule MembaWeb.PageControllerTest do
   end
 
   defp create_club(attrs) do
-    Repo.insert!(%Club{
-      club_id: Ecto.UUID.generate(),
-      name: Keyword.fetch!(attrs, :name),
-      slug: Keyword.get(attrs, :slug)
-    })
+    insert_membership_club!(attrs)
   end
 
   defp create_active_member(attrs) do
@@ -478,10 +474,10 @@ defmodule MembaWeb.PageControllerTest do
 
     club =
       Repo.get(Club, club_id) ||
-        Repo.insert!(%Club{
+        insert_membership_club!(
           club_id: club_id,
           name: club_name
-        })
+        )
 
     Repo.insert!(%Person{
       person_id: person_id,

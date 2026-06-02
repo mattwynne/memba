@@ -28,6 +28,7 @@ defmodule Memba.EventSourcedCase do
       import Ecto.Changeset
       import Ecto.Query
       import Memba.EventSourcedCase
+      import Memba.MembershipFixtures
     end
   end
 

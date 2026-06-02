@@ -120,7 +120,13 @@ function worldWithBrowser() {
   return {
     baseUrl: "http://127.0.0.1:4444",
     browser: new FakeBrowser(),
-    clubs: { [kootenayClubName]: { clubId: "club-1", name: kootenayClubName } },
+    clubs: {
+      [kootenayClubName]: {
+        clubId: "club-1",
+        name: kootenayClubName,
+        slug: "kootenay-mountaineering-club"
+      }
+    },
     people: { Alice: { email: "alice@example.test", name: "Alice", personId: "person-alice" } }
   };
 }

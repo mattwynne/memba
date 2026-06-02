@@ -161,7 +161,7 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert :ok =
              Membership.create_club(
-               %{club_id: club_id, name: "Kootenay Mountaineering Club"},
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
                consistency: :strong
              )
 

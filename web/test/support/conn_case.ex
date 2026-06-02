@@ -29,6 +29,7 @@ defmodule MembaWeb.ConnCase do
       import Phoenix.ConnTest
       import PhoenixTest
       import MembaWeb.ConnCase
+      import Memba.MembershipFixtures
     end
   end
 

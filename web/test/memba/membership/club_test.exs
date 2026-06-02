@@ -28,19 +28,25 @@ defmodule Memba.Membership.ClubTest do
       assert {:error, :invalid_club_id} =
                Club.execute(%Club{}, %CreateClub{
                  club_id: nil,
-                 name: "Kootenay Mountaineering Club"
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
                })
 
       assert {:error, :invalid_club_id} =
                Club.execute(%Club{}, %CreateClub{
                  club_id: "not-a-uuid",
-                 name: "Kootenay Mountaineering Club"
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
                })
     end
 
     test "rejects blank club names" do
       assert {:error, :invalid_name} =
-               Club.execute(%Club{}, %CreateClub{club_id: Ecto.UUID.generate(), name: "  "})
+               Club.execute(%Club{}, %CreateClub{
+                 club_id: Ecto.UUID.generate(),
+                 name: "  ",
+                 slug: "kmc"
+               })
     end
 
     test "rejects missing club slugs" do
@@ -64,7 +70,8 @@ defmodule Memba.Membership.ClubTest do
       assert {:error, :already_created} =
                Club.execute(club, %CreateClub{
                  club_id: club_id,
-                 name: "Kootenay Mountaineering Club"
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
                })
     end
   end

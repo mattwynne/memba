@@ -1,7 +1,6 @@
 defmodule MembaWeb.AuthGatesTest do
   use MembaWeb.ConnCase, async: false
 
-  alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Membership.Projections.Person
   alias Memba.Repo
@@ -94,10 +93,7 @@ defmodule MembaWeb.AuthGatesTest do
   end
 
   defp create_club(attrs) do
-    Repo.insert!(%Club{
-      club_id: Ecto.UUID.generate(),
-      name: Keyword.fetch!(attrs, :name)
-    })
+    insert_membership_club!(attrs)
   end
 
   defp create_active_member(attrs) do
@@ -105,10 +101,10 @@ defmodule MembaWeb.AuthGatesTest do
     person_id = Ecto.UUID.generate()
 
     club =
-      Repo.insert!(%Club{
+      insert_membership_club!(
         club_id: club_id,
         name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
-      })
+      )
 
     Repo.insert!(%Person{
       person_id: person_id,

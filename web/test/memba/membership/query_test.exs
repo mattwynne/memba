@@ -129,10 +129,7 @@ defmodule Memba.Membership.QueryTest do
       add_member(nelson.club_id, uppercase_alice.person_id)
       add_member(other_club.club_id, other_person.person_id)
 
-      Repo.insert!(%ClubProjection{
-        club_id: inactive_club_id,
-        name: "Inactive Club"
-      })
+      insert_membership_club!(club_id: inactive_club_id, name: "Inactive Club")
 
       Repo.insert!(%MembershipProjection{
         membership_id: Ecto.UUID.generate(),
