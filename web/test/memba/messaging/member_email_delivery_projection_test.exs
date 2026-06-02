@@ -6,9 +6,10 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.EmailDeliveryOpened
+  alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Recipient
 
@@ -54,9 +55,9 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
 
   test "member email delivery projection applies the ADR 0006 status mapping" do
     %{message_id: message_id, recipients: recipients} =
-      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin", "Frank"])
+      send_message_with_recipients(["Alice", "Bob", "Carol", "Dana", "Erin"])
 
-    [_alice, bob, carol, dana, erin, frank] = recipients
+    [_alice, bob, carol, dana, erin] = recipients
 
     assert :ok =
              App.dispatch(
@@ -97,24 +98,6 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
                consistency: :strong
              )
 
-    assert :ok =
-             App.dispatch(
-               %ReportEmailDeliveryDelivered{
-                 message_id: message_id,
-                 delivery_id: frank.delivery_id
-               },
-               consistency: :strong
-             )
-
-    assert :ok =
-             App.dispatch(
-               %ReportEmailDeliveryOpened{
-                 message_id: message_id,
-                 delivery_id: frank.delivery_id
-               },
-               consistency: :strong
-             )
-
     receipts_by_recipient =
       message_id
       |> Messaging.list_member_email_deliverys()
@@ -125,9 +108,48 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
              "Bob" => "delivered",
              "Carol" => "delivery problem",
              "Dana" => "delivery problem",
-             "Erin" => "delivery problem",
-             "Frank" => "opened"
+             "Erin" => "delivery problem"
            }
+  end
+
+  test "member email delivery projection maps historic opened events to delivered" do
+    %{message_id: message_id, recipients: [_alice, bob]} =
+      send_message_with_recipients(["Alice", "Bob"])
+
+    assert :ok =
+             MemberEmailDeliveryProjector.handle(
+               %EmailDeliveryOpened{
+                 message_id: message_id,
+                 delivery_id: bob.delivery_id
+               },
+               %{
+                 handler_name: "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
+                 event_number: 10_000
+               }
+             )
+
+    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+             Messaging.get_member_email_delivery(message_id, bob.person_id)
+  end
+
+  test "member email delivery queries normalize historic opened rows to delivered" do
+    %{message_id: message_id, recipients: [_alice, bob]} =
+      send_message_with_recipients(["Alice", "Bob"])
+
+    MemberEmailDeliveryProjection
+    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
+    |> Repo.update_all(set: [status: "opened"])
+
+    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+             Messaging.get_member_email_delivery(bob.delivery_id)
+
+    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+             Messaging.get_member_email_delivery(message_id, bob.person_id)
+
+    assert %{"Bob" => "delivered"} =
+             message_id
+             |> Messaging.list_member_email_deliverys()
+             |> Map.new(&{&1.recipient_name, &1.status})
   end
 
   test "member email delivery queries return empty results for missing or invalid IDs" do

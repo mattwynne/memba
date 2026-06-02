@@ -60,7 +60,6 @@ Current code models the concept as email delivery:
 - `EmailDeliveryDelayed`
 - `EmailDeliveryBounced`
 - `EmailDeliverySpamComplaint`
-- `EmailDeliveryOpened`
 - `Memba.Messaging.Projections.EmailDelivery`
 - `messaging_recipient_deliveries`
 - fields and docs using `email_delivery`
@@ -74,7 +73,6 @@ Recommendation:
   - `EmailDeliveryDelayed`
   - `EmailDeliveryBounced`
   - `EmailDeliverySpamComplaintReceived`
-  - `EmailDeliveryOpened`
 - Keep recipient/person fields as attributes of an email delivery.
 
 ### 4. Revisit “member email delivery” naming

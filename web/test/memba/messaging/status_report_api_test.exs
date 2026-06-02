@@ -8,8 +8,8 @@ defmodule Memba.Messaging.StatusReportApiTest do
 
   test "public status reporting APIs dispatch delivery status commands" do
     message_id = Ecto.UUID.generate()
-    recipients = recipients(["Alice", "Bob", "Carol", "Dana", "Erin"])
-    [alice, bob, carol, dana, erin] = recipients
+    recipients = recipients(["Alice", "Bob", "Carol", "Dana"])
+    [alice, bob, carol, dana] = recipients
 
     assert :ok =
              App.dispatch(
@@ -51,18 +51,6 @@ defmodule Memba.Messaging.StatusReportApiTest do
              )
 
     assert :ok =
-             Messaging.report_email_delivery_delivered(
-               %{message_id: message_id, delivery_id: erin.delivery_id},
-               consistency: :strong
-             )
-
-    assert :ok =
-             Messaging.report_email_delivery_opened(
-               %{message_id: message_id, delivery_id: erin.delivery_id},
-               consistency: :strong
-             )
-
-    assert :ok =
              Messaging.report_email_delivery_spam_complaint(
                %{
                  message_id: message_id,
@@ -89,10 +77,13 @@ defmodule Memba.Messaging.StatusReportApiTest do
     assert Messaging.get_memba_staff_email_delivery(message_id, dana.person_id).status ==
              "bounced"
 
-    assert Messaging.get_memba_staff_email_delivery(message_id, erin.person_id).status == "opened"
-
     assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status ==
              "spam complaint"
+  end
+
+  test "public status reporting API does not expose opened reports" do
+    refute function_exported?(Messaging, :report_email_delivery_opened, 1)
+    refute function_exported?(Messaging, :report_email_delivery_opened, 2)
   end
 
   test "public status reporting APIs surface aggregate validation errors" do

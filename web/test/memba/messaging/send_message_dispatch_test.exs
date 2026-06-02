@@ -1,6 +1,8 @@
 defmodule Memba.Messaging.SendMessageDispatchTest do
   use Memba.EventSourcedCase, async: false
 
+  import ExUnit.CaptureLog
+
   alias Commanded.Commands.ExecutionResult
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -9,7 +11,6 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelivered
-  alias Memba.Messaging.Events.EmailDeliveryOpened
   alias Memba.Messaging.Message
   alias Memba.Messaging.Recipient
 
@@ -154,45 +155,20 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
                consistency: :strong
              )
 
-    assert {:ok,
-            %ExecutionResult{
-              aggregate_uuid: ^message_id,
-              aggregate_version: 4,
-              events: [
-                %EmailDeliveryOpened{
-                  message_id: ^message_id,
-                  delivery_id: ^delivery_id
-                }
-              ],
-              aggregate_state: %Message{
-                delivery_statuses: %{
-                  ^delivery_id => %{status: :opened, reason: nil}
-                }
-              }
-            }} =
-             App.dispatch(
-               %ReportEmailDeliveryOpened{
-                 message_id: message_id,
-                 delivery_id: delivery_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+    log =
+      capture_log(fn ->
+        assert {:error, :unregistered_command} =
+                 App.dispatch(
+                   %ReportEmailDeliveryOpened{
+                     message_id: message_id,
+                     delivery_id: delivery_id
+                   },
+                   returning: :execution_result,
+                   consistency: :strong
+                 )
+      end)
 
-    assert {:ok,
-            %ExecutionResult{
-              aggregate_uuid: ^message_id,
-              aggregate_version: 4,
-              events: []
-            }} =
-             App.dispatch(
-               %ReportEmailDeliveryOpened{
-                 message_id: message_id,
-                 delivery_id: delivery_id
-               },
-               returning: :execution_result,
-               consistency: :strong
-             )
+    assert log =~ "attempted to dispatch an unregistered command"
   end
 
   defp with_sender_recipient(%SendMessage{} = command) do

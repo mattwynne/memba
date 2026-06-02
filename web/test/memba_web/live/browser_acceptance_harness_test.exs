@@ -176,12 +176,6 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
                delivery_id: delivery_ids_by_name["Frank"]
              })
 
-    assert :ok =
-             report_email_delivery_opened(%{
-               message_id: message_id,
-               delivery_id: delivery_ids_by_name["Frank"]
-             })
-
     conn
     |> sign_in_staff()
     |> visit("/admin/messages/#{message_id}")
@@ -191,7 +185,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_member_email_delivery("Carol", "delivery problem")
     |> assert_member_email_delivery("Dana", "delivery problem")
     |> assert_member_email_delivery("Erin", "delivery problem")
-    |> assert_member_email_delivery("Frank", "opened")
+    |> assert_member_email_delivery("Frank", "delivered")
   end
 
   defp create_club(session, name) do
@@ -268,10 +262,6 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
   defp report_email_delivery_spam_complaint(attrs) do
     apply(Messaging, :report_email_delivery_spam_complaint, [attrs, [consistency: :strong]])
-  end
-
-  defp report_email_delivery_opened(attrs) do
-    apply(Messaging, :report_email_delivery_opened, [attrs, [consistency: :strong]])
   end
 
   defp send_projected_message_with_recipients(names) do

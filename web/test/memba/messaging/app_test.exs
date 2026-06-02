@@ -7,7 +7,6 @@ defmodule Memba.Messaging.AppTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.Router
@@ -30,8 +29,7 @@ defmodule Memba.Messaging.AppTest do
         ReportEmailDeliveryDelivered,
         ReportEmailDeliveryDelayed,
         ReportEmailDeliveryBounced,
-        ReportEmailDeliverySpamComplaint,
-        ReportEmailDeliveryOpened
+        ReportEmailDeliverySpamComplaint
       ])
 
     assert MapSet.new(App.__registered_commands__()) == expected_commands

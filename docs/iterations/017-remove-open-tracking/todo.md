@@ -1,0 +1,12 @@
+# Implementation TODO
+
+- [x] 001 Inspect current opened references in `web/lib`, `web/test`, `acceptance-tests/features`, active docs, and Postmark delivery code. Exclude old `docs/iterations/**` design/prototype artifacts from cleanup unless they are active validation inputs.
+- [x] 002 Update shared acceptance feature expectations to remove opened receipts.
+- [x] 003 Remove or deprecate the Messaging opened-report command/API/event path from current behaviour:
+- [x] 004 Update projections/read models and loaders so current status lists, summaries, and grouping functions do not include opened.
+- [x] 005 Update Postmark outbound delivery so it does not set `track_opens: true` or any equivalent open-tracking option.
+- [x] 006 Update Postmark webhook handling so open events are treated as unsupported and do not mutate delivery status.
+- [x] 007 Update member LiveViews/presentation modules/tests to remove opened receipt segments, groups, toggles, counts, data attributes, and copy.
+- [x] 008 Update Memba staff delivery views/tests to remove opened status expectations while preserving delivered/problem visibility.
+- [x] 009 Update active operational/current-app documentation, especially Postmark email docs, to remove open-tracking instructions or claims.
+- [x] 010 Run targeted tests while changing each layer, then run `dev check` and fix regressions.
