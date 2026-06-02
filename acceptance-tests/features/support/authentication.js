@@ -29,6 +29,7 @@ async function signInStaffForSetup(world) {
   await requestSignInLinkForEmail(world, staffEmail, "Setup Staff");
   await assertReceivesSignInLink(world, "Setup Staff");
   await followSignInLink(world, "Setup Staff");
+  await completeStaffOnboardingIfNeeded(world);
 }
 
 async function withStaffSetupWorld(world, action) {
@@ -198,8 +199,18 @@ async function assertStillSignedIn(world, personName) {
 }
 
 async function assertSignedInAsStaff(world, _personName) {
+  await completeStaffOnboardingIfNeeded(world);
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
   await playwrightExpect(world.page.getByRole("link", { name: "Clubs" })).toBeVisible();
+}
+
+async function completeStaffOnboardingIfNeeded(world) {
+  if (!currentPageUrl(world.page).includes("/auth/onboard")) {
+    return;
+  }
+
+  await world.page.getByLabel("Your name").fill("Acceptance Staff");
+  await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
 }
 
 async function openClubPage(world, clubName) {
@@ -289,6 +300,18 @@ function signInLinkFor(world, personName) {
   return link;
 }
 
+function currentPageUrl(page) {
+  if (!page) {
+    return "";
+  }
+
+  if (typeof page.url === "function") {
+    return page.url();
+  }
+
+  return page.currentUrl || "";
+}
+
 function signInEmailMatches(email, recipientEmail) {
   return (
     email.subject === signInSubject &&
@@ -298,7 +321,7 @@ function signInEmailMatches(email, recipientEmail) {
 }
 
 function signInLinkFromTextBody(textBody) {
-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
+  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
   return match && match[0];
 }
 
