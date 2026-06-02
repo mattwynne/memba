@@ -121,3 +121,27 @@ Validation:
 Remaining follow-up:
 
 - Consider adding a production smoke command that runs `Memba.Release.verify_schema!()` explicitly after deploy and before manual sign-in smoke tests.
+
+## Defect prevention lessons
+
+Date: 2026-06-01
+
+This was a production incident, not just a migration bug. The important lesson is that production state is another artifact in the delivery system, and it needs explicit verification after every deploy.
+
+Lessons learned:
+
+1. Applied migrations are immutable in practice. Once a migration version may have reached any shared or production database, changing that migration file is unsafe. Future schema changes must use a new migration, even if the old migration name or body is awkward.
+2. `schema_migrations` proves only that a version number was recorded. It does not prove the live schema matches current application expectations. Release workflows need post-migration assertions against real database shape.
+3. Green local tests do not protect against drift in a long-lived environment. Local/test databases are rebuilt from the current migration files, so they cannot reveal that production applied an older body for the same migration version.
+4. A public page health check is too shallow for an auth deploy. The first meaningful write in the sign-in flow exposed the drift. Smoke checks should exercise the riskiest changed path, not only page load or app boot.
+5. Manual production cleanup is itself a release operation. If we reset or clean production-like data, the script should verify schema shape and application invariants afterwards.
+6. Ambiguous naming is a weak signal worth acting on. The mismatch between `create_auth_magic_tokens.exs` and `auth_sign_in_tokens` made the historical state harder to reason about and should have triggered a closer migration-history check.
+7. Defect prevention belongs at several layers: migration discipline, release-time schema verification, post-deploy smoke tests, and clear operator errors. No single test is enough.
+
+Prevention checklist for future incidents/deploys:
+
+- If a migration has possibly run outside a disposable local database, do not edit it; add a new migration.
+- After release migrations, run schema verification against production before declaring the deploy healthy.
+- For auth/email changes, smoke-test token creation and delivery with a controlled address before handing over.
+- Treat any production reset/cleanup as scripted delivery work, with verification and captured output.
+- When a smoke test fails, first separate provider/configuration errors from database/schema errors by reading the server logs and checking release-migration evidence.
