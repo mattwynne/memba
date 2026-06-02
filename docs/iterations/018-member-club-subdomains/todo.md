@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect current routing, `PageController`, member dashboard LiveView, member message routes, compose route, auth return-to handling, and URL generation helpers.
+- [x] 001 Inspect current routing, `PageController`, member dashboard LiveView, member message routes, compose route, auth return-to handling, and URL generation helpers.
 - [ ] 002 Add configuration for the club-site base domain and generated URL scheme/port where needed:
 - [ ] 003 Add a small URL/host helper or equivalent web module that:
 - [ ] 004 Update home-page “My clubs” link generation to use the helper and each club's slug.
