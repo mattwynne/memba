@@ -128,11 +128,17 @@ defmodule MembaWeb.MemberMessageDetailTest do
       receipt_cases = [
         {alice, "sent", "Sending", "hero-clock"},
         {bob, "delivered", "Delivered", "hero-check-circle"},
-        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"},
-        {dana, "opened", "Opened", "hero-envelope-open"}
+        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"}
       ]
 
-      Enum.each(receipt_cases, fn {member, status, _label, _icon} ->
+      seeded_receipt_cases = [
+        {alice, "sent"},
+        {bob, "delivered"},
+        {carol, "delivery problem"},
+        {dana, "opened"}
+      ]
+
+      Enum.each(seeded_receipt_cases, fn {member, status} ->
         create_member_email_delivery(
           message_id: message.message_id,
           recipient_id: member.person_id,
@@ -166,7 +172,14 @@ defmodule MembaWeb.MemberMessageDetailTest do
         )
 
         assert_text_in(html, "#{group_selector} h3", label)
-        assert_exact_text(html, "#{group_selector} [data-testid='receipt-group-count']", "1")
+        expected_count = if status == "delivered", do: "2", else: "1"
+
+        assert_exact_text(
+          html,
+          "#{group_selector} [data-testid='receipt-group-count']",
+          expected_count
+        )
+
         assert_selector_exists(html, "#{group_selector} .#{icon}")
 
         refute html
@@ -175,6 +188,12 @@ defmodule MembaWeb.MemberMessageDetailTest do
                )
                |> Enum.any?()
       end)
+
+      refute html
+             |> LazyHTML.query(
+               "[data-testid='member-receipt-group'][data-receipt-status='opened']"
+             )
+             |> Enum.any?()
     end
 
     test "does not expose Memba-staff-only delivery fields on member message detail", %{

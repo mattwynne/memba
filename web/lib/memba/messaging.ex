@@ -149,7 +149,9 @@ defmodule Memba.Messaging do
   """
   def get_member_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MemberEmailDeliveryProjection, delivery_id)
+      MemberEmailDeliveryProjection
+      |> Repo.get(delivery_id)
+      |> normalize_member_email_delivery()
     else
       :error -> nil
     end
@@ -168,6 +170,7 @@ defmodule Memba.Messaging do
         message_id: message_id,
         recipient_id: recipient_id
       )
+      |> normalize_member_email_delivery()
     else
       :error -> nil
     end
@@ -186,6 +189,7 @@ defmodule Memba.Messaging do
       |> where([receipt], receipt.message_id == ^message_id)
       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
       |> Repo.all()
+      |> Enum.map(&normalize_member_email_delivery/1)
     else
       :error -> []
     end
@@ -198,7 +202,9 @@ defmodule Memba.Messaging do
   """
   def get_memba_staff_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MembaStaffEmailDeliveryProjection, delivery_id)
+      MembaStaffEmailDeliveryProjection
+      |> Repo.get(delivery_id)
+      |> normalize_memba_staff_email_delivery()
     else
       :error -> nil
     end
@@ -217,6 +223,7 @@ defmodule Memba.Messaging do
         message_id: message_id,
         recipient_id: recipient_id
       )
+      |> normalize_memba_staff_email_delivery()
     else
       :error -> nil
     end
@@ -234,6 +241,7 @@ defmodule Memba.Messaging do
     if is_list(opts) do
       with {:ok, query} <- operator_deliveries_query(opts) do
         Repo.all(query)
+        |> Enum.map(&normalize_memba_staff_email_delivery/1)
       else
         :error -> []
       end
@@ -258,9 +266,30 @@ defmodule Memba.Messaging do
         asc: deliverability.recipient_id
       )
       |> Repo.all()
+      |> Enum.map(&normalize_memba_staff_email_delivery/1)
     else
       :error -> []
     end
+  end
+
+  defp normalize_member_email_delivery(nil), do: nil
+
+  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{status: "opened"} = receipt) do
+    %{receipt | status: "delivered"}
+  end
+
+  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{} = receipt), do: receipt
+
+  defp normalize_memba_staff_email_delivery(nil), do: nil
+
+  defp normalize_memba_staff_email_delivery(
+         %MembaStaffEmailDeliveryProjection{status: "opened"} = delivery
+       ) do
+    %{delivery | status: "delivered", reason: nil}
+  end
+
+  defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
+    delivery
   end
 
   defp operator_deliveries_query(opts) do

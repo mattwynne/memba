@@ -8,6 +8,8 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Events.EmailDeliveryOpened
+  alias Memba.Messaging.Projectors.MemberEmailDelivery, as: MemberEmailDeliveryProjector
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Recipient
 
@@ -108,6 +110,46 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
              "Dana" => "delivery problem",
              "Erin" => "delivery problem"
            }
+  end
+
+  test "member email delivery projection maps historic opened events to delivered" do
+    %{message_id: message_id, recipients: [_alice, bob]} =
+      send_message_with_recipients(["Alice", "Bob"])
+
+    assert :ok =
+             MemberEmailDeliveryProjector.handle(
+               %EmailDeliveryOpened{
+                 message_id: message_id,
+                 delivery_id: bob.delivery_id
+               },
+               %{
+                 handler_name: "member-email-delivery-opened-compat-#{Ecto.UUID.generate()}",
+                 event_number: 10_000
+               }
+             )
+
+    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+             Messaging.get_member_email_delivery(message_id, bob.person_id)
+  end
+
+  test "member email delivery queries normalize historic opened rows to delivered" do
+    %{message_id: message_id, recipients: [_alice, bob]} =
+      send_message_with_recipients(["Alice", "Bob"])
+
+    MemberEmailDeliveryProjection
+    |> where([receipt], receipt.delivery_id == ^bob.delivery_id)
+    |> Repo.update_all(set: [status: "opened"])
+
+    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+             Messaging.get_member_email_delivery(bob.delivery_id)
+
+    assert %MemberEmailDeliveryProjection{status: "delivered"} =
+             Messaging.get_member_email_delivery(message_id, bob.person_id)
+
+    assert %{"Bob" => "delivered"} =
+             message_id
+             |> Messaging.list_member_email_deliverys()
+             |> Map.new(&{&1.recipient_name, &1.status})
   end
 
   test "member email delivery queries return empty results for missing or invalid IDs" do

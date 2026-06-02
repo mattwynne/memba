@@ -56,7 +56,7 @@ defmodule Memba.Messaging.Projectors.MembaStaffEmailDelivery do
   end)
 
   project(%EmailDeliveryOpened{} = event, fn multi ->
-    update_deliverability(multi, event.delivery_id, status: "opened", reason: nil)
+    update_deliverability(multi, event.delivery_id, status: "delivered", reason: nil)
   end)
 
   defp update_deliverability(multi, delivery_id, attrs) do
