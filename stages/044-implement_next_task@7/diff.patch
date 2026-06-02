@@ -1,0 +1,115 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index 783a6e8..e193110 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Implement slug generation and validation in a small Membership slug module or equivalent domain helper:
+ - [x] 005 Update `Membership.create_club/2` and relevant forms to use the generated default slug while allowing staff override.
+ - [x] 006 Add a migration to add `slug` to `membership_clubs`, backfill existing rows deterministically, set non-null, and create a unique index.
+-- [ ] 007 Update the club projector to write `slug` from `ClubCreated` events.
++- [x] 007 Update the club projector to write `slug` from `ClubCreated` events.
+ - [ ] 008 Do not support replay of old slug-less `ClubCreated` events. There is no live data yet; development/test event stores may be reset or backfilled as needed.
+ - [ ] 009 Add `Membership.get_club_by_slug/1`, using normalized lookup input only where safe and returning `nil` for invalid/unknown values.
+ - [ ] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
+diff --git a/web/lib/memba/membership/projections/club.ex b/web/lib/memba/membership/projections/club.ex
+index aa8e300..a42f1f7 100644
+--- a/web/lib/memba/membership/projections/club.ex
++++ b/web/lib/memba/membership/projections/club.ex
+@@ -8,7 +8,7 @@ defmodule Memba.Membership.Projections.Club do
+   @primary_key {:club_id, :binary_id, autogenerate: false}
+   schema "membership_clubs" do
+     field :name, :string
+-    field :slug, :string, virtual: true
++    field :slug, :string
+ 
+     timestamps(type: :utc_datetime_usec)
+   end
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index 2f87fc3..ade9948 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -15,7 +15,8 @@ defmodule Memba.Membership.Projectors.Club do
+   project(%ClubCreated{} = event, fn multi ->
+     Ecto.Multi.insert(multi, :membership_club, %ClubProjection{
+       club_id: event.club_id,
+-      name: event.name
++      name: event.name,
++      slug: event.slug
+     })
+   end)
+ end
+diff --git a/web/test/features/step_definitions/authentication_steps.exs b/web/test/features/step_definitions/authentication_steps.exs
+index c7ff53e..d3f3d37 100644
+--- a/web/test/features/step_definitions/authentication_steps.exs
++++ b/web/test/features/step_definitions/authentication_steps.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+   alias Memba.Accounts
+   alias Memba.Accounts.MagicToken
+   alias Memba.Membership
++  alias Memba.Membership.Slug
+   alias Memba.Repo
+ 
+   step "{word} is a member of Kootenay Mountaineering Club", %{args: [person_name]} = context do
+@@ -193,9 +194,13 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+       context
+     else
+       club_id = Ecto.UUID.generate()
++      slug = scenario_slug(context, club_name)
+ 
+       assert :ok =
+-               Membership.create_club(%{club_id: club_id, name: club_name}, consistency: :strong)
++               Membership.create_club(
++                 %{club_id: club_id, name: club_name, slug: slug},
++                 consistency: :strong
++               )
+ 
+       update_context_map(context, :clubs, club_name, club_id)
+     end
+@@ -304,6 +309,24 @@ defmodule Memba.Cucumber.AuthenticationSteps do
+   defp default_email_for("Pat"), do: "pat@memba.io"
+   defp default_email_for(person_name), do: email_for(person_name)
+ 
++  defp scenario_slug(context, club_name) do
++    suffix =
++      {Map.get(context, :scenario_name, "scenario"), club_name}
++      |> :erlang.phash2(1_000_000)
++      |> Integer.to_string(36)
++      |> String.downcase()
++
++    max_base_length = Slug.max_length() - String.length(suffix) - 1
++
++    base =
++      club_name
++      |> Slug.default_from_name()
++      |> String.slice(0, max_base_length)
++      |> String.trim("-")
++
++    "#{base}-#{suffix}"
++  end
++
+   defp email_for(name) do
+     normalized_name =
+       name
+diff --git a/web/test/memba/membership/club_projection_test.exs b/web/test/memba/membership/club_projection_test.exs
+index 273ad9f..ff26927 100644
+--- a/web/test/memba/membership/club_projection_test.exs
++++ b/web/test/memba/membership/club_projection_test.exs
+@@ -30,14 +30,16 @@ defmodule Memba.Membership.ClubProjectionTest do
+              App.dispatch(
+                %CreateClub{
+                  club_id: club_id,
+-                 name: "Kootenay Mountaineering Club"
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
+                },
+                consistency: :strong
+              )
+ 
+     assert %ClubProjection{
+              club_id: ^club_id,
+-             name: "Kootenay Mountaineering Club"
++             name: "Kootenay Mountaineering Club",
++             slug: "kmc"
+            } = Membership.get_club(club_id)
+   end
+ 
