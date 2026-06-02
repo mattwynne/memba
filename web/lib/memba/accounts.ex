@@ -50,7 +50,8 @@ defmodule Memba.Accounts do
   end
 
   @doc """
-  Request a sign-in link for a staff or active member email.
+  Request a sign-in link for a staff email or any known email address attached
+  to an active member.
 
   Unknown, invalid, and non-member addresses return `{:ok, nil}` so callers can
   render a neutral response without revealing whether the email is known.
@@ -63,7 +64,7 @@ defmodule Memba.Accounts do
         {:ok, nil}
 
       normalized_email ->
-        if sign_in_link_recipient?(normalized_email) do
+        if eligible_sign_in_email?(normalized_email) do
           create_sign_in_token(normalized_email, opts)
         else
           {:ok, nil}
@@ -176,7 +177,7 @@ defmodule Memba.Accounts do
     end
   end
 
-  defp sign_in_link_recipient?(email) do
+  defp eligible_sign_in_email?(email) do
     staff_email?(email) or list_active_clubs_for_email(email) != []
   end
 

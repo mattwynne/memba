@@ -60,6 +60,24 @@ defmodule Memba.AccountsTest do
                |> select([sign_in_token], sign_in_token.email)
                |> Repo.all()
     end
+
+    test "creates tokens for alternate email addresses attached to active members" do
+      now = ~U[2026-05-31 12:00:00.000000Z]
+
+      create_active_member(
+        club_name: "Kootenay Mountaineering Club",
+        email_addresses: [
+          %{email: "alice@example.com", is_primary: true},
+          %{email: "Alice.Work@Example.COM", is_primary: false}
+        ]
+      )
+
+      assert {:ok, %{token: token}} =
+               Accounts.request_sign_in_link(" alice.work@example.com ", now: now)
+
+      assert is_binary(token)
+      assert Repo.aggregate(SignInToken, :count) == 1
+    end
   end
 
   describe "consume_sign_in_token/2" do
@@ -148,11 +166,7 @@ defmodule Memba.AccountsTest do
     unless Membership.get_person(person_id) do
       assert :ok =
                Membership.create_person(
-                 %{
-                   person_id: person_id,
-                   name: "Test Member",
-                   email: Keyword.fetch!(attrs, :email)
-                 },
+                 create_person_attrs(attrs, person_id),
                  consistency: :strong
                )
     end
@@ -164,5 +178,20 @@ defmodule Memba.AccountsTest do
              )
 
     %{club_id: club_id, person_id: person_id}
+  end
+
+  defp create_person_attrs(attrs, person_id) do
+    base_attrs = %{
+      person_id: person_id,
+      name: "Test Member"
+    }
+
+    case Keyword.fetch(attrs, :email_addresses) do
+      {:ok, email_addresses} ->
+        Map.put(base_attrs, :email_addresses, email_addresses)
+
+      :error ->
+        Map.put(base_attrs, :email, Keyword.fetch!(attrs, :email))
+    end
   end
 end
