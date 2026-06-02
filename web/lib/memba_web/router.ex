@@ -55,6 +55,7 @@ defmodule MembaWeb.Router do
     pipe_through :browser
 
     get "/auth", AuthController, :new
+    get "/auth/check-email", AuthController, :sent
     post "/auth", AuthController, :create
     get "/auth/sign-in/:token", AuthController, :callback
     delete "/auth", AuthController, :delete

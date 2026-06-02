@@ -54,6 +54,20 @@ defmodule MembaWeb.AuthGatesTest do
       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
 
+    test "allow signed-in staff to see a club page without active membership", %{conn: conn} do
+      club = create_club(name: "Alpine Club")
+
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get(~p"/?#{[club_id: club.club_id]}")
+
+      response = html_response(conn, 200)
+
+      assert response =~ "Welcome to Alpine Club"
+      assert response =~ "Sign in to continue"
+    end
+
     test "forbid signed-in browsers without active membership in the requested club", %{
       conn: conn
     } do

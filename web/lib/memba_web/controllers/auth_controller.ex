@@ -14,14 +14,19 @@ defmodule MembaWeb.AuthController do
     render_sign_in(conn)
   end
 
+  def sent(conn, _params) do
+    conn
+    |> assign(:page_title, "Check your email")
+    |> assign(:notice, @neutral_notice)
+    |> render(:sent)
+  end
+
   def create(conn, params) do
     params
     |> email_param()
     |> request_and_deliver_sign_in_link(conn)
 
-    conn
-    |> put_flash(:info, @neutral_notice)
-    |> redirect(to: ~p"/auth")
+    redirect(conn, to: ~p"/auth/check-email")
   end
 
   def callback(conn, %{"token" => token}) do

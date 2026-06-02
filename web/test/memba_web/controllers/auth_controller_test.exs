@@ -48,20 +48,33 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "POST /auth" do
-    test "shows the same neutral response for known and unknown emails", %{conn: conn} do
+    test "redirects known and unknown emails to the same neutral acknowledgement page", %{
+      conn: conn
+    } do
       configure_auth_email()
       create_active_member(email: "alice@example.com")
 
       known_conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE@EXAMPLE.COM "}})
 
-      assert redirected_to(known_conn) == ~p"/auth"
-      assert flash(known_conn, :info) == neutral_notice()
+      assert redirected_to(known_conn) == ~p"/auth/check-email"
+      assert flash(known_conn, :info) == nil
 
       conn = Phoenix.ConnTest.recycle(conn)
       unknown_conn = post(conn, ~p"/auth", %{"auth" => %{"email" => "unknown@example.com"}})
 
-      assert redirected_to(unknown_conn) == ~p"/auth"
-      assert flash(unknown_conn, :info) == neutral_notice()
+      assert redirected_to(unknown_conn) == ~p"/auth/check-email"
+      assert flash(unknown_conn, :info) == nil
+    end
+
+    test "shows the sign-in link request acknowledgement page", %{conn: conn} do
+      conn = get(conn, ~p"/auth/check-email")
+      response = html_response(conn, 200)
+      html = LazyHTML.from_fragment(response)
+
+      assert response =~ "We’ve sent your sign-in link"
+      assert response =~ neutral_notice()
+      assert html |> LazyHTML.query("section#auth-sign-in-sent") |> Enum.any?()
+      assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
     end
 
     test "creates a sign-in token and sends a callback URL email for known member recipients", %{
@@ -72,7 +85,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE@EXAMPLE.COM "}})
 
-      assert redirected_to(conn) == ~p"/auth"
+      assert redirected_to(conn) == ~p"/auth/check-email"
       assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
@@ -88,7 +101,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " New.Staff@Memba.IO "}})
 
-      assert redirected_to(conn) == ~p"/auth"
+      assert redirected_to(conn) == ~p"/auth/check-email"
       assert [%SignInToken{email: "new.staff@memba.io"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
 
@@ -102,7 +115,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       conn = post(conn, ~p"/auth", %{"auth" => %{"email" => "unknown@example.com"}})
 
-      assert redirected_to(conn) == ~p"/auth"
+      assert redirected_to(conn) == ~p"/auth/check-email"
       assert Repo.all(SignInToken) == []
       assert_no_email_sent()
     end

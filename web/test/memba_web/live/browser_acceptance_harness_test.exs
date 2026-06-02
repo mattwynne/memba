@@ -32,6 +32,10 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_path("/admin/clubs/*")
     |> assert_has("#back-to-clubs-link[aria-label='Back to clubs']")
     |> assert_has("#back-to-clubs-link[href='/admin/clubs']")
+    |> assert_has(
+      "#staff-club-home-link[aria-label='Open Kootenay Mountaineering Club home page']"
+    )
+    |> assert_has("#staff-club-home-link[href^='/?club_id=']")
     |> assert_has("#new-person-form[aria-label='Create a person']")
     |> assert_has("#person-name-input[aria-label='Person name']")
     |> assert_has("#person-email-input[aria-label='Person email']")
@@ -76,6 +80,19 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has("#member-receipts[aria-label='Member email delivery statuses']")
     |> assert_has("#member-receipts [data-testid='member-receipt'][data-recipient-name='Alice']")
     |> assert_has("#member-receipts [data-testid='receipt-status'][data-receipt-status='sent']")
+  end
+
+  test "staff can open a club home page from the staff club page", %{conn: conn} do
+    conn
+    |> sign_in_staff()
+    |> visit("/admin/clubs")
+    |> create_club("Kootenay Mountaineering Club")
+    |> click_link("Kootenay Mountaineering Club")
+    |> assert_path("/admin/clubs/*")
+    |> click_link("Open club home page")
+    |> assert_has("#public-club-page-page", "Welcome to Kootenay Mountaineering Club")
+    |> assert_has("#public-club-page-sign-in-link[href='/auth']")
+    |> refute_has("#member-club-home")
   end
 
   test "developers can use browser routes to send a club message to active members", %{

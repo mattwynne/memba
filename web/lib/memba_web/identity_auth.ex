@@ -141,6 +141,9 @@ defmodule MembaWeb.IdentityAuth do
       conn.method == "GET" and is_nil(ensure_current_identity(conn).assigns.current_identity) ->
         conn
 
+      conn.method == "GET" and ensure_current_identity(conn).assigns.current_identity.staff? ->
+        conn
+
       true ->
         require_active_club_member(conn, [])
     end
