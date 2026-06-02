@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-02T02:24:55.246131743Z",
-  "last_event_at": "2026-06-02T05:32:27.098891490Z",
+  "last_event_at": "2026-06-02T05:32:45.019687693Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -30986,8 +30986,8 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-02T05:32:42.990483052Z",
-        "current_node": "validate_task",
+        "timestamp": "2026-06-02T05:32:47.056714572Z",
+        "current_node": "task_gate",
         "completed_nodes": [
           "start",
           "read_plan",
@@ -31082,7 +31082,8 @@
           "all_tasks_done",
           "implement_next_task",
           "pre_validate_snapshot",
-          "validate_task"
+          "validate_task",
+          "task_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -31091,7 +31092,7 @@
           "task_retry_available": false,
           "failure_signature": "",
           "internal.work_dir": "/workspace/memba",
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "internal.run_id": "01KT329V7X61YAG1PJ00TCBH59",
           "internal.retry_count.validate_task": 0,
           "task_list_needs_human": false,
@@ -31125,7 +31126,7 @@
           "internal.retry_count.start": 0,
           "response.all_tasks_done": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/016-person-email-addresses/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\nif [ ! -r \\\"$TODO_PATH\\\" ]; then\\n  echo 'missing-or-unreadable'\\n  exit 0\\nfi\\ngrep -n -E '^[[:space:]]*- \\\\[ \\\\] ' \\\"$TODO_PATH\\\" || true\"}{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "internal.retry_count.all_tasks_done": 0,
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "internal.retry_count.preflight_sandbox": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it recorded a clean working tree at implement checkpoint `bbc3696`.\n  - Live `git status --short` and `git diff` are clean.\n  - Recent log shows `471a10a pre_validate_snapshot` on top of `bbc3696 implement_next_task`.\n  - `git diff bbc3696^ bbc3696 -- docs/iterations/016-person-email-addresses/todo.md` shows exactly one ordinary task line changed:\n    - `015` from `- [ ]` to `- [x]`.\n  - Parent todo state shows `015` was the first unchecked task before the implement checkpoint.\n\n- **Implementation artifacts found.**\n  - Added `web/lib/memba_web/live/admin/person_email_address_form.ex` with repeated email-row normalization, add/remove row state, primary radio handling, name/email validation, duplicate detection, and server-error mapping.\n  - Updated `web/lib/memba_web/live/admin/people_live/new.ex` with repeated email rows, one primary radio, first row primary by default, add/remove controls, validation, and create submission using `Membership.create_person/2`.\n  - Updated `web/lib/memba_web/live/admin/people_live/edit.ex` with existing email rows, primary selection, add/remove controls, validation, and save submission using `Membership.replace_person_email_addresses/2`.\n  - Updated `web/test/memba_web/live/admin_people_live_test.exs` to cover new/edit rendering, create with primary+alternate addresses, malformed/no-primary/multiple-primary/duplicate validation, and replacing primary selection.\n  - No acceptance feature files or `acceptance-tests/` files were changed in the implement checkpoint.\n\n- **Tests run/results found.**\n  - `git diff --check bbc3696^ bbc3696` passed.\n  - Ran `PATH=\"$PWD/bin:$PATH\" dev check`.\n    - Initial validation attempts were blocked by a stale zombie repo-managed Postgres PID/lock, not by code failures.\n    - After clearing the stale zombie lock/socket, `dev check` passed:\n      - `343 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- **ADR/plan conformance notes.**\n  - Matches implementation plan task `015`.\n  - Preserves plan-required atomic replace-all Membership workflow.\n  - Uses Phoenix LiveView staff UI surfaces and Membership public APIs; no cross-context persistence reach-through found.\n  - Uses generated UUID person IDs for creation, not email as identity.\n  - Adds focused web-facing tests consistent with the project’s testing expectations.\n  - Task is small and independently checkpointed with a clear Fabro diff trail.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
           "command.output": "blob://sha256/c65b4f20b8c519cdf00612092a27950a74cd572e02dbacf326735787e2efcce0",
@@ -31343,7 +31344,7 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "wip_gate": 1,
           "implement_next_task": 15,
@@ -31354,7 +31355,7 @@
           "all_tasks_done": 15,
           "pre_validate_snapshot": 15,
           "validate_task": 15,
-          "task_gate": 14,
+          "task_gate": 15,
           "preflight_sandbox": 1
         }
       },
@@ -34575,7 +34576,12 @@
       "first_event_seq": 5595,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-02T05:32:42.986677298Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -34589,13 +34595,20 @@
       "output": null,
       "started_at": "2026-06-02T05:28:33.743678212Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 249244,
+        "inference_time_ms": 109082,
+        "tool_time_ms": 139421,
+        "active_time_ms": 248503
+      },
       "usage": {
-        "input_tokens": 563002,
-        "output_tokens": 1908,
-        "total_tokens": 1216133,
-        "reasoning_tokens": 1495,
+        "input_tokens": 728800,
+        "output_tokens": 3096,
+        "total_tokens": 1383503,
+        "reasoning_tokens": 1879,
         "cache_read_tokens": 649728,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 3680039
       },
       "model": {
         "provider": "openai",
@@ -34734,42 +34747,42 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 82833,
-        "usage_percent": 30.45330882352941,
+        "input_tokens": 82899,
+        "usage_percent": 30.477573529411764,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-02T05:32:26.975133041Z",
-        "event_seq": 5672,
+        "generated_at": "2026-06-02T05:32:42.985576475Z",
+        "event_seq": 5679,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1184,
-            "usage_percent": 0.43529411764705883
+            "tokens": 1180,
+            "usage_percent": 0.4338235294117647
           },
           {
             "category": "tools",
-            "tokens": 1684,
-            "usage_percent": 0.6191176470588236
+            "tokens": 1677,
+            "usage_percent": 0.6165441176470589
           },
           {
             "category": "memory",
-            "tokens": 371,
-            "usage_percent": 0.1363970588235294
+            "tokens": 370,
+            "usage_percent": 0.13602941176470587
           },
           {
             "category": "conversation",
-            "tokens": 79587,
-            "usage_percent": 29.259926470588237
+            "tokens": 79666,
+            "usage_percent": 29.288970588235294
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "task_gate@6": {
       "first_event_seq": 2457,
