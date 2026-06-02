@@ -1,4 +1,3 @@
-@wip
 Feature: Person email addresses
   People may be known by more than one email address while Memba still has one primary address for sending club mail.
 

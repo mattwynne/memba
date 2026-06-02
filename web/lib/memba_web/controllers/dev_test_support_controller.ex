@@ -9,6 +9,18 @@ defmodule MembaWeb.DevTestSupportController do
   alias Memba.Accounts.SignInToken
   alias Memba.Repo
 
+  @projection_versions_table :projection_versions
+  @projectors [
+    Memba.Membership.Projectors.Club,
+    Memba.Membership.Projectors.Membership,
+    Memba.Membership.Projectors.Person,
+    Memba.Messaging.Projectors.Message,
+    Memba.Messaging.Projectors.EmailDelivery,
+    Memba.Messaging.Projectors.MemberEmailDelivery,
+    Memba.Messaging.Projectors.MembaStaffEmailDelivery
+  ]
+  @public_reset_tables [:auth_sign_in_tokens]
+
   @messaging_email_delivery_providers %{
     "fake" => Memba.Messaging.EmailDeliveryProviders.Fake,
     "local" => Memba.Messaging.EmailDeliveryProviders.Local,
@@ -37,6 +49,19 @@ defmodule MembaWeb.DevTestSupportController do
     send_resp(conn, :no_content, "")
   end
 
+  def reset_acceptance_state(conn, _params) do
+    projector_child_ids = stop_event_sourced_projectors!()
+
+    try do
+      reset_event_store!()
+      reset_public_tables!()
+    after
+      start_event_sourced_projectors!(projector_child_ids)
+    end
+
+    send_resp(conn, :no_content, "")
+  end
+
   def configure_messaging_email_delivery_provider(conn, %{"provider" => provider_name}) do
     with {:ok, provider} <- Map.fetch(@messaging_email_delivery_providers, provider_name),
          true <- Code.ensure_loaded?(provider) do
@@ -49,5 +74,80 @@ defmodule MembaWeb.DevTestSupportController do
         |> put_status(:not_found)
         |> json(%{error: "unknown messaging email delivery provider"})
     end
+  end
+
+  defp stop_event_sourced_projectors! do
+    for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
+        module in @projectors do
+      if is_pid(pid) do
+        :ok = Supervisor.terminate_child(Memba.Supervisor, child_id)
+      end
+
+      child_id
+    end
+  end
+
+  defp start_event_sourced_projectors!(child_ids) do
+    Enum.each(child_ids, fn child_id ->
+      case Supervisor.restart_child(Memba.Supervisor, child_id) do
+        {:ok, _pid} -> :ok
+        {:ok, _pid, _info} -> :ok
+        {:error, :running} -> :ok
+      end
+    end)
+  end
+
+  defp reset_event_store! do
+    schema = event_store_schema()
+
+    Repo.transaction(fn ->
+      Repo.query!(~s(SET LOCAL search_path TO #{quote_identifier(schema)};))
+      Repo.query!(~s(SET LOCAL eventstore.reset TO 'on';))
+
+      Repo.query!("""
+      TRUNCATE TABLE snapshots, subscriptions, stream_events, streams, events
+      RESTART IDENTITY;
+      """)
+
+      Repo.query!("""
+      INSERT INTO streams (stream_id, stream_uuid, stream_version)
+      VALUES (0, '$all', 0);
+      """)
+    end)
+  end
+
+  defp reset_public_tables! do
+    tables =
+      :memba
+      |> Application.get_env(:event_sourced_projection_tables, [])
+      |> List.wrap()
+      |> then(fn tables -> @public_reset_tables ++ [@projection_versions_table | tables] end)
+      |> Enum.uniq()
+
+    if tables != [] do
+      table_names =
+        tables
+        |> Enum.map(&qualified_public_table_name/1)
+        |> Enum.join(", ")
+
+      Repo.query!("TRUNCATE TABLE #{table_names} RESTART IDENTITY CASCADE;")
+    end
+  end
+
+  defp event_store_schema do
+    Memba.EventStore.config()
+    |> Keyword.fetch!(:schema)
+    |> to_string()
+  end
+
+  defp qualified_public_table_name(table), do: ~s(public.#{quote_identifier(table)})
+
+  defp quote_identifier(identifier) do
+    escaped =
+      identifier
+      |> to_string()
+      |> String.replace(~s("), ~s(""))
+
+    ~s("#{escaped}")
   end
 end

@@ -59,6 +59,7 @@ Before(async function ({ pickle } = {}) {
     );
   });
 
+  await resetAcceptanceState(this);
 });
 
 After(async function ({ result } = {}) {
@@ -103,3 +104,15 @@ After(async function ({ result } = {}) {
     await this.browser.close();
   }
 });
+
+async function resetAcceptanceState(world) {
+  const response = await world.context.request.post(
+    new URL("/dev/test-support/reset", `${world.baseUrl}/`).toString()
+  );
+
+  if (response.status() !== 204) {
+    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
+
+    throw new Error(`Expected acceptance reset to return 204, got ${response.status()}: ${body}`);
+  }
+}

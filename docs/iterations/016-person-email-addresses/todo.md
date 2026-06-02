@@ -11,11 +11,11 @@
 - [x] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
 - [x] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
 - [x] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
-- [ ] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
-- [ ] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
-- [ ] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
-- [ ] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
-- [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
-- [ ] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
-- [ ] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
-- [ ] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
+- [x] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+- [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+- [x] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+- [x] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+- [x] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+- [x] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+- [x] 018 Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+- [x] 019 Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.

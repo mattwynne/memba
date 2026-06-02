@@ -56,10 +56,16 @@ defmodule Memba.MembershipFixtures do
   def membership_person_attrs(attrs \\ []) when is_list(attrs) do
     person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
 
+    email_addresses =
+      Keyword.get_lazy(attrs, :email_addresses, fn -> primary_email_addresses(attrs) end)
+
+    primary_email_address = primary_email_address!(email_addresses)
+
     %{
       person_id: person_id,
       name: Keyword.get(attrs, :name, "Test Member"),
-      email: Keyword.fetch!(attrs, :email)
+      email: Keyword.get(attrs, :email, primary_email_address.email),
+      email_addresses: email_addresses
     }
   end
 
@@ -75,11 +81,13 @@ defmodule Memba.MembershipFixtures do
             email: attrs.email
           })
 
-        insert_membership_person_email_address!(
-          person_id: attrs.person_id,
-          email: attrs.email,
-          is_primary: true
-        )
+        Enum.each(attrs.email_addresses, fn email_address ->
+          insert_membership_person_email_address!(
+            person_id: attrs.person_id,
+            email: email_address.email,
+            is_primary: email_address.is_primary
+          )
+        end)
 
         person
 
@@ -108,5 +116,16 @@ defmodule Memba.MembershipFixtures do
     else
       _not_found -> nil
     end
+  end
+
+  defp primary_email_addresses(attrs) do
+    email = Keyword.fetch!(attrs, :email)
+
+    [%{email: email, is_primary: true}]
+  end
+
+  defp primary_email_address!(email_addresses) do
+    Enum.find(email_addresses, & &1.is_primary) ||
+      raise ArgumentError, "membership person fixture requires exactly one primary email address"
   end
 end
