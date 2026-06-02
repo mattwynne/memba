@@ -14,8 +14,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
 
   @behaviour EmailDeliveryProvider
 
-  @default_from {"Memba", "messages@mail.memba.local"}
-
   @impl EmailDeliveryProvider
   def deliver(%EmailDeliveryRequest{channel: :email} = request) do
     request
@@ -28,18 +26,13 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
 
   defp email(%EmailDeliveryRequest{} = request) do
     new()
-    |> from(from_address())
+    |> from({request.sender_name, request.sender_address})
     |> maybe_reply_to(reply_to_address())
     |> to({request.recipient_name, request.recipient_address})
     |> subject(request.subject)
     |> text_body(request.body)
     |> html_body(html_body(request.body))
     |> put_provider_option(:metadata, metadata(request))
-  end
-
-  defp from_address do
-    provider_config()
-    |> Keyword.get(:from, @default_from)
   end
 
   defp reply_to_address do

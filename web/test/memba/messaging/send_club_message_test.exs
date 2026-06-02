@@ -111,6 +111,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
                recipient_id: ^alice_id,
                recipient_name: "Alice",
                recipient_address: "alice@example.com",
+               sender_name: "Alice",
+               sender_address: "alice@example.com",
                channel: :email,
                subject: "Trip planning night",
                body: "Bring route ideas."
@@ -122,6 +124,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
                recipient_id: ^bob_id,
                recipient_name: "Bob",
                recipient_address: "bob@example.com",
+               sender_name: "Alice",
+               sender_address: "alice@example.com",
                channel: :email,
                subject: "Trip planning night",
                body: "Bring route ideas."
@@ -133,6 +137,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
                recipient_id: ^carol_id,
                recipient_name: "Carol",
                recipient_address: "carol@example.com",
+               sender_name: "Alice",
+               sender_address: "alice@example.com",
                channel: :email,
                subject: "Trip planning night",
                body: "Bring route ideas."

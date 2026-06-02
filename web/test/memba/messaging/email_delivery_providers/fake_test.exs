@@ -28,6 +28,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.FakeTest do
       recipient_id: Ecto.UUID.generate(),
       recipient_name: name,
       recipient_address: String.downcase(name) <> "@example.com",
+      sender_name: "Bob",
+      sender_address: "bob@example.com",
       channel: :email,
       subject: "Trail day",
       body: "Meet at 9am."

@@ -414,6 +414,9 @@ defmodule Memba.Messaging do
   end
 
   defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
+    sender = Membership.get_person(command.sender_id)
+    sender_address = Membership.get_person_primary_email(command.sender_id)
+
     %EmailDeliveryRequest{
       message_id: command.message_id,
       club_id: command.club_id,
@@ -421,6 +424,8 @@ defmodule Memba.Messaging do
       recipient_id: recipient.person_id,
       recipient_name: recipient.name,
       recipient_address: recipient.email,
+      sender_name: sender.name,
+      sender_address: sender_address,
       channel: :email,
       subject: command.subject,
       body: command.body

@@ -35,7 +35,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"Memba", "messages@mail.memba.io"}
+    assert email.from == {"Bob Barker", "bob@example.com"}
     assert email.reply_to == {"", "help@memba.io"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
     assert email.subject == "Trip planning night"
@@ -130,6 +130,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
       recipient_id: Keyword.get_lazy(overrides, :recipient_id, &Ecto.UUID.generate/0),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
+      sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
+      sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
       channel: Keyword.get(overrides, :channel, :email),
       subject: Keyword.get(overrides, :subject, "Trip planning night"),
       body: Keyword.get(overrides, :body, "Bring route ideas.")

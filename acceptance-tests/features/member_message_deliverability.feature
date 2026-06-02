@@ -18,6 +18,7 @@ Feature: Member message deliverability
       And Alice should see the message was addressed to Alice, Bob, Carol, and Dana
       And Alice should not see Pat in the addressed members
       And Alice should see every addressed member's status as "Sending"
+      And each addressed member should receive an email from Alice
 
   Rule: Members see simple statuses for everyone addressed
 

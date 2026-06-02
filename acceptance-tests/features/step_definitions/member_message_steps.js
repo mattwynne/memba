@@ -160,6 +160,10 @@ Then("each addressed member should receive the email in the test mailbox", async
   await withStaffHarness(this, (staff) => assertEachAddressedMemberReceivedEmailInTestMailbox(staff));
 });
 
+Then("each addressed member should receive an email from {word}", async function (senderName) {
+  await withStaffHarness(this, (staff) => assertEachAddressedMemberReceivedEmailInTestMailbox(staff, { senderName }));
+});
+
 Then(
   "{word}'s status for {string} should be {string}",
   async function (viewerName, subject, expectedStatus) {
