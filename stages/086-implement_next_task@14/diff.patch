@@ -1,0 +1,321 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index d921f9b..be4df4a 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -13,7 +13,7 @@
+ - [x] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+ - [x] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+ - [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+-- [ ] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
++- [x] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+ - [ ] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+ - [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+ - [ ] 017 Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
+diff --git a/web/lib/memba_web/live/admin/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+index 92d2bea..afa7327 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -6,14 +6,13 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   alias Memba.Messaging
+ 
+   @empty_club %{"name" => "", "slug" => ""}
+-  @empty_person %{"name" => "", "email" => ""}
+   @empty_membership %{"person_id" => ""}
+   @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
+ 
+   @impl Phoenix.LiveView
+   def mount(%{"club_id" => club_id}, _session, socket) do
+     club = Membership.get_club(club_id)
+-    people = Membership.list_people()
++    people = Membership.list_people() |> people_with_email_summaries()
+     members = Membership.list_active_members_of_club(club_id)
+     messages = Messaging.list_messages_for_club(club_id)
+ 
+@@ -66,35 +65,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+     end
+   end
+ 
+-  def handle_event("create_person", %{"person" => person_params}, socket) do
+-    attrs =
+-      person_params
+-      |> Map.take(["name", "email"])
+-      |> Map.put("person_id", Ecto.UUID.generate())
+-
+-    case Membership.create_person(attrs, consistency: :strong) do
+-      :ok ->
+-        {:noreply,
+-         socket
+-         |> put_flash(:info, "Person created")
+-         |> assign(:person_form, to_form(@empty_person, as: :person))
+-         |> refresh_people()}
+-
+-      {:ok, _result} ->
+-        {:noreply,
+-         socket
+-         |> put_flash(:info, "Person created")
+-         |> assign(:person_form, to_form(@empty_person, as: :person))
+-         |> refresh_people()}
+-
+-      {:error, reason} ->
+-        {:noreply,
+-         socket
+-         |> put_flash(:error, "Could not create person: #{format_reason(reason)}")
+-         |> assign(:person_form, to_form(person_params, as: :person))}
+-    end
+-  end
+-
+   def handle_event("add_member", %{"membership" => membership_params}, socket) do
+     attrs =
+       membership_params
+@@ -251,34 +221,23 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+ 
+           <div class="grid gap-6 lg:grid-cols-2">
+             <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+-              <h2 class="text-lg font-semibold text-zinc-900">Create a person</h2>
++              <div class="flex items-start justify-between gap-4">
++                <div>
++                  <h2 class="text-lg font-semibold text-zinc-900">People</h2>
++                  <p class="mt-1 text-sm text-zinc-600">
++                    Manage staff-created people and their primary email address.
++                  </p>
++                </div>
+ 
+-              <.form
+-                for={@person_form}
+-                id="new-person-form"
+-                aria-label="Create a person"
+-                class="mt-4 space-y-4"
+-                phx-submit="create_person"
+-              >
+-                <.input
+-                  field={@person_form[:name]}
+-                  id="person-name-input"
+-                  label="Name"
+-                  aria-label="Person name"
+-                  required
+-                />
+-                <.input
+-                  field={@person_form[:email]}
+-                  id="person-email-input"
+-                  label="Email"
+-                  type="email"
+-                  aria-label="Person email"
+-                  required
+-                />
+-                <.button id="create-person-button" type="submit" aria-label="Create person">
+-                  Create person
+-                </.button>
+-              </.form>
++                <.link
++                  id="new-person-link"
++                  navigate={~p"/admin/clubs/#{@club_id}/people/new"}
++                  aria-label="New person"
++                  class="inline-flex shrink-0 rounded-full bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800"
++                >
++                  New person
++                </.link>
++              </div>
+ 
+               <div
+                 id="people"
+@@ -296,10 +255,36 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+                   data-person-id={person.person_id}
+                   data-person-name={person.name}
+                   aria-label={"Person #{person.name}"}
+-                  class="py-3"
++                  class="flex items-start justify-between gap-4 py-3"
+                 >
+-                  <p class="font-medium text-zinc-900">{person.name}</p>
+-                  <p class="text-sm text-zinc-500">{person.email}</p>
++                  <div class="min-w-0 space-y-1">
++                    <p class="font-medium text-zinc-900">{person.name}</p>
++                    <p
++                      id={"person-primary-email-#{person.person_id}"}
++                      data-testid="person-primary-email"
++                      class="text-sm text-zinc-600"
++                    >
++                      Primary: <span class="font-medium text-zinc-800">{person.primary_email}</span>
++                    </p>
++                    <p
++                      id={"person-alternate-summary-#{person.person_id}"}
++                      data-testid="person-alternate-summary"
++                      data-alternate-count={person.alternate_count}
++                      class="text-sm text-zinc-500"
++                    >
++                      {alternate_email_summary(person)}
++                    </p>
++                  </div>
++
++                  <.link
++                    id={"edit-person-link-#{person.person_id}"}
++                    navigate={~p"/admin/clubs/#{@club_id}/people/#{person.person_id}/edit"}
++                    data-testid="edit-person-link"
++                    aria-label={"Edit #{person.name}"}
++                    class="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:border-blue-300 hover:text-blue-700"
++                  >
++                    Edit
++                  </.link>
+                 </div>
+               </div>
+             </section>
+@@ -447,7 +432,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   defp assign_forms(socket) do
+     socket
+     |> assign(:club_form, to_form(club_form_params(socket.assigns.club), as: :club))
+-    |> assign(:person_form, to_form(@empty_person, as: :person))
+     |> assign(:membership_form, to_form(@empty_membership, as: :membership))
+     |> assign(:message_form, to_form(@empty_message, as: :message))
+   end
+@@ -461,14 +445,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+     |> assign_club_slug_feedback(current_club_slug(club))
+   end
+ 
+-  defp refresh_people(socket) do
+-    people = Membership.list_people()
+-
+-    socket
+-    |> assign(:person_options, person_options(people))
+-    |> stream(:people, people, reset: true, dom_id: &"person-#{&1.person_id}")
+-  end
+-
+   defp refresh_members(socket) do
+     members = Membership.list_active_members_of_club(socket.assigns.club_id)
+ 
+@@ -488,6 +464,30 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+ 
+   defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
+ 
++  defp people_with_email_summaries(people) do
++    Enum.map(people, fn person ->
++      alternate_emails = Membership.list_person_alternate_emails(person.person_id)
++
++      %{
++        person_id: person.person_id,
++        name: person.name,
++        primary_email: person.email,
++        alternate_emails: alternate_emails,
++        alternate_count: length(alternate_emails)
++      }
++    end)
++  end
++
++  defp alternate_email_summary(%{alternate_count: 0}), do: "No alternate emails"
++
++  defp alternate_email_summary(%{alternate_count: 1, alternate_emails: [email]}) do
++    "1 alternate email: #{email}"
++  end
++
++  defp alternate_email_summary(%{alternate_count: count, alternate_emails: emails}) do
++    "#{count} alternate emails: #{Enum.join(emails, ", ")}"
++  end
++
+   defp club_form_params(nil), do: @empty_club
+ 
+   defp club_form_params(club) do
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+index da310b1..dbb3af0 100644
+--- a/web/test/memba_web/live/admin/clubs_live/show_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -134,6 +134,50 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+     refute has_element?(view, "#update-club-button[disabled]")
+   end
+ 
++  test "people list links to dedicated create and edit pages and summarizes email addresses", %{
++    conn: conn
++  } do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
++
++    insert_membership_person_email_address!(
++      person_id: person.person_id,
++      email: "alice@work.example",
++      is_primary: false
++    )
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club.club_id}")
++
++    refute has_element?(view, "#new-person-form")
++    assert has_element?(view, "#new-person-link[href='/admin/clubs/#{club.club_id}/people/new']")
++
++    assert has_element?(
++             view,
++             "#person-#{person.person_id} [data-testid='person-primary-email']",
++             "alice@example.com"
++           )
++
++    assert has_element?(
++             view,
++             "#person-#{person.person_id} [data-testid='person-alternate-summary'][data-alternate-count='1']",
++             "1 alternate email"
++           )
++
++    assert has_element?(
++             view,
++             "#person-#{person.person_id} [data-testid='person-alternate-summary']",
++             "alice@work.example"
++           )
++
++    assert has_element?(
++             view,
++             "#edit-person-link-#{person.person_id}[href='/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit']"
++           )
++  end
++
+   defp input_value(html, selector) do
+     values =
+       html
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 7a3496a..78b0560 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -1,6 +1,7 @@
+ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  alias Memba.Membership
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
+@@ -36,10 +37,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+       "#staff-club-home-link[aria-label='Open Kootenay Mountaineering Club home page']"
+     )
+     |> assert_has("#staff-club-home-link[href^='/?club_id=']")
+-    |> assert_has("#new-person-form[aria-label='Create a person']")
+-    |> assert_has("#person-name-input[aria-label='Person name']")
+-    |> assert_has("#person-email-input[aria-label='Person email']")
+-    |> assert_has("#create-person-button[aria-label='Create person']")
++    |> assert_has("#new-person-link[aria-label='New person'][href^='/admin/clubs/']")
++    |> refute_has("#new-person-form")
+     |> assert_has("#people[aria-label='People']")
+     |> assert_has("#add-member-form[aria-label='Add a member']")
+     |> assert_has("#member-person-select[aria-label='Person to add as member']")
+@@ -206,13 +205,20 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+   end
+ 
+   defp create_person(session, name) do
++    current_path = PhoenixTest.Driver.current_path(session)
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: Ecto.UUID.generate(),
++                 name: name,
++                 email: email_for(name)
++               },
++               consistency: :strong
++             )
++
+     session
+-    |> within("#new-person-form", fn session ->
+-      session
+-      |> fill_in("Name", with: name)
+-      |> fill_in("Email", with: email_for(name))
+-      |> click_button("Create person")
+-    end)
++    |> visit(current_path)
+     |> assert_has("#people [data-testid='person-row']", name)
+   end
+ 
