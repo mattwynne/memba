@@ -117,10 +117,63 @@ defmodule MembaWeb.ResendWebhookControllerTest do
     assert detail =~ "Unsupported Resend webhook event type"
   end
 
+  test "accepts signed Resend webhooks when a signing secret is configured", %{conn: conn} do
+    configure_resend_webhook_signing_secret()
+    %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
+    payload = realistic_resend_payload(:delivered, message, bob)
+
+    conn = post_signed_resend_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
+    end)
+  end
+
+  test "rejects unsigned Resend webhooks when a signing secret is configured", %{conn: conn} do
+    configure_resend_webhook_signing_secret()
+    %{recipients: [bob]} = message = send_message_to(["Bob"])
+
+    conn = post_resend_event(conn, realistic_resend_payload(:delivered, message, bob))
+
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 401)
+    assert detail =~ "Missing Resend webhook signature header"
+  end
+
+  test "rejects incorrectly signed Resend webhooks", %{conn: conn} do
+    configure_resend_webhook_signing_secret()
+    %{recipients: [bob]} = message = send_message_to(["Bob"])
+    payload = realistic_resend_payload(:delivered, message, bob)
+
+    conn = post_signed_resend_event(conn, payload, signature: "v1,not-the-signature")
+
+    assert %{"errors" => %{"detail" => "Invalid Resend webhook signature"}} =
+             json_response(conn, 401)
+  end
+
   defp post_resend_event(conn, payload) do
     conn
     |> put_req_header("content-type", "application/json")
     |> post(~p"/webhooks/resend", Jason.encode!(payload))
+  end
+
+  defp post_signed_resend_event(conn, payload, opts \\ []) do
+    body = Jason.encode!(payload)
+    svix_id = Keyword.get(opts, :svix_id, "msg_123")
+
+    svix_timestamp =
+      Keyword.get(opts, :svix_timestamp, System.system_time(:second) |> to_string())
+
+    signature =
+      Keyword.get_lazy(opts, :signature, fn -> signature(svix_id, svix_timestamp, body) end)
+
+    conn
+    |> put_req_header("content-type", "application/json")
+    |> put_req_header("svix-id", svix_id)
+    |> put_req_header("svix-timestamp", svix_timestamp)
+    |> put_req_header("svix-signature", signature)
+    |> post(~p"/webhooks/resend", body)
   end
 
   defp send_message_to(names) do
@@ -195,6 +248,24 @@ defmodule MembaWeb.ResendWebhookControllerTest do
       %{"name" => "memba_club_id", "value" => club_id},
       %{"name" => "memba_email_kind", "value" => "member_message"}
     ]
+  end
+
+  defp configure_resend_webhook_signing_secret do
+    Application.put_env(:memba, MembaWeb.ResendWebhookSignature,
+      signing_secret: test_signing_secret()
+    )
+
+    on_exit(fn -> Application.delete_env(:memba, MembaWeb.ResendWebhookSignature) end)
+  end
+
+  defp signature(svix_id, svix_timestamp, body) do
+    secret = test_signing_secret() |> String.replace_prefix("whsec_", "") |> Base.decode64!()
+    signed_content = [svix_id, svix_timestamp, body] |> Enum.join(".")
+    "v1," <> Base.encode64(:crypto.mac(:hmac, :sha256, secret, signed_content))
+  end
+
+  defp test_signing_secret do
+    "whsec_" <> Base.encode64("test-signing-secret")
   end
 
   defp email_for(name) do
