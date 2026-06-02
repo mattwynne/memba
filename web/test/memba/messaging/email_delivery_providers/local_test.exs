@@ -33,7 +33,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     assert :ok = Local.deliver(request)
 
     assert_email_sent(fn email ->
-      assert email.from == {"Memba", "messages@mail.memba.io"}
+      assert email.from == {"Bob", "bob@example.test"}
       assert email.reply_to == {"Matt Wynne", "matt@mattwynne.net"}
       assert email.to == [{"Alice", "alice@example.test"}]
       assert email.subject == "Trip planning night"
@@ -63,6 +63,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       recipient_id: Keyword.get_lazy(overrides, :recipient_id, &Ecto.UUID.generate/0),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.test"),
+      sender_name: Keyword.get(overrides, :sender_name, "Bob"),
+      sender_address: Keyword.get(overrides, :sender_address, "bob@example.test"),
       channel: Keyword.get(overrides, :channel, :email),
       subject: Keyword.get(overrides, :subject, "Trip planning night"),
       body: Keyword.get(overrides, :body, "Bring route ideas.")

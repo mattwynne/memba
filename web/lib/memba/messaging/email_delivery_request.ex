@@ -15,6 +15,8 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
     :recipient_id,
     :recipient_name,
     :recipient_address,
+    :sender_name,
+    :sender_address,
     :channel,
     :subject,
     :body
@@ -26,6 +28,8 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
     :recipient_id,
     :recipient_name,
     :recipient_address,
+    :sender_name,
+    :sender_address,
     :channel,
     :subject,
     :body
@@ -38,6 +42,8 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
           recipient_id: Ecto.UUID.t(),
           recipient_name: String.t(),
           recipient_address: String.t(),
+          sender_name: String.t(),
+          sender_address: String.t(),
           channel: :email,
           subject: String.t(),
           body: String.t()

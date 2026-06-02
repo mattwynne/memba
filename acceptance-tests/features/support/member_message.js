@@ -1027,7 +1027,7 @@ async function assertEachDeliverySentThroughEmailProvider(
   return world;
 }
 
-async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
+async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { senderName } = {}) {
   ensureState(world);
 
   const subject = world.lastMessageSubject;
@@ -1053,11 +1053,18 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
     const person = world.people[recipientName];
     assert.ok(person, `Expected ${recipientName} to have been created`);
 
+    const sender = senderName ? world.people[senderName] : null;
+
+    if (senderName) {
+      assert.ok(sender, `Expected ${senderName} to have been created`);
+    }
+
     const matchingEmail = newEmails.find(
       (email) =>
         email.subject === subject &&
         email.text_body === message.body &&
-        email.to.some((recipient) => recipient.includes(person.email))
+        email.to.some((recipient) => recipient.includes(person.email)) &&
+        (!sender || mailboxEmailFrom(email).includes(sender.email))
     );
 
     assertFinalBrowserState(`test mailbox email for ${recipientName}`, () =>
@@ -1065,7 +1072,7 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world) {
         matchingEmail,
         `Expected a mailbox email for ${recipientName} <${person.email}> with subject ${JSON.stringify(
           subject
-        )}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+        )}${sender ? ` from ${senderName} <${sender.email}>` : ""}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
       )
     );
   }
@@ -1528,8 +1535,19 @@ function mailboxMessageId(email) {
   return email && email.headers && email.headers["Message-ID"];
 }
 
+function mailboxEmailFrom(email) {
+  const from = email && email.from;
+
+  if (Array.isArray(from)) {
+    return from.join(" ");
+  }
+
+  return String(from || "");
+}
+
 function mailboxEmailSummary(email) {
   return {
+    from: email.from,
     subject: email.subject,
     to: email.to,
     text_body: email.text_body
@@ -1591,6 +1609,7 @@ module.exports = {
   addMembers,
   appUrl,
   assertEveryAddressedMemberEmailDeliveryStatus,
+  assertEveryAddressedMemberReceiptStatus: assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachDeliverySentThroughEmailProvider,
@@ -1599,6 +1618,7 @@ module.exports = {
   assertMemberMessageAddressedTo,
   assertMemberMessageNotAddressedTo,
   assertMemberEmailDeliveryStatus,
+  assertMemberReceiptStatus: assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
