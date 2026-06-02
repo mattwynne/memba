@@ -26,7 +26,7 @@ green than before.
 | 014 | 2026-06-01 | merged | Member dashboard LiveView polish | [plan](014-member-dashboard-liveview-polish/plan.md) |
 | 015 | 2026-06-01 | merged | Club slugs and public club subdomains | [plan](015-club-slugs/plan.md) |
 | 016 | 2026-06-01 | implementing | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
-| 017 | 2026-06-01 | ready | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |
+| 017 | 2026-06-01 | validated | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |
 
 Status notes:
 
