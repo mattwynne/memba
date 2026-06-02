@@ -1,0 +1,240 @@
+diff --git a/docs/iterations/015-club-slugs/todo.md b/docs/iterations/015-club-slugs/todo.md
+index b03567d..98c6f03 100644
+--- a/docs/iterations/015-club-slugs/todo.md
++++ b/docs/iterations/015-club-slugs/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Do not support replay of old slug-less `ClubCreated` events. There is no live data yet; development/test event stores may be reset or backfilled as needed.
+ - [x] 009 Add `Membership.get_club_by_slug/1`, using normalized lookup input only where safe and returning `nil` for invalid/unknown values.
+ - [x] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
+-- [ ] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
++- [x] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
+ - [ ] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
+ - [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.
+ - [ ] 014 Add tests for:
+diff --git a/web/lib/memba_web/live/admin/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+index 6b42284..a24d223 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -22,6 +22,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+      |> assign(:club_id, club_id)
+      |> assign(:club, club)
+      |> assign_forms()
++     |> assign_club_slug_feedback(current_club_slug(club))
+      |> assign(:person_options, person_options(people))
+      |> assign(:member_options, member_options(members))
+      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
+@@ -30,6 +31,13 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+   end
+ 
+   @impl Phoenix.LiveView
++  def handle_event("validate_club_slug", %{"club" => club_params}, socket) do
++    {:noreply,
++     socket
++     |> assign(:club_form, to_form(club_params, as: :club))
++     |> assign_club_slug_feedback(Map.get(club_params, "slug"))}
++  end
++
+   def handle_event("update_club", %{"club" => club_params}, socket) do
+     attrs =
+       club_params
+@@ -53,7 +61,8 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+         {:noreply,
+          socket
+          |> put_flash(:error, "Could not update club: #{format_reason(reason)}")
+-         |> assign(:club_form, to_form(club_params, as: :club))}
++         |> assign(:club_form, to_form(club_params, as: :club))
++         |> assign_club_slug_feedback(Map.get(club_params, "slug"))}
+     end
+   end
+ 
+@@ -184,6 +193,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+               id="edit-club-form"
+               aria-label="Edit club"
+               class="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
++              phx-change="validate_club_slug"
+               phx-submit="update_club"
+             >
+               <.input
+@@ -199,14 +209,30 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+                   id="edit-club-slug-input"
+                   label="Slug"
+                   aria-label="Club slug"
++                  aria-describedby="edit-club-slug-help edit-club-slug-feedback"
++                  aria-invalid={@club_slug_feedback.status in ["invalid", "taken"]}
+                   maxlength={Slug.max_length()}
+                   required
+                 />
+                 <p id="edit-club-slug-help" class="mt-1 text-xs text-zinc-500">
+                   Use lowercase letters, numbers, and hyphens.
+                 </p>
++                <p
++                  id="edit-club-slug-feedback"
++                  role="status"
++                  aria-live="polite"
++                  data-status={@club_slug_feedback.status}
++                  class={slug_feedback_class(@club_slug_feedback)}
++                >
++                  {@club_slug_feedback.message}
++                </p>
+               </div>
+-              <.button id="update-club-button" type="submit" aria-label="Save club">
++              <.button
++                id="update-club-button"
++                type="submit"
++                aria-label="Save club"
++                disabled={not @club_slug_feedback.valid}
++              >
+                 Save club
+               </.button>
+             </.form>
+@@ -421,6 +447,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+     socket
+     |> assign(:club, club)
+     |> assign(:club_form, to_form(club_form_params(club), as: :club))
++    |> assign_club_slug_feedback(current_club_slug(club))
+   end
+ 
+   defp refresh_people(socket) do
+@@ -456,5 +483,66 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+     %{"name" => club.name, "slug" => club.slug}
+   end
+ 
++  defp current_club_slug(nil), do: ""
++  defp current_club_slug(club), do: club.slug
++
++  defp assign_club_slug_feedback(socket, slug) do
++    assign(socket, :club_slug_feedback, club_slug_feedback(socket.assigns.club_id, slug))
++  end
++
++  defp club_slug_feedback(club_id, slug) do
++    case Slug.validate(slug) do
++      {:ok, valid_slug} ->
++        availability_feedback(club_id, valid_slug)
++
++      {:error, reason} ->
++        %{
++          status: "invalid",
++          valid: false,
++          message: invalid_slug_message(reason)
++        }
++    end
++  end
++
++  defp availability_feedback(club_id, slug) do
++    case Membership.get_club_by_slug(slug) do
++      nil ->
++        available_slug_feedback()
++
++      %{club_id: ^club_id} ->
++        available_slug_feedback()
++
++      _club ->
++        %{
++          status: "taken",
++          valid: false,
++          message: "This slug is already used by another club."
++        }
++    end
++  end
++
++  defp available_slug_feedback do
++    %{
++      status: "available",
++      valid: true,
++      message: "This slug is valid and available."
++    }
++  end
++
++  defp invalid_slug_message(:blank), do: "Enter a slug."
++
++  defp invalid_slug_message(:too_long),
++    do: "Slug must be #{Slug.max_length()} characters or fewer."
++
++  defp invalid_slug_message(_reason) do
++    "Slug must use lowercase letters, numbers, and hyphens with no leading or trailing hyphen."
++  end
++
++  defp slug_feedback_class(%{status: "available"}),
++    do: "mt-1 text-xs font-medium text-emerald-700"
++
++  defp slug_feedback_class(%{status: "taken"}), do: "mt-1 text-xs font-medium text-red-700"
++  defp slug_feedback_class(_feedback), do: "mt-1 text-xs font-medium text-amber-700"
++
+   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
+ end
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+index be6f7c7..da310b1 100644
+--- a/web/test/memba_web/live/admin/clubs_live/show_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -69,6 +69,71 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+              Membership.get_club(club_id)
+   end
+ 
++  test "slug validation feedback updates live while editing", %{conn: conn} do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club_id}")
++
++    view
++    |> form("#edit-club-form", club: %{name: "KMC", slug: "kmc club!"})
++    |> render_change()
++
++    assert has_element?(view, "#edit-club-slug-feedback[data-status='invalid']")
++    assert has_element?(view, "#update-club-button[disabled]")
++
++    view
++    |> form("#edit-club-form", club: %{name: "KMC", slug: "kmc-alpine"})
++    |> render_change()
++
++    assert has_element?(view, "#edit-club-slug-feedback[data-status='available']")
++    refute has_element?(view, "#update-club-button[disabled]")
++  end
++
++  test "slug availability feedback updates live while editing", %{conn: conn} do
++    club_id = Ecto.UUID.generate()
++    other_club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.create_club(
++               %{club_id: other_club_id, name: "Alpine Club", slug: "alpine"},
++               consistency: :strong
++             )
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club_id}")
++
++    view
++    |> form("#edit-club-form", club: %{name: "KMC", slug: "alpine"})
++    |> render_change()
++
++    assert has_element?(view, "#edit-club-slug-feedback[data-status='taken']")
++    assert has_element?(view, "#update-club-button[disabled]")
++
++    view
++    |> form("#edit-club-form", club: %{name: "KMC", slug: "kmc"})
++    |> render_change()
++
++    assert has_element?(view, "#edit-club-slug-feedback[data-status='available']")
++    refute has_element?(view, "#update-club-button[disabled]")
++  end
++
+   defp input_value(html, selector) do
+     values =
+       html
