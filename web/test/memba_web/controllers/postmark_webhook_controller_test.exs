@@ -115,6 +115,37 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
     end)
   end
 
+  test "rejects Postmark open events before delivered events", %{conn: conn} do
+    %{message_id: message_id, recipients: [bob, carol]} =
+      message = send_message_to(["Bob", "Carol"])
+
+    conn = post_postmark_event(conn, realistic_postmark_payload(:opened, message, bob))
+
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+    assert detail =~ "Unsupported Postmark webhook RecordType"
+
+    opened_payload =
+      :opened
+      |> realistic_postmark_payload(message, carol)
+      |> Map.put("RecordType", "Opened")
+
+    conn =
+      conn
+      |> recycle()
+      |> post_postmark_event(opened_payload)
+
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+    assert detail =~ "Unsupported Postmark webhook RecordType"
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
+      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "sent"
+
+      assert Messaging.get_member_email_delivery(message_id, carol.person_id).status == "sent"
+      assert Messaging.get_memba_staff_email_delivery(carol.delivery_id).status == "sent"
+    end)
+  end
+
   test "returns an unprocessable response for unsupported Postmark events", %{conn: conn} do
     conn =
       post_postmark_event(conn, %{
