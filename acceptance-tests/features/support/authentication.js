@@ -195,7 +195,7 @@ async function tryOpenStaffOnlyArea(world) {
 
 async function assertSignedIn(world, personName) {
   const person = personFromWorld(world, personName);
-  await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${person.email}`);
+  await playwrightExpect(world.page.locator("body")).toContainText(`Signed in as ${signedInEmailFor(world, personName, person)}`);
 }
 
 async function assertStillSignedIn(world, personName) {
@@ -223,7 +223,7 @@ async function assertSignedInOnClubPage(world, personName) {
   const person = personFromWorld(world, personName);
   await playwrightExpect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
   await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(
-    `Signed in as ${person.email}`
+    `Signed in as ${signedInEmailFor(world, personName, person)}`
   );
   await playwrightExpect(world.page.locator("#club-site-sign-out-button")).toBeVisible();
 }
@@ -288,6 +288,12 @@ function signInRequestFor(world, personName) {
   return request;
 }
 
+function signedInEmailFor(world, personName, person) {
+  const request = world.signInRequests && world.signInRequests[personName];
+
+  return (request && request.email) || person.email;
+}
+
 function signInLinkFor(world, personName) {
   const link = world.signInLinks && world.signInLinks[personName];
   assert.ok(link, `Expected ${personName} to have received a sign-in link`);
@@ -303,7 +309,7 @@ function signInEmailMatches(email, recipientEmail) {
 }
 
 function signInLinkFromTextBody(textBody) {
-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
+  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:magic|sign-in)\/\S+/);
   return match && match[0];
 }
 

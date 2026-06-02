@@ -16,6 +16,7 @@ const {
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   createClub,
+  createPerson,
   createPeople,
   kootenayClubName,
   makeClubMessageSendingUnavailable,
@@ -68,6 +69,7 @@ Given("Pat is a member of Nelson Paddling Club", async function () {
 When(
   "{word} sends the message {string} to Kootenay Mountaineering Club members",
   async function (senderName, subject) {
+    await ensureKootenayMember(this, senderName);
     await withMemberHarness(this, senderName, (member) =>
       sendMemberMessageToKootenayMembers(member, senderName, subject)
     );
@@ -259,4 +261,31 @@ function parsePersonList(text) {
     .split(/\s*,\s*/)
     .map((name) => name.trim())
     .filter(Boolean);
+}
+
+async function ensureKootenayMember(world, personName) {
+  if (
+    world.clubs &&
+    world.clubs[kootenayClubName] &&
+    world.people &&
+    world.people[personName] &&
+    world.memberships &&
+    world.memberships[`${kootenayClubName}:${personName}`]
+  ) {
+    return;
+  }
+
+  await withStaffHarness(world, async (staff) => {
+    if (!staff.clubs || !staff.clubs[kootenayClubName]) {
+      await createClub(staff, kootenayClubName);
+    }
+
+    if (!staff.people || !staff.people[personName]) {
+      await createPerson(staff, personName, kootenayClubName);
+    }
+
+    if (!staff.memberships || !staff.memberships[`${kootenayClubName}:${personName}`]) {
+      await addMembers(staff, [personName], kootenayClubName);
+    }
+  });
 }

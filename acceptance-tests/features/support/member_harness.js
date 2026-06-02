@@ -218,7 +218,7 @@ function signInEmailMatches(email, recipientEmail) {
 }
 
 function signInLinkFromTextBody(textBody) {
-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/magic\/\S+/);
+  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:magic|sign-in)\/\S+/);
   return match && match[0];
 }
 

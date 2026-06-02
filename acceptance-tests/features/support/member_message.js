@@ -503,11 +503,16 @@ async function createPeople(world, names, { expect = playwrightExpect } = {}) {
   return world;
 }
 
-async function createPerson(world, name, clubName = kootenayClubName, { email, expect = playwrightExpect } = {}) {
+async function createPerson(
+  world,
+  name,
+  clubName = kootenayClubName,
+  { email, emailAddresses, expect = playwrightExpect } = {}
+) {
   ensureState(world);
 
   await openClub(world, clubName, { expect });
-  await createPersonOnCurrentClubPage(world, name, clubName, { email, expect });
+  await createPersonOnCurrentClubPage(world, name, clubName, { email, emailAddresses, expect });
 
   return world;
 }
@@ -516,10 +521,11 @@ async function createPersonOnCurrentClubPage(
   world,
   name,
   clubName,
-  { email = emailFor(name), expect = playwrightExpect, timeoutMs } = {}
+  { email, emailAddresses, expect = playwrightExpect, timeoutMs } = {}
 ) {
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before creating ${name}`);
+  const normalizedEmailAddresses = personEmailAddressSet(name, { email, emailAddresses });
 
   const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
@@ -536,7 +542,7 @@ async function createPersonOnCurrentClubPage(
 
   await browserInteraction(`submit person creation form for ${name}`, async () => {
     await world.page.getByLabel("Person name").fill(name);
-    await world.page.getByLabel("Email address 0").fill(email);
+    await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
     await world.page.getByRole("button", { name: "Create person" }).click();
   });
   await waitForProjectedCount(
@@ -560,17 +566,119 @@ async function createPersonOnCurrentClubPage(
     { expect }
   );
 
-  world.people[name] = personState({ email, name, personId });
+  world.people[name] = personState({ emailAddresses: normalizedEmailAddresses, name, personId });
 }
 
-function personState({ email, name, personId }) {
+async function updatePersonEmailAddresses(
+  world,
+  name,
+  clubName = kootenayClubName,
+  emailAddresses,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to have been created before editing ${name}`);
+
+  const person = world.people[name];
+  assert.ok(person && person.personId, `Expected ${name} to have been created before editing email addresses`);
+
+  const normalizedEmailAddresses = personEmailAddressSet(name, { emailAddresses });
+
+  await browserInteraction(`visit edit-person page for ${name}`, () =>
+    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/people/${person.personId}/edit`))
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: `Edit ${name}` }),
+    `edit person heading for ${name}`,
+    { expect, timeoutMs }
+  );
+
+  await browserInteraction(`submit person email-address edit form for ${name}`, async () => {
+    await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
+    await world.page.getByRole("button", { name: "Save person" }).click();
+  });
+  await waitForProjectedVisible(
+    world,
+    rowByData(world.page, "person-row", "data-person-id", person.personId),
+    `projected edited person row ${person.personId}`,
+    { expect }
+  );
+
+  world.people[name] = personState({
+    emailAddresses: normalizedEmailAddresses,
+    name,
+    personId: person.personId
+  });
+
+  return world;
+}
+
+async function fillPersonEmailAddressRows(
+  world,
+  emailAddresses,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  const existingRows = world.page.locator('[data-testid="person-email-row"]');
+  const existingRowCount = await existingRows.count();
+
+  for (const [index, emailAddress] of emailAddresses.entries()) {
+    if (index >= existingRowCount) {
+      await world.page.getByRole("button", { name: "Add email address" }).click();
+      await waitForProjectedVisible(
+        world,
+        world.page.getByLabel(`Email address ${index}`, { exact: true }),
+        `email address row ${index}`,
+        { expect, timeoutMs }
+      );
+    }
+
+    await world.page.getByLabel(`Email address ${index}`, { exact: true }).fill(emailAddress.email);
+
+    if (emailAddress.isPrimary) {
+      await world.page.locator(`#person-primary-radio-${index}`).click();
+    }
+  }
+}
+
+function personEmailAddressSet(name, { email, emailAddresses } = {}) {
+  const rawEmailAddresses = emailAddresses || [{ email: email || emailFor(name), isPrimary: true }];
+  const normalizedEmailAddresses = rawEmailAddresses.map((emailAddress) => {
+    const normalizedEmail = String(emailAddress.email || "").trim();
+    const isPrimary = Boolean(
+      emailAddress.isPrimary ?? emailAddress.is_primary ?? emailAddress.primary ?? emailAddress["primary?"]
+    );
+
+    assert.ok(normalizedEmail, `Expected ${name} email-address entries to include a non-blank email`);
+
+    return { email: normalizedEmail, isPrimary };
+  });
+
+  assert.equal(
+    normalizedEmailAddresses.filter((emailAddress) => emailAddress.isPrimary).length,
+    1,
+    `Expected exactly one primary email address for ${name}`
+  );
+
+  return normalizedEmailAddresses;
+}
+
+function personState({ emailAddresses, name, personId }) {
+  const primaryEmailAddress = emailAddresses.find((emailAddress) => emailAddress.isPrimary);
+  assert.ok(primaryEmailAddress, `Expected ${name} to have one primary email address`);
+  const alternateEmails = emailAddresses
+    .filter((emailAddress) => !emailAddress.isPrimary)
+    .map((emailAddress) => emailAddress.email);
+
   return {
-    alternateEmails: [],
-    email,
-    emailAddresses: [{ email, isPrimary: true }],
+    alternateEmails,
+    email: primaryEmailAddress.email,
+    emailAddresses,
     name,
     personId,
-    primaryEmail: email
+    primaryEmail: primaryEmailAddress.email
   };
 }
 
@@ -1663,6 +1771,7 @@ module.exports = {
   sendMessageToKootenayMembers,
   testMailboxEmails,
   trySendMemberMessageToKootenayMembers,
+  updatePersonEmailAddresses,
   visitClubsIndex,
   waitForMailboxEmails
 };

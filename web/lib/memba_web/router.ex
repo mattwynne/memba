@@ -105,6 +105,8 @@ defmodule MembaWeb.Router do
 
       post "/auth-links/expire", DevTestSupportController, :expire_auth_link
 
+      post "/reset", DevTestSupportController, :reset_acceptance_state
+
       post "/messaging-delivery-provider",
            DevTestSupportController,
            :configure_messaging_email_delivery_provider
