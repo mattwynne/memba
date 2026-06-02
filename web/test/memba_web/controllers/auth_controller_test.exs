@@ -7,7 +7,6 @@ defmodule MembaWeb.AuthControllerTest do
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Membership
-  alias Memba.Membership.Projections.Person
   alias Memba.Repo
   alias MembaWeb.IdentityAuth
 
@@ -244,16 +243,17 @@ defmodule MembaWeb.AuthControllerTest do
       name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
     )
 
-    Repo.insert!(%Person{
-      person_id: person_id,
-      name: "Test Member",
-      email: Keyword.fetch!(attrs, :email)
-    })
+    person =
+      insert_membership_person!(
+        person_id: person_id,
+        name: "Test Member",
+        email: Keyword.fetch!(attrs, :email)
+      )
 
     Repo.insert!(%Membership{
       membership_id: Ecto.UUID.generate(),
       club_id: club_id,
-      person_id: person_id,
+      person_id: person.person_id,
       active: true
     })
   end

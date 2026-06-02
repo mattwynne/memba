@@ -88,10 +88,96 @@ defmodule Memba.Membership.QueryTest do
       assert Membership.list_active_members_of_club(club_id) == []
     end
 
+    test "returns one row per active member using each person's primary email address" do
+      club_id = Ecto.UUID.generate()
+
+      alice =
+        create_person(
+          name: "Alice",
+          email: "alice@work.example",
+          email_addresses: [
+            %{email: "alice@example.com", is_primary: false},
+            %{email: "alice@work.example", is_primary: true}
+          ]
+        )
+
+      bob =
+        create_person(
+          name: "Bob",
+          email: "bob@example.com",
+          email_addresses: [
+            %{email: "bob@example.com", is_primary: true},
+            %{email: "bob@work.example", is_primary: false}
+          ]
+        )
+
+      add_member(club_id, alice.person_id)
+      add_member(club_id, bob.person_id)
+
+      assert Membership.list_active_members_of_club(club_id) == [
+               %{id: alice.person_id, name: "Alice", email: "alice@work.example"},
+               %{id: bob.person_id, name: "Bob", email: "bob@example.com"}
+             ]
+    end
+
     test "returns an empty list for missing or invalid club IDs" do
       assert Membership.list_active_members_of_club(Ecto.UUID.generate()) == []
       assert Membership.list_active_members_of_club(nil) == []
       assert Membership.list_active_members_of_club("not-a-uuid") == []
+    end
+  end
+
+  describe "person email address query APIs" do
+    test "fetches a person's primary and alternate email addresses" do
+      alice =
+        create_person(
+          name: "Alice",
+          email: "alice@work.example",
+          email_addresses: [
+            %{email: "alice@example.com", is_primary: false},
+            %{email: "alice@work.example", is_primary: true},
+            %{email: "alice+old@example.com", is_primary: false}
+          ]
+        )
+
+      assert Membership.get_person_primary_email(alice.person_id) == "alice@work.example"
+
+      assert Membership.list_person_alternate_emails(alice.person_id) == [
+               "alice+old@example.com",
+               "alice@example.com"
+             ]
+
+      assert Membership.list_person_email_addresses(alice.person_id) == [
+               %{
+                 email: "alice@work.example",
+                 normalized_email: "alice@work.example",
+                 primary?: true
+               },
+               %{
+                 email: "alice+old@example.com",
+                 normalized_email: "alice+old@example.com",
+                 primary?: false
+               },
+               %{
+                 email: "alice@example.com",
+                 normalized_email: "alice@example.com",
+                 primary?: false
+               }
+             ]
+    end
+
+    test "returns nil or empty lists for missing or invalid person IDs" do
+      assert Membership.get_person_primary_email(Ecto.UUID.generate()) == nil
+      assert Membership.get_person_primary_email(nil) == nil
+      assert Membership.get_person_primary_email("not-a-uuid") == nil
+
+      assert Membership.list_person_alternate_emails(Ecto.UUID.generate()) == []
+      assert Membership.list_person_alternate_emails(nil) == []
+      assert Membership.list_person_alternate_emails("not-a-uuid") == []
+
+      assert Membership.list_person_email_addresses(Ecto.UUID.generate()) == []
+      assert Membership.list_person_email_addresses(nil) == []
+      assert Membership.list_person_email_addresses("not-a-uuid") == []
     end
   end
 
@@ -146,6 +232,27 @@ defmodule Memba.Membership.QueryTest do
       assert nelson_id == nelson.club_id
     end
 
+    test "matches any known email address attached to the active member" do
+      kootenay = create_club("Kootenay Mountaineering Club")
+
+      alice =
+        create_person(
+          name: "Alice",
+          email: "alice@example.com",
+          email_addresses: [
+            %{email: "alice@example.com", is_primary: true},
+            %{email: "alice@work.example", is_primary: false}
+          ]
+        )
+
+      add_member(kootenay.club_id, alice.person_id)
+
+      assert [%ClubProjection{club_id: kootenay_id}] =
+               Membership.list_active_clubs_for_member_email(" ALICE@WORK.EXAMPLE ")
+
+      assert kootenay_id == kootenay.club_id
+    end
+
     test "returns an empty list for blank, nil, or unknown email addresses" do
       assert Membership.list_active_clubs_for_member_email("unknown@example.com") == []
       assert Membership.list_active_clubs_for_member_email("   ") == []
@@ -172,6 +279,24 @@ defmodule Memba.Membership.QueryTest do
       refute Membership.active_member_of_club_by_email?(club.club_id, "   ")
       refute Membership.active_member_of_club_by_email?(club.club_id, nil)
     end
+
+    test "matches alternate known email addresses attached to the active member" do
+      club = create_club("Kootenay Mountaineering Club")
+
+      alice =
+        create_person(
+          name: "Alice",
+          email: "alice@example.com",
+          email_addresses: [
+            %{email: "alice@example.com", is_primary: true},
+            %{email: "alice@work.example", is_primary: false}
+          ]
+        )
+
+      add_member(club.club_id, alice.person_id)
+
+      assert Membership.active_member_of_club_by_email?(club.club_id, " ALICE@WORK.EXAMPLE ")
+    end
   end
 
   defp create_club(name, opts \\ []) do
@@ -195,19 +320,28 @@ defmodule Memba.Membership.QueryTest do
   end
 
   defp create_person(attrs) do
+    email_addresses = Keyword.get(attrs, :email_addresses)
+
     person = %{
       person_id: Ecto.UUID.generate(),
       name: Keyword.fetch!(attrs, :name),
-      email: Keyword.fetch!(attrs, :email)
+      email: Keyword.fetch!(attrs, :email),
+      email_addresses: email_addresses
     }
 
     assert :ok =
              App.dispatch(
-               %CreatePerson{
-                 person_id: person.person_id,
-                 name: person.name,
-                 email: person.email
-               },
+               struct!(
+                 CreatePerson,
+                 %{
+                   person_id: person.person_id,
+                   name: person.name,
+                   email: person.email,
+                   email_addresses: person.email_addresses
+                 }
+                 |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+                 |> Map.new()
+               ),
                consistency: :strong
              )
 
