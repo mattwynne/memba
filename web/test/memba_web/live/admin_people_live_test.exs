@@ -105,7 +105,8 @@ defmodule MembaWeb.AdminPeopleLiveTest do
                %{
                  person_id: Ecto.UUID.generate(),
                  name: "Existing Alice",
-                 email: "alice@example.com"
+                 email: "alice@example.com",
+                 email_addresses: [%{email: "alice@example.com", is_primary: true}]
                },
                consistency: :strong
              )

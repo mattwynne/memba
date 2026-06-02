@@ -545,9 +545,12 @@ test("creating people and members uses accessible form labels and keeps browser 
   await addMembers(world, ["Alice", "Bob"], kootenayClubName, { expect: fakeExpect(expectations) });
 
   assert.deepEqual(world.people.Alice, {
+    alternateEmails: [],
     email: "alice@example.test",
+    emailAddresses: [{ email: "alice@example.test", isPrimary: true }],
     name: "Alice",
-    personId: "person-alice-1"
+    personId: "person-alice-1",
+    primaryEmail: "alice@example.test"
   });
   assert.deepEqual(world.memberships[`${kootenayClubName}:Bob`], {
     clubName: kootenayClubName,
@@ -557,9 +560,20 @@ test("creating people and members uses accessible form labels and keeps browser 
   assert.ok(
     page.actions.some(
       (action) =>
-        action[0] === "select" &&
-        action[1] === "Person to add as member" &&
-        action[2] === "person-alice-1"
+        action[0] === "goto" &&
+        action[1] === "http://127.0.0.1:4444/admin/clubs/club-1/people/new"
+    )
+  );
+  assert.ok(
+    page.actions.some(
+      (action) =>
+        action[0] === "fill" && action[1] === "Email address 0" && action[2] === "alice@example.test"
+    )
+  );
+  assert.ok(
+    page.actions.some(
+      (action) =>
+        action[0] === "select" && action[1] === "Person to add as member" && action[2] === "person-alice-1"
     )
   );
   assert.ok(

@@ -105,8 +105,9 @@ async function signInStaff(world) {
 
 async function signInMember(world, memberName) {
   const person = personFromWorld(world, memberName);
+  const email = signInEmailForPerson(person);
 
-  await signInByMagicLink(world, person.email, memberName);
+  await signInByMagicLink(world, email, memberName);
   assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
 }
 
@@ -196,9 +197,16 @@ function personFromWorld(world, memberName) {
   const person = world.people[memberName];
 
   assert.ok(person, `Expected ${memberName} to be known in the scenario`);
-  assert.ok(person.email, `Expected ${memberName} to have an email address for member sign-in`);
+  assert.ok(
+    signInEmailForPerson(person),
+    `Expected ${memberName} to have a primary email address for member sign-in`
+  );
 
   return person;
+}
+
+function signInEmailForPerson(person) {
+  return person.email || person.primaryEmail;
 }
 
 function signInEmailMatches(email, recipientEmail) {

@@ -171,6 +171,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
 
   defp create_active_member(club_id, attrs) do
     person_id = Ecto.UUID.generate()
+    email = Keyword.fetch!(attrs, :email)
 
     if is_nil(Membership.get_club(club_id)) do
       assert :ok =
@@ -185,7 +186,8 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
                %{
                  person_id: person_id,
                  name: Keyword.fetch!(attrs, :name),
-                 email: Keyword.fetch!(attrs, :email)
+                 email: email,
+                 email_addresses: [%{email: email, is_primary: true}]
                },
                consistency: :strong
              )

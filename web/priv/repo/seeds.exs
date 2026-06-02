@@ -9,11 +9,14 @@
 alias Memba.Membership.Projections.Club
 alias Memba.Membership.Projections.Membership
 alias Memba.Membership.Projections.Person
+alias Memba.Membership.Projections.PersonEmailAddress
 alias Memba.Messaging.Projections.EmailDelivery
 alias Memba.Messaging.Projections.MembaStaffEmailDelivery
 alias Memba.Messaging.Projections.MemberEmailDelivery
 alias Memba.Messaging.Projections.Message
 alias Memba.Repo
+
+import Ecto.Query
 
 now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 one_hour_ago = DateTime.add(now, -60 * 60, :second)
@@ -67,6 +70,63 @@ people = [
     person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     name: "Pat Staff",
     email: "pat@memba.io",
+    inserted_at: two_days_ago,
+    updated_at: now
+  }
+]
+
+person_email_addresses = [
+  %{
+    id: "20000000-0000-0000-0000-000000000001",
+    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    email: "alice@example.com",
+    normalized_email: "alice@example.com",
+    is_primary: true,
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    id: "20000000-0000-0000-0000-000000000002",
+    person_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    email: "alice@work.example",
+    normalized_email: "alice@work.example",
+    is_primary: false,
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    id: "20000000-0000-0000-0000-000000000003",
+    person_id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    email: "bob@example.com",
+    normalized_email: "bob@example.com",
+    is_primary: true,
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    id: "20000000-0000-0000-0000-000000000004",
+    person_id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    email: "carol@example.com",
+    normalized_email: "carol@example.com",
+    is_primary: true,
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    id: "20000000-0000-0000-0000-000000000005",
+    person_id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+    email: "dana@example.com",
+    normalized_email: "dana@example.com",
+    is_primary: true,
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    id: "20000000-0000-0000-0000-000000000006",
+    person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    email: "pat@memba.io",
+    normalized_email: "pat@memba.io",
+    is_primary: true,
     inserted_at: two_days_ago,
     updated_at: now
   }
@@ -253,6 +313,17 @@ Repo.insert_all(Person, people,
   conflict_target: :person_id
 )
 
+seed_person_ids = Enum.map(people, & &1.person_id)
+
+Repo.delete_all(
+  from(email_address in PersonEmailAddress, where: email_address.person_id in ^seed_person_ids)
+)
+
+Repo.insert_all(PersonEmailAddress, person_email_addresses,
+  on_conflict: {:replace_all_except, [:id]},
+  conflict_target: :id
+)
+
 Repo.insert_all(Membership, memberships,
   on_conflict: {:replace_all_except, [:membership_id]},
   conflict_target: :membership_id
@@ -280,4 +351,5 @@ Repo.insert_all(MembaStaffEmailDelivery, memba_staff_email_deliveries,
 
 IO.puts("Seeded representative Memba data.")
 IO.puts("Member sign-in emails: alice@example.com, bob@example.com, carol@example.com")
+IO.puts("Alice alternate sign-in email: alice@work.example")
 IO.puts("Memba staff sign-in email: pat@memba.io")

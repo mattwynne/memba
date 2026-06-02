@@ -286,12 +286,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   defp create_person(attrs) do
-    email_addresses = Keyword.get(attrs, :email_addresses)
+    email = Keyword.fetch!(attrs, :email)
+    email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
 
     person = %{
       person_id: Ecto.UUID.generate(),
       name: Keyword.fetch!(attrs, :name),
-      email: Keyword.fetch!(attrs, :email),
+      email: email,
       email_addresses: email_addresses
     }
 

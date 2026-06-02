@@ -217,9 +217,18 @@ defmodule Memba.Cucumber.AuthenticationSteps do
 
       assert :ok =
                Membership.create_person(
-                 %{person_id: person_id, name: person_name, email: email},
+                 %{
+                   person_id: person_id,
+                   name: person_name,
+                   email: email,
+                   email_addresses: [%{email: email, is_primary: true}]
+                 },
                  consistency: :strong
                )
+
+      assert [
+               %{email: ^email, normalized_email: ^email, primary?: true}
+             ] = Membership.list_person_email_addresses(person_id)
 
       update_context_map(context, :people, person_name, %{person_id: person_id, email: email})
     end

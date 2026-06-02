@@ -81,10 +81,15 @@ async function ensureMember(world, personName, clubName) {
 
 async function recordNonMember(world, personName) {
   ensureState(world);
+  const email = authEmailFor(personName);
+
   world.people[personName] = world.people[personName] || {
-    email: authEmailFor(personName),
+    alternateEmails: [],
+    email,
+    emailAddresses: [{ email, isPrimary: true }],
     name: personName,
-    personId: null
+    personId: null,
+    primaryEmail: email
   };
 }
 

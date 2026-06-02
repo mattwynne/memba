@@ -200,7 +200,12 @@ defmodule Memba.AccountsTest do
         Map.put(base_attrs, :email_addresses, email_addresses)
 
       :error ->
-        Map.put(base_attrs, :email, Keyword.fetch!(attrs, :email))
+        email = Keyword.fetch!(attrs, :email)
+
+        Map.merge(base_attrs, %{
+          email: email,
+          email_addresses: [%{email: email, is_primary: true}]
+        })
     end
   end
 end

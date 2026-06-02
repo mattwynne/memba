@@ -497,7 +497,7 @@ async function createPeople(world, names, { expect = playwrightExpect } = {}) {
   await openClub(world, kootenayClubName, { expect });
 
   for (const name of names) {
-    await createPersonOnCurrentClubPage(world, name, { expect });
+    await createPersonOnCurrentClubPage(world, name, kootenayClubName, { expect });
   }
 
   return world;
@@ -507,18 +507,36 @@ async function createPerson(world, name, clubName = kootenayClubName, { email, e
   ensureState(world);
 
   await openClub(world, clubName, { expect });
-  await createPersonOnCurrentClubPage(world, name, { email, expect });
+  await createPersonOnCurrentClubPage(world, name, clubName, { email, expect });
 
   return world;
 }
 
-async function createPersonOnCurrentClubPage(world, name, { email = emailFor(name), expect = playwrightExpect } = {}) {
+async function createPersonOnCurrentClubPage(
+  world,
+  name,
+  clubName,
+  { email = emailFor(name), expect = playwrightExpect, timeoutMs } = {}
+) {
+  const club = world.clubs[clubName];
+  assert.ok(club, `Expected ${clubName} to have been created before creating ${name}`);
+
   const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
 
+  await browserInteraction(`visit create-person page for ${name}`, () =>
+    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/people/new`))
+  );
+  await waitForProjectedVisible(
+    world,
+    world.page.getByRole("heading", { name: "New person" }),
+    `new person heading for ${clubName}`,
+    { expect, timeoutMs }
+  );
+
   await browserInteraction(`submit person creation form for ${name}`, async () => {
     await world.page.getByLabel("Person name").fill(name);
-    await world.page.getByLabel("Person email").fill(email);
+    await world.page.getByLabel("Email address 0").fill(email);
     await world.page.getByRole("button", { name: "Create person" }).click();
   });
   await waitForProjectedCount(
@@ -542,7 +560,18 @@ async function createPersonOnCurrentClubPage(world, name, { email = emailFor(nam
     { expect }
   );
 
-  world.people[name] = { email, name, personId };
+  world.people[name] = personState({ email, name, personId });
+}
+
+function personState({ email, name, personId }) {
+  return {
+    alternateEmails: [],
+    email,
+    emailAddresses: [{ email, isPrimary: true }],
+    name,
+    personId,
+    primaryEmail: email
+  };
 }
 
 async function addMembers(world, personNames, clubName, { expect = playwrightExpect } = {}) {

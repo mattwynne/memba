@@ -206,13 +206,15 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
   defp create_person(session, name) do
     current_path = PhoenixTest.Driver.current_path(session)
+    email = email_for(name)
 
     assert :ok =
              Membership.create_person(
                %{
                  person_id: Ecto.UUID.generate(),
                  name: name,
-                 email: email_for(name)
+                 email: email,
+                 email_addresses: [%{email: email, is_primary: true}]
                },
                consistency: :strong
              )
