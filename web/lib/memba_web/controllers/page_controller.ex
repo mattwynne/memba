@@ -29,9 +29,9 @@ defmodule MembaWeb.PageController do
   def home(conn, _params) do
     page_title =
       if conn.assigns.current_identity do
-        "My clubs"
+        "Your clubs"
       else
-        "Membership made calm"
+        "Run your club, not your spreadsheet"
       end
 
     conn

@@ -25,13 +25,15 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "GET /auth" do
-    test "shows the shared sign-in form", %{conn: conn} do
+    test "shows the sign-in form", %{conn: conn} do
       conn = get(conn, ~p"/auth")
       response = html_response(conn, 200)
       html = LazyHTML.from_fragment(response)
 
-      assert response =~ "Sign in to Memba"
-      assert response =~ "signs up anyone with a memba.io email as Memba staff"
+      assert response =~ "Sign in to your club"
+      assert response =~ "Enter your email address and we’ll send you a link to sign in."
+      refute response =~ "magic link"
+      refute response =~ "signs up anyone with a memba.io email as Memba staff"
 
       assert html
              |> LazyHTML.query("form#magic-link-form[action='/auth'][method='post']")
@@ -212,7 +214,7 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   defp neutral_notice do
-    "If we know that email, we sent a sign-in link."
+    "Thanks. You should have an email in your inbox with a sign-in link."
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
