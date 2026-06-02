@@ -82,3 +82,23 @@ Developers and agents often need a browser session open while running tests or c
 - Or teach `dev check` to reuse an existing healthy project Postgres service instead of bringing its own service up/down.
 - Add a preflight check that detects the current impossible side-by-side state and prints a clear message until true isolation is implemented.
 - Add a regression test or script smoke test that starts `dev up` and then runs `dev check` concurrently enough to prove the desired contract.
+
+## Resolution
+
+Date: 2026-06-01
+
+Root cause: `bin/dev` treated every command that called `start_services` as the owner of Postgres. When `dev check` adopted an already-running Postgres from `dev up`, its `EXIT` trap still called `down`, so the quality gate could stop the shared service. Separately, `devenv processes down` can return while Postgres is still shutting down, leaving `postmaster.pid` in `.devenv/state/postgres`; an immediate restart then hits the low-level lock-file failure.
+
+Fix applied:
+
+- `bin/dev`: track whether the current command actually started the Postgres service, and only stop services on exit when it did. Commands that adopt an existing healthy Postgres now leave it running.
+- `bin/dev`: wait for the Postgres `postmaster.pid`/process to disappear after `processes down` before trying to start a new service, with a `pg_ctl stop -m fast` fallback for stale shutdowns.
+- `docs/kaizen/2026-05-31-dev-check-cannot-run-beside-dev-up.md`: recorded the root cause, fix, validation, and follow-up.
+
+Validation:
+
+- `./bin/dev postgres; ./bin/dev check` — passed, 315 tests, 0 failures; the Postgres PID was unchanged after `dev check`, proving the quality gate adopted the existing service and did not stop it.
+
+Remaining follow-up:
+
+- Add a dedicated automated shell smoke test for `dev up` + `dev check` side-by-side if this workflow keeps regressing.
