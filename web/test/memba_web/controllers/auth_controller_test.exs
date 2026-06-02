@@ -92,6 +92,29 @@ defmodule MembaWeb.AuthControllerTest do
       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
     end
 
+    test "creates a token and delivers the link to the requested alternate email, not the primary",
+         %{conn: conn} do
+      configure_auth_email()
+
+      create_active_member(
+        email_addresses: [
+          %{email: "Alice.Primary@Example.COM", is_primary: true},
+          %{email: "Alice.Work@Example.COM", is_primary: false}
+        ]
+      )
+
+      conn = post(conn, ~p"/auth", %{"auth" => %{"email" => " ALICE.WORK@example.com "}})
+
+      assert redirected_to(conn) == ~p"/auth/check-email"
+      assert [%SignInToken{email: "alice.work@example.com"}] = Repo.all(SignInToken)
+      assert_received {:email, %Swoosh.Email{} = email}
+
+      assert email.to == [{"", "alice.work@example.com"}]
+      refute email.to == [{"", "alice.primary@example.com"}]
+      assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
+      assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
+    end
+
     test "creates a sign-in token and sends a callback URL email for new Memba staff", %{
       conn: conn
     } do
@@ -244,11 +267,34 @@ defmodule MembaWeb.AuthControllerTest do
     )
 
     person =
-      insert_membership_person!(
-        person_id: person_id,
-        name: "Test Member",
-        email: Keyword.fetch!(attrs, :email)
-      )
+      case Keyword.fetch(attrs, :email_addresses) do
+        {:ok, email_addresses} ->
+          primary_email_address = Enum.find(email_addresses, & &1.is_primary)
+
+          person =
+            insert_membership_person!(
+              person_id: person_id,
+              name: "Test Member",
+              email: primary_email_address.email
+            )
+
+          for email_address <- email_addresses, email_address.is_primary == false do
+            insert_membership_person_email_address!(
+              person_id: person_id,
+              email: email_address.email,
+              is_primary: false
+            )
+          end
+
+          person
+
+        :error ->
+          insert_membership_person!(
+            person_id: person_id,
+            name: "Test Member",
+            email: Keyword.fetch!(attrs, :email)
+          )
+      end
 
     Repo.insert!(%Membership{
       membership_id: Ecto.UUID.generate(),

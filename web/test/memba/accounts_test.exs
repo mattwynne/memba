@@ -61,7 +61,7 @@ defmodule Memba.AccountsTest do
                |> Repo.all()
     end
 
-    test "creates tokens for alternate email addresses attached to active members" do
+    test "creates tokens for the normalized alternate email address requested by active members" do
       now = ~U[2026-05-31 12:00:00.000000Z]
 
       create_active_member(
@@ -76,7 +76,16 @@ defmodule Memba.AccountsTest do
                Accounts.request_sign_in_link(" alice.work@example.com ", now: now)
 
       assert is_binary(token)
-      assert Repo.aggregate(SignInToken, :count) == 1
+
+      assert %SignInToken{
+               email: "alice.work@example.com",
+               token_hash: token_hash
+             } = Repo.one(SignInToken)
+
+      assert token_hash == Accounts.hash_sign_in_token(token)
+
+      assert {:ok, %{email: "alice.work@example.com"}} =
+               Accounts.consume_sign_in_token(token, now: DateTime.add(now, 5 * 60, :second))
     end
   end
 
