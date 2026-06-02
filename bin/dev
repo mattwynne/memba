@@ -5,31 +5,12 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
-find_free_port() {
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - <<'PY'
-import socket
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind(("127.0.0.1", 0))
-    print(s.getsockname()[1])
-PY
-    return
-  fi
-
-  local port
-  for port in $(seq 15432 16432); do
-    if ! lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
-      printf '%s\n' "$port"
-      return
-    fi
-  done
-
-  echo "Could not find a free Postgres port" >&2
-  exit 1
+default_postgres_port() {
+  printf '%s\n' "${MEMBA_POSTGRES_PORT:-15432}"
 }
 
 if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
-  memba_postgres_port="${MEMBA_POSTGRES_PORT:-$(find_free_port)}"
+  memba_postgres_port="$(default_postgres_port)"
 
   exec env \
     -u DEVENV_DOTFILE \
@@ -59,7 +40,42 @@ devenv_with_postgres_port() {
   fi
 }
 
+adopt_running_postgres() {
+  local pid_file="$repo_root/.devenv/state/postgres/postmaster.pid"
+
+  if [ ! -f "$pid_file" ]; then
+    return 1
+  fi
+
+  local pid port socket_dir
+  pid="$(sed -n '1p' "$pid_file")"
+  port="$(sed -n '4p' "$pid_file")"
+  socket_dir="$(sed -n '5p' "$pid_file")"
+
+  if [ -z "$pid" ] || ! kill -0 "$pid" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if [ -n "$socket_dir" ] && pg_isready -h "$socket_dir" -p "$port" >/dev/null 2>&1; then
+    export PGHOST="$socket_dir"
+    export PGPORT="$port"
+    return 0
+  fi
+
+  if [ -n "$port" ] && pg_isready -h localhost -p "$port" >/dev/null 2>&1; then
+    export PGHOST=localhost
+    export PGPORT="$port"
+    return 0
+  fi
+
+  return 1
+}
+
 start_services() {
+  if adopt_running_postgres; then
+    return
+  fi
+
   if pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
     return
   fi
@@ -67,10 +83,14 @@ start_services() {
   # Use devenv's process-compose backend directly. A previous run can leave
   # process-compose thinking postgres is "ready" even though the socket/port in
   # the current shell is not accepting connections, so reset stale processes
-  # before starting on the free port selected for this shell.
+  # before starting one shared development/test Postgres.
   devenv_with_postgres_port processes down >/dev/null 2>&1 || true
   DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
   devenv_with_postgres_port processes wait --timeout 120
+
+  if adopt_running_postgres; then
+    return
+  fi
 
   if ! pg_isready -h "$PGHOST" -p "$PGPORT" >/dev/null 2>&1; then
     devenv_with_postgres_port processes logs -n 100 postgres >&2 || true
