@@ -66,6 +66,18 @@ function buildDevCommand(config, subcommand) {
   };
 }
 
+function buildPostgresReadinessCommand(config) {
+  return {
+    command: "bash",
+    args: [
+      "-lc",
+      'if ! devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes status postgres >/dev/null 2>&1; then DEVENV_TUI=false devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres; fi; devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes wait --timeout 120'
+    ],
+    cwd: config.repoRoot,
+    env: buildCommandEnvironment(config)
+  };
+}
+
 function buildMixCommand(config, mixArgs) {
   const env = buildCommandEnvironment(config);
 
@@ -400,7 +412,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
       }
 
       try {
-        await processRunner.run(buildDevCommand(currentConfig, "postgres"), {
+        await processRunner.run(buildPostgresReadinessCommand(currentConfig), {
           label: "Postgres readiness",
           timeoutMs: currentConfig.commandTimeoutMs,
           logBuffer
@@ -463,6 +475,7 @@ module.exports = {
   buildLifecycleConfig,
   buildMixCommand,
   buildPhoenixCommand,
+  buildPostgresReadinessCommand,
   createBrowserAcceptanceLifecycle,
   databaseSetupSteps,
   findFreePort

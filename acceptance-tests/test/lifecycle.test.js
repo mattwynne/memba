@@ -6,6 +6,7 @@ const {
   assetBuildStep,
   buildLifecycleConfig,
   buildMixCommand,
+  buildPostgresReadinessCommand,
   createBrowserAcceptanceLifecycle,
   databaseSetupSteps
 } = require("../features/support/lifecycle");
@@ -60,6 +61,19 @@ test("lifecycle prepares Postgres, database, Phoenix, readiness, and teardown in
       "stop:Phoenix server"
     ]
   );
+});
+
+test("Postgres readiness uses devenv processes instead of removed bin/dev postgres", async () => {
+  const config = await buildLifecycleConfig(testEnv());
+  const command = buildPostgresReadinessCommand(config);
+
+  assert.equal(command.command, "bash");
+  assert.equal(command.args[0], "-lc");
+  assert.match(command.args[1], /processes status postgres/);
+  assert.match(command.args[1], /devenv -O services\.postgres\.port:int "\$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres/);
+  assert.match(command.args[1], /devenv -O services\.postgres\.port:int "\$MEMBA_POSTGRES_PORT" processes wait --timeout 120/);
+  assert.doesNotMatch(command.args[1], /bin\/dev postgres/);
+  assert.equal(command.env.MEMBA_POSTGRES_PORT, "15555");
 });
 
 test("non-dev-shell mix commands run through devenv on the selected Postgres port", async () => {
