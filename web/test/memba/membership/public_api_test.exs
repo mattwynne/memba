@@ -225,6 +225,50 @@ defmodule Memba.Membership.PublicApiTest do
              )
   end
 
+  test "create_person/2 rejects globally duplicate normalized email addresses before dispatch" do
+    existing_person_id = Ecto.UUID.generate()
+    duplicate_person_id = Ecto.UUID.generate()
+    duplicate_alternate_person_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: existing_person_id,
+                 name: "Alice",
+                 email: "Alice@Example.COM"
+               },
+               consistency: :strong
+             )
+
+    assert {:error, :email_address_taken} =
+             Membership.create_person(
+               %{
+                 person_id: duplicate_person_id,
+                 name: "Duplicate Alice",
+                 email: " alice@example.com "
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:error, :email_address_taken} =
+             Membership.create_person(
+               %{
+                 person_id: duplicate_alternate_person_id,
+                 name: "Duplicate Alternate Alice",
+                 email_addresses: [
+                   %{email: "duplicate@example.com", is_primary: true},
+                   %{email: " ALICE@EXAMPLE.COM ", is_primary: false}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert is_nil(Membership.get_person(duplicate_person_id))
+    assert is_nil(Membership.get_person(duplicate_alternate_person_id))
+  end
+
   test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
     person_id = Ecto.UUID.generate()
 
@@ -267,6 +311,44 @@ defmodule Memba.Membership.PublicApiTest do
                returning: :execution_result,
                consistency: :strong
              )
+  end
+
+  test "replace_person_email_addresses/2 rejects addresses already attached to another person" do
+    alice_id = Ecto.UUID.generate()
+    bob_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: alice_id, name: "Alice", email: "Alice@Example.COM"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: bob_id, name: "Bob", email: "bob@example.com"},
+               consistency: :strong
+             )
+
+    assert {:error, :email_address_taken} =
+             Membership.replace_person_email_addresses(
+               %{
+                 person_id: bob_id,
+                 email_addresses: [
+                   %{email: "bob@example.com", is_primary: true},
+                   %{email: " alice@example.com ", is_primary: false}
+                 ]
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert Membership.list_person_email_addresses(bob_id) == [
+             %{
+               email: "bob@example.com",
+               normalized_email: "bob@example.com",
+               primary?: true
+             }
+           ]
   end
 
   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
