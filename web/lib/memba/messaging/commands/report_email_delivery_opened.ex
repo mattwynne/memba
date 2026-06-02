@@ -1,9 +1,10 @@
 defmodule Memba.Messaging.Commands.ReportEmailDeliveryOpened do
   @moduledoc """
-  Compatibility struct for historic opened-report command data.
+  DEPRECATED: Open tracking has been removed from Memba.
 
-  Memba no longer routes this command or records email opens as current
-  behaviour.
+  This compatibility struct is retained for historic opened-report command
+  data, but it is no longer routed by `Memba.Messaging.Router`. Attempting to
+  dispatch this command will raise `Commanded.Router.UnregisteredCommandError`.
   """
 
   @enforce_keys [:message_id, :delivery_id]
