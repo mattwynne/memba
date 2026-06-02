@@ -118,6 +118,11 @@ defmodule Memba.CucumberConfigurationTest do
      ]}
   ]
 
+  @deliverability_feature_names [
+    "member_message_deliverability.feature",
+    "memba_staff_email_deliverability.feature"
+  ]
+
   @authentication_scenarios [
     {"Logged-out visitor sees a public club page",
      [
@@ -357,6 +362,16 @@ defmodule Memba.CucumberConfigurationTest do
       |> feature_file_named!("memba_staff_email_deliverability.feature")
 
     refute File.read!(memba_staff_feature_file) =~ ~r/^\s*@todo-web\s*\n\s*Feature:/m
+  end
+
+  test "shared deliverability features do not describe opened receipts" do
+    configured_feature_paths()
+    |> Enum.filter(&(Path.basename(&1) in @deliverability_feature_names))
+    |> Enum.each(fn deliverability_feature_file ->
+      feature_text = File.read!(deliverability_feature_file)
+
+      refute feature_text =~ ~r/\b(opened|opens|open tracking|track_opens)\b/i
+    end)
   end
 
   test "all member message deliverability scenarios pass through Cucumber runtime" do

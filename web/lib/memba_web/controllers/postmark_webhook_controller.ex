@@ -34,13 +34,13 @@ defmodule MembaWeb.PostmarkWebhookController do
          ) do
       "delivery" -> {:ok, :delivered}
       "delivered" -> {:ok, :delivered}
-      "open" -> {:ok, :opened}
-      "opened" -> {:ok, :opened}
       "delayed" -> {:ok, :delayed}
       "delay" -> {:ok, :delayed}
       "bounced" -> {:ok, :bounced}
       "spamcomplaint" -> {:ok, :spam_complaint}
       "spam" -> {:ok, :spam_complaint}
+      "open" -> {:error, {:unsupported_record_type, "Open"}}
+      "opened" -> {:error, {:unsupported_record_type, "Opened"}}
       "bounce" -> {:ok, bounce_event_type(params)}
       record_type -> {:error, {:unsupported_record_type, record_type}}
     end
@@ -81,9 +81,6 @@ defmodule MembaWeb.PostmarkWebhookController do
 
   defp report_status(attrs, :spam_complaint),
     do: Messaging.report_email_delivery_spam_complaint(attrs)
-
-  defp report_status(attrs, :opened),
-    do: Messaging.report_email_delivery_opened(attrs)
 
   defp normalize_dispatch_result(:ok), do: :ok
   defp normalize_dispatch_result({:ok, _result}), do: :ok

@@ -8,7 +8,9 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
 
   import Plug.Conn
 
-  test "maps realistic Postmark delivery and open events with outbound metadata", %{conn: conn} do
+  test "maps realistic Postmark delivery events with outbound metadata and rejects opens", %{
+    conn: conn
+  } do
     %{message_id: message_id, recipients: [bob]} = message = send_message_to(["Bob"])
 
     conn =
@@ -26,13 +28,14 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       |> recycle()
       |> post_postmark_event(realistic_postmark_payload(:opened, message, bob))
 
-    assert %{"status" => "accepted"} = json_response(conn, 202)
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+    assert detail =~ "Unsupported Postmark webhook RecordType"
 
     assert_eventually(fn ->
-      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "opened"
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "delivered"
 
       assert Messaging.get_memba_staff_email_delivery(message_id, bob.person_id).status ==
-               "opened"
+               "delivered"
     end)
   end
 
@@ -109,6 +112,37 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
                "recipient marked the message as spam"
 
       assert Messaging.get_memba_staff_email_delivery(dana.delivery_id).status == "spam complaint"
+    end)
+  end
+
+  test "rejects Postmark open events before delivered events", %{conn: conn} do
+    %{message_id: message_id, recipients: [bob, carol]} =
+      message = send_message_to(["Bob", "Carol"])
+
+    conn = post_postmark_event(conn, realistic_postmark_payload(:opened, message, bob))
+
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+    assert detail =~ "Unsupported Postmark webhook RecordType"
+
+    opened_payload =
+      :opened
+      |> realistic_postmark_payload(message, carol)
+      |> Map.put("RecordType", "Opened")
+
+    conn =
+      conn
+      |> recycle()
+      |> post_postmark_event(opened_payload)
+
+    assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
+    assert detail =~ "Unsupported Postmark webhook RecordType"
+
+    assert_eventually(fn ->
+      assert Messaging.get_member_email_delivery(message_id, bob.person_id).status == "sent"
+      assert Messaging.get_memba_staff_email_delivery(bob.delivery_id).status == "sent"
+
+      assert Messaging.get_member_email_delivery(message_id, carol.person_id).status == "sent"
+      assert Messaging.get_memba_staff_email_delivery(carol.delivery_id).status == "sent"
     end)
   end
 

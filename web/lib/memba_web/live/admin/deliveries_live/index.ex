@@ -144,7 +144,6 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   defp status_class("delayed"), do: "bg-amber-100 text-amber-800"
   defp status_class("bounced"), do: "bg-red-100 text-red-800"
   defp status_class("spam complaint"), do: "bg-red-100 text-red-800"
-  defp status_class("opened"), do: "bg-emerald-100 text-emerald-800"
   defp status_class("delivered"), do: "bg-blue-100 text-blue-800"
   defp status_class(_status), do: "bg-zinc-100 text-zinc-700"
 end

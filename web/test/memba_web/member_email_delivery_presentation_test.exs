@@ -24,9 +24,9 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
              }
 
       assert MemberEmailDeliveryPresentation.present_status("opened") == %{
-               status: "opened",
-               label: "Opened",
-               icon: "hero-envelope-open"
+               status: "delivered",
+               label: "Delivered",
+               icon: "hero-check-circle"
              }
     end
 
@@ -46,7 +46,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
   end
 
   describe "present_receipt/1" do
-    test "keeps the raw projection status while adding display label and icon" do
+    test "maps the projection status to current member-facing receipt data" do
       receipt = %{
         recipient_id: "person-123",
         recipient_name: "Alice Adams",
@@ -56,6 +56,22 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
                recipient_id: "person-123",
                recipient_name: "Alice Adams",
+               status: "delivered",
+               status_label: "Delivered",
+               status_icon: "hero-check-circle"
+             }
+    end
+
+    test "folds historic opened receipts into Delivered instead of exposing opened" do
+      receipt = %{
+        recipient_id: "person-456",
+        recipient_name: "Historic Recipient",
+        status: "opened"
+      }
+
+      assert MemberEmailDeliveryPresentation.present_receipt(receipt) == %{
+               recipient_id: "person-456",
+               recipient_name: "Historic Recipient",
                status: "delivered",
                status_label: "Delivered",
                status_icon: "hero-check-circle"
@@ -72,7 +88,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
           recipient_name: "Delivered Member One",
           status: "delivered"
         },
-        %{recipient_id: "opened-1", recipient_name: "Opened Member", status: "opened"},
+        %{recipient_id: "opened-1", recipient_name: "Historic Opened Member", status: "opened"},
         %{
           recipient_id: "delivered-2",
           recipient_name: "Delivered Member Two",
@@ -90,26 +106,18 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       assert Enum.map(presented_receipts, & &1.status) == [
                "sent",
                "delivered",
-               "opened",
+               "delivered",
                "delivered"
              ]
 
       assert summary == [
                %{
-                 status: "opened",
-                 status_label: "Opened",
-                 status_icon: "hero-envelope-open",
-                 description: "read it",
-                 count: 1,
-                 percentage: 25
-               },
-               %{
                  status: "delivered",
                  status_label: "Delivered",
                  status_icon: "hero-check-circle",
-                 description: "arrived, not opened yet",
-                 count: 2,
-                 percentage: 50
+                 description: "delivered to their inbox",
+                 count: 3,
+                 percentage: 75
                },
                %{
                  status: "sent",
@@ -129,15 +137,12 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                }
              ]
 
-      assert Enum.map(groups, & &1.status) == ["opened", "delivered", "sent"]
+      assert Enum.map(groups, & &1.status) == ["delivered", "sent"]
       refute Enum.any?(groups, &(&1.status == "delivery problem"))
 
       assert [
-               %{recipient_name: "Opened Member", status_label: "Opened"}
-             ] = Enum.find(groups, &(&1.status == "opened")).receipts
-
-      assert [
                %{recipient_name: "Delivered Member One", status_label: "Delivered"},
+               %{recipient_name: "Historic Opened Member", status_label: "Delivered"},
                %{recipient_name: "Delivered Member Two", status_label: "Delivered"}
              ] = Enum.find(groups, &(&1.status == "delivered")).receipts
     end
@@ -152,8 +157,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
       model = MemberEmailDeliveryPresentation.present_receipts(receipts)
 
       assert Enum.map(model.summary, &{&1.status, &1.percentage}) == [
-               {"opened", 33},
-               {"delivered", 0},
+               {"delivered", 33},
                {"sent", 67},
                {"delivery problem", 0}
              ]
@@ -165,7 +169,6 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                receipts: [],
                groups: [],
                summary: [
-                 %{status: "opened", count: 0, percentage: 0},
                  %{status: "delivered", count: 0, percentage: 0},
                  %{status: "sent", count: 0, percentage: 0},
                  %{status: "delivery problem", count: 0, percentage: 0}

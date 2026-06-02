@@ -196,14 +196,14 @@ defmodule MembaWeb.MemberDashboardPresentation do
   defp receipt_glance_copy(_summary, 0), do: nil
 
   defp receipt_glance_copy(summary, total_count) do
-    opened_count =
+    delivered_count =
       summary
       |> Enum.find_value(0, fn
-        %{status: "opened", count: count} -> count
+        %{status: "delivered", count: count} -> count
         _status -> false
       end)
 
-    "#{opened_count} of #{total_count} opened"
+    "#{delivered_count} of #{total_count} delivered"
   end
 
   defp sent_at_label(%DateTime{} = sent_at), do: Calendar.strftime(sent_at, "%b %d, %Y")

@@ -8,7 +8,6 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
-  alias Memba.Messaging.Commands.ReportEmailDeliveryOpened
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
@@ -83,17 +82,6 @@ defmodule Memba.Messaging do
   end
 
   @doc """
-  Report that a recipient opened a delivery.
-  """
-  def report_email_delivery_opened(attrs, dispatch_opts \\ [])
-      when is_map(attrs) and is_list(dispatch_opts) do
-    with {:ok, command} <- report_email_delivery_opened_command(attrs),
-         {:ok, dispatch_result} <- dispatch_command(command, dispatch_opts) do
-      dispatch_result
-    end
-  end
-
-  @doc """
   Fetch a projected message read model by caller-generated UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
@@ -161,7 +149,9 @@ defmodule Memba.Messaging do
   """
   def get_member_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MemberEmailDeliveryProjection, delivery_id)
+      MemberEmailDeliveryProjection
+      |> Repo.get(delivery_id)
+      |> normalize_member_email_delivery()
     else
       :error -> nil
     end
@@ -170,8 +160,8 @@ defmodule Memba.Messaging do
   @doc """
   Fetch a member-facing email delivery for a recipient on a message.
 
-  Invalid or missing IDs return `nil`. The status uses ADR 0006's
-  simplified member vocabulary: sent, delivered, delivery problem, or opened.
+  Invalid or missing IDs return `nil`. The status uses the simplified
+  member vocabulary: sent, delivered, or delivery problem.
   """
   def get_member_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
@@ -180,6 +170,7 @@ defmodule Memba.Messaging do
         message_id: message_id,
         recipient_id: recipient_id
       )
+      |> normalize_member_email_delivery()
     else
       :error -> nil
     end
@@ -198,6 +189,7 @@ defmodule Memba.Messaging do
       |> where([receipt], receipt.message_id == ^message_id)
       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
       |> Repo.all()
+      |> Enum.map(&normalize_member_email_delivery/1)
     else
       :error -> []
     end
@@ -210,7 +202,9 @@ defmodule Memba.Messaging do
   """
   def get_memba_staff_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MembaStaffEmailDeliveryProjection, delivery_id)
+      MembaStaffEmailDeliveryProjection
+      |> Repo.get(delivery_id)
+      |> normalize_memba_staff_email_delivery()
     else
       :error -> nil
     end
@@ -229,6 +223,7 @@ defmodule Memba.Messaging do
         message_id: message_id,
         recipient_id: recipient_id
       )
+      |> normalize_memba_staff_email_delivery()
     else
       :error -> nil
     end
@@ -246,6 +241,7 @@ defmodule Memba.Messaging do
     if is_list(opts) do
       with {:ok, query} <- operator_deliveries_query(opts) do
         Repo.all(query)
+        |> Enum.map(&normalize_memba_staff_email_delivery/1)
       else
         :error -> []
       end
@@ -270,9 +266,30 @@ defmodule Memba.Messaging do
         asc: deliverability.recipient_id
       )
       |> Repo.all()
+      |> Enum.map(&normalize_memba_staff_email_delivery/1)
     else
       :error -> []
     end
+  end
+
+  defp normalize_member_email_delivery(nil), do: nil
+
+  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{status: "opened"} = receipt) do
+    %{receipt | status: "delivered"}
+  end
+
+  defp normalize_member_email_delivery(%MemberEmailDeliveryProjection{} = receipt), do: receipt
+
+  defp normalize_memba_staff_email_delivery(nil), do: nil
+
+  defp normalize_memba_staff_email_delivery(
+         %MembaStaffEmailDeliveryProjection{status: "opened"} = delivery
+       ) do
+    %{delivery | status: "delivered", reason: nil}
+  end
+
+  defp normalize_memba_staff_email_delivery(%MembaStaffEmailDeliveryProjection{} = delivery) do
+    delivery
   end
 
   defp operator_deliveries_query(opts) do
@@ -369,13 +386,6 @@ defmodule Memba.Messaging do
          delivery_id: delivery_id,
          reason: reason
        }}
-    end
-  end
-
-  defp report_email_delivery_opened_command(attrs) do
-    with {:ok, message_id} <- fetch_required(attrs, :message_id),
-         {:ok, delivery_id} <- fetch_required(attrs, :delivery_id) do
-      {:ok, %ReportEmailDeliveryOpened{message_id: message_id, delivery_id: delivery_id}}
     end
   end
 

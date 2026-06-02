@@ -40,7 +40,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
     |> text_body(request.body)
     |> html_body(html_body(request.body))
     |> put_provider_option(:metadata, metadata(request))
-    |> put_provider_option(:track_opens, true)
   end
 
   defp sender_display_name(%EmailDeliveryRequest{} = request) do

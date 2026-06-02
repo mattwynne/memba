@@ -8,18 +8,16 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   """
 
   @fallback_status "sent"
-  @status_order ["opened", "delivered", "sent", "delivery problem"]
+  @status_order ["delivered", "sent", "delivery problem"]
 
   @presentations %{
     "sent" => %{label: "Sending", icon: "hero-clock"},
     "delivered" => %{label: "Delivered", icon: "hero-check-circle"},
-    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"},
-    "opened" => %{label: "Opened", icon: "hero-envelope-open"}
+    "delivery problem" => %{label: "Delivery problem", icon: "hero-exclamation-triangle"}
   }
 
   @descriptions %{
-    "opened" => "read it",
-    "delivered" => "arrived, not opened yet",
+    "delivered" => "delivered to their inbox",
     "sent" => "on its way",
     "delivery problem" => "we couldn't reach them"
   }
@@ -56,7 +54,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   @doc """
   Builds the LiveView receipt presentation model for a message.
 
-  The summary always includes the four member-facing statuses in the design
+  The summary always includes the three member-facing statuses in the design
   order, even when a status has no receipts. Groups are built from the same
   status models but only include statuses with at least one receipt.
   """
@@ -87,7 +85,11 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   end
 
   defp normalize_status(status) when is_binary(status) do
-    if status == "", do: @fallback_status, else: status
+    case status do
+      "" -> @fallback_status
+      "opened" -> "delivered"
+      status -> status
+    end
   end
 
   defp normalize_status(_status), do: @fallback_status
