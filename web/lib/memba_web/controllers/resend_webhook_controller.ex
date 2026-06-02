@@ -6,7 +6,7 @@ defmodule MembaWeb.ResendWebhookController do
   @successful_status :accepted
 
   def create(conn, params) do
-    case handle_resend_event(params) do
+    case verify_and_handle_resend_event(conn, params) do
       :ok ->
         conn
         |> put_status(@successful_status)
@@ -14,8 +14,22 @@ defmodule MembaWeb.ResendWebhookController do
 
       {:error, reason} ->
         conn
-        |> put_status(:unprocessable_entity)
+        |> put_status(error_status(reason))
         |> json(%{errors: %{detail: error_detail(reason)}})
+    end
+  end
+
+  defp verify_and_handle_resend_event(conn, params) do
+    with :ok <- verify_signature(conn) do
+      handle_resend_event(params)
+    end
+  end
+
+  defp verify_signature(conn) do
+    if MembaWeb.ResendWebhookSignature.configured?() do
+      MembaWeb.ResendWebhookSignature.verify(conn)
+    else
+      :ok
     end
   end
 
@@ -206,6 +220,24 @@ defmodule MembaWeb.ResendWebhookController do
     |> to_string()
     |> String.downcase()
     |> String.replace(~r/[\s_.-]+/, "")
+  end
+
+  defp error_status(:invalid_signature), do: :unauthorized
+  defp error_status(:stale_timestamp), do: :unauthorized
+  defp error_status(:invalid_timestamp), do: :unauthorized
+  defp error_status(:missing_signing_secret), do: :unauthorized
+  defp error_status(:missing_raw_body), do: :unauthorized
+  defp error_status({:missing_header, _header}), do: :unauthorized
+  defp error_status(_reason), do: :unprocessable_entity
+
+  defp error_detail(:invalid_signature), do: "Invalid Resend webhook signature"
+  defp error_detail(:stale_timestamp), do: "Stale Resend webhook timestamp"
+  defp error_detail(:invalid_timestamp), do: "Invalid Resend webhook timestamp"
+  defp error_detail(:missing_signing_secret), do: "Missing Resend webhook signing secret"
+  defp error_detail(:missing_raw_body), do: "Missing raw Resend webhook body"
+
+  defp error_detail({:missing_header, header}) do
+    "Missing Resend webhook signature header: #{header}"
   end
 
   defp error_detail({:unsupported_event_type, nil}) do
