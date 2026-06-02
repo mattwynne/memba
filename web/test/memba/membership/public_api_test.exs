@@ -15,7 +15,13 @@ defmodule Memba.Membership.PublicApiTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              events: [%ClubCreated{club_id: ^club_id, name: "Kootenay Mountaineering Club"}]
+              events: [
+                %ClubCreated{
+                  club_id: ^club_id,
+                  name: "Kootenay Mountaineering Club",
+                  slug: "kootenay-mountaineering-club"
+                }
+              ]
             }} =
              Membership.create_club(
                %{"club_id" => club_id, "name" => " Kootenay Mountaineering Club "},
@@ -25,6 +31,34 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert %ClubProjection{club_id: ^club_id, name: "Kootenay Mountaineering Club"} =
              Membership.get_club(club_id)
+  end
+
+  test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
+    club_id = Ecto.UUID.generate()
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              events: [
+                %ClubCreated{
+                  club_id: ^club_id,
+                  name: "Kootenay Mountaineering Club",
+                  slug: "kmc"
+                }
+              ]
+            }} =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert {:error, :invalid_format} =
+             Membership.create_club(%{
+               club_id: Ecto.UUID.generate(),
+               name: "Kootenay Mountaineering Club",
+               slug: "kmc club!"
+             })
   end
 
   test "create_person/2 dispatches CreatePerson through the Membership context" do

@@ -4,7 +4,7 @@
 - [x] 002 Inspect current Membership club command/event/aggregate/projector/projection code, public club route code, admin/staff route code, and all club creation call sites.
 - [x] 003 Add `slug` to `CreateClub`, `ClubCreated`, `Memba.Membership.Club`, and `Memba.Membership.Projections.Club`.
 - [x] 004 Implement slug generation and validation in a small Membership slug module or equivalent domain helper:
-- [ ] 005 Update `Membership.create_club/2` and relevant forms to use the generated default slug while allowing staff override.
+- [x] 005 Update `Membership.create_club/2` and relevant forms to use the generated default slug while allowing staff override.
 - [ ] 006 Add a migration to add `slug` to `membership_clubs`, backfill existing rows deterministically, set non-null, and create a unique index.
 - [ ] 007 Update the club projector to write `slug` from `ClubCreated` events.
 - [ ] 008 Do not support replay of old slug-less `ClubCreated` events. There is no live data yet; development/test event stores may be reset or backfilled as needed.

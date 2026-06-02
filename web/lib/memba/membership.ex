@@ -12,6 +12,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
+  alias Memba.Membership.Slug
   alias Memba.Repo
 
   @doc """
@@ -205,8 +206,9 @@ defmodule Memba.Membership do
 
   defp create_club_command(attrs) do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
-         {:ok, name} <- fetch_required(attrs, :name) do
-      {:ok, %CreateClub{club_id: club_id, name: name}}
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, slug} <- club_slug(attrs, name) do
+      {:ok, %CreateClub{club_id: club_id, name: name, slug: slug}}
     end
   end
 
@@ -249,6 +251,24 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
+    end
+  end
+
+  defp fetch_optional(attrs, key) when is_atom(key) do
+    string_key = Atom.to_string(key)
+
+    case attrs do
+      %{^key => value} -> {:ok, value}
+      %{^string_key => value} -> {:ok, value}
+      _attrs -> :error
+    end
+  end
+
+  defp club_slug(attrs, name) do
+    case fetch_optional(attrs, :slug) do
+      {:ok, ""} -> Slug.default_from_name(name) |> Slug.validate()
+      {:ok, slug} -> Slug.validate(slug)
+      :error -> Slug.default_from_name(name) |> Slug.validate()
     end
   end
 
