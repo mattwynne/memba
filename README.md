@@ -5,6 +5,8 @@ This repository is a monorepo:
 * `web/` contains the Phoenix application.
 * `acceptance-tests/` contains the Node, Cucumber.js, and Playwright acceptance tests.
 
+Product language is captured in [`docs/problem-domain-terms.md`](docs/problem-domain-terms.md).
+
 ## Development environment
 
 Use the development helper from the repository root:
