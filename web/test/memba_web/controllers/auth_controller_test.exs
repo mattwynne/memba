@@ -143,10 +143,27 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "GET /auth/sign-in/:token" do
-    test "consumes a valid Memba staff token, signs the browser in, and redirects to the Memba staff area",
+    test "consumes a first-time Memba staff token, signs the browser in, and redirects to onboarding",
          %{
            conn: conn
          } do
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("Pat@Memba.IO")
+
+      conn = get(conn, ~p"/auth/sign-in/#{token}")
+
+      assert redirected_to(conn) == ~p"/auth/onboard"
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
+
+      assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
+               ~p"/admin/clubs"
+
+      assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
+    end
+
+    test "staff who already have a person record go straight to the Memba staff area", %{
+      conn: conn
+    } do
+      insert_membership_person!(name: "Pat Staff", email: "pat@memba.io")
       assert {:ok, %{token: token}} = Accounts.request_sign_in_link("Pat@Memba.IO")
 
       conn = get(conn, ~p"/auth/sign-in/#{token}")
@@ -166,9 +183,12 @@ defmodule MembaWeb.AuthControllerTest do
         })
         |> get("/auth/sign-in/#{token}")
 
-      assert redirected_to(conn) == "/admin/clubs?club_id=club-123"
+      assert redirected_to(conn) == ~p"/auth/onboard"
       assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
+
+      assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
+               "/admin/clubs?club_id=club-123"
     end
 
     test "rejects unknown tokens without signing in", %{conn: conn} do
@@ -220,6 +240,70 @@ defmodule MembaWeb.AuthControllerTest do
       assert flash(conn, :error) == nil
       assert get_session(conn, IdentityAuth.identity_session_key()) == "pat@memba.io"
       assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
+    end
+  end
+
+  describe "GET /auth/onboard" do
+    test "shows the staff onboarding form for signed-in staff without a person record", %{
+      conn: conn
+    } do
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get(~p"/auth/onboard")
+
+      response = html_response(conn, 200)
+      html = LazyHTML.from_fragment(response)
+
+      assert response =~ "Tell us your name"
+      assert html |> LazyHTML.query("section#staff-onboarding") |> Enum.any?()
+
+      assert html
+             |> LazyHTML.query("form#staff-onboarding-form[action='/auth/onboard']")
+             |> Enum.any?()
+
+      assert html |> LazyHTML.query("input#staff-name-input[name='staff[name]']") |> Enum.any?()
+    end
+
+    test "redirects onboarded staff away from the onboarding form", %{conn: conn} do
+      insert_membership_person!(name: "Pat Staff", email: "pat@memba.io")
+
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get(~p"/auth/onboard")
+
+      assert redirected_to(conn) == ~p"/admin/clubs"
+    end
+  end
+
+  describe "POST /auth/onboard" do
+    test "creates a person record for first-time staff and redirects to the staff area", %{
+      conn: conn
+    } do
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> post(~p"/auth/onboard", %{"staff" => %{"name" => " Pat Staff "}})
+
+      assert redirected_to(conn) == ~p"/admin/clubs"
+      assert flash(conn, :info) == "Welcome to Memba, Pat Staff."
+
+      assert %{name: "Pat Staff", email: "pat@memba.io"} =
+               Memba.Membership.get_person_by_email("pat@memba.io")
+    end
+
+    test "keeps first-time staff on onboarding when the name is blank", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> post(~p"/auth/onboard", %{"staff" => %{"name" => " "}})
+
+      response = html_response(conn, 200)
+
+      assert response =~ "Tell us your name"
+      assert flash(conn, :error) == "Please tell us your name."
+      assert Memba.Membership.get_person_by_email("pat@memba.io") == nil
     end
   end
 

@@ -5,6 +5,7 @@ defmodule MembaWeb.AuthController do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
+  alias Memba.Membership
   alias MembaWeb.IdentityAuth
 
   @neutral_notice "Thanks. You should have an email in your inbox with a sign-in link."
@@ -36,8 +37,9 @@ defmodule MembaWeb.AuthController do
       {:ok, %{email: email}} ->
         conn
         |> IdentityAuth.log_in_identity(email)
+        |> maybe_store_staff_onboarding_return_to(email, return_to)
         |> put_flash(:info, "Signed in.")
-        |> redirect(to: safe_return_to(return_to) || default_after_sign_in_path(email))
+        |> redirect(to: path_after_sign_in(email, return_to))
 
       {:error, :consumed} ->
         if signed_in?(conn) do
@@ -49,6 +51,36 @@ defmodule MembaWeb.AuthController do
       {:error, reason} ->
         reject_sign_in_link(conn, reason)
     end
+  end
+
+  def onboard(conn, _params) do
+    if staff_person?(conn.assigns.current_identity_email) do
+      redirect_after_staff_onboarding(conn)
+    else
+      render_staff_onboarding(conn)
+    end
+  end
+
+  def create_onboarded_staff_person(conn, %{"staff" => %{"name" => name}}) do
+    email = conn.assigns.current_identity_email
+
+    case create_staff_person(email, name) do
+      :ok ->
+        conn
+        |> put_flash(:info, "Welcome to Memba, #{String.trim(name)}.")
+        |> redirect_after_staff_onboarding()
+
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, staff_onboarding_error(reason))
+        |> render_staff_onboarding(%{"name" => name})
+    end
+  end
+
+  def create_onboarded_staff_person(conn, _params) do
+    conn
+    |> put_flash(:error, "Please tell us your name.")
+    |> render_staff_onboarding()
   end
 
   def delete(conn, _params) do
@@ -63,6 +95,13 @@ defmodule MembaWeb.AuthController do
     |> assign(:page_title, "Sign in")
     |> assign(:form, Phoenix.Component.to_form(%{"email" => ""}, as: :auth))
     |> render(:new)
+  end
+
+  defp render_staff_onboarding(conn, params \\ %{"name" => ""}) do
+    conn
+    |> assign(:page_title, "Welcome to Memba")
+    |> assign(:form, Phoenix.Component.to_form(params, as: :staff))
+    |> render(:onboard)
   end
 
   defp email_param(%{"auth" => %{"email" => email}}), do: email
@@ -113,11 +152,54 @@ defmodule MembaWeb.AuthController do
 
   defp safe_return_to(_return_to), do: nil
 
-  defp default_after_sign_in_path(email) do
-    if Accounts.staff_email?(email) do
-      ~p"/admin/clubs"
-    else
-      ~p"/"
+  defp path_after_sign_in(email, return_to) do
+    cond do
+      needs_staff_onboarding?(email) -> ~p"/auth/onboard"
+      Accounts.staff_email?(email) -> safe_return_to(return_to) || ~p"/admin/clubs"
+      true -> safe_return_to(return_to) || ~p"/"
     end
   end
+
+  defp needs_staff_onboarding?(email) do
+    Accounts.staff_email?(email) and not staff_person?(email)
+  end
+
+  defp staff_person?(email), do: not is_nil(Membership.get_person_by_email(email))
+
+  defp maybe_store_staff_onboarding_return_to(conn, email, return_to) do
+    if needs_staff_onboarding?(email) do
+      put_session(
+        conn,
+        IdentityAuth.staff_onboarding_return_to_session_key(),
+        safe_return_to(return_to) || ~p"/admin/clubs"
+      )
+    else
+      conn
+    end
+  end
+
+  defp staff_onboarding_return_to(conn) do
+    conn
+    |> get_session(IdentityAuth.staff_onboarding_return_to_session_key())
+    |> safe_return_to()
+  end
+
+  defp redirect_after_staff_onboarding(conn) do
+    return_to = staff_onboarding_return_to(conn) || ~p"/admin/clubs"
+
+    conn
+    |> delete_session(IdentityAuth.staff_onboarding_return_to_session_key())
+    |> redirect(to: return_to)
+  end
+
+  defp create_staff_person(email, name) do
+    Membership.create_person(
+      %{person_id: Ecto.UUID.generate(), name: name, email: email},
+      consistency: :strong
+    )
+  end
+
+  defp staff_onboarding_error(:invalid_name), do: "Please tell us your name."
+  defp staff_onboarding_error(:email_address_taken), do: "That email address is already in use."
+  defp staff_onboarding_error(reason), do: "Could not finish staff onboarding: #{inspect(reason)}"
 end

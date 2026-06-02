@@ -26,7 +26,21 @@ defmodule MembaWeb.AuthGatesTest do
       assert response(conn, 403) == "Forbidden"
     end
 
-    test "allow signed-in Memba staff browsers", %{conn: conn} do
+    test "redirect first-time signed-in Memba staff browsers to onboarding", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get(~p"/admin/clubs")
+
+      assert redirected_to(conn) == ~p"/auth/onboard"
+
+      assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
+               ~p"/admin/clubs"
+    end
+
+    test "allow onboarded signed-in Memba staff browsers", %{conn: conn} do
+      insert_membership_person!(name: "Pat Staff", email: "pat@memba.io")
+
       conn =
         conn
         |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})

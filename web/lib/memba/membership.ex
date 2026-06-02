@@ -132,6 +132,29 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a projected person read model by email address.
+
+  Email lookup is normalized by trimming whitespace and comparing
+  case-insensitively across primary and alternate projected email addresses.
+  Invalid, blank, and unknown addresses return `nil`.
+  """
+  def get_person_by_email(email) do
+    case normalize_email(email) do
+      nil ->
+        nil
+
+      normalized_email ->
+        Person
+        |> join(:inner, [person], email_address in PersonEmailAddress,
+          on: email_address.person_id == person.person_id
+        )
+        |> where([_person, email_address], email_address.normalized_email == ^normalized_email)
+        |> limit(1)
+        |> Repo.one()
+    end
+  end
+
+  @doc """
   List projected clubs for the browser-facing membership flows.
 
   Results are ordered by name and ID for stable browser/test output.
