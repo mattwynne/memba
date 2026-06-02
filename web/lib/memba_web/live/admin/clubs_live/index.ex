@@ -129,6 +129,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
               data-testid="club-row"
               data-club-id={club.club_id}
               data-club-name={club.name}
+              data-club-slug={club.slug}
               aria-label={"Club #{club.name}"}
               class="flex items-center justify-between gap-4 py-3"
             >
@@ -142,6 +143,9 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
                 >
                   {club.name}
                 </.link>
+                <p class="mt-1 text-xs text-zinc-500">
+                  Slug: <span class="font-mono">{club.slug}</span>
+                </p>
               </div>
               <span class="text-xs text-zinc-500">{club.club_id}</span>
             </div>

@@ -9,7 +9,7 @@
 - [x] 007 Update the club projector to write `slug` from `ClubCreated` events.
 - [x] 008 Do not support replay of old slug-less `ClubCreated` events. There is no live data yet; development/test event stores may be reset or backfilled as needed.
 - [x] 009 Add `Membership.get_club_by_slug/1`, using normalized lookup input only where safe and returning `nil` for invalid/unknown values.
-- [ ] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
+- [x] 010 Add a minimal staff/admin club edit page for name/slug editing or, if creation already exists, extend the creation/edit flow with slug controls.
 - [ ] 011 Implement live validity/availability feedback for staff slug editing, either in LiveView or via a small admin-only validation endpoint.
 - [ ] 012 Add host-based public club-page resolution for `*.clubs.memba.io`:
 - [ ] 013 Update seeds, fixtures, acceptance support, and tests to create clubs with slugs.

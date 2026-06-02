@@ -5,7 +5,9 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.App
   alias Memba.Membership.Club
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubUpdated
 
   test "Membership app dispatch routes CreateClub to the Club aggregate" do
     club_id = Ecto.UUID.generate()
@@ -51,5 +53,43 @@ defmodule Memba.Membership.CreateClubDispatchTest do
 
     assert :ok = App.dispatch(command, consistency: :strong)
     assert {:error, :already_created} = App.dispatch(command)
+  end
+
+  test "Membership app dispatch routes UpdateClub to the Club aggregate" do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
+
+    command = %UpdateClub{
+      club_id: club_id,
+      name: "KMC Alpine Club",
+      slug: "kmc-alpine"
+    }
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              aggregate_version: 2,
+              events: [
+                %ClubUpdated{
+                  club_id: ^club_id,
+                  name: "KMC Alpine Club",
+                  slug: "kmc-alpine"
+                }
+              ],
+              aggregate_state: %Club{
+                club_id: ^club_id,
+                name: "KMC Alpine Club",
+                slug: "kmc-alpine"
+              }
+            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
   end
 end

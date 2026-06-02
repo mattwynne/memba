@@ -2,8 +2,10 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias Memba.Membership.Slug
   alias Memba.Messaging
 
+  @empty_club %{"name" => "", "slug" => ""}
   @empty_person %{"name" => "", "email" => ""}
   @empty_membership %{"person_id" => ""}
   @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
@@ -28,6 +30,33 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   end
 
   @impl Phoenix.LiveView
+  def handle_event("update_club", %{"club" => club_params}, socket) do
+    attrs =
+      club_params
+      |> Map.take(["name", "slug"])
+      |> Map.put("club_id", socket.assigns.club_id)
+
+    case Membership.update_club(attrs, consistency: :strong) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Club updated")
+         |> refresh_club()}
+
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Club updated")
+         |> refresh_club()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not update club: #{format_reason(reason)}")
+         |> assign(:club_form, to_form(club_params, as: :club))}
+    end
+  end
+
   def handle_event("create_person", %{"person" => person_params}, socket) do
     attrs =
       person_params
@@ -139,9 +168,48 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
           <section class="space-y-2">
             <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
             <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
+            <p id="club-slug-display" class="text-sm font-medium text-zinc-600">
+              Slug: <span class="font-mono">{@club.slug}</span>
+            </p>
             <p class="text-zinc-600">
               Add people to this club, then send a message to the active members.
             </p>
+          </section>
+
+          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-zinc-900">Edit club</h2>
+
+            <.form
+              for={@club_form}
+              id="edit-club-form"
+              aria-label="Edit club"
+              class="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+              phx-submit="update_club"
+            >
+              <.input
+                field={@club_form[:name]}
+                id="edit-club-name-input"
+                label="Name"
+                aria-label="Club name"
+                required
+              />
+              <div>
+                <.input
+                  field={@club_form[:slug]}
+                  id="edit-club-slug-input"
+                  label="Slug"
+                  aria-label="Club slug"
+                  maxlength={Slug.max_length()}
+                  required
+                />
+                <p id="edit-club-slug-help" class="mt-1 text-xs text-zinc-500">
+                  Use lowercase letters, numbers, and hyphens.
+                </p>
+              </div>
+              <.button id="update-club-button" type="submit" aria-label="Save club">
+                Save club
+              </.button>
+            </.form>
           </section>
 
           <div class="grid gap-6 lg:grid-cols-2">
@@ -341,9 +409,18 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   defp assign_forms(socket) do
     socket
+    |> assign(:club_form, to_form(club_form_params(socket.assigns.club), as: :club))
     |> assign(:person_form, to_form(@empty_person, as: :person))
     |> assign(:membership_form, to_form(@empty_membership, as: :membership))
     |> assign(:message_form, to_form(@empty_message, as: :message))
+  end
+
+  defp refresh_club(socket) do
+    club = Membership.get_club(socket.assigns.club_id)
+
+    socket
+    |> assign(:club, club)
+    |> assign(:club_form, to_form(club_form_params(club), as: :club))
   end
 
   defp refresh_people(socket) do
@@ -372,6 +449,12 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   defp person_options(people), do: Enum.map(people, &{&1.name, &1.person_id})
 
   defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
+
+  defp club_form_params(nil), do: @empty_club
+
+  defp club_form_params(club) do
+    %{"name" => club.name, "slug" => club.slug}
+  end
 
   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 end

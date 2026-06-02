@@ -4,6 +4,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   alias Memba.Membership
   alias Memba.Membership.App
   alias Memba.Membership.Commands.CreateClub
+  alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -43,6 +44,39 @@ defmodule Memba.Membership.ClubProjectionTest do
              name: "Kootenay Mountaineering Club",
              slug: "kmc"
            } = Membership.get_club(club_id)
+  end
+
+  test "UpdateClub updates the projected club name and slug" do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             App.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %UpdateClub{
+                 club_id: club_id,
+                 name: "KMC Alpine Club",
+                 slug: "kmc-alpine"
+               },
+               consistency: :strong
+             )
+
+    assert %ClubProjection{
+             club_id: ^club_id,
+             name: "KMC Alpine Club",
+             slug: "kmc-alpine"
+           } = Membership.get_club(club_id)
+
+    assert %ClubProjection{club_id: ^club_id} = Membership.get_club_by_slug("kmc-alpine")
+    assert is_nil(Membership.get_club_by_slug("kmc"))
   end
 
   test "slug-less ClubCreated events are not replay-compatible" do

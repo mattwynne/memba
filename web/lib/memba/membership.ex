@@ -9,6 +9,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
@@ -23,6 +24,20 @@ defmodule Memba.Membership do
   """
   def create_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- create_club_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Update a club's staff-managed display name and public slug.
+
+  The caller supplies the club aggregate identity as `:club_id` or
+  `"club_id"`. Slugs must already be valid address-safe values and must not be
+  used by another projected club.
+  """
+  def update_club(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- update_club_command(attrs),
+         :ok <- prevent_duplicate_club_slug(command) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -227,6 +242,16 @@ defmodule Memba.Membership do
     end
   end
 
+  defp update_club_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, club_id} <- cast_club_id(club_id),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, slug} <- fetch_required(attrs, :slug),
+         {:ok, slug} <- Slug.validate(slug) do
+      {:ok, %UpdateClub{club_id: club_id, name: name, slug: slug}}
+    end
+  end
+
   defp create_person_command(attrs) do
     with {:ok, person_id} <- fetch_required(attrs, :person_id),
          {:ok, name} <- fetch_required(attrs, :name),
@@ -248,6 +273,14 @@ defmodule Memba.Membership do
       {:error, :already_active_member}
     else
       :ok
+    end
+  end
+
+  defp prevent_duplicate_club_slug(%UpdateClub{} = command) do
+    case Repo.get_by(Club, slug: command.slug) do
+      nil -> :ok
+      %Club{club_id: club_id} when club_id == command.club_id -> :ok
+      %Club{} -> {:error, :slug_taken}
     end
   end
 
@@ -276,6 +309,13 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> :error
+    end
+  end
+
+  defp cast_club_id(club_id) do
+    case Ecto.UUID.cast(club_id) do
+      {:ok, club_id} -> {:ok, club_id}
+      :error -> {:error, :invalid_club_id}
     end
   end
 

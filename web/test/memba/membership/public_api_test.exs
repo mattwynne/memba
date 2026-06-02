@@ -4,6 +4,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -58,6 +59,74 @@ defmodule Memba.Membership.PublicApiTest do
                club_id: Ecto.UUID.generate(),
                name: "Kootenay Mountaineering Club",
                slug: "kmc club!"
+             })
+  end
+
+  test "update_club/2 edits a projected club name and slug" do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: club_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^club_id,
+              events: [
+                %ClubUpdated{
+                  club_id: ^club_id,
+                  name: "KMC Alpine Club",
+                  slug: "kmc-alpine"
+                }
+              ]
+            }} =
+             Membership.update_club(
+               %{
+                 "club_id" => club_id,
+                 "name" => " KMC Alpine Club ",
+                 "slug" => "kmc-alpine"
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %ClubProjection{
+             club_id: ^club_id,
+             name: "KMC Alpine Club",
+             slug: "kmc-alpine"
+           } = Membership.get_club(club_id)
+  end
+
+  test "update_club/2 rejects invalid and duplicate slugs" do
+    kootenay_id = Ecto.UUID.generate()
+    nelson_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: kootenay_id, name: "Kootenay Mountaineering Club", slug: "kmc"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_club(
+               %{club_id: nelson_id, name: "Nelson Cycling Club", slug: "nelson-cycling"},
+               consistency: :strong
+             )
+
+    assert {:error, :invalid_format} =
+             Membership.update_club(%{
+               club_id: kootenay_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "KMC Club!"
+             })
+
+    assert {:error, :slug_taken} =
+             Membership.update_club(%{
+               club_id: kootenay_id,
+               name: "Kootenay Mountaineering Club",
+               slug: "nelson-cycling"
              })
   end
 
