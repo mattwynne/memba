@@ -112,6 +112,31 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "Signed in as"
   end
 
+  test "GET / with a club_id shows the public club page to signed-in staff who are not members",
+       %{
+         conn: conn
+       } do
+    club = create_club(name: "Alpine Club")
+
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+      |> get(~p"/?#{[club_id: club.club_id]}")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Welcome to Alpine Club"
+    assert response =~ "Members can sign in to see club updates"
+
+    assert html
+           |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+
+    refute response =~ "Send club message"
+    refute response =~ "Signed in as pat@memba.io"
+  end
+
   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
     club =
       create_active_member(

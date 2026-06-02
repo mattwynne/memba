@@ -136,12 +136,23 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
         </.link>
 
         <%= if @club do %>
-          <section class="space-y-2">
-            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
-            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
-            <p class="text-zinc-600">
-              Add people to this club, then send a message to the active members.
-            </p>
+          <section class="space-y-4">
+            <div class="space-y-2">
+              <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
+              <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
+              <p class="text-zinc-600">
+                Add people to this club, then send a message to the active members.
+              </p>
+            </div>
+
+            <.link
+              id="staff-club-home-link"
+              href={~p"/?#{[club_id: @club.club_id]}"}
+              aria-label={"Open #{@club.name} home page"}
+              class="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700"
+            >
+              Open club home page
+            </.link>
           </section>
 
           <div class="grid gap-6 lg:grid-cols-2">
