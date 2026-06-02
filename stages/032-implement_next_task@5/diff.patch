@@ -1,0 +1,751 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 12fc678..a790b03 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add a `membership_person_email_addresses` projection table and `Memba.Membership.Projections.PersonEmailAddress` schema with:
+ - [x] 003 Add migration/backfill that creates one email-address row for every existing `membership_people.email`, sets it as primary, stores the lowercase trimmed value in `normalized_email`, and keeps `membership_people.email` as a denormalized primary-email field for compatibility and efficient recipient reads during this iteration.
+ - [x] 004 Add database constraints and matching changeset/command validation:
+-- [ ] 005 Evolve Membership commands/events using an atomic replace-all model:
++- [x] 005 Evolve Membership commands/events using an atomic replace-all model:
+ - [ ] 006 Add projector handling so:
+ - [ ] 007 Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.
+ - [ ] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index aeb3bd2..fa42c08 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -9,6 +9,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+@@ -55,6 +56,20 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Atomically replace a person's primary and alternate email addresses.
++
++  The caller supplies the person aggregate identity as `:person_id` or
++  `"person_id"`. The submitted `:email_addresses` or `"email_addresses"` value
++  must be a non-empty list with exactly one primary address.
++  """
++  def replace_person_email_addresses(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, command} <- replace_person_email_addresses_command(attrs) do
++      dispatch(command, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Add a person as an active member of a club through the Membership context.
+ 
+@@ -256,8 +271,15 @@ defmodule Memba.Membership do
+   defp create_person_command(attrs) do
+     with {:ok, person_id} <- fetch_required(attrs, :person_id),
+          {:ok, name} <- fetch_required(attrs, :name),
+-         {:ok, email} <- fetch_required(attrs, :email) do
+-      {:ok, %CreatePerson{person_id: person_id, name: name, email: email}}
++         {:ok, email_attrs} <- create_person_email_attrs(attrs) do
++      {:ok, struct!(CreatePerson, Map.merge(%{person_id: person_id, name: name}, email_attrs))}
++    end
++  end
++
++  defp replace_person_email_addresses_command(attrs) do
++    with {:ok, person_id} <- fetch_required(attrs, :person_id),
++         {:ok, email_addresses} <- fetch_required(attrs, :email_addresses) do
++      {:ok, %ReplacePersonEmailAddresses{person_id: person_id, email_addresses: email_addresses}}
+     end
+   end
+ 
+@@ -320,6 +342,24 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp create_person_email_attrs(attrs) do
++    case fetch_optional(attrs, :email_addresses) do
++      {:ok, email_addresses} ->
++        email_attrs =
++          case fetch_optional(attrs, :email) do
++            {:ok, email} -> %{email: email, email_addresses: email_addresses}
++            :error -> %{email_addresses: email_addresses}
++          end
++
++        {:ok, email_attrs}
++
++      :error ->
++        with {:ok, email} <- fetch_required(attrs, :email) do
++          {:ok, %{email: email}}
++        end
++    end
++  end
++
+   defp cast_club_id(club_id) do
+     case Ecto.UUID.cast(club_id) do
+       {:ok, club_id} -> {:ok, club_id}
+diff --git a/web/lib/memba/membership/commands/create_person.ex b/web/lib/memba/membership/commands/create_person.ex
+index ba0c4fe..0e6e33e 100644
+--- a/web/lib/memba/membership/commands/create_person.ex
++++ b/web/lib/memba/membership/commands/create_person.ex
+@@ -5,6 +5,6 @@ defmodule Memba.Membership.Commands.CreatePerson do
+   The caller supplies the aggregate identity as `person_id`.
+   """
+ 
+-  @enforce_keys [:person_id, :name, :email]
+-  defstruct [:person_id, :name, :email]
++  @enforce_keys [:person_id, :name]
++  defstruct [:person_id, :name, :email, :email_addresses]
+ end
+diff --git a/web/lib/memba/membership/commands/replace_person_email_addresses.ex b/web/lib/memba/membership/commands/replace_person_email_addresses.ex
+new file mode 100644
+index 0000000..4a698eb
+--- /dev/null
++++ b/web/lib/memba/membership/commands/replace_person_email_addresses.ex
+@@ -0,0 +1,8 @@
++defmodule Memba.Membership.Commands.ReplacePersonEmailAddresses do
++  @moduledoc """
++  Command to atomically replace every email address attached to a person.
++  """
++
++  @enforce_keys [:person_id, :email_addresses]
++  defstruct [:person_id, :email_addresses]
++end
+diff --git a/web/lib/memba/membership/events/person_email_addresses_replaced.ex b/web/lib/memba/membership/events/person_email_addresses_replaced.ex
+new file mode 100644
+index 0000000..2993f48
+--- /dev/null
++++ b/web/lib/memba/membership/events/person_email_addresses_replaced.ex
+@@ -0,0 +1,9 @@
++defmodule Memba.Membership.Events.PersonEmailAddressesReplaced do
++  @moduledoc """
++  Event raised when a person's full email-address set has been replaced.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:person_id, :email_addresses, :primary_email]
++  defstruct [:person_id, :email_addresses, :primary_email]
++end
+diff --git a/web/lib/memba/membership/person.ex b/web/lib/memba/membership/person.ex
+index e12e8d2..2535b15 100644
+--- a/web/lib/memba/membership/person.ex
++++ b/web/lib/memba/membership/person.ex
+@@ -5,27 +5,81 @@ defmodule Memba.Membership.Person do
+ 
+   alias Commanded.Aggregates.Aggregate
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.EmailAddresses
++  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+ 
+   @behaviour Aggregate
+ 
+-  defstruct [:person_id, :name, :email]
++  defstruct [:person_id, :name, :email, :email_addresses]
+ 
+   @impl Aggregate
+   def execute(%__MODULE__{person_id: nil}, %CreatePerson{} = command) do
+     with :ok <- validate_person_id(command.person_id),
+          {:ok, name} <- normalize_name(command.name),
+-         {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do
+-      %PersonCreated{person_id: command.person_id, name: name, email: email}
++         {:ok, email_addresses} <- create_email_addresses(command),
++         {:ok, primary_email} <- primary_email(email_addresses) do
++      person_created = %PersonCreated{
++        person_id: command.person_id,
++        name: name,
++        email: primary_email
++      }
++
++      if is_nil(command.email_addresses) do
++        person_created
++      else
++        [
++          person_created,
++          %PersonEmailAddressesReplaced{
++            person_id: command.person_id,
++            email_addresses: email_addresses,
++            primary_email: primary_email
++          }
++        ]
++      end
+     end
+   end
+ 
+   def execute(%__MODULE__{}, %CreatePerson{}), do: {:error, :already_created}
+ 
++  @impl Aggregate
++  def execute(%__MODULE__{person_id: nil}, %ReplacePersonEmailAddresses{}) do
++    {:error, :person_not_created}
++  end
++
++  def execute(%__MODULE__{} = person, %ReplacePersonEmailAddresses{} = command) do
++    with :ok <- validate_person_id(command.person_id),
++         :ok <- validate_matching_person_id(person, command),
++         {:ok, email_addresses} <- EmailAddresses.validate_set(command.email_addresses),
++         {:ok, primary_email} <- primary_email(email_addresses) do
++      %PersonEmailAddressesReplaced{
++        person_id: command.person_id,
++        email_addresses: email_addresses,
++        primary_email: primary_email
++      }
++    end
++  end
++
+   @impl Aggregate
+   def apply(%__MODULE__{} = person, %PersonCreated{} = event) do
+-    %__MODULE__{person | person_id: event.person_id, name: event.name, email: event.email}
++    %__MODULE__{
++      person
++      | person_id: event.person_id,
++        name: event.name,
++        email: event.email,
++        email_addresses: [
++          %{email: event.email, normalized_email: event.email, is_primary: true}
++        ]
++    }
++  end
++
++  def apply(%__MODULE__{} = person, %PersonEmailAddressesReplaced{} = event) do
++    %__MODULE__{
++      person
++      | email: event.primary_email,
++        email_addresses: event.email_addresses
++    }
+   end
+ 
+   defp validate_person_id(person_id) do
+@@ -43,4 +97,59 @@ defmodule Memba.Membership.Person do
+   end
+ 
+   defp normalize_name(_name), do: {:error, :invalid_name}
++
++  defp create_email_addresses(%CreatePerson{email_addresses: nil} = command) do
++    with {:ok, email} <- EmailAddresses.normalize_primary_email(command.email) do
++      {:ok, [%{email: email, normalized_email: email, is_primary: true}]}
++    end
++  end
++
++  defp create_email_addresses(%CreatePerson{} = command) do
++    with {:ok, email_addresses} <- EmailAddresses.validate_set(command.email_addresses),
++         :ok <- validate_legacy_email_matches_primary(command.email, email_addresses) do
++      {:ok, email_addresses}
++    end
++  end
++
++  defp validate_legacy_email_matches_primary(nil, _email_addresses), do: :ok
++
++  defp validate_legacy_email_matches_primary(email, email_addresses) do
++    with {:ok, email} <- EmailAddresses.normalize_primary_email(email),
++         {:ok, primary_email} <- primary_normalized_email(email_addresses) do
++      if email == primary_email do
++        :ok
++      else
++        {:error, :primary_email_mismatch}
++      end
++    end
++  end
++
++  defp validate_matching_person_id(
++         %__MODULE__{person_id: person_id},
++         %ReplacePersonEmailAddresses{
++           person_id: person_id
++         }
++       ) do
++    :ok
++  end
++
++  defp validate_matching_person_id(%__MODULE__{}, %ReplacePersonEmailAddresses{}) do
++    {:error, :invalid_person_id}
++  end
++
++  defp primary_email(email_addresses) do
++    case Enum.find(email_addresses, & &1.is_primary) do
++      %{email: email} -> {:ok, email}
++      %{"email" => email} -> {:ok, email}
++      _email_address -> {:error, :exactly_one_primary_email_required}
++    end
++  end
++
++  defp primary_normalized_email(email_addresses) do
++    case Enum.find(email_addresses, & &1.is_primary) do
++      %{normalized_email: normalized_email} -> {:ok, normalized_email}
++      %{"normalized_email" => normalized_email} -> {:ok, normalized_email}
++      _email_address -> {:error, :exactly_one_primary_email_required}
++    end
++  end
+ end
+diff --git a/web/lib/memba/membership/router.ex b/web/lib/memba/membership/router.ex
+index d6de430..2789229 100644
+--- a/web/lib/memba/membership/router.ex
++++ b/web/lib/memba/membership/router.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Membership.Router do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.UpdateClub
+ 
+   identify(Club, by: :club_id)
+@@ -20,5 +21,6 @@ defmodule Memba.Membership.Router do
+   dispatch(AddMember, to: Membership)
+   dispatch(CreateClub, to: Club)
+   dispatch(CreatePerson, to: Person)
++  dispatch(ReplacePersonEmailAddresses, to: Person)
+   dispatch(UpdateClub, to: Club)
+ end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 456fbd6..72ffe32 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -7,6 +7,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+   alias Memba.Membership.Commands.UpdateClub
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
+   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+@@ -46,7 +47,8 @@ defmodule Memba.Membership.AppTest do
+   end
+ 
+   test "Membership Commanded app includes the Membership router" do
+-    expected_commands = MapSet.new([AddMember, CreateClub, CreatePerson, UpdateClub])
++    expected_commands =
++      MapSet.new([AddMember, CreateClub, CreatePerson, ReplacePersonEmailAddresses, UpdateClub])
+ 
+     assert MapSet.new(App.__registered_commands__()) == expected_commands
+     assert MapSet.new(Router.__registered_commands__()) == expected_commands
+diff --git a/web/test/memba/membership/create_person_dispatch_test.exs b/web/test/memba/membership/create_person_dispatch_test.exs
+index 57f68ce..691dda2 100644
+--- a/web/test/memba/membership/create_person_dispatch_test.exs
++++ b/web/test/memba/membership/create_person_dispatch_test.exs
+@@ -4,6 +4,8 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
++  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Person
+ 
+@@ -48,4 +50,97 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
+     assert :ok = App.dispatch(command, consistency: :strong)
+     assert {:error, :already_created} = App.dispatch(command)
+   end
++
++  test "Membership app dispatches CreatePerson with multiple addresses as an atomic event pair" do
++    person_id = Ecto.UUID.generate()
++
++    command = %CreatePerson{
++      person_id: person_id,
++      name: "Alice",
++      email_addresses: [
++        %{email: "alice@example.com", is_primary: true},
++        %{email: "alice@work.example", is_primary: false}
++      ]
++    }
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 2,
++              events: [
++                %PersonCreated{
++                  person_id: ^person_id,
++                  name: "Alice",
++                  email: "alice@example.com"
++                },
++                %PersonEmailAddressesReplaced{
++                  person_id: ^person_id,
++                  primary_email: "alice@example.com",
++                  email_addresses: [
++                    %{
++                      email: "alice@example.com",
++                      normalized_email: "alice@example.com",
++                      is_primary: true
++                    },
++                    %{
++                      email: "alice@work.example",
++                      normalized_email: "alice@work.example",
++                      is_primary: false
++                    }
++                  ]
++                }
++              ],
++              aggregate_state: %Person{
++                person_id: ^person_id,
++                name: "Alice",
++                email: "alice@example.com",
++                email_addresses: [
++                  %{
++                    email: "alice@example.com",
++                    normalized_email: "alice@example.com",
++                    is_primary: true
++                  },
++                  %{
++                    email: "alice@work.example",
++                    normalized_email: "alice@work.example",
++                    is_primary: false
++                  }
++                ]
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++  end
++
++  test "Membership app dispatches ReplacePersonEmailAddresses to the Person aggregate" do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             App.dispatch(
++               %CreatePerson{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    command = %ReplacePersonEmailAddresses{
++      person_id: person_id,
++      email_addresses: [
++        %{email: "alice@example.com", is_primary: false},
++        %{email: "alice@work.example", is_primary: true}
++      ]
++    }
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              aggregate_version: 2,
++              events: [
++                %PersonEmailAddressesReplaced{
++                  person_id: ^person_id,
++                  primary_email: "alice@work.example"
++                }
++              ],
++              aggregate_state: %Person{
++                person_id: ^person_id,
++                email: "alice@work.example"
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++  end
+ end
+diff --git a/web/test/memba/membership/person_test.exs b/web/test/memba/membership/person_test.exs
+index ff997a4..da771d1 100644
+--- a/web/test/memba/membership/person_test.exs
++++ b/web/test/memba/membership/person_test.exs
+@@ -2,6 +2,8 @@ defmodule Memba.Membership.PersonTest do
+   use ExUnit.Case, async: true
+ 
+   alias Memba.Membership.Commands.CreatePerson
++  alias Memba.Membership.Commands.ReplacePersonEmailAddresses
++  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Person
+ 
+@@ -22,6 +24,43 @@ defmodule Memba.Membership.PersonTest do
+              } = Person.execute(%Person{}, command)
+     end
+ 
++    test "accepts a replace-all email-address set and emits the compatibility event followed by the replacement event" do
++      person_id = Ecto.UUID.generate()
++
++      command = %CreatePerson{
++        person_id: person_id,
++        name: " Alice ",
++        email_addresses: [
++          %{email: " Alice@Example.COM ", is_primary: true},
++          %{email: " alice@work.example ", is_primary: false}
++        ]
++      }
++
++      assert [
++               %PersonCreated{
++                 person_id: ^person_id,
++                 name: "Alice",
++                 email: "Alice@Example.COM"
++               },
++               %PersonEmailAddressesReplaced{
++                 person_id: ^person_id,
++                 primary_email: "Alice@Example.COM",
++                 email_addresses: [
++                   %{
++                     email: "Alice@Example.COM",
++                     normalized_email: "alice@example.com",
++                     is_primary: true
++                   },
++                   %{
++                     email: "alice@work.example",
++                     normalized_email: "alice@work.example",
++                     is_primary: false
++                   }
++                 ]
++               }
++             ] = Person.execute(%Person{}, command)
++    end
++
+     test "rejects missing or malformed person UUIDs" do
+       assert {:error, :invalid_person_id} =
+                Person.execute(%Person{}, %CreatePerson{
+@@ -63,6 +102,41 @@ defmodule Memba.Membership.PersonTest do
+                })
+     end
+ 
++    test "rejects invalid replace-all email-address sets on create" do
++      assert {:error, :exactly_one_primary_email_required} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: Ecto.UUID.generate(),
++                 name: "Alice",
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: false},
++                   %{email: "alice@work.example", is_primary: false}
++                 ]
++               })
++
++      assert {:error, :duplicate_email_address} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: Ecto.UUID.generate(),
++                 name: "Alice",
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: true},
++                   %{email: " ALICE@EXAMPLE.COM ", is_primary: false}
++                 ]
++               })
++    end
++
++    test "rejects a legacy email that disagrees with the replace-all primary address" do
++      assert {:error, :primary_email_mismatch} =
++               Person.execute(%Person{}, %CreatePerson{
++                 person_id: Ecto.UUID.generate(),
++                 name: "Alice",
++                 email: "alice@old.example",
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: true},
++                   %{email: "alice@work.example", is_primary: false}
++                 ]
++               })
++    end
++
+     test "rejects creating the same aggregate twice" do
+       person_id = Ecto.UUID.generate()
+ 
+@@ -82,6 +156,78 @@ defmodule Memba.Membership.PersonTest do
+     end
+   end
+ 
++  describe "execute/2 ReplacePersonEmailAddresses" do
++    test "emits a replace-all email-address event for an existing person" do
++      person_id = Ecto.UUID.generate()
++
++      person =
++        Person.apply(%Person{}, %PersonCreated{
++          person_id: person_id,
++          name: "Alice",
++          email: "alice@example.com"
++        })
++
++      command = %ReplacePersonEmailAddresses{
++        person_id: person_id,
++        email_addresses: [
++          %{email: "alice@example.com", is_primary: false},
++          %{email: " Alice@Work.Example ", is_primary: true}
++        ]
++      }
++
++      assert %PersonEmailAddressesReplaced{
++               person_id: ^person_id,
++               primary_email: "Alice@Work.Example",
++               email_addresses: [
++                 %{
++                   email: "alice@example.com",
++                   normalized_email: "alice@example.com",
++                   is_primary: false
++                 },
++                 %{
++                   email: "Alice@Work.Example",
++                   normalized_email: "alice@work.example",
++                   is_primary: true
++                 }
++               ]
++             } = Person.execute(person, command)
++    end
++
++    test "rejects replacement before the person is created" do
++      assert {:error, :person_not_created} =
++               Person.execute(%Person{}, %ReplacePersonEmailAddresses{
++                 person_id: Ecto.UUID.generate(),
++                 email_addresses: [%{email: "alice@example.com", is_primary: true}]
++               })
++    end
++
++    test "rejects invalid person IDs and invalid address sets" do
++      person_id = Ecto.UUID.generate()
++
++      person =
++        Person.apply(%Person{}, %PersonCreated{
++          person_id: person_id,
++          name: "Alice",
++          email: "alice@example.com"
++        })
++
++      assert {:error, :invalid_person_id} =
++               Person.execute(person, %ReplacePersonEmailAddresses{
++                 person_id: "not-a-uuid",
++                 email_addresses: [%{email: "alice@example.com", is_primary: true}]
++               })
++
++      assert {:error, :exactly_one_primary_email_required} =
++               Person.execute(person, %ReplacePersonEmailAddresses{
++                 person_id: person_id,
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: false},
++                   %{email: "alice@work.example", is_primary: false}
++                 ]
++               })
++    end
++  end
++
+   test "apply/2 records the created person identity, name, and email" do
+     person_id = Ecto.UUID.generate()
+ 
+@@ -96,4 +242,32 @@ defmodule Memba.Membership.PersonTest do
+                email: "alice@example.com"
+              })
+   end
++
++  test "apply/2 records replaced email addresses and primary email" do
++    person_id = Ecto.UUID.generate()
++
++    person =
++      Person.apply(%Person{}, %PersonCreated{
++        person_id: person_id,
++        name: "Alice",
++        email: "alice@example.com"
++      })
++
++    email_addresses = [
++      %{email: "alice@example.com", normalized_email: "alice@example.com", is_primary: false},
++      %{email: "alice@work.example", normalized_email: "alice@work.example", is_primary: true}
++    ]
++
++    assert %Person{
++             person_id: ^person_id,
++             name: "Alice",
++             email: "alice@work.example",
++             email_addresses: ^email_addresses
++           } =
++             Person.apply(person, %PersonEmailAddressesReplaced{
++               person_id: person_id,
++               email_addresses: email_addresses,
++               primary_email: "alice@work.example"
++             })
++  end
+ end
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 4f0a5e8..bc52bf6 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -6,6 +6,7 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.MemberAdded
++  alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+@@ -180,6 +181,94 @@ defmodule Memba.Membership.PublicApiTest do
+              Membership.get_person(person_id)
+   end
+ 
++  test "create_person/2 accepts an email-address set for new staff create flows" do
++    person_id = Ecto.UUID.generate()
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonCreated{
++                  person_id: ^person_id,
++                  name: "Alice",
++                  email: "Alice@Example.COM"
++                },
++                %PersonEmailAddressesReplaced{
++                  person_id: ^person_id,
++                  primary_email: "Alice@Example.COM",
++                  email_addresses: [
++                    %{
++                      email: "Alice@Example.COM",
++                      normalized_email: "alice@example.com",
++                      is_primary: true
++                    },
++                    %{
++                      email: "alice@work.example",
++                      normalized_email: "alice@work.example",
++                      is_primary: false
++                    }
++                  ]
++                }
++              ]
++            }} =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: " Alice ",
++                 email_addresses: [
++                   %{email: " Alice@Example.COM ", is_primary: true},
++                   %{email: "alice@work.example", is_primary: false}
++                 ]
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
++  test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^person_id,
++              events: [
++                %PersonEmailAddressesReplaced{
++                  person_id: ^person_id,
++                  primary_email: "alice@work.example",
++                  email_addresses: [
++                    %{
++                      email: "alice@example.com",
++                      normalized_email: "alice@example.com",
++                      is_primary: false
++                    },
++                    %{
++                      email: "alice@work.example",
++                      normalized_email: "alice@work.example",
++                      is_primary: true
++                    }
++                  ]
++                }
++              ]
++            }} =
++             Membership.replace_person_email_addresses(
++               %{
++                 person_id: person_id,
++                 email_addresses: [
++                   %{email: "alice@example.com", is_primary: false},
++                   %{email: "alice@work.example", is_primary: true}
++                 ]
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++  end
++
+   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
+     club_id = Ecto.UUID.generate()
+     person_id = Ecto.UUID.generate()
