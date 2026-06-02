@@ -46,8 +46,11 @@ config :memba, Memba.Messaging.EventStore, event_store_config
 # you can enable the server option below.
 config :memba, MembaWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4002],
+  check_origin: ["//localhost", "//lvh.me", "//*.lvh.me"],
   secret_key_base: "+oZn9i13kWVdYNGOEgsHq8mRThfrIm6gsdUyl5gUMJXV8sHSGJ7m0sDaknZ7eOWQ",
   server: false
+
+config :memba, :session_cookie_domain, ".lvh.me"
 
 # In ordinary ExUnit tests we don't send emails. Browser acceptance tests opt into
 # Swoosh's local adapter so they can inspect `/dev/mailbox` like a developer would.
@@ -87,7 +90,7 @@ config :phoenix,
 config :memba, :club_site,
   base_domain: "lvh.me",
   scheme: "http",
-  port: 4002
+  port: String.to_integer(System.get_env("PORT") || "4002")
 
 config :cucumber,
   features: ["../acceptance-tests/features/**/*.feature"],

@@ -135,7 +135,7 @@ async function buildLifecycleConfig(env = process.env, portFinder = findFreePort
     postgresPort = await portFinder();
   }
 
-  const baseUrl = env.BASE_URL || `http://localhost:${phoenixPort}`;
+  const baseUrl = env.BASE_URL || `http://lvh.me:${phoenixPort}`;
 
   return {
     env,
@@ -396,7 +396,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
 
   return {
     get baseUrl() {
-      return config ? config.baseUrl : env.BASE_URL || "http://localhost:4000";
+      return config ? config.baseUrl : env.BASE_URL || "http://lvh.me:4000";
     },
 
     getLogTail() {

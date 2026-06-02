@@ -135,7 +135,7 @@ async function assertReceivesSignInLink(world, personName) {
   const signInLink = signInLinkFromTextBody(email.text_body);
   assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${email.text_body}`);
 
-  world.signInLinks[personName] = signInLink;
+  world.signInLinks[personName] = browserAppUrl(world, signInLink);
 }
 
 async function assertDoesNotReceiveSignInLink(world, personName) {
@@ -177,7 +177,7 @@ async function followUnissuedSignInLink(world) {
 }
 
 async function followSignInLinkUrl(world, url) {
-  await world.page.goto(url);
+  await world.page.goto(browserAppUrl(world, url));
 }
 
 async function expireSignInLink(world, personName) {
@@ -340,6 +340,19 @@ function signInEmailMatches(email, recipientEmail) {
 function signInLinkFromTextBody(textBody) {
   const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
   return match && match[0];
+}
+
+function browserAppUrl(world, url) {
+  const parsed = new URL(url, `${world.baseUrl}/`);
+  const base = new URL(world.baseUrl);
+
+  if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+    parsed.protocol = base.protocol;
+    parsed.hostname = base.hostname;
+    parsed.port = base.port;
+  }
+
+  return parsed.toString();
 }
 
 function mailboxMessageId(email) {
