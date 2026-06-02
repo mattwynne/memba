@@ -5,6 +5,6 @@ defmodule Memba.Membership.Commands.CreatePerson do
   The caller supplies the aggregate identity as `person_id`.
   """
 
-  @enforce_keys [:person_id, :name, :email]
-  defstruct [:person_id, :name, :email]
+  @enforce_keys [:person_id, :name]
+  defstruct [:person_id, :name, :email, :email_addresses]
 end
