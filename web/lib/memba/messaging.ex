@@ -176,7 +176,10 @@ defmodule Memba.Messaging do
   def get_member_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
          {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
-      Repo.get_by(MemberEmailDeliveryProjection, message_id: message_id, recipient_id: recipient_id)
+      Repo.get_by(MemberEmailDeliveryProjection,
+        message_id: message_id,
+        recipient_id: recipient_id
+      )
     else
       :error -> nil
     end

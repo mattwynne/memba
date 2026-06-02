@@ -14,7 +14,9 @@ defmodule MembaWeb.AuthGatesTest do
         |> get("/admin/clubs?filter=recent")
 
       assert redirected_to(conn) == ~p"/auth"
-      assert get_session(conn, IdentityAuth.return_to_session_key()) == "/admin/clubs?filter=recent"
+
+      assert get_session(conn, IdentityAuth.return_to_session_key()) ==
+               "/admin/clubs?filter=recent"
     end
 
     test "forbid signed-in non-staff browsers", %{conn: conn} do

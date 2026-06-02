@@ -71,9 +71,10 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     refute response =~ "Delivery problem"
   end
 
-  test "Memba staff email deliveries overview keeps detailed Memba staff statuses and provider reasons", %{
-    conn: conn
-  } do
+  test "Memba staff email deliveries overview keeps detailed Memba staff statuses and provider reasons",
+       %{
+         conn: conn
+       } do
     %{message_id: message_id, recipients: [recipient]} =
       send_projected_message_with_recipients(["Carol"], subject: "Trail work party")
 

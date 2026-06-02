@@ -32,7 +32,7 @@ defmodule MembaWeb.AuthControllerTest do
 
       assert response =~ "Sign in to your club"
       assert response =~ "Enter your email address and we’ll send you a link to sign in."
-      refute response =~ "sign-in link"
+      refute response =~ "magic link"
       refute response =~ "signs up anyone with a memba.io email as Memba staff"
 
       assert html
@@ -109,9 +109,10 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "GET /auth/sign-in/:token" do
-    test "consumes a valid Memba staff token, signs the browser in, and redirects to the Memba staff area", %{
-      conn: conn
-    } do
+    test "consumes a valid Memba staff token, signs the browser in, and redirects to the Memba staff area",
+         %{
+           conn: conn
+         } do
       assert {:ok, %{token: token}} = Accounts.request_sign_in_link("Pat@Memba.IO")
 
       conn = get(conn, ~p"/auth/sign-in/#{token}")

@@ -42,7 +42,9 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
 
     request = email_delivery_request()
 
-    assert {:error, {:postmark_configuration_error, message}} = EmailDeliveryProvider.deliver(request)
+    assert {:error, {:postmark_configuration_error, message}} =
+             EmailDeliveryProvider.deliver(request)
+
     assert message =~ "Postmark email delivery provider is enabled"
     assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
     assert message =~ "MEMBA_POSTMARK_FROM_ADDRESS"
