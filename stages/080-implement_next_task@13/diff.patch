@@ -1,0 +1,277 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index 59a2f49..d921f9b 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -12,7 +12,7 @@
+ - [x] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
+ - [x] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+ - [x] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+-- [ ] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
++- [x] 013 Add dedicated staff routes and LiveViews under the existing `/admin` staff LiveSession:
+ - [ ] 014 Replace the existing inline person creation form on `MembaWeb.Admin.ClubsLive.Show` with a “New person” link to the create LiveView. Keep the people list on the club show page, show each person's primary email plus alternate-count or alternate-list summary, and add an “Edit” link for each person.
+ - [ ] 015 Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
+ - [ ] 016 Update staff/operator person displays to show primary and alternate addresses distinctly.
+diff --git a/web/lib/memba_web/live/admin/people_live/edit.ex b/web/lib/memba_web/live/admin/people_live/edit.ex
+new file mode 100644
+index 0000000..aa96f13
+--- /dev/null
++++ b/web/lib/memba_web/live/admin/people_live/edit.ex
+@@ -0,0 +1,100 @@
++defmodule MembaWeb.Admin.PeopleLive.Edit do
++  use MembaWeb, :live_view
++
++  alias Memba.Membership
++
++  @impl Phoenix.LiveView
++  def mount(%{"club_id" => club_id, "person_id" => person_id}, _session, socket) do
++    club = Membership.get_club(club_id)
++    person = Membership.get_person(person_id)
++    email_addresses = Membership.list_person_email_addresses(person_id)
++
++    {:ok,
++     socket
++     |> assign(:club_id, club_id)
++     |> assign(:person_id, person_id)
++     |> assign(:club, club)
++     |> assign(:person, person)
++     |> assign(:email_addresses, email_addresses)
++     |> assign(:form, to_form(person_form_params(person), as: :person))}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.admin flash={@flash}>
++      <main
++        id="person-edit"
++        data-club-id={@club_id}
++        data-person-id={@person_id}
++        class="mx-auto max-w-4xl space-y-8 p-6"
++      >
++        <.link
++          id="back-to-club-link"
++          navigate={~p"/admin/clubs/#{@club_id}"}
++          aria-label="Back to club"
++          class="text-sm font-medium text-blue-700 hover:text-blue-900"
++        >
++          ← Club
++        </.link>
++
++        <%= if @club && @person do %>
++          <section class="space-y-2">
++            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
++              {@club.name}
++            </p>
++            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">Edit {@person.name}</h1>
++            <p class="text-zinc-600">
++              Edit this person's name, primary email address, and alternate email addresses.
++            </p>
++          </section>
++
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <.form for={@form} id="person-form" aria-label="Edit person" class="space-y-5">
++              <div>
++                <h2 class="text-lg font-semibold text-zinc-900">Person details</h2>
++                <p class="mt-1 text-sm text-zinc-600">
++                  The dedicated edit form is ready for the multi-address fields in this iteration.
++                </p>
++              </div>
++
++              <.input
++                field={@form[:name]}
++                id="person-name-input"
++                label="Name"
++                aria-label="Person name"
++                required
++              />
++
++              <div id="person-email-addresses" aria-label="Email addresses" class="space-y-3">
++                <h2 class="text-lg font-semibold text-zinc-900">Email addresses</h2>
++                <p
++                  :for={email_address <- @email_addresses}
++                  data-testid="person-email-address"
++                  data-primary={to_string(email_address.primary?)}
++                  class="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm"
++                >
++                  <span class="font-medium text-zinc-900">{email_address.email}</span>
++                  <span class="ml-2 text-zinc-500">
++                    {if email_address.primary?, do: "Primary", else: "Alternate"}
++                  </span>
++                </p>
++              </div>
++            </.form>
++          </section>
++        <% else %>
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h1 class="text-2xl font-bold text-zinc-900">Person not found</h1>
++            <p class="mt-2 text-zinc-600">
++              No projected club and person combination exists for this URL.
++            </p>
++          </section>
++        <% end %>
++      </main>
++    </Layouts.admin>
++    """
++  end
++
++  defp person_form_params(nil), do: %{"name" => ""}
++  defp person_form_params(person), do: %{"name" => person.name}
++end
+diff --git a/web/lib/memba_web/live/admin/people_live/new.ex b/web/lib/memba_web/live/admin/people_live/new.ex
+new file mode 100644
+index 0000000..039541d
+--- /dev/null
++++ b/web/lib/memba_web/live/admin/people_live/new.ex
+@@ -0,0 +1,83 @@
++defmodule MembaWeb.Admin.PeopleLive.New do
++  use MembaWeb, :live_view
++
++  alias Memba.Membership
++
++  @person_form %{"name" => ""}
++
++  @impl Phoenix.LiveView
++  def mount(%{"club_id" => club_id}, _session, socket) do
++    club = Membership.get_club(club_id)
++
++    {:ok,
++     socket
++     |> assign(:club_id, club_id)
++     |> assign(:club, club)
++     |> assign(:form, to_form(@person_form, as: :person))}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.admin flash={@flash}>
++      <main id="person-new" data-club-id={@club_id} class="mx-auto max-w-4xl space-y-8 p-6">
++        <.link
++          id="back-to-club-link"
++          navigate={~p"/admin/clubs/#{@club_id}"}
++          aria-label="Back to club"
++          class="text-sm font-medium text-blue-700 hover:text-blue-900"
++        >
++          ← Club
++        </.link>
++
++        <%= if @club do %>
++          <section class="space-y-2">
++            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
++              {@club.name}
++            </p>
++            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">New person</h1>
++            <p class="text-zinc-600">
++              Create a person for this club context and manage their primary and alternate email addresses.
++            </p>
++          </section>
++
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <.form for={@form} id="person-form" aria-label="Create person" class="space-y-5">
++              <div>
++                <h2 class="text-lg font-semibold text-zinc-900">Person details</h2>
++                <p class="mt-1 text-sm text-zinc-600">
++                  The dedicated create form is ready for the multi-address fields in this iteration.
++                </p>
++              </div>
++
++              <.input
++                field={@form[:name]}
++                id="person-name-input"
++                label="Name"
++                aria-label="Person name"
++                required
++              />
++
++              <div
++                id="person-email-addresses"
++                aria-label="Email addresses"
++                class="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-4"
++              >
++                <p class="text-sm font-medium text-zinc-700">Primary and alternate email addresses</p>
++                <p class="mt-1 text-sm text-zinc-500">
++                  Email address rows and primary selection are added by the staff form task.
++                </p>
++              </div>
++            </.form>
++          </section>
++        <% else %>
++          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
++            <h1 class="text-2xl font-bold text-zinc-900">Club not found</h1>
++            <p class="mt-2 text-zinc-600">No projected club exists for this URL.</p>
++          </section>
++        <% end %>
++      </main>
++    </Layouts.admin>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 3fee296..81ceba8 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -71,6 +71,8 @@ defmodule MembaWeb.Router do
+     live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
+       live "/clubs", ClubsLive.Index
+       live "/clubs/:club_id", ClubsLive.Show
++      live "/clubs/:club_id/people/new", PeopleLive.New
++      live "/clubs/:club_id/people/:person_id/edit", PeopleLive.Edit
+       live "/deliveries", DeliveriesLive.Index
+       live "/messages/:message_id", MessagesLive.Show
+     end
+diff --git a/web/test/memba_web/live/admin_people_live_test.exs b/web/test/memba_web/live/admin_people_live_test.exs
+new file mode 100644
+index 0000000..efe86f6
+--- /dev/null
++++ b/web/test/memba_web/live/admin_people_live_test.exs
+@@ -0,0 +1,50 @@
++defmodule MembaWeb.AdminPeopleLiveTest do
++  use MembaWeb.FeatureCase, async: false
++
++  test "staff can open the dedicated new-person LiveView for a club", %{conn: conn} do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++
++    conn
++    |> sign_in_staff()
++    |> visit(~p"/admin/clubs/#{club.club_id}/people/new")
++    |> assert_path("/admin/clubs/*/people/new")
++    |> assert_has("#admin-layout[data-surface='admin']")
++    |> assert_has("#person-new[data-club-id='#{club.club_id}']")
++    |> assert_has("#back-to-club-link[href='/admin/clubs/#{club.club_id}']")
++    |> assert_has("#person-form[aria-label='Create person']")
++    |> assert_has("#person-name-input[aria-label='Person name']")
++    |> assert_has("#person-email-addresses[aria-label='Email addresses']")
++  end
++
++  test "staff can open the dedicated edit-person LiveView for a club person", %{conn: conn} do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
++    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
++
++    insert_membership_person_email_address!(
++      person_id: person.person_id,
++      email: "alice@work.example",
++      is_primary: false
++    )
++
++    conn
++    |> sign_in_staff()
++    |> visit(~p"/admin/clubs/#{club.club_id}/people/#{person.person_id}/edit")
++    |> assert_path("/admin/clubs/*/people/*/edit")
++    |> assert_has("#admin-layout[data-surface='admin']")
++    |> assert_has(
++      "#person-edit[data-club-id='#{club.club_id}'][data-person-id='#{person.person_id}']"
++    )
++    |> assert_has("#back-to-club-link[href='/admin/clubs/#{club.club_id}']")
++    |> assert_has("#person-form[aria-label='Edit person']")
++    |> assert_has("#person-name-input[aria-label='Person name']")
++    |> assert_has("#person-email-addresses[aria-label='Email addresses']")
++    |> assert_has(
++      "#person-email-addresses [data-testid='person-email-address'][data-primary='true']",
++      text: "alice@example.com"
++    )
++    |> assert_has(
++      "#person-email-addresses [data-testid='person-email-address'][data-primary='false']",
++      text: "alice@work.example"
++    )
++  end
++end
