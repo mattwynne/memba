@@ -1,0 +1,107 @@
+diff --git a/docs/iterations/016-person-email-addresses/todo.md b/docs/iterations/016-person-email-addresses/todo.md
+index c394ddd..c00beb1 100644
+--- a/docs/iterations/016-person-email-addresses/todo.md
++++ b/docs/iterations/016-person-email-addresses/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Add projector handling so:
+ - [x] 007 Update Membership public query APIs so callers can fetch a person's primary email, alternate emails, and lookup active memberships by any known address. `list_active_clubs_for_member_email/1` and `active_member_of_club_by_email?/2` must join `membership_person_email_addresses` on `normalized_email`; `list_active_members_of_club/1` must still return one row per active member with the primary email address.
+ - [x] 008 Enforce global duplicate normalized-email rejection before unsafe sign-in or sender matching can occur, using both application validation and the database unique index.
+-- [ ] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
++- [x] 009 Update Accounts sign-in eligibility to search all known addresses for active members, while preserving staff `@memba.io` sign-in behaviour.
+ - [ ] 010 Ensure magic-link tokens and delivery use the normalized known address requested by the user, not necessarily the person's primary address.
+ - [ ] 011 Update active-club lookup and active-member-by-email checks to match any known address attached to the person.
+ - [ ] 012 Update Messaging recipient resolution to return one recipient per active member using the person's primary email address only.
+diff --git a/web/lib/memba/accounts.ex b/web/lib/memba/accounts.ex
+index 187670c..60e2463 100644
+--- a/web/lib/memba/accounts.ex
++++ b/web/lib/memba/accounts.ex
+@@ -50,7 +50,8 @@ defmodule Memba.Accounts do
+   end
+ 
+   @doc """
+-  Request a sign-in link for a staff or active member email.
++  Request a sign-in link for a staff email or any known email address attached
++  to an active member.
+ 
+   Unknown, invalid, and non-member addresses return `{:ok, nil}` so callers can
+   render a neutral response without revealing whether the email is known.
+@@ -63,7 +64,7 @@ defmodule Memba.Accounts do
+         {:ok, nil}
+ 
+       normalized_email ->
+-        if sign_in_link_recipient?(normalized_email) do
++        if eligible_sign_in_email?(normalized_email) do
+           create_sign_in_token(normalized_email, opts)
+         else
+           {:ok, nil}
+@@ -176,7 +177,7 @@ defmodule Memba.Accounts do
+     end
+   end
+ 
+-  defp sign_in_link_recipient?(email) do
++  defp eligible_sign_in_email?(email) do
+     staff_email?(email) or list_active_clubs_for_email(email) != []
+   end
+ 
+diff --git a/web/test/memba/accounts_test.exs b/web/test/memba/accounts_test.exs
+index c7f03dc..b53b4e1 100644
+--- a/web/test/memba/accounts_test.exs
++++ b/web/test/memba/accounts_test.exs
+@@ -60,6 +60,24 @@ defmodule Memba.AccountsTest do
+                |> select([sign_in_token], sign_in_token.email)
+                |> Repo.all()
+     end
++
++    test "creates tokens for alternate email addresses attached to active members" do
++      now = ~U[2026-05-31 12:00:00.000000Z]
++
++      create_active_member(
++        club_name: "Kootenay Mountaineering Club",
++        email_addresses: [
++          %{email: "alice@example.com", is_primary: true},
++          %{email: "Alice.Work@Example.COM", is_primary: false}
++        ]
++      )
++
++      assert {:ok, %{token: token}} =
++               Accounts.request_sign_in_link(" alice.work@example.com ", now: now)
++
++      assert is_binary(token)
++      assert Repo.aggregate(SignInToken, :count) == 1
++    end
+   end
+ 
+   describe "consume_sign_in_token/2" do
+@@ -148,11 +166,7 @@ defmodule Memba.AccountsTest do
+     unless Membership.get_person(person_id) do
+       assert :ok =
+                Membership.create_person(
+-                 %{
+-                   person_id: person_id,
+-                   name: "Test Member",
+-                   email: Keyword.fetch!(attrs, :email)
+-                 },
++                 create_person_attrs(attrs, person_id),
+                  consistency: :strong
+                )
+     end
+@@ -165,4 +179,19 @@ defmodule Memba.AccountsTest do
+ 
+     %{club_id: club_id, person_id: person_id}
+   end
++
++  defp create_person_attrs(attrs, person_id) do
++    base_attrs = %{
++      person_id: person_id,
++      name: "Test Member"
++    }
++
++    case Keyword.fetch(attrs, :email_addresses) do
++      {:ok, email_addresses} ->
++        Map.put(base_attrs, :email_addresses, email_addresses)
++
++      :error ->
++        Map.put(base_attrs, :email, Keyword.fetch!(attrs, :email))
++    end
++  end
+ end
