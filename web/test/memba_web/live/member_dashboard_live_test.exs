@@ -131,12 +131,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#member-message-#{message.message_id} [data-testid='message-receipt-glance']",
-             "1 of 2 opened"
+             "1 of 2 delivered"
            )
 
     assert has_element?(
              view,
-             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='opened'][data-receipt-percentage='50']"
+             "#member-message-#{message.message_id} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-percentage='50']"
            )
 
     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
@@ -240,17 +240,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     assert has_element?(
              view,
              "#{message_selector} [data-testid='message-receipt-glance']",
-             "1 of 4 opened"
+             "2 of 4 delivered"
+           )
+
+    refute has_element?(
+             view,
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened']"
            )
 
     assert has_element?(
              view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='opened'][data-receipt-label='Opened'][data-receipt-count='1']"
-           )
-
-    assert has_element?(
-             view,
-             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='1']"
+             "#{message_selector} [data-testid='message-receipt-segment'][data-receipt-status='delivered'][data-receipt-label='Delivered'][data-receipt-count='2']"
            )
 
     assert has_element?(

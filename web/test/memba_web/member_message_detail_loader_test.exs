@@ -53,7 +53,6 @@ defmodule MembaWeb.MemberMessageDetailLoaderTest do
 
     assert Enum.map(assigns.member_email_delivery_summary, &{&1.status, &1.count, &1.percentage}) ==
              [
-               {"opened", 0, 0},
                {"delivered", 1, 100},
                {"sent", 0, 0},
                {"delivery problem", 0, 0}

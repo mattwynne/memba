@@ -3,7 +3,8 @@ defmodule Memba.Messaging.Projections.MembaStaffEmailDelivery do
   Memba-staff-facing deliverability read model for one email delivery.
 
   Unlike member-facing email deliveries, this projection keeps the detailed delivery
-  status and the provider/channel reason text Memba staff need for diagnosis.
+  status and the provider/channel reason text Memba staff need for diagnosis. Current
+  statuses are `sent`, `delivered`, `delayed`, `bounced`, and `spam complaint`.
   """
 
   use Ecto.Schema

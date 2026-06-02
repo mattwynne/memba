@@ -110,14 +110,6 @@ defmodule MembaWeb.MemberMessageDetailTest do
           club_id: alice.club_id
         )
 
-      dana =
-        create_member(
-          email: "dana@example.com",
-          name: "Dana Downhill",
-          club_name: "Alpine Club",
-          club_id: alice.club_id
-        )
-
       message =
         create_message(
           club_id: alice.club_id,
@@ -128,8 +120,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
       receipt_cases = [
         {alice, "sent", "Sending", "hero-clock"},
         {bob, "delivered", "Delivered", "hero-check-circle"},
-        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"},
-        {dana, "opened", "Opened", "hero-envelope-open"}
+        {carol, "delivery problem", "Delivery problem", "hero-exclamation-triangle"}
       ]
 
       Enum.each(receipt_cases, fn {member, status, _label, _icon} ->
@@ -151,7 +142,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
       assert_selector_exists(
         html,
-        "#member-receipts-summary[data-receipt-count='4']"
+        "#member-receipts-summary[data-receipt-count='3']"
       )
 
       Enum.each(receipt_cases, fn {member, status, label, icon} ->
@@ -175,6 +166,12 @@ defmodule MembaWeb.MemberMessageDetailTest do
                )
                |> Enum.any?()
       end)
+
+      refute html
+             |> LazyHTML.query(
+               "[data-testid='member-receipt-group'][data-receipt-status='opened']"
+             )
+             |> Enum.any?()
     end
 
     test "does not expose Memba-staff-only delivery fields on member message detail", %{

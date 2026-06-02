@@ -2,8 +2,9 @@ defmodule Memba.Messaging.Projections.MemberEmailDelivery do
   @moduledoc """
   Member-facing receipt read model for one email delivery.
 
-  The `status` field stores the simplified ADR 0006 vocabulary rather
-  than provider- or Memba-staff-facing delivery details.
+  The `status` field stores the simplified member-facing vocabulary rather
+  than provider- or Memba-staff-facing delivery details. Current projections
+  use `sent`, `delivered`, and `delivery problem`.
   """
 
   use Ecto.Schema

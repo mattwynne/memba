@@ -155,7 +155,9 @@ defmodule Memba.Messaging do
   """
   def get_member_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MemberEmailDeliveryProjection, delivery_id)
+      delivery_id
+      |> then(&Repo.get(MemberEmailDeliveryProjection, &1))
+      |> normalize_member_email_delivery_projection()
     else
       :error -> nil
     end
@@ -170,10 +172,9 @@ defmodule Memba.Messaging do
   def get_member_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
          {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
-      Repo.get_by(MemberEmailDeliveryProjection,
-        message_id: message_id,
-        recipient_id: recipient_id
-      )
+      MemberEmailDeliveryProjection
+      |> Repo.get_by(message_id: message_id, recipient_id: recipient_id)
+      |> normalize_member_email_delivery_projection()
     else
       :error -> nil
     end
@@ -192,6 +193,7 @@ defmodule Memba.Messaging do
       |> where([receipt], receipt.message_id == ^message_id)
       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
       |> Repo.all()
+      |> Enum.map(&normalize_member_email_delivery_projection/1)
     else
       :error -> []
     end
@@ -204,7 +206,9 @@ defmodule Memba.Messaging do
   """
   def get_memba_staff_email_delivery(delivery_id) do
     with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
-      Repo.get(MembaStaffEmailDeliveryProjection, delivery_id)
+      delivery_id
+      |> then(&Repo.get(MembaStaffEmailDeliveryProjection, &1))
+      |> normalize_memba_staff_email_delivery_projection()
     else
       :error -> nil
     end
@@ -219,10 +223,9 @@ defmodule Memba.Messaging do
   def get_memba_staff_email_delivery(message_id, recipient_id) do
     with {:ok, message_id} <- Ecto.UUID.cast(message_id),
          {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
-      Repo.get_by(MembaStaffEmailDeliveryProjection,
-        message_id: message_id,
-        recipient_id: recipient_id
-      )
+      MembaStaffEmailDeliveryProjection
+      |> Repo.get_by(message_id: message_id, recipient_id: recipient_id)
+      |> normalize_memba_staff_email_delivery_projection()
     else
       :error -> nil
     end
@@ -239,7 +242,9 @@ defmodule Memba.Messaging do
   def list_operator_deliveries(opts \\ []) do
     if is_list(opts) do
       with {:ok, query} <- operator_deliveries_query(opts) do
-        Repo.all(query)
+        query
+        |> Repo.all()
+        |> Enum.map(&normalize_memba_staff_email_delivery_projection/1)
       else
         :error -> []
       end
@@ -264,6 +269,7 @@ defmodule Memba.Messaging do
         asc: deliverability.recipient_id
       )
       |> Repo.all()
+      |> Enum.map(&normalize_memba_staff_email_delivery_projection/1)
     else
       :error -> []
     end
@@ -293,6 +299,23 @@ defmodule Memba.Messaging do
         {:ok, query}
     end
   end
+
+  defp normalize_member_email_delivery_projection(
+         %MemberEmailDeliveryProjection{status: "opened"} =
+           receipt
+       ) do
+    %{receipt | status: "delivered"}
+  end
+
+  defp normalize_member_email_delivery_projection(receipt), do: receipt
+
+  defp normalize_memba_staff_email_delivery_projection(
+         %MembaStaffEmailDeliveryProjection{status: "opened"} = deliverability
+       ) do
+    %{deliverability | status: "delivered", reason: nil}
+  end
+
+  defp normalize_memba_staff_email_delivery_projection(deliverability), do: deliverability
 
   defp dispatch_command(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do

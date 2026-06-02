@@ -14,7 +14,6 @@ defmodule Memba.Messaging.Projectors.MemberEmailDelivery do
   alias Memba.Messaging.Events.EmailDeliveryCreated
   alias Memba.Messaging.Events.EmailDeliveryDelayed
   alias Memba.Messaging.Events.EmailDeliveryDelivered
-  alias Memba.Messaging.Events.EmailDeliveryOpened
   alias Memba.Messaging.Events.EmailDeliverySpamComplaint
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Repo
@@ -43,10 +42,6 @@ defmodule Memba.Messaging.Projectors.MemberEmailDelivery do
 
   project(%EmailDeliverySpamComplaint{} = event, fn multi ->
     update_status(multi, event.delivery_id, "delivery problem")
-  end)
-
-  project(%EmailDeliveryOpened{} = event, fn multi ->
-    update_status(multi, event.delivery_id, "opened")
   end)
 
   defp update_status(multi, delivery_id, status) do
