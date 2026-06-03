@@ -5,7 +5,7 @@ Status: validated
 
 ## Goal
 
-Make Memba ready to switch all production email from Resend to Postmark after inbound club messages have been proven end-to-end with Resend.
+Make Memba ready to switch all production email from Resend to Postmark, including inbound club messages that could not be proven with the current Resend domain/account setup.
 
 After this iteration, Matt can manually cut production over to Postmark for member-message outbound delivery, inbound club-message email, rejection emails, and magic-link authentication using a documented runbook, while keeping Resend available as a rollback/fallback provider.
 
@@ -15,7 +15,7 @@ Iteration 008 added Postmark-backed outbound member-message delivery and Postmar
 
 Iteration 019 is the current delivery slice for inbound club messages by email. It deliberately proves inbound email with Resend first while keeping the application-side inbound email API provider-neutral enough for Postmark to replace or supplement Resend later.
 
-Postmark has now been approved. The product plan is to finish iteration 019 with Resend, observe that incoming messages work, then migrate production email to Postmark. This gives Memba evidence that both providers work fully and preserves a tested fallback path.
+Postmark has now been approved. The original product plan was to finish iteration 019 with Resend, observe that incoming messages work, then migrate production email to Postmark. During production smoke-test preparation we found the current Resend setup cannot receive `clubs.memba.io` without changing or upgrading the Resend domain configuration. Matt approved proceeding directly to Postmark inbound setup while preserving Resend as a fallback for the code paths that already work.
 
 ## Scope
 
@@ -90,7 +90,7 @@ Decisions made during planning:
 
 ## Implementation Plan
 
-1. Start after iteration 019 is delivered and inbound club-message behaviour has been manually observed working with Resend.
+1. Start after iteration 019 is delivered. Do not require manual Resend inbound observation before proceeding; Matt approved moving directly to Postmark after production setup showed the current Resend domain/account cannot receive `clubs.memba.io` without further provider changes.
 2. Inspect iteration 019's provider-neutral inbound email API, idempotency model, rejection-email path, Resend inbound parser/controller, provider selection, and tests.
 3. Inspect existing Postmark outbound member-message provider, Postmark delivery-status webhook controller, auth email Postmark configuration, and `docs/postmark-email.md`.
 4. Determine the cleanest Postmark inbound routing shape. Prefer keeping inbound-email handling separate from outbound delivery-status webhooks if Postmark's dashboard supports separate inbound and delivery-status webhook URLs; otherwise make the shared Postmark route dispatch safely by payload shape.
