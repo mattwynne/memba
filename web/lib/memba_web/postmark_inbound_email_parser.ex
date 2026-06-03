@@ -16,7 +16,8 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
          {:ok, from_address} <- from_address(payload),
          {:ok, recipient_addresses} <- recipient_addresses(payload),
          {:ok, subject} <- required_binary(payload, [:Subject, "Subject"], "Subject"),
-         {:ok, text_body} <- required_binary(payload, [:TextBody, "TextBody"], "TextBody"),
+         {:ok, text_body} <-
+           optional_binary(payload, [:TextBody, "TextBody"], :invalid_text_body),
          {:ok, html_body} <-
            optional_binary(payload, [:HtmlBody, "HtmlBody"], :invalid_html_body),
          {:ok, attachments} <- attachments(payload) do

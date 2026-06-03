@@ -43,6 +43,7 @@ defmodule MembaWeb.PostmarkInboundWebhookController do
 
   defp error_detail(:invalid_attachments), do: "Invalid Postmark inbound webhook attachments"
   defp error_detail(:invalid_html_body), do: "Invalid Postmark inbound webhook HTML body"
+  defp error_detail(:invalid_text_body), do: "Invalid Postmark inbound webhook text body"
   defp error_detail(:invalid_payload), do: "Invalid Postmark inbound webhook payload"
 
   defp error_detail(reason) do

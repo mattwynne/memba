@@ -110,11 +110,24 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
             }} = PostmarkInboundEmailParser.parse(payload)
   end
 
+  test "allows missing plain text so shared inbound handling can reject HTML-only messages" do
+    payload =
+      valid_payload(%{
+        "HtmlBody" => "<p>This HTML must not be converted into a club message.</p>"
+      })
+      |> Map.delete("TextBody")
+
+    assert {:ok,
+            %{
+              text_body: nil,
+              html_body: "<p>This HTML must not be converted into a club message.</p>"
+            }} = PostmarkInboundEmailParser.parse(payload)
+  end
+
   test "treats missing required fields as malformed" do
     required_field_removals = [
       {"MessageID", fn payload -> Map.delete(payload, "MessageID") end},
-      {"Subject", fn payload -> Map.delete(payload, "Subject") end},
-      {"TextBody", fn payload -> Map.delete(payload, "TextBody") end}
+      {"Subject", fn payload -> Map.delete(payload, "Subject") end}
     ]
 
     for {field, remove_field} <- required_field_removals do
@@ -140,6 +153,7 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
 
   test "rejects malformed optional fields" do
     malformed_payloads = [
+      {:invalid_text_body, valid_payload(%{"TextBody" => %{"body" => "Hi"}})},
       {:invalid_html_body, valid_payload(%{"HtmlBody" => %{"body" => "<p>Hi</p>"}})},
       {:invalid_attachments,
        valid_payload(%{
