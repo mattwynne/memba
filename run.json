@@ -1,0 +1,244 @@
+{
+  "title": "Probe Fabro sandbox devenv nesting and format permissions",
+  "spec": {
+    "run_id": "01KT67S2NV8D3BDZ6HDF5FSXYD",
+    "settings": {
+      "project": {
+        "name": null,
+        "description": null,
+        "metadata": {}
+      },
+      "workflow": {
+        "name": null,
+        "description": null,
+        "graph": "workflow.fabro",
+        "metadata": {}
+      },
+      "run": {
+        "goal": {
+          "type": "inline",
+          "value": "Probe Fabro sandbox devenv nesting and format permissions"
+        },
+        "working_dir": null,
+        "metadata": {},
+        "inputs": {},
+        "model": {
+          "provider": "openai",
+          "name": "gpt-5.5",
+          "fallbacks": [],
+          "controls": {
+            "reasoning_effort": null,
+            "speed": null
+          }
+        },
+        "git": {
+          "author": null
+        },
+        "prepare": {
+          "commands": [
+            "bash /workspace/memba/.fabro/workflows/iteration-implementation/prepare_mix.sh"
+          ],
+          "timeout_ms": 300000
+        },
+        "execution": {
+          "mode": "normal",
+          "approval": "prompt"
+        },
+        "checkpoint": {
+          "exclude_globs": [
+            ".fabro/tmp",
+            ".fabro/tmp/**"
+          ],
+          "skip_git_hooks": false
+        },
+        "clone": {
+          "enabled": true
+        },
+        "run_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "meta_branch": {
+          "enabled": true,
+          "push": true
+        },
+        "environment": {
+          "id": "memba-dev",
+          "provider": "docker",
+          "image": {
+            "ref": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+            "dockerfile": null
+          },
+          "resources": {
+            "cpu": null,
+            "memory": null,
+            "disk": null
+          },
+          "network": {
+            "mode": "allow_all",
+            "allow": []
+          },
+          "lifecycle": {
+            "preserve": false,
+            "stop_on_terminal": true,
+            "auto_stop": null
+          },
+          "labels": {},
+          "volumes": [],
+          "env": {}
+        },
+        "notifications": {},
+        "interviews": {
+          "provider": null,
+          "slack": null
+        },
+        "agent": {
+          "fabro_tools": false,
+          "permissions": null,
+          "mcps": {}
+        },
+        "hooks": [],
+        "scm": {
+          "provider": null,
+          "owner": null,
+          "repository": null,
+          "github": null
+        },
+        "pull_request": null,
+        "artifacts": {
+          "include": []
+        },
+        "integrations": {
+          "github": {
+            "permissions": {}
+          }
+        }
+      }
+    },
+    "graph": {
+      "name": "PermissionProbe",
+      "nodes": {
+        "start": {
+          "id": "start",
+          "attrs": {
+            "shape": {
+              "String": "Mdiamond"
+            },
+            "label": {
+              "String": "Start"
+            }
+          }
+        },
+        "probe": {
+          "id": "probe",
+          "attrs": {
+            "label": {
+              "String": "Probe"
+            },
+            "script": {
+              "String": "set -eux\npwd\nid\necho PATH=$PATH\nls -ld . web web/test web/test/memba/messaging || true\nPROBE=web/test/memba/messaging/fabro_format_probe_test.exs\ncat > $PROBE <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\nls -l $PROBE\necho '== direct bin/mix format on current-owned file =='\nPATH=\"$PWD/bin:$PATH\" bin/mix format $PROBE\nls -l $PROBE\ncat > $PROBE <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\nif chown root:root $PROBE 2>/tmp/chown.err; then echo chown_root_ok; else echo chown_root_failed; cat /tmp/chown.err; fi\nchmod 0644 $PROBE || true\nls -l $PROBE\necho '== direct bin/mix format on root-owned file =='\nif PATH=\"$PWD/bin:$PATH\" bin/mix format $PROBE; then echo direct_root_owned_ok; else echo direct_root_owned_failed; fi\nls -l $PROBE\ncat > $PROBE <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\nchown root:root $PROBE 2>/dev/null || true\nchmod 0644 $PROBE || true\nls -l $PROBE\necho '== nested devenv shell mix format on root-owned file =='\nif devenv shell -- sh -lc 'pwd; id; mix format web/test/memba/messaging/fabro_format_probe_test.exs'; then echo nested_root_owned_ok; else echo nested_root_owned_failed; fi\nls -l $PROBE\nrm -f $PROBE\n"
+            },
+            "shape": {
+              "String": "parallelogram"
+            }
+          }
+        },
+        "exit": {
+          "id": "exit",
+          "attrs": {
+            "label": {
+              "String": "Exit"
+            },
+            "shape": {
+              "String": "Msquare"
+            }
+          }
+        }
+      },
+      "edges": [
+        {
+          "from": "start",
+          "to": "probe",
+          "attrs": {}
+        },
+        {
+          "from": "probe",
+          "to": "exit",
+          "attrs": {}
+        }
+      ],
+      "attrs": {
+        "goal": {
+          "String": "Probe Fabro sandbox devenv nesting and format permissions"
+        },
+        "rankdir": {
+          "String": "LR"
+        }
+      }
+    },
+    "graph_source": "digraph PermissionProbe {\n  graph [goal=\"Probe Fabro sandbox devenv nesting and format permissions\"]\n  rankdir=LR\n  start [shape=Mdiamond, label=\"Start\"]\n  probe [shape=parallelogram, label=\"Probe\", script=\"set -eux\\npwd\\nid\\necho PATH=$PATH\\nls -ld . web web/test web/test/memba/messaging || true\\nPROBE=web/test/memba/messaging/fabro_format_probe_test.exs\\ncat > $PROBE <<'EOT'\\ndefmodule FabroFormatProbeTest do\\n  use ExUnit.Case\\n  test \\\"probe\\\" do\\n    assert true\\n  end\\nend\\nEOT\\nls -l $PROBE\\necho '== direct bin/mix format on current-owned file =='\\nPATH=\\\"$PWD/bin:$PATH\\\" bin/mix format $PROBE\\nls -l $PROBE\\ncat > $PROBE <<'EOT'\\ndefmodule FabroFormatProbeTest do\\n  use ExUnit.Case\\n  test \\\"probe\\\" do\\n    assert true\\n  end\\nend\\nEOT\\nif chown root:root $PROBE 2>/tmp/chown.err; then echo chown_root_ok; else echo chown_root_failed; cat /tmp/chown.err; fi\\nchmod 0644 $PROBE || true\\nls -l $PROBE\\necho '== direct bin/mix format on root-owned file =='\\nif PATH=\\\"$PWD/bin:$PATH\\\" bin/mix format $PROBE; then echo direct_root_owned_ok; else echo direct_root_owned_failed; fi\\nls -l $PROBE\\ncat > $PROBE <<'EOT'\\ndefmodule FabroFormatProbeTest do\\n  use ExUnit.Case\\n  test \\\"probe\\\" do\\n    assert true\\n  end\\nend\\nEOT\\nchown root:root $PROBE 2>/dev/null || true\\nchmod 0644 $PROBE || true\\nls -l $PROBE\\necho '== nested devenv shell mix format on root-owned file =='\\nif devenv shell -- sh -lc 'pwd; id; mix format web/test/memba/messaging/fabro_format_probe_test.exs'; then echo nested_root_owned_ok; else echo nested_root_owned_failed; fi\\nls -l $PROBE\\nrm -f $PROBE\\n\"]\n  exit [shape=Msquare, label=\"Exit\"]\n  start -> probe -> exit\n}\n",
+    "workflow_slug": "permission-test",
+    "source_directory": "/Users/matt/git/mattwynne/memba",
+    "provenance": {
+      "server": {
+        "version": "0.245.0-nightly.0"
+      },
+      "client": {
+        "user_agent": "fabro-cli/0.243.0-nightly.1",
+        "name": "fabro-cli",
+        "version": "0.243.0-nightly.1"
+      },
+      "subject": {
+        "kind": "user",
+        "identity": {
+          "issuer": "fabro:dev",
+          "subject": "dev"
+        },
+        "login": "dev",
+        "auth_method": "dev_token"
+      }
+    },
+    "manifest_blob": "22de3ad7b81bb685bfcacbd03d7a991555058e3c1ae7121341ffd913a23a3fa1",
+    "definition_blob": "e2018b96782310b981eee62f1a3f630c95d4fd0ec4318cf72342c0c6b287a54d",
+    "git": {
+      "origin_url": "https://github.com/mattwynne/memba",
+      "branch": "main",
+      "sha": "cb9ec96334f601d117991bfc96314adfe59e11ce",
+      "dirty": "clean",
+      "push_outcome": {
+        "type": "succeeded",
+        "remote": "origin",
+        "branch": "main"
+      }
+    }
+  },
+  "web_url": "https://fabro.home.wynne.family/runs/01KT67S2NV8D3BDZ6HDF5FSXYD",
+  "start": null,
+  "status": {
+    "kind": "starting"
+  },
+  "status_updated_at": "2026-06-03T07:57:12.958348964Z",
+  "last_event_at": "2026-06-03T07:58:36.239019622Z",
+  "pending_control": null,
+  "checkpoints": [],
+  "conclusion": null,
+  "sandbox": {
+    "provider": "docker",
+    "image": "ghcr.io/mattwynne/memba-fabro-dev:latest",
+    "runtime": {
+      "id": "c14d971b6a4caa355508429193800421e2e5e2787dca0eb7bdfd283d6eb5c883",
+      "working_directory": "/workspace/memba",
+      "repo_cloned": true,
+      "clone_origin_url": "https://github.com/mattwynne/memba",
+      "clone_branch": "main",
+      "workspace_root": "/workspace",
+      "repos_root": "/repos",
+      "primary_repo_path": "/repos/mattwynne/memba",
+      "primary_repo_link": "/workspace/memba"
+    }
+  },
+  "pull_request": null,
+  "superseded_by": null,
+  "pending_interviews": {},
+  "stages": {}
+}

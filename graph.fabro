@@ -1,0 +1,8 @@
+digraph PermissionProbe {
+  graph [goal="Probe Fabro sandbox devenv nesting and format permissions"]
+  rankdir=LR
+  start [shape=Mdiamond, label="Start"]
+  probe [shape=parallelogram, label="Probe", script="set -eux\npwd\nid\necho PATH=$PATH\nls -ld . web web/test web/test/memba/messaging || true\nPROBE=web/test/memba/messaging/fabro_format_probe_test.exs\ncat > $PROBE <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\nls -l $PROBE\necho '== direct bin/mix format on current-owned file =='\nPATH=\"$PWD/bin:$PATH\" bin/mix format $PROBE\nls -l $PROBE\ncat > $PROBE <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\nif chown root:root $PROBE 2>/tmp/chown.err; then echo chown_root_ok; else echo chown_root_failed; cat /tmp/chown.err; fi\nchmod 0644 $PROBE || true\nls -l $PROBE\necho '== direct bin/mix format on root-owned file =='\nif PATH=\"$PWD/bin:$PATH\" bin/mix format $PROBE; then echo direct_root_owned_ok; else echo direct_root_owned_failed; fi\nls -l $PROBE\ncat > $PROBE <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\nchown root:root $PROBE 2>/dev/null || true\nchmod 0644 $PROBE || true\nls -l $PROBE\necho '== nested devenv shell mix format on root-owned file =='\nif devenv shell -- sh -lc 'pwd; id; mix format web/test/memba/messaging/fabro_format_probe_test.exs'; then echo nested_root_owned_ok; else echo nested_root_owned_failed; fi\nls -l $PROBE\nrm -f $PROBE\n"]
+  exit [shape=Msquare, label="Exit"]
+  start -> probe -> exit
+}
