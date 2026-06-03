@@ -35,15 +35,24 @@ jobs:
           name: devenv
 
       - name: Install devenv
-        run: nix profile install nixpkgs#devenv
+        run: nix profile add nixpkgs#devenv
 
-      - name: Install Hex and Rebar
-        run: |
-          devenv shell -- mix local.hex --force
-          devenv shell -- mix local.rebar --force
+      - name: Restore dependency caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/home/.hex
+            /tmp/home/.mix
+            /tmp/home/.npm
+            web/deps
+            web/_build
+            acceptance-tests/node_modules
+          key: ${{ runner.os }}-memba-dev-${{ hashFiles('devenv.lock', 'devenv.yaml', 'devenv.nix', 'web/mix.lock', 'acceptance-tests/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-memba-dev-
 
-      - name: Run dev check
-        run: ./bin/dev check
+      - name: Run devenv test suite
+        run: devenv test
 
   deploy:
     name: deploy to Fly.io
