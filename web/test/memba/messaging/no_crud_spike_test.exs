@@ -16,6 +16,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
     assert source =~ "def list_member_email_deliverys("
     assert source =~ "def list_operator_deliveries("
     assert source =~ "def list_operator_email_deliveries("
+    assert source =~ "def get_inbound_email_source("
 
     list_functions =
       ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/

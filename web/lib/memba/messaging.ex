@@ -14,6 +14,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.InboundEmail
+  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
@@ -144,6 +145,29 @@ defmodule Memba.Messaging do
       :error -> nil
     end
   end
+
+  @doc """
+  Fetch a projected inbound email source/status record by provider identity.
+
+  This is a support/audit read-model query. Inbound idempotency remains owned by
+  the event-sourced inbound email aggregate, not this projection.
+  """
+  def get_inbound_email_source(provider, provider_message_id)
+      when is_binary(provider) and is_binary(provider_message_id) do
+    provider = normalize_inbound_source_lookup(provider)
+    provider_message_id = normalize_inbound_source_lookup(provider_message_id)
+
+    if provider == "" or provider_message_id == "" do
+      nil
+    else
+      Repo.get_by(InboundEmailSourceProjection,
+        provider: provider,
+        provider_message_id: provider_message_id
+      )
+    end
+  end
+
+  def get_inbound_email_source(_provider, _provider_message_id), do: nil
 
   @doc """
   List email email deliveries for a projected message.
@@ -336,6 +360,12 @@ defmodule Memba.Messaging do
       :error ->
         {:ok, query}
     end
+  end
+
+  defp normalize_inbound_source_lookup(value) do
+    value
+    |> String.trim()
+    |> String.downcase()
   end
 
   defp dispatch_command(command, dispatch_opts) do

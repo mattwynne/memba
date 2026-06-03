@@ -58,6 +58,7 @@ defmodule Memba.Release do
     Memba.Membership.Projections.Membership,
     Memba.Membership.Projections.Person,
     Memba.Messaging.Projections.EmailDelivery,
+    Memba.Messaging.Projections.InboundEmailSource,
     Memba.Messaging.Projections.MemberEmailDelivery,
     Memba.Messaging.Projections.MembaStaffEmailDelivery,
     Memba.Messaging.Projections.Message

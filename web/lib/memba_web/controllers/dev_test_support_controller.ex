@@ -17,7 +17,8 @@ defmodule MembaWeb.DevTestSupportController do
     Memba.Messaging.Projectors.Message,
     Memba.Messaging.Projectors.EmailDelivery,
     Memba.Messaging.Projectors.MemberEmailDelivery,
-    Memba.Messaging.Projectors.MembaStaffEmailDelivery
+    Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+    Memba.Messaging.Projectors.InboundEmailSource
   ]
   @public_reset_tables [:auth_sign_in_tokens]
 

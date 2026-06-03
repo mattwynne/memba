@@ -19,7 +19,8 @@ config :memba,
     :messaging_messages,
     :messaging_email_deliveries,
     :messaging_member_email_deliveries,
-    :messaging_memba_staff_email_deliveries
+    :messaging_memba_staff_email_deliveries,
+    :messaging_inbound_email_sources
   ],
   generators: [timestamp_type: :utc_datetime]
 
