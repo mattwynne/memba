@@ -19,7 +19,7 @@
 - [x] 017 Require the existing Svix-based `MembaWeb.ResendWebhookSignature` verification when a Resend signing secret is configured. Production must configure the signing secret for inbound webhooks. Development/test may run unsigned only when no signing secret is configured.
 - [x] 018 Translate the Resend payload into the provider-neutral inbound email command/API and return provider-appropriate HTTP statuses for accepted webhook receipt versus malformed/unprocessable payloads.
 - [x] 019 Add tests for member-visible inbound address display on dashboard and compose.
-- [ ] 020 Add tests for provider-neutral inbound behaviour:
+- [x] 020 Add tests for provider-neutral inbound behaviour:
 - [ ] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
 - [ ] 022 Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
 - [ ] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.

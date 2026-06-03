@@ -10,6 +10,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
@@ -248,6 +249,79 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            ] = Fake.deliveries()
   end
 
+  test "accepted inbound email from an alternate sender address posts as the person" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    alice =
+      create_person!(
+        name: "Alice Example",
+        email: "alice@example.com",
+        email_addresses: [
+          %{email: "alice@example.com", is_primary: true},
+          %{email: "Alice.Work@Example.COM", is_primary: false}
+        ]
+      )
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              message_id: message_id,
+              club_id: kmc_id,
+              sender_id: alice_id,
+              from_address: "alice.work@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-020-alternate-sender",
+                 provider_event_id: "task-020-alternate-sender-event",
+                 from_address: " Alice.Work@Example.COM ",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Alternate sender address",
+                 text_body: "Posting from my work address."
+               },
+               consistency: :strong
+             )
+
+    assert kmc_id == kmc.club_id
+    assert alice_id == alice.person_id
+
+    assert %{
+             message_id: ^message_id,
+             club_id: ^kmc_id,
+             sender_id: ^alice_id,
+             subject: "Alternate sender address",
+             body: "Posting from my work address."
+           } = Messaging.get_message(message_id)
+
+    assert [
+             %EmailDeliveryRequest{
+               message_id: ^message_id,
+               club_id: ^kmc_id,
+               recipient_id: ^alice_id,
+               recipient_address: "alice@example.com",
+               sender_name: "Alice Example",
+               sender_address: "alice@example.com",
+               subject: "Alternate sender address",
+               body: "Posting from my work address."
+             }
+           ] = Fake.deliveries()
+
+    assert %InboundEmailSourceProjection{
+             status: "accepted",
+             provider: "resend",
+             provider_message_id: "task-020-alternate-sender",
+             provider_event_id: "task-020-alternate-sender-event",
+             from_address: "alice.work@example.com",
+             to_address: "kmc@clubs.memba.io",
+             club_id: ^kmc_id,
+             sender_id: ^alice_id,
+             message_id: ^message_id
+           } = Messaging.get_inbound_email_source("resend", "task-020-alternate-sender")
+  end
+
   test "inbound email without usable plain text is rejected without creating a club message" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
@@ -292,6 +366,100 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              rejection_reason: "plain_text_required",
              rejection_email_delivery_reference: rejection_email_delivery_reference
            } = Messaging.get_inbound_email_source("resend", "task-013-html-only")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "a plain text message body is required"
+    )
+  end
+
+  test "inbound email with blank plain text is rejected without creating a club message" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-020-blank-plain-text",
+              status: :rejected,
+              rejection_reason: "plain_text_required",
+              from_address: "alice@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-020-blank-plain-text",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: " \n\t "
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "plain_text_required",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-020-blank-plain-text")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "a plain text message body is required"
+    )
+  end
+
+  test "HTML-only inbound email is rejected without converting HTML to text" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-020-html-only",
+              status: :rejected,
+              rejection_reason: "plain_text_required",
+              from_address: "alice@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-020-html-only",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 html_body: "<p>This HTML must not be converted to a posted message.</p>"
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "plain_text_required",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-020-html-only")
 
     assert is_binary(rejection_email_delivery_reference)
 
@@ -409,6 +577,151 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
+  test "known sender who is not a member of the destination club is rejected" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
+    pat = create_person!(name: "Pat Example", email: "pat@example.com")
+
+    add_member!(npc.club_id, pat.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-020-non-member",
+              status: :rejected,
+              rejection_reason: "sender_not_active_member",
+              from_address: "pat@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-020-non-member",
+                 from_address: "pat@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Can I post to KMC?"
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Messaging.list_messages_for_club(npc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "sender_not_active_member",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-020-non-member")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "pat@example.com",
+      reason: "your sender address is not an active member of that club"
+    )
+  end
+
+  test "known sender with an inactive destination-club membership is rejected" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    insert_inactive_membership!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-020-inactive-member",
+              status: :rejected,
+              rejection_reason: "sender_not_active_member",
+              from_address: "alice@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-020-inactive-member",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Can I post while inactive?"
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "sender_not_active_member",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-020-inactive-member")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "your sender address is not an active member of that club"
+    )
+  end
+
+  test "unknown club slug is rejected without creating a club message" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-020-unknown-club",
+              status: :rejected,
+              rejection_reason: "unknown_club_slug",
+              from_address: "alice@example.com",
+              to_address: "unknown@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-020-unknown-club",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["unknown@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Where did this go?"
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             from_address: "alice@example.com",
+             to_address: "unknown@clubs.memba.io",
+             message_id: nil,
+             rejection_reason: "unknown_club_slug",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-020-unknown-club")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "the club address was not recognized"
+    )
+  end
+
   test "duplicate rejected inbound email does not send another rejection email" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     alice = create_person!(name: "Alice Example", email: "alice@example.com")
@@ -478,15 +791,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   defp create_person!(attrs) do
     person_id = Ecto.UUID.generate()
 
-    assert :ok =
-             Membership.create_person(
-               %{
-                 person_id: person_id,
-                 name: Keyword.fetch!(attrs, :name),
-                 email: Keyword.fetch!(attrs, :email)
-               },
-               consistency: :strong
-             )
+    create_attrs =
+      attrs
+      |> Keyword.take([:email, :email_addresses])
+      |> Map.new()
+      |> Map.merge(%{
+        person_id: person_id,
+        name: Keyword.fetch!(attrs, :name)
+      })
+
+    assert :ok = Membership.create_person(create_attrs, consistency: :strong)
 
     Membership.get_person(person_id)
   end
@@ -501,6 +815,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                },
                consistency: :strong
              )
+  end
+
+  defp insert_inactive_membership!(club_id, person_id) do
+    Repo.insert!(%MembershipProjection{
+      membership_id: Ecto.UUID.generate(),
+      club_id: club_id,
+      person_id: person_id,
+      active: false
+    })
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
