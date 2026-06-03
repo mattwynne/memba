@@ -7,6 +7,9 @@ Before running the production inbound email smoke tests in `./smoke-tests`, Matt
 - [x] Automatically seed a controlled production club named `Smoke Test Club` with slug `test`.
 - [x] Hard-code the `test` club slug so the smoke-test club does not appear as a public club page.
 - [x] Automatically seed a controlled active member of the smoke-test club with primary email address `test@memba.io`.
+- [x] Configure `clubs.memba.io` DNS MX to route inbound club email to Postmark: `10 inbound.postmarkapp.com`.
+- [x] Configure the Postmark `memba.io` server inbound domain as `clubs.memba.io`.
+- [x] Configure the Postmark inbound webhook URL as `https://memba.io/webhooks/postmark`.
 - [ ] Set up the `test@memba.io` Fastmail account so the smoke-test runner can send real emails and read resulting rejection/distribution emails.
 - [ ] Provide the smoke-test runner with the required Fastmail credentials or app passwords through local environment variables/secrets; do not commit them.
 - [ ] Confirm whether `test@memba.io` should also be usable for Memba sign-in during smoke tests, or whether the runner should sign in with a separate staff account.
@@ -51,8 +54,8 @@ and webhook details.
 
 - [x] In Postmark, configure the webhook URL for the deployed Memba environment: `https://memba.io/webhooks/postmark`.
 - [x] Enable webhook events needed by Memba: delivered, bounced, and spam complaint. Postmark delivery-delay events arrive through the bounce/delayed shape handled by the app.
-- [ ] Disable/remove Postmark open webhook events if they were previously enabled. Memba rejects open events as unsupported and does not change delivery status from them.
-- [ ] Keep Postmark open tracking disabled for the outbound member broadcast stream/domain. Memba does not request or consume open-tracking signals.
+- [x] Disable/remove Postmark open webhook events if they were previously enabled. Memba rejects open events as unsupported and does not change delivery status from them.
+- [x] Keep Postmark open tracking disabled for the outbound member broadcast stream/domain. Memba does not request or consume open-tracking signals.
 - [x] Confirm Postmark webhook payloads include metadata/custom fields so Memba can receive `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
 
 ### Deployment configuration
@@ -62,7 +65,7 @@ and webhook details.
   - `MEMBA_POSTMARK_SERVER_TOKEN`
   - `MEMBA_POSTMARK_FROM_ADDRESS`
   - `MEMBA_POSTMARK_REPLY_TO_ADDRESS`
-- [ ] Add the same secrets/config to the production deployment environment once Fly.io deploys are set up.
+- [ ] Add/select the same Postmark provider config in the production deployment environment once iteration 020 is deployed. The Postmark server token is present in Fly secrets, but production provider selection should wait for the code/runbook cutover.
 - [x] Keep local/test environments on fake delivery unless explicitly opting into real Postmark sending.
 
 ### Manual smoke test
