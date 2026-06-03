@@ -2,6 +2,8 @@ defmodule Memba.Messaging.InboundEmailReceiptTest do
   use ExUnit.Case, async: true
 
   alias Memba.Messaging.Commands.ReceiveInboundEmail
+  alias Memba.Messaging.Commands.RejectInboundClubEmail
+  alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.InboundEmailReceipt
@@ -73,6 +75,70 @@ defmodule Memba.Messaging.InboundEmailReceiptTest do
     end
   end
 
+  describe "execute/2 RejectInboundClubEmail" do
+    test "records a rejected outcome for a received provider message id" do
+      receipt = received_receipt()
+      command = reject_command()
+
+      assert %InboundClubEmailRejected{
+               inbound_email_id: "inbound-email:resend:email-123",
+               provider: "resend",
+               provider_message_id: "email-123",
+               provider_event_id: "event-456",
+               from_address: "alice@example.com",
+               to_address: "kmc@clubs.memba.io",
+               rejection_reason: "plain_text_required",
+               rejection_email_delivery_reference: nil
+             } = InboundEmailReceipt.execute(receipt, command)
+    end
+
+    test "returns no events for duplicate rejected outcomes with the same reason" do
+      receipt =
+        received_receipt()
+        |> InboundEmailReceipt.apply(%InboundClubEmailRejected{
+          inbound_email_id: "inbound-email:resend:email-123",
+          provider: "resend",
+          provider_message_id: "email-123",
+          provider_event_id: "event-456",
+          from_address: "alice@example.com",
+          to_address: "kmc@clubs.memba.io",
+          rejection_reason: "plain_text_required"
+        })
+
+      assert [] = InboundEmailReceipt.execute(receipt, reject_command())
+    end
+
+    test "does not reject an already accepted provider message id" do
+      receipt = %InboundEmailReceipt{
+        received_receipt()
+        | status: :accepted,
+          message_id: Ecto.UUID.generate()
+      }
+
+      assert {:error, :inbound_email_already_accepted} =
+               InboundEmailReceipt.execute(receipt, reject_command())
+    end
+  end
+
+  describe "apply/2 InboundClubEmailRejected" do
+    test "stores the rejected status and reason for duplicate receipts" do
+      assert %InboundEmailReceipt{
+               status: :rejected,
+               rejection_reason: "plain_text_required"
+             } =
+               received_receipt()
+               |> InboundEmailReceipt.apply(%InboundClubEmailRejected{
+                 inbound_email_id: "inbound-email:resend:email-123",
+                 provider: "resend",
+                 provider_message_id: "email-123",
+                 provider_event_id: nil,
+                 from_address: "alice@example.com",
+                 to_address: "kmc@clubs.memba.io",
+                 rejection_reason: "plain_text_required"
+               })
+    end
+  end
+
   defp receive_command do
     inbound_email = %InboundEmail{
       provider: "resend",
@@ -88,5 +154,25 @@ defmodule Memba.Messaging.InboundEmailReceiptTest do
       inbound_email_id: InboundEmail.identity(inbound_email),
       inbound_email: inbound_email
     }
+  end
+
+  defp reject_command do
+    receive_command = receive_command()
+
+    %RejectInboundClubEmail{
+      inbound_email_id: receive_command.inbound_email_id,
+      inbound_email: receive_command.inbound_email,
+      to_address: "kmc@clubs.memba.io",
+      rejection_reason: "plain_text_required"
+    }
+  end
+
+  defp received_receipt do
+    InboundEmailReceipt.apply(%InboundEmailReceipt{}, %InboundEmailReceived{
+      inbound_email_id: "inbound-email:resend:email-123",
+      provider: "resend",
+      provider_message_id: "email-123",
+      provider_event_id: "event-456"
+    })
   end
 end

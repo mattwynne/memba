@@ -7,6 +7,7 @@ defmodule Memba.Messaging do
   alias Memba.Membership
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -19,6 +20,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
   alias Memba.Messaging.InboundEmail
+  alias Memba.Messaging.InboundEmailBody
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -467,7 +469,8 @@ defmodule Memba.Messaging do
        inbound_email_id: receive_command.inbound_email_id,
        duplicate?: true,
        status: receipt.status,
-       message_id: receipt.message_id
+       message_id: receipt.message_id,
+       rejection_reason: receipt.rejection_reason
      }}
   end
 
@@ -475,14 +478,44 @@ defmodule Memba.Messaging do
     with {:ok, destination} <-
            resolve_inbound_club_email_destination(receive_command.inbound_email),
          {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
-         :ok <- authorize_inbound_club_email_sender(sender, destination),
-         message_id = Ecto.UUID.generate(),
-         :ok <-
+         :ok <- authorize_inbound_club_email_sender(sender, destination) do
+      case InboundEmailBody.normalize_text_body(receive_command.inbound_email) do
+        {:ok, body} ->
+          accept_first_inbound_club_email(
+            receive_command,
+            destination,
+            sender,
+            body,
+            dispatch_opts
+          )
+
+        {:error, :plain_text_required} ->
+          reject_first_inbound_club_email(
+            receive_command,
+            destination.to_address,
+            "plain_text_required",
+            dispatch_opts
+          )
+      end
+    end
+  end
+
+  defp accept_first_inbound_club_email(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         body,
+         dispatch_opts
+       ) do
+    message_id = Ecto.UUID.generate()
+
+    with :ok <-
            send_inbound_club_message(
              receive_command.inbound_email,
              destination,
              sender,
              message_id,
+             body,
              dispatch_opts
            ),
          :ok <-
@@ -505,11 +538,36 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp reject_first_inbound_club_email(
+         receive_command,
+         to_address,
+         rejection_reason,
+         dispatch_opts
+       ) do
+    with :ok <-
+           record_inbound_club_email_rejected(
+             receive_command.inbound_email,
+             to_address,
+             rejection_reason,
+             dispatch_opts
+           ) do
+      {:ok,
+       %{
+         inbound_email_id: receive_command.inbound_email_id,
+         status: :rejected,
+         rejection_reason: rejection_reason,
+         from_address: receive_command.inbound_email.from_address,
+         to_address: to_address
+       }}
+    end
+  end
+
   defp send_inbound_club_message(
          %InboundEmail{} = inbound_email,
          %InboundClubDestination{} = destination,
          %InboundClubSender{} = sender,
          message_id,
+         body,
          dispatch_opts
        ) do
     case send_club_message(
@@ -518,7 +576,7 @@ defmodule Memba.Messaging do
              club_id: destination.club_id,
              sender_id: sender.person_id,
              subject: inbound_email.subject,
-             body: inbound_email.text_body
+             body: body
            },
            dispatch_opts
          ) do
@@ -542,6 +600,23 @@ defmodule Memba.Messaging do
         club_id: destination.club_id,
         sender_id: sender.person_id,
         message_id: message_id
+      },
+      dispatch_opts
+    )
+  end
+
+  defp record_inbound_club_email_rejected(
+         %InboundEmail{} = inbound_email,
+         to_address,
+         rejection_reason,
+         dispatch_opts
+       ) do
+    dispatch_ok(
+      %RejectInboundClubEmail{
+        inbound_email_id: InboundEmail.identity(inbound_email),
+        inbound_email: inbound_email,
+        to_address: to_address,
+        rejection_reason: rejection_reason
       },
       dispatch_opts
     )

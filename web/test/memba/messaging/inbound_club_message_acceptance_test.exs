@@ -6,6 +6,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.InboundClubEmailAccepted
+  alias Memba.Messaging.Events.InboundClubEmailRejected
   alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
 
@@ -193,6 +194,91 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert 1 == count_events(MessageSent)
     assert 1 == count_events(InboundClubEmailAccepted)
+  end
+
+  test "accepted inbound email uses normalized plain text and ignores HTML" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok, %{message_id: message_id}} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-013-normalized-body",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: """
+                 Bring route ideas.
+
+                 Meet at 7.
+
+                 -- 
+                 Alice
+
+                 On Tue, Bob wrote:
+                 > Old message
+                 """,
+                 html_body: "<p>This HTML must not be converted or posted.</p>"
+               },
+               consistency: :strong
+             )
+
+    assert %{body: "Bring route ideas.\n\nMeet at 7."} = Messaging.get_message(message_id)
+
+    assert [
+             %EmailDeliveryRequest{
+               body: "Bring route ideas.\n\nMeet at 7."
+             }
+           ] = Fake.deliveries()
+  end
+
+  test "inbound email without usable plain text is rejected without creating a club message" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-013-html-only",
+              status: :rejected,
+              rejection_reason: "plain_text_required",
+              from_address: "alice@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-013-html-only",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "  \n> quoted prior content only\n",
+                 html_body: "<p>This HTML must not be converted.</p>"
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             inbound_email_id: "inbound-email:resend:task-013-html-only",
+             provider: "resend",
+             provider_message_id: "task-013-html-only",
+             from_address: "alice@example.com",
+             to_address: "kmc@clubs.memba.io",
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "plain_text_required",
+             rejection_email_delivery_reference: nil
+           } = Messaging.get_inbound_email_source("resend", "task-013-html-only")
   end
 
   defp create_club!(attrs) do
