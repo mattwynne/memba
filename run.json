@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-03T18:27:00.639767351Z",
-  "last_event_at": "2026-06-03T19:41:16.101040992Z",
+  "last_event_at": "2026-06-03T19:41:46.869076266Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -19816,9 +19816,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2712,
       "checkpoint": {
-        "timestamp": "2026-06-03T19:41:43.169502201Z",
+        "timestamp": "2026-06-03T19:41:46.729176340Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -19885,8 +19885,375 @@
         ],
         "node_retries": {},
         "context_values": {
-          "outcome": "succeeded",
+          "internal.retry_count.preflight_sandbox": 0,
           "current_node": "implement_next_task",
+          "internal.retry_count.validate_task": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "failure_signature": "",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "last_stage": "implement_next_task",
+          "outcome": "succeeded",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "command.output": "blob://sha256/cc5e7f2bd9d1cc4bb633e4fd07c0541ffd964f9cde630d11c1873ff85491e91d",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.reset_task_attempt": 0,
+          "task_retry_available": false,
+          "graph.default_fidelity": "summary:high",
+          "internal.run_id": "01KT7BR6YQQSTZVM0G42C138AW",
+          "internal.retry_count.implement_next_task": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.thread_id": "all_tasks_done",
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; snapshot showed implement commit `cfdf000` with clean tracked working tree and only untracked `.fabro/tmp/`.\n  - Live `git status --short` still shows only `?? .fabro/tmp/`.\n  - Recent commits show current HEAD `5c0cb00 pre_validate_snapshot` after `cfdf000 implement_next_task`.\n  - `git diff cfdf000^ cfdf000 -- docs/iterations/020-migrate-production-email-to-postmark/todo.md` shows exactly one ordinary task changed from unchecked to checked: task `009`.\n  - Parent todo state confirms `009` was the first unchecked task.\n\n- Implementation artifacts found.\n  - `web/test/memba_web/controllers/postmark_webhook_controller_test.exs` was updated with a focused integration-style test proving Postmark outbound member-message emails include:\n    - sender/from address,\n    - reply-to,\n    - recipient,\n    - subject,\n    - plain-text body,\n    - escaped HTML body,\n    - Postmark metadata for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.\n  - The same metadata is then fed through a realistic Postmark delivery-status webhook payload and asserted to correlate delivery state to `delivered`.\n  - Only the todo and this test file changed in the implement commit.\n  - No acceptance `.feature` files were changed.\n\n- Tests run/results found.\n  - Ran focused validation test command:\n    - `bin/mix test test/memba_web/controllers/postmark_webhook_controller_test.exs`\n    - Result: `5 tests, 0 failures`.\n  - `git diff --check cfdf000^ cfdf000` passed.\n  - The preceding implementation summary also reports format check, Postmark provider tests, and `dev check --quick` passing.\n\n- ADR/plan conformance notes.\n  - Work directly satisfies task `009` and acceptance criterion requiring Postmark outbound metadata/custom fields for delivery-status correlation.\n  - Scope is appropriately small and independently useful.\n  - ADR 0016 is respected: Postmark remains switchable behind provider boundaries, and provider-specific webhook correlation remains at the provider/webhook edge.\n  - Resend fallback support was not removed or weakened.\n  - No plan-required work was deleted, weakened, reordered, or silently deferred.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "task_list_complete": false,
+          "task_valid": true,
+          "thread.reset_task_attempt.current_node": "implement_next_task",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `010 Verify or add tests proving Postmark auth email configuration uses MEMBA_AUTH_EMAIL_PROVIDER=postmark, MEMBA_POSTMARK_SERVER_TOKEN, MEMBA_AUTH_EMAIL_FROM_ADDRESS, and MEMBA_AUTH_EMAIL_MESSAGE_STREAM, and fails clearly when incomplete.`\n\n2. **Changes made**\n   - Updated `web/test/memba/accounts/auth_email_config_test.exs` to:\n     - Assert Postmark env parsing returns `provider: :postmark`.\n     - Add a runtime config test proving `MEMBA_AUTH_EMAIL_PROVIDER=postmark` configures:\n       - `Memba.Mailer` with `Swoosh.Adapters.Postmark`\n       - `api_key` from `MEMBA_POSTMARK_SERVER_TOKEN`\n       - `Memba.Accounts.AuthEmail` with `provider: :postmark`\n       - `from` from `MEMBA_AUTH_EMAIL_FROM_ADDRESS`\n       - `message_stream` from `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`\n       - `Swoosh.ApiClient.Req`\n     - Add a runtime config failure test proving selected-but-incomplete Postmark auth email config raises a clear `ArgumentError` mentioning all required env vars and `MEMBA_AUTH_EMAIL_PROVIDER`.\n   - Updated `docs/iterations/020-migrate-production-email-to-postmark/todo.md` to check off task 010 only.\n\n3. **Focused validation commands run and results**\n   - Formatting:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted test/memba/accounts/auth_email_config_test.exs\n     ```\n     Passed.\n   - Initial focused test:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_config_test.exs\n     ```\n     Failed due the known sandbox `PGHOST=/tmp/devenv/postgres PGPORT=5432` mismatch.\n   - Focused auth config test with sandbox Postgres override:\n     ```sh\n     env -u PGHOST -u PGPORT MEMBA_POSTGRES_PORT=15432 devenv shell -O services.postgres.port:int 15432 -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_config_test.exs'\n     ```\n     Passed: `7 tests, 0 failures`.\n   - Focused auth config + auth email delivery tests:\n     ```sh\n     env -u PGHOST -u PGPORT MEMBA_POSTGRES_PORT=15432 devenv shell -O services.postgres.port:int 15432 -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_test.exs test/memba/accounts/auth_email_config_test.exs'\n     ```\n     Passed: `13 tests, 0 failures`.\n   - Broad quick validation:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" dev check --quick\n     ```\n     Passed: `489 tests, 0 failures`.\n   - Whitespace check:\n     ```sh\n     git diff --check\n     ```\n     Passed.\n\n4. **Exact todo check-off made**\n   - Changed:\n     ```md\n     - [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n     ```\n   - To:\n     ```md\n     - [x] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n     ```\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0016 preserved: auth email remains provider-selectable through runtime configuration, Postmark uses the Swoosh Postmark adapter, and Resend fallback support was not changed or weakened.\n   - The tests verify provider-specific Postmark configuration at the configuration boundary without changing domain behaviour.\n   - ADR 0017 alignment: selected-but-incomplete production-style auth email config now has explicit test coverage for clear operator-facing failure.\n   - No acceptance feature files, routing, UI, or production secrets were changed.",
+          "internal.retry_count.wip_gate": 0,
+          "graph.rankdir": "LR",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.start": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "thread.start.current_node": "read_plan",
+          "task_list_needs_human": false,
+          "internal.node_visit_count": 10,
+          "failure_class": "",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.task_gate": 0,
+          "last_response": "1. **Selected todo line**\n   - `010 Verify or add tests proving Postmark auth email configuration uses MEMBA_AUTH_EMAIL_PROVIDER=postmark, MEMBA_POSTMARK_SERVER_TOKEN, MEMBA_AUTH_EMAIL_FROM_ADDRESS, a",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox"
+        },
+        "node_outcomes": {
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4fb29bd7be06fca476883fc5be5c92c0136cfd3ab69e0023d689fb4003f54f2c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 6165,
+              "active_time_ms": 6165
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/08dc967549d2d186810fba2b7eee46089a49d6183ac25a768c3ecc3c5a289ab7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 180,
+              "active_time_ms": 180
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/de0141b4f4cd97c4c678dbf1a62d5098bbf6409482c39ad1031af637a597ea2f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 214,
+              "active_time_ms": 214
+            }
+          },
+          "reset_task_attempt": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/962dfba3f99925e10989a748c8bf4cd09fcd1c51bcb53ef9eac6aea0709ed97e"
+            },
+            "notes": "Script completed: set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 306,
+              "active_time_ms": 306
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cc5e7f2bd9d1cc4bb633e4fd07c0541ffd964f9cde630d11c1873ff85491e91d"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 181,
+              "active_time_ms": 181
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; snapshot showed implement commit `cfdf000` with clean tracked working tree and only untracked `.fabro/tmp/`.\n  - Live `git status --short` still shows only `?? .fabro/tmp/`.\n  - Recent commits show current HEAD `5c0cb00 pre_validate_snapshot` after `cfdf000 implement_next_task`.\n  - `git diff cfdf000^ cfdf000 -- docs/iterations/020-migrate-production-email-to-postmark/todo.md` shows exactly one ordinary task changed from unchecked to checked: task `009`.\n  - Parent todo state confirms `009` was the first unchecked task.\n\n- Implementation artifacts found.\n  - `web/test/memba_web/controllers/postmark_webhook_controller_test.exs` was updated with a focused integration-style test proving Postmark outbound member-message emails include:\n    - sender/from address,\n    - reply-to,\n    - recipient,\n    - subject,\n    - plain-text body,\n    - escaped HTML body,\n    - Postmark metadata for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.\n  - The same metadata is then fed through a realistic Postmark delivery-status webhook payload and asserted to correlate delivery state to `delivered`.\n  - Only the todo and this test file changed in the implement commit.\n  - No acceptance `.feature` files were changed.\n\n- Tests run/results found.\n  - Ran focused validation test command:\n    - `bin/mix test test/memba_web/controllers/postmark_webhook_controller_test.exs`\n    - Result: `5 tests, 0 failures`.\n  - `git diff --check cfdf000^ cfdf000` passed.\n  - The preceding implementation summary also reports format check, Postmark provider tests, and `dev check --quick` passing.\n\n- ADR/plan conformance notes.\n  - Work directly satisfies task `009` and acceptance criterion requiring Postmark outbound metadata/custom fields for delivery-status correlation.\n  - Scope is appropriately small and independently useful.\n  - ADR 0016 is respected: Postmark remains switchable behind provider boundaries, and provider-specific webhook correlation remains at the provider/webhook edge.\n  - Resend fallback support was not removed or weakened.\n  - No plan-required work was deleted, weakened, reordered, or silently deferred.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; snapshot showed implement commit `cfdf000` with clean tracked working "
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 528266,
+                    "output_tokens": 1978,
+                    "reasoning_tokens": 1284,
+                    "cache_read_tokens": 672768,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3075574
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 105277,
+              "tool_time_ms": 7301,
+              "active_time_ms": 112578
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c98ba1a42530ca0c44a7a13b35cea7afe902413fdecb98b898f8a54779f98d9b"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 278,
+              "active_time_ms": 278
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a11c021a6762b2dfddca15771ae7d96a9ea43facc83f7b5b264aafd746bfbacd"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 135503,
+              "active_time_ms": 135503
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false,
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 36755,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 134,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 188635
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4971,
+              "tool_time_ms": 0,
+              "active_time_ms": 4971
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "1. **Selected todo line**\n   - `010 Verify or add tests proving Postmark auth email configuration uses MEMBA_AUTH_EMAIL_PROVIDER=postmark, MEMBA_POSTMARK_SERVER_TOKEN, MEMBA_AUTH_EMAIL_FROM_ADDRESS, a",
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `010 Verify or add tests proving Postmark auth email configuration uses MEMBA_AUTH_EMAIL_PROVIDER=postmark, MEMBA_POSTMARK_SERVER_TOKEN, MEMBA_AUTH_EMAIL_FROM_ADDRESS, and MEMBA_AUTH_EMAIL_MESSAGE_STREAM, and fails clearly when incomplete.`\n\n2. **Changes made**\n   - Updated `web/test/memba/accounts/auth_email_config_test.exs` to:\n     - Assert Postmark env parsing returns `provider: :postmark`.\n     - Add a runtime config test proving `MEMBA_AUTH_EMAIL_PROVIDER=postmark` configures:\n       - `Memba.Mailer` with `Swoosh.Adapters.Postmark`\n       - `api_key` from `MEMBA_POSTMARK_SERVER_TOKEN`\n       - `Memba.Accounts.AuthEmail` with `provider: :postmark`\n       - `from` from `MEMBA_AUTH_EMAIL_FROM_ADDRESS`\n       - `message_stream` from `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`\n       - `Swoosh.ApiClient.Req`\n     - Add a runtime config failure test proving selected-but-incomplete Postmark auth email config raises a clear `ArgumentError` mentioning all required env vars and `MEMBA_AUTH_EMAIL_PROVIDER`.\n   - Updated `docs/iterations/020-migrate-production-email-to-postmark/todo.md` to check off task 010 only.\n\n3. **Focused validation commands run and results**\n   - Formatting:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted test/memba/accounts/auth_email_config_test.exs\n     ```\n     Passed.\n   - Initial focused test:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_config_test.exs\n     ```\n     Failed due the known sandbox `PGHOST=/tmp/devenv/postgres PGPORT=5432` mismatch.\n   - Focused auth config test with sandbox Postgres override:\n     ```sh\n     env -u PGHOST -u PGPORT MEMBA_POSTGRES_PORT=15432 devenv shell -O services.postgres.port:int 15432 -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_config_test.exs'\n     ```\n     Passed: `7 tests, 0 failures`.\n   - Focused auth config + auth email delivery tests:\n     ```sh\n     env -u PGHOST -u PGPORT MEMBA_POSTGRES_PORT=15432 devenv shell -O services.postgres.port:int 15432 -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/accounts/auth_email_test.exs test/memba/accounts/auth_email_config_test.exs'\n     ```\n     Passed: `13 tests, 0 failures`.\n   - Broad quick validation:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" dev check --quick\n     ```\n     Passed: `489 tests, 0 failures`.\n   - Whitespace check:\n     ```sh\n     git diff --check\n     ```\n     Passed.\n\n4. **Exact todo check-off made**\n   - Changed:\n     ```md\n     - [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n     ```\n   - To:\n     ```md\n     - [x] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n     ```\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0016 preserved: auth email remains provider-selectable through runtime configuration, Postmark uses the Swoosh Postmark adapter, and Resend fallback support was not changed or weakened.\n   - The tests verify provider-specific Postmark configuration at the configuration boundary without changing domain behaviour.\n   - ADR 0017 alignment: selected-but-incomplete production-style auth email config now has explicit test coverage for clear operator-facing failure.\n   - No acceptance feature files, routing, UI, or production secrets were changed."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 910576,
+                    "output_tokens": 4350,
+                    "reasoning_tokens": 3373,
+                    "cache_read_tokens": 1141760,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 5355450
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 204454,
+              "tool_time_ms": 62660,
+              "active_time_ms": 267114
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "3bcd29eb1c95c2d1c5b16a035dcbb74dd13de32d",
+        "node_visits": {
+          "validate_task": 9,
+          "preflight_sandbox": 1,
+          "pre_validate_snapshot": 9,
+          "all_tasks_done": 9,
+          "start": 1,
+          "reset_task_attempt": 1,
+          "sync_task_list": 9,
+          "task_gate": 9,
+          "read_plan": 1,
+          "resume_gate": 1,
+          "implement_next_task": 10,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/020-migrate-production-email-to-postmark/todo.md b/docs/iterations/020-migrate-production-email-to-postmark/todo.md\nindex 0ade5af..d3324ea 100644\n--- a/docs/iterations/020-migrate-production-email-to-postmark/todo.md\n+++ b/docs/iterations/020-migrate-production-email-to-postmark/todo.md\n@@ -9,7 +9,7 @@\n - [x] 007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.\n - [x] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n - [x] 009 Verify or add tests proving Postmark outbound member-message payloads still include sender/reply-to, text/HTML bodies, and correlation metadata expected by the Postmark delivery-status webhook handler.\n-- [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n+- [x] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n - [ ] 011 Verify rejection-email delivery follows the configured mailer/provider path and works when Postmark is selected.\n - [ ] 012 Update `docs/postmark-email.md` to describe the full Postmark production setup: outbound member-message stream, auth stream, inbound club-message routing for `clubs.memba.io`, delivery-status webhook URL, inbound webhook URL, environment variables, and local smoke-test guidance.\n - [ ] 013 Update `docs/human-todo.md` or add a runbook under this iteration folder with Matt's manual cutover steps, smoke tests, monitoring checks, and rollback steps to Resend.\ndiff --git a/web/test/memba/accounts/auth_email_config_test.exs b/web/test/memba/accounts/auth_email_config_test.exs\nindex 919132f..a6e3416 100644\n--- a/web/test/memba/accounts/auth_email_config_test.exs\n+++ b/web/test/memba/accounts/auth_email_config_test.exs\n@@ -3,9 +3,20 @@ defmodule Memba.Accounts.AuthEmailConfigTest do\n \n   alias Memba.Accounts.AuthEmailConfig\n \n+  @runtime_env_keys [\n+    \"MEMBA_AUTH_EMAIL_PROVIDER\",\n+    \"MEMBA_POSTMARK_SERVER_TOKEN\",\n+    \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\",\n+    \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\",\n+    \"MEMBA_MESSAGING_DELIVERY_PROVIDER\",\n+    \"MEMBA_RESEND_API_KEY\",\n+    \"MEMBA_RESEND_WEBHOOK_SIGNING_SECRET\"\n+  ]\n+\n   test \"reads required auth email Postmark settings from environment\" do\n     assert {:ok,\n             %AuthEmailConfig{\n+              provider: :postmark,\n               server_token: \"server-token\",\n               from: \"auth@mail.memba.io\",\n               message_stream: \"outbound-authentication\"\n@@ -82,6 +93,51 @@ defmodule Memba.Accounts.AuthEmailConfigTest do\n     assert message =~ \"resend\"\n   end\n \n+  test \"runtime config selects Postmark auth email from MEMBA_AUTH_EMAIL_PROVIDER\" do\n+    runtime_config =\n+      read_runtime_config(%{\n+        \"MEMBA_AUTH_EMAIL_PROVIDER\" => \"postmark\",\n+        \"MEMBA_POSTMARK_SERVER_TOKEN\" => \"server-token\",\n+        \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\" => \"auth@mail.memba.io\",\n+        \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\" => \"outbound-authentication\"\n+      })\n+\n+    memba_config = Keyword.fetch!(runtime_config, :memba)\n+\n+    assert Keyword.fetch!(memba_config, Memba.Mailer) == [\n+             adapter: Swoosh.Adapters.Postmark,\n+             api_key: \"server-token\"\n+           ]\n+\n+    assert Keyword.fetch!(memba_config, Memba.Accounts.AuthEmail) == [\n+             provider: :postmark,\n+             from: \"auth@mail.memba.io\",\n+             message_stream: \"outbound-authentication\"\n+           ]\n+\n+    assert Keyword.fetch!(Keyword.fetch!(runtime_config, :swoosh), :api_client) ==\n+             Swoosh.ApiClient.Req\n+  end\n+\n+  test \"runtime config fails clearly when Postmark auth email is selected but incomplete\" do\n+    error =\n+      assert_raise ArgumentError, fn ->\n+        read_runtime_config(%{\n+          \"MEMBA_AUTH_EMAIL_PROVIDER\" => \"postmark\",\n+          \"MEMBA_POSTMARK_SERVER_TOKEN\" => \"\",\n+          \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\" => nil,\n+          \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\" => \" \"\n+        })\n+      end\n+\n+    assert error.message =~ \"Auth email delivery is enabled\"\n+    assert error.message =~ \"required environment configuration is missing\"\n+    assert error.message =~ \"MEMBA_POSTMARK_SERVER_TOKEN\"\n+    assert error.message =~ \"MEMBA_AUTH_EMAIL_FROM_ADDRESS\"\n+    assert error.message =~ \"MEMBA_AUTH_EMAIL_MESSAGE_STREAM\"\n+    assert error.message =~ \"MEMBA_AUTH_EMAIL_PROVIDER\"\n+  end\n+\n   defp with_application_env(key, value) do\n     original_value = Application.get_env(:memba, key)\n     Application.put_env(:memba, key, value)\n@@ -94,4 +150,40 @@ defmodule Memba.Accounts.AuthEmailConfigTest do\n       end\n     end)\n   end\n+\n+  defp read_runtime_config(env) do\n+    with_system_env(env, fn ->\n+      Config.Reader.read!(\"config/runtime.exs\", env: :test)\n+    end)\n+  end\n+\n+  defp with_system_env(env, fun) do\n+    env = with_default_runtime_env(env)\n+\n+    original_env =\n+      Map.new(Map.keys(env), fn key ->\n+        {key, System.get_env(key)}\n+      end)\n+\n+    set_system_env(env)\n+\n+    try do\n+      fun.()\n+    after\n+      set_system_env(original_env)\n+    end\n+  end\n+\n+  defp with_default_runtime_env(env) do\n+    Enum.reduce(@runtime_env_keys, env, fn key, env ->\n+      Map.put_new(env, key, nil)\n+    end)\n+  end\n+\n+  defp set_system_env(env) do\n+    Enum.each(env, fn\n+      {key, nil} -> System.delete_env(key)\n+      {key, value} -> System.put_env(key, value)\n+    end)\n+  end\n end\n",
+        "summary": {
+          "files_changed": 12,
+          "additions": 1860,
+          "deletions": 4
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-03T19:41:47.088148265Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "outcome": "succeeded",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.sync_task_list": 0,
           "thread.validate_task.current_node": "task_gate",
           "internal.retry_count.reset_task_attempt": 0,
@@ -19905,7 +20272,7 @@
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "internal.retry_count.all_tasks_done": 0,
           "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; snapshot showed implement commit `cfdf000` with clean tracked working tree and only untracked `.fabro/tmp/`.\n  - Live `git status --short` still shows only `?? .fabro/tmp/`.\n  - Recent commits show current HEAD `5c0cb00 pre_validate_snapshot` after `cfdf000 implement_next_task`.\n  - `git diff cfdf000^ cfdf000 -- docs/iterations/020-migrate-production-email-to-postmark/todo.md` shows exactly one ordinary task changed from unchecked to checked: task `009`.\n  - Parent todo state confirms `009` was the first unchecked task.\n\n- Implementation artifacts found.\n  - `web/test/memba_web/controllers/postmark_webhook_controller_test.exs` was updated with a focused integration-style test proving Postmark outbound member-message emails include:\n    - sender/from address,\n    - reply-to,\n    - recipient,\n    - subject,\n    - plain-text body,\n    - escaped HTML body,\n    - Postmark metadata for `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.\n  - The same metadata is then fed through a realistic Postmark delivery-status webhook payload and asserted to correlate delivery state to `delivered`.\n  - Only the todo and this test file changed in the implement commit.\n  - No acceptance `.feature` files were changed.\n\n- Tests run/results found.\n  - Ran focused validation test command:\n    - `bin/mix test test/memba_web/controllers/postmark_webhook_controller_test.exs`\n    - Result: `5 tests, 0 failures`.\n  - `git diff --check cfdf000^ cfdf000` passed.\n  - The preceding implementation summary also reports format check, Postmark provider tests, and `dev check --quick` passing.\n\n- ADR/plan conformance notes.\n  - Work directly satisfies task `009` and acceptance criterion requiring Postmark outbound metadata/custom fields for delivery-status correlation.\n  - Scope is appropriately small and independently useful.\n  - ADR 0016 is respected: Postmark remains switchable behind provider boundaries, and provider-specific webhook correlation remains at the provider/webhook edge.\n  - Resend fallback support was not removed or weakened.\n  - No plan-required work was deleted, weakened, reordered, or silently deferred.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
-          "command.output": "blob://sha256/cc5e7f2bd9d1cc4bb633e4fd07c0541ffd964f9cde630d11c1873ff85491e91d",
+          "command.output": "blob://sha256/34c194b167708e6ab7d82e5823de417f4cd7494659e1c9b9755991556dd91a0e",
           "internal.fidelity": "summary:high",
           "internal.retry_count.start": 0,
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
@@ -19932,7 +20299,7 @@
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "thread.reset_task_attempt.current_node": "implement_next_task",
           "internal.retry_count.resume_gate": 0,
-          "internal.thread_id": "all_tasks_done"
+          "internal.thread_id": "implement_next_task"
         },
         "node_outcomes": {
           "start": {
@@ -20036,15 +20403,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/08dc967549d2d186810fba2b7eee46089a49d6183ac25a768c3ecc3c5a289ab7"
+              "command.output": "blob://sha256/34c194b167708e6ab7d82e5823de417f4cd7494659e1c9b9755991556dd91a0e"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 180,
-              "active_time_ms": 180
+              "tool_time_ms": 185,
+              "active_time_ms": 185
             }
           },
           "resume_gate": {
@@ -20155,7 +20522,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "task_gate": 9,
           "reset_task_attempt": 1,
@@ -20167,7 +20534,7 @@
           "validate_task": 9,
           "start": 1,
           "all_tasks_done": 9,
-          "pre_validate_snapshot": 9,
+          "pre_validate_snapshot": 10,
           "wip_gate": 1
         }
       },
@@ -22322,6 +22689,34 @@
       },
       "state": "succeeded"
     },
+    "pre_validate_snapshot@10": {
+      "first_event_seq": 2715,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-03T19:41:46.835147494Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "validate_task@5": {
       "first_event_seq": 1251,
       "prompt": null,
@@ -23310,7 +23705,12 @@
       "first_event_seq": 2584,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-03T19:41:43.151297923Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -23324,13 +23724,20 @@
       "output": null,
       "started_at": "2026-06-03T19:37:15.321920815Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 267828,
+        "inference_time_ms": 204454,
+        "tool_time_ms": 62660,
+        "active_time_ms": 267114
+      },
       "usage": {
-        "input_tokens": 909669,
-        "output_tokens": 3444,
-        "total_tokens": 1968801,
-        "reasoning_tokens": 3016,
-        "cache_read_tokens": 1052672,
-        "cache_write_tokens": 0
+        "input_tokens": 910576,
+        "output_tokens": 4350,
+        "total_tokens": 2060059,
+        "reasoning_tokens": 3373,
+        "cache_read_tokens": 1141760,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5355450
       },
       "model": {
         "provider": "openai",
@@ -23469,32 +23876,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 89562,
-        "usage_percent": 32.92720588235294,
+        "input_tokens": 89995,
+        "usage_percent": 33.08639705882353,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-03T19:41:16.003473200Z",
-        "event_seq": 2701,
+        "generated_at": "2026-06-03T19:41:43.127442386Z",
+        "event_seq": 2707,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1113,
-            "usage_percent": 0.4091911764705882
+            "tokens": 1109,
+            "usage_percent": 0.4077205882352941
           },
           {
             "category": "tools",
-            "tokens": 1579,
-            "usage_percent": 0.580514705882353
+            "tokens": 1573,
+            "usage_percent": 0.5783088235294118
           },
           {
             "category": "memory",
-            "tokens": 392,
-            "usage_percent": 0.14411764705882352
+            "tokens": 391,
+            "usage_percent": 0.14375
           },
           {
             "category": "conversation",
-            "tokens": 86472,
-            "usage_percent": 31.791176470588237
+            "tokens": 86916,
+            "usage_percent": 31.95441176470588
           },
           {
             "category": "other",
@@ -23504,7 +23911,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@6": {
       "first_event_seq": 1553,

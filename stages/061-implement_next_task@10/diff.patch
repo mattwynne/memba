@@ -1,0 +1,131 @@
+diff --git a/docs/iterations/020-migrate-production-email-to-postmark/todo.md b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+index 0ade5af..d3324ea 100644
+--- a/docs/iterations/020-migrate-production-email-to-postmark/todo.md
++++ b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.
+ - [x] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.
+ - [x] 009 Verify or add tests proving Postmark outbound member-message payloads still include sender/reply-to, text/HTML bodies, and correlation metadata expected by the Postmark delivery-status webhook handler.
+-- [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.
++- [x] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.
+ - [ ] 011 Verify rejection-email delivery follows the configured mailer/provider path and works when Postmark is selected.
+ - [ ] 012 Update `docs/postmark-email.md` to describe the full Postmark production setup: outbound member-message stream, auth stream, inbound club-message routing for `clubs.memba.io`, delivery-status webhook URL, inbound webhook URL, environment variables, and local smoke-test guidance.
+ - [ ] 013 Update `docs/human-todo.md` or add a runbook under this iteration folder with Matt's manual cutover steps, smoke tests, monitoring checks, and rollback steps to Resend.
+diff --git a/web/test/memba/accounts/auth_email_config_test.exs b/web/test/memba/accounts/auth_email_config_test.exs
+index 919132f..a6e3416 100644
+--- a/web/test/memba/accounts/auth_email_config_test.exs
++++ b/web/test/memba/accounts/auth_email_config_test.exs
+@@ -3,9 +3,20 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
+ 
+   alias Memba.Accounts.AuthEmailConfig
+ 
++  @runtime_env_keys [
++    "MEMBA_AUTH_EMAIL_PROVIDER",
++    "MEMBA_POSTMARK_SERVER_TOKEN",
++    "MEMBA_AUTH_EMAIL_FROM_ADDRESS",
++    "MEMBA_AUTH_EMAIL_MESSAGE_STREAM",
++    "MEMBA_MESSAGING_DELIVERY_PROVIDER",
++    "MEMBA_RESEND_API_KEY",
++    "MEMBA_RESEND_WEBHOOK_SIGNING_SECRET"
++  ]
++
+   test "reads required auth email Postmark settings from environment" do
+     assert {:ok,
+             %AuthEmailConfig{
++              provider: :postmark,
+               server_token: "server-token",
+               from: "auth@mail.memba.io",
+               message_stream: "outbound-authentication"
+@@ -82,6 +93,51 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
+     assert message =~ "resend"
+   end
+ 
++  test "runtime config selects Postmark auth email from MEMBA_AUTH_EMAIL_PROVIDER" do
++    runtime_config =
++      read_runtime_config(%{
++        "MEMBA_AUTH_EMAIL_PROVIDER" => "postmark",
++        "MEMBA_POSTMARK_SERVER_TOKEN" => "server-token",
++        "MEMBA_AUTH_EMAIL_FROM_ADDRESS" => "auth@mail.memba.io",
++        "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" => "outbound-authentication"
++      })
++
++    memba_config = Keyword.fetch!(runtime_config, :memba)
++
++    assert Keyword.fetch!(memba_config, Memba.Mailer) == [
++             adapter: Swoosh.Adapters.Postmark,
++             api_key: "server-token"
++           ]
++
++    assert Keyword.fetch!(memba_config, Memba.Accounts.AuthEmail) == [
++             provider: :postmark,
++             from: "auth@mail.memba.io",
++             message_stream: "outbound-authentication"
++           ]
++
++    assert Keyword.fetch!(Keyword.fetch!(runtime_config, :swoosh), :api_client) ==
++             Swoosh.ApiClient.Req
++  end
++
++  test "runtime config fails clearly when Postmark auth email is selected but incomplete" do
++    error =
++      assert_raise ArgumentError, fn ->
++        read_runtime_config(%{
++          "MEMBA_AUTH_EMAIL_PROVIDER" => "postmark",
++          "MEMBA_POSTMARK_SERVER_TOKEN" => "",
++          "MEMBA_AUTH_EMAIL_FROM_ADDRESS" => nil,
++          "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" => " "
++        })
++      end
++
++    assert error.message =~ "Auth email delivery is enabled"
++    assert error.message =~ "required environment configuration is missing"
++    assert error.message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
++    assert error.message =~ "MEMBA_AUTH_EMAIL_FROM_ADDRESS"
++    assert error.message =~ "MEMBA_AUTH_EMAIL_MESSAGE_STREAM"
++    assert error.message =~ "MEMBA_AUTH_EMAIL_PROVIDER"
++  end
++
+   defp with_application_env(key, value) do
+     original_value = Application.get_env(:memba, key)
+     Application.put_env(:memba, key, value)
+@@ -94,4 +150,40 @@ defmodule Memba.Accounts.AuthEmailConfigTest do
+       end
+     end)
+   end
++
++  defp read_runtime_config(env) do
++    with_system_env(env, fn ->
++      Config.Reader.read!("config/runtime.exs", env: :test)
++    end)
++  end
++
++  defp with_system_env(env, fun) do
++    env = with_default_runtime_env(env)
++
++    original_env =
++      Map.new(Map.keys(env), fn key ->
++        {key, System.get_env(key)}
++      end)
++
++    set_system_env(env)
++
++    try do
++      fun.()
++    after
++      set_system_env(original_env)
++    end
++  end
++
++  defp with_default_runtime_env(env) do
++    Enum.reduce(@runtime_env_keys, env, fn key, env ->
++      Map.put_new(env, key, nil)
++    end)
++  end
++
++  defp set_system_env(env) do
++    Enum.each(env, fn
++      {key, nil} -> System.delete_env(key)
++      {key, value} -> System.put_env(key, value)
++    end)
++  end
+ end
