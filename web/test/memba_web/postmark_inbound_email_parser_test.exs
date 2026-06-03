@@ -94,6 +94,22 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
             }} = PostmarkInboundEmailParser.parse(payload)
   end
 
+  test "uses the top-level Postmark MessageID as the provider retry identity" do
+    payload =
+      valid_payload(%{
+        "MessageID" => "postmark-stable-provider-id",
+        "Headers" => [
+          %{"Name" => "Message-ID", "Value" => "<original-sender-message@example.com>"}
+        ]
+      })
+
+    assert {:ok,
+            %{
+              provider: "postmark",
+              provider_message_id: "postmark-stable-provider-id"
+            }} = PostmarkInboundEmailParser.parse(payload)
+  end
+
   test "treats missing required fields as malformed" do
     required_field_removals = [
       {"MessageID", fn payload -> Map.delete(payload, "MessageID") end},

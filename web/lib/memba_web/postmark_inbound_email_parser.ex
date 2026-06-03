@@ -4,6 +4,7 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
   """
 
   @provider "postmark"
+  @provider_message_id_keys [:MessageID, "MessageID", :message_id, "message_id"]
   @email_regex ~r/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/iu
 
   @doc """
@@ -37,8 +38,11 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
   def parse(_payload), do: {:error, :invalid_payload}
 
   defp provider_message_id(payload) do
+    # Postmark's top-level MessageID is the stable inbound retry identity.
+    # The RFC Message-ID can appear in Headers and belongs to the original
+    # sender message, so it is intentionally not used for provider idempotency.
     payload
-    |> value([:MessageID, "MessageID", :message_id, "message_id"])
+    |> value(@provider_message_id_keys)
     |> required_trimmed_string("MessageID", :invalid_provider_message_id)
   end
 

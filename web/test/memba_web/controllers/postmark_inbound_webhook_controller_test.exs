@@ -122,6 +122,71 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
              "we could not find a member account for your sender address"
   end
 
+  test "uses Postmark MessageID for retry idempotency without duplicate messages or deliveries",
+       %{conn: conn} do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+
+    payload =
+      valid_payload(%{
+        "MessageID" => "postmark-controller-duplicate",
+        "From" => "Alice Example <alice@example.com>",
+        "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
+        "OriginalRecipient" => "kmc@clubs.memba.io",
+        "To" => "KMC <kmc@clubs.memba.io>",
+        "Subject" => "Trip planning night",
+        "TextBody" => "Bring route ideas."
+      })
+
+    conn = post_postmark_inbound_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+    first_deliveries = Fake.deliveries()
+    assert length(first_deliveries) == 2
+
+    retry_payload =
+      valid_payload(%{
+        "MessageID" => "postmark-controller-duplicate",
+        "From" => "Alice Example <alice@example.com>",
+        "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
+        "OriginalRecipient" => "kmc@clubs.memba.io",
+        "To" => "KMC <kmc@clubs.memba.io>",
+        "Subject" => "Trip planning night retry",
+        "TextBody" => "This retry must not create another message."
+      })
+
+    conn =
+      conn
+      |> recycle()
+      |> post_postmark_inbound_event(retry_payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert [
+             %{
+               club_id: kmc_id,
+               sender_id: alice_id,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             }
+           ] = Messaging.list_messages_for_club(kmc.club_id)
+
+    assert kmc_id == kmc.club_id
+    assert alice_id == alice.person_id
+    assert Fake.deliveries() == first_deliveries
+
+    assert %{
+             provider: "postmark",
+             provider_message_id: "postmark-controller-duplicate",
+             provider_event_id: nil,
+             status: "accepted"
+           } = Messaging.get_inbound_email_source("postmark", "postmark-controller-duplicate")
+  end
+
   test "returns unprocessable for malformed Postmark inbound payloads", %{conn: conn} do
     payload = Map.delete(valid_payload(), "MessageID")
 
