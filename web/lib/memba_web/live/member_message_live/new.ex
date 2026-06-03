@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   require Logger
 
   alias Memba.Accounts
+  alias Memba.ClubInboundEmailAddress
   alias Memba.Membership
   alias Memba.Messaging
 
@@ -91,6 +92,7 @@ defmodule MembaWeb.MemberMessageLive.New do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
+    <% inbound_email_address = club_inbound_email_address(@selected_club) %>
     <Layouts.club_site
       flash={@flash}
       club_name={selected_club_name(@selected_club)}
@@ -244,6 +246,27 @@ defmodule MembaWeb.MemberMessageLive.New do
                 {active_member_count_summary(@active_member_count)}
               </strong>
               of {selected_club_name(@selected_club)}. There’s no list to pick — everyone with a current membership gets it.
+            </p>
+          </div>
+
+          <div
+            :if={inbound_email_address}
+            id="member-compose-inbound-email"
+            data-inbound-address={inbound_email_address}
+            class="mt-4 flex gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3 text-sm leading-6 text-[var(--club-site-muted)]"
+          >
+            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-paper)] text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
+              <.icon name="hero-envelope" class="size-4" />
+            </span>
+            <p>
+              Prefer email? Send a club-wide message to
+              <a
+                id="member-compose-inbound-email-link"
+                href={"mailto:#{inbound_email_address}"}
+                class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
+              >
+                {inbound_email_address}
+              </a>
             </p>
           </div>
 
@@ -422,6 +445,8 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp selected_club_name(nil), do: "Club"
   defp selected_club_name(selected_club), do: selected_club.name
+
+  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
   defp selected_club_id(nil, route_params), do: Map.get(route_params, "club_id")
   defp selected_club_id(selected_club, _route_params), do: selected_club.club_id

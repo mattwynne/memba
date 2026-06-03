@@ -6,7 +6,11 @@ defmodule MembaWeb.PageHTML do
   """
   use MembaWeb, :html
 
+  alias Memba.ClubInboundEmailAddress
+
   embed_templates "page_html/*"
+
+  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
 
   defp first_name(%{name: name}) when is_binary(name) do
     name

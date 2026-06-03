@@ -17,7 +17,8 @@ defmodule Memba.EventSourcedCase do
     Memba.Messaging.Projectors.Message,
     Memba.Messaging.Projectors.EmailDelivery,
     Memba.Messaging.Projectors.MemberEmailDelivery,
-    Memba.Messaging.Projectors.MembaStaffEmailDelivery
+    Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+    Memba.Messaging.Projectors.InboundEmailSource
   ]
   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
 

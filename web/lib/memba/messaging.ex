@@ -3,15 +3,27 @@ defmodule Memba.Messaging do
   Public application service API for the Messaging bounded context.
   """
 
+  alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.InboundClubAuthorization
+  alias Memba.Messaging.InboundClubDestination
+  alias Memba.Messaging.InboundClubRejectionEmail
+  alias Memba.Messaging.InboundClubSender
+  alias Memba.Messaging.InboundEmail
+  alias Memba.Messaging.InboundEmailBody
+  alias Memba.Messaging.InboundEmailReceipt
+  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
@@ -35,6 +47,82 @@ defmodule Memba.Messaging do
          :ok <- deliver_to_provider(command) do
       dispatch_result
     end
+  end
+
+  @doc """
+  Build a provider-neutral command for an inbound club-message email.
+
+  Provider webhook adapters should translate provider-specific payloads into
+  this API's attrs before later inbound-email handling resolves clubs, authorizes
+  senders, creates messages, and records idempotency/audit events.
+  """
+  def receive_inbound_club_email_command(attrs) when is_map(attrs) do
+    with {:ok, inbound_email} <- InboundEmail.new(attrs) do
+      {:ok,
+       %ReceiveInboundEmail{
+         inbound_email_id: InboundEmail.identity(inbound_email),
+         inbound_email: inbound_email
+       }}
+    end
+  end
+
+  def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
+
+  @doc """
+  Receive and post a provider-neutral inbound club-message email.
+
+  This wraps the same `send_club_message/2` path used by browser-composed club
+  messages, so accepted inbound email creates the same message event, recipient
+  delivery events, projections, and outbound provider handoffs.
+  """
+  def receive_inbound_club_email(attrs, dispatch_opts \\ [])
+
+  def receive_inbound_club_email(attrs, dispatch_opts)
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
+         {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do
+      if duplicate_inbound_email_receipt?(receive_result) do
+        duplicate_inbound_email_response(receive_command, receive_result)
+      else
+        post_first_inbound_club_email(receive_command, dispatch_opts)
+      end
+    end
+  end
+
+  def receive_inbound_club_email(_attrs, _dispatch_opts), do: {:error, :invalid_inbound_email}
+
+  @doc """
+  Resolve an inbound club-message email's recipient addresses to a destination club.
+
+  Supports the current whole-club address shape
+  `<club-slug>@<configured inbound domain>`, returning a resolved destination
+  with club id and normalized to-address, or a typed rejection reason for
+  unsupported recipient addresses and unknown club slugs.
+  """
+  def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
+    InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
+  end
+
+  @doc """
+  Resolve an inbound club-message email's sender address to a Membership person.
+
+  Supports primary and alternate email addresses through Membership's public
+  email lookup API, returning a resolved sender or a typed rejection reason for
+  unknown sender addresses.
+  """
+  def resolve_inbound_club_email_sender(inbound_email_or_from_address) do
+    InboundClubSender.resolve(inbound_email_or_from_address)
+  end
+
+  @doc """
+  Authorize a resolved inbound sender to post to a resolved club destination.
+
+  Only active members of the destination club may post by email. Known people who
+  belong only to another club, or whose destination-club membership is inactive,
+  receive a typed rejection reason for later rejection-email handling.
+  """
+  def authorize_inbound_club_email_sender(sender, destination) do
+    InboundClubAuthorization.authorize(sender, destination)
   end
 
   @doc """
@@ -123,6 +211,29 @@ defmodule Memba.Messaging do
       :error -> nil
     end
   end
+
+  @doc """
+  Fetch a projected inbound email source/status record by provider identity.
+
+  This is a support/audit read-model query. Inbound idempotency remains owned by
+  the event-sourced inbound email aggregate, not this projection.
+  """
+  def get_inbound_email_source(provider, provider_message_id)
+      when is_binary(provider) and is_binary(provider_message_id) do
+    provider = normalize_inbound_source_lookup(provider)
+    provider_message_id = normalize_inbound_source_lookup(provider_message_id)
+
+    if provider == "" or provider_message_id == "" do
+      nil
+    else
+      Repo.get_by(InboundEmailSourceProjection,
+        provider: provider,
+        provider_message_id: provider_message_id
+      )
+    end
+  end
+
+  def get_inbound_email_source(_provider, _provider_message_id), do: nil
 
   @doc """
   List email email deliveries for a projected message.
@@ -317,6 +428,12 @@ defmodule Memba.Messaging do
     end
   end
 
+  defp normalize_inbound_source_lookup(value) do
+    value
+    |> String.trim()
+    |> String.downcase()
+  end
+
   defp dispatch_command(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
       :ok -> {:ok, :ok}
@@ -324,6 +441,281 @@ defmodule Memba.Messaging do
       {:error, _reason} = error -> error
     end
   end
+
+  defp dispatch_ok(command, dispatch_opts) do
+    case dispatch_command(command, dispatch_opts) do
+      {:ok, _dispatch_result} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp dispatch_inbound_email_received(receive_command, dispatch_opts) do
+    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+
+    case dispatch_command(receive_command, dispatch_opts) do
+      {:ok, {:ok, %ExecutionResult{} = result}} -> {:ok, result}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true
+  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
+
+  defp duplicate_inbound_email_response(
+         receive_command,
+         %ExecutionResult{aggregate_state: %InboundEmailReceipt{} = receipt}
+       ) do
+    {:ok,
+     %{
+       inbound_email_id: receive_command.inbound_email_id,
+       duplicate?: true,
+       status: receipt.status,
+       message_id: receipt.message_id,
+       rejection_reason: receipt.rejection_reason
+     }}
+  end
+
+  defp post_first_inbound_club_email(receive_command, dispatch_opts) do
+    case resolve_inbound_club_email_destination(receive_command.inbound_email) do
+      {:ok, %InboundClubDestination{} = destination} ->
+        post_first_inbound_club_email_to_destination(receive_command, destination, dispatch_opts)
+
+      {:error, reason, to_address} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          to_address,
+          rejection_reason(reason),
+          dispatch_opts
+        )
+    end
+  end
+
+  defp post_first_inbound_club_email_to_destination(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         dispatch_opts
+       ) do
+    case resolve_inbound_club_email_sender(receive_command.inbound_email) do
+      {:ok, %InboundClubSender{} = sender} ->
+        post_first_inbound_club_email_from_sender(
+          receive_command,
+          destination,
+          sender,
+          dispatch_opts
+        )
+
+      {:error, reason, _details} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          rejection_reason(reason),
+          dispatch_opts
+        )
+    end
+  end
+
+  defp post_first_inbound_club_email_from_sender(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         dispatch_opts
+       ) do
+    case authorize_inbound_club_email_sender(sender, destination) do
+      :ok ->
+        post_authorized_first_inbound_club_email(
+          receive_command,
+          destination,
+          sender,
+          dispatch_opts
+        )
+
+      {:error, reason, _details} ->
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          rejection_reason(reason),
+          dispatch_opts
+        )
+    end
+  end
+
+  defp post_authorized_first_inbound_club_email(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         dispatch_opts
+       ) do
+    if inbound_email_has_attachments?(receive_command.inbound_email) do
+      reject_first_inbound_club_email(
+        receive_command,
+        destination.to_address,
+        "attachments_not_supported",
+        dispatch_opts
+      )
+    else
+      case InboundEmailBody.normalize_text_body(receive_command.inbound_email) do
+        {:ok, body} ->
+          accept_first_inbound_club_email(
+            receive_command,
+            destination,
+            sender,
+            body,
+            dispatch_opts
+          )
+
+        {:error, :plain_text_required} ->
+          reject_first_inbound_club_email(
+            receive_command,
+            destination.to_address,
+            "plain_text_required",
+            dispatch_opts
+          )
+      end
+    end
+  end
+
+  defp inbound_email_has_attachments?(%InboundEmail{attachments: [_attachment | _attachments]}),
+    do: true
+
+  defp inbound_email_has_attachments?(%InboundEmail{}), do: false
+
+  defp accept_first_inbound_club_email(
+         receive_command,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         body,
+         dispatch_opts
+       ) do
+    message_id = Ecto.UUID.generate()
+
+    with :ok <-
+           send_inbound_club_message(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             body,
+             dispatch_opts
+           ),
+         :ok <-
+           record_inbound_club_email_accepted(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             dispatch_opts
+           ) do
+      {:ok,
+       %{
+         inbound_email_id: receive_command.inbound_email_id,
+         message_id: message_id,
+         club_id: destination.club_id,
+         sender_id: sender.person_id,
+         from_address: sender.from_address,
+         to_address: destination.to_address
+       }}
+    end
+  end
+
+  defp reject_first_inbound_club_email(
+         receive_command,
+         to_address,
+         rejection_reason,
+         dispatch_opts
+       ) do
+    rejection_email_delivery_reference = Ecto.UUID.generate()
+
+    with :ok <-
+           record_inbound_club_email_rejected(
+             receive_command.inbound_email,
+             to_address,
+             rejection_reason,
+             rejection_email_delivery_reference,
+             dispatch_opts
+           ),
+         :ok <-
+           InboundClubRejectionEmail.deliver(
+             receive_command.inbound_email,
+             to_address,
+             rejection_reason,
+             rejection_email_delivery_reference
+           ) do
+      {:ok,
+       %{
+         inbound_email_id: receive_command.inbound_email_id,
+         status: :rejected,
+         rejection_reason: rejection_reason,
+         from_address: receive_command.inbound_email.from_address,
+         to_address: to_address,
+         rejection_email_delivery_reference: rejection_email_delivery_reference
+       }}
+    end
+  end
+
+  defp send_inbound_club_message(
+         %InboundEmail{} = inbound_email,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         message_id,
+         body,
+         dispatch_opts
+       ) do
+    case send_club_message(
+           %{
+             message_id: message_id,
+             club_id: destination.club_id,
+             sender_id: sender.person_id,
+             subject: inbound_email.subject,
+             body: body
+           },
+           dispatch_opts
+         ) do
+      {:error, _reason} = error -> error
+      _send_result -> :ok
+    end
+  end
+
+  defp record_inbound_club_email_accepted(
+         %InboundEmail{} = inbound_email,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         message_id,
+         dispatch_opts
+       ) do
+    dispatch_ok(
+      %AcceptInboundClubEmail{
+        inbound_email_id: InboundEmail.identity(inbound_email),
+        inbound_email: inbound_email,
+        to_address: destination.to_address,
+        club_id: destination.club_id,
+        sender_id: sender.person_id,
+        message_id: message_id
+      },
+      dispatch_opts
+    )
+  end
+
+  defp record_inbound_club_email_rejected(
+         %InboundEmail{} = inbound_email,
+         to_address,
+         rejection_reason,
+         rejection_email_delivery_reference,
+         dispatch_opts
+       ) do
+    dispatch_ok(
+      %RejectInboundClubEmail{
+        inbound_email_id: InboundEmail.identity(inbound_email),
+        inbound_email: inbound_email,
+        to_address: to_address,
+        rejection_reason: rejection_reason,
+        rejection_email_delivery_reference: rejection_email_delivery_reference
+      },
+      dispatch_opts
+    )
+  end
+
+  defp rejection_reason(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp rejection_reason(reason) when is_binary(reason), do: reason
 
   defp send_club_message_command(attrs) do
     with {:ok, message_id} <- fetch_required(attrs, :message_id),

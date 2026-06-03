@@ -17,6 +17,7 @@ defmodule Memba.Application do
       Memba.Messaging.Projectors.EmailDelivery,
       Memba.Messaging.Projectors.MemberEmailDelivery,
       Memba.Messaging.Projectors.MembaStaffEmailDelivery,
+      Memba.Messaging.Projectors.InboundEmailSource,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.Membership,
       Memba.Membership.Projectors.Person,
