@@ -1,0 +1,141 @@
+diff --git a/docs/iterations/020-migrate-production-email-to-postmark/todo.md b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+index 2090c98..8952743 100644
+--- a/docs/iterations/020-migrate-production-email-to-postmark/todo.md
++++ b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Determine the cleanest Postmark inbound routing shape. Prefer keeping inbound-email handling separate from outbound delivery-status webhooks if Postmark's dashboard supports separate inbound and delivery-status webhook URLs; otherwise make the shared Postmark route dispatch safely by payload shape.
+ - [x] 005 Add a Postmark inbound parser/controller/dispatcher that maps realistic Postmark inbound payload fields to the provider-neutral inbound email structure: provider name, provider message id, sender, recipients, subject, plain text, HTML body if present, attachment metadata, and useful headers.
+ - [x] 006 Reuse iteration 019's provider-neutral command/API for all accepted/rejected behaviour rather than duplicating business rules in Postmark-specific code.
+-- [ ] 007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.
++- [x] 007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.
+ - [ ] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.
+ - [ ] 009 Verify or add tests proving Postmark outbound member-message payloads still include sender/reply-to, text/HTML bodies, and correlation metadata expected by the Postmark delivery-status webhook handler.
+ - [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.
+diff --git a/web/lib/memba_web/postmark_inbound_email_parser.ex b/web/lib/memba_web/postmark_inbound_email_parser.ex
+index c04f48d..9223f63 100644
+--- a/web/lib/memba_web/postmark_inbound_email_parser.ex
++++ b/web/lib/memba_web/postmark_inbound_email_parser.ex
+@@ -4,6 +4,7 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+   """
+ 
+   @provider "postmark"
++  @provider_message_id_keys [:MessageID, "MessageID", :message_id, "message_id"]
+   @email_regex ~r/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+/iu
+ 
+   @doc """
+@@ -37,8 +38,11 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
+   def parse(_payload), do: {:error, :invalid_payload}
+ 
+   defp provider_message_id(payload) do
++    # Postmark's top-level MessageID is the stable inbound retry identity.
++    # The RFC Message-ID can appear in Headers and belongs to the original
++    # sender message, so it is intentionally not used for provider idempotency.
+     payload
+-    |> value([:MessageID, "MessageID", :message_id, "message_id"])
++    |> value(@provider_message_id_keys)
+     |> required_trimmed_string("MessageID", :invalid_provider_message_id)
+   end
+ 
+diff --git a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs
+index c674b8f..1def6bc 100644
+--- a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs
+@@ -122,6 +122,71 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
+              "we could not find a member account for your sender address"
+   end
+ 
++  test "uses Postmark MessageID for retry idempotency without duplicate messages or deliveries",
++       %{conn: conn} do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    alice = create_person!(name: "Alice Example", email: "alice@example.com")
++    bob = create_person!(name: "Bob Example", email: "bob@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++    add_member!(kmc.club_id, bob.person_id)
++
++    payload =
++      valid_payload(%{
++        "MessageID" => "postmark-controller-duplicate",
++        "From" => "Alice Example <alice@example.com>",
++        "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
++        "OriginalRecipient" => "kmc@clubs.memba.io",
++        "To" => "KMC <kmc@clubs.memba.io>",
++        "Subject" => "Trip planning night",
++        "TextBody" => "Bring route ideas."
++      })
++
++    conn = post_postmark_inbound_event(conn, payload)
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++    first_deliveries = Fake.deliveries()
++    assert length(first_deliveries) == 2
++
++    retry_payload =
++      valid_payload(%{
++        "MessageID" => "postmark-controller-duplicate",
++        "From" => "Alice Example <alice@example.com>",
++        "FromFull" => %{"Email" => "alice@example.com", "Name" => "Alice Example"},
++        "OriginalRecipient" => "kmc@clubs.memba.io",
++        "To" => "KMC <kmc@clubs.memba.io>",
++        "Subject" => "Trip planning night retry",
++        "TextBody" => "This retry must not create another message."
++      })
++
++    conn =
++      conn
++      |> recycle()
++      |> post_postmark_inbound_event(retry_payload)
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert [
++             %{
++               club_id: kmc_id,
++               sender_id: alice_id,
++               subject: "Trip planning night",
++               body: "Bring route ideas."
++             }
++           ] = Messaging.list_messages_for_club(kmc.club_id)
++
++    assert kmc_id == kmc.club_id
++    assert alice_id == alice.person_id
++    assert Fake.deliveries() == first_deliveries
++
++    assert %{
++             provider: "postmark",
++             provider_message_id: "postmark-controller-duplicate",
++             provider_event_id: nil,
++             status: "accepted"
++           } = Messaging.get_inbound_email_source("postmark", "postmark-controller-duplicate")
++  end
++
+   test "returns unprocessable for malformed Postmark inbound payloads", %{conn: conn} do
+     payload = Map.delete(valid_payload(), "MessageID")
+ 
+diff --git a/web/test/memba_web/postmark_inbound_email_parser_test.exs b/web/test/memba_web/postmark_inbound_email_parser_test.exs
+index dd74f88..050ad44 100644
+--- a/web/test/memba_web/postmark_inbound_email_parser_test.exs
++++ b/web/test/memba_web/postmark_inbound_email_parser_test.exs
+@@ -94,6 +94,22 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
+             }} = PostmarkInboundEmailParser.parse(payload)
+   end
+ 
++  test "uses the top-level Postmark MessageID as the provider retry identity" do
++    payload =
++      valid_payload(%{
++        "MessageID" => "postmark-stable-provider-id",
++        "Headers" => [
++          %{"Name" => "Message-ID", "Value" => "<original-sender-message@example.com>"}
++        ]
++      })
++
++    assert {:ok,
++            %{
++              provider: "postmark",
++              provider_message_id: "postmark-stable-provider-id"
++            }} = PostmarkInboundEmailParser.parse(payload)
++  end
++
+   test "treats missing required fields as malformed" do
+     required_field_removals = [
+       {"MessageID", fn payload -> Map.delete(payload, "MessageID") end},
