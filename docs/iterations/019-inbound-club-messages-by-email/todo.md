@@ -1,0 +1,26 @@
+# Implementation TODO
+
+- [ ] 001 Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
+- [ ] 002 Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
+- [ ] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
+- [ ] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
+- [ ] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
+- [ ] 006 Add inbound email events such as:
+- [ ] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
+- [ ] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+- [ ] 009 Add sender resolution that finds a person by any primary or alternate email address.
+- [ ] 010 Add active-membership authorization for the resolved sender and destination club.
+- [ ] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
+- [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
+- [ ] 013 Add plain-text body normalization:
+- [ ] 014 Add attachment rejection before message creation when inbound payload includes any attachments.
+- [ ] 015 Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
+- [ ] 016 Add a Resend inbound webhook route/controller/parser for `email.received`-style inbound payloads. Support message fields under `data`: provider message id (`email_id` or `id`), `from`, `to`, optional `cc`/`bcc`, `subject`, `text`, optional `html`, optional `attachments`, and optional `headers`. Treat missing required fields as malformed/unprocessable and cover this with parser tests.
+- [ ] 017 Require the existing Svix-based `MembaWeb.ResendWebhookSignature` verification when a Resend signing secret is configured. Production must configure the signing secret for inbound webhooks. Development/test may run unsigned only when no signing secret is configured.
+- [ ] 018 Translate the Resend payload into the provider-neutral inbound email command/API and return provider-appropriate HTTP statuses for accepted webhook receipt versus malformed/unprocessable payloads.
+- [ ] 019 Add tests for member-visible inbound address display on dashboard and compose.
+- [ ] 020 Add tests for provider-neutral inbound behaviour:
+- [ ] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
+- [ ] 022 Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
+- [ ] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
+- [ ] 024 Run `dev check`.
