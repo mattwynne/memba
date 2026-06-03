@@ -1,0 +1,202 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index 9191401..b4fbd0a 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Add inbound email events such as:
+ - [x] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
+ - [x] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+-- [ ] 009 Add sender resolution that finds a person by any primary or alternate email address.
++- [x] 009 Add sender resolution that finds a person by any primary or alternate email address.
+ - [ ] 010 Add active-membership authorization for the resolved sender and destination club.
+ - [ ] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
+ - [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 7fe685e..f655abc 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -14,6 +14,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.InboundClubDestination
++  alias Memba.Messaging.InboundClubSender
+   alias Memba.Messaging.InboundEmail
+   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+@@ -72,6 +73,17 @@ defmodule Memba.Messaging do
+     InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
+   end
+ 
++  @doc """
++  Resolve an inbound club-message email's sender address to a Membership person.
++
++  Supports primary and alternate email addresses through Membership's public
++  email lookup API, returning a resolved sender or a typed rejection reason for
++  unknown sender addresses.
++  """
++  def resolve_inbound_club_email_sender(inbound_email_or_from_address) do
++    InboundClubSender.resolve(inbound_email_or_from_address)
++  end
++
+   @doc """
+   Report that a email delivery was accepted by the recipient server.
+   """
+diff --git a/web/lib/memba/messaging/inbound_club_sender.ex b/web/lib/memba/messaging/inbound_club_sender.ex
+new file mode 100644
+index 0000000..1dce73e
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_club_sender.ex
+@@ -0,0 +1,71 @@
++defmodule Memba.Messaging.InboundClubSender do
++  @moduledoc """
++  Resolved sender for a provider-neutral inbound club-message email.
++
++  Sender resolution deliberately uses Membership's public email lookup API so
++  Messaging can identify people by primary or alternate email address without
++  coupling to Membership projection storage.
++  """
++
++  alias Memba.Membership
++  alias Memba.Messaging.InboundEmail
++
++  @enforce_keys [:person_id, :name, :from_address]
++  defstruct [:person_id, :name, :from_address]
++
++  @type t :: %__MODULE__{
++          person_id: Ecto.UUID.t(),
++          name: String.t(),
++          from_address: String.t()
++        }
++
++  @type rejection_reason :: :unknown_sender
++  @type rejection :: {:error, rejection_reason(), String.t() | nil}
++
++  @doc """
++  Resolve an inbound email sender address to a Membership person.
++
++  Returns `{:ok, sender}` when the address belongs to a person as either their
++  primary or alternate email address. Returns `{:error, :unknown_sender,
++  normalized_address_or_nil}` for blank, invalid, or unknown sender input.
++  """
++  @spec resolve(InboundEmail.t() | String.t() | term()) :: {:ok, t()} | rejection()
++  def resolve(%InboundEmail{from_address: from_address}), do: resolve(from_address)
++
++  def resolve(from_address) do
++    case normalize_address(from_address) do
++      {:ok, normalized_address} ->
++        resolve_normalized_address(normalized_address)
++
++      {:error, :blank_address} ->
++        {:error, :unknown_sender, nil}
++
++      {:error, :invalid_address} ->
++        {:error, :unknown_sender, nil}
++    end
++  end
++
++  defp normalize_address(address) when is_binary(address) do
++    case address |> String.trim() |> String.downcase() do
++      "" -> {:error, :blank_address}
++      normalized_address -> {:ok, normalized_address}
++    end
++  end
++
++  defp normalize_address(_address), do: {:error, :invalid_address}
++
++  defp resolve_normalized_address(normalized_address) do
++    case Membership.get_person_by_email(normalized_address) do
++      nil ->
++        {:error, :unknown_sender, normalized_address}
++
++      person ->
++        {:ok,
++         %__MODULE__{
++           person_id: person.person_id,
++           name: person.name,
++           from_address: normalized_address
++         }}
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_club_sender_test.exs b/web/test/memba/messaging/inbound_club_sender_test.exs
+new file mode 100644
+index 0000000..8b0de1b
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_club_sender_test.exs
+@@ -0,0 +1,64 @@
++defmodule Memba.Messaging.InboundClubSenderTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Messaging
++  alias Memba.Messaging.InboundClubSender
++  alias Memba.Messaging.InboundEmail
++
++  describe "resolve_inbound_club_email_sender/1" do
++    test "resolves a sender from a person's primary email address" do
++      alice =
++        insert_membership_person!(
++          name: "Alice Example",
++          email_addresses: [
++            %{email: "Alice@Example.COM", is_primary: true},
++            %{email: "alice@work.example", is_primary: false}
++          ]
++        )
++
++      assert {:ok,
++              %InboundClubSender{
++                person_id: alice.person_id,
++                name: "Alice Example",
++                from_address: "alice@example.com"
++              }} == Messaging.resolve_inbound_club_email_sender(" Alice@Example.COM ")
++    end
++
++    test "resolves a sender from any alternate email address" do
++      alice =
++        insert_membership_person!(
++          name: "Alice Example",
++          email_addresses: [
++            %{email: "alice@example.com", is_primary: true},
++            %{email: "Alice.Work@Example.COM", is_primary: false}
++          ]
++        )
++
++      inbound_email = %InboundEmail{
++        provider: "resend",
++        provider_message_id: "email-123",
++        from_address: " alice.work@example.com ",
++        recipient_addresses: ["kmc@clubs.memba.io"],
++        subject: "Trip planning night"
++      }
++
++      assert {:ok,
++              %InboundClubSender{
++                person_id: alice.person_id,
++                name: "Alice Example",
++                from_address: "alice.work@example.com"
++              }} == Messaging.resolve_inbound_club_email_sender(inbound_email)
++    end
++
++    test "rejects unknown, blank, or missing sender addresses" do
++      assert {:error, :unknown_sender, "unknown@example.com"} ==
++               Messaging.resolve_inbound_club_email_sender("unknown@example.com")
++
++      assert {:error, :unknown_sender, nil} ==
++               Messaging.resolve_inbound_club_email_sender("   ")
++
++      assert {:error, :unknown_sender, nil} ==
++               Messaging.resolve_inbound_club_email_sender(nil)
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 99eee15..3eb5473 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -18,6 +18,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def list_operator_email_deliveries("
+     assert source =~ "def get_inbound_email_source("
+     assert source =~ "def resolve_inbound_club_email_destination("
++    assert source =~ "def resolve_inbound_club_email_sender("
+ 
+     list_functions =
+       ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/
