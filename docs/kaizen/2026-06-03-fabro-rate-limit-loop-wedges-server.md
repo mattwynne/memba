@@ -61,12 +61,23 @@ LLM error: Rate limited by openai: Rate limit exceeded
 
 Despite those failures, the workflow kept selecting edges and looping back instead of terminating, blocking, backing off safely, or surfacing a clear recoverable failure.
 
+A later recovery attempt found:
+
+- Graceful `pct reboot 115` wedged on `lxc-stop`.
+- After clearing the stale task/lock, `pct stop 115` plus `pct start 115` restarted the container.
+- `fabro.service` came back up and recreated the `fabro` Docker container.
+- `https://fabro.home.wynne.family/health` returned `HTTP/2 200` with `{"status":"ok"}` after restart.
+- Container resources dropped to about 442MiB RAM used, 0 swap used, and `/storage` 17% used.
+- Run `01KT5M274P6VNG3WJK24N2SZQ9` became inspectable and reported `failed`, reason `terminated`.
+- The stopped Docker run container `fabro-run-01KT5M274P6VNG3WJK24N2SZQ9` remained, exited `255`, size about 1.06GB.
+- `fabro doctor` also reported a low Anthropic credit balance, so switching providers may not be enough without checking provider quota/credit first.
+
 ## Impact
 
 - Iteration 019 remained stuck in `implementing`.
 - Iteration 020 could not start because ordered single-piece-flow correctly waited for 019 to merge.
 - Fabro's remote API became unresponsive, so normal diagnosis through `inspect` and `events` was unavailable.
-- Recovery required manual host-level investigation from `hub.local` and likely a container/server restart.
+- Recovery required manual host-level investigation from `hub.local`, a non-graceful container restart, and later cleanup decisions for the failed run and stopped run container.
 - The failure mode risks wasting model spend, exhausting server resources, and hiding the true cause behind generic CLI timeouts.
 
 ## What allowed it to happen
@@ -83,6 +94,8 @@ The server also lacked enough resource isolation or load-shedding to keep the AP
 - `fabro inspect` and `fabro events` were not reliable recovery tools once the remote server stopped servicing requests.
 - A separate local Fabro server being healthy could mislead diagnosis unless the CLI target/server URL is checked.
 - The hub.local agent could only diagnose by inspecting host/container state and process/log evidence.
+- A graceful LXC reboot was not enough once the container was wedged; recovery required clearing a stale Proxmox task/lock and using stop/start.
+- After restart, the run transitioned to an inspectable failed/terminated state, which is better than an unresponsive API but still left Memba's iteration status requiring cleanup or retry decisions.
 
 ## Why this matters
 
@@ -95,6 +108,7 @@ If provider rate limits can wedge the workflow engine, any long implementation r
 - What server/container memory limit is appropriate for concurrent Fabro server plus worker processes?
 - Should provider rate limits be classified as terminal, retry-with-backoff, or human-intervention failures in implementation workflows?
 - What is the safest operator recovery procedure for a stuck active implementation run after a server restart?
+- Should stopped per-run Docker containers be pruned automatically after failed/terminated runs, or retained for evidence with a size/age limit?
 
 ## Possible prevention ideas
 
@@ -104,4 +118,5 @@ If provider rate limits can wedge the workflow engine, any long implementation r
 - Keep health endpoints responsive under worker pressure, or expose a separate lightweight supervisor health endpoint.
 - Add watchdog detection for runs that repeat the same node cycle without progress.
 - Make `fabro inspect/events` report the configured server target prominently when timeouts occur.
-- Document a safe recovery runbook for remote Fabro server/container restart and stuck implementation status cleanup.
+- Document a safe recovery runbook for remote Fabro server/container restart, including what to do when graceful LXC reboot hangs on `lxc-stop`.
+- Add post-restart cleanup guidance for failed runs, stale iteration statuses, and stopped per-run Docker containers.
