@@ -423,6 +423,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
            )
 
+    assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
+    assert has_element?(view, "#member-dashboard-inbound-email", "Send a club-wide message to")
+
     assert has_element?(
              view,
              "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']",

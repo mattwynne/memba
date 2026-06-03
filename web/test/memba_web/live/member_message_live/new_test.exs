@@ -223,6 +223,9 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
              "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
            )
 
+    assert has_element?(view, "#member-compose-inbound-email", "Prefer email?")
+    assert has_element?(view, "#member-compose-inbound-email", "Send a club-wide message to")
+
     assert has_element?(
              view,
              "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
