@@ -5,6 +5,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.Events.InboundClubEmailAccepted
+  alias Memba.Messaging.Events.MessageSent
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
 
   setup do
@@ -132,6 +134,67 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            } = Messaging.get_inbound_email_source("resend", "task-011-email")
   end
 
+  test "duplicate provider message ids return accepted without creating duplicate messages or outbound deliveries" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-012-duplicate-email",
+      provider_event_id: "task-012-event-first",
+      from_address: "alice@example.com",
+      recipient_addresses: ["kmc@clubs.memba.io"],
+      subject: "Trip planning night",
+      text_body: "Bring route ideas."
+    }
+
+    assert {:ok, %{message_id: message_id}} =
+             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    first_deliveries = Fake.deliveries()
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-012-duplicate-email",
+              duplicate?: true,
+              status: :accepted,
+              message_id: ^message_id
+            }} =
+             inbound_attrs
+             |> Map.merge(%{
+               provider_event_id: "task-012-event-retry",
+               subject: "Trip planning night retry",
+               text_body: "This retry must not be posted."
+             })
+             |> Messaging.receive_inbound_club_email(consistency: :strong)
+
+    assert [
+             %{
+               message_id: ^message_id,
+               subject: "Trip planning night",
+               body: "Bring route ideas."
+             }
+           ] =
+             Messaging.list_messages_for_club(kmc.club_id)
+
+    assert Fake.deliveries() == first_deliveries
+    assert length(first_deliveries) == 2
+
+    assert %InboundEmailSourceProjection{
+             status: "accepted",
+             provider_event_id: "task-012-event-first",
+             message_id: ^message_id
+           } = Messaging.get_inbound_email_source("resend", "task-012-duplicate-email")
+
+    assert 1 == count_events(MessageSent)
+    assert 1 == count_events(InboundClubEmailAccepted)
+  end
+
   defp create_club!(attrs) do
     club_id = Ecto.UUID.generate()
 
@@ -178,4 +241,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+
+  defp count_events(event_module) when is_atom(event_module) do
+    event_type = Atom.to_string(event_module)
+
+    %{rows: [[count]]} =
+      Repo.query!(
+        ~S|SELECT count(*) FROM "event_store"."events" WHERE event_type = $1|,
+        [event_type]
+      )
+
+    count
+  end
 end

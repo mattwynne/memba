@@ -3,6 +3,7 @@ defmodule Memba.Messaging do
   Public application service API for the Messaging bounded context.
   """
 
+  alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
@@ -18,6 +19,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
   alias Memba.Messaging.InboundEmail
+  alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
@@ -75,37 +77,12 @@ defmodule Memba.Messaging do
   def receive_inbound_club_email(attrs, dispatch_opts)
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
-         :ok <- dispatch_ok(receive_command, dispatch_opts),
-         {:ok, destination} <-
-           resolve_inbound_club_email_destination(receive_command.inbound_email),
-         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
-         :ok <- authorize_inbound_club_email_sender(sender, destination),
-         message_id = Ecto.UUID.generate(),
-         :ok <-
-           send_inbound_club_message(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             dispatch_opts
-           ),
-         :ok <-
-           record_inbound_club_email_accepted(
-             receive_command.inbound_email,
-             destination,
-             sender,
-             message_id,
-             dispatch_opts
-           ) do
-      {:ok,
-       %{
-         inbound_email_id: receive_command.inbound_email_id,
-         message_id: message_id,
-         club_id: destination.club_id,
-         sender_id: sender.person_id,
-         from_address: sender.from_address,
-         to_address: destination.to_address
-       }}
+         {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do
+      if duplicate_inbound_email_receipt?(receive_result) do
+        duplicate_inbound_email_response(receive_command, receive_result)
+      else
+        post_first_inbound_club_email(receive_command, dispatch_opts)
+      end
     end
   end
 
@@ -466,6 +443,65 @@ defmodule Memba.Messaging do
     case dispatch_command(command, dispatch_opts) do
       {:ok, _dispatch_result} -> :ok
       {:error, _reason} = error -> error
+    end
+  end
+
+  defp dispatch_inbound_email_received(receive_command, dispatch_opts) do
+    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
+
+    case dispatch_command(receive_command, dispatch_opts) do
+      {:ok, {:ok, %ExecutionResult{} = result}} -> {:ok, result}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true
+  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
+
+  defp duplicate_inbound_email_response(
+         receive_command,
+         %ExecutionResult{aggregate_state: %InboundEmailReceipt{} = receipt}
+       ) do
+    {:ok,
+     %{
+       inbound_email_id: receive_command.inbound_email_id,
+       duplicate?: true,
+       status: receipt.status,
+       message_id: receipt.message_id
+     }}
+  end
+
+  defp post_first_inbound_club_email(receive_command, dispatch_opts) do
+    with {:ok, destination} <-
+           resolve_inbound_club_email_destination(receive_command.inbound_email),
+         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
+         :ok <- authorize_inbound_club_email_sender(sender, destination),
+         message_id = Ecto.UUID.generate(),
+         :ok <-
+           send_inbound_club_message(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             dispatch_opts
+           ),
+         :ok <-
+           record_inbound_club_email_accepted(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             dispatch_opts
+           ) do
+      {:ok,
+       %{
+         inbound_email_id: receive_command.inbound_email_id,
+         message_id: message_id,
+         club_id: destination.club_id,
+         sender_id: sender.person_id,
+         from_address: sender.from_address,
+         to_address: destination.to_address
+       }}
     end
   end
 
