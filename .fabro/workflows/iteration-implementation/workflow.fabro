@@ -2,7 +2,7 @@ digraph IterationImplementation {
     graph [
         goal="Implement the iteration plan at {{ inputs.plan_path }} and leave the codebase passing dev check",
         default_fidelity="summary:high",
-        max_node_visits=300,
+        max_node_visits=80,
         model_stylesheet="
             * { model: gpt-5.5; reasoning_effort: high; }
             #read_plan { reasoning_effort: low; }
@@ -87,13 +87,15 @@ digraph IterationImplementation {
         label="Check Task List",
         shape=tab,
         output_schema="routing",
-        prompt="@prompts/check_task_list.md"
+        prompt="@prompts/check_task_list.md",
+        max_visits=40
     ]
 
     implement_next_task [
         label="Implement Next Task",
         prompt="@prompts/implement_next_task.md",
-        timeout="2400s"
+        timeout="2400s",
+        max_visits=30
     ]
 
     pre_validate_snapshot [
@@ -106,7 +108,8 @@ digraph IterationImplementation {
     validate_task [
         label="Validate Completed Task",
         output_schema="routing",
-        prompt="@prompts/validate_task.md"
+        prompt="@prompts/validate_task.md",
+        max_visits=30
     ]
 
     task_gate [shape=diamond, label="Task valid?"]
@@ -227,12 +230,15 @@ digraph IterationImplementation {
     resume_failed -> exit
 
     sync_task_list -> all_tasks_done
-    all_tasks_done -> dev_check [label="No unchecked tasks", condition="context.task_list_complete=true"]
-    all_tasks_done -> implement_next_task [label="Tasks remain", condition="context.task_list_complete=false && context.task_list_needs_human=false"]
-    all_tasks_done -> task_not_ready [label="Task list problem"]
-    implement_next_task -> pre_validate_snapshot
-    pre_validate_snapshot -> validate_task
-    validate_task -> task_gate
+    all_tasks_done -> dev_check [label="No unchecked tasks", condition="outcome=succeeded && context.task_list_complete=true"]
+    all_tasks_done -> implement_next_task [label="Tasks remain", condition="outcome=succeeded && context.task_list_complete=false && context.task_list_needs_human=false"]
+    all_tasks_done -> task_not_ready [label="Task list problem or provider failure"]
+    implement_next_task -> pre_validate_snapshot [condition="outcome=succeeded"]
+    implement_next_task -> task_not_ready [label="Implementation/provider failure"]
+    pre_validate_snapshot -> validate_task [condition="outcome=succeeded"]
+    pre_validate_snapshot -> task_not_ready [label="Pre-validation snapshot failed"]
+    validate_task -> task_gate [condition="outcome=succeeded"]
+    validate_task -> task_not_ready [label="Validation/provider failure"]
     task_gate -> sync_task_list [label="Valid", condition="context.task_valid=true"]
     task_gate -> reset_task_attempt [label="Retry from last good checkpoint", condition="context.task_retry_available=true"]
     task_gate -> task_not_ready [label="Needs human input or retry budget exhausted"]
