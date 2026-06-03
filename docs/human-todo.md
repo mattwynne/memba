@@ -1,5 +1,25 @@
 # Human todo
 
+## Inbound club email smoke-test setup
+
+Before running the production inbound email smoke tests in `./smoke-tests`, Matt needs to set up the following outside the codebase.
+
+- [ ] Create or confirm a controlled production club named `Test` with slug `test`.
+- [ ] Make sure the `Test` club does not appear in public-facing UI or ordinary member discovery surfaces.
+- [ ] Create or confirm a controlled active member of the `Test` club with primary email address `test@memba.io`.
+- [ ] Set up the `test@memba.io` Fastmail account so the smoke-test runner can send real emails and read resulting rejection/distribution emails.
+- [ ] Provide the smoke-test runner with the required Fastmail credentials or app passwords through local environment variables/secrets; do not commit them.
+- [ ] Confirm whether `test@memba.io` should also be usable for Memba sign-in during smoke tests, or whether the runner should sign in with a separate staff account.
+- [ ] Confirm the production base URL the smoke tests should target. Expected default: `https://memba.io`.
+
+The routine inbound wiring smoke tests should cover real email from mailbox to Memba and back again:
+
+- [ ] Unknown sender to `test@clubs.memba.io` is rejected and receives guidance.
+- [ ] Known active member `test@memba.io` to `test@clubs.memba.io` creates and distributes a club message.
+- [ ] Known active member `test@memba.io` with an attachment is rejected and receives attachment guidance.
+
+HTML-only email is not required as a production smoke test because it mainly exercises the business rule for `plain_text_required`, which is covered by lower-level tests. The smoke tests should focus on production wiring and visible touch-points.
+
 ## Postmark setup for iteration 008
 
 Before or during Postmark email integration, Matt needs to set up the following outside the codebase.
