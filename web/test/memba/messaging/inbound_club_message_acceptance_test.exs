@@ -577,6 +577,68 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     )
   end
 
+  test "rejection emails use Postmark mailer/provider configuration when Postmark is selected" do
+    Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
+
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:postmark:task-020-postmark-selected-rejection",
+              status: :rejected,
+              rejection_reason: "unknown_sender",
+              from_address: "unknown@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "postmark",
+                 provider_message_id: "task-020-postmark-selected-rejection",
+                 from_address: "unknown@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Can I post through Postmark?"
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "unknown_sender",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } =
+             Messaging.get_inbound_email_source(
+               "postmark",
+               "task-020-postmark-selected-rejection"
+             )
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    rejection_email =
+      assert_rejection_email_received(
+        to: "unknown@example.com",
+        reason: "we could not find a member account for your sender address"
+      )
+
+    assert rejection_email.provider_options[:metadata] == %{
+             "memba_email_kind" => "inbound_club_rejection",
+             "memba_inbound_email_id" =>
+               "inbound-email:postmark:task-020-postmark-selected-rejection",
+             "memba_inbound_provider" => "postmark",
+             "memba_inbound_provider_message_id" => "task-020-postmark-selected-rejection",
+             "memba_inbound_to_address" => "kmc@clubs.memba.io",
+             "memba_rejection_reason" => "unknown_sender",
+             "memba_rejection_delivery_reference" => rejection_email_delivery_reference
+           }
+  end
+
   test "known sender who is not a member of the destination club is rejected" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
