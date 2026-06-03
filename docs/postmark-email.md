@@ -3,11 +3,27 @@
 Memba has Postmark-backed and Resend-backed email paths:
 
 - member-message email for club broadcasts;
-- shared magic-link authentication email for members and Memba staff.
+- shared magic-link authentication email for members and Memba staff;
+- inbound club-message email sent to `<club-slug>@clubs.memba.io`.
 
 Each path opts in to real provider sending explicitly. Leaving the relevant
 provider unset keeps routine local development and automated tests from sending
 real email.
+
+## Production Postmark setup at a glance
+
+Postmark should be configured with distinct production responsibilities:
+
+| Email path | Postmark setup | Memba configuration |
+| --- | --- | --- |
+| Outbound member broadcasts and rejection emails | Member broadcast message stream, currently named `outbound-member-broadcasts`; verified sender such as `messages@mail.memba.io`; delivery-status webhook on the same stream | `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_POSTMARK_FROM_ADDRESS`, optional `MEMBA_POSTMARK_REPLY_TO_ADDRESS` for rejection/contact replies |
+| Magic-link authentication | Dedicated auth Transactional Message Stream, recommended ID `outbound-authentication`; verified sender such as `auth@mail.memba.io` | `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` |
+| Inbound club messages | Inbound Message Stream for `clubs.memba.io`; MX for `clubs.memba.io` points to Postmark inbound; inbound webhook URL configured on the inbound stream | No runtime provider variable. Postmark sends JSON to `POST /webhooks/postmark/inbound`, and Memba derives the club from the recipient address such as `kmc@clubs.memba.io`. |
+
+Keep these Postmark paths separate. Delivery-status webhooks for outbound member
+messages go to `POST /webhooks/postmark`; inbound email webhooks go to
+`POST /webhooks/postmark/inbound`; auth email does not currently require a Memba
+webhook.
 
 ## Enable real provider sending
 
@@ -20,7 +36,7 @@ Set these environment variables for the environment that should send real email:
 | `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` | Yes | Opts the environment into the Postmark delivery provider. If unset or blank, Memba keeps the configured default provider, which is fake in local/test defaults. |
 | `MEMBA_POSTMARK_SERVER_TOKEN` | Yes with Postmark | Postmark server token used by Swoosh as the Postmark API key. Keep this secret out of the repository. |
 | `MEMBA_POSTMARK_FROM_ADDRESS` | Yes with Postmark | Sender/from address for member-message email. Use a verified, monitored Memba-controlled sending address. |
-| `MEMBA_POSTMARK_REPLY_TO_ADDRESS` | Recommended | Reply-To/contact address added to outbound email when configured. This inbox should be monitored by a human. |
+| `MEMBA_POSTMARK_REPLY_TO_ADDRESS` | Recommended | Reply-To/contact address available to provider-backed rejection/contact email when configured. This inbox should be monitored by a human. Member broadcasts reply to the member sender. |
 
 Example local opt-in for a controlled real-send test:
 
@@ -96,6 +112,26 @@ When real auth delivery is selected, Memba fails clearly if the provider token,
 auth from address, or auth message stream/category is missing. It does not
 silently send auth email through an unconfigured provider.
 
+### Production Postmark environment variables
+
+For a production cutover where all real email paths use Postmark, set or confirm
+these deployment secrets/config values together:
+
+```text
+MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark
+MEMBA_POSTMARK_SERVER_TOKEN=<Postmark server token>
+MEMBA_POSTMARK_FROM_ADDRESS=messages@mail.memba.io
+MEMBA_POSTMARK_REPLY_TO_ADDRESS=<monitored reply/contact address>
+
+MEMBA_AUTH_EMAIL_PROVIDER=postmark
+MEMBA_AUTH_EMAIL_FROM_ADDRESS=auth@mail.memba.io
+MEMBA_AUTH_EMAIL_MESSAGE_STREAM=outbound-authentication
+```
+
+There is no separate `MEMBA_POSTMARK_INBOUND_*` setting. Inbound provider
+selection is route-based: Postmark calls `/webhooks/postmark/inbound`, while
+Resend remains available at `/webhooks/resend` for fallback support.
+
 ## Sender domain and addresses
 
 For first production use, prefer a dedicated Memba-controlled sending subdomain
@@ -111,6 +147,30 @@ Wait for Postmark to verify the domain before enabling real sends.
 
 Club-owned sender domains are intentionally deferred. Use one configured
 Memba-controlled sender for this first real-send slice.
+
+## Member broadcast stream
+
+Create or confirm the Postmark member broadcast stream:
+
+```text
+outbound-member-broadcasts
+```
+
+Use this stream, or the server/default stream that Postmark records for this
+Memba server token, for outbound member-message delivery and rejection emails.
+The delivery-status webhook for this stream must point at Memba's Postmark
+delivery-status route:
+
+```text
+https://<memba-host>/webhooks/postmark
+```
+
+Member-message sends include correlation metadata (`memba_message_id`,
+`memba_delivery_id`, and `memba_club_id`) so delivery-status webhooks can update
+Memba records. The current member-message runtime configuration does not expose a
+`MEMBA_*` variable for choosing a Postmark `MessageStream`; before cutover,
+confirm a controlled member-message send appears in the intended member broadcast
+stream in Postmark. Do not reuse the auth stream for member broadcasts.
 
 ## Auth message stream
 
@@ -136,7 +196,56 @@ broadcast stream for auth email.
 The Swoosh Postmark adapter sends this value as Postmark's `MessageStream`
 provider option on every magic-link email.
 
-## Webhook configuration
+## Inbound club-message email
+
+Inbound club messages keep the member-facing address shape:
+
+```text
+<club-slug>@clubs.memba.io
+```
+
+For example, members email:
+
+```text
+kmc@clubs.memba.io
+```
+
+Configure Postmark inbound domain forwarding for the `clubs.memba.io` subdomain:
+
+```text
+MX clubs.memba.io -> inbound.postmarkapp.com, priority 10
+```
+
+Use a dedicated Postmark Inbound Message Stream for this route and set its
+inbound webhook URL to:
+
+```text
+https://<memba-host>/webhooks/postmark/inbound
+```
+
+Postmark inbound payloads are parsed from fields including `MessageID`, `From` /
+`FromFull`, `OriginalRecipient`, `To` / `ToFull`, `Subject`, `TextBody`,
+`HtmlBody`, `Attachments`, and `Headers`. Memba uses Postmark's top-level
+`MessageID` as the stable provider retry/idempotency key; duplicate Postmark
+retries for the same `MessageID` do not create duplicate club messages or
+duplicate rejection emails.
+
+Memba uses the provider-neutral inbound email handling shared with Resend:
+
+- active members can post to their club address;
+- alternate known member email addresses are accepted;
+- unknown senders, inactive members, and non-members are rejected without
+  creating a club message;
+- inbound emails with attachments are rejected;
+- inbound emails without usable plain text are rejected;
+- rejection emails are delivered through the configured real provider, so they
+  go through Postmark when `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`.
+
+Webhook authentication/signature verification for Postmark inbound webhooks is a
+follow-up security concern. Do not put other applications behind this route, and
+limit the Postmark inbound stream to the `clubs.memba.io` mail flow.
+
+## Delivery-status webhook configuration
 
 Configure the Postmark webhook URL for each deployed Memba environment:
 
@@ -159,6 +268,13 @@ unsupported and does not change delivery status.
 
 Webhook signature verification is not part of this slice, so production exposure
 should account for that follow-up security work.
+
+Do not configure Postmark inbound email to use this route. Inbound email must use
+the separate inbound stream webhook URL:
+
+```text
+https://<memba-host>/webhooks/postmark/inbound
+```
 
 For Resend, configure this webhook URL:
 
@@ -212,19 +328,56 @@ successful Postmark handoff remain webhook-driven and appear through Memba's
 existing delivery status model.
 
 Member-message email does not currently expose a runtime environment variable
-for selecting a Postmark message stream. Magic-link authentication email does:
-use `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` as documented above.
+for selecting a Postmark message stream. Confirm the Postmark server/stream setup
+records member-message sends in the intended member broadcast stream. Magic-link
+authentication email does expose a stream variable: use
+`MEMBA_AUTH_EMAIL_MESSAGE_STREAM` as documented above.
 
-## Manual smoke test
+## Local smoke-test guidance
+
+Routine local development and automated tests should not set real provider
+environment variables. By default, member-message delivery uses the fake provider
+and the mailer uses local/test adapters, so local tests do not send real Postmark
+or Resend email.
+
+For a local Postmark member-message smoke test, opt in explicitly with the
+member-message Postmark environment variables, start the app, send one message to
+a controlled inbox, and confirm:
+
+- Postmark accepts the email;
+- the email arrives from `MEMBA_POSTMARK_FROM_ADDRESS`;
+- replies go to the member sender/contact address expected for the message;
+- Postmark shows the `memba_message_id`, `memba_delivery_id`, and
+  `memba_club_id` metadata.
+
+For a local auth smoke test, opt in explicitly with the auth Postmark environment
+variables and confirm the magic-link email is accepted on
+`MEMBA_AUTH_EMAIL_MESSAGE_STREAM`.
+
+For a local inbound parser/controller smoke test, post a Postmark-shaped JSON
+payload to:
+
+```text
+http://localhost:4000/webhooks/postmark/inbound
+```
+
+Use a payload with `MessageID`, `From`, `OriginalRecipient` such as
+`kmc@clubs.memba.io`, `Subject`, and `TextBody`. This tests Memba's inbound route
+without changing DNS. A real Postmark inbound smoke test requires public HTTPS
+access to the running environment, so use the deployed host or a temporary tunnel
+and set the Postmark inbound stream webhook URL to the public `/webhooks/postmark/inbound`
+URL for that controlled test.
+
+## Manual production smoke test
 
 For a controlled environment only:
 
 1. Verify the sending subdomain and sender address in Postmark.
 2. Set the Postmark environment variables above.
-3. Configure the environment-specific webhook URL in Postmark.
+3. Configure the environment-specific delivery-status webhook URL in Postmark.
 4. Send one member message to a controlled inbox.
 5. Confirm Postmark accepts the email and the inbox receives it from the
-   configured sender with the configured reply-to address.
+   configured sender with the expected Reply-To/contact behaviour.
 6. Trigger or observe delivery/problem webhooks and confirm the message receipt
    and `/deliveries` overview update through Memba's delivery records.
 
@@ -241,3 +394,15 @@ For a controlled magic-link auth smoke test:
    email on the auth stream.
 6. Confirm the inbox receives a magic-link email from the configured auth sender.
 7. Follow the link and confirm the browser signs in and redirects to `/`.
+
+For a controlled inbound club-message smoke test:
+
+1. Verify the `clubs.memba.io` MX record points to Postmark inbound.
+2. Verify the Postmark inbound stream webhook URL is
+   `https://<memba-host>/webhooks/postmark/inbound`.
+3. Email `kmc@clubs.memba.io` from a controlled active member address.
+4. Confirm Memba creates the club message and sends member deliveries.
+5. Email the same address from an unsupported sender, or with an unsupported
+   attachment, and confirm Memba creates no club message.
+6. Confirm the rejection email is delivered through the selected Postmark
+   member-message provider path.

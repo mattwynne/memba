@@ -107,6 +107,7 @@ defmodule MembaWeb.Router do
     pipe_through :api
 
     post "/postmark", PostmarkWebhookController, :create
+    post "/postmark/inbound", PostmarkInboundWebhookController, :create
     post "/resend", ResendWebhookController, :create
   end
 
