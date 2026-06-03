@@ -1,0 +1,449 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index 64069ac..d160423 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
+ - [x] 002 Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
+ - [x] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
+-- [ ] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
++- [x] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
+ - [ ] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
+ - [ ] 006 Add inbound email events such as:
+ - [ ] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 563247d..ac8edc7 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -9,9 +9,11 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.InboundEmail
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
+@@ -37,6 +39,21 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Build a provider-neutral command for an inbound club-message email.
++
++  Provider webhook adapters should translate provider-specific payloads into
++  this API's attrs before later inbound-email handling resolves clubs, authorizes
++  senders, creates messages, and records idempotency/audit events.
++  """
++  def receive_inbound_club_email_command(attrs) when is_map(attrs) do
++    with {:ok, inbound_email} <- InboundEmail.new(attrs) do
++      {:ok, %ReceiveInboundEmail{inbound_email: inbound_email}}
++    end
++  end
++
++  def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
++
+   @doc """
+   Report that a email delivery was accepted by the recipient server.
+   """
+diff --git a/web/lib/memba/messaging/commands/receive_inbound_email.ex b/web/lib/memba/messaging/commands/receive_inbound_email.ex
+new file mode 100644
+index 0000000..9af64d4
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/receive_inbound_email.ex
+@@ -0,0 +1,13 @@
++defmodule Memba.Messaging.Commands.ReceiveInboundEmail do
++  @moduledoc """
++  Command wrapper for a provider-neutral inbound club-message email.
++
++  Routing, idempotency, destination resolution, authorization, and posting rules
++  are implemented in later inbound-email tasks. This command establishes the
++  Messaging-facing input shape without coupling the domain API to Resend or any
++  other provider payload.
++  """
++
++  @enforce_keys [:inbound_email]
++  defstruct [:inbound_email]
++end
+diff --git a/web/lib/memba/messaging/inbound_email.ex b/web/lib/memba/messaging/inbound_email.ex
+new file mode 100644
+index 0000000..f53b43f
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email.ex
+@@ -0,0 +1,190 @@
++defmodule Memba.Messaging.InboundEmail do
++  @moduledoc """
++  Provider-neutral inbound email data for club-message intake.
++
++  Provider webhook controllers and parsers should translate their payload shape
++  into this structure before Messaging applies club routing, sender
++  authorization, body policy, and idempotency rules.
++  """
++
++  alias Memba.Messaging.InboundEmailAttachment
++
++  @enforce_keys [
++    :provider,
++    :provider_message_id,
++    :from_address,
++    :recipient_addresses,
++    :subject
++  ]
++  defstruct [
++    :provider,
++    :provider_message_id,
++    :provider_event_id,
++    :from_address,
++    :recipient_addresses,
++    :subject,
++    :text_body,
++    :html_body,
++    attachments: []
++  ]
++
++  @type t :: %__MODULE__{
++          provider: String.t(),
++          provider_message_id: String.t(),
++          provider_event_id: String.t() | nil,
++          from_address: String.t(),
++          recipient_addresses: [String.t()],
++          subject: String.t(),
++          text_body: String.t() | nil,
++          html_body: String.t() | nil,
++          attachments: [InboundEmailAttachment.t()]
++        }
++
++  @doc """
++  Build a provider-neutral inbound email from atom- or string-keyed attrs.
++  """
++  @spec new(map()) :: {:ok, t()} | {:error, atom() | {:missing_required_attribute, atom()}}
++  def new(attrs) when is_map(attrs) do
++    with {:ok, provider} <- fetch_required(attrs, :provider),
++         {:ok, provider} <- normalize_required_string(provider, :invalid_provider),
++         {:ok, provider_message_id} <- fetch_required(attrs, :provider_message_id),
++         {:ok, provider_message_id} <-
++           normalize_required_string(provider_message_id, :invalid_provider_message_id),
++         {:ok, from_address} <- fetch_required(attrs, :from_address),
++         {:ok, from_address} <- normalize_email(from_address, :invalid_from_address),
++         {:ok, recipient_addresses} <- fetch_required(attrs, :recipient_addresses),
++         {:ok, recipient_addresses} <- normalize_recipient_addresses(recipient_addresses),
++         {:ok, subject} <- fetch_required(attrs, :subject),
++         {:ok, subject} <- normalize_subject(subject),
++         {:ok, provider_event_id} <-
++           normalize_optional_string(fetch_optional(attrs, :provider_event_id), :invalid_provider_event_id),
++         {:ok, text_body} <- normalize_optional_body(fetch_optional(attrs, :text_body), :invalid_text_body),
++         {:ok, html_body} <- normalize_optional_body(fetch_optional(attrs, :html_body), :invalid_html_body),
++         {:ok, attachments} <- normalize_attachments(fetch_optional(attrs, :attachments)) do
++      {:ok,
++       %__MODULE__{
++         provider: provider,
++         provider_message_id: provider_message_id,
++         provider_event_id: provider_event_id,
++         from_address: from_address,
++         recipient_addresses: recipient_addresses,
++         subject: subject,
++         text_body: text_body,
++         html_body: html_body,
++         attachments: attachments
++       }}
++    end
++  end
++
++  def new(_attrs), do: {:error, :invalid_inbound_email}
++
++  defp fetch_required(attrs, key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> {:ok, value}
++      %{^string_key => value} -> {:ok, value}
++      _attrs -> {:error, {:missing_required_attribute, key}}
++    end
++  end
++
++  defp fetch_optional(attrs, key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> value
++      %{^string_key => value} -> value
++      _attrs -> nil
++    end
++  end
++
++  defp normalize_required_string(value, error) when is_binary(value) do
++    value = value |> String.trim() |> String.downcase()
++
++    if value == "" do
++      {:error, error}
++    else
++      {:ok, value}
++    end
++  end
++
++  defp normalize_required_string(_value, error), do: {:error, error}
++
++  defp normalize_subject(subject) when is_binary(subject), do: {:ok, String.trim(subject)}
++  defp normalize_subject(_subject), do: {:error, :invalid_subject}
++
++  defp normalize_optional_string(nil, _error), do: {:ok, nil}
++
++  defp normalize_optional_string(value, _error) when is_binary(value) do
++    case String.trim(value) do
++      "" -> {:ok, nil}
++      value -> {:ok, value}
++    end
++  end
++
++  defp normalize_optional_string(_value, error), do: {:error, error}
++
++  defp normalize_optional_body(nil, _error), do: {:ok, nil}
++  defp normalize_optional_body(value, _error) when is_binary(value), do: {:ok, value}
++  defp normalize_optional_body(_value, error), do: {:error, error}
++
++  defp normalize_recipient_addresses(addresses) when is_list(addresses) and addresses != [] do
++    addresses
++    |> Enum.reduce_while({:ok, []}, fn address, {:ok, normalized_addresses} ->
++      case normalize_email(address, :invalid_recipient_address) do
++        {:ok, normalized_address} ->
++          {:cont, {:ok, [normalized_address | normalized_addresses]}}
++
++        {:error, :invalid_recipient_address} ->
++          {:halt, {:error, :invalid_recipient_addresses}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_addresses} -> {:ok, Enum.reverse(normalized_addresses)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_recipient_addresses(_addresses), do: {:error, :invalid_recipient_addresses}
++
++  defp normalize_email(email, error) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, error}
++    end
++  end
++
++  defp normalize_email(_email, error), do: {:error, error}
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _other -> false
++    end
++  end
++
++  defp normalize_attachments(nil), do: {:ok, []}
++  defp normalize_attachments([]), do: {:ok, []}
++
++  defp normalize_attachments(attachments) when is_list(attachments) do
++    attachments
++    |> Enum.reduce_while({:ok, []}, fn attachment, {:ok, normalized_attachments} ->
++      case InboundEmailAttachment.new(attachment) do
++        {:ok, normalized_attachment} ->
++          {:cont, {:ok, [normalized_attachment | normalized_attachments]}}
++
++        {:error, :invalid_attachment} ->
++          {:halt, {:error, :invalid_attachment}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_attachments} -> {:ok, Enum.reverse(normalized_attachments)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_attachments(_attachments), do: {:error, :invalid_attachments}
++end
+diff --git a/web/lib/memba/messaging/inbound_email_attachment.ex b/web/lib/memba/messaging/inbound_email_attachment.ex
+new file mode 100644
+index 0000000..71ef5b4
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email_attachment.ex
+@@ -0,0 +1,61 @@
++defmodule Memba.Messaging.InboundEmailAttachment do
++  @moduledoc """
++  Provider-neutral attachment metadata from an inbound email.
++
++  Attachments are not supported for posting in this iteration, but preserving
++  metadata in the inbound command lets later policy code reject them without
++  depending on a provider-specific payload shape.
++  """
++
++  defstruct [:filename, :content_type, :size, :content_id]
++
++  @type t :: %__MODULE__{
++          filename: String.t() | nil,
++          content_type: String.t() | nil,
++          size: non_neg_integer() | nil,
++          content_id: String.t() | nil
++        }
++
++  @doc """
++  Build attachment metadata from atom- or string-keyed provider-neutral attrs.
++  """
++  @spec new(map()) :: {:ok, t()} | {:error, :invalid_attachment}
++  def new(attrs) when is_map(attrs) do
++    with {:ok, size} <- optional_size(fetch_optional(attrs, :size)) do
++      {:ok,
++       %__MODULE__{
++         filename: optional_string(fetch_optional(attrs, :filename)),
++         content_type: optional_string(fetch_optional(attrs, :content_type)),
++         size: size,
++         content_id: optional_string(fetch_optional(attrs, :content_id))
++       }}
++    end
++  end
++
++  def new(_attrs), do: {:error, :invalid_attachment}
++
++  defp fetch_optional(attrs, key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> value
++      %{^string_key => value} -> value
++      _attrs -> nil
++    end
++  end
++
++  defp optional_string(nil), do: nil
++
++  defp optional_string(value) when is_binary(value) do
++    case String.trim(value) do
++      "" -> nil
++      value -> value
++    end
++  end
++
++  defp optional_string(_value), do: nil
++
++  defp optional_size(nil), do: {:ok, nil}
++  defp optional_size(size) when is_integer(size) and size >= 0, do: {:ok, size}
++  defp optional_size(_size), do: {:error, :invalid_attachment}
++end
+diff --git a/web/test/memba/messaging/inbound_email_api_test.exs b/web/test/memba/messaging/inbound_email_api_test.exs
+new file mode 100644
+index 0000000..d508057
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_api_test.exs
+@@ -0,0 +1,110 @@
++defmodule Memba.Messaging.InboundEmailApiTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.InboundEmail
++  alias Memba.Messaging.InboundEmailAttachment
++
++  describe "receive_inbound_club_email_command/1" do
++    test "builds a provider-neutral inbound email command" do
++      attrs = %{
++        provider: " Example Mail ",
++        provider_message_id: " provider-message-123 ",
++        provider_event_id: " provider-event-456 ",
++        from_address: " Alice@Example.COM ",
++        recipient_addresses: [" KMC@Clubs.Memba.IO ", " everyone@example.org "],
++        subject: "Trip planning night",
++        text_body: "Bring route ideas.",
++        html_body: "<p>Bring route ideas.</p>",
++        attachments: [
++          %{
++            filename: "route.gpx",
++            content_type: "application/gpx+xml",
++            size: 1234,
++            content_id: "map-attachment"
++          }
++        ]
++      }
++
++      assert {:ok,
++              %ReceiveInboundEmail{
++                inbound_email: %InboundEmail{
++                  provider: "example mail",
++                  provider_message_id: "provider-message-123",
++                  provider_event_id: "provider-event-456",
++                  from_address: "alice@example.com",
++                  recipient_addresses: ["kmc@clubs.memba.io", "everyone@example.org"],
++                  subject: "Trip planning night",
++                  text_body: "Bring route ideas.",
++                  html_body: "<p>Bring route ideas.</p>",
++                  attachments: [
++                    %InboundEmailAttachment{
++                      filename: "route.gpx",
++                      content_type: "application/gpx+xml",
++                      size: 1234,
++                      content_id: "map-attachment"
++                    }
++                  ]
++                }
++              }} = Messaging.receive_inbound_club_email_command(attrs)
++    end
++
++    test "accepts string-keyed attrs and keeps optional provider fields optional" do
++      attrs = %{
++        "provider" => "postmark",
++        "provider_message_id" => "inbound-123",
++        "from_address" => "alice@example.com",
++        "recipient_addresses" => ["kmc@clubs.memba.io"],
++        "subject" => "Trail conditions"
++      }
++
++      assert {:ok,
++              %ReceiveInboundEmail{
++                inbound_email: %InboundEmail{
++                  provider: "postmark",
++                  provider_message_id: "inbound-123",
++                  provider_event_id: nil,
++                  from_address: "alice@example.com",
++                  recipient_addresses: ["kmc@clubs.memba.io"],
++                  subject: "Trail conditions",
++                  text_body: nil,
++                  html_body: nil,
++                  attachments: []
++                }
++              }} = Messaging.receive_inbound_club_email_command(attrs)
++    end
++
++    test "rejects malformed provider-neutral attrs before any provider-specific parsing" do
++      valid_attrs = %{
++        provider: "example-mail",
++        provider_message_id: "provider-message-123",
++        from_address: "alice@example.com",
++        recipient_addresses: ["kmc@clubs.memba.io"],
++        subject: "Trip planning night"
++      }
++
++      assert {:error, {:missing_required_attribute, :provider_message_id}} =
++               valid_attrs
++               |> Map.delete(:provider_message_id)
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_provider} =
++               %{valid_attrs | provider: " "}
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_from_address} =
++               %{valid_attrs | from_address: "not an email address"}
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_recipient_addresses} =
++               %{valid_attrs | recipient_addresses: []}
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_attachment} =
++               valid_attrs
++               |> Map.put(:attachments, ["route.gpx"])
++               |> Messaging.receive_inbound_club_email_command()
++    end
++  end
++end
