@@ -19,7 +19,8 @@ config :memba,
     :messaging_messages,
     :messaging_email_deliveries,
     :messaging_member_email_deliveries,
-    :messaging_memba_staff_email_deliveries
+    :messaging_memba_staff_email_deliveries,
+    :messaging_inbound_email_sources
   ],
   generators: [timestamp_type: :utc_datetime]
 
@@ -40,6 +41,8 @@ config :memba, Memba.Messaging.App,
   registry: :local
 
 config :memba, :messaging_email_delivery_provider, Memba.Messaging.EmailDeliveryProviders.Fake
+
+config :memba, :club_inbound_email, domain: "clubs.memba.io"
 
 config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
   from: {"Memba", "messages@mail.memba.io"},

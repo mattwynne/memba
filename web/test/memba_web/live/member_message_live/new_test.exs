@@ -204,6 +204,35 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     refute has_element?(view, "[name='message[sender_id]']")
   end
 
+  test "routed compose screen shows the selected club inbound email address", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/new?club_id=#{alice.club_id}")
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
+           )
+
+    assert has_element?(view, "#member-compose-inbound-email", "Prefer email?")
+    assert has_element?(view, "#member-compose-inbound-email", "Send a club-wide message to")
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
+             "kmc@clubs.memba.io"
+           )
+  end
+
   test "routed GET redirects signed-out visitors and preserves the selected club return path",
        %{conn: conn} do
     alice =

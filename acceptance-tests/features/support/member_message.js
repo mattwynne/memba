@@ -116,12 +116,48 @@ function postmarkPayloadForStatus({
   }
 }
 
+function resendInboundEmailPayload({
+  attachments,
+  eventId = randomUUID(),
+  fromAddress,
+  htmlBody,
+  providerMessageId = randomUUID(),
+  subject,
+  textBody,
+  toAddress
+}) {
+  const data = {
+    email_id: providerMessageId,
+    from: fromAddress,
+    to: [toAddress],
+    subject,
+    text: textBody
+  };
+
+  if (htmlBody !== undefined) {
+    data.html = htmlBody;
+  }
+
+  if (attachments !== undefined) {
+    data.attachments = attachments;
+  }
+
+  return {
+    id: eventId,
+    type: "email.received",
+    data
+  };
+}
+
 function ensureState(world) {
   world.clubs = world.clubs || {};
   world.people = world.people || {};
   world.memberships = world.memberships || {};
   world.messages = world.messages || {};
   world.deliveries = world.deliveries || {};
+  world.inboundEmails = world.inboundEmails || {};
+  world.inboundEmailSenders = world.inboundEmailSenders || {};
+  world.inboundRejectionEmails = world.inboundRejectionEmails || {};
   world.reportedDeliveryStatuses = world.reportedDeliveryStatuses || {};
 
   return world;
@@ -539,6 +575,20 @@ async function updateClubSlug(world, clubName, slug, { expect = playwrightExpect
   return world;
 }
 
+async function ensureClubSlugMatchesInboundAddress(
+  world,
+  clubName,
+  inboundAddress,
+  { expect = playwrightExpect, timeoutMs } = {}
+) {
+  ensureState(world);
+
+  const slug = slugFromInboundAddress(inboundAddress);
+  assert.ok(slug, `Expected inbound address ${JSON.stringify(inboundAddress)} to include a local-part slug`);
+
+  return updateClubSlug(world, clubName, slug, { expect, timeoutMs });
+}
+
 async function createPeople(world, names, { expect = playwrightExpect } = {}) {
   ensureState(world);
 
@@ -836,6 +886,66 @@ async function sendMemberMessageToKootenayMembers(
   return world;
 }
 
+async function sendInboundClubEmail(
+  world,
+  senderName,
+  subject,
+  toAddress,
+  {
+    attachments,
+    fromAddress,
+    htmlBody,
+    htmlOnly = false,
+    providerMessageId,
+    textBody,
+    expect = playwrightExpect
+  } = {}
+) {
+  ensureState(world);
+
+  const senderEmail = fromAddress || emailAddressForSender(world, senderName);
+  const messageTextBody = htmlOnly ? "" : textBody ?? `${subject} details.`;
+  const messageHtmlBody = htmlOnly ? htmlBody || `<p>${subject} details.</p>` : htmlBody;
+  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+
+  const payload = resendInboundEmailPayload({
+    attachments,
+    fromAddress: senderEmail,
+    htmlBody: messageHtmlBody,
+    providerMessageId,
+    subject,
+    textBody: messageTextBody,
+    toAddress
+  });
+
+  await postResendInboundWebhook(world, payload);
+
+  const inboundEmail = {
+    attachments: attachments || [],
+    fromAddress: senderEmail,
+    htmlBody: messageHtmlBody,
+    payload,
+    providerMessageId: payload.data.email_id,
+    senderName,
+    subject,
+    textBody: messageTextBody,
+    toAddress
+  };
+
+  world.inboundEmails[subject] = inboundEmail;
+  world.inboundEmailSenders[senderName] = inboundEmail;
+  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
+  world.lastInboundEmail = inboundEmail;
+  world.lastMessageSubject = subject;
+  world.addressedMemberNames = memberNamesForClub(world, kootenayClubName);
+
+  if (expect !== false) {
+    await waitForInboundWebhookAccepted(world, payload);
+  }
+
+  return world;
+}
+
 async function trySendMemberMessageToKootenayMembers(
   world,
   _senderName,
@@ -1022,6 +1132,62 @@ async function assertMemberSeesMessageInClub(
     world,
     row,
     `member club message row for ${JSON.stringify(subject)} in ${clubName}`,
+    { expect }
+  );
+
+  const messageId = await row.getAttribute("data-message-id");
+
+  if (messageId && !world.messages[subject]) {
+    const inboundEmail = world.inboundEmails[subject] || {};
+
+    world.messages[subject] = {
+      body: inboundEmail.textBody || `${subject} details.`,
+      clubId: world.clubs[clubName].clubId,
+      messageId,
+      senderName: inboundEmail.senderName,
+      subject
+    };
+  }
+
+  world.lastMessageSubject = subject;
+
+  return world;
+}
+
+async function assertNoMemberMessageCreated(
+  world,
+  clubName,
+  subject,
+  { expect = playwrightExpect } = {}
+) {
+  await openMemberClubHome(world, clubName, { expect });
+
+  const rows = rowsByData(world.page, "club-message-row", "data-message-subject", subject);
+  await waitForProjectedCount(
+    world,
+    rows,
+    0,
+    `no member club message row for ${JSON.stringify(subject)} in ${clubName}`,
+    { expect }
+  );
+
+  assertFinalBrowserState(`message ${JSON.stringify(subject)} should not be recorded in scenario state`, () =>
+    assert.equal(world.messages[subject], undefined)
+  );
+
+  return world;
+}
+
+async function assertMemberMessageBody(world, expectedBody, { expect = playwrightExpect } = {}) {
+  const subject = world.lastMessageSubject;
+  assert.ok(subject, "Expected a current message subject before checking the message body");
+
+  await openMemberMessage(world, subject, { expect });
+  await waitForProjectedText(
+    world,
+    world.page.locator("#member-message-body"),
+    normalizeDocString(expectedBody),
+    `member message body for ${JSON.stringify(subject)}`,
     { expect }
   );
 
@@ -1261,6 +1427,56 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
       )
     );
   }
+
+  return world;
+}
+
+async function assertInboundRejectionEmail(world, senderName, expectedText) {
+  ensureState(world);
+
+  const senderEmail = inboundSenderEmail(world, senderName);
+  const previousEmails = world.mailboxEmailsBeforeSend || [];
+  const emails = await waitForMailboxEmails(
+    world,
+    previousEmails.length + 1,
+    `inbound rejection email for ${senderName} <${senderEmail}>`
+  );
+  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+
+  const rejectionEmail = newEmails.find(
+    (email) =>
+      email.subject === "Your email was not posted" &&
+      mailboxEmailTo(email).includes(senderEmail) &&
+      mailboxEmailText(email).includes(expectedText)
+  );
+
+  assertFinalBrowserState(`inbound rejection email for ${senderName}`, () =>
+    assert.ok(
+      rejectionEmail,
+      `Expected a rejection email to ${senderEmail} containing ${JSON.stringify(
+        expectedText
+      )}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+    )
+  );
+
+  world.inboundRejectionEmails[senderName] = rejectionEmail;
+
+  return world;
+}
+
+async function assertInboundRejectionEmailSupportGuidance(world, senderName) {
+  ensureState(world);
+
+  const rejectionEmail = world.inboundRejectionEmails[senderName];
+  assert.ok(
+    rejectionEmail,
+    `Expected ${senderName}'s rejection email to have been asserted before checking support guidance`
+  );
+
+  assertFinalBrowserState(`inbound rejection support guidance for ${senderName}`, () =>
+    assert.match(mailboxEmailText(rejectionEmail), /contact Memba support|reply to this email/i)
+  );
 
   return world;
 }
@@ -1720,6 +1936,20 @@ function mailboxMessageId(email) {
   return email && email.headers && email.headers["Message-ID"];
 }
 
+function mailboxEmailTo(email) {
+  const to = email && email.to;
+
+  if (Array.isArray(to)) {
+    return to.join(" ");
+  }
+
+  return String(to || "");
+}
+
+function mailboxEmailText(email) {
+  return String((email && (email.text_body || email.textBody || email.text)) || "");
+}
+
 function mailboxEmailFrom(email) {
   const from = email && email.from;
 
@@ -1776,8 +2006,92 @@ async function postPostmarkWebhook(world, payload) {
   return response;
 }
 
+async function postResendInboundWebhook(world, payload) {
+  const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
+  assert.ok(
+    request && typeof request.post === "function",
+    "Expected Playwright request context to be available for Resend inbound webhook submission"
+  );
+
+  let response;
+
+  try {
+    response = await request.post(appUrl(world.baseUrl, "/webhooks/resend/inbound"), {
+      data: payload,
+      headers: {
+        "content-type": "application/json"
+      }
+    });
+  } catch (error) {
+    throw new Error(
+      `Resend inbound webhook submission failed: POST /webhooks/resend/inbound request error.\n` +
+        `Payload: ${JSON.stringify(payload)}\nCause: ${errorMessage(error)}`,
+      { cause: error }
+    );
+  }
+  const status = response.status();
+
+  if (status !== 202) {
+    const body = typeof response.text === "function" ? await response.text() : "(response body unavailable)";
+
+    throw new Error(
+      `Resend inbound webhook submission failed: expected HTTP 202 from POST /webhooks/resend/inbound, got HTTP ${status}.\n` +
+        `Payload: ${JSON.stringify(payload)}\nResponse body: ${body}`
+    );
+  }
+
+  return response;
+}
+
+async function waitForInboundWebhookAccepted(world, payload) {
+  assert.ok(
+    payload && payload.type === "email.received",
+    `Expected an email.received Resend inbound payload; got ${JSON.stringify(payload)}`
+  );
+
+  return world;
+}
+
 async function rowDatasetValues(rows, datasetName) {
   return rows.evaluateAll((elements, key) => elements.map((element) => element.dataset[key]), datasetName);
+}
+
+function emailAddressForSender(world, senderName) {
+  const person = world.people[senderName];
+
+  if (person && (person.email || person.primaryEmail)) {
+    return person.email || person.primaryEmail;
+  }
+
+  return emailFor(senderName);
+}
+
+function inboundSenderEmail(world, senderName) {
+  const inboundEmail = world.inboundEmailSenders[senderName];
+
+  if (inboundEmail && inboundEmail.fromAddress) {
+    return inboundEmail.fromAddress;
+  }
+
+  return emailAddressForSender(world, senderName);
+}
+
+function memberNamesForClub(world, clubName) {
+  const prefix = `${clubName}:`;
+
+  return Object.keys(world.memberships || {})
+    .filter((membershipKey) => membershipKey.startsWith(prefix))
+    .map((membershipKey) => membershipKey.slice(prefix.length));
+}
+
+function slugFromInboundAddress(inboundAddress) {
+  const match = String(inboundAddress || "").match(/<?([^<>\s@]+)@[^<>\s@]+>?/);
+
+  return match && match[1];
+}
+
+function normalizeDocString(text) {
+  return String(text || "").replace(/\r\n/g, "\n").replace(/\n+$/g, "");
 }
 
 function assertUnique(values, label) {
@@ -1799,15 +2113,19 @@ module.exports = {
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
   assertEachDeliverySentThroughEmailProvider,
+  assertInboundRejectionEmail,
+  assertInboundRejectionEmailSupportGuidance,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
+  assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
   assertMemberEmailDeliveryStatus,
   assertMemberReceiptStatus: assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
+  assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   assertReceiptStatus,
@@ -1817,6 +2135,7 @@ module.exports = {
   cssString,
   deliveryForRecipient,
   emailFor,
+  ensureClubSlugMatchesInboundAddress,
   ensureState,
   kootenayClubName,
   makeClubMessageSendingUnavailable,
@@ -1828,14 +2147,17 @@ module.exports = {
   openMemberMessage,
   postmarkPayloadForStatus,
   postPostmarkWebhook,
+  postResendInboundWebhook,
   projectionPollIntervalMs,
   projectionTimeoutMs,
   reportRecipientEmailStatus,
+  resendInboundEmailPayload,
   rowAttributeValues,
   openDeliveriesOverview,
   openClub,
   openMessage,
   restoreClubMessageSending,
+  sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
   testMailboxEmails,

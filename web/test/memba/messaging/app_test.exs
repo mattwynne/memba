@@ -4,11 +4,15 @@ defmodule Memba.Messaging.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.AcceptInboundClubEmail
+  alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
+  alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
   alias Memba.Messaging.Router
 
   test "Messaging Commanded app is supervised by the Phoenix application" do
@@ -20,12 +24,24 @@ defmodule Memba.Messaging.AppTest do
              {App, pid, :supervisor, [App]} when is_pid(pid) -> true
              _child -> false
            end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{InboundEmailSourceProjector, _opts}, pid, :worker, [InboundEmailSourceProjector]}
+             when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
   end
 
   test "Messaging Commanded app includes the Messaging router" do
     expected_commands =
       MapSet.new([
         SendMessage,
+        ReceiveInboundEmail,
+        AcceptInboundClubEmail,
+        RejectInboundClubEmail,
         ReportEmailDeliveryDelivered,
         ReportEmailDeliveryDelayed,
         ReportEmailDeliveryBounced,
