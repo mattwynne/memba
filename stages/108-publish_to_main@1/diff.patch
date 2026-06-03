@@ -1,0 +1,1340 @@
+diff --git a/acceptance-tests/features/member_club_subdomains.feature b/acceptance-tests/features/member_club_subdomains.feature
+index 5cbbc39..d9a13cf 100644
+--- a/acceptance-tests/features/member_club_subdomains.feature
++++ b/acceptance-tests/features/member_club_subdomains.feature
+@@ -51,3 +51,21 @@ Feature: Member club subdomains
+       When Robin opens "kmc.clubs.memba.io"
+       Then Robin should see the Kootenay Mountaineering Public club page
+       And the club page should show Powered by Memba in the footer
++
++  Rule: Memba keeps a smoke-test club available without publishing it
++
++    Scenario: Staff can see the smoke-test club
++      Given the smoke-test club has been seeded
++      And Pat is signed in as Memba staff
++      Then Pat should see Smoke Test Club in the staff club list
++
++    Scenario: Robin cannot open the smoke-test club public page
++      Given the smoke-test club has been seeded
++      When Robin opens "test.clubs.memba.io"
++      Then Robin should see a not found page
++      And Robin should not see the Smoke Test Club public page
++
++    Scenario: Robin does not see the smoke-test club on the Memba homepage
++      Given the smoke-test club has been seeded
++      When Robin visits the Memba homepage
++      Then Robin should not see Smoke Test Club
+diff --git a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+index ee9a39d..b5216ea 100644
+--- a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
++++ b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+@@ -7,18 +7,30 @@ const {
+   requestSignInLinkForPerson
+ } = require("../support/authentication");
+ const {
++  addMembers,
++  appUrl,
+   createClub,
++  createPerson,
++  cssString,
+   kootenayClubName,
+   updateClubSlug
+ } = require("../support/member_message");
+ const { withStaffHarness } = require("../support/member_harness");
+ 
+ const productionClubBaseDomain = "clubs.memba.io";
++const smokeTestClubName = "Smoke Test Club";
++const smokeTestClubSlug = "test";
++const smokeTestPersonName = "Smoke Tester";
++const smokeTestMemberEmail = "test@memba.io";
+ 
+ Given("Kootenay Mountaineering Club has the slug {string}", async function (slug) {
+   await ensureClubHasSlug(this, kootenayClubName, slug);
+ });
+ 
++Given("the smoke-test club has been seeded", async function () {
++  await ensureSmokeTestClubSeeded(this);
++});
++
+ When("{word} signs in", async function (personName) {
+   await signIn(this, personName);
+ });
+@@ -61,6 +73,10 @@ When("{word} opens {string}", async function (_personName, host) {
+   await this.page.goto(clubHostUrl(this, host));
+ });
+ 
++When("{word} visits the Memba homepage", async function (_personName) {
++  await this.page.goto(appUrl(this.baseUrl, "/"));
++});
++
+ Then("{word} should be on {string}", async function (_personName, host) {
+   assert.equal(new URL(this.page.url()).hostname, localHostForProductionHost(host));
+ });
+@@ -94,6 +110,21 @@ Then("Robin should see a not found page", async function () {
+   await playwrightExpect(this.page.locator("body")).toContainText(/Not Found|not found/i);
+ });
+ 
++Then("{word} should see Smoke Test Club in the staff club list", async function (_personName) {
++  await playwrightExpect(
++    this.page.locator(`[data-testid="club-row"][data-club-name=${cssString(smokeTestClubName)}]`)
++  ).toBeVisible();
++});
++
++Then("Robin should not see the Smoke Test Club public page", async function () {
++  await playwrightExpect(this.page.locator("#public-club-page-page")).toHaveCount(0);
++  await playwrightExpect(this.page.locator("body")).not.toContainText(`Welcome to ${smokeTestClubName}`);
++});
++
++Then("Robin should not see Smoke Test Club", async function () {
++  await playwrightExpect(this.page.locator("body")).not.toContainText(smokeTestClubName);
++});
++
+ async function ensureClubHasSlug(world, clubName, slug) {
+   await withStaffHarness(world, async (staff) => {
+     if (!staff.clubs || !staff.clubs[clubName]) {
+@@ -104,6 +135,26 @@ async function ensureClubHasSlug(world, clubName, slug) {
+   });
+ }
+ 
++async function ensureSmokeTestClubSeeded(world) {
++  await withStaffHarness(world, async (staff) => {
++    if (!staff.clubs || !staff.clubs[smokeTestClubName]) {
++      await createClub(staff, smokeTestClubName, { slug: smokeTestClubSlug });
++    } else {
++      await updateClubSlug(staff, smokeTestClubName, smokeTestClubSlug);
++    }
++
++    if (!staff.people || !staff.people[smokeTestPersonName]) {
++      await createPerson(staff, smokeTestPersonName, smokeTestClubName, {
++        email: smokeTestMemberEmail
++      });
++    }
++
++    if (!staff.memberships || !staff.memberships[`${smokeTestClubName}:${smokeTestPersonName}`]) {
++      await addMembers(staff, [smokeTestPersonName], smokeTestClubName);
++    }
++  });
++}
++
+ async function signIn(world, personName) {
+   await requestSignInLinkForPerson(world, personName);
+   await assertReceivesSignInLink(world, personName);
+diff --git a/docs/human-todo.md b/docs/human-todo.md
+index 071eae5..82ef740 100644
+--- a/docs/human-todo.md
++++ b/docs/human-todo.md
+@@ -1,5 +1,29 @@
+ # Human todo
+ 
++## Inbound club email smoke-test setup
++
++Before running the production inbound email smoke tests in `./smoke-tests`, Matt needs to set up the following outside the codebase.
++
++- [x] Automatically seed a controlled production club named `Smoke Test Club` with slug `test`.
++- [x] Hard-code the `test` club slug so the smoke-test club does not appear as a public club page.
++- [x] Automatically seed a controlled active member of the smoke-test club with primary email address `test@memba.io`.
++- [x] Configure `clubs.memba.io` DNS MX to route inbound club email to Postmark: `10 inbound.postmarkapp.com`.
++- [x] Configure the Postmark `memba.io` server inbound domain as `clubs.memba.io`.
++- [x] Configure the Postmark inbound webhook URL as `https://memba.io/webhooks/postmark`.
++- [x] Set up the `test@memba.io` Fastmail account so the smoke-test runner can send real emails and read resulting rejection/distribution emails.
++- [x] Provide the smoke-test runner with the `test@memba.io` Fastmail app password through local environment variable `SMOKE_TEST_EMAIL_PASSWORD`; do not commit it.
++- [ ] Provide a Fastmail JMAP API token, or update the smoke-test runner to poll `test@memba.io` via IMAP using `SMOKE_TEST_EMAIL_PASSWORD`. The current JMAP client expects a bearer API token and does not accept the app password directly.
++- [ ] Confirm whether `test@memba.io` should also be usable for Memba sign-in during smoke tests, or whether the runner should sign in with a separate staff account.
++- [ ] Confirm the production base URL the smoke tests should target. Expected default: `https://memba.io`.
++
++The routine inbound wiring smoke tests should cover real email from mailbox to Memba and back again:
++
++- [ ] Unknown sender to `test@clubs.memba.io` is rejected and receives guidance.
++- [ ] Known active member `test@memba.io` to `test@clubs.memba.io` creates and distributes a club message.
++- [ ] Known active member `test@memba.io` with an attachment is rejected and receives attachment guidance.
++
++HTML-only email is not required as a production smoke test because it mainly exercises the business rule for `plain_text_required`, which is covered by lower-level tests. The smoke tests should focus on production wiring and visible touch-points.
++
+ ## Postmark setup for iteration 008
+ 
+ Before or during Postmark email integration, Matt needs to set up the following outside the codebase.
+@@ -31,8 +55,8 @@ and webhook details.
+ 
+ - [x] In Postmark, configure the webhook URL for the deployed Memba environment: `https://memba.io/webhooks/postmark`.
+ - [x] Enable webhook events needed by Memba: delivered, bounced, and spam complaint. Postmark delivery-delay events arrive through the bounce/delayed shape handled by the app.
+-- [ ] Disable/remove Postmark open webhook events if they were previously enabled. Memba rejects open events as unsupported and does not change delivery status from them.
+-- [ ] Keep Postmark open tracking disabled for the outbound member broadcast stream/domain. Memba does not request or consume open-tracking signals.
++- [x] Disable/remove Postmark open webhook events if they were previously enabled. Memba rejects open events as unsupported and does not change delivery status from them.
++- [x] Keep Postmark open tracking disabled for the outbound member broadcast stream/domain. Memba does not request or consume open-tracking signals.
+ - [x] Confirm Postmark webhook payloads include metadata/custom fields so Memba can receive `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
+ 
+ ### Deployment configuration
+@@ -42,7 +66,7 @@ and webhook details.
+   - `MEMBA_POSTMARK_SERVER_TOKEN`
+   - `MEMBA_POSTMARK_FROM_ADDRESS`
+   - `MEMBA_POSTMARK_REPLY_TO_ADDRESS`
+-- [ ] Add the same secrets/config to the production deployment environment once Fly.io deploys are set up.
++- [ ] Add/select the same Postmark provider config in the production deployment environment once iteration 020 is deployed. The Postmark server token is present in Fly secrets, but production provider selection should wait for the code/runbook cutover.
+ - [x] Keep local/test environments on fake delivery unless explicitly opting into real Postmark sending.
+ 
+ ### Manual smoke test
+diff --git a/docs/kaizen/2026-06-03-inbound-email-smoke-tests-missing-from-release-handoff.md b/docs/kaizen/2026-06-03-inbound-email-smoke-tests-missing-from-release-handoff.md
+index cdc85ad..7798118 100644
+--- a/docs/kaizen/2026-06-03-inbound-email-smoke-tests-missing-from-release-handoff.md
++++ b/docs/kaizen/2026-06-03-inbound-email-smoke-tests-missing-from-release-handoff.md
+@@ -155,3 +155,26 @@ Inbound email spans several independently configurable systems. Automated app te
+ - Add this smoke spec to the Postmark cutover/deployment runbook produced by iteration 020.
+ - Add a future script that sends the smoke emails with unique subjects and then polls Memba projections/mailboxes for expected outcomes.
+ - Add an operator-facing query or task that prints recent inbound email source records by subject/provider message id once the projection contains enough correlation data.
++
++## Resolution
++
++Date: 2026-06-03
++
++Root cause: the deployment handoff had no executable production smoke-test artifact for the real inbound email path, so operator validation depended on ad hoc manual emails and investigation across mailboxes, provider dashboards, logs, and projections.
++
++Fix applied:
++
++- `smoke-tests/`: added a Cucumber smoke-test runner that sends real email through Fastmail SMTP, polls Fastmail JMAP mailboxes for rejection/distribution emails, and uses Playwright to check staff/member-visible Memba UI.
++- `smoke-tests/features/inbound_club_email.feature`: captured the routine production wiring smoke cases: unknown sender rejected, known active member accepted/distributed, and known active member with attachment rejected.
++- `smoke-tests/README.md`: documented the required `Test` club fixture, `test@memba.io` member mailbox, credentials, and run commands.
++- `docs/human-todo.md`: added Matt's external setup tasks for the controlled smoke club and Fastmail credentials.
++
++Validation:
++
++- `node --check smoke-tests/lib/config.js && node --check smoke-tests/lib/fastmail_jmap.js && node --check smoke-tests/lib/smtp.js && node --check smoke-tests/lib/browser.js && node --check smoke-tests/features/support/world.js && node --check smoke-tests/features/step_definitions/inbound_club_email_steps.js` — passed.
++- `cd smoke-tests && npm test -- --dry-run` — passed; Cucumber discovered 3 scenarios and 21 steps.
++
++Remaining follow-up:
++
++- Matt needs to complete the external setup tasks in `docs/human-todo.md` before the smoke tests can run against production.
++- The smoke runner assumes a hidden/non-public `Test` club can be prepared operationally; if the product lacks a way to hide that club, add that affordance or choose another controlled fixture strategy.
+diff --git a/smoke-tests/README.md b/smoke-tests/README.md
+new file mode 100644
+index 0000000..52f9072
+--- /dev/null
++++ b/smoke-tests/README.md
+@@ -0,0 +1,64 @@
++# Production smoke tests
++
++This directory contains Cucumber smoke tests for real production inbound club email wiring. They send real email to Memba, poll Fastmail for resulting emails, and use Playwright to check member/staff-visible UI.
++
++## Required production fixture
++
++- Club name: `Test`
++- Club slug: `test`
++- Inbound address: `test@clubs.memba.io`
++- Known active member email: `test@memba.io`
++- The `Test` club should not appear in public-facing UI or ordinary member discovery surfaces.
++
++HTML-only email is intentionally not a production smoke case. Lower-level tests cover the `plain_text_required` business rule; these smoke tests focus on production wiring.
++
++## Environment
++
++Required:
++
++```sh
++export MEMBA_SMOKE_STAFF_EMAIL="..."
++export MEMBA_SMOKE_FASTMAIL_PASSWORD="..."      # SMTP app password for test@memba.io
++export MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN="..."    # Fastmail API token that can read test@memba.io
++export MEMBA_SMOKE_UNKNOWN_EMAIL="..."          # unregistered sender that can receive rejection email
++```
++
++Optional/defaulted:
++
++```sh
++export MEMBA_SMOKE_BASE_URL="https://memba.io"
++export MEMBA_SMOKE_CLUB_NAME="Test"
++export MEMBA_SMOKE_CLUB_SLUG="test"
++export MEMBA_SMOKE_INBOUND_DOMAIN="clubs.memba.io"
++export MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN="memba.io"
++export MEMBA_SMOKE_MEMBER_EMAIL="test@memba.io"
++export MEMBA_SMOKE_FASTMAIL_USER="test@memba.io"
++
++# If the unknown sender is a separate Fastmail account or token:
++export MEMBA_SMOKE_UNKNOWN_FASTMAIL_USER="$MEMBA_SMOKE_UNKNOWN_EMAIL"
++export MEMBA_SMOKE_UNKNOWN_FASTMAIL_PASSWORD="..."
++export MEMBA_SMOKE_UNKNOWN_FASTMAIL_JMAP_TOKEN="..."
++
++# If the staff sign-in mailbox is separate from test@memba.io:
++export MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN="..."
++
++export MEMBA_SMOKE_POLL_TIMEOUT_MS="120000"
++export MEMBA_SMOKE_POLL_INTERVAL_MS="5000"
++export HEADLESS="false" # optional, for watching Playwright
++```
++
++## Run
++
++The script reuses the Cucumber and Playwright dependencies already installed for `acceptance-tests`:
++
++```sh
++cd smoke-tests
++npm test
++```
++
++Run headed:
++
++```sh
++cd smoke-tests
++npm run test:headed
++```
+diff --git a/smoke-tests/cucumber.js b/smoke-tests/cucumber.js
+new file mode 100644
+index 0000000..ba9f840
+--- /dev/null
++++ b/smoke-tests/cucumber.js
+@@ -0,0 +1,8 @@
++module.exports = {
++  default: {
++    paths: ["features/**/*.feature"],
++    require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
++    format: ["progress"],
++    publishQuiet: true
++  }
++};
+diff --git a/smoke-tests/features/inbound_club_email.feature b/smoke-tests/features/inbound_club_email.feature
+new file mode 100644
+index 0000000..d5abb2c
+--- /dev/null
++++ b/smoke-tests/features/inbound_club_email.feature
+@@ -0,0 +1,25 @@
++Feature: Production inbound club email smoke tests
++  These smoke tests send real email through public MX/provider wiring and then
++  check the member-visible and mailbox-visible outcomes. They are intended for
++  a controlled production smoke club named Test with slug test.
++
++  Background:
++    Given the production smoke configuration is valid
++    And Memba staff can sign in
++    And the smoke club exists
++    And the smoke member can sign in
++
++  Scenario: Unknown sender is rejected
++    When an unknown sender emails the smoke club
++    Then the unknown sender receives an unknown-sender rejection email
++    And the smoke member should not see that club message
++
++  Scenario: Known active member email is accepted and distributed
++    When the smoke member emails the smoke club
++    Then the smoke member sees that club message
++    And the smoke member receives a distributed copy of that club message
++
++  Scenario: Known active member email with an attachment is rejected
++    When the smoke member emails the smoke club with an attachment
++    Then the smoke member receives an attachment-not-supported rejection email
++    And the smoke member should not see that club message
+diff --git a/smoke-tests/features/step_definitions/inbound_club_email_steps.js b/smoke-tests/features/step_definitions/inbound_club_email_steps.js
+new file mode 100644
+index 0000000..473a461
+--- /dev/null
++++ b/smoke-tests/features/step_definitions/inbound_club_email_steps.js
+@@ -0,0 +1,166 @@
++const assert = require("node:assert/strict");
++const { Given, When, Then } = require("@cucumber/cucumber");
++const {
++  assertMemberDoesNotSeeMessage,
++  assertMemberSeesMessage,
++  assertSmokeClubExists,
++  ensureSmokeMemberSignedIn,
++  ensureStaffSignedIn
++} = require("../../lib/browser");
++const { sendEmail } = require("../../lib/smtp");
++
++Given("the production smoke configuration is valid", async function () {
++  assert.equal(this.config.clubName, "Test", "Expected the default smoke club name to be Test");
++  assert.equal(this.config.clubSlug, "test", "Expected the default smoke club slug to be test");
++  assert.equal(this.config.inboundAddress, "test@clubs.memba.io", "Expected the default inbound address");
++  assert.notEqual(
++    this.config.unknown.email.toLowerCase(),
++    this.config.member.email.toLowerCase(),
++    "Unknown-sender smoke requires MEMBA_SMOKE_UNKNOWN_EMAIL to differ from the known member address"
++  );
++});
++
++Given("Memba staff can sign in", async function () {
++  await ensureStaffSignedIn(this);
++});
++
++Given("the smoke club exists", async function () {
++  await assertSmokeClubExists(this);
++});
++
++Given("the smoke member can sign in", async function () {
++  await ensureSmokeMemberSignedIn(this);
++});
++
++When("an unknown sender emails the smoke club", async function () {
++  const subject = uniqueSubject("Smoke unknown sender");
++  const body = "This should be rejected because the sender is unknown.";
++  this.messages.current = { body, from: this.config.unknown.email, kind: "unknown", subject };
++
++  await sendEmail({
++    body,
++    from: this.config.unknown.email,
++    password: this.config.unknown.smtpPassword,
++    subject,
++    to: this.config.inboundAddress,
++    user: this.config.unknown.smtpUser
++  });
++});
++
++When("the smoke member emails the smoke club", async function () {
++  const subject = uniqueSubject("Smoke accepted member");
++  const body = "This should become a club message.";
++  this.messages.current = { body, from: this.config.member.email, kind: "accepted", subject };
++
++  await sendEmail({
++    body,
++    from: this.config.member.email,
++    password: this.config.member.smtpPassword,
++    subject,
++    to: this.config.inboundAddress,
++    user: this.config.member.smtpUser
++  });
++});
++
++When("the smoke member emails the smoke club with an attachment", async function () {
++  const subject = uniqueSubject("Smoke attachment rejected");
++  const body = "This should be rejected because it has an attachment.";
++  this.messages.current = { body, from: this.config.member.email, kind: "attachment", subject };
++
++  await sendEmail({
++    attachment: {
++      content: "Memba smoke-test attachment.\n",
++      contentType: "text/plain",
++      filename: "memba-smoke-test.txt"
++    },
++    body,
++    from: this.config.member.email,
++    password: this.config.member.smtpPassword,
++    subject,
++    to: this.config.inboundAddress,
++    user: this.config.member.smtpUser
++  });
++});
++
++Then("the unknown sender receives an unknown-sender rejection email", async function () {
++  const message = currentMessage(this);
++  await this.mailboxes.unknown.waitForEmail(
++    (email) =>
++      email.subject === "Your email was not posted" &&
++      email.toEmails.includes(this.config.unknown.email.toLowerCase()) &&
++      /could not find a member account|unknown sender/i.test(`${email.text}\n${email.html}`),
++    {
++      after: subjectTimestamp(message.subject),
++      description: `unknown-sender rejection for ${message.subject}`,
++      intervalMs: this.config.poll.intervalMs,
++      timeoutMs: this.config.poll.timeoutMs,
++      text: "Your email was not posted"
++    }
++  );
++});
++
++Then("the smoke member receives an attachment-not-supported rejection email", async function () {
++  const message = currentMessage(this);
++  await this.mailboxes.member.waitForEmail(
++    (email) =>
++      email.subject === "Your email was not posted" &&
++      email.toEmails.includes(this.config.member.email.toLowerCase()) &&
++      /attachments are not supported/i.test(`${email.text}\n${email.html}`),
++    {
++      after: subjectTimestamp(message.subject),
++      description: `attachment rejection for ${message.subject}`,
++      intervalMs: this.config.poll.intervalMs,
++      timeoutMs: this.config.poll.timeoutMs,
++      text: "Your email was not posted"
++    }
++  );
++});
++
++Then("the smoke member sees that club message", async function () {
++  const message = currentMessage(this);
++  await assertMemberSeesMessage(this, message.subject, message.body);
++});
++
++Then("the smoke member receives a distributed copy of that club message", async function () {
++  const message = currentMessage(this);
++  await this.mailboxes.member.waitForEmail(
++    (email) =>
++      email.subject === message.subject &&
++      email.toEmails.includes(this.config.member.email.toLowerCase()) &&
++      `${email.text}\n${email.html}`.includes(message.body),
++    {
++      after: subjectTimestamp(message.subject),
++      description: `distributed member copy for ${message.subject}`,
++      intervalMs: this.config.poll.intervalMs,
++      timeoutMs: this.config.poll.timeoutMs,
++      text: message.subject
++    }
++  );
++});
++
++Then("the smoke member should not see that club message", async function () {
++  const message = currentMessage(this);
++  await assertMemberDoesNotSeeMessage(this, message.subject);
++});
++
++function uniqueSubject(prefix) {
++  const now = new Date();
++  const compact = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
++  return `${prefix} ${compact}`;
++}
++
++function subjectTimestamp(subject) {
++  const match = String(subject).match(/(\d{8}T\d{6}Z)$/);
++  if (!match) {
++    return new Date(Date.now() - 60_000);
++  }
++  const value = match[1];
++  return new Date(
++    `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(9, 11)}:${value.slice(11, 13)}:${value.slice(13, 15)}Z`
++  );
++}
++
++function currentMessage(world) {
++  assert.ok(world.messages.current, "Expected a smoke email to have been sent in this scenario");
++  return world.messages.current;
++}
+diff --git a/smoke-tests/features/support/world.js b/smoke-tests/features/support/world.js
+new file mode 100644
+index 0000000..56b040c
+--- /dev/null
++++ b/smoke-tests/features/support/world.js
+@@ -0,0 +1,41 @@
++const { setDefaultTimeout, setWorldConstructor, Before, After } = require("@cucumber/cucumber");
++const { chromium } = require("playwright");
++const { smokeConfig } = require("../../lib/config");
++const { FastmailJmapClient } = require("../../lib/fastmail_jmap");
++
++setDefaultTimeout(Number(process.env.MEMBA_SMOKE_STEP_TIMEOUT_MS || 180000));
++
++class SmokeWorld {
++  constructor({ attach, log } = {}) {
++    this.attach = attach;
++    this.log = log;
++    this.config = null;
++    this.browser = null;
++    this.context = null;
++    this.page = null;
++    this.mailboxes = {};
++    this.messages = {};
++  }
++}
++
++setWorldConstructor(SmokeWorld);
++
++Before(async function () {
++  this.config = smokeConfig();
++  this.mailboxes.member = await new FastmailJmapClient({ token: this.config.member.jmapToken }).connect();
++  this.mailboxes.unknown = await new FastmailJmapClient({ token: this.config.unknown.jmapToken }).connect();
++  this.mailboxes.staff = await new FastmailJmapClient({ token: this.config.staff.jmapToken }).connect();
++
++  this.browser = await chromium.launch({ headless: this.config.browser.headless });
++  this.context = await this.browser.newContext();
++  this.page = await this.context.newPage();
++});
++
++After(async function () {
++  if (this.context) {
++    await this.context.close();
++  }
++  if (this.browser) {
++    await this.browser.close();
++  }
++});
+diff --git a/smoke-tests/lib/browser.js b/smoke-tests/lib/browser.js
+new file mode 100644
+index 0000000..63d5035
+--- /dev/null
++++ b/smoke-tests/lib/browser.js
+@@ -0,0 +1,129 @@
++const assert = require("node:assert/strict");
++const { expect } = require("@playwright/test");
++
++function appUrl(config, path) {
++  return new URL(path, `${config.baseUrl}/`).toString();
++}
++
++function clubSiteUrl(config, path = "/") {
++  const url = new URL(path, `${config.baseUrl}/`);
++  url.hostname = `${config.clubSlug}.${config.clubSiteBaseDomain}`;
++  return url.toString();
++}
++
++async function signInWithMagicLink(world, { email, mailbox, label }) {
++  const since = new Date(Date.now() - 5000);
++  await world.page.goto(appUrl(world.config, "/auth"));
++  await world.page.getByLabel("Email address").fill(email);
++  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
++  await expect(world.page.getByText("Thanks. You should have an email in your inbox with a sign-in link.")).toBeVisible();
++
++  const message = await mailbox.waitForEmail(
++    (emailMessage) =>
++      emailMessage.subject === "Sign in to Memba" &&
++      emailMessage.toEmails.includes(email.toLowerCase()) &&
++      magicLink(emailMessage),
++    {
++      after: since,
++      description: `magic-link email for ${label || email}`,
++      intervalMs: world.config.poll.intervalMs,
++      timeoutMs: world.config.poll.timeoutMs,
++      text: "Sign in to Memba"
++    }
++  );
++
++  await world.page.goto(rewriteLocalhostMagicLink(world.config, magicLink(message)));
++  await world.page.waitForLoadState("networkidle").catch(() => {});
++}
++
++async function ensureStaffSignedIn(world) {
++  await signInWithMagicLink(world, {
++    email: world.config.staff.email,
++    mailbox: world.mailboxes.staff,
++    label: "smoke staff"
++  });
++
++  const nameField = world.page.getByLabel("Your name");
++  if (await nameField.count()) {
++    await nameField.fill("Smoke Test Staff");
++    await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
++  }
++
++  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
++}
++
++async function assertSmokeClubExists(world) {
++  await world.page.goto(appUrl(world.config, "/admin/clubs"));
++  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
++
++  const clubRow = world.page.locator(
++    `[data-testid="club-row"][data-club-slug="${cssStringValue(world.config.clubSlug)}"]`
++  );
++  await expect(clubRow).toBeVisible();
++  await expect(clubRow).toContainText(world.config.clubName);
++}
++
++async function ensureSmokeMemberSignedIn(world) {
++  await signInWithMagicLink(world, {
++    email: world.config.member.email,
++    mailbox: world.mailboxes.member,
++    label: "smoke member"
++  });
++  await expect(world.page.locator("body")).toContainText(`Signed in as ${world.config.member.email}`);
++}
++
++async function openSmokeClubHome(world) {
++  await world.page.goto(clubSiteUrl(world.config, "/"));
++  await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
++}
++
++async function assertMemberSeesMessage(world, subject, body) {
++  await openSmokeClubHome(world);
++  const row = messageRow(world, subject);
++  await expect(row).toBeVisible({ timeout: world.config.poll.timeoutMs });
++  const messageId = await row.getAttribute("data-message-id");
++  assert.ok(messageId, `Expected message row for ${subject} to expose data-message-id`);
++
++  await row.getByRole("link").first().click();
++  await expect(world.page.locator("#member-message-body")).toContainText(body, {
++    timeout: world.config.poll.timeoutMs
++  });
++}
++
++async function assertMemberDoesNotSeeMessage(world, subject) {
++  await openSmokeClubHome(world);
++  await expect(messageRow(world, subject)).toHaveCount(0, { timeout: world.config.poll.timeoutMs });
++}
++
++function messageRow(world, subject) {
++  return world.page.locator(`[data-testid="club-message-row"][data-message-subject="${cssStringValue(subject)}"]`);
++}
++
++function magicLink(emailMessage) {
++  const text = `${emailMessage.text || ""}\n${emailMessage.html || ""}`;
++  const match = text.match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/[^\s<"]+/);
++  return match && match[0].replace(/&amp;/g, "&");
++}
++
++function rewriteLocalhostMagicLink(config, link) {
++  const parsed = new URL(link);
++  const base = new URL(config.baseUrl);
++  if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
++    parsed.protocol = base.protocol;
++    parsed.hostname = base.hostname;
++    parsed.port = base.port;
++  }
++  return parsed.toString();
++}
++
++function cssStringValue(value) {
++  return String(value).replace(/\\/g, "\\\\").replace(/"/g, "\\\"").replace(/\n/g, "\\a ");
++}
++
++module.exports = {
++  assertMemberDoesNotSeeMessage,
++  assertMemberSeesMessage,
++  assertSmokeClubExists,
++  ensureSmokeMemberSignedIn,
++  ensureStaffSignedIn
++};
+diff --git a/smoke-tests/lib/config.js b/smoke-tests/lib/config.js
+new file mode 100644
+index 0000000..b55927b
+--- /dev/null
++++ b/smoke-tests/lib/config.js
+@@ -0,0 +1,68 @@
++function requiredEnv(name) {
++  const value = process.env[name];
++  if (!value || String(value).trim() === "") {
++    throw new Error(`Missing required environment variable ${name}`);
++  }
++  return value;
++}
++
++function optionalEnv(name, fallback) {
++  const value = process.env[name];
++  return value && String(value).trim() !== "" ? value : fallback;
++}
++
++function smokeConfig() {
++  const baseUrl = optionalEnv("MEMBA_SMOKE_BASE_URL", "https://memba.io");
++  const clubName = optionalEnv("MEMBA_SMOKE_CLUB_NAME", "Test");
++  const clubSlug = optionalEnv("MEMBA_SMOKE_CLUB_SLUG", "test");
++  const inboundDomain = optionalEnv("MEMBA_SMOKE_INBOUND_DOMAIN", "clubs.memba.io");
++  const clubSiteBaseDomain = optionalEnv("MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN", new URL(baseUrl).hostname);
++  const memberEmail = optionalEnv("MEMBA_SMOKE_MEMBER_EMAIL", "test@memba.io");
++  const memberName = optionalEnv("MEMBA_SMOKE_MEMBER_NAME", "Test");
++  const staffEmail = requiredEnv("MEMBA_SMOKE_STAFF_EMAIL");
++
++  const fastmailUser = optionalEnv("MEMBA_SMOKE_FASTMAIL_USER", memberEmail);
++  const fastmailPassword = requiredEnv("MEMBA_SMOKE_FASTMAIL_PASSWORD");
++  const jmapToken = requiredEnv("MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN");
++
++  const unknownEmail = requiredEnv("MEMBA_SMOKE_UNKNOWN_EMAIL");
++  const unknownFastmailUser = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_USER", unknownEmail);
++  const unknownFastmailPassword = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_PASSWORD", fastmailPassword);
++  const unknownJmapToken = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_JMAP_TOKEN", jmapToken);
++
++  const staffJmapToken = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN", jmapToken);
++
++  return {
++    baseUrl,
++    clubName,
++    clubSlug,
++    clubSiteBaseDomain,
++    inboundAddress: `${clubSlug}@${inboundDomain}`,
++    member: {
++      email: memberEmail,
++      name: memberName,
++      smtpUser: fastmailUser,
++      smtpPassword: fastmailPassword,
++      jmapToken
++    },
++    unknown: {
++      email: unknownEmail,
++      smtpUser: unknownFastmailUser,
++      smtpPassword: unknownFastmailPassword,
++      jmapToken: unknownJmapToken
++    },
++    staff: {
++      email: staffEmail,
++      jmapToken: staffJmapToken
++    },
++    poll: {
++      intervalMs: Number(optionalEnv("MEMBA_SMOKE_POLL_INTERVAL_MS", "5000")),
++      timeoutMs: Number(optionalEnv("MEMBA_SMOKE_POLL_TIMEOUT_MS", "120000"))
++    },
++    browser: {
++      headless: process.env.HEADLESS !== "false"
++    }
++  };
++}
++
++module.exports = { smokeConfig };
+diff --git a/smoke-tests/lib/fastmail_jmap.js b/smoke-tests/lib/fastmail_jmap.js
+new file mode 100644
+index 0000000..4c9379c
+--- /dev/null
++++ b/smoke-tests/lib/fastmail_jmap.js
+@@ -0,0 +1,153 @@
++const assert = require("node:assert/strict");
++
++const JMAP_SESSION_URL = "https://api.fastmail.com/jmap/session";
++
++class FastmailJmapClient {
++  constructor({ token }) {
++    assert.ok(token, "Expected a Fastmail JMAP API token");
++    this.token = token;
++    this.session = null;
++    this.apiUrl = null;
++    this.accountId = null;
++  }
++
++  async connect() {
++    const response = await fetch(JMAP_SESSION_URL, {
++      headers: { Authorization: `Bearer ${this.token}` }
++    });
++
++    if (!response.ok) {
++      throw new Error(`Fastmail JMAP session failed: HTTP ${response.status} ${await response.text()}`);
++    }
++
++    this.session = await response.json();
++    this.apiUrl = this.session.apiUrl;
++    this.accountId = this.session.primaryAccounts && this.session.primaryAccounts["urn:ietf:params:jmap:mail"];
++
++    if (!this.apiUrl || !this.accountId) {
++      throw new Error("Fastmail JMAP session did not include a mail apiUrl/accountId");
++    }
++
++    return this;
++  }
++
++  async apiCall(methodCalls) {
++    if (!this.session) {
++      await this.connect();
++    }
++
++    const response = await fetch(this.apiUrl, {
++      method: "POST",
++      headers: {
++        Authorization: `Bearer ${this.token}`,
++        "Content-Type": "application/json"
++      },
++      body: JSON.stringify({
++        using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
++        methodCalls
++      })
++    });
++
++    if (!response.ok) {
++      throw new Error(`Fastmail JMAP call failed: HTTP ${response.status} ${await response.text()}`);
++    }
++
++    return response.json();
++  }
++
++  async recentEmails({ after, limit = 30, text } = {}) {
++    const filter = {};
++    if (after) {
++      filter.after = after instanceof Date ? after.toISOString() : after;
++    }
++    if (text) {
++      filter.text = text;
++    }
++
++    const result = await this.apiCall([
++      [
++        "Email/query",
++        {
++          accountId: this.accountId,
++          filter,
++          limit,
++          sort: [{ property: "receivedAt", isAscending: false }]
++        },
++        "q"
++      ],
++      [
++        "Email/get",
++        {
++          accountId: this.accountId,
++          "#ids": { resultOf: "q", name: "Email/query", path: "/ids" },
++          properties: ["id", "blobId", "threadId", "mailboxIds", "keywords", "subject", "from", "to", "cc", "bcc", "receivedAt", "sentAt", "preview", "textBody", "htmlBody", "bodyValues"],
++          fetchTextBodyValues: true,
++          fetchHTMLBodyValues: true,
++          maxBodyValueBytes: 200000
++        },
++        "g"
++      ]
++    ]);
++
++    const get = result.methodResponses.find(([name, _args, id]) => name === "Email/get" && id === "g");
++    if (!get) {
++      throw new Error(`Fastmail JMAP Email/get response missing: ${JSON.stringify(result)}`);
++    }
++
++    return get[1].list.map(normalizeEmail);
++  }
++
++  async waitForEmail(predicate, { after, description, intervalMs = 5000, timeoutMs = 120000, text } = {}) {
++    const deadline = Date.now() + timeoutMs;
++    let lastEmails = [];
++
++    while (Date.now() <= deadline) {
++      lastEmails = await this.recentEmails({ after, text });
++      const found = lastEmails.find(predicate);
++      if (found) {
++        return found;
++      }
++      await new Promise((resolve) => setTimeout(resolve, intervalMs));
++    }
++
++    throw new Error(
++      `Timed out waiting for ${description || "email"}. Last emails: ${JSON.stringify(lastEmails.map(summary))}`
++    );
++  }
++}
++
++function normalizeEmail(email) {
++  const bodyValues = email.bodyValues || {};
++  const text = bodyParts(email.textBody, bodyValues).join("\n");
++  const html = bodyParts(email.htmlBody, bodyValues).join("\n");
++
++  return {
++    ...email,
++    fromEmails: addresses(email.from),
++    toEmails: addresses(email.to),
++    text,
++    html
++  };
++}
++
++function bodyParts(parts, bodyValues) {
++  return (parts || [])
++    .map((part) => bodyValues[part.partId] && bodyValues[part.partId].value)
++    .filter((value) => typeof value === "string" && value.length > 0);
++}
++
++function addresses(items) {
++  return (items || []).map((item) => String(item.email || "").toLowerCase()).filter(Boolean);
++}
++
++function summary(email) {
++  return {
++    subject: email.subject,
++    from: email.fromEmails,
++    to: email.toEmails,
++    receivedAt: email.receivedAt,
++    preview: email.preview
++  };
++}
++
++module.exports = { FastmailJmapClient };
+diff --git a/smoke-tests/lib/smtp.js b/smoke-tests/lib/smtp.js
+new file mode 100644
+index 0000000..4e58126
+--- /dev/null
++++ b/smoke-tests/lib/smtp.js
+@@ -0,0 +1,158 @@
++const tls = require("node:tls");
++
++async function sendEmail({ attachment, body, from, password, subject, to, user }) {
++  const client = await SmtpClient.connect({ host: "smtp.fastmail.com", port: 465 });
++
++  try {
++    await client.expect(/^220/);
++    await client.command("EHLO memba-smoke-tests", /^250[ -]/m);
++    await client.command(`AUTH PLAIN ${Buffer.from(`\0${user}\0${password}`).toString("base64")}`, /^235/);
++    await client.command(`MAIL FROM:<${from}>`, /^250/);
++    await client.command(`RCPT TO:<${to}>`, /^250/);
++    await client.command("DATA", /^354/);
++    await client.writeData(mimeMessage({ attachment, body, from, subject, to }));
++    await client.expect(/^250/);
++    await client.command("QUIT", /^221/).catch(() => {});
++  } finally {
++    client.close();
++  }
++}
++
++class SmtpClient {
++  constructor(socket) {
++    this.socket = socket;
++    this.buffer = "";
++    this.waiters = [];
++    socket.on("data", (chunk) => this.onData(chunk));
++  }
++
++  static connect({ host, port }) {
++    return new Promise((resolve, reject) => {
++      const socket = tls.connect({ host, port, servername: host }, () => resolve(new SmtpClient(socket)));
++      socket.once("error", reject);
++    });
++  }
++
++  onData(chunk) {
++    this.buffer += chunk.toString("utf8");
++    this.flushWaiters();
++  }
++
++  flushWaiters() {
++    for (const waiter of [...this.waiters]) {
++      const response = completeResponse(this.buffer);
++      if (!response) {
++        continue;
++      }
++      this.buffer = this.buffer.slice(response.length);
++      this.waiters = this.waiters.filter((item) => item !== waiter);
++      waiter.resolve(response);
++    }
++  }
++
++  expect(pattern) {
++    return new Promise((resolve, reject) => {
++      const waiter = {
++        resolve: (response) => {
++          if (!pattern.test(response)) {
++            reject(new Error(`Unexpected SMTP response. Expected ${pattern}, got:\n${response}`));
++          } else {
++            resolve(response);
++          }
++        }
++      };
++      this.waiters.push(waiter);
++      this.flushWaiters();
++    });
++  }
++
++  async command(line, pattern) {
++    this.socket.write(`${line}\r\n`);
++    return this.expect(pattern);
++  }
++
++  async writeData(message) {
++    this.socket.write(`${dotStuff(message)}\r\n.\r\n`);
++  }
++
++  close() {
++    this.socket.destroy();
++  }
++}
++
++function completeResponse(buffer) {
++  const lines = buffer.split(/\r?\n/);
++  if (lines.length < 2) {
++    return null;
++  }
++
++  let consumed = "";
++  for (const line of lines) {
++    if (line === "") {
++      consumed += "\r\n";
++      continue;
++    }
++    consumed += `${line}\r\n`;
++    if (/^\d{3} /.test(line)) {
++      return consumed;
++    }
++  }
++  return null;
++}
++
++function dotStuff(message) {
++  return message.replace(/^\./gm, "..");
++}
++
++function mimeMessage({ attachment, body, from, subject, to }) {
++  const now = new Date().toUTCString();
++  const messageId = `<${Date.now()}.${Math.random().toString(16).slice(2)}@memba-smoke-tests>`;
++
++  if (!attachment) {
++    return [
++      `From: ${from}`,
++      `To: ${to}`,
++      `Subject: ${subject}`,
++      `Date: ${now}`,
++      `Message-ID: ${messageId}`,
++      "MIME-Version: 1.0",
++      "Content-Type: text/plain; charset=utf-8",
++      "Content-Transfer-Encoding: quoted-printable",
++      "",
++      quotedPrintable(body)
++    ].join("\r\n");
++  }
++
++  const boundary = `memba-smoke-${Date.now()}-${Math.random().toString(16).slice(2)}`;
++  return [
++    `From: ${from}`,
++    `To: ${to}`,
++    `Subject: ${subject}`,
++    `Date: ${now}`,
++    `Message-ID: ${messageId}`,
++    "MIME-Version: 1.0",
++    `Content-Type: multipart/mixed; boundary="${boundary}"`,
++    "",
++    `--${boundary}`,
++    "Content-Type: text/plain; charset=utf-8",
++    "Content-Transfer-Encoding: quoted-printable",
++    "",
++    quotedPrintable(body),
++    `--${boundary}`,
++    `Content-Type: ${attachment.contentType || "application/octet-stream"}`,
++    `Content-Disposition: attachment; filename="${attachment.filename}"`,
++    "Content-Transfer-Encoding: base64",
++    "",
++    Buffer.from(attachment.content).toString("base64").replace(/.{1,76}/g, "$&\r\n").trim(),
++    `--${boundary}--`,
++    ""
++  ].join("\r\n");
++}
++
++function quotedPrintable(text) {
++  return String(text || "")
++    .replace(/=/g, "=3D")
++    .replace(/[^\S\r\n]+$/gm, (spaces) => spaces.replace(/ /g, "=20").replace(/\t/g, "=09"));
++}
++
++module.exports = { sendEmail };
+diff --git a/smoke-tests/package.json b/smoke-tests/package.json
+new file mode 100644
+index 0000000..0d807ee
+--- /dev/null
++++ b/smoke-tests/package.json
+@@ -0,0 +1,10 @@
++{
++  "name": "memba-smoke-tests",
++  "version": "0.1.0",
++  "private": true,
++  "type": "commonjs",
++  "scripts": {
++    "test": "NODE_PATH=../acceptance-tests/node_modules ../acceptance-tests/node_modules/.bin/cucumber-js",
++    "test:headed": "HEADLESS=false NODE_PATH=../acceptance-tests/node_modules ../acceptance-tests/node_modules/.bin/cucumber-js"
++  }
++}
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index 7add699..a95ac89 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -5,6 +5,8 @@ defmodule MembaWeb.PageController do
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+ 
++  @publicly_hidden_club_slugs MapSet.new(["test"])
++
+   def home(conn, params) do
+     case ClubSite.slug_from_host(conn.host) do
+       {:ok, slug} -> home_for_public_club_slug(conn, slug)
+@@ -25,14 +27,16 @@ defmodule MembaWeb.PageController do
+         render_member_dashboard(conn, club_id, "query")
+ 
+       true ->
+-        render_public_club_page(conn, club_id)
++        club_id
++        |> Membership.get_club()
++        |> then(&render_public_club_page_or_not_found(conn, &1))
+     end
+   end
+ 
+   defp home_for_params(conn, %{"club_id" => club_id}) do
+     case Membership.get_club(club_id) do
+       nil -> not_found(conn)
+-      _club -> render_public_club_page(conn, club_id)
++      club -> render_public_club_page_or_not_found(conn, club)
+     end
+   end
+ 
+@@ -58,7 +62,7 @@ defmodule MembaWeb.PageController do
+         if signed_in_active_member?(conn, club.club_id) do
+           render_member_dashboard(conn, club.club_id, "host")
+         else
+-          render_public_club_page(conn, club.club_id)
++          render_public_club_page_or_not_found(conn, club)
+         end
+     end
+   end
+@@ -103,6 +107,20 @@ defmodule MembaWeb.PageController do
+     )
+   end
+ 
++  defp render_public_club_page_or_not_found(conn, nil), do: not_found(conn)
++
++  defp render_public_club_page_or_not_found(conn, club) do
++    if public_club_page_visible?(club) do
++      render_public_club_page(conn, club.club_id)
++    else
++      not_found(conn)
++    end
++  end
++
++  defp public_club_page_visible?(club) do
++    not MapSet.member?(@publicly_hidden_club_slugs, club.slug)
++  end
++
+   defp render_public_club_page(conn, club_id) do
+     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.PublicClubPageLive,
+       session: %{"club_id" => club_id}
+diff --git a/web/priv/repo/seeds.exs b/web/priv/repo/seeds.exs
+index 239e684..b5b16fe 100644
+--- a/web/priv/repo/seeds.exs
++++ b/web/priv/repo/seeds.exs
+@@ -34,6 +34,13 @@ clubs = [
+     name: "Nelson Paddling Club",
+     inserted_at: two_days_ago,
+     updated_at: now
++  },
++  %{
++    club_id: "33333333-3333-3333-3333-333333333333",
++    name: "Smoke Test Club",
++    slug: "test",
++    inserted_at: two_days_ago,
++    updated_at: now
+   }
+ ]
+ 
+@@ -72,6 +79,13 @@ people = [
+     email: "pat@memba.io",
+     inserted_at: two_days_ago,
+     updated_at: now
++  },
++  %{
++    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
++    name: "Smoke Tester",
++    email: "test@memba.io",
++    inserted_at: two_days_ago,
++    updated_at: now
+   }
+ ]
+ 
+@@ -129,6 +143,15 @@ person_email_addresses = [
+     is_primary: true,
+     inserted_at: two_days_ago,
+     updated_at: now
++  },
++  %{
++    id: "20000000-0000-0000-0000-000000000007",
++    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
++    email: "test@memba.io",
++    normalized_email: "test@memba.io",
++    is_primary: true,
++    inserted_at: two_days_ago,
++    updated_at: now
+   }
+ ]
+ 
+@@ -180,6 +203,14 @@ memberships = [
+     active: true,
+     inserted_at: two_days_ago,
+     updated_at: now
++  },
++  %{
++    membership_id: "10000000-0000-0000-0000-000000000007",
++    club_id: "33333333-3333-3333-3333-333333333333",
++    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
++    active: true,
++    inserted_at: two_days_ago,
++    updated_at: now
+   }
+ ]
+ 
+@@ -353,3 +384,5 @@ IO.puts("Seeded representative Memba data.")
+ IO.puts("Member sign-in emails: alice@example.com, bob@example.com, carol@example.com")
+ IO.puts("Alice alternate sign-in email: alice@work.example")
+ IO.puts("Memba staff sign-in email: pat@memba.io")
++IO.puts("Smoke-test member sign-in email: test@memba.io")
++IO.puts("Smoke-test inbound email address: test@clubs.memba.io")
+diff --git a/web/test/event_sourced_setup_test.exs b/web/test/event_sourced_setup_test.exs
+index 45b9e85..e6ebfe5 100644
+--- a/web/test/event_sourced_setup_test.exs
++++ b/web/test/event_sourced_setup_test.exs
+@@ -98,6 +98,47 @@ defmodule Memba.EventSourcedSetupTest do
+     end
+   end
+ 
++  test "seeds include a hidden smoke-test club for production inbound email checks" do
++    Memba.EventSourcedCase.reset_event_sourced_system!()
++
++    try do
++      Sandbox.unboxed_run(Repo, fn ->
++        Code.eval_file("priv/repo/seeds.exs")
++      end)
++
++      assert [["Smoke Test Club", "test"]] =
++               query!("""
++               SELECT name, slug
++               FROM membership_clubs
++               WHERE club_id = '33333333-3333-3333-3333-333333333333'
++               """).rows
++
++      assert [["Smoke Tester", "test@memba.io"]] =
++               query!("""
++               SELECT name, email
++               FROM membership_people
++               WHERE person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
++               """).rows
++
++      assert [["test@memba.io", true]] =
++               query!("""
++               SELECT email, is_primary
++               FROM membership_person_email_addresses
++               WHERE person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
++               """).rows
++
++      assert [[true]] =
++               query!("""
++               SELECT active
++               FROM membership_memberships
++               WHERE club_id = '33333333-3333-3333-3333-333333333333'
++                 AND person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
++               """).rows
++    after
++      Memba.EventSourcedCase.reset_event_sourced_system!()
++    end
++  end
++
+   test "event-sourced test helper resets EventStore and projection rows" do
+     Memba.EventSourcedCase.reset_event_sourced_system!()
+ 
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 6c98de1..53bea0b 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -171,6 +171,64 @@ defmodule MembaWeb.PageControllerTest do
+     refute response =~ "Kootenay Mountaineering Club"
+   end
+ 
++  test "GET / on the smoke-test club subdomain returns not found for public visitors", %{
++    conn: conn
++  } do
++    _club = create_club(name: "Smoke Test Club", slug: "test")
++
++    conn =
++      conn
++      |> Map.put(:host, "test.lvh.me")
++      |> get(~p"/")
++
++    response = html_response(conn, 404)
++
++    refute response =~ "Welcome to Smoke Test Club"
++    refute response =~ "Members can sign in to see club updates"
++  end
++
++  test "GET / with the smoke-test club_id returns not found for public visitors", %{conn: conn} do
++    club = create_club(name: "Smoke Test Club", slug: "test")
++
++    conn = get(conn, ~p"/?#{[club_id: club.club_id]}")
++
++    response = html_response(conn, 404)
++
++    refute response =~ "Welcome to Smoke Test Club"
++  end
++
++  test "GET / on the smoke-test club subdomain still shows the member dashboard to active members",
++       %{conn: conn} do
++    club = create_club(name: "Smoke Test Club", slug: "test")
++
++    tester =
++      create_active_member(
++        email: "test@memba.io",
++        name: "Smoke Tester",
++        club_name: club.name,
++        club_id: club.club_id
++      )
++
++    _message =
++      create_message(club_id: club.club_id, sender_id: tester.person_id, subject: "Smoke test")
++
++    conn =
++      conn
++      |> Map.put(:host, "test.lvh.me")
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "test@memba.io"})
++      |> get(~p"/")
++
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Hello, Smoke."
++    refute response =~ "Welcome to Smoke Test Club"
++
++    assert html
++           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
++           |> Enum.any?()
++  end
++
+   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
+     club =
+       create_active_member(
