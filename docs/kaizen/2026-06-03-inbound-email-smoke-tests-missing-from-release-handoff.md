@@ -182,4 +182,27 @@ Remaining follow-up:
 - The production smoke runner can sign staff/member in through `test@memba.io`, can see the smoke-test club in staff UI, and can send mail through Fastmail SMTP using `test+x@memba.io` as an unknown sender.
 - The current production smoke failure is downstream of sending: Postmark is not showing inbound messages for `test@clubs.memba.io` (`/messages/inbound` returned `TotalCount: 0`), and Memba logs show no `POST /webhooks/postmark` for those test emails. This suggests the remaining abnormality is still at the provider receiving/MX acceptance boundary, not mailbox access or app sign-in.
 - The smoke runner now assumes `Smoke Test Club`, not `Test`, and production contains that fixture.
-- A future kaizen/fix should make the provider receiving boundary easier to diagnose automatically: after sending, check provider inbound message history and webhook delivery before waiting for Memba-visible outcomes.
+
+### Follow-up applied
+
+Date: 2026-06-03
+
+Root cause: the smoke runner waited for final mailbox/UI outcomes without first checking the provider receiving boundary, so a DNS/Postmark receiving failure looked like a long generic smoke-test timeout.
+
+Fix applied:
+
+- `smoke-tests/lib/postmark.js`: added optional Postmark inbound message-history diagnostics using the server token and `/messages/inbound` query.
+- `smoke-tests/lib/config.js` and `smoke-tests/features/support/world.js`: added optional `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` / `MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM` configuration and wired the diagnostics client into the Cucumber world.
+- `smoke-tests/features/step_definitions/inbound_club_email_steps.js`: after SMTP acceptance, each inbound scenario now checks whether Postmark received the exact subject/recipient before waiting for Memba-visible outcomes when a Postmark token is configured.
+- `smoke-tests/README.md` and `smoke-tests/features/inbound_club_email.feature`: documented the optional Postmark boundary check and corrected the smoke club name to `Smoke Test Club`.
+
+Validation:
+
+- `node --check smoke-tests/lib/config.js && node --check smoke-tests/lib/postmark.js && node --check smoke-tests/features/support/world.js && node --check smoke-tests/features/step_definitions/inbound_club_email_steps.js` — passed.
+- `cd smoke-tests && npm test -- --dry-run` — passed; Cucumber discovered 3 scenarios and 21 steps.
+- `dev check` — blocked because an existing local Phoenix/test process has 52 open `memba_test` database sessions, so the test database cannot be dropped. I did not stop the user's running server/processes.
+
+Remaining follow-up:
+
+- Run the production smoke tests with `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` set to distinguish provider receiving failure from webhook/application failure.
+- If Postmark receives the message but Memba still has no visible outcome, add webhook delivery diagnostics as the next boundary check.

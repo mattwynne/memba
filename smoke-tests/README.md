@@ -22,6 +22,9 @@ export MEMBA_SMOKE_FASTMAIL_PASSWORD="..."      # Fastmail app password for SMTP
 # Optional: use JMAP instead of IMAP polling. The runner listens to JMAP EventSource changes when available.
 export SMOKE_TEST_EMAIL_API_KEY="..."           # or MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN / FASTMAIL_API_KEY
 export MEMBA_SMOKE_UNKNOWN_EMAIL="..."          # unregistered sender that can receive rejection email
+
+# Optional but recommended while diagnosing provider receiving/webhook boundaries:
+export MEMBA_SMOKE_POSTMARK_SERVER_TOKEN="..."  # Postmark server token for /messages/inbound history
 ```
 
 Optional/defaulted:
@@ -45,12 +48,16 @@ export MEMBA_SMOKE_STAFF_FASTMAIL_USER="..."
 export MEMBA_SMOKE_STAFF_FASTMAIL_PASSWORD="..."
 export MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN="..." # optional; otherwise IMAP uses the Fastmail app password
 
+export MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM="..." # optional, if the inbound stream must be filtered explicitly
+
 export MEMBA_SMOKE_POLL_TIMEOUT_MS="120000"
 export MEMBA_SMOKE_POLL_INTERVAL_MS="5000"
 export HEADLESS="false" # optional, for watching Playwright
 ```
 
 ## Run
+
+When `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` is set, each scenario checks Postmark inbound message history immediately after SMTP acceptance. That narrows failures before the mailbox/UI waits: no Postmark inbound message means the problem is still at DNS/provider receiving; a Postmark inbound message with no Memba-visible outcome points to webhook delivery or application processing.
 
 The script reuses the Cucumber and Playwright dependencies already installed for `acceptance-tests`:
 

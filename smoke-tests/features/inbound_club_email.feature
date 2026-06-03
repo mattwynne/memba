@@ -1,7 +1,7 @@
 Feature: Production inbound club email smoke tests
   These smoke tests send real email through public MX/provider wiring and then
   check the member-visible and mailbox-visible outcomes. They are intended for
-  a controlled production smoke club named Test with slug test.
+  a controlled production smoke club named Smoke Test Club with slug test.
 
   Background:
     Given the production smoke configuration is valid

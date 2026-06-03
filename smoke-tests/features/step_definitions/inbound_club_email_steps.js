@@ -49,6 +49,7 @@ When("an unknown sender emails the smoke club", async function () {
     to: this.config.inboundAddress,
     user: this.config.unknown.smtpUser
   });
+  await assertPostmarkReceivedInboundMessage(this);
 });
 
 When("the smoke member emails the smoke club", async function () {
@@ -64,6 +65,7 @@ When("the smoke member emails the smoke club", async function () {
     to: this.config.inboundAddress,
     user: this.config.member.smtpUser
   });
+  await assertPostmarkReceivedInboundMessage(this);
 });
 
 When("the smoke member emails the smoke club with an attachment", async function () {
@@ -84,6 +86,7 @@ When("the smoke member emails the smoke club with an attachment", async function
     to: this.config.inboundAddress,
     user: this.config.member.smtpUser
   });
+  await assertPostmarkReceivedInboundMessage(this);
 });
 
 Then("the unknown sender receives an unknown-sender rejection email", async function () {
@@ -151,6 +154,24 @@ function uniqueSubject(prefix) {
   const now = new Date();
   const compact = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   return `${prefix} ${compact}`;
+}
+
+async function assertPostmarkReceivedInboundMessage(world) {
+  if (!world.postmark) {
+    world.log && world.log("Skipping Postmark inbound-history check; set MEMBA_SMOKE_POSTMARK_SERVER_TOKEN to enable provider-boundary diagnostics.");
+    return;
+  }
+
+  const message = currentMessage(world);
+  await world.postmark.waitForInboundMessage({
+    after: subjectTimestamp(message.subject),
+    description: `${message.subject} at ${world.config.inboundAddress}`,
+    from: message.from,
+    intervalMs: world.config.poll.intervalMs,
+    recipient: world.config.inboundAddress,
+    subject: message.subject,
+    timeoutMs: world.config.poll.timeoutMs
+  });
 }
 
 function subjectTimestamp(subject) {
