@@ -12,6 +12,14 @@ Useful access pattern from `hub.local`:
 PATH="$PWD/bin:$PATH" devenv shell -- console fabro
 ```
 
+When Matt is present to approve the SSH host key, direct SSH to the Fabro LXC is also available:
+
+```sh
+ssh root@192.168.1.201
+# or
+ssh root@fabro.home.wynne.family
+```
+
 Inside the Fabro LXC, the checked-out Memba repo is currently available at:
 
 ```sh
