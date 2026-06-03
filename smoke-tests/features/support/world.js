@@ -3,6 +3,7 @@ const { chromium } = require("playwright");
 const { smokeConfig } = require("../../lib/config");
 const { FastmailImapClient } = require("../../lib/fastmail_imap");
 const { FastmailJmapClient } = require("../../lib/fastmail_jmap");
+const { PostmarkInboundDiagnostics } = require("../../lib/postmark");
 
 setDefaultTimeout(Number(process.env.MEMBA_SMOKE_STEP_TIMEOUT_MS || 180000));
 
@@ -16,6 +17,7 @@ class SmokeWorld {
     this.page = null;
     this.mailboxes = {};
     this.messages = {};
+    this.postmark = null;
   }
 }
 
@@ -26,6 +28,13 @@ Before(async function () {
   this.mailboxes.member = await connectFastmailMailbox(this.config.member);
   this.mailboxes.unknown = await connectFastmailMailbox(this.config.unknown);
   this.mailboxes.staff = await connectFastmailMailbox(this.config.staff);
+
+  if (PostmarkInboundDiagnostics.configured(this.config)) {
+    this.postmark = new PostmarkInboundDiagnostics({
+      messageStream: this.config.postmark.inboundMessageStream,
+      token: this.config.postmark.serverToken
+    });
+  }
 
   this.browser = await chromium.launch({ headless: this.config.browser.headless });
   this.context = await this.browser.newContext();

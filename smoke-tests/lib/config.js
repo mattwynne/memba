@@ -48,6 +48,12 @@ function smokeConfig() {
   const staffFastmailPassword = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_PASSWORD", fastmailPassword);
   const staffJmapToken = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN", jmapToken);
 
+  const postmarkServerToken = optionalEnv(
+    "MEMBA_SMOKE_POSTMARK_SERVER_TOKEN",
+    optionalEnv("MEMBA_POSTMARK_SERVER_TOKEN", optionalEnv("POSTMARK_SERVER_TOKEN", null))
+  );
+  const postmarkInboundMessageStream = optionalEnv("MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM", null);
+
   return {
     baseUrl,
     clubName,
@@ -76,6 +82,10 @@ function smokeConfig() {
       imapUser: staffFastmailUser,
       imapPassword: staffFastmailPassword,
       jmapToken: staffJmapToken
+    },
+    postmark: {
+      serverToken: postmarkServerToken,
+      inboundMessageStream: postmarkInboundMessageStream
     },
     poll: {
       intervalMs: Number(optionalEnv("MEMBA_SMOKE_POLL_INTERVAL_MS", "5000")),
