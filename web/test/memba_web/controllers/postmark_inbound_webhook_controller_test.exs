@@ -79,6 +79,49 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     assert length(Fake.deliveries()) == 2
   end
 
+  test "uses provider-neutral inbound handling for Postmark rejection outcomes", %{conn: conn} do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    payload =
+      valid_payload(%{
+        "MessageID" => "postmark-controller-unknown-sender",
+        "From" => "Mystery Sender <mystery@example.com>",
+        "FromFull" => %{"Email" => "mystery@example.com", "Name" => "Mystery Sender"},
+        "OriginalRecipient" => "kmc@clubs.memba.io",
+        "To" => "KMC <kmc@clubs.memba.io>",
+        "Subject" => "Can I post?",
+        "TextBody" => "Please post this."
+      })
+
+    conn = post_postmark_inbound_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+
+    assert %{
+             provider: "postmark",
+             provider_message_id: "postmark-controller-unknown-sender",
+             provider_event_id: nil,
+             from_address: "mystery@example.com",
+             to_address: "kmc@clubs.memba.io",
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "unknown_sender",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } =
+             Messaging.get_inbound_email_source("postmark", "postmark-controller-unknown-sender")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_received {:email, %Swoosh.Email{} = rejection_email}
+    assert rejection_email.to == [{"", "mystery@example.com"}]
+    assert rejection_email.subject == "Your email was not posted"
+
+    assert rejection_email.text_body =~
+             "we could not find a member account for your sender address"
+  end
+
   test "returns unprocessable for malformed Postmark inbound payloads", %{conn: conn} do
     payload = Map.delete(valid_payload(), "MessageID")
 
