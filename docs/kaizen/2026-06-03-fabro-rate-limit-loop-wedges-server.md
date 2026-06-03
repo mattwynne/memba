@@ -120,3 +120,23 @@ If provider rate limits can wedge the workflow engine, any long implementation r
 - Make `fabro inspect/events` report the configured server target prominently when timeouts occur.
 - Document a safe recovery runbook for remote Fabro server/container restart, including what to do when graceful LXC reboot hangs on `lxc-stop`.
 - Add post-restart cleanup guidance for failed runs, stale iteration statuses, and stopped per-run Docker containers.
+
+## Resolution
+
+Date: 2026-06-03
+
+Root cause: Failed LLM/prompt nodes in the implementation workflow could still flow through normal routing because key edges depended only on context values, not `outcome=succeeded`. When OpenAI rate limits caused prompt failures, stale routing context let the graph continue cycling. The graph also allowed a very high per-node visit count and the Docker run environment had no CPU or memory limit, so a runaway run could consume the Fabro host and starve the control plane.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: lowered the graph visit circuit breaker, added per-node visit budgets to the task-list, implementation, and validation nodes, and made implementation-loop edges fail closed unless the upstream node succeeded.
+- `.fabro/workflows/iteration-implementation/workflow.toml`: added Docker CPU and memory limits for the `memba-dev` environment so an implementation run has a resource ceiling inside the Fabro LXC.
+
+Validation:
+
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — passed with existing goal-gate warnings only.
+- `dev check` — passed: 396 ExUnit tests and 31 Cucumber scenarios.
+
+Remaining follow-up:
+
+- Fabro itself should still classify provider rate limits as terminal/human-intervention or retry-with-backoff failures at the runtime level; this repo fix prevents the Memba implementation workflow from amplifying those failures.
