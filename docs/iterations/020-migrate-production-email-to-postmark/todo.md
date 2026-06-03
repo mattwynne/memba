@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Start after iteration 019 is delivered and inbound club-message behaviour has been manually observed working with Resend.
+- [x] 001 Start after iteration 019 is delivered and inbound club-message behaviour has been manually observed working with Resend.
 - [ ] 002 Inspect iteration 019's provider-neutral inbound email API, idempotency model, rejection-email path, Resend inbound parser/controller, provider selection, and tests.
 - [ ] 003 Inspect existing Postmark outbound member-message provider, Postmark delivery-status webhook controller, auth email Postmark configuration, and `docs/postmark-email.md`.
 - [ ] 004 Determine the cleanest Postmark inbound routing shape. Prefer keeping inbound-email handling separate from outbound delivery-status webhooks if Postmark's dashboard supports separate inbound and delivery-status webhook URLs; otherwise make the shared Postmark route dispatch safely by payload shape.
