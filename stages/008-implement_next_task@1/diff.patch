@@ -1,0 +1,126 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/implementation-notes.md b/docs/iterations/019-inbound-club-messages-by-email/implementation-notes.md
+new file mode 100644
+index 0000000..30a4471
+--- /dev/null
++++ b/docs/iterations/019-inbound-club-messages-by-email/implementation-notes.md
+@@ -0,0 +1,108 @@
++# Implementation notes
++
++## 001 existing flow inspection
++
++Task 001 inspected the current extension points for inbound club messages by email.
++
++### Messaging command flow
++
++- Public API: `web/lib/memba/messaging.ex`
++  - `send_club_message/2` builds a `Memba.Messaging.Commands.SendMessage`, resolves active club recipients through `Memba.Membership.list_active_members_of_club/1`, dispatches to `Memba.Messaging.App`, then delivers each generated `EmailDeliveryRequest` through `Memba.Messaging.EmailDeliveryProvider`.
++  - `deliver_to_provider/1` is synchronous and stops on the first provider error.
++  - Delivery requests use the sender's primary email via `Membership.get_person_primary_email/1`.
++- Command/router/aggregate:
++  - `web/lib/memba/messaging/commands/send_message.ex`
++  - `web/lib/memba/messaging/router.ex`
++  - `web/lib/memba/messaging/message.ex`
++  - Existing message aggregate is identified by `message_id`; duplicate `SendMessage` for the same aggregate returns `{:error, :already_sent}`.
++  - `MessageSent` and `EmailDeliveryCreated` events are emitted in the same stream.
++- Projections:
++  - `web/lib/memba/messaging/projectors/message.ex`
++  - `web/lib/memba/messaging/projectors/email_delivery.ex`
++  - Projectors use `Commanded.Projections.Ecto` with `consistency: :strong`.
++
++### Membership/person email lookup
++
++- Public query API: `web/lib/memba/membership.ex`
++  - `get_person_by_email/1` normalizes input and joins `membership_people` to `membership_person_email_addresses`, so it already finds primary and alternate addresses.
++  - `active_member_of_club?/2` authorizes by resolved `person_id`.
++  - `active_member_of_club_by_email?/2` exists for browser auth and checks primary/alternate projected email rows.
++  - `list_active_members_of_club/1` returns active recipient maps using each person's primary email address only.
++- Email normalization/validation: `web/lib/memba/membership/email_addresses.ex`.
++- Projection schema: `web/lib/memba/membership/projections/person_email_address.ex`.
++
++### Club slug lookup and addressable identity
++
++- Slug helpers: `web/lib/memba/membership/slug.ex`.
++- Club lookup: `Membership.get_club_by_slug/1` normalizes lookup input by trimming and downcasing, then validates the slug.
++- Club-site URL helper: `web/lib/memba_web/club_site.ex`.
++  - Current browser base-domain default is `lvh.me`, configured as `:memba, :club_site`.
++  - The inbound-email domain should be separate from club-site URL generation because the iteration requires default `clubs.memba.io` for email addresses.
++
++### Outbound email provider flow
++
++- Provider port/config:
++  - `web/lib/memba/messaging/email_delivery_provider.ex`
++  - `web/lib/memba/messaging/email_delivery_provider_config.ex`
++  - `web/lib/memba/messaging/email_delivery_request.ex`
++- Providers:
++  - `web/lib/memba/messaging/email_delivery_providers/resend.ex`
++  - `web/lib/memba/messaging/email_delivery_providers/postmark.ex`
++  - `web/lib/memba/messaging/email_delivery_providers/local.ex`
++  - `web/lib/memba/messaging/email_delivery_providers/fake.ex`
++- Runtime provider selection is in `web/config/runtime.exs`; default provider in `web/config/config.exs` is fake.
++- Rejection-email delivery can likely use the same `Memba.Mailer`/Swoosh boundary, but it should not go through `send_club_message/2` because no club message or recipient delivery records should be created for rejected inbound mail.
++
++### Resend webhook and signature handling
++
++- Existing outbound-status webhook controller: `web/lib/memba_web/controllers/resend_webhook_controller.ex`.
++  - It currently handles delivery lifecycle events (`email.delivered`, `email.bounced`, etc.) and maps them to provider-neutral Messaging status-reporting APIs.
++  - It does not parse inbound `email.received` payloads yet.
++- Signature verification: `web/lib/memba_web/resend_webhook_signature.ex`.
++  - Uses Svix headers `svix-id`, `svix-timestamp`, and `svix-signature`.
++  - Verification is enforced by `ResendWebhookController` only when `MembaWeb.ResendWebhookSignature.configured?/0` is true.
++- Raw body caching:
++  - `web/lib/memba_web/cache_body_reader.ex`
++  - `web/lib/memba_web/endpoint.ex` configures `Plug.Parsers` with this body reader, so signature verification can read `conn.assigns.raw_body`.
++- Runtime secret configuration:
++  - `MEMBA_RESEND_WEBHOOK_SIGNING_SECRET` is read in `web/config/runtime.exs`.
++
++### Router webhook scope
++
++- `web/lib/memba_web/router.ex`
++  - `/webhooks/postmark` and `/webhooks/resend` are under the JSON `:api` pipeline.
++  - Inbound Resend support can either share `/webhooks/resend` by event type or use an additional route in the same scope; the plan names a dedicated endpoint/parser but also binds use of the existing signature verifier.
++
++### Member dashboard and compose surfaces
++
++- Dashboard:
++  - `web/lib/memba_web/live/member_dashboard_live.ex` delegates rendering to `MembaWeb.PageHTML.club/1`.
++  - Template: `web/lib/memba_web/controllers/page_html/club.html.heex`.
++  - Presentation data: `web/lib/memba_web/member_dashboard_presentation.ex`.
++- Compose:
++  - `web/lib/memba_web/live/member_message_live/new.ex`.
++  - Current compose context assigns `selected_club`, `current_member`, and `active_member_count`.
++- Both surfaces already have selected club data including `slug`, so the upcoming inbound-address helper can be called from presentation/rendering without another lookup.
++
++### Acceptance support
++
++- Shared feature: `acceptance-tests/features/member_message_deliverability.feature`.
++  - Inbound-email scenarios are already present and tagged `@wip`.
++- Browser Cucumber config: `acceptance-tests/cucumber.js`.
++  - Excludes `@wip`.
++- Domain Cucumber config: `web/config/test.exs`.
++  - Excludes `@wip`.
++- Existing browser support:
++  - `acceptance-tests/features/step_definitions/member_message_steps.js`.
++  - `acceptance-tests/features/support/member_message.js`.
++  - Current support covers web compose, outbound test mailbox inspection, delivery status reporting, and no-message failure copy. It does not yet simulate inbound Resend payloads or inspect rejection emails.
++- Existing domain steps:
++  - `web/test/features/step_definitions/messaging_steps.exs`.
++  - Current steps drive `Messaging.send_club_message/2` directly and use `Fake` email provider assertions. No inbound-email steps exist yet.
++
++### Relevant tests to extend later
++
++- Messaging behaviour: `web/test/memba/messaging/send_club_message_test.exs`, `web/test/memba/messaging/message_test.exs`, `web/test/memba/messaging/send_message_dispatch_test.exs`.
++- Resend webhook/signature: `web/test/memba_web/controllers/resend_webhook_controller_test.exs`.
++- Member dashboard/compose UI: `web/test/memba_web/live/member_dashboard_live_test.exs`, `web/test/memba_web/live/member_message_live/new_send_test.exs`.
++- Acceptance config/support: `web/test/features/cucumber_configuration_test.exs`, `acceptance-tests/test/member_message_steps.test.js`.
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index 4b68d09..0cbae86 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
++- [x] 001 Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
+ - [ ] 002 Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
+ - [ ] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
+ - [ ] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
