@@ -13,6 +13,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -58,6 +59,18 @@ defmodule Memba.Messaging do
   end
 
   def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
+
+  @doc """
+  Resolve an inbound club-message email's recipient addresses to a destination club.
+
+  Supports the current whole-club address shape
+  `<club-slug>@<configured inbound domain>`, returning a resolved destination
+  with club id and normalized to-address, or a typed rejection reason for
+  unsupported recipient addresses and unknown club slugs.
+  """
+  def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
+    InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
+  end
 
   @doc """
   Report that a email delivery was accepted by the recipient server.

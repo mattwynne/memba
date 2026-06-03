@@ -7,7 +7,7 @@
 - [x] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
 - [x] 006 Add inbound email events such as:
 - [x] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
-- [ ] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+- [x] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
 - [ ] 009 Add sender resolution that finds a person by any primary or alternate email address.
 - [ ] 010 Add active-membership authorization for the resolved sender and destination club.
 - [ ] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
