@@ -1,6 +1,7 @@
 const { setDefaultTimeout, setWorldConstructor, Before, After } = require("@cucumber/cucumber");
 const { chromium } = require("playwright");
 const { smokeConfig } = require("../../lib/config");
+const { FastmailImapClient } = require("../../lib/fastmail_imap");
 const { FastmailJmapClient } = require("../../lib/fastmail_jmap");
 
 setDefaultTimeout(Number(process.env.MEMBA_SMOKE_STEP_TIMEOUT_MS || 180000));
@@ -22,9 +23,9 @@ setWorldConstructor(SmokeWorld);
 
 Before(async function () {
   this.config = smokeConfig();
-  this.mailboxes.member = await new FastmailJmapClient({ token: this.config.member.jmapToken }).connect();
-  this.mailboxes.unknown = await new FastmailJmapClient({ token: this.config.unknown.jmapToken }).connect();
-  this.mailboxes.staff = await new FastmailJmapClient({ token: this.config.staff.jmapToken }).connect();
+  this.mailboxes.member = await connectFastmailMailbox(this.config.member);
+  this.mailboxes.unknown = await connectFastmailMailbox(this.config.unknown);
+  this.mailboxes.staff = await connectFastmailMailbox(this.config.staff);
 
   this.browser = await chromium.launch({ headless: this.config.browser.headless });
   this.context = await this.browser.newContext();
@@ -38,4 +39,20 @@ After(async function () {
   if (this.browser) {
     await this.browser.close();
   }
+  for (const mailbox of Object.values(this.mailboxes || {})) {
+    if (mailbox && typeof mailbox.close === "function") {
+      mailbox.close();
+    }
+  }
 });
+
+function connectFastmailMailbox(config) {
+  if (config.jmapToken) {
+    return new FastmailJmapClient({ token: config.jmapToken }).connect();
+  }
+
+  return new FastmailImapClient({
+    user: config.imapUser || config.smtpUser,
+    password: config.imapPassword || config.smtpPassword
+  }).connect();
+}

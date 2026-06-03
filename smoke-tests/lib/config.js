@@ -6,6 +6,17 @@ function requiredEnv(name) {
   return value;
 }
 
+function requiredEnvAny(names) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value && String(value).trim() !== "") {
+      return value;
+    }
+  }
+
+  throw new Error(`Missing required environment variable; set one of ${names.join(", ")}`);
+}
+
 function optionalEnv(name, fallback) {
   const value = process.env[name];
   return value && String(value).trim() !== "" ? value : fallback;
@@ -13,23 +24,25 @@ function optionalEnv(name, fallback) {
 
 function smokeConfig() {
   const baseUrl = optionalEnv("MEMBA_SMOKE_BASE_URL", "https://memba.io");
-  const clubName = optionalEnv("MEMBA_SMOKE_CLUB_NAME", "Test");
+  const clubName = optionalEnv("MEMBA_SMOKE_CLUB_NAME", "Smoke Test Club");
   const clubSlug = optionalEnv("MEMBA_SMOKE_CLUB_SLUG", "test");
   const inboundDomain = optionalEnv("MEMBA_SMOKE_INBOUND_DOMAIN", "clubs.memba.io");
   const clubSiteBaseDomain = optionalEnv("MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN", new URL(baseUrl).hostname);
   const memberEmail = optionalEnv("MEMBA_SMOKE_MEMBER_EMAIL", "test@memba.io");
-  const memberName = optionalEnv("MEMBA_SMOKE_MEMBER_NAME", "Test");
+  const memberName = optionalEnv("MEMBA_SMOKE_MEMBER_NAME", "Smoke Tester");
   const staffEmail = requiredEnv("MEMBA_SMOKE_STAFF_EMAIL");
 
   const fastmailUser = optionalEnv("MEMBA_SMOKE_FASTMAIL_USER", memberEmail);
-  const fastmailPassword = requiredEnv("MEMBA_SMOKE_FASTMAIL_PASSWORD");
-  const jmapToken = requiredEnv("MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN");
+  const fastmailPassword = requiredEnvAny(["MEMBA_SMOKE_FASTMAIL_PASSWORD", "SMOKE_TEST_EMAIL_PASSWORD"]);
+  const jmapToken = optionalEnv("MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN", null);
 
   const unknownEmail = requiredEnv("MEMBA_SMOKE_UNKNOWN_EMAIL");
   const unknownFastmailUser = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_USER", unknownEmail);
   const unknownFastmailPassword = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_PASSWORD", fastmailPassword);
   const unknownJmapToken = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_JMAP_TOKEN", jmapToken);
 
+  const staffFastmailUser = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_USER", fastmailUser);
+  const staffFastmailPassword = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_PASSWORD", fastmailPassword);
   const staffJmapToken = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_JMAP_TOKEN", jmapToken);
 
   return {
@@ -43,16 +56,22 @@ function smokeConfig() {
       name: memberName,
       smtpUser: fastmailUser,
       smtpPassword: fastmailPassword,
+      imapUser: fastmailUser,
+      imapPassword: fastmailPassword,
       jmapToken
     },
     unknown: {
       email: unknownEmail,
       smtpUser: unknownFastmailUser,
       smtpPassword: unknownFastmailPassword,
+      imapUser: unknownFastmailUser,
+      imapPassword: unknownFastmailPassword,
       jmapToken: unknownJmapToken
     },
     staff: {
       email: staffEmail,
+      imapUser: staffFastmailUser,
+      imapPassword: staffFastmailPassword,
       jmapToken: staffJmapToken
     },
     poll: {
