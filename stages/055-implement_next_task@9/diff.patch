@@ -1,0 +1,161 @@
+diff --git a/docs/iterations/020-migrate-production-email-to-postmark/todo.md b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+index e5b6ac6..0ade5af 100644
+--- a/docs/iterations/020-migrate-production-email-to-postmark/todo.md
++++ b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Reuse iteration 019's provider-neutral command/API for all accepted/rejected behaviour rather than duplicating business rules in Postmark-specific code.
+ - [x] 007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.
+ - [x] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.
+-- [ ] 009 Verify or add tests proving Postmark outbound member-message payloads still include sender/reply-to, text/HTML bodies, and correlation metadata expected by the Postmark delivery-status webhook handler.
++- [x] 009 Verify or add tests proving Postmark outbound member-message payloads still include sender/reply-to, text/HTML bodies, and correlation metadata expected by the Postmark delivery-status webhook handler.
+ - [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.
+ - [ ] 011 Verify rejection-email delivery follows the configured mailer/provider path and works when Postmark is selected.
+ - [ ] 012 Update `docs/postmark-email.md` to describe the full Postmark production setup: outbound member-message stream, auth stream, inbound club-message routing for `clubs.memba.io`, delivery-status webhook URL, inbound webhook URL, environment variables, and local smoke-test guidance.
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index 043e5b7..23b3892 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -4,10 +4,76 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.App, as: MessagingApp
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.EmailDeliveryProviders.Postmark
++  alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.Recipient
+ 
+   import Plug.Conn
+ 
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_postmark_config = Application.get_env(:memba, Postmark)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(Postmark, original_postmark_config)
++    end)
++
++    :ok
++  end
++
++  test "Postmark outbound member-message payload metadata correlates delivery-status webhooks",
++       %{conn: conn} do
++    body = "Hello <Alice> & Bob\nBring route ideas."
++
++    %{sender: sender, recipients: [_bob, alice]} =
++      message = send_message_to(["Bob Barker", "Alice Adams"], body: body)
++
++    assert :ok = Postmark.deliver(email_delivery_request(message, alice, sender))
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
++    assert email.reply_to == {"Bob Barker", "bob.barker@example.test"}
++    assert email.to == [{"Alice Adams", "alice.adams@example.test"}]
++    assert email.subject == "Trip planning night"
++    assert email.text_body == body
++
++    assert email.html_body ==
++             "<html><body><p>Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas.</p></body></html>"
++
++    assert metadata = email.provider_options[:metadata]
++
++    assert metadata == %{
++             "memba_club_id" => message.club_id,
++             "memba_delivery_id" => alice.delivery_id,
++             "memba_message_id" => message.message_id
++           }
++
++    conn =
++      conn
++      |> post_postmark_event(
++        :delivered
++        |> realistic_postmark_payload(message, alice)
++        |> Map.put("Metadata", metadata)
++      )
++
++    assert %{"status" => "accepted"} = json_response(conn, 202)
++
++    assert_eventually(fn ->
++      assert Messaging.get_member_email_delivery(message.message_id, alice.person_id).status ==
++               "delivered"
++
++      assert Messaging.get_memba_staff_email_delivery(alice.delivery_id).status == "delivered"
++    end)
++  end
++
+   test "maps realistic Postmark delivery events with outbound metadata and rejects opens", %{
+     conn: conn
+   } do
+@@ -166,7 +232,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     |> post(~p"/webhooks/postmark", Jason.encode!(payload))
+   end
+ 
+-  defp send_message_to(names) do
++  defp send_message_to(names, opts \\ []) do
+     [sender | _rest] =
+       recipients =
+       Enum.map(names, fn name ->
+@@ -180,6 +246,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+ 
+     message_id = Ecto.UUID.generate()
+     club_id = Ecto.UUID.generate()
++    subject = Keyword.get(opts, :subject, "Trip planning night")
++    body = Keyword.get(opts, :body, "Bring route ideas.")
+ 
+     assert :ok =
+              MessagingApp.dispatch(
+@@ -187,14 +255,37 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+                  message_id: message_id,
+                  club_id: club_id,
+                  sender_id: sender.person_id,
+-                 subject: "Trip planning night",
+-                 body: "Bring route ideas.",
++                 subject: subject,
++                 body: body,
+                  recipients: recipients
+                },
+                consistency: :strong
+              )
+ 
+-    %{club_id: club_id, message_id: message_id, recipients: recipients}
++    %{
++      body: body,
++      club_id: club_id,
++      message_id: message_id,
++      recipients: recipients,
++      sender: sender,
++      subject: subject
++    }
++  end
++
++  defp email_delivery_request(message, recipient, sender) do
++    %EmailDeliveryRequest{
++      message_id: message.message_id,
++      club_id: message.club_id,
++      delivery_id: recipient.delivery_id,
++      recipient_id: recipient.person_id,
++      recipient_name: recipient.name,
++      recipient_address: recipient.email,
++      sender_name: sender.name,
++      sender_address: sender.email,
++      channel: :email,
++      subject: message.subject,
++      body: message.body
++    }
+   end
+ 
+   defp realistic_postmark_payload(event_type, message, recipient, opts \\ []) do
+@@ -304,4 +395,7 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+ 
+     "#{normalized_name}@example.test"
+   end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
