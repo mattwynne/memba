@@ -107,12 +107,60 @@ class FastmailJmapClient {
       if (found) {
         return found;
       }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      await this.waitForEmailEvent({ timeoutMs: Math.min(intervalMs, Math.max(0, deadline - Date.now())) });
     }
 
     throw new Error(
       `Timed out waiting for ${description || "email"}. Last emails: ${JSON.stringify(lastEmails.map(summary))}`
     );
+  }
+
+  async waitForEmailEvent({ timeoutMs = 5000 } = {}) {
+    if (!this.session || !this.session.eventSourceUrl || timeoutMs <= 0) {
+      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+      return;
+    }
+
+    try {
+      await waitForJmapEvent({
+        eventSourceUrl: this.session.eventSourceUrl,
+        token: this.token,
+        timeoutMs
+      });
+    } catch (_error) {
+      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
+    }
+  }
+}
+
+async function waitForJmapEvent({ eventSourceUrl, token, timeoutMs }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = eventSourceUrl
+      .replace("{types}", encodeURIComponent("Email"))
+      .replace("{closeafter}", encodeURIComponent("StateChange"))
+      .replace("{ping}", "300");
+
+    const response = await fetch(url, {
+      headers: { Accept: "text/event-stream", Authorization: `Bearer ${token}` },
+      signal: controller.signal
+    });
+
+    if (!response.ok || !response.body) {
+      throw new Error(`Fastmail JMAP event source failed: HTTP ${response.status}`);
+    }
+
+    for await (const chunk of response.body) {
+      const text = Buffer.from(chunk).toString("utf8");
+      if (/^data:/m.test(text) && /Email|StateChange/i.test(text)) {
+        controller.abort();
+        return;
+      }
+    }
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

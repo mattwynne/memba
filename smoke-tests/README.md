@@ -19,6 +19,8 @@ Required:
 ```sh
 export MEMBA_SMOKE_STAFF_EMAIL="..."
 export MEMBA_SMOKE_FASTMAIL_PASSWORD="..."      # Fastmail app password for SMTP and IMAP access to test@memba.io
+# Optional: use JMAP instead of IMAP polling. The runner listens to JMAP EventSource changes when available.
+export SMOKE_TEST_EMAIL_API_KEY="..."           # or MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN / FASTMAIL_API_KEY
 export MEMBA_SMOKE_UNKNOWN_EMAIL="..."          # unregistered sender that can receive rejection email
 ```
 

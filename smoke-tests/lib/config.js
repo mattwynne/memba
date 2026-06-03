@@ -34,7 +34,10 @@ function smokeConfig() {
 
   const fastmailUser = optionalEnv("MEMBA_SMOKE_FASTMAIL_USER", memberEmail);
   const fastmailPassword = requiredEnvAny(["MEMBA_SMOKE_FASTMAIL_PASSWORD", "SMOKE_TEST_EMAIL_PASSWORD"]);
-  const jmapToken = optionalEnv("MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN", null);
+  const jmapToken = optionalEnv(
+    "MEMBA_SMOKE_FASTMAIL_JMAP_TOKEN",
+    optionalEnv("SMOKE_TEST_EMAIL_API_KEY", optionalEnv("FASTMAIL_API_KEY", null))
+  );
 
   const unknownEmail = requiredEnv("MEMBA_SMOKE_UNKNOWN_EMAIL");
   const unknownFastmailUser = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_USER", unknownEmail);
