@@ -9,9 +9,11 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
   alias Memba.Messaging.Projections.Message, as: MessageProjection
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
@@ -36,6 +38,21 @@ defmodule Memba.Messaging do
       dispatch_result
     end
   end
+
+  @doc """
+  Build a provider-neutral command for an inbound club-message email.
+
+  Provider webhook adapters should translate provider-specific payloads into
+  this API's attrs before later inbound-email handling resolves clubs, authorizes
+  senders, creates messages, and records idempotency/audit events.
+  """
+  def receive_inbound_club_email_command(attrs) when is_map(attrs) do
+    with {:ok, inbound_email} <- InboundEmail.new(attrs) do
+      {:ok, %ReceiveInboundEmail{inbound_email: inbound_email}}
+    end
+  end
+
+  def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
 
   @doc """
   Report that a email delivery was accepted by the recipient server.
