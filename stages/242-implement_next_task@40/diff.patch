@@ -1,0 +1,544 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index e15227c..1340281 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+ - [x] 009 Add sender resolution that finds a person by any primary or alternate email address.
+ - [x] 010 Add active-membership authorization for the resolved sender and destination club.
+-- [ ] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
++- [x] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
+ - [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
+ - [ ] 013 Add plain-text body normalization:
+ - [ ] 014 Add attachment rejection before message creation when inbound payload includes any attachments.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index ad5c410..f5378e8 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging do
+ 
+   alias Memba.Membership
+   alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.AcceptInboundClubEmail
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+@@ -62,6 +63,54 @@ defmodule Memba.Messaging do
+ 
+   def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
+ 
++  @doc """
++  Receive and post a provider-neutral inbound club-message email.
++
++  This wraps the same `send_club_message/2` path used by browser-composed club
++  messages, so accepted inbound email creates the same message event, recipient
++  delivery events, projections, and outbound provider handoffs.
++  """
++  def receive_inbound_club_email(attrs, dispatch_opts \\ [])
++
++  def receive_inbound_club_email(attrs, dispatch_opts)
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
++         :ok <- dispatch_ok(receive_command, dispatch_opts),
++         {:ok, destination} <-
++           resolve_inbound_club_email_destination(receive_command.inbound_email),
++         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
++         :ok <- authorize_inbound_club_email_sender(sender, destination),
++         message_id = Ecto.UUID.generate(),
++         :ok <-
++           send_inbound_club_message(
++             receive_command.inbound_email,
++             destination,
++             sender,
++             message_id,
++             dispatch_opts
++           ),
++         :ok <-
++           record_inbound_club_email_accepted(
++             receive_command.inbound_email,
++             destination,
++             sender,
++             message_id,
++             dispatch_opts
++           ) do
++      {:ok,
++       %{
++         inbound_email_id: receive_command.inbound_email_id,
++         message_id: message_id,
++         club_id: destination.club_id,
++         sender_id: sender.person_id,
++         from_address: sender.from_address,
++         to_address: destination.to_address
++       }}
++    end
++  end
++
++  def receive_inbound_club_email(_attrs, _dispatch_opts), do: {:error, :invalid_inbound_email}
++
+   @doc """
+   Resolve an inbound club-message email's recipient addresses to a destination club.
+ 
+@@ -413,6 +462,55 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp dispatch_ok(command, dispatch_opts) do
++    case dispatch_command(command, dispatch_opts) do
++      {:ok, _dispatch_result} -> :ok
++      {:error, _reason} = error -> error
++    end
++  end
++
++  defp send_inbound_club_message(
++         %InboundEmail{} = inbound_email,
++         %InboundClubDestination{} = destination,
++         %InboundClubSender{} = sender,
++         message_id,
++         dispatch_opts
++       ) do
++    case send_club_message(
++           %{
++             message_id: message_id,
++             club_id: destination.club_id,
++             sender_id: sender.person_id,
++             subject: inbound_email.subject,
++             body: inbound_email.text_body
++           },
++           dispatch_opts
++         ) do
++      {:error, _reason} = error -> error
++      _send_result -> :ok
++    end
++  end
++
++  defp record_inbound_club_email_accepted(
++         %InboundEmail{} = inbound_email,
++         %InboundClubDestination{} = destination,
++         %InboundClubSender{} = sender,
++         message_id,
++         dispatch_opts
++       ) do
++    dispatch_ok(
++      %AcceptInboundClubEmail{
++        inbound_email_id: InboundEmail.identity(inbound_email),
++        inbound_email: inbound_email,
++        to_address: destination.to_address,
++        club_id: destination.club_id,
++        sender_id: sender.person_id,
++        message_id: message_id
++      },
++      dispatch_opts
++    )
++  end
++
+   defp send_club_message_command(attrs) do
+     with {:ok, message_id} <- fetch_required(attrs, :message_id),
+          {:ok, club_id} <- fetch_required(attrs, :club_id),
+diff --git a/web/lib/memba/messaging/commands/accept_inbound_club_email.ex b/web/lib/memba/messaging/commands/accept_inbound_club_email.ex
+new file mode 100644
+index 0000000..a08b87a
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/accept_inbound_club_email.ex
+@@ -0,0 +1,26 @@
++defmodule Memba.Messaging.Commands.AcceptInboundClubEmail do
++  @moduledoc """
++  Command to record that a provider inbound email was accepted as a club message.
++
++  The inbound email aggregate remains keyed by provider retry identity. The
++  caller supplies the created message aggregate identity after posting through
++  the normal message-send flow.
++  """
++
++  @enforce_keys [
++    :inbound_email_id,
++    :inbound_email,
++    :to_address,
++    :club_id,
++    :sender_id,
++    :message_id
++  ]
++  defstruct [
++    :inbound_email_id,
++    :inbound_email,
++    :to_address,
++    :club_id,
++    :sender_id,
++    :message_id
++  ]
++end
+diff --git a/web/lib/memba/messaging/inbound_email_receipt.ex b/web/lib/memba/messaging/inbound_email_receipt.ex
+index ab6db91..e30bc83 100644
+--- a/web/lib/memba/messaging/inbound_email_receipt.ex
++++ b/web/lib/memba/messaging/inbound_email_receipt.ex
+@@ -9,13 +9,21 @@ defmodule Memba.Messaging.InboundEmailReceipt do
+   """
+ 
+   alias Commanded.Aggregates.Aggregate
++  alias Memba.Messaging.Commands.AcceptInboundClubEmail
+   alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.Events.InboundClubEmailAccepted
+   alias Memba.Messaging.Events.InboundEmailReceived
+   alias Memba.Messaging.InboundEmail
+ 
+   @behaviour Aggregate
+ 
+-  defstruct [:inbound_email_id, :provider, :provider_message_id]
++  defstruct [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :status,
++    :message_id
++  ]
+ 
+   @impl Aggregate
+   def execute(%__MODULE__{inbound_email_id: nil}, %ReceiveInboundEmail{} = command) do
+@@ -36,6 +44,41 @@ defmodule Memba.Messaging.InboundEmailReceipt do
+     end
+   end
+ 
++  def execute(%__MODULE__{inbound_email_id: nil}, %AcceptInboundClubEmail{} = command) do
++    with {:ok, _inbound_email_id} <- validate_command_identity(command) do
++      {:error, :inbound_email_not_received}
++    end
++  end
++
++  def execute(%__MODULE__{status: nil} = receipt, %AcceptInboundClubEmail{} = command) do
++    with {:ok, inbound_email_id} <- validate_command_identity(command),
++         :ok <- validate_same_provider_message(receipt, command.inbound_email),
++         :ok <- validate_uuid(command.club_id, :invalid_club_id),
++         :ok <- validate_uuid(command.sender_id, :invalid_sender_id),
++         :ok <- validate_uuid(command.message_id, :invalid_message_id),
++         {:ok, to_address} <- normalize_email(command.to_address, :invalid_to_address) do
++      %InboundClubEmailAccepted{
++        inbound_email_id: inbound_email_id,
++        provider: command.inbound_email.provider,
++        provider_message_id: command.inbound_email.provider_message_id,
++        provider_event_id: command.inbound_email.provider_event_id,
++        from_address: command.inbound_email.from_address,
++        to_address: to_address,
++        club_id: command.club_id,
++        sender_id: command.sender_id,
++        message_id: command.message_id
++      }
++    end
++  end
++
++  def execute(%__MODULE__{status: :accepted} = receipt, %AcceptInboundClubEmail{} = command) do
++    with {:ok, _inbound_email_id} <- validate_command_identity(command),
++         :ok <- validate_same_provider_message(receipt, command.inbound_email),
++         :ok <- validate_same_accepted_message(receipt, command.message_id) do
++      []
++    end
++  end
++
+   @impl Aggregate
+   def apply(%__MODULE__{} = receipt, %InboundEmailReceived{} = event) do
+     %__MODULE__{
+@@ -46,6 +89,14 @@ defmodule Memba.Messaging.InboundEmailReceipt do
+     }
+   end
+ 
++  def apply(%__MODULE__{} = receipt, %InboundClubEmailAccepted{} = event) do
++    %__MODULE__{
++      receipt
++      | status: :accepted,
++        message_id: event.message_id
++    }
++  end
++
+   defp validate_command_identity(%ReceiveInboundEmail{
+          inbound_email_id: inbound_email_id,
+          inbound_email: %InboundEmail{} = inbound_email
+@@ -66,6 +117,26 @@ defmodule Memba.Messaging.InboundEmailReceipt do
+ 
+   defp validate_command_identity(%ReceiveInboundEmail{}), do: {:error, :invalid_inbound_email}
+ 
++  defp validate_command_identity(%AcceptInboundClubEmail{
++         inbound_email_id: inbound_email_id,
++         inbound_email: %InboundEmail{} = inbound_email
++       }) do
++    expected_inbound_email_id = InboundEmail.identity(inbound_email)
++
++    cond do
++      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
++        {:error, :invalid_inbound_email_id}
++
++      inbound_email_id == expected_inbound_email_id ->
++        {:ok, inbound_email_id}
++
++      true ->
++        {:error, :inbound_email_id_mismatch}
++    end
++  end
++
++  defp validate_command_identity(%AcceptInboundClubEmail{}), do: {:error, :invalid_inbound_email}
++
+   defp validate_same_provider_message(
+          %__MODULE__{provider: provider, provider_message_id: provider_message_id},
+          %InboundEmail{provider: provider, provider_message_id: provider_message_id}
+@@ -76,4 +147,36 @@ defmodule Memba.Messaging.InboundEmailReceipt do
+   defp validate_same_provider_message(%__MODULE__{}, %InboundEmail{}) do
+     {:error, :provider_message_id_mismatch}
+   end
++
++  defp validate_same_accepted_message(%__MODULE__{message_id: message_id}, message_id), do: :ok
++
++  defp validate_same_accepted_message(%__MODULE__{}, _message_id) do
++    {:error, :inbound_email_already_accepted}
++  end
++
++  defp validate_uuid(value, error) do
++    case Ecto.UUID.cast(value) do
++      {:ok, ^value} -> :ok
++      _other -> {:error, error}
++    end
++  end
++
++  defp normalize_email(email, error) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, error}
++    end
++  end
++
++  defp normalize_email(_email, error), do: {:error, error}
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _parts -> false
++    end
++  end
+ end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+index 463c566..df13c57 100644
+--- a/web/lib/memba/messaging/router.ex
++++ b/web/lib/memba/messaging/router.ex
+@@ -7,6 +7,7 @@ defmodule Memba.Messaging.Router do
+ 
+   alias Memba.Messaging.InboundEmailReceipt
+   alias Memba.Messaging.Message
++  alias Memba.Messaging.Commands.AcceptInboundClubEmail
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+@@ -17,7 +18,7 @@ defmodule Memba.Messaging.Router do
+   identify(InboundEmailReceipt, by: :inbound_email_id)
+   identify(Message, by: :message_id)
+ 
+-  dispatch(ReceiveInboundEmail, to: InboundEmailReceipt)
++  dispatch([ReceiveInboundEmail, AcceptInboundClubEmail], to: InboundEmailReceipt)
+ 
+   dispatch(
+     [
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index cfa9c00..6d5bb7d 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Messaging.AppTest do
+   import ExUnit.CaptureLog
+ 
+   alias Memba.Messaging.App
++  alias Memba.Messaging.Commands.AcceptInboundClubEmail
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+@@ -38,6 +39,7 @@ defmodule Memba.Messaging.AppTest do
+       MapSet.new([
+         SendMessage,
+         ReceiveInboundEmail,
++        AcceptInboundClubEmail,
+         ReportEmailDeliveryDelivered,
+         ReportEmailDeliveryDelayed,
+         ReportEmailDeliveryBounced,
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+new file mode 100644
+index 0000000..9be8d2d
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -0,0 +1,181 @@
++defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership
++  alias Memba.Messaging
++  alias Memba.Messaging.EmailDeliveryProviders.Fake
++  alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
++
++  setup do
++    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
++    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
++    Fake.reset()
++
++    on_exit(fn ->
++      restore_env(:messaging_email_delivery_provider, original_provider)
++      Fake.reset()
++    end)
++
++    :ok
++  end
++
++  test "accepted inbound email posts through the same club message and delivery flow as web compose" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
++
++    alice = create_person!(name: "Alice Example", email: "alice@example.com")
++    bob = create_person!(name: "Bob Example", email: "bob@example.com")
++    pat = create_person!(name: "Pat Example", email: "pat@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++    add_member!(kmc.club_id, bob.person_id)
++    add_member!(npc.club_id, pat.person_id)
++
++    assert {:ok,
++            %{
++              inbound_email_id: "inbound-email:resend:task-011-email",
++              message_id: message_id,
++              club_id: kmc_id,
++              sender_id: alice_id,
++              from_address: "alice@example.com",
++              to_address: "kmc@clubs.memba.io"
++            }} =
++             Messaging.receive_inbound_club_email(
++               %{
++                 provider: "resend",
++                 provider_message_id: "task-011-email",
++                 provider_event_id: "task-011-event",
++                 from_address: "alice@example.com",
++                 recipient_addresses: ["kmc@clubs.memba.io"],
++                 subject: "Trip planning night",
++                 text_body: "Bring route ideas."
++               },
++               consistency: :strong
++             )
++
++    assert kmc_id == kmc.club_id
++    assert alice_id == alice.person_id
++
++    assert %{
++             message_id: ^message_id,
++             club_id: ^kmc_id,
++             sender_id: ^alice_id,
++             subject: "Trip planning night",
++             body: "Bring route ideas."
++           } = Messaging.get_message(message_id)
++
++    assert [
++             %{
++               message_id: ^message_id,
++               recipient_id: ^alice_id,
++               recipient_name: "Alice Example",
++               recipient_address: "alice@example.com",
++               channel: "email",
++               status: "sent"
++             },
++             %{
++               message_id: ^message_id,
++               recipient_id: bob_id,
++               recipient_name: "Bob Example",
++               recipient_address: "bob@example.com",
++               channel: "email",
++               status: "sent"
++             }
++           ] = Messaging.list_recipient_deliveries(message_id)
++
++    assert bob_id == bob.person_id
++
++    assert [
++             %EmailDeliveryRequest{
++               message_id: ^message_id,
++               club_id: ^kmc_id,
++               recipient_id: ^alice_id,
++               recipient_name: "Alice Example",
++               recipient_address: "alice@example.com",
++               sender_name: "Alice Example",
++               sender_address: "alice@example.com",
++               channel: :email,
++               subject: "Trip planning night",
++               body: "Bring route ideas."
++             },
++             %EmailDeliveryRequest{
++               message_id: ^message_id,
++               club_id: ^kmc_id,
++               recipient_id: ^bob_id,
++               recipient_name: "Bob Example",
++               recipient_address: "bob@example.com",
++               sender_name: "Alice Example",
++               sender_address: "alice@example.com",
++               channel: :email,
++               subject: "Trip planning night",
++               body: "Bring route ideas."
++             }
++           ] = Fake.deliveries()
++
++    delivered_recipient_ids = Enum.map(Fake.deliveries(), & &1.recipient_id)
++    refute pat.person_id in delivered_recipient_ids
++
++    assert %InboundEmailSourceProjection{
++             inbound_email_id: "inbound-email:resend:task-011-email",
++             provider: "resend",
++             provider_message_id: "task-011-email",
++             provider_event_id: "task-011-event",
++             from_address: "alice@example.com",
++             to_address: "kmc@clubs.memba.io",
++             status: "accepted",
++             club_id: ^kmc_id,
++             sender_id: ^alice_id,
++             message_id: ^message_id,
++             rejection_reason: nil,
++             rejection_email_delivery_reference: nil
++           } = Messaging.get_inbound_email_source("resend", "task-011-email")
++  end
++
++  defp create_club!(attrs) do
++    club_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_club(
++               %{
++                 club_id: club_id,
++                 name: Keyword.fetch!(attrs, :name),
++                 slug: Keyword.fetch!(attrs, :slug)
++               },
++               consistency: :strong
++             )
++
++    Membership.get_club(club_id)
++  end
++
++  defp create_person!(attrs) do
++    person_id = Ecto.UUID.generate()
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: Keyword.fetch!(attrs, :name),
++                 email: Keyword.fetch!(attrs, :email)
++               },
++               consistency: :strong
++             )
++
++    Membership.get_person(person_id)
++  end
++
++  defp add_member!(club_id, person_id) do
++    assert :ok =
++             Membership.add_member(
++               %{
++                 membership_id: Ecto.UUID.generate(),
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
