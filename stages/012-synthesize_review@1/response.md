@@ -1,0 +1,1 @@
+{"cmd": "git status --short && find .fabro -maxdepth 4 -type f | sed 's#^#/#' | head -200", "timeout_ms": 120000}{"cmd": "pwd; git status --short; find .fabro -maxdepth 4 -type f | head -200", "timeout_ms": 120000}{"cmd": "echo hello", "timeout_ms": 120000}{"context_updates":{"implementation_accepted":true,"review_fixes_available":false}}
