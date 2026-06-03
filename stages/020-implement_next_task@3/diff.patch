@@ -1,0 +1,231 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index e108997..64069ac 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
+ - [x] 002 Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
+-- [ ] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
++- [x] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
+ - [ ] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
+ - [ ] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
+ - [ ] 006 Add inbound email events such as:
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 5d51994..5f4ceef 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -6,8 +6,12 @@ defmodule MembaWeb.PageHTML do
+   """
+   use MembaWeb, :html
+ 
++  alias Memba.ClubInboundEmailAddress
++
+   embed_templates "page_html/*"
+ 
++  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
++
+   defp first_name(%{name: name}) when is_binary(name) do
+     name
+     |> String.split(~r/\s+/, trim: true)
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index ae7c3c4..851be4a 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -1,4 +1,5 @@
+ <% club_id_source = assigns[:club_id_source] %>
++<% inbound_email_address = club_inbound_email_address(@selected_club) %>
+ 
+ <Layouts.club_site
+   flash={@flash}
+@@ -36,6 +37,26 @@
+           <p class="mt-1 text-sm leading-6 text-white/75">
+             Write once — every active member gets it.
+           </p>
++          <div
++            :if={inbound_email_address}
++            id="member-dashboard-inbound-email"
++            data-inbound-address={inbound_email_address}
++            class="mt-4 rounded-2xl bg-white/10 px-4 py-3 text-sm leading-6 text-white/85 ring-1 ring-white/15"
++          >
++            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
++              Prefer email?
++            </p>
++            <p class="mt-1">
++              Send a club-wide message to
++              <a
++                id="member-dashboard-inbound-email-link"
++                href={"mailto:#{inbound_email_address}"}
++                class="font-semibold text-white underline decoration-white/40 underline-offset-4 transition duration-200 hover:decoration-white"
++              >
++                {inbound_email_address}
++              </a>
++            </p>
++          </div>
+         </div>
+ 
+         <.link
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index 7f687d6..168b428 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+   require Logger
+ 
+   alias Memba.Accounts
++  alias Memba.ClubInboundEmailAddress
+   alias Memba.Membership
+   alias Memba.Messaging
+ 
+@@ -91,6 +92,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
++    <% inbound_email_address = club_inbound_email_address(@selected_club) %>
+     <Layouts.club_site
+       flash={@flash}
+       club_name={selected_club_name(@selected_club)}
+@@ -247,6 +249,27 @@ defmodule MembaWeb.MemberMessageLive.New do
+             </p>
+           </div>
+ 
++          <div
++            :if={inbound_email_address}
++            id="member-compose-inbound-email"
++            data-inbound-address={inbound_email_address}
++            class="mt-4 flex gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3 text-sm leading-6 text-[var(--club-site-muted)]"
++          >
++            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-paper)] text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
++              <.icon name="hero-envelope" class="size-4" />
++            </span>
++            <p>
++              Prefer email? Send a club-wide message to
++              <a
++                id="member-compose-inbound-email-link"
++                href={"mailto:#{inbound_email_address}"}
++                class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
++              >
++                {inbound_email_address}
++              </a>
++            </p>
++          </div>
++
+           <div :if={@current_member} class="mt-6">
+             <p class="mb-2 text-sm font-semibold text-[var(--club-site-ink)]">From</p>
+             <div
+@@ -423,6 +446,8 @@ defmodule MembaWeb.MemberMessageLive.New do
+   defp selected_club_name(nil), do: "Club"
+   defp selected_club_name(selected_club), do: selected_club.name
+ 
++  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
++
+   defp selected_club_id(nil, route_params), do: Map.get(route_params, "club_id")
+   defp selected_club_id(selected_club, _route_params), do: selected_club.club_id
+ 
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index d0bebaf..e8de3de 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -404,6 +404,32 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "button#member-message-send-button")
+   end
+ 
++  test "dashboard shows the selected club inbound email address", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
++             "kmc@clubs.memba.io"
++           )
++  end
++
+   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -526,10 +552,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+ 
+     Repo.get(Club, club_id) ||
+-      insert_membership_club!(
+-        club_id: club_id,
+-        name: club_name
+-      )
++      attrs
++      |> club_attrs(club_id, club_name)
++      |> insert_membership_club!()
+ 
+     person =
+       insert_membership_person!(
+@@ -551,6 +576,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     }
+   end
+ 
++  defp club_attrs(attrs, club_id, club_name) do
++    base = [
++      club_id: club_id,
++      name: club_name
++    ]
++
++    case Keyword.fetch(attrs, :slug) do
++      {:ok, slug} -> Keyword.put(base, :slug, slug)
++      :error -> base
++    end
++  end
++
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+ 
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 4c634ff..0988bd1 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -204,6 +204,32 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     refute has_element?(view, "[name='message[sender_id]']")
+   end
+ 
++  test "routed compose screen shows the selected club inbound email address", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/new?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
++             "kmc@clubs.memba.io"
++           )
++  end
++
+   test "routed GET redirects signed-out visitors and preserves the selected club return path",
+        %{conn: conn} do
+     alice =
