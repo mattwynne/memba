@@ -12,7 +12,7 @@ Before running the production inbound email smoke tests in `./smoke-tests`, Matt
 - [x] Configure the Postmark inbound webhook URL as `https://memba.io/webhooks/postmark`.
 - [x] Set up the `test@memba.io` Fastmail account so the smoke-test runner can send real emails and read resulting rejection/distribution emails.
 - [x] Provide the smoke-test runner with the `test@memba.io` Fastmail app password through local environment variable `SMOKE_TEST_EMAIL_PASSWORD`; do not commit it.
-- [ ] Provide a Fastmail JMAP API token, or update the smoke-test runner to poll `test@memba.io` via IMAP using `SMOKE_TEST_EMAIL_PASSWORD`. The current JMAP client expects a bearer API token and does not accept the app password directly.
+- [x] Update the smoke-test runner to poll `test@memba.io` via IMAP using `SMOKE_TEST_EMAIL_PASSWORD`, while still supporting a Fastmail JMAP token when provided.
 - [ ] Confirm whether `test@memba.io` should also be usable for Memba sign-in during smoke tests, or whether the runner should sign in with a separate staff account.
 - [ ] Confirm the production base URL the smoke tests should target. Expected default: `https://memba.io`.
 
