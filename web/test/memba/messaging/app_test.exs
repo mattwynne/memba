@@ -4,6 +4,7 @@ defmodule Memba.Messaging.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -38,6 +39,7 @@ defmodule Memba.Messaging.AppTest do
       MapSet.new([
         SendMessage,
         ReceiveInboundEmail,
+        AcceptInboundClubEmail,
         ReportEmailDeliveryDelivered,
         ReportEmailDeliveryDelayed,
         ReportEmailDeliveryBounced,

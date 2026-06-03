@@ -5,6 +5,7 @@ defmodule Memba.Messaging do
 
   alias Memba.Membership
   alias Memba.Messaging.App
+  alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -61,6 +62,54 @@ defmodule Memba.Messaging do
   end
 
   def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
+
+  @doc """
+  Receive and post a provider-neutral inbound club-message email.
+
+  This wraps the same `send_club_message/2` path used by browser-composed club
+  messages, so accepted inbound email creates the same message event, recipient
+  delivery events, projections, and outbound provider handoffs.
+  """
+  def receive_inbound_club_email(attrs, dispatch_opts \\ [])
+
+  def receive_inbound_club_email(attrs, dispatch_opts)
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
+         :ok <- dispatch_ok(receive_command, dispatch_opts),
+         {:ok, destination} <-
+           resolve_inbound_club_email_destination(receive_command.inbound_email),
+         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
+         :ok <- authorize_inbound_club_email_sender(sender, destination),
+         message_id = Ecto.UUID.generate(),
+         :ok <-
+           send_inbound_club_message(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             dispatch_opts
+           ),
+         :ok <-
+           record_inbound_club_email_accepted(
+             receive_command.inbound_email,
+             destination,
+             sender,
+             message_id,
+             dispatch_opts
+           ) do
+      {:ok,
+       %{
+         inbound_email_id: receive_command.inbound_email_id,
+         message_id: message_id,
+         club_id: destination.club_id,
+         sender_id: sender.person_id,
+         from_address: sender.from_address,
+         to_address: destination.to_address
+       }}
+    end
+  end
+
+  def receive_inbound_club_email(_attrs, _dispatch_opts), do: {:error, :invalid_inbound_email}
 
   @doc """
   Resolve an inbound club-message email's recipient addresses to a destination club.
@@ -411,6 +460,55 @@ defmodule Memba.Messaging do
       {:ok, _result} = ok -> {:ok, ok}
       {:error, _reason} = error -> error
     end
+  end
+
+  defp dispatch_ok(command, dispatch_opts) do
+    case dispatch_command(command, dispatch_opts) do
+      {:ok, _dispatch_result} -> :ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp send_inbound_club_message(
+         %InboundEmail{} = inbound_email,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         message_id,
+         dispatch_opts
+       ) do
+    case send_club_message(
+           %{
+             message_id: message_id,
+             club_id: destination.club_id,
+             sender_id: sender.person_id,
+             subject: inbound_email.subject,
+             body: inbound_email.text_body
+           },
+           dispatch_opts
+         ) do
+      {:error, _reason} = error -> error
+      _send_result -> :ok
+    end
+  end
+
+  defp record_inbound_club_email_accepted(
+         %InboundEmail{} = inbound_email,
+         %InboundClubDestination{} = destination,
+         %InboundClubSender{} = sender,
+         message_id,
+         dispatch_opts
+       ) do
+    dispatch_ok(
+      %AcceptInboundClubEmail{
+        inbound_email_id: InboundEmail.identity(inbound_email),
+        inbound_email: inbound_email,
+        to_address: destination.to_address,
+        club_id: destination.club_id,
+        sender_id: sender.person_id,
+        message_id: message_id
+      },
+      dispatch_opts
+    )
   end
 
   defp send_club_message_command(attrs) do

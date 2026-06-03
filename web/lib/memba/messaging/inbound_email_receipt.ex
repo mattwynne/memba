@@ -9,13 +9,21 @@ defmodule Memba.Messaging.InboundEmailReceipt do
   """
 
   alias Commanded.Aggregates.Aggregate
+  alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.ReceiveInboundEmail
+  alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundEmailReceived
   alias Memba.Messaging.InboundEmail
 
   @behaviour Aggregate
 
-  defstruct [:inbound_email_id, :provider, :provider_message_id]
+  defstruct [
+    :inbound_email_id,
+    :provider,
+    :provider_message_id,
+    :status,
+    :message_id
+  ]
 
   @impl Aggregate
   def execute(%__MODULE__{inbound_email_id: nil}, %ReceiveInboundEmail{} = command) do
@@ -36,6 +44,41 @@ defmodule Memba.Messaging.InboundEmailReceipt do
     end
   end
 
+  def execute(%__MODULE__{inbound_email_id: nil}, %AcceptInboundClubEmail{} = command) do
+    with {:ok, _inbound_email_id} <- validate_command_identity(command) do
+      {:error, :inbound_email_not_received}
+    end
+  end
+
+  def execute(%__MODULE__{status: nil} = receipt, %AcceptInboundClubEmail{} = command) do
+    with {:ok, inbound_email_id} <- validate_command_identity(command),
+         :ok <- validate_same_provider_message(receipt, command.inbound_email),
+         :ok <- validate_uuid(command.club_id, :invalid_club_id),
+         :ok <- validate_uuid(command.sender_id, :invalid_sender_id),
+         :ok <- validate_uuid(command.message_id, :invalid_message_id),
+         {:ok, to_address} <- normalize_email(command.to_address, :invalid_to_address) do
+      %InboundClubEmailAccepted{
+        inbound_email_id: inbound_email_id,
+        provider: command.inbound_email.provider,
+        provider_message_id: command.inbound_email.provider_message_id,
+        provider_event_id: command.inbound_email.provider_event_id,
+        from_address: command.inbound_email.from_address,
+        to_address: to_address,
+        club_id: command.club_id,
+        sender_id: command.sender_id,
+        message_id: command.message_id
+      }
+    end
+  end
+
+  def execute(%__MODULE__{status: :accepted} = receipt, %AcceptInboundClubEmail{} = command) do
+    with {:ok, _inbound_email_id} <- validate_command_identity(command),
+         :ok <- validate_same_provider_message(receipt, command.inbound_email),
+         :ok <- validate_same_accepted_message(receipt, command.message_id) do
+      []
+    end
+  end
+
   @impl Aggregate
   def apply(%__MODULE__{} = receipt, %InboundEmailReceived{} = event) do
     %__MODULE__{
@@ -43,6 +86,14 @@ defmodule Memba.Messaging.InboundEmailReceipt do
       | inbound_email_id: event.inbound_email_id,
         provider: event.provider,
         provider_message_id: event.provider_message_id
+    }
+  end
+
+  def apply(%__MODULE__{} = receipt, %InboundClubEmailAccepted{} = event) do
+    %__MODULE__{
+      receipt
+      | status: :accepted,
+        message_id: event.message_id
     }
   end
 
@@ -66,6 +117,26 @@ defmodule Memba.Messaging.InboundEmailReceipt do
 
   defp validate_command_identity(%ReceiveInboundEmail{}), do: {:error, :invalid_inbound_email}
 
+  defp validate_command_identity(%AcceptInboundClubEmail{
+         inbound_email_id: inbound_email_id,
+         inbound_email: %InboundEmail{} = inbound_email
+       }) do
+    expected_inbound_email_id = InboundEmail.identity(inbound_email)
+
+    cond do
+      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
+        {:error, :invalid_inbound_email_id}
+
+      inbound_email_id == expected_inbound_email_id ->
+        {:ok, inbound_email_id}
+
+      true ->
+        {:error, :inbound_email_id_mismatch}
+    end
+  end
+
+  defp validate_command_identity(%AcceptInboundClubEmail{}), do: {:error, :invalid_inbound_email}
+
   defp validate_same_provider_message(
          %__MODULE__{provider: provider, provider_message_id: provider_message_id},
          %InboundEmail{provider: provider, provider_message_id: provider_message_id}
@@ -75,5 +146,37 @@ defmodule Memba.Messaging.InboundEmailReceipt do
 
   defp validate_same_provider_message(%__MODULE__{}, %InboundEmail{}) do
     {:error, :provider_message_id_mismatch}
+  end
+
+  defp validate_same_accepted_message(%__MODULE__{message_id: message_id}, message_id), do: :ok
+
+  defp validate_same_accepted_message(%__MODULE__{}, _message_id) do
+    {:error, :inbound_email_already_accepted}
+  end
+
+  defp validate_uuid(value, error) do
+    case Ecto.UUID.cast(value) do
+      {:ok, ^value} -> :ok
+      _other -> {:error, error}
+    end
+  end
+
+  defp normalize_email(email, error) when is_binary(email) do
+    email = email |> String.trim() |> String.downcase()
+
+    if valid_email?(email) do
+      {:ok, email}
+    else
+      {:error, error}
+    end
+  end
+
+  defp normalize_email(_email, error), do: {:error, error}
+
+  defp valid_email?(email) do
+    case String.split(email, "@") do
+      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
+      _parts -> false
+    end
   end
 end

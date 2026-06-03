@@ -10,7 +10,7 @@
 - [x] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
 - [x] 009 Add sender resolution that finds a person by any primary or alternate email address.
 - [x] 010 Add active-membership authorization for the resolved sender and destination club.
-- [ ] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
+- [x] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
 - [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
 - [ ] 013 Add plain-text body normalization:
 - [ ] 014 Add attachment rejection before message creation when inbound payload includes any attachments.

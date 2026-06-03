@@ -7,6 +7,7 @@ defmodule Memba.Messaging.Router do
 
   alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
+  alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -17,7 +18,7 @@ defmodule Memba.Messaging.Router do
   identify(InboundEmailReceipt, by: :inbound_email_id)
   identify(Message, by: :message_id)
 
-  dispatch(ReceiveInboundEmail, to: InboundEmailReceipt)
+  dispatch([ReceiveInboundEmail, AcceptInboundClubEmail], to: InboundEmailReceipt)
 
   dispatch(
     [
