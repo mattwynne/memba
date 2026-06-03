@@ -281,6 +281,58 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            } = Messaging.get_inbound_email_source("resend", "task-013-html-only")
   end
 
+  test "inbound email with attachments is rejected before creating a club message" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-014-attachments",
+              status: :rejected,
+              rejection_reason: "attachments_not_supported",
+              from_address: "alice@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-014-attachments",
+                 from_address: "alice@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Bring route ideas.",
+                 attachments: [
+                   %{
+                     filename: "route.gpx",
+                     content_type: "application/gpx+xml",
+                     size: 1234
+                   }
+                 ]
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             inbound_email_id: "inbound-email:resend:task-014-attachments",
+             provider: "resend",
+             provider_message_id: "task-014-attachments",
+             from_address: "alice@example.com",
+             to_address: "kmc@clubs.memba.io",
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "attachments_not_supported",
+             rejection_email_delivery_reference: nil
+           } = Messaging.get_inbound_email_source("resend", "task-014-attachments")
+  end
+
   defp create_club!(attrs) do
     club_id = Ecto.UUID.generate()
 

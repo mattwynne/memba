@@ -479,26 +479,40 @@ defmodule Memba.Messaging do
            resolve_inbound_club_email_destination(receive_command.inbound_email),
          {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
          :ok <- authorize_inbound_club_email_sender(sender, destination) do
-      case InboundEmailBody.normalize_text_body(receive_command.inbound_email) do
-        {:ok, body} ->
-          accept_first_inbound_club_email(
-            receive_command,
-            destination,
-            sender,
-            body,
-            dispatch_opts
-          )
+      if inbound_email_has_attachments?(receive_command.inbound_email) do
+        reject_first_inbound_club_email(
+          receive_command,
+          destination.to_address,
+          "attachments_not_supported",
+          dispatch_opts
+        )
+      else
+        case InboundEmailBody.normalize_text_body(receive_command.inbound_email) do
+          {:ok, body} ->
+            accept_first_inbound_club_email(
+              receive_command,
+              destination,
+              sender,
+              body,
+              dispatch_opts
+            )
 
-        {:error, :plain_text_required} ->
-          reject_first_inbound_club_email(
-            receive_command,
-            destination.to_address,
-            "plain_text_required",
-            dispatch_opts
-          )
+          {:error, :plain_text_required} ->
+            reject_first_inbound_club_email(
+              receive_command,
+              destination.to_address,
+              "plain_text_required",
+              dispatch_opts
+            )
+        end
       end
     end
   end
+
+  defp inbound_email_has_attachments?(%InboundEmail{attachments: [_attachment | _attachments]}),
+    do: true
+
+  defp inbound_email_has_attachments?(%InboundEmail{}), do: false
 
   defp accept_first_inbound_club_email(
          receive_command,
