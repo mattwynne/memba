@@ -14,6 +14,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.InboundClubDestination
+  alias Memba.Messaging.InboundClubSender
   alias Memba.Messaging.InboundEmail
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
@@ -70,6 +71,17 @@ defmodule Memba.Messaging do
   """
   def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
     InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
+  end
+
+  @doc """
+  Resolve an inbound club-message email's sender address to a Membership person.
+
+  Supports primary and alternate email addresses through Membership's public
+  email lookup API, returning a resolved sender or a typed rejection reason for
+  unknown sender addresses.
+  """
+  def resolve_inbound_club_email_sender(inbound_email_or_from_address) do
+    InboundClubSender.resolve(inbound_email_or_from_address)
   end
 
   @doc """
