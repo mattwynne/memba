@@ -155,3 +155,26 @@ Inbound email spans several independently configurable systems. Automated app te
 - Add this smoke spec to the Postmark cutover/deployment runbook produced by iteration 020.
 - Add a future script that sends the smoke emails with unique subjects and then polls Memba projections/mailboxes for expected outcomes.
 - Add an operator-facing query or task that prints recent inbound email source records by subject/provider message id once the projection contains enough correlation data.
+
+## Resolution
+
+Date: 2026-06-03
+
+Root cause: the deployment handoff had no executable production smoke-test artifact for the real inbound email path, so operator validation depended on ad hoc manual emails and investigation across mailboxes, provider dashboards, logs, and projections.
+
+Fix applied:
+
+- `smoke-tests/`: added a Cucumber smoke-test runner that sends real email through Fastmail SMTP, polls Fastmail JMAP mailboxes for rejection/distribution emails, and uses Playwright to check staff/member-visible Memba UI.
+- `smoke-tests/features/inbound_club_email.feature`: captured the routine production wiring smoke cases: unknown sender rejected, known active member accepted/distributed, and known active member with attachment rejected.
+- `smoke-tests/README.md`: documented the required `Test` club fixture, `test@memba.io` member mailbox, credentials, and run commands.
+- `docs/human-todo.md`: added Matt's external setup tasks for the controlled smoke club and Fastmail credentials.
+
+Validation:
+
+- `node --check smoke-tests/lib/config.js && node --check smoke-tests/lib/fastmail_jmap.js && node --check smoke-tests/lib/smtp.js && node --check smoke-tests/lib/browser.js && node --check smoke-tests/features/support/world.js && node --check smoke-tests/features/step_definitions/inbound_club_email_steps.js` — passed.
+- `cd smoke-tests && npm test -- --dry-run` — passed; Cucumber discovered 3 scenarios and 21 steps.
+
+Remaining follow-up:
+
+- Matt needs to complete the external setup tasks in `docs/human-todo.md` before the smoke tests can run against production.
+- The smoke runner assumes a hidden/non-public `Test` club can be prepared operationally; if the product lacks a way to hide that club, add that affordance or choose another controlled fixture strategy.
