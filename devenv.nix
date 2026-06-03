@@ -136,6 +136,7 @@ in
 
   services.postgres = {
     enable = true;
+    port = 15432;
     initialDatabases = [{ name = "memba_dev"; }];
   };
 
@@ -205,6 +206,17 @@ in
     ];
     workingDir = "/workspace";
   };
+
+  enterTest = ''
+    set -euo pipefail
+
+    ${pkgs.elixir}/bin/mix local.hex --force
+    ${pkgs.elixir}/bin/mix local.rebar --force
+    (cd web && ${pkgs.elixir}/bin/mix deps.get)
+    (cd acceptance-tests && npm ci)
+
+    MEMBA_DEVENV_SHELL=1 MEMBA_POSTGRES_PORT=15432 ./bin/dev check
+  '';
 
   enterShell = ''
     if [ "$HOME" = "/env" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
