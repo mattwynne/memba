@@ -37,7 +37,10 @@ class FastmailImapClient {
       .map(normalizeMessage)
       .filter((email) => !after || new Date(email.receivedAt) >= new Date(after))
       .filter((email) => !text || searchableText(email).toLowerCase().includes(String(text).toLowerCase()))
-      .sort((left, right) => new Date(right.receivedAt) - new Date(left.receivedAt));
+      .sort((left, right) => {
+        const dateComparison = new Date(right.receivedAt) - new Date(left.receivedAt);
+        return dateComparison || Number(right.id || 0) - Number(left.id || 0);
+      });
   }
 
   async waitForEmail(predicate, { after, description, intervalMs = 5000, timeoutMs = 120000, text } = {}) {

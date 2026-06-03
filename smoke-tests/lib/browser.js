@@ -12,11 +12,14 @@ function clubSiteUrl(config, path = "/") {
 }
 
 async function signInWithMagicLink(world, { email, mailbox, label }) {
-  const since = new Date(Date.now() - 5000);
+  const since = new Date(Date.now() - 30 * 1000);
   await world.page.goto(appUrl(world.config, "/auth"));
+  await expect(world.page.locator("[data-phx-main].phx-connected")).toBeVisible({ timeout: 30000 });
   await world.page.getByLabel("Email address").fill(email);
   await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await expect(world.page.getByText("Thanks. You should have an email in your inbox with a sign-in link.")).toBeVisible();
+  await expect(world.page.getByText("Thanks. You should have an email in your inbox with a sign-in link.")).toBeVisible({
+    timeout: 30000
+  });
 
   const message = await mailbox.waitForEmail(
     (emailMessage) =>

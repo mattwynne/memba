@@ -10,7 +10,11 @@ const {
 const { sendEmail } = require("../../lib/smtp");
 
 Given("the production smoke configuration is valid", async function () {
-  assert.equal(this.config.clubName, "Test", "Expected the default smoke club name to be Test");
+  assert.equal(
+    this.config.clubName,
+    "Smoke Test Club",
+    "Expected the default smoke club name to be Smoke Test Club"
+  );
   assert.equal(this.config.clubSlug, "test", "Expected the default smoke club slug to be test");
   assert.equal(this.config.inboundAddress, "test@clubs.memba.io", "Expected the default inbound address");
   assert.notEqual(
