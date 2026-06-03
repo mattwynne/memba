@@ -1,0 +1,2367 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/implementation-notes.md b/docs/iterations/019-inbound-club-messages-by-email/implementation-notes.md
+new file mode 100644
+index 0000000..30a4471
+--- /dev/null
++++ b/docs/iterations/019-inbound-club-messages-by-email/implementation-notes.md
+@@ -0,0 +1,108 @@
++# Implementation notes
++
++## 001 existing flow inspection
++
++Task 001 inspected the current extension points for inbound club messages by email.
++
++### Messaging command flow
++
++- Public API: `web/lib/memba/messaging.ex`
++  - `send_club_message/2` builds a `Memba.Messaging.Commands.SendMessage`, resolves active club recipients through `Memba.Membership.list_active_members_of_club/1`, dispatches to `Memba.Messaging.App`, then delivers each generated `EmailDeliveryRequest` through `Memba.Messaging.EmailDeliveryProvider`.
++  - `deliver_to_provider/1` is synchronous and stops on the first provider error.
++  - Delivery requests use the sender's primary email via `Membership.get_person_primary_email/1`.
++- Command/router/aggregate:
++  - `web/lib/memba/messaging/commands/send_message.ex`
++  - `web/lib/memba/messaging/router.ex`
++  - `web/lib/memba/messaging/message.ex`
++  - Existing message aggregate is identified by `message_id`; duplicate `SendMessage` for the same aggregate returns `{:error, :already_sent}`.
++  - `MessageSent` and `EmailDeliveryCreated` events are emitted in the same stream.
++- Projections:
++  - `web/lib/memba/messaging/projectors/message.ex`
++  - `web/lib/memba/messaging/projectors/email_delivery.ex`
++  - Projectors use `Commanded.Projections.Ecto` with `consistency: :strong`.
++
++### Membership/person email lookup
++
++- Public query API: `web/lib/memba/membership.ex`
++  - `get_person_by_email/1` normalizes input and joins `membership_people` to `membership_person_email_addresses`, so it already finds primary and alternate addresses.
++  - `active_member_of_club?/2` authorizes by resolved `person_id`.
++  - `active_member_of_club_by_email?/2` exists for browser auth and checks primary/alternate projected email rows.
++  - `list_active_members_of_club/1` returns active recipient maps using each person's primary email address only.
++- Email normalization/validation: `web/lib/memba/membership/email_addresses.ex`.
++- Projection schema: `web/lib/memba/membership/projections/person_email_address.ex`.
++
++### Club slug lookup and addressable identity
++
++- Slug helpers: `web/lib/memba/membership/slug.ex`.
++- Club lookup: `Membership.get_club_by_slug/1` normalizes lookup input by trimming and downcasing, then validates the slug.
++- Club-site URL helper: `web/lib/memba_web/club_site.ex`.
++  - Current browser base-domain default is `lvh.me`, configured as `:memba, :club_site`.
++  - The inbound-email domain should be separate from club-site URL generation because the iteration requires default `clubs.memba.io` for email addresses.
++
++### Outbound email provider flow
++
++- Provider port/config:
++  - `web/lib/memba/messaging/email_delivery_provider.ex`
++  - `web/lib/memba/messaging/email_delivery_provider_config.ex`
++  - `web/lib/memba/messaging/email_delivery_request.ex`
++- Providers:
++  - `web/lib/memba/messaging/email_delivery_providers/resend.ex`
++  - `web/lib/memba/messaging/email_delivery_providers/postmark.ex`
++  - `web/lib/memba/messaging/email_delivery_providers/local.ex`
++  - `web/lib/memba/messaging/email_delivery_providers/fake.ex`
++- Runtime provider selection is in `web/config/runtime.exs`; default provider in `web/config/config.exs` is fake.
++- Rejection-email delivery can likely use the same `Memba.Mailer`/Swoosh boundary, but it should not go through `send_club_message/2` because no club message or recipient delivery records should be created for rejected inbound mail.
++
++### Resend webhook and signature handling
++
++- Existing outbound-status webhook controller: `web/lib/memba_web/controllers/resend_webhook_controller.ex`.
++  - It currently handles delivery lifecycle events (`email.delivered`, `email.bounced`, etc.) and maps them to provider-neutral Messaging status-reporting APIs.
++  - It does not parse inbound `email.received` payloads yet.
++- Signature verification: `web/lib/memba_web/resend_webhook_signature.ex`.
++  - Uses Svix headers `svix-id`, `svix-timestamp`, and `svix-signature`.
++  - Verification is enforced by `ResendWebhookController` only when `MembaWeb.ResendWebhookSignature.configured?/0` is true.
++- Raw body caching:
++  - `web/lib/memba_web/cache_body_reader.ex`
++  - `web/lib/memba_web/endpoint.ex` configures `Plug.Parsers` with this body reader, so signature verification can read `conn.assigns.raw_body`.
++- Runtime secret configuration:
++  - `MEMBA_RESEND_WEBHOOK_SIGNING_SECRET` is read in `web/config/runtime.exs`.
++
++### Router webhook scope
++
++- `web/lib/memba_web/router.ex`
++  - `/webhooks/postmark` and `/webhooks/resend` are under the JSON `:api` pipeline.
++  - Inbound Resend support can either share `/webhooks/resend` by event type or use an additional route in the same scope; the plan names a dedicated endpoint/parser but also binds use of the existing signature verifier.
++
++### Member dashboard and compose surfaces
++
++- Dashboard:
++  - `web/lib/memba_web/live/member_dashboard_live.ex` delegates rendering to `MembaWeb.PageHTML.club/1`.
++  - Template: `web/lib/memba_web/controllers/page_html/club.html.heex`.
++  - Presentation data: `web/lib/memba_web/member_dashboard_presentation.ex`.
++- Compose:
++  - `web/lib/memba_web/live/member_message_live/new.ex`.
++  - Current compose context assigns `selected_club`, `current_member`, and `active_member_count`.
++- Both surfaces already have selected club data including `slug`, so the upcoming inbound-address helper can be called from presentation/rendering without another lookup.
++
++### Acceptance support
++
++- Shared feature: `acceptance-tests/features/member_message_deliverability.feature`.
++  - Inbound-email scenarios are already present and tagged `@wip`.
++- Browser Cucumber config: `acceptance-tests/cucumber.js`.
++  - Excludes `@wip`.
++- Domain Cucumber config: `web/config/test.exs`.
++  - Excludes `@wip`.
++- Existing browser support:
++  - `acceptance-tests/features/step_definitions/member_message_steps.js`.
++  - `acceptance-tests/features/support/member_message.js`.
++  - Current support covers web compose, outbound test mailbox inspection, delivery status reporting, and no-message failure copy. It does not yet simulate inbound Resend payloads or inspect rejection emails.
++- Existing domain steps:
++  - `web/test/features/step_definitions/messaging_steps.exs`.
++  - Current steps drive `Messaging.send_club_message/2` directly and use `Fake` email provider assertions. No inbound-email steps exist yet.
++
++### Relevant tests to extend later
++
++- Messaging behaviour: `web/test/memba/messaging/send_club_message_test.exs`, `web/test/memba/messaging/message_test.exs`, `web/test/memba/messaging/send_message_dispatch_test.exs`.
++- Resend webhook/signature: `web/test/memba_web/controllers/resend_webhook_controller_test.exs`.
++- Member dashboard/compose UI: `web/test/memba_web/live/member_dashboard_live_test.exs`, `web/test/memba_web/live/member_message_live/new_send_test.exs`.
++- Acceptance config/support: `web/test/features/cucumber_configuration_test.exs`, `acceptance-tests/test/member_message_steps.test.js`.
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+new file mode 100644
+index 0000000..e15227c
+--- /dev/null
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -0,0 +1,26 @@
++# Implementation TODO
++
++- [x] 001 Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
++- [x] 002 Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
++- [x] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
++- [x] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
++- [x] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
++- [x] 006 Add inbound email events such as:
++- [x] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
++- [x] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
++- [x] 009 Add sender resolution that finds a person by any primary or alternate email address.
++- [x] 010 Add active-membership authorization for the resolved sender and destination club.
++- [ ] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
++- [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
++- [ ] 013 Add plain-text body normalization:
++- [ ] 014 Add attachment rejection before message creation when inbound payload includes any attachments.
++- [ ] 015 Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
++- [ ] 016 Add a Resend inbound webhook route/controller/parser for `email.received`-style inbound payloads. Support message fields under `data`: provider message id (`email_id` or `id`), `from`, `to`, optional `cc`/`bcc`, `subject`, `text`, optional `html`, optional `attachments`, and optional `headers`. Treat missing required fields as malformed/unprocessable and cover this with parser tests.
++- [ ] 017 Require the existing Svix-based `MembaWeb.ResendWebhookSignature` verification when a Resend signing secret is configured. Production must configure the signing secret for inbound webhooks. Development/test may run unsigned only when no signing secret is configured.
++- [ ] 018 Translate the Resend payload into the provider-neutral inbound email command/API and return provider-appropriate HTTP statuses for accepted webhook receipt versus malformed/unprocessable payloads.
++- [ ] 019 Add tests for member-visible inbound address display on dashboard and compose.
++- [ ] 020 Add tests for provider-neutral inbound behaviour:
++- [ ] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
++- [ ] 022 Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
++- [ ] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
++- [ ] 024 Run `dev check`.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index ee98321..41e17c4 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -19,7 +19,8 @@ config :memba,
+     :messaging_messages,
+     :messaging_email_deliveries,
+     :messaging_member_email_deliveries,
+-    :messaging_memba_staff_email_deliveries
++    :messaging_memba_staff_email_deliveries,
++    :messaging_inbound_email_sources
+   ],
+   generators: [timestamp_type: :utc_datetime]
+ 
+@@ -41,6 +42,8 @@ config :memba, Memba.Messaging.App,
+ 
+ config :memba, :messaging_email_delivery_provider, Memba.Messaging.EmailDeliveryProviders.Fake
+ 
++config :memba, :club_inbound_email, domain: "clubs.memba.io"
++
+ config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
+   from: {"Memba", "messages@mail.memba.io"},
+   reply_to: {"Matt Wynne", "matt@mattwynne.net"},
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index b5f768f..a7f4e26 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -17,6 +17,7 @@ defmodule Memba.Application do
+       Memba.Messaging.Projectors.EmailDelivery,
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+       Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++      Memba.Messaging.Projectors.InboundEmailSource,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.Membership,
+       Memba.Membership.Projectors.Person,
+diff --git a/web/lib/memba/club_inbound_email_address.ex b/web/lib/memba/club_inbound_email_address.ex
+new file mode 100644
+index 0000000..7ac6fe6
+--- /dev/null
++++ b/web/lib/memba/club_inbound_email_address.ex
+@@ -0,0 +1,56 @@
++defmodule Memba.ClubInboundEmailAddress do
++  @moduledoc """
++  Derives member-facing inbound email addresses for clubs.
++
++  The current slice uses one implicit whole-club address per club:
++  `<club-slug>@<configured-domain>`.
++  """
++
++  alias Memba.Membership.Slug
++
++  @default_domain "clubs.memba.io"
++
++  @doc """
++  Build the inbound email address for a club or club slug.
++
++  Returns `nil` when the slug is missing or not a valid public club slug.
++  """
++  def address(club_or_slug)
++
++  def address(%{slug: slug}), do: address(slug)
++
++  def address(slug) when is_binary(slug) do
++    with {:ok, normalized_slug} <- Slug.normalize_for_lookup(slug) do
++      normalized_slug <> "@" <> domain()
++    else
++      {:error, _reason} -> nil
++    end
++  end
++
++  def address(_club_or_slug), do: nil
++
++  @doc """
++  Return the configured inbound email domain.
++
++  Defaults to `clubs.memba.io` for this iteration.
++  """
++  def domain do
++    :memba
++    |> Application.get_env(:club_inbound_email, [])
++    |> Keyword.get(:domain, @default_domain)
++    |> normalize_domain()
++  end
++
++  defp normalize_domain(domain) do
++    domain
++    |> to_string()
++    |> String.trim()
++    |> String.trim_leading("@")
++    |> String.downcase()
++    |> String.trim_trailing(".")
++    |> case do
++      "" -> @default_domain
++      domain -> domain
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 563247d..ad5c410 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -9,9 +9,15 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.InboundClubAuthorization
++  alias Memba.Messaging.InboundClubDestination
++  alias Memba.Messaging.InboundClubSender
++  alias Memba.Messaging.InboundEmail
++  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery, as: MembaStaffEmailDeliveryProjection
+@@ -37,6 +43,59 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Build a provider-neutral command for an inbound club-message email.
++
++  Provider webhook adapters should translate provider-specific payloads into
++  this API's attrs before later inbound-email handling resolves clubs, authorizes
++  senders, creates messages, and records idempotency/audit events.
++  """
++  def receive_inbound_club_email_command(attrs) when is_map(attrs) do
++    with {:ok, inbound_email} <- InboundEmail.new(attrs) do
++      {:ok,
++       %ReceiveInboundEmail{
++         inbound_email_id: InboundEmail.identity(inbound_email),
++         inbound_email: inbound_email
++       }}
++    end
++  end
++
++  def receive_inbound_club_email_command(_attrs), do: {:error, :invalid_inbound_email}
++
++  @doc """
++  Resolve an inbound club-message email's recipient addresses to a destination club.
++
++  Supports the current whole-club address shape
++  `<club-slug>@<configured inbound domain>`, returning a resolved destination
++  with club id and normalized to-address, or a typed rejection reason for
++  unsupported recipient addresses and unknown club slugs.
++  """
++  def resolve_inbound_club_email_destination(inbound_email_or_recipient_addresses) do
++    InboundClubDestination.resolve(inbound_email_or_recipient_addresses)
++  end
++
++  @doc """
++  Resolve an inbound club-message email's sender address to a Membership person.
++
++  Supports primary and alternate email addresses through Membership's public
++  email lookup API, returning a resolved sender or a typed rejection reason for
++  unknown sender addresses.
++  """
++  def resolve_inbound_club_email_sender(inbound_email_or_from_address) do
++    InboundClubSender.resolve(inbound_email_or_from_address)
++  end
++
++  @doc """
++  Authorize a resolved inbound sender to post to a resolved club destination.
++
++  Only active members of the destination club may post by email. Known people who
++  belong only to another club, or whose destination-club membership is inactive,
++  receive a typed rejection reason for later rejection-email handling.
++  """
++  def authorize_inbound_club_email_sender(sender, destination) do
++    InboundClubAuthorization.authorize(sender, destination)
++  end
++
+   @doc """
+   Report that a email delivery was accepted by the recipient server.
+   """
+@@ -124,6 +183,29 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  Fetch a projected inbound email source/status record by provider identity.
++
++  This is a support/audit read-model query. Inbound idempotency remains owned by
++  the event-sourced inbound email aggregate, not this projection.
++  """
++  def get_inbound_email_source(provider, provider_message_id)
++      when is_binary(provider) and is_binary(provider_message_id) do
++    provider = normalize_inbound_source_lookup(provider)
++    provider_message_id = normalize_inbound_source_lookup(provider_message_id)
++
++    if provider == "" or provider_message_id == "" do
++      nil
++    else
++      Repo.get_by(InboundEmailSourceProjection,
++        provider: provider,
++        provider_message_id: provider_message_id
++      )
++    end
++  end
++
++  def get_inbound_email_source(_provider, _provider_message_id), do: nil
++
+   @doc """
+   List email email deliveries for a projected message.
+ 
+@@ -317,6 +399,12 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp normalize_inbound_source_lookup(value) do
++    value
++    |> String.trim()
++    |> String.downcase()
++  end
++
+   defp dispatch_command(command, dispatch_opts) do
+     case App.dispatch(command, dispatch_opts) do
+       :ok -> {:ok, :ok}
+diff --git a/web/lib/memba/messaging/commands/receive_inbound_email.ex b/web/lib/memba/messaging/commands/receive_inbound_email.ex
+new file mode 100644
+index 0000000..19cc0d1
+--- /dev/null
++++ b/web/lib/memba/messaging/commands/receive_inbound_email.ex
+@@ -0,0 +1,13 @@
++defmodule Memba.Messaging.Commands.ReceiveInboundEmail do
++  @moduledoc """
++  Command wrapper for a provider-neutral inbound club-message email.
++
++  Routing, idempotency, destination resolution, authorization, and posting rules
++  are implemented in later inbound-email tasks. This command establishes the
++  Messaging-facing input shape without coupling the domain API to Resend or any
++  other provider payload.
++  """
++
++  @enforce_keys [:inbound_email_id, :inbound_email]
++  defstruct [:inbound_email_id, :inbound_email]
++end
+diff --git a/web/lib/memba/messaging/events/inbound_club_email_accepted.ex b/web/lib/memba/messaging/events/inbound_club_email_accepted.ex
+new file mode 100644
+index 0000000..5e802c6
+--- /dev/null
++++ b/web/lib/memba/messaging/events/inbound_club_email_accepted.ex
+@@ -0,0 +1,28 @@
++defmodule Memba.Messaging.Events.InboundClubEmailAccepted do
++  @moduledoc """
++  Event raised when an inbound provider email has been accepted as a club message.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :from_address,
++    :to_address,
++    :club_id,
++    :sender_id,
++    :message_id
++  ]
++  defstruct [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :provider_event_id,
++    :from_address,
++    :to_address,
++    :club_id,
++    :sender_id,
++    :message_id
++  ]
++end
+diff --git a/web/lib/memba/messaging/events/inbound_club_email_rejected.ex b/web/lib/memba/messaging/events/inbound_club_email_rejected.ex
+new file mode 100644
+index 0000000..a7cc355
+--- /dev/null
++++ b/web/lib/memba/messaging/events/inbound_club_email_rejected.ex
+@@ -0,0 +1,24 @@
++defmodule Memba.Messaging.Events.InboundClubEmailRejected do
++  @moduledoc """
++  Event raised when an inbound provider email is rejected before posting.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :from_address,
++    :rejection_reason
++  ]
++  defstruct [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :provider_event_id,
++    :from_address,
++    :to_address,
++    :rejection_reason,
++    :rejection_email_delivery_reference
++  ]
++end
+diff --git a/web/lib/memba/messaging/events/inbound_email_received.ex b/web/lib/memba/messaging/events/inbound_email_received.ex
+new file mode 100644
+index 0000000..65ca46a
+--- /dev/null
++++ b/web/lib/memba/messaging/events/inbound_email_received.ex
+@@ -0,0 +1,13 @@
++defmodule Memba.Messaging.Events.InboundEmailReceived do
++  @moduledoc """
++  Event raised when a provider inbound email is first seen by Messaging.
++
++  Later inbound-email events record the accepted/rejected business outcome. This
++  event gives the inbound-email aggregate an event-sourced identity and makes
++  provider retry handling command-side rather than projection-invented.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:inbound_email_id, :provider, :provider_message_id]
++  defstruct [:inbound_email_id, :provider, :provider_message_id, :provider_event_id]
++end
+diff --git a/web/lib/memba/messaging/inbound_club_authorization.ex b/web/lib/memba/messaging/inbound_club_authorization.ex
+new file mode 100644
+index 0000000..51e7222
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_club_authorization.ex
+@@ -0,0 +1,53 @@
++defmodule Memba.Messaging.InboundClubAuthorization do
++  @moduledoc """
++  Active-membership authorization for inbound club-message email.
++
++  Authorization deliberately uses Membership's public query API so Messaging can
++  enforce posting rules without coupling to Membership projection storage.
++  """
++
++  alias Memba.Membership
++  alias Memba.Messaging.InboundClubDestination
++  alias Memba.Messaging.InboundClubSender
++
++  @type rejection_reason :: :sender_not_active_member | :invalid_inbound_authorization
++  @type rejection_details :: %{
++          sender_id: Ecto.UUID.t(),
++          club_id: Ecto.UUID.t(),
++          from_address: String.t(),
++          to_address: String.t()
++        }
++  @type rejection :: {:error, rejection_reason(), rejection_details() | nil}
++
++  @doc """
++  Authorize a resolved sender to post to a resolved club destination.
++
++  Returns `:ok` only when the sender person currently has an active membership in
++  the destination club. Known people who are active only in other clubs, inactive
++  destination-club members, and invalid inputs are rejected without relying on
++  Messaging-owned membership state.
++  """
++  @spec authorize(InboundClubSender.t() | term(), InboundClubDestination.t() | term()) ::
++          :ok | rejection()
++  def authorize(
++        %InboundClubSender{} = sender,
++        %InboundClubDestination{} = destination
++      ) do
++    if Membership.active_member_of_club?(destination.club_id, sender.person_id) do
++      :ok
++    else
++      {:error, :sender_not_active_member, rejection_details(sender, destination)}
++    end
++  end
++
++  def authorize(_sender, _destination), do: {:error, :invalid_inbound_authorization, nil}
++
++  defp rejection_details(%InboundClubSender{} = sender, %InboundClubDestination{} = destination) do
++    %{
++      sender_id: sender.person_id,
++      club_id: destination.club_id,
++      from_address: sender.from_address,
++      to_address: destination.to_address
++    }
++  end
++end
+diff --git a/web/lib/memba/messaging/inbound_club_destination.ex b/web/lib/memba/messaging/inbound_club_destination.ex
+new file mode 100644
+index 0000000..d7f9fe9
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_club_destination.ex
+@@ -0,0 +1,135 @@
++defmodule Memba.Messaging.InboundClubDestination do
++  @moduledoc """
++  Resolved destination for a provider-neutral inbound club-message email.
++
++  The current slice supports one whole-club inbound address shape:
++  `<club-slug>@<configured inbound domain>`. Resolution deliberately uses
++  Membership's public slug lookup API so Messaging does not couple to
++  Membership projection internals.
++  """
++
++  alias Memba.ClubInboundEmailAddress
++  alias Memba.Membership
++  alias Memba.Membership.Slug
++  alias Memba.Messaging.InboundEmail
++
++  @enforce_keys [:club_id, :club_slug, :to_address]
++  defstruct [:club_id, :club_slug, :to_address]
++
++  @type t :: %__MODULE__{
++          club_id: Ecto.UUID.t(),
++          club_slug: String.t(),
++          to_address: String.t()
++        }
++
++  @type rejection_reason :: :unsupported_recipient_address | :unknown_club_slug
++  @type rejection :: {:error, rejection_reason(), String.t() | nil}
++
++  @doc """
++  Resolve recipient addresses to the destination club for an inbound email.
++
++  Returns `{:ok, destination}` when any recipient address uses the configured
++  inbound club domain and its local part matches an existing club slug. Unrelated
++  copied recipients are ignored once a supported club destination is found.
++
++  Returns `{:error, :unknown_club_slug, to_address}` when the inbound domain is
++  present but no matching club exists, or
++  `{:error, :unsupported_recipient_address, address_or_nil}` when no supported
++  whole-club address shape is present.
++  """
++  @spec resolve(InboundEmail.t() | [String.t()] | term()) :: {:ok, t()} | rejection()
++  def resolve(%InboundEmail{recipient_addresses: recipient_addresses}),
++    do: resolve(recipient_addresses)
++
++  def resolve(recipient_addresses) when is_list(recipient_addresses) do
++    recipient_addresses
++    |> Enum.map(&candidate/1)
++    |> resolve_candidates()
++  end
++
++  def resolve(_recipient_addresses), do: {:error, :unsupported_recipient_address, nil}
++
++  defp candidate(address) do
++    with {:ok, normalized_address} <- normalize_address(address),
++         {:ok, local_part, domain} <- split_address(normalized_address),
++         true <- domain == ClubInboundEmailAddress.domain(),
++         {:ok, slug} <- Slug.normalize_for_lookup(local_part) do
++      {:club_candidate, slug, normalized_address}
++    else
++      {:error, _reason} -> unsupported_candidate(address)
++      false -> unsupported_candidate(address)
++    end
++  end
++
++  defp normalize_address(address) when is_binary(address) do
++    case address |> String.trim() |> String.downcase() do
++      "" -> {:error, :blank_address}
++      normalized_address -> {:ok, normalized_address}
++    end
++  end
++
++  defp normalize_address(_address), do: {:error, :invalid_address}
++
++  defp split_address(address) do
++    case String.split(address, "@") do
++      [local_part, domain] when local_part != "" and domain != "" ->
++        {:ok, local_part, domain}
++
++      _parts ->
++        {:error, :invalid_address}
++    end
++  end
++
++  defp unsupported_candidate(address) do
++    case normalize_address(address) do
++      {:ok, normalized_address} -> {:unsupported, normalized_address}
++      {:error, _reason} -> {:unsupported, nil}
++    end
++  end
++
++  defp resolve_candidates(candidates) do
++    candidates
++    |> Enum.reduce(%{destination: nil, unknown: nil, unsupported: nil}, &accumulate_candidate/2)
++    |> resolve_accumulator()
++  end
++
++  defp accumulate_candidate(_candidate, %{destination: %__MODULE__{}} = accumulator),
++    do: accumulator
++
++  defp accumulate_candidate({:club_candidate, slug, to_address}, accumulator) do
++    case Membership.get_club_by_slug(slug) do
++      nil -> record_first(accumulator, :unknown, to_address)
++      club -> %{accumulator | destination: destination(club, to_address)}
++    end
++  end
++
++  defp accumulate_candidate({:unsupported, address}, accumulator) do
++    record_first(accumulator, :unsupported, address)
++  end
++
++  defp record_first(accumulator, key, value) do
++    if Map.fetch!(accumulator, key) do
++      accumulator
++    else
++      Map.put(accumulator, key, value)
++    end
++  end
++
++  defp resolve_accumulator(%{destination: %__MODULE__{} = destination}), do: {:ok, destination}
++
++  defp resolve_accumulator(%{unknown: to_address}) when is_binary(to_address) do
++    {:error, :unknown_club_slug, to_address}
++  end
++
++  defp resolve_accumulator(%{unsupported: address}) do
++    {:error, :unsupported_recipient_address, address}
++  end
++
++  defp destination(club, to_address) do
++    %__MODULE__{
++      club_id: club.club_id,
++      club_slug: club.slug,
++      to_address: to_address
++    }
++  end
++end
+diff --git a/web/lib/memba/messaging/inbound_club_sender.ex b/web/lib/memba/messaging/inbound_club_sender.ex
+new file mode 100644
+index 0000000..1dce73e
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_club_sender.ex
+@@ -0,0 +1,71 @@
++defmodule Memba.Messaging.InboundClubSender do
++  @moduledoc """
++  Resolved sender for a provider-neutral inbound club-message email.
++
++  Sender resolution deliberately uses Membership's public email lookup API so
++  Messaging can identify people by primary or alternate email address without
++  coupling to Membership projection storage.
++  """
++
++  alias Memba.Membership
++  alias Memba.Messaging.InboundEmail
++
++  @enforce_keys [:person_id, :name, :from_address]
++  defstruct [:person_id, :name, :from_address]
++
++  @type t :: %__MODULE__{
++          person_id: Ecto.UUID.t(),
++          name: String.t(),
++          from_address: String.t()
++        }
++
++  @type rejection_reason :: :unknown_sender
++  @type rejection :: {:error, rejection_reason(), String.t() | nil}
++
++  @doc """
++  Resolve an inbound email sender address to a Membership person.
++
++  Returns `{:ok, sender}` when the address belongs to a person as either their
++  primary or alternate email address. Returns `{:error, :unknown_sender,
++  normalized_address_or_nil}` for blank, invalid, or unknown sender input.
++  """
++  @spec resolve(InboundEmail.t() | String.t() | term()) :: {:ok, t()} | rejection()
++  def resolve(%InboundEmail{from_address: from_address}), do: resolve(from_address)
++
++  def resolve(from_address) do
++    case normalize_address(from_address) do
++      {:ok, normalized_address} ->
++        resolve_normalized_address(normalized_address)
++
++      {:error, :blank_address} ->
++        {:error, :unknown_sender, nil}
++
++      {:error, :invalid_address} ->
++        {:error, :unknown_sender, nil}
++    end
++  end
++
++  defp normalize_address(address) when is_binary(address) do
++    case address |> String.trim() |> String.downcase() do
++      "" -> {:error, :blank_address}
++      normalized_address -> {:ok, normalized_address}
++    end
++  end
++
++  defp normalize_address(_address), do: {:error, :invalid_address}
++
++  defp resolve_normalized_address(normalized_address) do
++    case Membership.get_person_by_email(normalized_address) do
++      nil ->
++        {:error, :unknown_sender, normalized_address}
++
++      person ->
++        {:ok,
++         %__MODULE__{
++           person_id: person.person_id,
++           name: person.name,
++           from_address: normalized_address
++         }}
++    end
++  end
++end
+diff --git a/web/lib/memba/messaging/inbound_email.ex b/web/lib/memba/messaging/inbound_email.ex
+new file mode 100644
+index 0000000..4c754d0
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email.ex
+@@ -0,0 +1,203 @@
++defmodule Memba.Messaging.InboundEmail do
++  @moduledoc """
++  Provider-neutral inbound email data for club-message intake.
++
++  Provider webhook controllers and parsers should translate their payload shape
++  into this structure before Messaging applies club routing, sender
++  authorization, body policy, and idempotency rules.
++  """
++
++  alias Memba.Messaging.InboundEmailAttachment
++
++  @enforce_keys [
++    :provider,
++    :provider_message_id,
++    :from_address,
++    :recipient_addresses,
++    :subject
++  ]
++  defstruct [
++    :provider,
++    :provider_message_id,
++    :provider_event_id,
++    :from_address,
++    :recipient_addresses,
++    :subject,
++    :text_body,
++    :html_body,
++    attachments: []
++  ]
++
++  @type t :: %__MODULE__{
++          provider: String.t(),
++          provider_message_id: String.t(),
++          provider_event_id: String.t() | nil,
++          from_address: String.t(),
++          recipient_addresses: [String.t()],
++          subject: String.t(),
++          text_body: String.t() | nil,
++          html_body: String.t() | nil,
++          attachments: [InboundEmailAttachment.t()]
++        }
++
++  @doc """
++  Build a provider-neutral inbound email from atom- or string-keyed attrs.
++  """
++  @spec new(map()) :: {:ok, t()} | {:error, atom() | {:missing_required_attribute, atom()}}
++  def new(attrs) when is_map(attrs) do
++    with {:ok, provider} <- fetch_required(attrs, :provider),
++         {:ok, provider} <- normalize_required_string(provider, :invalid_provider),
++         {:ok, provider_message_id} <- fetch_required(attrs, :provider_message_id),
++         {:ok, provider_message_id} <-
++           normalize_required_string(provider_message_id, :invalid_provider_message_id),
++         {:ok, from_address} <- fetch_required(attrs, :from_address),
++         {:ok, from_address} <- normalize_email(from_address, :invalid_from_address),
++         {:ok, recipient_addresses} <- fetch_required(attrs, :recipient_addresses),
++         {:ok, recipient_addresses} <- normalize_recipient_addresses(recipient_addresses),
++         {:ok, subject} <- fetch_required(attrs, :subject),
++         {:ok, subject} <- normalize_subject(subject),
++         {:ok, provider_event_id} <-
++           normalize_optional_string(
++             fetch_optional(attrs, :provider_event_id),
++             :invalid_provider_event_id
++           ),
++         {:ok, text_body} <-
++           normalize_optional_body(fetch_optional(attrs, :text_body), :invalid_text_body),
++         {:ok, html_body} <-
++           normalize_optional_body(fetch_optional(attrs, :html_body), :invalid_html_body),
++         {:ok, attachments} <- normalize_attachments(fetch_optional(attrs, :attachments)) do
++      {:ok,
++       %__MODULE__{
++         provider: provider,
++         provider_message_id: provider_message_id,
++         provider_event_id: provider_event_id,
++         from_address: from_address,
++         recipient_addresses: recipient_addresses,
++         subject: subject,
++         text_body: text_body,
++         html_body: html_body,
++         attachments: attachments
++       }}
++    end
++  end
++
++  def new(_attrs), do: {:error, :invalid_inbound_email}
++
++  @doc """
++  Return the deterministic aggregate identity for a provider message.
++  """
++  @spec identity(t()) :: String.t()
++  def identity(%__MODULE__{provider: provider, provider_message_id: provider_message_id}) do
++    "inbound-email:#{provider}:#{provider_message_id}"
++  end
++
++  defp fetch_required(attrs, key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> {:ok, value}
++      %{^string_key => value} -> {:ok, value}
++      _attrs -> {:error, {:missing_required_attribute, key}}
++    end
++  end
++
++  defp fetch_optional(attrs, key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> value
++      %{^string_key => value} -> value
++      _attrs -> nil
++    end
++  end
++
++  defp normalize_required_string(value, error) when is_binary(value) do
++    value = value |> String.trim() |> String.downcase()
++
++    if value == "" do
++      {:error, error}
++    else
++      {:ok, value}
++    end
++  end
++
++  defp normalize_required_string(_value, error), do: {:error, error}
++
++  defp normalize_subject(subject) when is_binary(subject), do: {:ok, String.trim(subject)}
++  defp normalize_subject(_subject), do: {:error, :invalid_subject}
++
++  defp normalize_optional_string(nil, _error), do: {:ok, nil}
++
++  defp normalize_optional_string(value, _error) when is_binary(value) do
++    case String.trim(value) do
++      "" -> {:ok, nil}
++      value -> {:ok, value}
++    end
++  end
++
++  defp normalize_optional_string(_value, error), do: {:error, error}
++
++  defp normalize_optional_body(nil, _error), do: {:ok, nil}
++  defp normalize_optional_body(value, _error) when is_binary(value), do: {:ok, value}
++  defp normalize_optional_body(_value, error), do: {:error, error}
++
++  defp normalize_recipient_addresses(addresses) when is_list(addresses) and addresses != [] do
++    addresses
++    |> Enum.reduce_while({:ok, []}, fn address, {:ok, normalized_addresses} ->
++      case normalize_email(address, :invalid_recipient_address) do
++        {:ok, normalized_address} ->
++          {:cont, {:ok, [normalized_address | normalized_addresses]}}
++
++        {:error, :invalid_recipient_address} ->
++          {:halt, {:error, :invalid_recipient_addresses}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_addresses} -> {:ok, Enum.reverse(normalized_addresses)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_recipient_addresses(_addresses), do: {:error, :invalid_recipient_addresses}
++
++  defp normalize_email(email, error) when is_binary(email) do
++    email = email |> String.trim() |> String.downcase()
++
++    if valid_email?(email) do
++      {:ok, email}
++    else
++      {:error, error}
++    end
++  end
++
++  defp normalize_email(_email, error), do: {:error, error}
++
++  defp valid_email?(email) do
++    case String.split(email, "@") do
++      [local, domain] -> local != "" and domain != "" and String.contains?(domain, ".")
++      _other -> false
++    end
++  end
++
++  defp normalize_attachments(nil), do: {:ok, []}
++  defp normalize_attachments([]), do: {:ok, []}
++
++  defp normalize_attachments(attachments) when is_list(attachments) do
++    attachments
++    |> Enum.reduce_while({:ok, []}, fn attachment, {:ok, normalized_attachments} ->
++      case InboundEmailAttachment.new(attachment) do
++        {:ok, normalized_attachment} ->
++          {:cont, {:ok, [normalized_attachment | normalized_attachments]}}
++
++        {:error, :invalid_attachment} ->
++          {:halt, {:error, :invalid_attachment}}
++      end
++    end)
++    |> case do
++      {:ok, normalized_attachments} -> {:ok, Enum.reverse(normalized_attachments)}
++      {:error, reason} -> {:error, reason}
++    end
++  end
++
++  defp normalize_attachments(_attachments), do: {:error, :invalid_attachments}
++end
+diff --git a/web/lib/memba/messaging/inbound_email_attachment.ex b/web/lib/memba/messaging/inbound_email_attachment.ex
+new file mode 100644
+index 0000000..71ef5b4
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email_attachment.ex
+@@ -0,0 +1,61 @@
++defmodule Memba.Messaging.InboundEmailAttachment do
++  @moduledoc """
++  Provider-neutral attachment metadata from an inbound email.
++
++  Attachments are not supported for posting in this iteration, but preserving
++  metadata in the inbound command lets later policy code reject them without
++  depending on a provider-specific payload shape.
++  """
++
++  defstruct [:filename, :content_type, :size, :content_id]
++
++  @type t :: %__MODULE__{
++          filename: String.t() | nil,
++          content_type: String.t() | nil,
++          size: non_neg_integer() | nil,
++          content_id: String.t() | nil
++        }
++
++  @doc """
++  Build attachment metadata from atom- or string-keyed provider-neutral attrs.
++  """
++  @spec new(map()) :: {:ok, t()} | {:error, :invalid_attachment}
++  def new(attrs) when is_map(attrs) do
++    with {:ok, size} <- optional_size(fetch_optional(attrs, :size)) do
++      {:ok,
++       %__MODULE__{
++         filename: optional_string(fetch_optional(attrs, :filename)),
++         content_type: optional_string(fetch_optional(attrs, :content_type)),
++         size: size,
++         content_id: optional_string(fetch_optional(attrs, :content_id))
++       }}
++    end
++  end
++
++  def new(_attrs), do: {:error, :invalid_attachment}
++
++  defp fetch_optional(attrs, key) do
++    string_key = Atom.to_string(key)
++
++    case attrs do
++      %{^key => value} -> value
++      %{^string_key => value} -> value
++      _attrs -> nil
++    end
++  end
++
++  defp optional_string(nil), do: nil
++
++  defp optional_string(value) when is_binary(value) do
++    case String.trim(value) do
++      "" -> nil
++      value -> value
++    end
++  end
++
++  defp optional_string(_value), do: nil
++
++  defp optional_size(nil), do: {:ok, nil}
++  defp optional_size(size) when is_integer(size) and size >= 0, do: {:ok, size}
++  defp optional_size(_size), do: {:error, :invalid_attachment}
++end
+diff --git a/web/lib/memba/messaging/inbound_email_receipt.ex b/web/lib/memba/messaging/inbound_email_receipt.ex
+new file mode 100644
+index 0000000..ab6db91
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email_receipt.ex
+@@ -0,0 +1,79 @@
++defmodule Memba.Messaging.InboundEmailReceipt do
++  @moduledoc """
++  Inbound email aggregate for provider retry identity.
++
++  One aggregate instance represents exactly one provider inbound message id,
++  keyed by `inbound-email:<provider>:<provider_message_id>`. Duplicate receives
++  for the same provider message are explicit no-ops; later tasks add the
++  accepted/rejected business outcome events to this stream.
++  """
++
++  alias Commanded.Aggregates.Aggregate
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.Events.InboundEmailReceived
++  alias Memba.Messaging.InboundEmail
++
++  @behaviour Aggregate
++
++  defstruct [:inbound_email_id, :provider, :provider_message_id]
++
++  @impl Aggregate
++  def execute(%__MODULE__{inbound_email_id: nil}, %ReceiveInboundEmail{} = command) do
++    with {:ok, inbound_email_id} <- validate_command_identity(command) do
++      %InboundEmailReceived{
++        inbound_email_id: inbound_email_id,
++        provider: command.inbound_email.provider,
++        provider_message_id: command.inbound_email.provider_message_id,
++        provider_event_id: command.inbound_email.provider_event_id
++      }
++    end
++  end
++
++  def execute(%__MODULE__{} = receipt, %ReceiveInboundEmail{} = command) do
++    with {:ok, _inbound_email_id} <- validate_command_identity(command),
++         :ok <- validate_same_provider_message(receipt, command.inbound_email) do
++      []
++    end
++  end
++
++  @impl Aggregate
++  def apply(%__MODULE__{} = receipt, %InboundEmailReceived{} = event) do
++    %__MODULE__{
++      receipt
++      | inbound_email_id: event.inbound_email_id,
++        provider: event.provider,
++        provider_message_id: event.provider_message_id
++    }
++  end
++
++  defp validate_command_identity(%ReceiveInboundEmail{
++         inbound_email_id: inbound_email_id,
++         inbound_email: %InboundEmail{} = inbound_email
++       }) do
++    expected_inbound_email_id = InboundEmail.identity(inbound_email)
++
++    cond do
++      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
++        {:error, :invalid_inbound_email_id}
++
++      inbound_email_id == expected_inbound_email_id ->
++        {:ok, inbound_email_id}
++
++      true ->
++        {:error, :inbound_email_id_mismatch}
++    end
++  end
++
++  defp validate_command_identity(%ReceiveInboundEmail{}), do: {:error, :invalid_inbound_email}
++
++  defp validate_same_provider_message(
++         %__MODULE__{provider: provider, provider_message_id: provider_message_id},
++         %InboundEmail{provider: provider, provider_message_id: provider_message_id}
++       ) do
++    :ok
++  end
++
++  defp validate_same_provider_message(%__MODULE__{}, %InboundEmail{}) do
++    {:error, :provider_message_id_mismatch}
++  end
++end
+diff --git a/web/lib/memba/messaging/projections/inbound_email_source.ex b/web/lib/memba/messaging/projections/inbound_email_source.ex
+new file mode 100644
+index 0000000..0b2b903
+--- /dev/null
++++ b/web/lib/memba/messaging/projections/inbound_email_source.ex
+@@ -0,0 +1,24 @@
++defmodule Memba.Messaging.Projections.InboundEmailSource do
++  @moduledoc """
++  Read model projection for provider inbound email source/status records.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:inbound_email_id, :string, autogenerate: false}
++  schema "messaging_inbound_email_sources" do
++    field :provider, :string
++    field :provider_message_id, :string
++    field :provider_event_id, :string
++    field :from_address, :string
++    field :to_address, :string
++    field :status, :string
++    field :club_id, :binary_id
++    field :sender_id, :binary_id
++    field :message_id, :binary_id
++    field :rejection_reason, :string
++    field :rejection_email_delivery_reference, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/messaging/projectors/inbound_email_source.ex b/web/lib/memba/messaging/projectors/inbound_email_source.ex
+new file mode 100644
+index 0000000..003430b
+--- /dev/null
++++ b/web/lib/memba/messaging/projectors/inbound_email_source.ex
+@@ -0,0 +1,44 @@
++defmodule Memba.Messaging.Projectors.InboundEmailSource do
++  @moduledoc """
++  Projects inbound club email outcome events into source/status records.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Messaging.App,
++    repo: Memba.Repo,
++    name: "Memba.Messaging.Projectors.InboundEmailSource",
++    consistency: :strong
++
++  alias Memba.Messaging.Events.InboundClubEmailAccepted
++  alias Memba.Messaging.Events.InboundClubEmailRejected
++  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
++
++  project(%InboundClubEmailAccepted{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :messaging_inbound_email_source, %InboundEmailSourceProjection{
++      inbound_email_id: event.inbound_email_id,
++      provider: event.provider,
++      provider_message_id: event.provider_message_id,
++      provider_event_id: event.provider_event_id,
++      from_address: event.from_address,
++      to_address: event.to_address,
++      status: "accepted",
++      club_id: event.club_id,
++      sender_id: event.sender_id,
++      message_id: event.message_id
++    })
++  end)
++
++  project(%InboundClubEmailRejected{} = event, fn multi ->
++    Ecto.Multi.insert(multi, :messaging_inbound_email_source, %InboundEmailSourceProjection{
++      inbound_email_id: event.inbound_email_id,
++      provider: event.provider,
++      provider_message_id: event.provider_message_id,
++      provider_event_id: event.provider_event_id,
++      from_address: event.from_address,
++      to_address: event.to_address,
++      status: "rejected",
++      rejection_reason: event.rejection_reason,
++      rejection_email_delivery_reference: event.rejection_email_delivery_reference
++    })
++  end)
++end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+index 403e3ef..463c566 100644
+--- a/web/lib/memba/messaging/router.ex
++++ b/web/lib/memba/messaging/router.ex
+@@ -5,15 +5,20 @@ defmodule Memba.Messaging.Router do
+ 
+   use Commanded.Commands.Router
+ 
++  alias Memba.Messaging.InboundEmailReceipt
+   alias Memba.Messaging.Message
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+ 
++  identify(InboundEmailReceipt, by: :inbound_email_id)
+   identify(Message, by: :message_id)
+ 
++  dispatch(ReceiveInboundEmail, to: InboundEmailReceipt)
++
+   dispatch(
+     [
+       SendMessage,
+diff --git a/web/lib/memba/release.ex b/web/lib/memba/release.ex
+index 84975fc..9018cf9 100644
+--- a/web/lib/memba/release.ex
++++ b/web/lib/memba/release.ex
+@@ -58,6 +58,7 @@ defmodule Memba.Release do
+     Memba.Membership.Projections.Membership,
+     Memba.Membership.Projections.Person,
+     Memba.Messaging.Projections.EmailDelivery,
++    Memba.Messaging.Projections.InboundEmailSource,
+     Memba.Messaging.Projections.MemberEmailDelivery,
+     Memba.Messaging.Projections.MembaStaffEmailDelivery,
+     Memba.Messaging.Projections.Message
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index a645d1d..9334491 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -17,7 +17,8 @@ defmodule MembaWeb.DevTestSupportController do
+     Memba.Messaging.Projectors.Message,
+     Memba.Messaging.Projectors.EmailDelivery,
+     Memba.Messaging.Projectors.MemberEmailDelivery,
+-    Memba.Messaging.Projectors.MembaStaffEmailDelivery
++    Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++    Memba.Messaging.Projectors.InboundEmailSource
+   ]
+   @public_reset_tables [:auth_sign_in_tokens]
+ 
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 5d51994..5f4ceef 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -6,8 +6,12 @@ defmodule MembaWeb.PageHTML do
+   """
+   use MembaWeb, :html
+ 
++  alias Memba.ClubInboundEmailAddress
++
+   embed_templates "page_html/*"
+ 
++  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
++
+   defp first_name(%{name: name}) when is_binary(name) do
+     name
+     |> String.split(~r/\s+/, trim: true)
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index ae7c3c4..851be4a 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -1,4 +1,5 @@
+ <% club_id_source = assigns[:club_id_source] %>
++<% inbound_email_address = club_inbound_email_address(@selected_club) %>
+ 
+ <Layouts.club_site
+   flash={@flash}
+@@ -36,6 +37,26 @@
+           <p class="mt-1 text-sm leading-6 text-white/75">
+             Write once — every active member gets it.
+           </p>
++          <div
++            :if={inbound_email_address}
++            id="member-dashboard-inbound-email"
++            data-inbound-address={inbound_email_address}
++            class="mt-4 rounded-2xl bg-white/10 px-4 py-3 text-sm leading-6 text-white/85 ring-1 ring-white/15"
++          >
++            <p class="text-xs font-semibold uppercase tracking-[0.16em] text-white/60">
++              Prefer email?
++            </p>
++            <p class="mt-1">
++              Send a club-wide message to
++              <a
++                id="member-dashboard-inbound-email-link"
++                href={"mailto:#{inbound_email_address}"}
++                class="font-semibold text-white underline decoration-white/40 underline-offset-4 transition duration-200 hover:decoration-white"
++              >
++                {inbound_email_address}
++              </a>
++            </p>
++          </div>
+         </div>
+ 
+         <.link
+diff --git a/web/lib/memba_web/live/member_message_live/new.ex b/web/lib/memba_web/live/member_message_live/new.ex
+index 7f687d6..168b428 100644
+--- a/web/lib/memba_web/live/member_message_live/new.ex
++++ b/web/lib/memba_web/live/member_message_live/new.ex
+@@ -11,6 +11,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+   require Logger
+ 
+   alias Memba.Accounts
++  alias Memba.ClubInboundEmailAddress
+   alias Memba.Membership
+   alias Memba.Messaging
+ 
+@@ -91,6 +92,7 @@ defmodule MembaWeb.MemberMessageLive.New do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
++    <% inbound_email_address = club_inbound_email_address(@selected_club) %>
+     <Layouts.club_site
+       flash={@flash}
+       club_name={selected_club_name(@selected_club)}
+@@ -247,6 +249,27 @@ defmodule MembaWeb.MemberMessageLive.New do
+             </p>
+           </div>
+ 
++          <div
++            :if={inbound_email_address}
++            id="member-compose-inbound-email"
++            data-inbound-address={inbound_email_address}
++            class="mt-4 flex gap-3 rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] px-4 py-3 text-sm leading-6 text-[var(--club-site-muted)]"
++          >
++            <span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--club-site-paper)] text-[var(--club-site-accent)] ring-1 ring-[var(--club-site-line)]">
++              <.icon name="hero-envelope" class="size-4" />
++            </span>
++            <p>
++              Prefer email? Send a club-wide message to
++              <a
++                id="member-compose-inbound-email-link"
++                href={"mailto:#{inbound_email_address}"}
++                class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
++              >
++                {inbound_email_address}
++              </a>
++            </p>
++          </div>
++
+           <div :if={@current_member} class="mt-6">
+             <p class="mb-2 text-sm font-semibold text-[var(--club-site-ink)]">From</p>
+             <div
+@@ -423,6 +446,8 @@ defmodule MembaWeb.MemberMessageLive.New do
+   defp selected_club_name(nil), do: "Club"
+   defp selected_club_name(selected_club), do: selected_club.name
+ 
++  defp club_inbound_email_address(club), do: ClubInboundEmailAddress.address(club)
++
+   defp selected_club_id(nil, route_params), do: Map.get(route_params, "club_id")
+   defp selected_club_id(selected_club, _route_params), do: selected_club.club_id
+ 
+diff --git a/web/priv/repo/migrations/20260603034844_create_messaging_inbound_email_sources_projection.exs b/web/priv/repo/migrations/20260603034844_create_messaging_inbound_email_sources_projection.exs
+new file mode 100644
+index 0000000..db0e5d0
+--- /dev/null
++++ b/web/priv/repo/migrations/20260603034844_create_messaging_inbound_email_sources_projection.exs
+@@ -0,0 +1,29 @@
++defmodule Memba.Repo.Migrations.CreateMessagingInboundEmailSourcesProjection do
++  use Ecto.Migration
++
++  def change do
++    create table(:messaging_inbound_email_sources, primary_key: false) do
++      add :inbound_email_id, :text, primary_key: true
++      add :provider, :text, null: false
++      add :provider_message_id, :text, null: false
++      add :provider_event_id, :text
++      add :from_address, :text, null: false
++      add :to_address, :text
++      add :status, :text, null: false
++      add :club_id, :uuid
++      add :sender_id, :uuid
++      add :message_id, :uuid
++      add :rejection_reason, :text
++      add :rejection_email_delivery_reference, :text
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create unique_index(:messaging_inbound_email_sources, [:provider, :provider_message_id],
++             name: :messaging_inbound_email_sources_provider_message_id_index
++           )
++
++    create index(:messaging_inbound_email_sources, [:status])
++    create index(:messaging_inbound_email_sources, [:message_id])
++  end
++end
+diff --git a/web/test/memba/club_inbound_email_address_test.exs b/web/test/memba/club_inbound_email_address_test.exs
+new file mode 100644
+index 0000000..b840b0e
+--- /dev/null
++++ b/web/test/memba/club_inbound_email_address_test.exs
+@@ -0,0 +1,53 @@
++defmodule Memba.ClubInboundEmailAddressTest do
++  use ExUnit.Case, async: false
++
++  alias Memba.ClubInboundEmailAddress
++
++  test "builds the default whole-club inbound address from a club slug" do
++    assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@clubs.memba.io"
++    assert ClubInboundEmailAddress.address("nelson-paddling") == "nelson-paddling@clubs.memba.io"
++  end
++
++  test "normalizes lookup-style slug casing and whitespace" do
++    assert ClubInboundEmailAddress.address(%{slug: " KMC "}) == "kmc@clubs.memba.io"
++  end
++
++  test "uses the configured inbound email domain" do
++    with_club_inbound_email_config([domain: " Example.Clubs.Memba.IO. "], fn ->
++      assert ClubInboundEmailAddress.domain() == "example.clubs.memba.io"
++      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@example.clubs.memba.io"
++    end)
++  end
++
++  test "falls back to the iteration default domain when no domain is configured" do
++    with_club_inbound_email_config([], fn ->
++      assert ClubInboundEmailAddress.domain() == "clubs.memba.io"
++      assert ClubInboundEmailAddress.address(%{slug: "kmc"}) == "kmc@clubs.memba.io"
++    end)
++  end
++
++  test "returns nil when the slug is missing or invalid" do
++    assert ClubInboundEmailAddress.address(%{}) == nil
++    assert ClubInboundEmailAddress.address(nil) == nil
++    assert ClubInboundEmailAddress.address("") == nil
++    assert ClubInboundEmailAddress.address("not safe") == nil
++    assert ClubInboundEmailAddress.address("-kmc") == nil
++  end
++
++  defp with_club_inbound_email_config(config, fun) do
++    original = Application.get_env(:memba, :club_inbound_email)
++
++    try do
++      Application.put_env(:memba, :club_inbound_email, config)
++      fun.()
++    after
++      restore_club_inbound_email_config(original)
++    end
++  end
++
++  defp restore_club_inbound_email_config(nil),
++    do: Application.delete_env(:memba, :club_inbound_email)
++
++  defp restore_club_inbound_email_config(config),
++    do: Application.put_env(:memba, :club_inbound_email, config)
++end
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index becacd9..cfa9c00 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -8,7 +8,9 @@ defmodule Memba.Messaging.AppTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
++  alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
+   alias Memba.Messaging.Router
+ 
+   test "Messaging Commanded app is supervised by the Phoenix application" do
+@@ -20,12 +22,22 @@ defmodule Memba.Messaging.AppTest do
+              {App, pid, :supervisor, [App]} when is_pid(pid) -> true
+              _child -> false
+            end)
++
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{InboundEmailSourceProjector, _opts}, pid, :worker, [InboundEmailSourceProjector]}
++             when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
+   end
+ 
+   test "Messaging Commanded app includes the Messaging router" do
+     expected_commands =
+       MapSet.new([
+         SendMessage,
++        ReceiveInboundEmail,
+         ReportEmailDeliveryDelivered,
+         ReportEmailDeliveryDelayed,
+         ReportEmailDeliveryBounced,
+diff --git a/web/test/memba/messaging/inbound_club_authorization_test.exs b/web/test/memba/messaging/inbound_club_authorization_test.exs
+new file mode 100644
+index 0000000..6f17d88
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_club_authorization_test.exs
+@@ -0,0 +1,84 @@
++defmodule Memba.Messaging.InboundClubAuthorizationTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Messaging
++  alias Memba.Messaging.InboundClubDestination
++  alias Memba.Messaging.InboundClubSender
++
++  describe "authorize_inbound_club_email_sender/2" do
++    test "authorizes a resolved sender who is an active member of the destination club" do
++      club = insert_membership_club!(slug: "kmc")
++      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
++      insert_membership!(club, alice, active: true)
++
++      assert :ok ==
++               Messaging.authorize_inbound_club_email_sender(
++                 sender(alice, "alice@example.com"),
++                 destination(club, "kmc@clubs.memba.io")
++               )
++    end
++
++    test "rejects a resolved sender who is only active in another club" do
++      kmc = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      npc = insert_membership_club!(name: "Nelson Paddling Club", slug: "npc")
++      pat = insert_membership_person!(name: "Pat Example", email: "pat@example.com")
++      insert_membership!(npc, pat, active: true)
++
++      assert {:error, :sender_not_active_member,
++              %{
++                sender_id: pat.person_id,
++                club_id: kmc.club_id,
++                from_address: "pat@example.com",
++                to_address: "kmc@clubs.memba.io"
++              }} ==
++               Messaging.authorize_inbound_club_email_sender(
++                 sender(pat, "pat@example.com"),
++                 destination(kmc, "kmc@clubs.memba.io")
++               )
++    end
++
++    test "rejects a resolved sender with an inactive destination-club membership" do
++      club = insert_membership_club!(slug: "kmc")
++      alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
++      insert_membership!(club, alice, active: false)
++
++      assert {:error, :sender_not_active_member,
++              %{
++                sender_id: alice.person_id,
++                club_id: club.club_id,
++                from_address: "alice@example.com",
++                to_address: "kmc@clubs.memba.io"
++              }} ==
++               Messaging.authorize_inbound_club_email_sender(
++                 sender(alice, "alice@example.com"),
++                 destination(club, "kmc@clubs.memba.io")
++               )
++    end
++  end
++
++  defp sender(person, from_address) do
++    %InboundClubSender{
++      person_id: person.person_id,
++      name: person.name,
++      from_address: from_address
++    }
++  end
++
++  defp destination(club, to_address) do
++    %InboundClubDestination{
++      club_id: club.club_id,
++      club_slug: club.slug,
++      to_address: to_address
++    }
++  end
++
++  defp insert_membership!(club, person, attrs) do
++    Repo.insert!(%MembershipProjection{
++      membership_id: Ecto.UUID.generate(),
++      club_id: club.club_id,
++      person_id: person.person_id,
++      active: Keyword.fetch!(attrs, :active)
++    })
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_club_destination_test.exs b/web/test/memba/messaging/inbound_club_destination_test.exs
+new file mode 100644
+index 0000000..221e54a
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_club_destination_test.exs
+@@ -0,0 +1,98 @@
++defmodule Memba.Messaging.InboundClubDestinationTest do
++  use Memba.DataCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.InboundClubDestination
++  alias Memba.Messaging.InboundEmail
++
++  describe "resolve_inbound_club_email_destination/1" do
++    test "resolves a whole-club inbound address to a club by slug" do
++      club = insert_membership_club!(slug: "kmc")
++
++      assert {:ok,
++              %InboundClubDestination{
++                club_id: club.club_id,
++                club_slug: "kmc",
++                to_address: "kmc@clubs.memba.io"
++              }} == Messaging.resolve_inbound_club_email_destination(["kmc@clubs.memba.io"])
++    end
++
++    test "normalizes recipient address casing and accepts unrelated copied recipients" do
++      club = insert_membership_club!(slug: "kmc")
++
++      inbound_email = %InboundEmail{
++        provider: "resend",
++        provider_message_id: "email-123",
++        from_address: "alice@example.com",
++        recipient_addresses: [" friend@example.org ", " KMC@Clubs.Memba.IO "],
++        subject: "Trip planning night"
++      }
++
++      assert {:ok,
++              %InboundClubDestination{
++                club_id: club.club_id,
++                club_slug: "kmc",
++                to_address: "kmc@clubs.memba.io"
++              }} == Messaging.resolve_inbound_club_email_destination(inbound_email)
++    end
++
++    test "uses the configured inbound email domain" do
++      club = insert_membership_club!(slug: "kmc")
++
++      with_club_inbound_email_config([domain: " Example.Clubs.Memba.IO. "], fn ->
++        assert {:ok,
++                %InboundClubDestination{
++                  club_id: club.club_id,
++                  club_slug: "kmc",
++                  to_address: "kmc@example.clubs.memba.io"
++                }} ==
++                 Messaging.resolve_inbound_club_email_destination([
++                   "kmc@example.clubs.memba.io"
++                 ])
++      end)
++    end
++
++    test "rejects recipient addresses outside the inbound club domain" do
++      insert_membership_club!(slug: "kmc")
++
++      assert {:error, :unsupported_recipient_address, "everyone@example.org"} ==
++               Messaging.resolve_inbound_club_email_destination(["everyone@example.org"])
++    end
++
++    test "rejects unknown club slugs at the inbound club domain" do
++      assert {:error, :unknown_club_slug, "unknown@clubs.memba.io"} ==
++               Messaging.resolve_inbound_club_email_destination(["unknown@clubs.memba.io"])
++    end
++
++    test "rejects malformed or missing recipient input as unsupported" do
++      assert {:error, :unsupported_recipient_address, nil} ==
++               Messaging.resolve_inbound_club_email_destination([])
++
++      assert {:error, :unsupported_recipient_address, nil} ==
++               Messaging.resolve_inbound_club_email_destination(nil)
++
++      assert {:error, :unsupported_recipient_address, "not-an-email-address"} ==
++               Messaging.resolve_inbound_club_email_destination(["not-an-email-address"])
++
++      assert {:error, :unsupported_recipient_address, "not_safe@clubs.memba.io"} ==
++               Messaging.resolve_inbound_club_email_destination(["not_safe@clubs.memba.io"])
++    end
++  end
++
++  defp with_club_inbound_email_config(config, fun) do
++    original = Application.get_env(:memba, :club_inbound_email)
++
++    try do
++      Application.put_env(:memba, :club_inbound_email, config)
++      fun.()
++    after
++      restore_club_inbound_email_config(original)
++    end
++  end
++
++  defp restore_club_inbound_email_config(nil),
++    do: Application.delete_env(:memba, :club_inbound_email)
++
++  defp restore_club_inbound_email_config(config),
++    do: Application.put_env(:memba, :club_inbound_email, config)
++end
+diff --git a/web/test/memba/messaging/inbound_club_sender_test.exs b/web/test/memba/messaging/inbound_club_sender_test.exs
+new file mode 100644
+index 0000000..8b0de1b
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_club_sender_test.exs
+@@ -0,0 +1,64 @@
++defmodule Memba.Messaging.InboundClubSenderTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Messaging
++  alias Memba.Messaging.InboundClubSender
++  alias Memba.Messaging.InboundEmail
++
++  describe "resolve_inbound_club_email_sender/1" do
++    test "resolves a sender from a person's primary email address" do
++      alice =
++        insert_membership_person!(
++          name: "Alice Example",
++          email_addresses: [
++            %{email: "Alice@Example.COM", is_primary: true},
++            %{email: "alice@work.example", is_primary: false}
++          ]
++        )
++
++      assert {:ok,
++              %InboundClubSender{
++                person_id: alice.person_id,
++                name: "Alice Example",
++                from_address: "alice@example.com"
++              }} == Messaging.resolve_inbound_club_email_sender(" Alice@Example.COM ")
++    end
++
++    test "resolves a sender from any alternate email address" do
++      alice =
++        insert_membership_person!(
++          name: "Alice Example",
++          email_addresses: [
++            %{email: "alice@example.com", is_primary: true},
++            %{email: "Alice.Work@Example.COM", is_primary: false}
++          ]
++        )
++
++      inbound_email = %InboundEmail{
++        provider: "resend",
++        provider_message_id: "email-123",
++        from_address: " alice.work@example.com ",
++        recipient_addresses: ["kmc@clubs.memba.io"],
++        subject: "Trip planning night"
++      }
++
++      assert {:ok,
++              %InboundClubSender{
++                person_id: alice.person_id,
++                name: "Alice Example",
++                from_address: "alice.work@example.com"
++              }} == Messaging.resolve_inbound_club_email_sender(inbound_email)
++    end
++
++    test "rejects unknown, blank, or missing sender addresses" do
++      assert {:error, :unknown_sender, "unknown@example.com"} ==
++               Messaging.resolve_inbound_club_email_sender("unknown@example.com")
++
++      assert {:error, :unknown_sender, nil} ==
++               Messaging.resolve_inbound_club_email_sender("   ")
++
++      assert {:error, :unknown_sender, nil} ==
++               Messaging.resolve_inbound_club_email_sender(nil)
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_email_api_test.exs b/web/test/memba/messaging/inbound_email_api_test.exs
+new file mode 100644
+index 0000000..a3db895
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_api_test.exs
+@@ -0,0 +1,112 @@
++defmodule Memba.Messaging.InboundEmailApiTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.InboundEmail
++  alias Memba.Messaging.InboundEmailAttachment
++
++  describe "receive_inbound_club_email_command/1" do
++    test "builds a provider-neutral inbound email command" do
++      attrs = %{
++        provider: " Example Mail ",
++        provider_message_id: " provider-message-123 ",
++        provider_event_id: " provider-event-456 ",
++        from_address: " Alice@Example.COM ",
++        recipient_addresses: [" KMC@Clubs.Memba.IO ", " everyone@example.org "],
++        subject: "Trip planning night",
++        text_body: "Bring route ideas.",
++        html_body: "<p>Bring route ideas.</p>",
++        attachments: [
++          %{
++            filename: "route.gpx",
++            content_type: "application/gpx+xml",
++            size: 1234,
++            content_id: "map-attachment"
++          }
++        ]
++      }
++
++      assert {:ok,
++              %ReceiveInboundEmail{
++                inbound_email_id: "inbound-email:example mail:provider-message-123",
++                inbound_email: %InboundEmail{
++                  provider: "example mail",
++                  provider_message_id: "provider-message-123",
++                  provider_event_id: "provider-event-456",
++                  from_address: "alice@example.com",
++                  recipient_addresses: ["kmc@clubs.memba.io", "everyone@example.org"],
++                  subject: "Trip planning night",
++                  text_body: "Bring route ideas.",
++                  html_body: "<p>Bring route ideas.</p>",
++                  attachments: [
++                    %InboundEmailAttachment{
++                      filename: "route.gpx",
++                      content_type: "application/gpx+xml",
++                      size: 1234,
++                      content_id: "map-attachment"
++                    }
++                  ]
++                }
++              }} = Messaging.receive_inbound_club_email_command(attrs)
++    end
++
++    test "accepts string-keyed attrs and keeps optional provider fields optional" do
++      attrs = %{
++        "provider" => "postmark",
++        "provider_message_id" => "inbound-123",
++        "from_address" => "alice@example.com",
++        "recipient_addresses" => ["kmc@clubs.memba.io"],
++        "subject" => "Trail conditions"
++      }
++
++      assert {:ok,
++              %ReceiveInboundEmail{
++                inbound_email_id: "inbound-email:postmark:inbound-123",
++                inbound_email: %InboundEmail{
++                  provider: "postmark",
++                  provider_message_id: "inbound-123",
++                  provider_event_id: nil,
++                  from_address: "alice@example.com",
++                  recipient_addresses: ["kmc@clubs.memba.io"],
++                  subject: "Trail conditions",
++                  text_body: nil,
++                  html_body: nil,
++                  attachments: []
++                }
++              }} = Messaging.receive_inbound_club_email_command(attrs)
++    end
++
++    test "rejects malformed provider-neutral attrs before any provider-specific parsing" do
++      valid_attrs = %{
++        provider: "example-mail",
++        provider_message_id: "provider-message-123",
++        from_address: "alice@example.com",
++        recipient_addresses: ["kmc@clubs.memba.io"],
++        subject: "Trip planning night"
++      }
++
++      assert {:error, {:missing_required_attribute, :provider_message_id}} =
++               valid_attrs
++               |> Map.delete(:provider_message_id)
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_provider} =
++               %{valid_attrs | provider: " "}
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_from_address} =
++               %{valid_attrs | from_address: "not an email address"}
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_recipient_addresses} =
++               %{valid_attrs | recipient_addresses: []}
++               |> Messaging.receive_inbound_club_email_command()
++
++      assert {:error, :invalid_attachment} =
++               valid_attrs
++               |> Map.put(:attachments, ["route.gpx"])
++               |> Messaging.receive_inbound_club_email_command()
++    end
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_email_dispatch_test.exs b/web/test/memba/messaging/inbound_email_dispatch_test.exs
+new file mode 100644
+index 0000000..a2fd8c2
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_dispatch_test.exs
+@@ -0,0 +1,49 @@
++defmodule Memba.Messaging.InboundEmailDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Events.InboundEmailReceived
++  alias Memba.Messaging.InboundEmailReceipt
++
++  test "Messaging app dispatch routes ReceiveInboundEmail to the inbound email aggregate" do
++    assert {:ok, command} =
++             Messaging.receive_inbound_club_email_command(%{
++               provider: "resend",
++               provider_message_id: "email-123",
++               provider_event_id: "event-456",
++               from_address: "alice@example.com",
++               recipient_addresses: ["kmc@clubs.memba.io"],
++               subject: "Trip planning night",
++               text_body: "Bring route ideas."
++             })
++
++    inbound_email_id = command.inbound_email_id
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^inbound_email_id,
++              aggregate_version: 1,
++              events: [
++                %InboundEmailReceived{
++                  inbound_email_id: ^inbound_email_id,
++                  provider: "resend",
++                  provider_message_id: "email-123",
++                  provider_event_id: "event-456"
++                }
++              ],
++              aggregate_state: %InboundEmailReceipt{
++                inbound_email_id: ^inbound_email_id,
++                provider: "resend",
++                provider_message_id: "email-123"
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++
++    assert %InboundEmailReceipt{
++             inbound_email_id: ^inbound_email_id,
++             provider: "resend",
++             provider_message_id: "email-123"
++           } = App.aggregate_state(InboundEmailReceipt, inbound_email_id)
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_email_events_test.exs b/web/test/memba/messaging/inbound_email_events_test.exs
+new file mode 100644
+index 0000000..e93153d
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_events_test.exs
+@@ -0,0 +1,76 @@
++defmodule Memba.Messaging.InboundEmailEventsTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.Events.InboundClubEmailAccepted
++  alias Memba.Messaging.Events.InboundClubEmailRejected
++
++  test "InboundClubEmailAccepted records provider identity, routing, sender, and message identity" do
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    message_id = Ecto.UUID.generate()
++
++    event = %InboundClubEmailAccepted{
++      inbound_email_id: "inbound-email:resend:email-123",
++      provider: "resend",
++      provider_message_id: "email-123",
++      provider_event_id: "event-456",
++      from_address: "alice@example.com",
++      to_address: "kmc@clubs.memba.io",
++      club_id: club_id,
++      sender_id: sender_id,
++      message_id: message_id
++    }
++
++    assert %{
++             "inbound_email_id" => "inbound-email:resend:email-123",
++             "provider" => "resend",
++             "provider_message_id" => "email-123",
++             "provider_event_id" => "event-456",
++             "from_address" => "alice@example.com",
++             "to_address" => "kmc@clubs.memba.io",
++             "club_id" => ^club_id,
++             "sender_id" => ^sender_id,
++             "message_id" => ^message_id
++           } = Jason.decode!(Jason.encode!(event))
++  end
++
++  test "InboundClubEmailRejected records provider identity, available addresses, reason, and rejection delivery reference" do
++    event = %InboundClubEmailRejected{
++      inbound_email_id: "inbound-email:resend:email-123",
++      provider: "resend",
++      provider_message_id: "email-123",
++      provider_event_id: "event-456",
++      from_address: "unknown@example.com",
++      to_address: "kmc@clubs.memba.io",
++      rejection_reason: "unknown sender",
++      rejection_email_delivery_reference: "resend-rejection-789"
++    }
++
++    assert %{
++             "inbound_email_id" => "inbound-email:resend:email-123",
++             "provider" => "resend",
++             "provider_message_id" => "email-123",
++             "provider_event_id" => "event-456",
++             "from_address" => "unknown@example.com",
++             "to_address" => "kmc@clubs.memba.io",
++             "rejection_reason" => "unknown sender",
++             "rejection_email_delivery_reference" => "resend-rejection-789"
++           } = Jason.decode!(Jason.encode!(event))
++  end
++
++  test "InboundClubEmailRejected can omit destination and rejection delivery reference" do
++    event = %InboundClubEmailRejected{
++      inbound_email_id: "inbound-email:resend:email-123",
++      provider: "resend",
++      provider_message_id: "email-123",
++      from_address: "unknown@example.com",
++      rejection_reason: "unsupported recipient"
++    }
++
++    assert %{
++             "to_address" => nil,
++             "provider_event_id" => nil,
++             "rejection_email_delivery_reference" => nil
++           } = Jason.decode!(Jason.encode!(event))
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_email_receipt_test.exs b/web/test/memba/messaging/inbound_email_receipt_test.exs
+new file mode 100644
+index 0000000..bb80198
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_receipt_test.exs
+@@ -0,0 +1,92 @@
++defmodule Memba.Messaging.InboundEmailReceiptTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.Events.InboundEmailReceived
++  alias Memba.Messaging.InboundEmail
++  alias Memba.Messaging.InboundEmailReceipt
++
++  describe "execute/2 ReceiveInboundEmail" do
++    test "records the first receipt for a provider message id" do
++      command = receive_command()
++
++      assert %InboundEmailReceived{
++               inbound_email_id: "inbound-email:resend:email-123",
++               provider: "resend",
++               provider_message_id: "email-123",
++               provider_event_id: "event-456"
++             } = InboundEmailReceipt.execute(%InboundEmailReceipt{}, command)
++    end
++
++    test "returns no events for duplicate provider message ids" do
++      command = receive_command()
++
++      receipt =
++        InboundEmailReceipt.apply(%InboundEmailReceipt{}, %InboundEmailReceived{
++          inbound_email_id: "inbound-email:resend:email-123",
++          provider: "resend",
++          provider_message_id: "email-123",
++          provider_event_id: "event-456"
++        })
++
++      assert [] = InboundEmailReceipt.execute(receipt, command)
++    end
++
++    test "rejects commands whose aggregate identity is not derived from the inbound email" do
++      command = %ReceiveInboundEmail{
++        receive_command()
++        | inbound_email_id: "inbound-email:resend:other"
++      }
++
++      assert {:error, :inbound_email_id_mismatch} =
++               InboundEmailReceipt.execute(%InboundEmailReceipt{}, command)
++    end
++
++    test "rejects malformed command payloads" do
++      assert {:error, :invalid_inbound_email} =
++               InboundEmailReceipt.execute(%InboundEmailReceipt{}, %ReceiveInboundEmail{
++                 inbound_email_id: "inbound-email:resend:email-123",
++                 inbound_email: nil
++               })
++
++      assert {:error, :invalid_inbound_email_id} =
++               InboundEmailReceipt.execute(%InboundEmailReceipt{}, %ReceiveInboundEmail{
++                 receive_command()
++                 | inbound_email_id: " "
++               })
++    end
++  end
++
++  describe "apply/2 InboundEmailReceived" do
++    test "stores only the provider identity needed to reject duplicates" do
++      assert %InboundEmailReceipt{
++               inbound_email_id: "inbound-email:resend:email-123",
++               provider: "resend",
++               provider_message_id: "email-123"
++             } =
++               InboundEmailReceipt.apply(%InboundEmailReceipt{}, %InboundEmailReceived{
++                 inbound_email_id: "inbound-email:resend:email-123",
++                 provider: "resend",
++                 provider_message_id: "email-123",
++                 provider_event_id: nil
++               })
++    end
++  end
++
++  defp receive_command do
++    inbound_email = %InboundEmail{
++      provider: "resend",
++      provider_message_id: "email-123",
++      provider_event_id: "event-456",
++      from_address: "alice@example.com",
++      recipient_addresses: ["kmc@clubs.memba.io"],
++      subject: "Trip planning night",
++      text_body: "Bring route ideas."
++    }
++
++    %ReceiveInboundEmail{
++      inbound_email_id: InboundEmail.identity(inbound_email),
++      inbound_email: inbound_email
++    }
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_email_source_projection_test.exs b/web/test/memba/messaging/inbound_email_source_projection_test.exs
+new file mode 100644
+index 0000000..ceb7622
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_source_projection_test.exs
+@@ -0,0 +1,130 @@
++defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Messaging
++  alias Memba.Messaging.Events.InboundClubEmailAccepted
++  alias Memba.Messaging.Events.InboundClubEmailRejected
++  alias Memba.Messaging.Projectors.InboundEmailSource, as: InboundEmailSourceProjector
++  alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
++
++  test "accepted inbound club email events project source status and created message identity" do
++    inbound_email_id = "inbound-email:resend:email-123"
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    message_id = Ecto.UUID.generate()
++
++    assert :ok =
++             InboundEmailSourceProjector.handle(
++               %InboundClubEmailAccepted{
++                 inbound_email_id: inbound_email_id,
++                 provider: "resend",
++                 provider_message_id: "email-123",
++                 provider_event_id: "event-456",
++                 from_address: "alice@example.com",
++                 to_address: "kmc@clubs.memba.io",
++                 club_id: club_id,
++                 sender_id: sender_id,
++                 message_id: message_id
++               },
++               projector_metadata(1)
++             )
++
++    assert %InboundEmailSourceProjection{
++             inbound_email_id: ^inbound_email_id,
++             provider: "resend",
++             provider_message_id: "email-123",
++             provider_event_id: "event-456",
++             from_address: "alice@example.com",
++             to_address: "kmc@clubs.memba.io",
++             status: "accepted",
++             club_id: ^club_id,
++             sender_id: ^sender_id,
++             message_id: ^message_id,
++             rejection_reason: nil,
++             rejection_email_delivery_reference: nil,
++             inserted_at: %DateTime{},
++             updated_at: %DateTime{}
++           } = Messaging.get_inbound_email_source("resend", "email-123")
++  end
++
++  test "rejected inbound club email events project source status and rejection audit fields" do
++    inbound_email_id = "inbound-email:resend:email-456"
++
++    assert :ok =
++             InboundEmailSourceProjector.handle(
++               %InboundClubEmailRejected{
++                 inbound_email_id: inbound_email_id,
++                 provider: "resend",
++                 provider_message_id: "email-456",
++                 provider_event_id: "event-789",
++                 from_address: "unknown@example.com",
++                 to_address: "kmc@clubs.memba.io",
++                 rejection_reason: "unknown sender",
++                 rejection_email_delivery_reference: "resend-rejection-123"
++               },
++               projector_metadata(2)
++             )
++
++    assert %InboundEmailSourceProjection{
++             inbound_email_id: ^inbound_email_id,
++             provider: "resend",
++             provider_message_id: "email-456",
++             provider_event_id: "event-789",
++             from_address: "unknown@example.com",
++             to_address: "kmc@clubs.memba.io",
++             status: "rejected",
++             message_id: nil,
++             rejection_reason: "unknown sender",
++             rejection_email_delivery_reference: "resend-rejection-123",
++             inserted_at: %DateTime{},
++             updated_at: %DateTime{}
++           } = Messaging.get_inbound_email_source(" resend ", " EMAIL-456 ")
++  end
++
++  test "inbound source projection enforces provider message id uniqueness defensively" do
++    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
++
++    Repo.insert!(%InboundEmailSourceProjection{
++      inbound_email_id: "inbound-email:resend:duplicate-a",
++      provider: "resend",
++      provider_message_id: "duplicate",
++      from_address: "alice@example.com",
++      to_address: "kmc@clubs.memba.io",
++      status: "accepted",
++      message_id: Ecto.UUID.generate(),
++      inserted_at: now,
++      updated_at: now
++    })
++
++    assert_raise Ecto.ConstraintError,
++                 ~r/messaging_inbound_email_sources_provider_message_id_index/,
++                 fn ->
++                   Repo.insert!(%InboundEmailSourceProjection{
++                     inbound_email_id: "inbound-email:resend:duplicate-b",
++                     provider: "resend",
++                     provider_message_id: "duplicate",
++                     from_address: "alice@example.com",
++                     to_address: "kmc@clubs.memba.io",
++                     status: "accepted",
++                     message_id: Ecto.UUID.generate(),
++                     inserted_at: now,
++                     updated_at: now
++                   })
++                 end
++  end
++
++  test "inbound source query returns nil for absent or invalid provider identity" do
++    assert is_nil(Messaging.get_inbound_email_source("resend", "missing"))
++    assert is_nil(Messaging.get_inbound_email_source(nil, "email-123"))
++    assert is_nil(Messaging.get_inbound_email_source("resend", nil))
++    assert is_nil(Messaging.get_inbound_email_source("", "email-123"))
++    assert is_nil(Messaging.get_inbound_email_source("resend", ""))
++  end
++
++  defp projector_metadata(event_number) do
++    %{
++      handler_name: "inbound-email-source-projection-test-#{Ecto.UUID.generate()}",
++      event_number: event_number
++    }
++  end
++end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 1e3eeb2..3eb5473 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -16,6 +16,9 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def list_member_email_deliverys("
+     assert source =~ "def list_operator_deliveries("
+     assert source =~ "def list_operator_email_deliveries("
++    assert source =~ "def get_inbound_email_source("
++    assert source =~ "def resolve_inbound_club_email_destination("
++    assert source =~ "def resolve_inbound_club_email_sender("
+ 
+     list_functions =
+       ~r/\bdef\s+(list_[a-zA-Z0-9_]+)\b/
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index d0bebaf..e8de3de 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -404,6 +404,32 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "button#member-message-send-button")
+   end
+ 
++  test "dashboard shows the selected club inbound email address", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-dashboard-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-dashboard-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
++             "kmc@clubs.memba.io"
++           )
++  end
++
+   test "dashboard renders a designed empty message state with a compose action", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -526,10 +552,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
+ 
+     Repo.get(Club, club_id) ||
+-      insert_membership_club!(
+-        club_id: club_id,
+-        name: club_name
+-      )
++      attrs
++      |> club_attrs(club_id, club_name)
++      |> insert_membership_club!()
+ 
+     person =
+       insert_membership_person!(
+@@ -551,6 +576,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     }
+   end
+ 
++  defp club_attrs(attrs, club_id, club_name) do
++    base = [
++      club_id: club_id,
++      name: club_name
++    ]
++
++    case Keyword.fetch(attrs, :slug) do
++      {:ok, slug} -> Keyword.put(base, :slug, slug)
++      :error -> base
++    end
++  end
++
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+ 
+diff --git a/web/test/memba_web/live/member_message_live/new_test.exs b/web/test/memba_web/live/member_message_live/new_test.exs
+index 4c634ff..0988bd1 100644
+--- a/web/test/memba_web/live/member_message_live/new_test.exs
++++ b/web/test/memba_web/live/member_message_live/new_test.exs
+@@ -204,6 +204,32 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
+     refute has_element?(view, "[name='message[sender_id]']")
+   end
+ 
++  test "routed compose screen shows the selected club inbound email address", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/messages/new?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-compose-inbound-email[data-inbound-address='kmc@clubs.memba.io']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-compose-inbound-email-link[href='mailto:kmc@clubs.memba.io']",
++             "kmc@clubs.memba.io"
++           )
++  end
++
+   test "routed GET redirects signed-out visitors and preserves the selected club return path",
+        %{conn: conn} do
+     alice =
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 453c7ba..9d10463 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -17,7 +17,8 @@ defmodule Memba.EventSourcedCase do
+     Memba.Messaging.Projectors.Message,
+     Memba.Messaging.Projectors.EmailDelivery,
+     Memba.Messaging.Projectors.MemberEmailDelivery,
+-    Memba.Messaging.Projectors.MembaStaffEmailDelivery
++    Memba.Messaging.Projectors.MembaStaffEmailDelivery,
++    Memba.Messaging.Projectors.InboundEmailSource
+   ]
+   @commanded_apps [Memba.Membership.App, Memba.Messaging.App]
+ 
