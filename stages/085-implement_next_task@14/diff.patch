@@ -1,0 +1,57 @@
+diff --git a/docs/adr/0016-use-resend-as-switchable-email-provider.md b/docs/adr/0016-use-resend-as-switchable-email-provider.md
+index 65bffc7..5b19753 100644
+--- a/docs/adr/0016-use-resend-as-switchable-email-provider.md
++++ b/docs/adr/0016-use-resend-as-switchable-email-provider.md
+@@ -20,6 +20,10 @@ We also want to avoid locking Memba to one email provider. Email deliverability,
+ 
+ Support Resend as a first-class, switchable email provider alongside Postmark.
+ 
++Postmark is the intended primary production provider once the account is
++approved and production setup is complete. Resend remains a first-class fallback,
++not a deprecated or temporary code path.
++
+ For member-message email:
+ 
+ - `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` selects the existing Postmark provider.
+@@ -45,6 +49,14 @@ Keep the existing Postmark endpoint at:
+ POST /webhooks/postmark
+ ```
+ 
++Use a distinct Postmark inbound-email endpoint for club-message email so
++delivery-status webhooks and inbound email webhooks do not share payload parsing
++or routing assumptions:
++
++```text
++POST /webhooks/postmark/inbound
++```
++
+ Resend outbound member-message emails include Memba correlation data using Resend tags and `X-Memba-*` headers:
+ 
+ - `memba_message_id`
+@@ -65,4 +77,13 @@ Operational documentation and deployment secrets must distinguish Postmark and R
+ 
+ Webhook authenticity remains a follow-up security concern. Before relying on provider webhooks for production customer data, each provider endpoint should verify the provider's webhook signature or equivalent authentication mechanism.
+ 
+-Postmark remains a viable provider. If Postmark activation completes and proves better operationally, Memba can switch back through configuration. If Resend proves reliable, it can remain the primary provider.
++Postmark approval completed after this ADR was accepted. Iteration 020 makes
++Postmark the intended primary production provider for member-message delivery,
++rejection emails, magic-link authentication, and inbound club-message email.
++Resend remains selectable for member-message delivery, auth email, and inbound
++handling so production can roll back without changing the domain model, command
++handlers, projections, member UI, or staff delivery views.
++
++Keeping Resend as a fallback means tests and documentation must continue to cover
++both provider paths. Removing Resend support requires a later ADR or an explicit
++iteration plan that replaces the rollback strategy.
+diff --git a/docs/iterations/020-migrate-production-email-to-postmark/todo.md b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+index c0e90e6..444941e 100644
+--- a/docs/iterations/020-migrate-production-email-to-postmark/todo.md
++++ b/docs/iterations/020-migrate-production-email-to-postmark/todo.md
+@@ -13,6 +13,6 @@
+ - [x] 011 Verify rejection-email delivery follows the configured mailer/provider path and works when Postmark is selected.
+ - [x] 012 Update `docs/postmark-email.md` to describe the full Postmark production setup: outbound member-message stream, auth stream, inbound club-message routing for `clubs.memba.io`, delivery-status webhook URL, inbound webhook URL, environment variables, and local smoke-test guidance.
+ - [x] 013 Update `docs/human-todo.md` or add a runbook under this iteration folder with Matt's manual cutover steps, smoke tests, monitoring checks, and rollback steps to Resend.
+-- [ ] 014 Update ADR/documentation as needed to reflect that Postmark is the intended primary production provider after approval, while Resend remains a first-class fallback.
++- [x] 014 Update ADR/documentation as needed to reflect that Postmark is the intended primary production provider after approval, while Resend remains a first-class fallback.
+ - [ ] 015 Run targeted tests for Postmark inbound, Resend inbound regression, Postmark outbound delivery, auth email configuration, and provider selection.
+ - [ ] 016 Run `dev check`.
