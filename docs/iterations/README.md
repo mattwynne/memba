@@ -28,7 +28,7 @@ green than before.
 | 016 | 2026-06-01 | merged | Multiple email addresses per person | [plan](016-person-email-addresses/plan.md) |
 | 017 | 2026-06-01 | merged | Remove email open tracking | [plan](017-remove-open-tracking/plan.md) |
 | 018 | 2026-06-01 | merged | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |
-| 019 | 2026-06-02 | implementing | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |
+| 019 | 2026-06-02 | merged | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |
 | 020 | 2026-06-02 | validated | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |
 
 Status notes:
