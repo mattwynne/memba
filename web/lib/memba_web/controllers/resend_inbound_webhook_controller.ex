@@ -1,21 +1,30 @@
 defmodule MembaWeb.ResendInboundWebhookController do
   use MembaWeb, :controller
 
+  alias Memba.Messaging
   alias MembaWeb.ResendInboundEmailParser
 
   @successful_status :accepted
 
   def create(conn, params) do
     case verify_and_parse_resend_inbound_event(conn, params) do
-      {:ok, _attrs} ->
+      {:ok, attrs} ->
+        accept_resend_inbound_email(conn, attrs)
+
+      {:error, reason} ->
+        render_error(conn, reason)
+    end
+  end
+
+  defp accept_resend_inbound_email(conn, attrs) do
+    case Messaging.receive_inbound_club_email(attrs, consistency: :strong) do
+      {:ok, _result} ->
         conn
         |> put_status(@successful_status)
         |> json(%{status: "accepted"})
 
       {:error, reason} ->
-        conn
-        |> put_status(error_status(reason))
-        |> json(%{errors: %{detail: error_detail(reason)}})
+        render_error(conn, reason)
     end
   end
 
@@ -31,6 +40,12 @@ defmodule MembaWeb.ResendInboundWebhookController do
     else
       :ok
     end
+  end
+
+  defp render_error(conn, reason) do
+    conn
+    |> put_status(error_status(reason))
+    |> json(%{errors: %{detail: error_detail(reason)}})
   end
 
   defp error_status(:invalid_signature), do: :unauthorized

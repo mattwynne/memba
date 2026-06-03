@@ -3,15 +3,29 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
 
   import Plug.Conn
 
+  alias Memba.Membership
+  alias Memba.Messaging
+  alias Memba.Messaging.EmailDeliveryProviders.Fake
+
   setup do
+    Memba.EventSourcedCase.reset_event_sourced_system!()
+
+    previous_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
     previous_config = Application.get_env(:memba, MembaWeb.ResendWebhookSignature, :unset)
+
+    Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Application.delete_env(:memba, MembaWeb.ResendWebhookSignature)
+    Fake.reset()
 
     on_exit(fn ->
+      restore_env(:messaging_email_delivery_provider, previous_provider)
+
       case previous_config do
         :unset -> Application.delete_env(:memba, MembaWeb.ResendWebhookSignature)
         config -> Application.put_env(:memba, MembaWeb.ResendWebhookSignature, config)
       end
+
+      Fake.reset()
     end)
 
     :ok
@@ -22,6 +36,61 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     conn = post_resend_inbound_event(conn, valid_payload())
 
     assert %{"status" => "accepted"} = json_response(conn, 202)
+  end
+
+  test "translates parsed Resend payloads into the provider-neutral inbound email API",
+       %{conn: conn} do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+
+    payload =
+      valid_payload(%{
+        "id" => "evt_controller_accepted",
+        "data" => %{
+          "email_id" => "email_controller_accepted",
+          "from" => "Alice Example <Alice@Example.COM>",
+          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "subject" => "Trip planning night",
+          "text" => "Bring route ideas."
+        }
+      })
+
+    conn = post_resend_inbound_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %{
+             provider: "resend",
+             provider_message_id: "email_controller_accepted",
+             provider_event_id: "evt_controller_accepted",
+             status: "accepted",
+             club_id: kmc_id,
+             sender_id: alice_id,
+             message_id: message_id
+           } = Messaging.get_inbound_email_source("resend", "email_controller_accepted")
+
+    assert kmc_id == kmc.club_id
+    assert alice_id == alice.person_id
+
+    assert %{
+             message_id: ^message_id,
+             club_id: ^kmc_id,
+             sender_id: ^alice_id,
+             subject: "Trip planning night",
+             body: "Bring route ideas."
+           } = Messaging.get_message(message_id)
+
+    assert [
+             %{recipient_id: ^alice_id, recipient_address: "alice@example.com"},
+             %{recipient_id: bob_id, recipient_address: "bob@example.com"}
+           ] = Messaging.list_recipient_deliveries(message_id)
+
+    assert bob_id == bob.person_id
+    assert length(Fake.deliveries()) == 2
   end
 
   test "accepts signed Resend inbound webhooks when a signing secret is configured", %{conn: conn} do
@@ -102,17 +171,75 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     "whsec_" <> Base.encode64("test-signing-secret")
   end
 
-  defp valid_payload do
-    %{
-      "id" => "evt_123",
-      "type" => "email.received",
-      "data" => %{
-        "email_id" => "email_123",
-        "from" => "Alice Example <alice@example.com>",
-        "to" => ["KMC <kmc@clubs.memba.io>"],
-        "subject" => "Trip planning night",
-        "text" => "Bring route ideas."
-      }
-    }
+  defp valid_payload(overrides \\ %{}) do
+    deep_merge(
+      %{
+        "id" => "evt_123",
+        "type" => "email.received",
+        "data" => %{
+          "email_id" => "email_123",
+          "from" => "Alice Example <alice@example.com>",
+          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "subject" => "Trip planning night",
+          "text" => "Bring route ideas."
+        }
+      },
+      overrides
+    )
   end
+
+  defp create_club!(attrs) do
+    club_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_club(
+               %{
+                 club_id: club_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 slug: Keyword.fetch!(attrs, :slug)
+               },
+               consistency: :strong
+             )
+
+    Membership.get_club(club_id)
+  end
+
+  defp create_person!(attrs) do
+    person_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: person_id,
+                 name: Keyword.fetch!(attrs, :name),
+                 email: Keyword.fetch!(attrs, :email)
+               },
+               consistency: :strong
+             )
+
+    Membership.get_person(person_id)
+  end
+
+  defp add_member!(club_id, person_id) do
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Ecto.UUID.generate(),
+                 club_id: club_id,
+                 person_id: person_id
+               },
+               consistency: :strong
+             )
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+
+  defp deep_merge(left, right) when is_map(left) and is_map(right) do
+    Map.merge(left, right, fn _key, left_value, right_value ->
+      deep_merge(left_value, right_value)
+    end)
+  end
+
+  defp deep_merge(_left, right), do: right
 end
