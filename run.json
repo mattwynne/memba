@@ -1314,7 +1314,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-03T06:07:11.723587034Z",
-  "last_event_at": "2026-06-03T07:02:53.685002696Z",
+  "last_event_at": "2026-06-03T07:03:18.786765219Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -86987,9 +86987,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 7097,
       "checkpoint": {
-        "timestamp": "2026-06-03T07:03:11.899967950Z",
+        "timestamp": "2026-06-03T07:03:18.786765219Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -87243,7 +87243,544 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.sync_task_list": 0,
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found**\n  - Working tree is clean after validation.\n  - Recent checkpoint commit `44a6bc5` changes exactly one ordinary todo line:\n    - `011 Reuse or wrap the existing web-composed club-message command...`\n    - from `- [ ]` to `- [x]`.\n  - `44a6bc5^:docs/iterations/019-inbound-club-messages-by-email/todo.md` shows task 011 was the first unchecked task when implementation began.\n\n- **Implementation artifacts found**\n  - Added `Memba.Messaging.Commands.AcceptInboundClubEmail`.\n  - Routed `AcceptInboundClubEmail` through `Memba.Messaging.Router` to `InboundEmailReceipt`.\n  - Extended `InboundEmailReceipt` to emit/apply `InboundClubEmailAccepted`.\n  - Updated `Memba.Messaging.receive_inbound_club_email/2` to resolve/authorize inbound email and call the existing `send_club_message/2` path, creating normal messages, delivery records, projections, and provider handoffs.\n  - Added focused coverage in `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`.\n  - Updated command registry expectations in `web/test/memba/messaging/app_test.exs`.\n\n- **Tests run/results found**\n  - Validator ran `PATH=\"$PWD/bin:$PATH\" dev check`.\n  - Result: `432 tests, 0 failures`; `31 scenarios (31 passed)`.\n  - Working tree remained clean afterward.\n\n- **ADR/plan conformance notes**\n  - Scope matches task 011 and leaves task 012 idempotency unchecked for the next planned slice.\n  - ADR 0005 respected: inbound accepted flow reuses the resolved-recipient `SendMessage` command path.\n  - ADR 0007 respected: Messaging uses Membership public APIs for people/clubs/recipients.\n  - ADR 0011 respected: message identity is caller-generated before dispatch.\n  - No acceptance `*.feature` files were edited.\n  - The checkpoint is small and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.fidelity": "summary:high",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "outcome": "succeeded",
+          "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "command.output": "blob://sha256/7133ec0a01594afdee0365af31a6068a57b4f1f667cbec329261847b402eacbf",
           "current_node": "implement_next_task",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.wip_gate": 0,
+          "task_list_needs_human": false,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.work_dir": "/workspace/memba",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "graph.rankdir": "LR",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.start": 0,
+          "task_retry_available": false,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.start.current_node": "read_plan",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "failure_signature": "",
+          "internal.thread_id": "all_tasks_done",
+          "failure_class": "",
+          "internal.retry_count.resume_gate": 0,
+          "graph.default_fidelity": "summary:high",
+          "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another MessageSent, create another club message, or send duplicate outbound/rejection emails.`\n\n2. **Changes made**\n   - Updated `Memba.Messaging.receive_inbound_club_email/2` to dispatch `ReceiveInboundEmail` with `returning: :execution_result`.\n   - Detects duplicate provider message IDs from the event-sourced inbound email aggregate result (`events: []`) before resolving/sending.\n   - Duplicate receives now return `{:ok, %{duplicate?: true, status: ..., message_id: ...}}` without creating another club message or sending provider deliveries.\n   - Added focused test coverage proving:\n     - duplicate provider message IDs return accepted/ok,\n     - only one projected club message exists,\n     - fake outbound deliveries are not duplicated,\n     - only one `MessageSent` event exists,\n     - only one `InboundClubEmailAccepted` event exists,\n     - the original inbound source projection remains tied to the first accepted event.\n\n3. **Validation run**\n   - Focused tests:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/messaging/inbound_club_message_acceptance_test.exs test/memba/messaging/inbound_email_dispatch_test.exs test/memba/messaging/inbound_email_receipt_test.exs test/memba/messaging/inbound_email_source_projection_test.exs test/memba/messaging/send_club_message_test.exs`\n     - Result: `16 tests, 0 failures`\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- mix format --check-formatted`\n     - Result: passed\n   - Full required check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: `433 tests, 0 failures`; `31 scenarios (31 passed)`\n\n4. **Todo check-off made**\n   - Changed exactly task 012 from `- [ ]` to `- [x]` in `docs/iterations/019-inbound-club-messages-by-email/todo.md`.\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0002: keeps idempotency in the event-sourced Commanded aggregate flow.\n   - ADR 0005: accepted inbound messages still reuse the existing resolved-recipient `SendMessage` path.\n   - ADR 0007: Messaging continues to use Membership public APIs for club/member/person lookup.\n   - ADR 0011: message aggregate IDs remain caller-generated UUIDs; duplicate handling uses the deterministic inbound email aggregate identity from `{provider, provider_message_id}`.",
+          "task_valid": true,
+          "last_stage": "implement_next_task",
+          "task_list_complete": false,
+          "internal.retry_count.read_plan": 0,
+          "graph.max_node_visits": "300",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.run_id": "01KT5M274P6VNG3WJK24N2SZQ9",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.task_gate.current_node": "sync_task_list",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 41,
+          "internal.retry_count.task_gate": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.validate_task.current_node": "task_gate"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/554c877306bf69831783b9dacce7b0bd6e63ef7bfff162d33e2066d271f8d9d5"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 134026,
+              "active_time_ms": 134026
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/568e7c733c3fc0a88b4e9ed451837c0b38a31c44eea39a871f60eb19a4db1301"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 198,
+              "active_time_ms": 198
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another MessageSent, create another club message, or send duplicate outbound/rejection emails.`\n\n2. **Changes made**\n   - Updated `Memba.Messaging.receive_inbound_club_email/2` to dispatch `ReceiveInboundEmail` with `returning: :execution_result`.\n   - Detects duplicate provider message IDs from the event-sourced inbound email aggregate result (`events: []`) before resolving/sending.\n   - Duplicate receives now return `{:ok, %{duplicate?: true, status: ..., message_id: ...}}` without creating another club message or sending provider deliveries.\n   - Added focused test coverage proving:\n     - duplicate provider message IDs return accepted/ok,\n     - only one projected club message exists,\n     - fake outbound deliveries are not duplicated,\n     - only one `MessageSent` event exists,\n     - only one `InboundClubEmailAccepted` event exists,\n     - the original inbound source projection remains tied to the first accepted event.\n\n3. **Validation run**\n   - Focused tests:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- mix test test/memba/messaging/inbound_club_message_acceptance_test.exs test/memba/messaging/inbound_email_dispatch_test.exs test/memba/messaging/inbound_email_receipt_test.exs test/memba/messaging/inbound_email_source_projection_test.exs test/memba/messaging/send_club_message_test.exs`\n     - Result: `16 tests, 0 failures`\n   - Formatting:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- mix format --check-formatted`\n     - Result: passed\n   - Full required check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Result: `433 tests, 0 failures`; `31 scenarios (31 passed)`\n\n4. **Todo check-off made**\n   - Changed exactly task 012 from `- [ ]` to `- [x]` in `docs/iterations/019-inbound-club-messages-by-email/todo.md`.\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0002: keeps idempotency in the event-sourced Commanded aggregate flow.\n   - ADR 0005: accepted inbound messages still reuse the existing resolved-recipient `SendMessage` path.\n   - ADR 0007: Messaging continues to use Membership public APIs for club/member/person lookup.\n   - ADR 0011: message aggregate IDs remain caller-generated UUIDs; duplicate handling uses the deterministic inbound email aggregate identity from `{provider, provider_message_id}`.",
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 2120639,
+                    "output_tokens": 6943,
+                    "reasoning_tokens": 6073,
+                    "cache_read_tokens": 5986304,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 13986827
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 395437,
+              "tool_time_ms": 427456,
+              "active_time_ms": 822893
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/61363048a63cd6a0633d191af290d4e71df05f71ec1689b0aef580d13cc84be6"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 170,
+              "active_time_ms": 170
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found**\n  - Working tree is clean after validation.\n  - Recent checkpoint commit `44a6bc5` changes exactly one ordinary todo ",
+              "task_valid": true,
+              "task_retry_available": false,
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found**\n  - Working tree is clean after validation.\n  - Recent checkpoint commit `44a6bc5` changes exactly one ordinary todo line:\n    - `011 Reuse or wrap the existing web-composed club-message command...`\n    - from `- [ ]` to `- [x]`.\n  - `44a6bc5^:docs/iterations/019-inbound-club-messages-by-email/todo.md` shows task 011 was the first unchecked task when implementation began.\n\n- **Implementation artifacts found**\n  - Added `Memba.Messaging.Commands.AcceptInboundClubEmail`.\n  - Routed `AcceptInboundClubEmail` through `Memba.Messaging.Router` to `InboundEmailReceipt`.\n  - Extended `InboundEmailReceipt` to emit/apply `InboundClubEmailAccepted`.\n  - Updated `Memba.Messaging.receive_inbound_club_email/2` to resolve/authorize inbound email and call the existing `send_club_message/2` path, creating normal messages, delivery records, projections, and provider handoffs.\n  - Added focused coverage in `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`.\n  - Updated command registry expectations in `web/test/memba/messaging/app_test.exs`.\n\n- **Tests run/results found**\n  - Validator ran `PATH=\"$PWD/bin:$PATH\" dev check`.\n  - Result: `432 tests, 0 failures`; `31 scenarios (31 passed)`.\n  - Working tree remained clean afterward.\n\n- **ADR/plan conformance notes**\n  - Scope matches task 011 and leaves task 012 idempotency unchecked for the next planned slice.\n  - ADR 0005 respected: inbound accepted flow reuses the resolved-recipient `SendMessage` command path.\n  - ADR 0007 respected: Messaging uses Membership public APIs for people/clubs/recipients.\n  - ADR 0011 respected: message identity is caller-generated before dispatch.\n  - No acceptance `*.feature` files were edited.\n  - The checkpoint is small and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_stage": "validate_task"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1230854,
+                    "output_tokens": 2289,
+                    "reasoning_tokens": 2507,
+                    "cache_read_tokens": 1301504,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6948902
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 138406,
+              "tool_time_ms": 274396,
+              "active_time_ms": 412802
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4efca81760afc75482ac6258b1802d3fdb461b9096dbb9bc37c6946e8a165025"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 9008,
+              "active_time_ms": 9008
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/29d5e70b7c1f15e466076246ef3082dbdd879c2ee9ad54630d4a1b9005d39367"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 341,
+              "active_time_ms": 341
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7133ec0a01594afdee0365af31a6068a57b4f1f667cbec329261847b402eacbf"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 239,
+              "active_time_ms": 239
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false,
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 129890,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 214,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 656710
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 8307,
+              "tool_time_ms": 0,
+              "active_time_ms": 8307
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "49e531ae77af000f0f7ec7a3ea293cf58618646e",
+        "node_visits": {
+          "validate_task": 40,
+          "sync_task_list": 41,
+          "all_tasks_done": 41,
+          "wip_gate": 1,
+          "start": 1,
+          "read_plan": 1,
+          "preflight_sandbox": 1,
+          "implement_next_task": 41,
+          "task_gate": 40,
+          "pre_validate_snapshot": 40,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md\nindex 1340281..516adc6 100644\n--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md\n+++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md\n@@ -11,7 +11,7 @@\n - [x] 009 Add sender resolution that finds a person by any primary or alternate email address.\n - [x] 010 Add active-membership authorization for the resolved sender and destination club.\n - [x] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.\n-- [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.\n+- [x] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.\n - [ ] 013 Add plain-text body normalization:\n - [ ] 014 Add attachment rejection before message creation when inbound payload includes any attachments.\n - [ ] 015 Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.\ndiff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex\nindex f5378e8..434c61d 100644\n--- a/web/lib/memba/messaging.ex\n+++ b/web/lib/memba/messaging.ex\n@@ -3,6 +3,7 @@ defmodule Memba.Messaging do\n   Public application service API for the Messaging bounded context.\n   \"\"\"\n \n+  alias Commanded.Commands.ExecutionResult\n   alias Memba.Membership\n   alias Memba.Messaging.App\n   alias Memba.Messaging.Commands.AcceptInboundClubEmail\n@@ -18,6 +19,7 @@ defmodule Memba.Messaging do\n   alias Memba.Messaging.InboundClubDestination\n   alias Memba.Messaging.InboundClubSender\n   alias Memba.Messaging.InboundEmail\n+  alias Memba.Messaging.InboundEmailReceipt\n   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection\n   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection\n   alias Memba.Messaging.Projections.Message, as: MessageProjection\n@@ -75,37 +77,12 @@ defmodule Memba.Messaging do\n   def receive_inbound_club_email(attrs, dispatch_opts)\n       when is_map(attrs) and is_list(dispatch_opts) do\n     with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),\n-         :ok <- dispatch_ok(receive_command, dispatch_opts),\n-         {:ok, destination} <-\n-           resolve_inbound_club_email_destination(receive_command.inbound_email),\n-         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),\n-         :ok <- authorize_inbound_club_email_sender(sender, destination),\n-         message_id = Ecto.UUID.generate(),\n-         :ok <-\n-           send_inbound_club_message(\n-             receive_command.inbound_email,\n-             destination,\n-             sender,\n-             message_id,\n-             dispatch_opts\n-           ),\n-         :ok <-\n-           record_inbound_club_email_accepted(\n-             receive_command.inbound_email,\n-             destination,\n-             sender,\n-             message_id,\n-             dispatch_opts\n-           ) do\n-      {:ok,\n-       %{\n-         inbound_email_id: receive_command.inbound_email_id,\n-         message_id: message_id,\n-         club_id: destination.club_id,\n-         sender_id: sender.person_id,\n-         from_address: sender.from_address,\n-         to_address: destination.to_address\n-       }}\n+         {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do\n+      if duplicate_inbound_email_receipt?(receive_result) do\n+        duplicate_inbound_email_response(receive_command, receive_result)\n+      else\n+        post_first_inbound_club_email(receive_command, dispatch_opts)\n+      end\n     end\n   end\n \n@@ -469,6 +446,65 @@ defmodule Memba.Messaging do\n     end\n   end\n \n+  defp dispatch_inbound_email_received(receive_command, dispatch_opts) do\n+    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)\n+\n+    case dispatch_command(receive_command, dispatch_opts) do\n+      {:ok, {:ok, %ExecutionResult{} = result}} -> {:ok, result}\n+      {:error, _reason} = error -> error\n+    end\n+  end\n+\n+  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true\n+  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false\n+\n+  defp duplicate_inbound_email_response(\n+         receive_command,\n+         %ExecutionResult{aggregate_state: %InboundEmailReceipt{} = receipt}\n+       ) do\n+    {:ok,\n+     %{\n+       inbound_email_id: receive_command.inbound_email_id,\n+       duplicate?: true,\n+       status: receipt.status,\n+       message_id: receipt.message_id\n+     }}\n+  end\n+\n+  defp post_first_inbound_club_email(receive_command, dispatch_opts) do\n+    with {:ok, destination} <-\n+           resolve_inbound_club_email_destination(receive_command.inbound_email),\n+         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),\n+         :ok <- authorize_inbound_club_email_sender(sender, destination),\n+         message_id = Ecto.UUID.generate(),\n+         :ok <-\n+           send_inbound_club_message(\n+             receive_command.inbound_email,\n+             destination,\n+             sender,\n+             message_id,\n+             dispatch_opts\n+           ),\n+         :ok <-\n+           record_inbound_club_email_accepted(\n+             receive_command.inbound_email,\n+             destination,\n+             sender,\n+             message_id,\n+             dispatch_opts\n+           ) do\n+      {:ok,\n+       %{\n+         inbound_email_id: receive_command.inbound_email_id,\n+         message_id: message_id,\n+         club_id: destination.club_id,\n+         sender_id: sender.person_id,\n+         from_address: sender.from_address,\n+         to_address: destination.to_address\n+       }}\n+    end\n+  end\n+\n   defp send_inbound_club_message(\n          %InboundEmail{} = inbound_email,\n          %InboundClubDestination{} = destination,\ndiff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\nindex 9be8d2d..b7c9389 100644\n--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n+++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs\n@@ -5,6 +5,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n   alias Memba.Messaging\n   alias Memba.Messaging.EmailDeliveryProviders.Fake\n   alias Memba.Messaging.EmailDeliveryRequest\n+  alias Memba.Messaging.Events.InboundClubEmailAccepted\n+  alias Memba.Messaging.Events.MessageSent\n   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection\n \n   setup do\n@@ -132,6 +134,67 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n            } = Messaging.get_inbound_email_source(\"resend\", \"task-011-email\")\n   end\n \n+  test \"duplicate provider message ids return accepted without creating duplicate messages or outbound deliveries\" do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+\n+    alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n+    bob = create_person!(name: \"Bob Example\", email: \"bob@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+    add_member!(kmc.club_id, bob.person_id)\n+\n+    inbound_attrs = %{\n+      provider: \"resend\",\n+      provider_message_id: \"task-012-duplicate-email\",\n+      provider_event_id: \"task-012-event-first\",\n+      from_address: \"alice@example.com\",\n+      recipient_addresses: [\"kmc@clubs.memba.io\"],\n+      subject: \"Trip planning night\",\n+      text_body: \"Bring route ideas.\"\n+    }\n+\n+    assert {:ok, %{message_id: message_id}} =\n+             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)\n+\n+    first_deliveries = Fake.deliveries()\n+\n+    assert {:ok,\n+            %{\n+              inbound_email_id: \"inbound-email:resend:task-012-duplicate-email\",\n+              duplicate?: true,\n+              status: :accepted,\n+              message_id: ^message_id\n+            }} =\n+             inbound_attrs\n+             |> Map.merge(%{\n+               provider_event_id: \"task-012-event-retry\",\n+               subject: \"Trip planning night retry\",\n+               text_body: \"This retry must not be posted.\"\n+             })\n+             |> Messaging.receive_inbound_club_email(consistency: :strong)\n+\n+    assert [\n+             %{\n+               message_id: ^message_id,\n+               subject: \"Trip planning night\",\n+               body: \"Bring route ideas.\"\n+             }\n+           ] =\n+             Messaging.list_messages_for_club(kmc.club_id)\n+\n+    assert Fake.deliveries() == first_deliveries\n+    assert length(first_deliveries) == 2\n+\n+    assert %InboundEmailSourceProjection{\n+             status: \"accepted\",\n+             provider_event_id: \"task-012-event-first\",\n+             message_id: ^message_id\n+           } = Messaging.get_inbound_email_source(\"resend\", \"task-012-duplicate-email\")\n+\n+    assert 1 == count_events(MessageSent)\n+    assert 1 == count_events(InboundClubEmailAccepted)\n+  end\n+\n   defp create_club!(attrs) do\n     club_id = Ecto.UUID.generate()\n \n@@ -178,4 +241,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do\n \n   defp restore_env(key, nil), do: Application.delete_env(:memba, key)\n   defp restore_env(key, value), do: Application.put_env(:memba, key, value)\n+\n+  defp count_events(event_module) when is_atom(event_module) do\n+    event_type = Atom.to_string(event_module)\n+\n+    %{rows: [[count]]} =\n+      Repo.query!(\n+        ~S|SELECT count(*) FROM \"event_store\".\"events\" WHERE event_type = $1|,\n+        [event_type]\n+      )\n+\n+    count\n+  end\n end\n",
+        "summary": {
+          "files_changed": 41,
+          "additions": 2482,
+          "deletions": 7
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-03T07:03:19.511675984Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "current_node": "pre_validate_snapshot",
           "last_stage": "implement_next_task",
           "failure_class": "",
           "task_list_needs_human": false,
@@ -87257,14 +87794,14 @@
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "internal.retry_count.start": 0,
           "internal.retry_count.wip_gate": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.read_plan.current_node": "wip_gate",
           "task_retry_available": false,
           "internal.retry_count.preflight_sandbox": 0,
           "outcome": "succeeded",
           "thread.all_tasks_done.current_node": "implement_next_task",
           "internal.retry_count.sync_task_list": 0,
-          "command.output": "blob://sha256/7133ec0a01594afdee0365af31a6068a57b4f1f667cbec329261847b402eacbf",
+          "command.output": "blob://sha256/8adbef7d7b8fcd9ced440ad743f5e30a74738dfe46aa92672d84bfddd594f0cd",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.pre_validate_snapshot": 0,
           "internal.retry_count.all_tasks_done": 0,
@@ -87294,15 +87831,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/29d5e70b7c1f15e466076246ef3082dbdd879c2ee9ad54630d4a1b9005d39367"
+              "command.output": "blob://sha256/8adbef7d7b8fcd9ced440ad743f5e30a74738dfe46aa92672d84bfddd594f0cd"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 341,
-              "active_time_ms": 341
+              "tool_time_ms": 351,
+              "active_time_ms": 351
             }
           },
           "wip_gate": {
@@ -87497,7 +88034,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "implement_next_task": 41,
           "preflight_sandbox": 1,
@@ -87508,7 +88045,7 @@
           "validate_task": 40,
           "start": 1,
           "wip_gate": 1,
-          "pre_validate_snapshot": 40,
+          "pre_validate_snapshot": 41,
           "sync_task_list": 41
         }
       },
@@ -91193,7 +91730,12 @@
       "first_event_seq": 6872,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-03T07:03:11.895239770Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -91207,13 +91749,20 @@
       "output": null,
       "started_at": "2026-06-03T06:49:28.035900514Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 823859,
+        "inference_time_ms": 395437,
+        "tool_time_ms": 427456,
+        "active_time_ms": 822893
+      },
       "usage": {
-        "input_tokens": 2109744,
-        "output_tokens": 6358,
-        "total_tokens": 7917908,
-        "reasoning_tokens": 5966,
-        "cache_read_tokens": 5795840,
-        "cache_write_tokens": 0
+        "input_tokens": 2120639,
+        "output_tokens": 6943,
+        "total_tokens": 8119959,
+        "reasoning_tokens": 6073,
+        "cache_read_tokens": 5986304,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 13986827
       },
       "model": {
         "provider": "openai",
@@ -91388,32 +91937,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 200952,
-        "usage_percent": 73.87941176470588,
+        "input_tokens": 201359,
+        "usage_percent": 74.02904411764706,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-03T07:02:53.682158216Z",
-        "event_seq": 7085,
+        "generated_at": "2026-06-03T07:03:11.870500864Z",
+        "event_seq": 7089,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1115,
-            "usage_percent": 0.4099264705882353
+            "tokens": 1112,
+            "usage_percent": 0.4088235294117647
           },
           {
             "category": "tools",
-            "tokens": 1596,
-            "usage_percent": 0.586764705882353
+            "tokens": 1591,
+            "usage_percent": 0.5849264705882353
           },
           {
             "category": "memory",
-            "tokens": 352,
-            "usage_percent": 0.12941176470588237
+            "tokens": 351,
+            "usage_percent": 0.12904411764705884
           },
           {
             "category": "conversation",
-            "tokens": 197883,
-            "usage_percent": 72.75110294117647
+            "tokens": 198299,
+            "usage_percent": 72.90404411764706
           },
           {
             "category": "other",
@@ -91423,7 +91972,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@22": {
       "first_event_seq": 4638,

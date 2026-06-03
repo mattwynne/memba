@@ -1,0 +1,241 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index 1340281..516adc6 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 Add sender resolution that finds a person by any primary or alternate email address.
+ - [x] 010 Add active-membership authorization for the resolved sender and destination club.
+ - [x] 011 Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
+-- [ ] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
++- [x] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
+ - [ ] 013 Add plain-text body normalization:
+ - [ ] 014 Add attachment rejection before message creation when inbound payload includes any attachments.
+ - [ ] 015 Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index f5378e8..434c61d 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -3,6 +3,7 @@ defmodule Memba.Messaging do
+   Public application service API for the Messaging bounded context.
+   """
+ 
++  alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership
+   alias Memba.Messaging.App
+   alias Memba.Messaging.Commands.AcceptInboundClubEmail
+@@ -18,6 +19,7 @@ defmodule Memba.Messaging do
+   alias Memba.Messaging.InboundClubDestination
+   alias Memba.Messaging.InboundClubSender
+   alias Memba.Messaging.InboundEmail
++  alias Memba.Messaging.InboundEmailReceipt
+   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+   alias Memba.Messaging.Projections.MemberEmailDelivery, as: MemberEmailDeliveryProjection
+   alias Memba.Messaging.Projections.Message, as: MessageProjection
+@@ -75,37 +77,12 @@ defmodule Memba.Messaging do
+   def receive_inbound_club_email(attrs, dispatch_opts)
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, receive_command} <- receive_inbound_club_email_command(attrs),
+-         :ok <- dispatch_ok(receive_command, dispatch_opts),
+-         {:ok, destination} <-
+-           resolve_inbound_club_email_destination(receive_command.inbound_email),
+-         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
+-         :ok <- authorize_inbound_club_email_sender(sender, destination),
+-         message_id = Ecto.UUID.generate(),
+-         :ok <-
+-           send_inbound_club_message(
+-             receive_command.inbound_email,
+-             destination,
+-             sender,
+-             message_id,
+-             dispatch_opts
+-           ),
+-         :ok <-
+-           record_inbound_club_email_accepted(
+-             receive_command.inbound_email,
+-             destination,
+-             sender,
+-             message_id,
+-             dispatch_opts
+-           ) do
+-      {:ok,
+-       %{
+-         inbound_email_id: receive_command.inbound_email_id,
+-         message_id: message_id,
+-         club_id: destination.club_id,
+-         sender_id: sender.person_id,
+-         from_address: sender.from_address,
+-         to_address: destination.to_address
+-       }}
++         {:ok, receive_result} <- dispatch_inbound_email_received(receive_command, dispatch_opts) do
++      if duplicate_inbound_email_receipt?(receive_result) do
++        duplicate_inbound_email_response(receive_command, receive_result)
++      else
++        post_first_inbound_club_email(receive_command, dispatch_opts)
++      end
+     end
+   end
+ 
+@@ -469,6 +446,65 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  defp dispatch_inbound_email_received(receive_command, dispatch_opts) do
++    dispatch_opts = Keyword.put(dispatch_opts, :returning, :execution_result)
++
++    case dispatch_command(receive_command, dispatch_opts) do
++      {:ok, {:ok, %ExecutionResult{} = result}} -> {:ok, result}
++      {:error, _reason} = error -> error
++    end
++  end
++
++  defp duplicate_inbound_email_receipt?(%ExecutionResult{events: []}), do: true
++  defp duplicate_inbound_email_receipt?(%ExecutionResult{}), do: false
++
++  defp duplicate_inbound_email_response(
++         receive_command,
++         %ExecutionResult{aggregate_state: %InboundEmailReceipt{} = receipt}
++       ) do
++    {:ok,
++     %{
++       inbound_email_id: receive_command.inbound_email_id,
++       duplicate?: true,
++       status: receipt.status,
++       message_id: receipt.message_id
++     }}
++  end
++
++  defp post_first_inbound_club_email(receive_command, dispatch_opts) do
++    with {:ok, destination} <-
++           resolve_inbound_club_email_destination(receive_command.inbound_email),
++         {:ok, sender} <- resolve_inbound_club_email_sender(receive_command.inbound_email),
++         :ok <- authorize_inbound_club_email_sender(sender, destination),
++         message_id = Ecto.UUID.generate(),
++         :ok <-
++           send_inbound_club_message(
++             receive_command.inbound_email,
++             destination,
++             sender,
++             message_id,
++             dispatch_opts
++           ),
++         :ok <-
++           record_inbound_club_email_accepted(
++             receive_command.inbound_email,
++             destination,
++             sender,
++             message_id,
++             dispatch_opts
++           ) do
++      {:ok,
++       %{
++         inbound_email_id: receive_command.inbound_email_id,
++         message_id: message_id,
++         club_id: destination.club_id,
++         sender_id: sender.person_id,
++         from_address: sender.from_address,
++         to_address: destination.to_address
++       }}
++    end
++  end
++
+   defp send_inbound_club_message(
+          %InboundEmail{} = inbound_email,
+          %InboundClubDestination{} = destination,
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 9be8d2d..b7c9389 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -5,6 +5,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.Events.InboundClubEmailAccepted
++  alias Memba.Messaging.Events.MessageSent
+   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
+ 
+   setup do
+@@ -132,6 +134,67 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+            } = Messaging.get_inbound_email_source("resend", "task-011-email")
+   end
+ 
++  test "duplicate provider message ids return accepted without creating duplicate messages or outbound deliveries" do
++    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++
++    alice = create_person!(name: "Alice Example", email: "alice@example.com")
++    bob = create_person!(name: "Bob Example", email: "bob@example.com")
++
++    add_member!(kmc.club_id, alice.person_id)
++    add_member!(kmc.club_id, bob.person_id)
++
++    inbound_attrs = %{
++      provider: "resend",
++      provider_message_id: "task-012-duplicate-email",
++      provider_event_id: "task-012-event-first",
++      from_address: "alice@example.com",
++      recipient_addresses: ["kmc@clubs.memba.io"],
++      subject: "Trip planning night",
++      text_body: "Bring route ideas."
++    }
++
++    assert {:ok, %{message_id: message_id}} =
++             Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
++
++    first_deliveries = Fake.deliveries()
++
++    assert {:ok,
++            %{
++              inbound_email_id: "inbound-email:resend:task-012-duplicate-email",
++              duplicate?: true,
++              status: :accepted,
++              message_id: ^message_id
++            }} =
++             inbound_attrs
++             |> Map.merge(%{
++               provider_event_id: "task-012-event-retry",
++               subject: "Trip planning night retry",
++               text_body: "This retry must not be posted."
++             })
++             |> Messaging.receive_inbound_club_email(consistency: :strong)
++
++    assert [
++             %{
++               message_id: ^message_id,
++               subject: "Trip planning night",
++               body: "Bring route ideas."
++             }
++           ] =
++             Messaging.list_messages_for_club(kmc.club_id)
++
++    assert Fake.deliveries() == first_deliveries
++    assert length(first_deliveries) == 2
++
++    assert %InboundEmailSourceProjection{
++             status: "accepted",
++             provider_event_id: "task-012-event-first",
++             message_id: ^message_id
++           } = Messaging.get_inbound_email_source("resend", "task-012-duplicate-email")
++
++    assert 1 == count_events(MessageSent)
++    assert 1 == count_events(InboundClubEmailAccepted)
++  end
++
+   defp create_club!(attrs) do
+     club_id = Ecto.UUID.generate()
+ 
+@@ -178,4 +241,16 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++
++  defp count_events(event_module) when is_atom(event_module) do
++    event_type = Atom.to_string(event_module)
++
++    %{rows: [[count]]} =
++      Repo.query!(
++        ~S|SELECT count(*) FROM "event_store"."events" WHERE event_type = $1|,
++        [event_type]
++      )
++
++    count
++  end
+ end
