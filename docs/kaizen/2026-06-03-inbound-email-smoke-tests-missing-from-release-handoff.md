@@ -164,10 +164,13 @@ Root cause: the deployment handoff had no executable production smoke-test artif
 
 Fix applied:
 
-- `smoke-tests/`: added a Cucumber smoke-test runner that sends real email through Fastmail SMTP, polls Fastmail JMAP mailboxes for rejection/distribution emails, and uses Playwright to check staff/member-visible Memba UI.
+- `smoke-tests/`: added a Cucumber smoke-test runner that sends real email through Fastmail SMTP, polls Fastmail mailboxes for rejection/distribution emails, and uses Playwright to check staff/member-visible Memba UI. The mailbox reader now supports Fastmail JMAP when an API token is available, waits on JMAP events between checks, and falls back to IMAP using `SMOKE_TEST_EMAIL_PASSWORD` / `MEMBA_SMOKE_FASTMAIL_PASSWORD`.
 - `smoke-tests/features/inbound_club_email.feature`: captured the routine production wiring smoke cases: unknown sender rejected, known active member accepted/distributed, and known active member with attachment rejected.
-- `smoke-tests/README.md`: documented the required `Test` club fixture, `test@memba.io` member mailbox, credentials, and run commands.
-- `docs/human-todo.md`: added Matt's external setup tasks for the controlled smoke club and Fastmail credentials.
+- `smoke-tests/README.md`: documented the required `Smoke Test Club` fixture, `test@memba.io` member mailbox, credentials, and run commands.
+- `docs/human-todo.md`: added and then updated Matt's external setup tasks for the controlled smoke club, Fastmail credentials, DNS, Postmark inbound configuration, and production provider cutover.
+- `web/priv/repo/seeds.exs`: seeds `Smoke Test Club` with slug `test`, `Smoke Tester <test@memba.io>`, and an active membership.
+- `MembaWeb.PageController`: hard-codes slug `test` as hidden from public club pages while preserving staff/member/inbound use.
+- Production setup applied during the session: `clubs.memba.io` MX points to `inbound.postmarkapp.com`; Postmark `memba.io` server has inbound domain `clubs.memba.io` and inbound hook `https://memba.io/webhooks/postmark`; production selects Postmark for messaging and auth email; production database contains the smoke-test club/member fixture.
 
 Validation:
 
@@ -176,5 +179,7 @@ Validation:
 
 Remaining follow-up:
 
-- Matt needs to complete the external setup tasks in `docs/human-todo.md` before the smoke tests can run against production.
-- The smoke runner assumes a hidden/non-public `Test` club can be prepared operationally; if the product lacks a way to hide that club, add that affordance or choose another controlled fixture strategy.
+- The production smoke runner can sign staff/member in through `test@memba.io`, can see the smoke-test club in staff UI, and can send mail through Fastmail SMTP using `test+x@memba.io` as an unknown sender.
+- The current production smoke failure is downstream of sending: Postmark is not showing inbound messages for `test@clubs.memba.io` (`/messages/inbound` returned `TotalCount: 0`), and Memba logs show no `POST /webhooks/postmark` for those test emails. This suggests the remaining abnormality is still at the provider receiving/MX acceptance boundary, not mailbox access or app sign-in.
+- The smoke runner now assumes `Smoke Test Club`, not `Test`, and production contains that fixture.
+- A future kaizen/fix should make the provider receiving boundary easier to diagnose automatically: after sending, check provider inbound message history and webhook delivery before waiting for Memba-visible outcomes.
