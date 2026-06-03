@@ -1,7 +1,7 @@
 # Migrate production email to Postmark
 
 Date: 2026-06-02
-Status: validated
+Status: implementing
 
 ## Goal
 
