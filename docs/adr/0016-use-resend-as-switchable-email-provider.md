@@ -20,6 +20,10 @@ We also want to avoid locking Memba to one email provider. Email deliverability,
 
 Support Resend as a first-class, switchable email provider alongside Postmark.
 
+Postmark is the intended primary production provider once the account is
+approved and production setup is complete. Resend remains a first-class fallback,
+not a deprecated or temporary code path.
+
 For member-message email:
 
 - `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` selects the existing Postmark provider.
@@ -45,6 +49,14 @@ Keep the existing Postmark endpoint at:
 POST /webhooks/postmark
 ```
 
+Use a distinct Postmark inbound-email endpoint for club-message email so
+delivery-status webhooks and inbound email webhooks do not share payload parsing
+or routing assumptions:
+
+```text
+POST /webhooks/postmark/inbound
+```
+
 Resend outbound member-message emails include Memba correlation data using Resend tags and `X-Memba-*` headers:
 
 - `memba_message_id`
@@ -65,4 +77,13 @@ Operational documentation and deployment secrets must distinguish Postmark and R
 
 Webhook authenticity remains a follow-up security concern. Before relying on provider webhooks for production customer data, each provider endpoint should verify the provider's webhook signature or equivalent authentication mechanism.
 
-Postmark remains a viable provider. If Postmark activation completes and proves better operationally, Memba can switch back through configuration. If Resend proves reliable, it can remain the primary provider.
+Postmark approval completed after this ADR was accepted. Iteration 020 makes
+Postmark the intended primary production provider for member-message delivery,
+rejection emails, magic-link authentication, and inbound club-message email.
+Resend remains selectable for member-message delivery, auth email, and inbound
+handling so production can roll back without changing the domain model, command
+handlers, projections, member UI, or staff delivery views.
+
+Keeping Resend as a fallback means tests and documentation must continue to cover
+both provider paths. Removing Resend support requires a later ADR or an explicit
+iteration plan that replaces the rollback strategy.
