@@ -95,11 +95,11 @@ in
 
 This produces `/bin/git` in the final image, so it is found by the default container `PATH`, and avoids benign clone progress on stderr during Fabro sandbox initialization.
 
-Fabro supplies the run container command itself. The default devenv container entrypoint runs `enterShell` and then exits, which terminates Fabro's run container and kills in-flight `docker exec` commands with exit code 137. Override the image entrypoint and provide a harmless default command:
+Fabro supplies the run container command itself. The default devenv container entrypoint runs `enterShell` and then exits, which terminates Fabro's run container and kills in-flight `docker exec` commands with exit code 137. Override the generated entrypoint, but use `tini` as PID 1 so the long-lived run container reaps orphaned child processes from repeated `docker exec` commands and browser acceptance-test runs:
 
 ```nix
 containers."fabro-dev" = {
-  entrypoint = [];
+  entrypoint = [ "/bin/tini" "-g" "--" ];
   startupCommand = [ "/bin/bash" "-lc" "sleep infinity" ];
 };
 ```
