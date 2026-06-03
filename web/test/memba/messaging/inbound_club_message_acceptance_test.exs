@@ -4,6 +4,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
@@ -12,11 +13,23 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   setup do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_postmark_config = Application.get_env(:memba, Postmark)
+
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
+    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
+
+    Application.put_env(:memba, Postmark,
+      from: {"Memba", "messages@mail.memba.test"},
+      reply_to: {"Memba support", "support@memba.test"}
+    )
+
     Fake.reset()
 
     on_exit(fn ->
       restore_env(:messaging_email_delivery_provider, original_provider)
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(Postmark, original_postmark_config)
       Fake.reset()
     end)
 
@@ -277,8 +290,15 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              status: "rejected",
              message_id: nil,
              rejection_reason: "plain_text_required",
-             rejection_email_delivery_reference: nil
+             rejection_email_delivery_reference: rejection_email_delivery_reference
            } = Messaging.get_inbound_email_source("resend", "task-013-html-only")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "a plain text message body is required"
+    )
   end
 
   test "inbound email with attachments is rejected before creating a club message" do
@@ -329,8 +349,114 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              status: "rejected",
              message_id: nil,
              rejection_reason: "attachments_not_supported",
-             rejection_email_delivery_reference: nil
+             rejection_email_delivery_reference: rejection_email_delivery_reference
            } = Messaging.get_inbound_email_source("resend", "task-014-attachments")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "attachments are not supported yet"
+    )
+  end
+
+  test "unknown sender is rejected and receives a concise rejection email" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-015-unknown-sender",
+              status: :rejected,
+              rejection_reason: "unknown_sender",
+              from_address: "unknown@example.com",
+              to_address: "kmc@clubs.memba.io"
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "task-015-unknown-sender",
+                 from_address: "unknown@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Bring route ideas."
+               },
+               consistency: :strong
+             )
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+
+    assert %InboundEmailSourceProjection{
+             inbound_email_id: "inbound-email:resend:task-015-unknown-sender",
+             provider: "resend",
+             provider_message_id: "task-015-unknown-sender",
+             from_address: "unknown@example.com",
+             to_address: "kmc@clubs.memba.io",
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "unknown_sender",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "task-015-unknown-sender")
+
+    assert is_binary(rejection_email_delivery_reference)
+
+    assert_rejection_email_received(
+      to: "unknown@example.com",
+      reason: "we could not find a member account for your sender address"
+    )
+  end
+
+  test "duplicate rejected inbound email does not send another rejection email" do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    inbound_attrs = %{
+      provider: "resend",
+      provider_message_id: "task-015-duplicate-rejected",
+      provider_event_id: "task-015-event-first",
+      from_address: "alice@example.com",
+      recipient_addresses: ["kmc@clubs.memba.io"],
+      subject: "Trip planning night",
+      text_body: "Bring route ideas.",
+      attachments: [%{filename: "route.gpx", content_type: "application/gpx+xml"}]
+    }
+
+    assert {:ok,
+            %{
+              status: :rejected,
+              rejection_reason: "attachments_not_supported"
+            }} = Messaging.receive_inbound_club_email(inbound_attrs, consistency: :strong)
+
+    assert_rejection_email_received(
+      to: "alice@example.com",
+      reason: "attachments are not supported yet"
+    )
+
+    assert {:ok,
+            %{
+              inbound_email_id: "inbound-email:resend:task-015-duplicate-rejected",
+              duplicate?: true,
+              status: :rejected,
+              rejection_reason: "attachments_not_supported"
+            }} =
+             inbound_attrs
+             |> Map.merge(%{
+               provider_event_id: "task-015-event-retry",
+               subject: "Trip planning night retry"
+             })
+             |> Messaging.receive_inbound_club_email(consistency: :strong)
+
+    assert [] = Messaging.list_messages_for_club(kmc.club_id)
+    assert [] = Fake.deliveries()
+    assert 0 == count_events(MessageSent)
+    assert 0 == count_events(InboundClubEmailAccepted)
+    assert 1 == count_events(InboundClubEmailRejected)
+    refute_received {:email, %Swoosh.Email{}}
   end
 
   defp create_club!(attrs) do
@@ -379,6 +505,24 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+
+  defp assert_rejection_email_received(opts) do
+    to_address = Keyword.fetch!(opts, :to)
+    reason = Keyword.fetch!(opts, :reason)
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.from == {"Memba", "messages@mail.memba.test"}
+    assert email.reply_to == {"Memba support", "support@memba.test"}
+    assert email.to == [{"", to_address}]
+    assert email.subject == "Your email was not posted"
+    assert email.text_body =~ "Your email was not posted: #{reason}."
+    assert email.text_body =~ "For help, reply to this email or contact Memba support."
+    assert email.html_body =~ reason
+    assert email.provider_options[:metadata]["memba_email_kind"] == "inbound_club_rejection"
+
+    email
+  end
 
   defp count_events(event_module) when is_atom(event_module) do
     event_type = Atom.to_string(event_module)

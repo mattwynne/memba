@@ -14,7 +14,7 @@
 - [x] 012 Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
 - [x] 013 Add plain-text body normalization:
 - [x] 014 Add attachment rejection before message creation when inbound payload includes any attachments.
-- [ ] 015 Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
+- [x] 015 Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
 - [ ] 016 Add a Resend inbound webhook route/controller/parser for `email.received`-style inbound payloads. Support message fields under `data`: provider message id (`email_id` or `id`), `from`, `to`, optional `cc`/`bcc`, `subject`, `text`, optional `html`, optional `attachments`, and optional `headers`. Treat missing required fields as malformed/unprocessable and cover this with parser tests.
 - [ ] 017 Require the existing Svix-based `MembaWeb.ResendWebhookSignature` verification when a Resend signing secret is configured. Production must configure the signing secret for inbound webhooks. Development/test may run unsigned only when no signing secret is configured.
 - [ ] 018 Translate the Resend payload into the provider-neutral inbound email command/API and return provider-appropriate HTTP statuses for accepted webhook receipt versus malformed/unprocessable payloads.
