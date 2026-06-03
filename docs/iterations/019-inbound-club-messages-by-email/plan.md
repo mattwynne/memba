@@ -23,7 +23,10 @@ Production currently uses Resend. Postmark is present in the codebase but still 
 
 - Add a club inbound address convention: `<club-slug>@clubs.memba.io`, for example `kmc@clubs.memba.io`.
 - Treat that address as the club's implicit everyone address for now.
+- Show the club's inbound email address on the member dashboard and member compose page.
 - Add a provider-neutral internal command/API for receiving an inbound club-message email.
+- Model inbound email as a small event-sourced inbound-email aggregate/process keyed by `{provider, provider_message_id}` so provider retries are idempotent and auditable.
+- Add inbound email events such as `InboundClubEmailAccepted` and `InboundClubEmailRejected`; use those events to project inbound source/status records instead of inventing projection state without events.
 - Add a Resend inbound webhook endpoint/parser that translates Resend inbound payloads into the provider-neutral internal command/API.
 - Identify the sender from any email address on a person record, primary or alternate.
 - Authorize inbound posting only when the identified person is an active member of the destination club.
@@ -82,7 +85,7 @@ Add `@wip` scenarios under new inbound-email rules until implementation catches 
 - Alice sends an email whose plain-text body contains a signature and quoted prior content; Memba posts only the new message text.
 - Alice sends an HTML-only email and receives a plain-text-required rejection; no club message is created.
 
-Matt should review the added scenario language as domain language before treating this plan as final.
+Matt reviewed the scenario language during planning and approved it as domain language for this slice.
 
 ## Allowed acceptance feature changes
 
@@ -91,6 +94,8 @@ Matt should review the added scenario language as domain language before treatin
 
 ## Acceptance Criteria
 
+- The KMC member dashboard shows `kmc@clubs.memba.io` as the address members can email to message the club.
+- The KMC member compose page shows `kmc@clubs.memba.io` as the address members can email to message the club.
 - `kmc@clubs.memba.io` resolves to Kootenay Mountaineering Club by the existing `kmc` club slug.
 - Unknown club slugs in inbound recipient addresses are rejected without creating a message.
 - An inbound email to `kmc@clubs.memba.io` from Alice's primary email address creates a KMC club message from Alice.
@@ -112,8 +117,12 @@ Matt should review the added scenario language as domain language before treatin
 - If the sender email address belongs to an inactive member of the destination club, no club message is created and the sender receives a polite rejection email with support/contact guidance.
 - Rejection emails include enough reason for the sender to know why their message was not posted, without exposing private club data unnecessarily.
 - Resend inbound webhook payloads are accepted by a dedicated endpoint and translated into the provider-neutral inbound email command/API.
+- The Resend inbound parser supports an `email.received`-style payload with message data under `data`, including provider message id (`email_id` or `id`), `from`, `to`, optional `cc`/`bcc`, `subject`, `text`, optional `html`, optional `attachments`, and optional `headers`.
+- Production Resend inbound webhooks require Svix signature verification using the existing `MembaWeb.ResendWebhookSignature` mechanism and configured signing secret; unsigned inbound webhooks are allowed only when no signing secret is configured in development/test.
 - The provider-neutral inbound email command/API is covered by tests independently from the Resend payload shape.
 - Resend-specific parsing/routing is covered by controller/parser tests.
+- Inbound provider retries are idempotent: a duplicate `{provider, provider_message_id}` returns accepted but does not create another club message or send duplicate outbound deliveries/rejections.
+- Inbound email source/status read models are projected from inbound email events, not written as invented projection state.
 - `dev check` passes.
 
 ## Open Business Decisions
@@ -133,23 +142,33 @@ Deferred decisions:
 
 ## Implementation Plan
 
-1. Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller, router webhook scope, and current acceptance support.
-2. Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, and provider name.
-3. Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
-4. Add sender resolution that finds a person by any primary or alternate email address.
-5. Add active-membership authorization for the resolved sender and destination club.
-6. Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
-7. Add plain-text body normalization:
+1. Inspect the existing messaging command flow, membership/person email-address lookup, club slug lookup, outbound email provider flow, Resend webhook controller/signature verifier, router webhook scope, current member dashboard/compose surfaces, and current acceptance support.
+2. Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
+3. Show the derived inbound address on the member dashboard and member compose page for the selected club.
+4. Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
+5. Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
+6. Add inbound email events such as:
+   - `InboundClubEmailAccepted` with provider, provider message id, optional provider event id, from address, to address, resolved club id, resolved sender id, and created Memba message id;
+   - `InboundClubEmailRejected` with provider, provider message id, optional provider event id, from address, to address if available, rejection reason, and rejection email delivery reference if available.
+7. Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
+8. Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+9. Add sender resolution that finds a person by any primary or alternate email address.
+10. Add active-membership authorization for the resolved sender and destination club.
+11. Reuse or wrap the existing web-composed club-message command so accepted inbound email creates the same message, recipients, delivery records, and outbound deliveries as a member-composed message.
+12. Add idempotency behaviour: if the same provider/provider message id is received again, return an accepted webhook response and do not emit another `MessageSent`, create another club message, or send duplicate outbound/rejection emails.
+13. Add plain-text body normalization:
    - require a non-blank `text/plain` part;
    - ignore `text/html`;
    - do not implement HTML-to-text conversion;
    - strip common signatures and quoted prior-message text;
    - reject if the resulting body is blank.
-8. Add attachment rejection before message creation when inbound payload includes any attachments.
-9. Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
-10. Add a Resend inbound webhook route/controller/parser that validates and accepts Resend inbound payloads according to the available Resend payload/signature conventions already used in production configuration.
-11. Translate the Resend payload into the provider-neutral inbound email command/API and return provider-appropriate HTTP statuses for accepted webhook receipt versus malformed/unprocessable payloads.
-12. Add tests for provider-neutral inbound behaviour:
+14. Add attachment rejection before message creation when inbound payload includes any attachments.
+15. Add rejection-email delivery for unsupported inbound emails. Use the configured application mailer/provider path where practical, and keep rejection copy concise: reason plus support/contact guidance.
+16. Add a Resend inbound webhook route/controller/parser for `email.received`-style inbound payloads. Support message fields under `data`: provider message id (`email_id` or `id`), `from`, `to`, optional `cc`/`bcc`, `subject`, `text`, optional `html`, optional `attachments`, and optional `headers`. Treat missing required fields as malformed/unprocessable and cover this with parser tests.
+17. Require the existing Svix-based `MembaWeb.ResendWebhookSignature` verification when a Resend signing secret is configured. Production must configure the signing secret for inbound webhooks. Development/test may run unsigned only when no signing secret is configured.
+18. Translate the Resend payload into the provider-neutral inbound email command/API and return provider-appropriate HTTP statuses for accepted webhook receipt versus malformed/unprocessable payloads.
+19. Add tests for member-visible inbound address display on dashboard and compose.
+20. Add tests for provider-neutral inbound behaviour:
     - accepted primary address;
     - accepted alternate address;
     - unknown sender rejection;
@@ -160,26 +179,27 @@ Deferred decisions:
     - HTML-only rejection without conversion;
     - quote/signature stripping;
     - unknown club slug rejection.
-13. Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, and rejection paths.
-14. Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
-15. Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
-16. Run `dev check`.
+21. Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
+22. Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
+23. Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
+24. Run `dev check`.
 
 ## Open Technical Decisions
 
 None expected to block implementation.
 
-Implementation should investigate and decide details for:
+Decisions made during planning:
 
-- The exact Resend inbound webhook payload fields available for text body, HTML body, attachments, headers, message id, and envelope recipients.
-- Whether Resend inbound webhooks require signature verification or share existing webhook verification mechanisms.
-- The minimal safe quote/signature stripping approach for plain text. Prefer conservative stripping over complex parsing.
-- Whether rejection emails should be sent synchronously during webhook handling or via existing asynchronous delivery paths.
-- How to avoid provider retries creating duplicate messages if Resend retries the same inbound webhook. Prefer idempotency based on provider message id where available.
+- Inbound email idempotency is event-sourced, not projection-invented. Use a deterministic inbound aggregate/process identity based on `{provider, provider_message_id}` and emit inbound accepted/rejected events before projecting support/audit state.
+- Add a defensive unique database constraint on `{provider, provider_message_id}` in the inbound source projection/read model, but keep the aggregate/event stream as the command-side source of truth.
+- Resend inbound webhooks use the existing Svix signature verification module, `MembaWeb.ResendWebhookSignature`. Production inbound webhook handling must be signed; development/test can be unsigned only when no signing secret is configured.
+- The Resend inbound parser contract for this iteration is an `email.received`-style payload with message fields under `data`: provider message id (`email_id` or `id`), `from`, `to`, optional `cc`/`bcc`, `subject`, `text`, optional `html`, optional `attachments`, and optional `headers`.
+- Rejection emails may be sent synchronously during webhook handling for this slice if that is the smallest safe implementation, but duplicate provider message ids must not send duplicate rejections.
+- Quote/signature stripping should be conservative and plain-text only.
 
 ## New Capability
 
-A member can post to the whole club by email, using the club's simple slug-based inbound address. Memba can receive provider inbound email payloads, route them to clubs, authorize senders, create normal club messages, and reject unsupported inbound emails politely.
+A member can see the club's inbound email address on the member dashboard and compose page, then post to the whole club by email using that address. Memba can receive provider inbound email payloads, route them to clubs, authorize senders, create normal club messages, reject unsupported inbound emails politely, and handle provider retries without duplicate messages.
 
 ## Validation Plan
 
@@ -203,8 +223,8 @@ A member can post to the whole club by email, using the club's simple slug-based
 
 ## Risks / Follow-ups
 
-- Resend inbound webhook support may have payload or verification details that differ from the current outbound/delivery-status assumptions. Keep the Resend-specific parser isolated.
-- Inbound webhooks may be retried. Without idempotency, duplicate emails could create duplicate club messages.
+- Resend inbound webhook support may have payload details that differ from the planned `email.received` parser contract. Keep the Resend-specific parser isolated and covered by realistic payload tests.
+- Inbound webhook idempotency crosses aggregate, projection, database constraint, and outbound side effects. Tests must prove duplicate provider message ids do not create duplicate club messages or duplicate emails.
 - Quote/signature stripping can easily become too aggressive or too weak. Keep this conservative and covered by examples.
 - Rejection emails can create backscatter if sent to spoofed senders. This is acceptable for the first slice only if the implementation uses provider guidance and avoids replying to obviously invalid automated senders where practical.
 - Ignoring HTML is a deliberate short-term simplification. A later rich-content iteration should preserve, sanitise, render, and forward safe HTML rather than adding throwaway HTML-to-text conversion now.
