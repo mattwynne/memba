@@ -2,6 +2,7 @@ defmodule MembaWeb.ResendWebhookController do
   use MembaWeb, :controller
 
   alias Memba.Messaging
+  alias MembaWeb.ResendInboundEmailParser
 
   @successful_status :accepted
 
@@ -34,6 +35,28 @@ defmodule MembaWeb.ResendWebhookController do
   end
 
   defp handle_resend_event(params) do
+    if inbound_email_event?(params) do
+      handle_resend_inbound_email_event(params)
+    else
+      handle_resend_delivery_event(params)
+    end
+  end
+
+  defp inbound_email_event?(params) do
+    params
+    |> event_value([:type, "type", :event, "event"])
+    |> normalize_token()
+    |> Kernel.==("emailreceived")
+  end
+
+  defp handle_resend_inbound_email_event(params) do
+    with {:ok, attrs} <- ResendInboundEmailParser.parse(params),
+         {:ok, _result} <- Messaging.receive_inbound_club_email(attrs, consistency: :strong) do
+      :ok
+    end
+  end
+
+  defp handle_resend_delivery_event(params) do
     with {:ok, event_type} <- resend_event_type(params) do
       params
       |> status_report_attrs(event_type)
@@ -245,8 +268,22 @@ defmodule MembaWeb.ResendWebhookController do
   end
 
   defp error_detail({:missing_required_attribute, key}) do
-    "Missing required Resend webhook attribute: #{key}"
+    "Missing required Resend inbound webhook attribute: #{key}"
   end
+
+  defp error_detail(:invalid_from_address), do: "Invalid Resend inbound webhook from address"
+
+  defp error_detail(:invalid_recipient_addresses) do
+    "Invalid Resend inbound webhook recipient addresses"
+  end
+
+  defp error_detail(:invalid_provider_message_id) do
+    "Invalid Resend inbound webhook provider message id"
+  end
+
+  defp error_detail(:invalid_attachments), do: "Invalid Resend inbound webhook attachments"
+  defp error_detail(:invalid_html_body), do: "Invalid Resend inbound webhook HTML body"
+  defp error_detail(:invalid_payload), do: "Invalid Resend inbound webhook payload"
 
   defp error_detail(reason) do
     "Could not process Resend webhook: #{inspect(reason)}"

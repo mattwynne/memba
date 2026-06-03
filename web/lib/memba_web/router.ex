@@ -108,7 +108,6 @@ defmodule MembaWeb.Router do
 
     post "/postmark", PostmarkWebhookController, :create
     post "/resend", ResendWebhookController, :create
-    post "/resend/inbound", ResendInboundWebhookController, :create
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
