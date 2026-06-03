@@ -41,6 +41,8 @@ config :memba, Memba.Messaging.App,
 
 config :memba, :messaging_email_delivery_provider, Memba.Messaging.EmailDeliveryProviders.Fake
 
+config :memba, :club_inbound_email, domain: "clubs.memba.io"
+
 config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
   from: {"Memba", "messages@mail.memba.io"},
   reply_to: {"Matt Wynne", "matt@mattwynne.net"},
