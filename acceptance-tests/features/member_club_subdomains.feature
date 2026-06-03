@@ -51,3 +51,21 @@ Feature: Member club subdomains
       When Robin opens "kmc.clubs.memba.io"
       Then Robin should see the Kootenay Mountaineering Public club page
       And the club page should show Powered by Memba in the footer
+
+  Rule: Memba keeps a smoke-test club available without publishing it
+
+    Scenario: Staff can see the smoke-test club
+      Given the smoke-test club has been seeded
+      And Pat is signed in as Memba staff
+      Then Pat should see Smoke Test Club in the staff club list
+
+    Scenario: Robin cannot open the smoke-test club public page
+      Given the smoke-test club has been seeded
+      When Robin opens "test.clubs.memba.io"
+      Then Robin should see a not found page
+      And Robin should not see the Smoke Test Club public page
+
+    Scenario: Robin does not see the smoke-test club on the Memba homepage
+      Given the smoke-test club has been seeded
+      When Robin visits the Memba homepage
+      Then Robin should not see Smoke Test Club

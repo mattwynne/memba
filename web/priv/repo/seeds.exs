@@ -34,6 +34,13 @@ clubs = [
     name: "Nelson Paddling Club",
     inserted_at: two_days_ago,
     updated_at: now
+  },
+  %{
+    club_id: "33333333-3333-3333-3333-333333333333",
+    name: "Smoke Test Club",
+    slug: "test",
+    inserted_at: two_days_ago,
+    updated_at: now
   }
 ]
 
@@ -70,6 +77,13 @@ people = [
     person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
     name: "Pat Staff",
     email: "pat@memba.io",
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    name: "Smoke Tester",
+    email: "test@memba.io",
     inserted_at: two_days_ago,
     updated_at: now
   }
@@ -129,6 +143,15 @@ person_email_addresses = [
     is_primary: true,
     inserted_at: two_days_ago,
     updated_at: now
+  },
+  %{
+    id: "20000000-0000-0000-0000-000000000007",
+    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    email: "test@memba.io",
+    normalized_email: "test@memba.io",
+    is_primary: true,
+    inserted_at: two_days_ago,
+    updated_at: now
   }
 ]
 
@@ -177,6 +200,14 @@ memberships = [
     membership_id: "10000000-0000-0000-0000-000000000006",
     club_id: "22222222-2222-2222-2222-222222222222",
     person_id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    active: true,
+    inserted_at: two_days_ago,
+    updated_at: now
+  },
+  %{
+    membership_id: "10000000-0000-0000-0000-000000000007",
+    club_id: "33333333-3333-3333-3333-333333333333",
+    person_id: "ffffffff-ffff-ffff-ffff-ffffffffffff",
     active: true,
     inserted_at: two_days_ago,
     updated_at: now
@@ -353,3 +384,5 @@ IO.puts("Seeded representative Memba data.")
 IO.puts("Member sign-in emails: alice@example.com, bob@example.com, carol@example.com")
 IO.puts("Alice alternate sign-in email: alice@work.example")
 IO.puts("Memba staff sign-in email: pat@memba.io")
+IO.puts("Smoke-test member sign-in email: test@memba.io")
+IO.puts("Smoke-test inbound email address: test@clubs.memba.io")

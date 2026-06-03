@@ -98,6 +98,47 @@ defmodule Memba.EventSourcedSetupTest do
     end
   end
 
+  test "seeds include a hidden smoke-test club for production inbound email checks" do
+    Memba.EventSourcedCase.reset_event_sourced_system!()
+
+    try do
+      Sandbox.unboxed_run(Repo, fn ->
+        Code.eval_file("priv/repo/seeds.exs")
+      end)
+
+      assert [["Smoke Test Club", "test"]] =
+               query!("""
+               SELECT name, slug
+               FROM membership_clubs
+               WHERE club_id = '33333333-3333-3333-3333-333333333333'
+               """).rows
+
+      assert [["Smoke Tester", "test@memba.io"]] =
+               query!("""
+               SELECT name, email
+               FROM membership_people
+               WHERE person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+               """).rows
+
+      assert [["test@memba.io", true]] =
+               query!("""
+               SELECT email, is_primary
+               FROM membership_person_email_addresses
+               WHERE person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+               """).rows
+
+      assert [[true]] =
+               query!("""
+               SELECT active
+               FROM membership_memberships
+               WHERE club_id = '33333333-3333-3333-3333-333333333333'
+                 AND person_id = 'ffffffff-ffff-ffff-ffff-ffffffffffff'
+               """).rows
+    after
+      Memba.EventSourcedCase.reset_event_sourced_system!()
+    end
+  end
+
   test "event-sourced test helper resets EventStore and projection rows" do
     Memba.EventSourcedCase.reset_event_sourced_system!()
 
