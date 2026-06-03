@@ -108,6 +108,22 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
     assert {:error, :invalid_recipient_addresses} = ResendInboundEmailParser.parse(payload)
   end
 
+  test "rejects malformed optional inbound email fields" do
+    malformed_payloads = [
+      {:invalid_provider_message_id, put_in(valid_payload(), ["data", "email_id"], %{})},
+      {:invalid_from_address, put_in(valid_payload(), ["data", "from"], "Alice Example")},
+      {:invalid_html_body, put_in(valid_payload(), ["data", "html"], %{"body" => "<p>Hi</p>"})},
+      {:invalid_attachments,
+       put_in(valid_payload(), ["data", "attachments"], [
+         %{"filename" => "route.gpx", "size" => -1}
+       ])}
+    ]
+
+    for {reason, payload} <- malformed_payloads do
+      assert {:error, ^reason} = ResendInboundEmailParser.parse(payload)
+    end
+  end
+
   defp valid_payload do
     %{
       "id" => "evt_123",
