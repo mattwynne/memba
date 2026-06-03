@@ -22,5 +22,5 @@
 - [x] 020 Add tests for provider-neutral inbound behaviour:
 - [x] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
 - [x] 022 Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
-- [ ] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
+- [x] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
 - [ ] 024 Run `dev check`.
