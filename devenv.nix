@@ -146,7 +146,10 @@ in
     # Fabro supplies the container command itself. The default devenv entrypoint
     # runs enterShell and then exits, which terminates Fabro's run container and
     # kills in-flight docker exec commands such as git clone with exit 137.
-    entrypoint = [];
+    # Use tini as PID 1 so long-running Fabro sandboxes also reap orphaned
+    # children from repeated docker exec commands and acceptance-test browser
+    # processes.
+    entrypoint = [ "/bin/tini" "-g" "--" ];
     startupCommand = [ "/bin/bash" "-lc" "sleep infinity" ];
     copyToRoot = [];
     layers = [
@@ -169,6 +172,7 @@ in
               fontconfig
               esbuild
               flyctl
+              tini
               which
               (hiPrio fabroDevenv)
               (hiPrio fabroGit)

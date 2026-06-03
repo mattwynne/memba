@@ -125,17 +125,21 @@ If provider rate limits can wedge the workflow engine, any long implementation r
 
 Date: 2026-06-03
 
-Root cause: Failed LLM/prompt nodes in the implementation workflow could still flow through normal routing because key edges depended only on context values, not `outcome=succeeded`. When OpenAI rate limits caused prompt failures, stale routing context let the graph continue cycling. The graph also allowed a very high per-node visit count and the Docker run environment had no CPU or memory limit, so a runaway run could consume the Fabro host and starve the control plane.
+Root cause: Failed LLM/prompt nodes in the implementation workflow could still flow through normal routing because key edges depended only on context values, not `outcome=succeeded`. When OpenAI rate limits caused prompt failures, stale routing context let the graph continue cycling. The graph also allowed a very high per-node visit count and the Docker run environment had no CPU or memory limit, so a runaway run could consume the Fabro host and starve the control plane. A later inspection of the same pre-fix run found a second amplification mechanism: the run container's PID 1 was `sleep infinity`, so orphaned children from repeated `dev check`/browser acceptance runs were adopted but not reaped, accumulating hundreds of zombie PIDs.
 
 Fix applied:
 
 - `.fabro/workflows/iteration-implementation/workflow.fabro`: lowered the graph visit circuit breaker, added per-node visit budgets to the task-list, implementation, and validation nodes, and made implementation-loop edges fail closed unless the upstream node succeeded.
 - `.fabro/workflows/iteration-implementation/workflow.toml`: added Docker CPU and memory limits for the `memba-dev` environment so an implementation run has a resource ceiling inside the Fabro LXC.
+- `devenv.nix`: added `tini` to the Fabro dev image and made it the image entrypoint, preserving the previous workaround for the devenv entrypoint exit-137 issue while giving long-lived run containers a PID 1 that reaps orphaned child processes.
+- `docs/reference/fabro-devenv.md`: documented the `tini` entrypoint rationale.
 
 Validation:
 
 - `fabro validate .fabro/workflows/iteration-implementation/workflow.toml --no-upgrade-check` — passed with existing goal-gate warnings only.
 - `dev check` — passed: 396 ExUnit tests and 31 Cucumber scenarios.
+- `devenv container build fabro-dev` — attempted locally, but this Mac cannot build the required `aarch64-linux` container derivation (`Current system: aarch64-darwin`). The image needs to be built/loaded on the Fabro Linux host.
+- `dev check` after the `tini` image change — passed: 396 ExUnit tests and 31 Cucumber scenarios.
 
 Remaining follow-up:
 
