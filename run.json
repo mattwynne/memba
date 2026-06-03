@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-03T18:27:00.639767351Z",
-  "last_event_at": "2026-06-03T19:26:14.367529008Z",
+  "last_event_at": "2026-06-03T19:26:18.466508171Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -15512,9 +15512,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2138,
       "checkpoint": {
-        "timestamp": "2026-06-03T19:26:14.400776075Z",
+        "timestamp": "2026-06-03T19:26:18.134062670Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -15569,8 +15569,363 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "task_list_complete": false,
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.sync_task_list": 0,
           "outcome": "succeeded",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "last_response": "1. **Selected todo line**\n   - `008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practi",
+          "internal.retry_count.task_gate": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.resume_gate.current_node": "sync_task_list",
           "current_node": "implement_next_task",
+          "failure_class": "",
+          "failure_signature": "",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.reset_task_attempt": 0,
+          "task_list_needs_human": false,
+          "task_valid": true,
+          "graph.max_node_visits": "80",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.validate_task.current_node": "task_gate",
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it records checkpoint `87ef529` with a clean tracked tree and only untracked `.fabro/tmp/`.\n  - Live `git status --short` also shows only `?? .fabro/tmp/`.\n  - Live recent commits show `87ef529 fabro(...): implement_next_task (succeeded)` immediately before the no-op `pre_validate_snapshot` checkpoint.\n  - `git show 87ef529` shows exactly one ordinary todo line changed:\n    - `007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001`–`006` checked and `007` first unchecked; current `todo.md` has `007` checked and `008` onward still unchecked.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/postmark_inbound_email_parser.ex` now explicitly uses Postmark top-level `MessageID`/`message_id` keys for `provider_message_id` and documents why RFC `Message-ID` headers are not used for provider idempotency.\n  - `web/test/memba_web/postmark_inbound_email_parser_test.exs` adds coverage proving top-level Postmark `MessageID` wins even when an original sender `Message-ID` header exists.\n  - `web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs` adds coverage proving duplicate webhook retries with the same Postmark `MessageID` return accepted without creating duplicate club messages or outbound deliveries.\n  - No acceptance feature files were edited.\n\n- Tests run/results found.\n  - Reran focused validation:\n    - `bin/mix test test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n    - Result: `10 tests, 0 failures`.\n  - `git diff --check 87ef529^ 87ef529` passed.\n  - Implementation summary also reported formatting passing and `dev check --quick` passing.\n\n- ADR/plan conformance notes.\n  - Work matches task `007`: Postmark inbound idempotency is tied to the stable top-level Postmark message id and verified through parser/controller tests.\n  - Work preserves ADR 0016’s provider-neutral boundary: provider-specific code parses/translates only; duplicate handling remains in shared Messaging inbound handling keyed by provider/provider message id.\n  - Resend fallback support is untouched.\n  - No plan-required work was deleted, weakened, or silently deferred; broader Postmark inbound case coverage remains appropriately listed under task `008`.\n  - The checkpoint is small, focused, and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.retry_count.wip_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.start": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.run_id": "01KT7BR6YQQSTZVM0G42C138AW",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.`\n\n2. **Changes made**\n   - Updated Postmark inbound parsing to allow missing `TextBody` so HTML-only/missing-plain-text payloads reach the shared provider-neutral `plain_text_required` rejection path.\n   - Added controller error text for malformed non-binary `TextBody`.\n   - Expanded parser tests for:\n     - Missing plain text with HTML body.\n     - Malformed text body.\n     - Existing required-field expectations adjusted so `TextBody` is no longer treated as a parser-required field.\n   - Expanded Postmark inbound controller/dispatcher tests for:\n     - Accepted primary-address sender.\n     - Accepted alternate-address sender.\n     - Unknown-sender rejection.\n     - Attachment rejection.\n     - HTML-only/missing plain-text rejection.\n     - Quoted-only/no-usable-plain-text rejection.\n     - Duplicate accepted retry handling.\n     - Duplicate rejected retry handling without duplicate rejection emails.\n\n3. **Focused validation**\n   - Formatted touched files:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix format lib/memba_web/postmark_inbound_email_parser.ex lib/memba_web/controllers/postmark_inbound_webhook_controller.ex test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\n     ```\n     Passed.\n   - Initial focused test hit the known sandbox Postgres `PGHOST/PGPORT` mismatch.\n   - Reran focused tests with sandbox Postgres override:\n     ```sh\n     env -u PGHOST -u PGPORT MEMBA_POSTGRES_PORT=15432 devenv shell -O services.postgres.port:int 15432 -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs'\n     ```\n     Passed: `15 tests, 0 failures`.\n   - Broad per-task validation:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" dev check --quick\n     ```\n     Passed: `486 tests, 0 failures`.\n   - Formatting/whitespace check:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/postmark_inbound_email_parser.ex lib/memba_web/controllers/postmark_inbound_webhook_controller.ex test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs && git diff --check\n     ```\n     Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     ```md\n     - [ ] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n     ```\n   - To:\n     ```md\n     - [x] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n     ```\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0016 preserved: Postmark-specific code remains at the parser/controller boundary; accepted/rejected behaviour continues through the shared provider-neutral Messaging inbound API.\n   - Resend fallback support was not changed.\n   - No production hosting, release-state, routing, UI, acceptance feature, or devenv/process orchestration changes were made, preserving ADRs 0014, 0017, and 0018.",
+          "internal.retry_count.read_plan": 0,
+          "command.output": "blob://sha256/f2c1c4d8f3b5f82530080f46331fd62d3f76c65f7edee66d1ee13e965ebff044",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.validate_task": 0,
+          "task_retry_available": false,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.reset_task_attempt.current_node": "implement_next_task",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.fidelity": "summary:high",
+          "graph.rankdir": "LR",
+          "internal.retry_count.implement_next_task": 0,
+          "last_stage": "implement_next_task",
+          "thread.start.current_node": "read_plan",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.thread_id": "all_tasks_done",
+          "internal.node_visit_count": 8
+        },
+        "node_outcomes": {
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f2c1c4d8f3b5f82530080f46331fd62d3f76c65f7edee66d1ee13e965ebff044"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 193,
+              "active_time_ms": 193
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "1. **Selected todo line**\n   - `008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practi",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.`\n\n2. **Changes made**\n   - Updated Postmark inbound parsing to allow missing `TextBody` so HTML-only/missing-plain-text payloads reach the shared provider-neutral `plain_text_required` rejection path.\n   - Added controller error text for malformed non-binary `TextBody`.\n   - Expanded parser tests for:\n     - Missing plain text with HTML body.\n     - Malformed text body.\n     - Existing required-field expectations adjusted so `TextBody` is no longer treated as a parser-required field.\n   - Expanded Postmark inbound controller/dispatcher tests for:\n     - Accepted primary-address sender.\n     - Accepted alternate-address sender.\n     - Unknown-sender rejection.\n     - Attachment rejection.\n     - HTML-only/missing plain-text rejection.\n     - Quoted-only/no-usable-plain-text rejection.\n     - Duplicate accepted retry handling.\n     - Duplicate rejected retry handling without duplicate rejection emails.\n\n3. **Focused validation**\n   - Formatted touched files:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix format lib/memba_web/postmark_inbound_email_parser.ex lib/memba_web/controllers/postmark_inbound_webhook_controller.ex test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\n     ```\n     Passed.\n   - Initial focused test hit the known sandbox Postgres `PGHOST/PGPORT` mismatch.\n   - Reran focused tests with sandbox Postgres override:\n     ```sh\n     env -u PGHOST -u PGPORT MEMBA_POSTGRES_PORT=15432 devenv shell -O services.postgres.port:int 15432 -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs'\n     ```\n     Passed: `15 tests, 0 failures`.\n   - Broad per-task validation:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" dev check --quick\n     ```\n     Passed: `486 tests, 0 failures`.\n   - Formatting/whitespace check:\n     ```sh\n     PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/postmark_inbound_email_parser.ex lib/memba_web/controllers/postmark_inbound_webhook_controller.ex test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs && git diff --check\n     ```\n     Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     ```md\n     - [ ] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n     ```\n   - To:\n     ```md\n     - [x] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n     ```\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0016 preserved: Postmark-specific code remains at the parser/controller boundary; accepted/rejected behaviour continues through the shared provider-neutral Messaging inbound API.\n   - Resend fallback support was not changed.\n   - No production hosting, release-state, routing, UI, acceptance feature, or devenv/process orchestration changes were made, preserving ADRs 0014, 0017, and 0018.",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1231395,
+                    "output_tokens": 11438,
+                    "reasoning_tokens": 3135,
+                    "cache_read_tokens": 2643968,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 7916149
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 378769,
+              "tool_time_ms": 48349,
+              "active_time_ms": 427118
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/a11c021a6762b2dfddca15771ae7d96a9ea43facc83f7b5b264aafd746bfbacd"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 135503,
+              "active_time_ms": 135503
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/de0141b4f4cd97c4c678dbf1a62d5098bbf6409482c39ad1031af637a597ea2f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 214,
+              "active_time_ms": 214
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_list_complete": false,
+              "last_stage": "all_tasks_done",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 29620,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 75,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 151190
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3091,
+              "tool_time_ms": 0,
+              "active_time_ms": 3091
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4fb29bd7be06fca476883fc5be5c92c0136cfd3ab69e0023d689fb4003f54f2c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 6165,
+              "active_time_ms": 6165
+            }
+          },
+          "reset_task_attempt": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/962dfba3f99925e10989a748c8bf4cd09fcd1c51bcb53ef9eac6aea0709ed97e"
+            },
+            "notes": "Script completed: set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 306,
+              "active_time_ms": 306
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c98ba1a42530ca0c44a7a13b35cea7afe902413fdecb98b898f8a54779f98d9b"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 278,
+              "active_time_ms": 278
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d2453dff4b0c1d059bca4275bc8c3572590df13daa40e8408c0d59fa0b0fd9ef"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 197,
+              "active_time_ms": 197
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it records checkpoint `87ef529` with a clean tracked tree and only unt",
+              "task_valid": true,
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it records checkpoint `87ef529` with a clean tracked tree and only untracked `.fabro/tmp/`.\n  - Live `git status --short` also shows only `?? .fabro/tmp/`.\n  - Live recent commits show `87ef529 fabro(...): implement_next_task (succeeded)` immediately before the no-op `pre_validate_snapshot` checkpoint.\n  - `git show 87ef529` shows exactly one ordinary todo line changed:\n    - `007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001`–`006` checked and `007` first unchecked; current `todo.md` has `007` checked and `008` onward still unchecked.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/postmark_inbound_email_parser.ex` now explicitly uses Postmark top-level `MessageID`/`message_id` keys for `provider_message_id` and documents why RFC `Message-ID` headers are not used for provider idempotency.\n  - `web/test/memba_web/postmark_inbound_email_parser_test.exs` adds coverage proving top-level Postmark `MessageID` wins even when an original sender `Message-ID` header exists.\n  - `web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs` adds coverage proving duplicate webhook retries with the same Postmark `MessageID` return accepted without creating duplicate club messages or outbound deliveries.\n  - No acceptance feature files were edited.\n\n- Tests run/results found.\n  - Reran focused validation:\n    - `bin/mix test test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n    - Result: `10 tests, 0 failures`.\n  - `git diff --check 87ef529^ 87ef529` passed.\n  - Implementation summary also reported formatting passing and `dev check --quick` passing.\n\n- ADR/plan conformance notes.\n  - Work matches task `007`: Postmark inbound idempotency is tied to the stable top-level Postmark message id and verified through parser/controller tests.\n  - Work preserves ADR 0016’s provider-neutral boundary: provider-specific code parses/translates only; duplicate handling remains in shared Messaging inbound handling keyed by provider/provider message id.\n  - Resend fallback support is untouched.\n  - No plan-required work was deleted, weakened, or silently deferred; broader Postmark inbound case coverage remains appropriately listed under task `008`.\n  - The checkpoint is small, focused, and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_retry_available": false
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 316192,
+                    "output_tokens": 1699,
+                    "reasoning_tokens": 1378,
+                    "cache_read_tokens": 248320,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1797430
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 80398,
+              "tool_time_ms": 6220,
+              "active_time_ms": 86618
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "84b98975aa1da19556ae709955da07d7125c9be1",
+        "node_visits": {
+          "reset_task_attempt": 1,
+          "start": 1,
+          "task_gate": 7,
+          "preflight_sandbox": 1,
+          "resume_gate": 1,
+          "wip_gate": 1,
+          "all_tasks_done": 7,
+          "validate_task": 7,
+          "implement_next_task": 8,
+          "read_plan": 1,
+          "sync_task_list": 7,
+          "pre_validate_snapshot": 7
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/020-migrate-production-email-to-postmark/todo.md b/docs/iterations/020-migrate-production-email-to-postmark/todo.md\nindex 8952743..e5b6ac6 100644\n--- a/docs/iterations/020-migrate-production-email-to-postmark/todo.md\n+++ b/docs/iterations/020-migrate-production-email-to-postmark/todo.md\n@@ -7,7 +7,7 @@\n - [x] 005 Add a Postmark inbound parser/controller/dispatcher that maps realistic Postmark inbound payload fields to the provider-neutral inbound email structure: provider name, provider message id, sender, recipients, subject, plain text, HTML body if present, attachment metadata, and useful headers.\n - [x] 006 Reuse iteration 019's provider-neutral command/API for all accepted/rejected behaviour rather than duplicating business rules in Postmark-specific code.\n - [x] 007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.\n-- [ ] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n+- [x] 008 Add tests for Postmark inbound payload parsing and controller/dispatcher behaviour, including accepted primary-address sender, alternate-address sender where practical, rejection cases, attachments, HTML-only/missing plain text, and duplicate retry handling.\n - [ ] 009 Verify or add tests proving Postmark outbound member-message payloads still include sender/reply-to, text/HTML bodies, and correlation metadata expected by the Postmark delivery-status webhook handler.\n - [ ] 010 Verify or add tests proving Postmark auth email configuration uses `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`, and fails clearly when incomplete.\n - [ ] 011 Verify rejection-email delivery follows the configured mailer/provider path and works when Postmark is selected.\ndiff --git a/web/lib/memba_web/controllers/postmark_inbound_webhook_controller.ex b/web/lib/memba_web/controllers/postmark_inbound_webhook_controller.ex\nindex 7d8d942..8e35592 100644\n--- a/web/lib/memba_web/controllers/postmark_inbound_webhook_controller.ex\n+++ b/web/lib/memba_web/controllers/postmark_inbound_webhook_controller.ex\n@@ -43,6 +43,7 @@ defmodule MembaWeb.PostmarkInboundWebhookController do\n \n   defp error_detail(:invalid_attachments), do: \"Invalid Postmark inbound webhook attachments\"\n   defp error_detail(:invalid_html_body), do: \"Invalid Postmark inbound webhook HTML body\"\n+  defp error_detail(:invalid_text_body), do: \"Invalid Postmark inbound webhook text body\"\n   defp error_detail(:invalid_payload), do: \"Invalid Postmark inbound webhook payload\"\n \n   defp error_detail(reason) do\ndiff --git a/web/lib/memba_web/postmark_inbound_email_parser.ex b/web/lib/memba_web/postmark_inbound_email_parser.ex\nindex 9223f63..ad4f914 100644\n--- a/web/lib/memba_web/postmark_inbound_email_parser.ex\n+++ b/web/lib/memba_web/postmark_inbound_email_parser.ex\n@@ -16,7 +16,8 @@ defmodule MembaWeb.PostmarkInboundEmailParser do\n          {:ok, from_address} <- from_address(payload),\n          {:ok, recipient_addresses} <- recipient_addresses(payload),\n          {:ok, subject} <- required_binary(payload, [:Subject, \"Subject\"], \"Subject\"),\n-         {:ok, text_body} <- required_binary(payload, [:TextBody, \"TextBody\"], \"TextBody\"),\n+         {:ok, text_body} <-\n+           optional_binary(payload, [:TextBody, \"TextBody\"], :invalid_text_body),\n          {:ok, html_body} <-\n            optional_binary(payload, [:HtmlBody, \"HtmlBody\"], :invalid_html_body),\n          {:ok, attachments} <- attachments(payload) do\ndiff --git a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\nindex 1def6bc..56fc80b 100644\n--- a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\n+++ b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs\n@@ -23,7 +23,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n     :ok\n   end\n \n-  test \"translates parsed Postmark inbound payloads into the provider-neutral inbound email API\",\n+  test \"translates accepted primary-address Postmark payloads into the provider-neutral inbound email API\",\n        %{conn: conn} do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n     alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n@@ -79,6 +79,81 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n     assert length(Fake.deliveries()) == 2\n   end\n \n+  test \"accepts Postmark inbound email from an alternate sender address\", %{conn: conn} do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+\n+    alice =\n+      create_person!(\n+        name: \"Alice Example\",\n+        email: \"alice@example.com\",\n+        email_addresses: [\n+          %{email: \"alice@example.com\", is_primary: true},\n+          %{email: \"Alice.Work@Example.COM\", is_primary: false}\n+        ]\n+      )\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+\n+    payload =\n+      valid_payload(%{\n+        \"MessageID\" => \"postmark-controller-alternate-sender\",\n+        \"From\" => \"Alice Work <Alice.Work@Example.COM>\",\n+        \"FromFull\" => %{\"Email\" => \"Alice.Work@Example.COM\", \"Name\" => \"Alice Work\"},\n+        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n+        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"Subject\" => \"Alternate sender address\",\n+        \"TextBody\" => \"Posting from my work address.\"\n+      })\n+\n+    conn = post_postmark_inbound_event(conn, payload)\n+\n+    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+\n+    assert %{\n+             provider: \"postmark\",\n+             provider_message_id: \"postmark-controller-alternate-sender\",\n+             status: \"accepted\",\n+             from_address: \"alice.work@example.com\",\n+             to_address: \"kmc@clubs.memba.io\",\n+             club_id: kmc_id,\n+             sender_id: alice_id,\n+             message_id: message_id\n+           } =\n+             Messaging.get_inbound_email_source(\n+               \"postmark\",\n+               \"postmark-controller-alternate-sender\"\n+             )\n+\n+    assert kmc_id == kmc.club_id\n+    assert alice_id == alice.person_id\n+\n+    assert %{\n+             message_id: ^message_id,\n+             club_id: ^kmc_id,\n+             sender_id: ^alice_id,\n+             subject: \"Alternate sender address\",\n+             body: \"Posting from my work address.\"\n+           } = Messaging.get_message(message_id)\n+\n+    assert [\n+             %{\n+               recipient_id: ^alice_id,\n+               recipient_address: \"alice@example.com\"\n+             }\n+           ] = Messaging.list_recipient_deliveries(message_id)\n+\n+    assert [\n+             %{\n+               recipient_id: ^alice_id,\n+               recipient_address: \"alice@example.com\",\n+               sender_name: \"Alice Example\",\n+               sender_address: \"alice@example.com\",\n+               subject: \"Alternate sender address\",\n+               body: \"Posting from my work address.\"\n+             }\n+           ] = Fake.deliveries()\n+  end\n+\n   test \"uses provider-neutral inbound handling for Postmark rejection outcomes\", %{conn: conn} do\n     kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n \n@@ -114,12 +189,184 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n \n     assert is_binary(rejection_email_delivery_reference)\n \n-    assert_received {:email, %Swoosh.Email{} = rejection_email}\n-    assert rejection_email.to == [{\"\", \"mystery@example.com\"}]\n-    assert rejection_email.subject == \"Your email was not posted\"\n+    assert_rejection_email_received(\n+      to: \"mystery@example.com\",\n+      reason: \"we could not find a member account for your sender address\"\n+    )\n+  end\n+\n+  test \"rejects Postmark inbound emails with attachments and does not duplicate rejection emails on retry\",\n+       %{conn: conn} do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+\n+    payload =\n+      valid_payload(%{\n+        \"MessageID\" => \"postmark-controller-attachment-rejected\",\n+        \"From\" => \"Alice Example <alice@example.com>\",\n+        \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n+        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n+        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"Subject\" => \"Trip planning night\",\n+        \"TextBody\" => \"See the attached route.\",\n+        \"Attachments\" => [\n+          %{\n+            \"Name\" => \"route.gpx\",\n+            \"ContentType\" => \"application/gpx+xml\",\n+            \"ContentLength\" => \"1234\",\n+            \"ContentID\" => \"route-file\"\n+          }\n+        ]\n+      })\n+\n+    conn = post_postmark_inbound_event(conn, payload)\n+\n+    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+    assert [] = Messaging.list_messages_for_club(kmc.club_id)\n+    assert [] = Fake.deliveries()\n+\n+    assert %{\n+             provider: \"postmark\",\n+             provider_message_id: \"postmark-controller-attachment-rejected\",\n+             from_address: \"alice@example.com\",\n+             to_address: \"kmc@clubs.memba.io\",\n+             status: \"rejected\",\n+             message_id: nil,\n+             rejection_reason: \"attachments_not_supported\",\n+             rejection_email_delivery_reference: rejection_email_delivery_reference\n+           } =\n+             Messaging.get_inbound_email_source(\n+               \"postmark\",\n+               \"postmark-controller-attachment-rejected\"\n+             )\n+\n+    assert is_binary(rejection_email_delivery_reference)\n+\n+    assert_rejection_email_received(\n+      to: \"alice@example.com\",\n+      reason: \"attachments are not supported yet\"\n+    )\n+\n+    retry_payload =\n+      valid_payload(%{\n+        \"MessageID\" => \"postmark-controller-attachment-rejected\",\n+        \"From\" => \"Alice Example <alice@example.com>\",\n+        \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n+        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n+        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"Subject\" => \"Retry without attachment\",\n+        \"TextBody\" => \"This retry must not send another rejection email.\"\n+      })\n+\n+    conn =\n+      conn\n+      |> recycle()\n+      |> post_postmark_inbound_event(retry_payload)\n+\n+    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+    assert [] = Messaging.list_messages_for_club(kmc.club_id)\n+    assert [] = Fake.deliveries()\n+    refute_received {:email, %Swoosh.Email{}}\n+\n+    assert %{\n+             status: \"rejected\",\n+             rejection_reason: \"attachments_not_supported\",\n+             rejection_email_delivery_reference: ^rejection_email_delivery_reference\n+           } =\n+             Messaging.get_inbound_email_source(\n+               \"postmark\",\n+               \"postmark-controller-attachment-rejected\"\n+             )\n+  end\n+\n+  test \"rejects Postmark HTML-only inbound emails through the shared plain-text rule\",\n+       %{conn: conn} do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+\n+    payload =\n+      valid_payload(%{\n+        \"MessageID\" => \"postmark-controller-html-only\",\n+        \"From\" => \"Alice Example <alice@example.com>\",\n+        \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n+        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n+        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"Subject\" => \"Trip planning night\",\n+        \"HtmlBody\" => \"<p>This HTML must not be converted into a club message.</p>\"\n+      })\n+      |> Map.delete(\"TextBody\")\n+\n+    conn = post_postmark_inbound_event(conn, payload)\n+\n+    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+    assert [] = Messaging.list_messages_for_club(kmc.club_id)\n+    assert [] = Fake.deliveries()\n \n-    assert rejection_email.text_body =~\n-             \"we could not find a member account for your sender address\"\n+    assert %{\n+             provider: \"postmark\",\n+             provider_message_id: \"postmark-controller-html-only\",\n+             from_address: \"alice@example.com\",\n+             to_address: \"kmc@clubs.memba.io\",\n+             status: \"rejected\",\n+             message_id: nil,\n+             rejection_reason: \"plain_text_required\",\n+             rejection_email_delivery_reference: rejection_email_delivery_reference\n+           } = Messaging.get_inbound_email_source(\"postmark\", \"postmark-controller-html-only\")\n+\n+    assert is_binary(rejection_email_delivery_reference)\n+\n+    assert_rejection_email_received(\n+      to: \"alice@example.com\",\n+      reason: \"a plain text message body is required\"\n+    )\n+  end\n+\n+  test \"rejects Postmark inbound emails whose plain text has no usable content\",\n+       %{conn: conn} do\n+    kmc = create_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    alice = create_person!(name: \"Alice Example\", email: \"alice@example.com\")\n+\n+    add_member!(kmc.club_id, alice.person_id)\n+\n+    payload =\n+      valid_payload(%{\n+        \"MessageID\" => \"postmark-controller-quoted-only\",\n+        \"From\" => \"Alice Example <alice@example.com>\",\n+        \"FromFull\" => %{\"Email\" => \"alice@example.com\", \"Name\" => \"Alice Example\"},\n+        \"OriginalRecipient\" => \"kmc@clubs.memba.io\",\n+        \"To\" => \"KMC <kmc@clubs.memba.io>\",\n+        \"Subject\" => \"Trip planning night\",\n+        \"TextBody\" => \"  \\n> quoted prior content only\\n\",\n+        \"HtmlBody\" => \"<p>This HTML must not be converted into a club message.</p>\"\n+      })\n+\n+    conn = post_postmark_inbound_event(conn, payload)\n+\n+    assert %{\"status\" => \"accepted\"} = json_response(conn, 202)\n+    assert [] = Messaging.list_messages_for_club(kmc.club_id)\n+    assert [] = Fake.deliveries()\n+\n+    assert %{\n+             provider: \"postmark\",\n+             provider_message_id: \"postmark-controller-quoted-only\",\n+             from_address: \"alice@example.com\",\n+             to_address: \"kmc@clubs.memba.io\",\n+             status: \"rejected\",\n+             message_id: nil,\n+             rejection_reason: \"plain_text_required\",\n+             rejection_email_delivery_reference: rejection_email_delivery_reference\n+           } = Messaging.get_inbound_email_source(\"postmark\", \"postmark-controller-quoted-only\")\n+\n+    assert is_binary(rejection_email_delivery_reference)\n+\n+    assert_rejection_email_received(\n+      to: \"alice@example.com\",\n+      reason: \"a plain text message body is required\"\n+    )\n   end\n \n   test \"uses Postmark MessageID for retry idempotency without duplicate messages or deliveries\",\n@@ -236,15 +483,17 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n   defp create_person!(attrs) do\n     person_id = Ecto.UUID.generate()\n \n+    create_attrs =\n+      attrs\n+      |> Keyword.take([:email, :email_addresses])\n+      |> Map.new()\n+      |> Map.merge(%{\n+        person_id: person_id,\n+        name: Keyword.fetch!(attrs, :name)\n+      })\n+\n     assert :ok =\n-             Membership.create_person(\n-               %{\n-                 person_id: person_id,\n-                 name: Keyword.fetch!(attrs, :name),\n-                 email: Keyword.fetch!(attrs, :email)\n-               },\n-               consistency: :strong\n-             )\n+             Membership.create_person(create_attrs, consistency: :strong)\n \n     Membership.get_person(person_id)\n   end\n@@ -263,4 +512,16 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do\n \n   defp restore_env(key, nil), do: Application.delete_env(:memba, key)\n   defp restore_env(key, value), do: Application.put_env(:memba, key, value)\n+\n+  defp assert_rejection_email_received(opts) do\n+    to_address = Keyword.fetch!(opts, :to)\n+    reason = Keyword.fetch!(opts, :reason)\n+\n+    assert_received {:email, %Swoosh.Email{} = rejection_email}\n+    assert rejection_email.to == [{\"\", to_address}]\n+    assert rejection_email.subject == \"Your email was not posted\"\n+    assert rejection_email.text_body =~ reason\n+\n+    rejection_email\n+  end\n end\ndiff --git a/web/test/memba_web/postmark_inbound_email_parser_test.exs b/web/test/memba_web/postmark_inbound_email_parser_test.exs\nindex 050ad44..b0518e5 100644\n--- a/web/test/memba_web/postmark_inbound_email_parser_test.exs\n+++ b/web/test/memba_web/postmark_inbound_email_parser_test.exs\n@@ -110,11 +110,24 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do\n             }} = PostmarkInboundEmailParser.parse(payload)\n   end\n \n+  test \"allows missing plain text so shared inbound handling can reject HTML-only messages\" do\n+    payload =\n+      valid_payload(%{\n+        \"HtmlBody\" => \"<p>This HTML must not be converted into a club message.</p>\"\n+      })\n+      |> Map.delete(\"TextBody\")\n+\n+    assert {:ok,\n+            %{\n+              text_body: nil,\n+              html_body: \"<p>This HTML must not be converted into a club message.</p>\"\n+            }} = PostmarkInboundEmailParser.parse(payload)\n+  end\n+\n   test \"treats missing required fields as malformed\" do\n     required_field_removals = [\n       {\"MessageID\", fn payload -> Map.delete(payload, \"MessageID\") end},\n-      {\"Subject\", fn payload -> Map.delete(payload, \"Subject\") end},\n-      {\"TextBody\", fn payload -> Map.delete(payload, \"TextBody\") end}\n+      {\"Subject\", fn payload -> Map.delete(payload, \"Subject\") end}\n     ]\n \n     for {field, remove_field} <- required_field_removals do\n@@ -140,6 +153,7 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do\n \n   test \"rejects malformed optional fields\" do\n     malformed_payloads = [\n+      {:invalid_text_body, valid_payload(%{\"TextBody\" => %{\"body\" => \"Hi\"}})},\n       {:invalid_html_body, valid_payload(%{\"HtmlBody\" => %{\"body\" => \"<p>Hi</p>\"}})},\n       {:invalid_attachments,\n        valid_payload(%{\n",
+        "summary": {
+          "files_changed": 10,
+          "additions": 1670,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-03T19:26:18.498201564Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "outcome": "succeeded",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.sync_task_list": 0,
           "thread.validate_task.current_node": "task_gate",
           "internal.retry_count.reset_task_attempt": 0,
@@ -15589,7 +15944,7 @@
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "internal.retry_count.all_tasks_done": 0,
           "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- Completed todo/check-off evidence found.\n  - Read `/tmp/fabro-pre-validate-snapshot.md`; it records checkpoint `87ef529` with a clean tracked tree and only untracked `.fabro/tmp/`.\n  - Live `git status --short` also shows only `?? .fabro/tmp/`.\n  - Live recent commits show `87ef529 fabro(...): implement_next_task (succeeded)` immediately before the no-op `pre_validate_snapshot` checkpoint.\n  - `git show 87ef529` shows exactly one ordinary todo line changed:\n    - `007 Add Postmark inbound idempotency support using the stable provider message id or equivalent payload field.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks `001`–`006` checked and `007` first unchecked; current `todo.md` has `007` checked and `008` onward still unchecked.\n\n- Implementation artifacts found.\n  - `web/lib/memba_web/postmark_inbound_email_parser.ex` now explicitly uses Postmark top-level `MessageID`/`message_id` keys for `provider_message_id` and documents why RFC `Message-ID` headers are not used for provider idempotency.\n  - `web/test/memba_web/postmark_inbound_email_parser_test.exs` adds coverage proving top-level Postmark `MessageID` wins even when an original sender `Message-ID` header exists.\n  - `web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs` adds coverage proving duplicate webhook retries with the same Postmark `MessageID` return accepted without creating duplicate club messages or outbound deliveries.\n  - No acceptance feature files were edited.\n\n- Tests run/results found.\n  - Reran focused validation:\n    - `bin/mix test test/memba_web/postmark_inbound_email_parser_test.exs test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs`\n    - Result: `10 tests, 0 failures`.\n  - `git diff --check 87ef529^ 87ef529` passed.\n  - Implementation summary also reported formatting passing and `dev check --quick` passing.\n\n- ADR/plan conformance notes.\n  - Work matches task `007`: Postmark inbound idempotency is tied to the stable top-level Postmark message id and verified through parser/controller tests.\n  - Work preserves ADR 0016’s provider-neutral boundary: provider-specific code parses/translates only; duplicate handling remains in shared Messaging inbound handling keyed by provider/provider message id.\n  - Resend fallback support is untouched.\n  - No plan-required work was deleted, weakened, or silently deferred; broader Postmark inbound case coverage remains appropriately listed under task `008`.\n  - The checkpoint is small, focused, and independently useful.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
-          "command.output": "blob://sha256/f2c1c4d8f3b5f82530080f46331fd62d3f76c65f7edee66d1ee13e965ebff044",
+          "command.output": "blob://sha256/1d6d86e204c85569066e131b175da606d309f35e3c3a176eec3a82ed36ebc3e4",
           "internal.fidelity": "summary:high",
           "internal.retry_count.start": 0,
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
@@ -15616,7 +15971,7 @@
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "thread.reset_task_attempt.current_node": "implement_next_task",
           "internal.retry_count.resume_gate": 0,
-          "internal.thread_id": "all_tasks_done"
+          "internal.thread_id": "implement_next_task"
         },
         "node_outcomes": {
           "start": {
@@ -15720,15 +16075,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/d2453dff4b0c1d059bca4275bc8c3572590df13daa40e8408c0d59fa0b0fd9ef"
+              "command.output": "blob://sha256/1d6d86e204c85569066e131b175da606d309f35e3c3a176eec3a82ed36ebc3e4"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 197,
-              "active_time_ms": 197
+              "tool_time_ms": 178,
+              "active_time_ms": 178
             }
           },
           "resume_gate": {
@@ -15839,7 +16194,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "task_gate": 7,
           "reset_task_attempt": 1,
@@ -15851,7 +16206,7 @@
           "validate_task": 7,
           "start": 1,
           "all_tasks_done": 7,
-          "pre_validate_snapshot": 7,
+          "pre_validate_snapshot": 8,
           "wip_gate": 1
         }
       },
@@ -19053,6 +19408,44 @@
       },
       "state": "succeeded"
     },
+    "pre_validate_snapshot@8": {
+      "first_event_seq": 2141,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/020-migrate-production-email-to-postmark/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/1d6d86e204c85569066e131b175da606d309f35e3c3a176eec3a82ed36ebc3e4",
+        "exit_code": 0,
+        "duration_ms": 178,
+        "termination": "exited",
+        "output_bytes": 849,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 849,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-03T19:26:18.230986947Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "pre_validate_snapshot@3": {
       "first_event_seq": 721,
       "prompt": null,
@@ -20439,7 +20832,12 @@
       "first_event_seq": 1932,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-03T19:26:14.376493614Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -20453,13 +20851,20 @@
       "output": null,
       "started_at": "2026-06-03T19:19:06.542486629Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 427833,
+        "inference_time_ms": 378769,
+        "tool_time_ms": 48349,
+        "active_time_ms": 427118
+      },
       "usage": {
-        "input_tokens": 1229964,
-        "output_tokens": 10620,
-        "total_tokens": 3770606,
-        "reasoning_tokens": 2790,
-        "cache_read_tokens": 2527232,
-        "cache_write_tokens": 0
+        "input_tokens": 1231395,
+        "output_tokens": 11438,
+        "total_tokens": 3889936,
+        "reasoning_tokens": 3135,
+        "cache_read_tokens": 2643968,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 7916149
       },
       "model": {
         "provider": "openai",
@@ -20634,32 +21039,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 118034,
-        "usage_percent": 43.394852941176474,
+        "input_tokens": 118167,
+        "usage_percent": 43.44375,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-03T19:25:47.447838537Z",
-        "event_seq": 2125,
+        "generated_at": "2026-06-03T19:26:14.367499182Z",
+        "event_seq": 2133,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1012,
-            "usage_percent": 0.3720588235294118
+            "tokens": 1009,
+            "usage_percent": 0.3709558823529412
           },
           {
             "category": "tools",
-            "tokens": 1437,
-            "usage_percent": 0.5283088235294118
+            "tokens": 1432,
+            "usage_percent": 0.5264705882352941
           },
           {
             "category": "memory",
-            "tokens": 357,
-            "usage_percent": 0.13125
+            "tokens": 356,
+            "usage_percent": 0.13088235294117648
           },
           {
             "category": "conversation",
-            "tokens": 115222,
-            "usage_percent": 42.361029411764704
+            "tokens": 115364,
+            "usage_percent": 42.41323529411765
           },
           {
             "category": "other",
@@ -20669,7 +21074,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "task_gate@7": {
       "first_event_seq": 1904,
