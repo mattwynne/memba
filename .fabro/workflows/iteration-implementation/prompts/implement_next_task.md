@@ -41,6 +41,10 @@ Todo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.
 - Use test-driven development for behaviour changes.
 - Add or update automated tests proving the selected task's behaviour/configuration.
 - Run focused validation appropriate to the selected task and capture the commands/results in your response.
+- For per-task validation, prefer the smallest checks that prove the selected task: relevant focused tests plus formatting for touched files when practical.
+- Use `PATH="$PWD/bin:$PATH" dev check --quick` for broad per-task validation when the selected task does not change browser-facing behaviour, acceptance tests, routing, LiveView/UI, or feature/step files.
+- Run full `PATH="$PWD/bin:$PATH" dev check` during a task only when that task changes browser-facing behaviour, acceptance tests, routing, LiveView/UI, feature/step files, or when the selected task is the final validation task. The workflow's final quality gate will still run the full check before publication.
+- In the Fabro sandbox, avoid wrapping focused commands in `devenv shell -- ...` unless there is a specific reason. The sandbox image and project wrappers are already prepared for the project; prefer `PATH="$PWD/bin:$PATH" bin/mix ...` or `PATH="$PWD/bin:$PATH" dev ...` so command execution stays consistent with the workflow environment.
 - Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If the plan permits a feature edit, make only that explicit edit and preserve/validate the coverage promised by the plan. If a feature file appears wrong, stale, or insufficient without explicit permission, stop and report the issue.
 - Add acceptance step definitions only where the plan explicitly requires executable plumbing for shared feature files.
 - Use Req for HTTP requests; do not introduce HTTPoison, Tesla, or `:httpc`.
