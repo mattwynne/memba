@@ -1,0 +1,159 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index a61208e..ffaf9f6 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
+ - [x] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
+ - [x] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
+-- [ ] 006 Add inbound email events such as:
++- [x] 006 Add inbound email events such as:
+ - [ ] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
+ - [ ] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+ - [ ] 009 Add sender resolution that finds a person by any primary or alternate email address.
+diff --git a/web/lib/memba/messaging/events/inbound_club_email_accepted.ex b/web/lib/memba/messaging/events/inbound_club_email_accepted.ex
+new file mode 100644
+index 0000000..5e802c6
+--- /dev/null
++++ b/web/lib/memba/messaging/events/inbound_club_email_accepted.ex
+@@ -0,0 +1,28 @@
++defmodule Memba.Messaging.Events.InboundClubEmailAccepted do
++  @moduledoc """
++  Event raised when an inbound provider email has been accepted as a club message.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :from_address,
++    :to_address,
++    :club_id,
++    :sender_id,
++    :message_id
++  ]
++  defstruct [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :provider_event_id,
++    :from_address,
++    :to_address,
++    :club_id,
++    :sender_id,
++    :message_id
++  ]
++end
+diff --git a/web/lib/memba/messaging/events/inbound_club_email_rejected.ex b/web/lib/memba/messaging/events/inbound_club_email_rejected.ex
+new file mode 100644
+index 0000000..a7cc355
+--- /dev/null
++++ b/web/lib/memba/messaging/events/inbound_club_email_rejected.ex
+@@ -0,0 +1,24 @@
++defmodule Memba.Messaging.Events.InboundClubEmailRejected do
++  @moduledoc """
++  Event raised when an inbound provider email is rejected before posting.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :from_address,
++    :rejection_reason
++  ]
++  defstruct [
++    :inbound_email_id,
++    :provider,
++    :provider_message_id,
++    :provider_event_id,
++    :from_address,
++    :to_address,
++    :rejection_reason,
++    :rejection_email_delivery_reference
++  ]
++end
+diff --git a/web/test/memba/messaging/inbound_email_events_test.exs b/web/test/memba/messaging/inbound_email_events_test.exs
+new file mode 100644
+index 0000000..e93153d
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_events_test.exs
+@@ -0,0 +1,76 @@
++defmodule Memba.Messaging.InboundEmailEventsTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.Events.InboundClubEmailAccepted
++  alias Memba.Messaging.Events.InboundClubEmailRejected
++
++  test "InboundClubEmailAccepted records provider identity, routing, sender, and message identity" do
++    club_id = Ecto.UUID.generate()
++    sender_id = Ecto.UUID.generate()
++    message_id = Ecto.UUID.generate()
++
++    event = %InboundClubEmailAccepted{
++      inbound_email_id: "inbound-email:resend:email-123",
++      provider: "resend",
++      provider_message_id: "email-123",
++      provider_event_id: "event-456",
++      from_address: "alice@example.com",
++      to_address: "kmc@clubs.memba.io",
++      club_id: club_id,
++      sender_id: sender_id,
++      message_id: message_id
++    }
++
++    assert %{
++             "inbound_email_id" => "inbound-email:resend:email-123",
++             "provider" => "resend",
++             "provider_message_id" => "email-123",
++             "provider_event_id" => "event-456",
++             "from_address" => "alice@example.com",
++             "to_address" => "kmc@clubs.memba.io",
++             "club_id" => ^club_id,
++             "sender_id" => ^sender_id,
++             "message_id" => ^message_id
++           } = Jason.decode!(Jason.encode!(event))
++  end
++
++  test "InboundClubEmailRejected records provider identity, available addresses, reason, and rejection delivery reference" do
++    event = %InboundClubEmailRejected{
++      inbound_email_id: "inbound-email:resend:email-123",
++      provider: "resend",
++      provider_message_id: "email-123",
++      provider_event_id: "event-456",
++      from_address: "unknown@example.com",
++      to_address: "kmc@clubs.memba.io",
++      rejection_reason: "unknown sender",
++      rejection_email_delivery_reference: "resend-rejection-789"
++    }
++
++    assert %{
++             "inbound_email_id" => "inbound-email:resend:email-123",
++             "provider" => "resend",
++             "provider_message_id" => "email-123",
++             "provider_event_id" => "event-456",
++             "from_address" => "unknown@example.com",
++             "to_address" => "kmc@clubs.memba.io",
++             "rejection_reason" => "unknown sender",
++             "rejection_email_delivery_reference" => "resend-rejection-789"
++           } = Jason.decode!(Jason.encode!(event))
++  end
++
++  test "InboundClubEmailRejected can omit destination and rejection delivery reference" do
++    event = %InboundClubEmailRejected{
++      inbound_email_id: "inbound-email:resend:email-123",
++      provider: "resend",
++      provider_message_id: "email-123",
++      from_address: "unknown@example.com",
++      rejection_reason: "unsupported recipient"
++    }
++
++    assert %{
++             "to_address" => nil,
++             "provider_event_id" => nil,
++             "rejection_email_delivery_reference" => nil
++           } = Jason.decode!(Jason.encode!(event))
++  end
++end
