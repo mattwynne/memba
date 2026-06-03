@@ -1367,7 +1367,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-03T08:33:30.694407964Z",
-  "last_event_at": "2026-06-03T09:50:05.317021906Z",
+  "last_event_at": "2026-06-03T09:50:09.126218614Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -11908,9 +11908,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2082,
       "checkpoint": {
-        "timestamp": "2026-06-03T09:50:05.347090301Z",
+        "timestamp": "2026-06-03T09:50:09.004517493Z",
         "current_node": "validate_task",
         "completed_nodes": [
           "start",
@@ -11956,6 +11956,334 @@
         ],
         "node_retries": {},
         "context_values": {
+          "failure_signature": "",
+          "task_list_needs_human": false,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.validate_task": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "thread.validate_task.current_node": "task_gate",
+          "outcome": "succeeded",
+          "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/resend_inbound_email_parser_test.exs`\n     - Added malformed-field parser coverage for:\n       - invalid provider message id shape\n       - invalid from address\n       - invalid HTML body shape\n       - invalid attachment size\n   - Updated `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Added controller retry/idempotency coverage for accepted inbound emails:\n       - retry returns `202`\n       - no duplicate message\n       - no duplicate outbound deliveries\n       - original inbound source projection remains unchanged\n     - Added controller rejection-path coverage for attachment rejection:\n       - webhook still returns accepted receipt (`202`)\n       - no club message created\n       - no outbound club-message deliveries\n       - inbound source projected as rejected\n       - rejection email sent once\n       - provider retry does not send a duplicate rejection email\n   - Updated `docs/iterations/019-inbound-club-messages-by-email/todo.md` to check off task 021 only.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted test/memba_web/resend_inbound_email_parser_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Initially failed on formatting; fixed with a small patch.\n     - Reran and passed.\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/resend_inbound_email_parser_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Attempted twice.\n     - Blocked both times by sandbox duplicate Postgres startup lock: `postmaster.pid already exists`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `470 tests, 0 failures`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.`\n   - To:\n     - `- [x] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: Kept changes in the Phoenix app test suite.\n   - ADR 0002: Tests exercise Commanded/event-sourced inbound behaviour via the public webhook/API flow.\n   - ADR 0007: Test setup uses Membership public commands/queries; Messaging remains separate.\n   - ADR 0009: Assertions verify inbound source projection state from events.\n   - ADR 0011: Test fixture setup continues using caller-generated UUIDs.\n   - ADR 0016: Resend-specific parser/controller behaviour remains isolated while the domain-facing inbound API stays provider-neutral.",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - Live working tree is clean (`git status --short` empty).\n  - Recent checkpoint `8f66393 fabro(...): implement_next_task (succeeded)` changes exactly one ordinary todo line:\n    - `021 Add Resend webhook parser/controller tests ...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state shows tasks `001`–`020` checked and `021` was the first unchecked task.\n  - No todo split/reorder/delete evidence found.\n\n- **Implementation artifacts found.**\n  - `8f66393` modifies:\n    - `web/test/memba_web/resend_inbound_email_parser_test.exs`\n    - `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n    - `docs/iterations/019-inbound-club-messages-by-email/todo.md`\n  - Parser tests now include additional malformed-field coverage for invalid provider message id, invalid sender address, invalid HTML body shape, and invalid attachment metadata.\n  - Controller tests now cover:\n    - duplicate provider message id retry returning accepted without duplicate message or outbound deliveries;\n    - rejected attachment path with projected rejected inbound source;\n    - rejection email sent once;\n    - retry of rejected provider message id without duplicate rejection email.\n  - Existing tests in the same files already cover realistic inbound payload parsing, malformed required fields, and signature-required/invalid-signature behaviour, so current task scope is covered.\n  - Implement checkpoint changed no `*.feature` files (`NO_FEATURE_CHANGES`).\n\n- **Tests run/results found.**\n  - Implementation summary reports formatting passed for the changed test files.\n  - Implementation summary reports targeted `bin/mix test ...` was blocked by a duplicate Postgres startup lock, then `dev check --quick` passed.\n  - I reran live validation:\n    - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n    - Passed: `470 tests, 0 failures`.\n  - Working tree remained clean afterward.\n\n- **ADR/plan conformance notes.**\n  - Matches implementation-plan task `021` and acceptance criteria requiring Resend-specific parser/controller coverage plus provider retry idempotency.\n  - ADR 0002/0009 respected: tests exercise event-sourced inbound behaviour and projected inbound source state through application flows.\n  - ADR 0007 respected: test setup uses Membership public commands/queries rather than mutating Messaging-owned membership state.\n  - ADR 0011 respected: test fixtures generate UUID identities at call sites.\n  - ADR 0016 respected: Resend-specific parsing/controller behaviour remains isolated while the domain-facing inbound API remains provider-neutral.\n  - Acceptance feature edit rule respected: no feature files were edited in this task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "last_stage": "validate_task",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "task_list_complete": false,
+          "graph.default_fidelity": "summary:high",
+          "graph.max_node_visits": "80",
+          "graph.rankdir": "LR",
+          "internal.node_visit_count": 6,
+          "internal.retry_count.task_gate": 0,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "last_response": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - Live working tree is clean (`git status --short` empty).\n  - Recent checkpoint `8f66393 fabro(...): implement_ne",
+          "command.output": "blob://sha256/c787aae5b5d82134160d7ce61b20c352fea601bfa762f4137a91f01e987f8072",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.resume_gate": 0,
+          "internal.fidelity": "summary:high",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "current_node": "validate_task",
+          "internal.retry_count.start": 0,
+          "thread.start.current_node": "read_plan",
+          "failure_class": "",
+          "internal.work_dir": "/workspace/memba",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.run_id": "01KT69SBX75VR8H7J257B3MXPW",
+          "internal.thread_id": "pre_validate_snapshot",
+          "internal.retry_count.sync_task_list": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "task_retry_available": false,
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.all_tasks_done": 0,
+          "task_valid": true
+        },
+        "node_outcomes": {
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c787aae5b5d82134160d7ce61b20c352fea601bfa762f4137a91f01e987f8072"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 208,
+              "active_time_ms": 208
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - Live working tree is clean (`git status --short` empty).\n  - Recent checkpoint `8f66393 fabro(...): implement_next_task (succeeded)` changes exactly one ordinary todo line:\n    - `021 Add Resend webhook parser/controller tests ...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state shows tasks `001`–`020` checked and `021` was the first unchecked task.\n  - No todo split/reorder/delete evidence found.\n\n- **Implementation artifacts found.**\n  - `8f66393` modifies:\n    - `web/test/memba_web/resend_inbound_email_parser_test.exs`\n    - `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n    - `docs/iterations/019-inbound-club-messages-by-email/todo.md`\n  - Parser tests now include additional malformed-field coverage for invalid provider message id, invalid sender address, invalid HTML body shape, and invalid attachment metadata.\n  - Controller tests now cover:\n    - duplicate provider message id retry returning accepted without duplicate message or outbound deliveries;\n    - rejected attachment path with projected rejected inbound source;\n    - rejection email sent once;\n    - retry of rejected provider message id without duplicate rejection email.\n  - Existing tests in the same files already cover realistic inbound payload parsing, malformed required fields, and signature-required/invalid-signature behaviour, so current task scope is covered.\n  - Implement checkpoint changed no `*.feature` files (`NO_FEATURE_CHANGES`).\n\n- **Tests run/results found.**\n  - Implementation summary reports formatting passed for the changed test files.\n  - Implementation summary reports targeted `bin/mix test ...` was blocked by a duplicate Postgres startup lock, then `dev check --quick` passed.\n  - I reran live validation:\n    - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n    - Passed: `470 tests, 0 failures`.\n  - Working tree remained clean afterward.\n\n- **ADR/plan conformance notes.**\n  - Matches implementation-plan task `021` and acceptance criteria requiring Resend-specific parser/controller coverage plus provider retry idempotency.\n  - ADR 0002/0009 respected: tests exercise event-sourced inbound behaviour and projected inbound source state through application flows.\n  - ADR 0007 respected: test setup uses Membership public commands/queries rather than mutating Messaging-owned membership state.\n  - ADR 0011 respected: test fixtures generate UUID identities at call sites.\n  - ADR 0016 respected: Resend-specific parsing/controller behaviour remains isolated while the domain-facing inbound API remains provider-neutral.\n  - Acceptance feature edit rule respected: no feature files were edited in this task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_valid": true,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - Live working tree is clean (`git status --short` empty).\n  - Recent checkpoint `8f66393 fabro(...): implement_ne"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 292686,
+                    "output_tokens": 2084,
+                    "reasoning_tokens": 1368,
+                    "cache_read_tokens": 348160,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1741070
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 89519,
+              "tool_time_ms": 31150,
+              "active_time_ms": 120669
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6cf0797a9f7a361f7a683e7d077f499b014a4beef5e91be49c8170596ec25994"
+            },
+            "notes": "Script completed: set -eu\nfor tool in python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool in finalization scripts outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 138359,
+              "active_time_ms": 138359
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/62f3fa87fac9595d004ce2fd5fd3f7654f917770f737d0780c71827068d2f4a4"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 8958,
+              "active_time_ms": 8958
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "task_list_needs_human": false,
+              "last_stage": "all_tasks_done"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 23636,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 110,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 122320
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3766,
+              "tool_time_ms": 0,
+              "active_time_ms": 3766
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/19d96d55e3f9cf9ebf95cd4b63092a764ce4daebdccd40d5166c9d5495ab6e7a"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 181,
+              "active_time_ms": 181
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fcdc2462ac304fc2c80fad2be9d39cdd879e1e701c99a2cd31c11421732ebc75"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 208,
+              "active_time_ms": 208
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/568e7c733c3fc0a88b4e9ed451837c0b38a31c44eea39a871f60eb19a4db1301"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/019-inbound-club-messages-by-email/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 265,
+              "active_time_ms": 265
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/resend_inbound_email_parser_test.exs`\n     - Added malformed-field parser coverage for:\n       - invalid provider message id shape\n       - invalid from address\n       - invalid HTML body shape\n       - invalid attachment size\n   - Updated `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Added controller retry/idempotency coverage for accepted inbound emails:\n       - retry returns `202`\n       - no duplicate message\n       - no duplicate outbound deliveries\n       - original inbound source projection remains unchanged\n     - Added controller rejection-path coverage for attachment rejection:\n       - webhook still returns accepted receipt (`202`)\n       - no club message created\n       - no outbound club-message deliveries\n       - inbound source projected as rejected\n       - rejection email sent once\n       - provider retry does not send a duplicate rejection email\n   - Updated `docs/iterations/019-inbound-club-messages-by-email/todo.md` to check off task 021 only.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted test/memba_web/resend_inbound_email_parser_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Initially failed on formatting; fixed with a small patch.\n     - Reran and passed.\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/resend_inbound_email_parser_test.exs test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n     - Attempted twice.\n     - Blocked both times by sandbox duplicate Postgres startup lock: `postmaster.pid already exists`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `470 tests, 0 failures`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.`\n   - To:\n     - `- [x] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: Kept changes in the Phoenix app test suite.\n   - ADR 0002: Tests exercise Commanded/event-sourced inbound behaviour via the public webhook/API flow.\n   - ADR 0007: Test setup uses Membership public commands/queries; Messaging remains separate.\n   - ADR 0009: Assertions verify inbound source projection state from events.\n   - ADR 0011: Test fixture setup continues using caller-generated UUIDs.\n   - ADR 0016: Resend-specific parser/controller behaviour remains isolated while the domain-facing inbound API stays provider-neutral.",
+              "last_response": "Implemented the next unchecked task.\n\n1. **Selected todo line**\n   - `021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, d",
+              "last_stage": "implement_next_task"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1002671,
+                    "output_tokens": 6208,
+                    "reasoning_tokens": 3338,
+                    "cache_read_tokens": 1848320,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6223895
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 301255,
+              "tool_time_ms": 39351,
+              "active_time_ms": 340606
+            }
+          }
+        },
+        "next_node_id": "task_gate",
+        "git_commit_sha": "3da07c08c6dd56efa6bf16b5f3555fc5622314cc",
+        "node_visits": {
+          "read_plan": 1,
+          "wip_gate": 1,
+          "task_gate": 5,
+          "pre_validate_snapshot": 6,
+          "sync_task_list": 6,
+          "preflight_sandbox": 1,
+          "start": 1,
+          "all_tasks_done": 6,
+          "validate_task": 6,
+          "implement_next_task": 6,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 12,
+          "additions": 1288,
+          "deletions": 16
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-03T09:50:09.199581463Z",
+        "current_node": "task_gate",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.resume_gate": 0,
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- **Completed todo/check-off evidence found.**\n  - Live working tree is clean (`git status --short` empty).\n  - Recent checkpoint `8f66393 fabro(...): implement_next_task (succeeded)` changes exactly one ordinary todo line:\n    - `021 Add Resend webhook parser/controller tests ...`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state shows tasks `001`–`020` checked and `021` was the first unchecked task.\n  - No todo split/reorder/delete evidence found.\n\n- **Implementation artifacts found.**\n  - `8f66393` modifies:\n    - `web/test/memba_web/resend_inbound_email_parser_test.exs`\n    - `web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs`\n    - `docs/iterations/019-inbound-club-messages-by-email/todo.md`\n  - Parser tests now include additional malformed-field coverage for invalid provider message id, invalid sender address, invalid HTML body shape, and invalid attachment metadata.\n  - Controller tests now cover:\n    - duplicate provider message id retry returning accepted without duplicate message or outbound deliveries;\n    - rejected attachment path with projected rejected inbound source;\n    - rejection email sent once;\n    - retry of rejected provider message id without duplicate rejection email.\n  - Existing tests in the same files already cover realistic inbound payload parsing, malformed required fields, and signature-required/invalid-signature behaviour, so current task scope is covered.\n  - Implement checkpoint changed no `*.feature` files (`NO_FEATURE_CHANGES`).\n\n- **Tests run/results found.**\n  - Implementation summary reports formatting passed for the changed test files.\n  - Implementation summary reports targeted `bin/mix test ...` was blocked by a duplicate Postgres startup lock, then `dev check --quick` passed.\n  - I reran live validation:\n    - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n    - Passed: `470 tests, 0 failures`.\n  - Working tree remained clean afterward.\n\n- **ADR/plan conformance notes.**\n  - Matches implementation-plan task `021` and acceptance criteria requiring Resend-specific parser/controller coverage plus provider retry idempotency.\n  - ADR 0002/0009 respected: tests exercise event-sourced inbound behaviour and projected inbound source state through application flows.\n  - ADR 0007 respected: test setup uses Membership public commands/queries rather than mutating Messaging-owned membership state.\n  - ADR 0011 respected: test fixtures generate UUID identities at call sites.\n  - ADR 0016 respected: Resend-specific parsing/controller behaviour remains isolated while the domain-facing inbound API remains provider-neutral.\n  - Acceptance feature edit rule respected: no feature files were edited in this task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
@@ -11964,9 +12292,9 @@
           "failure_class": "",
           "task_valid": true,
           "thread.task_gate.current_node": "sync_task_list",
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "thread.sync_task_list.current_node": "all_tasks_done",
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "internal.retry_count.sync_task_list": 0,
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.start": 0,
@@ -12210,7 +12538,7 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "wip_gate": 1,
           "implement_next_task": 6,
@@ -12219,7 +12547,7 @@
           "pre_validate_snapshot": 6,
           "all_tasks_done": 6,
           "validate_task": 6,
-          "task_gate": 5,
+          "task_gate": 6,
           "start": 1,
           "sync_task_list": 6,
           "read_plan": 1
@@ -12444,6 +12772,40 @@
       },
       "state": "succeeded"
     },
+    "task_gate@6": {
+      "first_event_seq": 2085,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: task_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-03T09:50:09.126218614Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-03T09:50:09.098469651Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 27,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "sync_task_list@1": {
       "first_event_seq": 65,
       "prompt": null,
@@ -12541,7 +12903,12 @@
       "first_event_seq": 1992,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-03T09:50:05.321662177Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -12555,13 +12922,20 @@
       "output": null,
       "started_at": "2026-06-03T09:48:04.081501960Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 121240,
+        "inference_time_ms": 89519,
+        "tool_time_ms": 31150,
+        "active_time_ms": 120669
+      },
       "usage": {
         "input_tokens": 292686,
         "output_tokens": 2084,
         "total_tokens": 644298,
         "reasoning_tokens": 1368,
         "cache_read_tokens": 348160,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 1741070
       },
       "model": {
         "provider": "openai",
@@ -12735,7 +13109,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@5": {
       "first_event_seq": 1641,
