@@ -27,7 +27,7 @@ function smokeConfig() {
   const clubName = optionalEnv("MEMBA_SMOKE_CLUB_NAME", "Smoke Test Club");
   const clubSlug = optionalEnv("MEMBA_SMOKE_CLUB_SLUG", "test");
   const inboundDomain = optionalEnv("MEMBA_SMOKE_INBOUND_DOMAIN", "clubs.memba.io");
-  const clubSiteBaseDomain = optionalEnv("MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN", new URL(baseUrl).hostname);
+  const clubSiteBaseDomain = optionalEnv("MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN", inboundDomain);
   const memberEmail = optionalEnv("MEMBA_SMOKE_MEMBER_EMAIL", "test@memba.io");
   const memberName = optionalEnv("MEMBA_SMOKE_MEMBER_NAME", "Smoke Tester");
   const staffEmail = requiredEnv("MEMBA_SMOKE_STAFF_EMAIL");
@@ -54,12 +54,16 @@ function smokeConfig() {
   );
   const postmarkInboundMessageStream = optionalEnv("MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM", null);
 
+  const inboundAddress = `${clubSlug}@${inboundDomain}`;
+  const smtpRecipient = optionalEnv("MEMBA_SMOKE_SMTP_RECIPIENT", inboundAddress);
+
   return {
     baseUrl,
     clubName,
     clubSlug,
     clubSiteBaseDomain,
-    inboundAddress: `${clubSlug}@${inboundDomain}`,
+    inboundAddress,
+    smtpRecipient,
     member: {
       email: memberEmail,
       name: memberName,

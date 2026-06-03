@@ -9,7 +9,7 @@ Before running the production inbound email smoke tests in `./smoke-tests`, Matt
 - [x] Automatically seed a controlled active member of the smoke-test club with primary email address `test@memba.io`.
 - [x] Configure `clubs.memba.io` DNS MX to route inbound club email to Postmark: `10 inbound.postmarkapp.com`.
 - [x] Configure the Postmark `memba.io` server inbound domain as `clubs.memba.io`.
-- [x] Configure the Postmark inbound webhook URL as `https://memba.io/webhooks/postmark`.
+- [x] Configure the Postmark inbound webhook URL as `https://memba.io/webhooks/postmark/inbound`.
 - [x] Set up the `test@memba.io` Fastmail account so the smoke-test runner can send real emails and read resulting rejection/distribution emails.
 - [x] Provide the smoke-test runner with the `test@memba.io` Fastmail app password through local environment variable `SMOKE_TEST_EMAIL_PASSWORD`; do not commit it.
 - [x] Update the smoke-test runner to poll `test@memba.io` via IMAP using `SMOKE_TEST_EMAIL_PASSWORD`, while still supporting a Fastmail JMAP token when provided.
@@ -18,9 +18,11 @@ Before running the production inbound email smoke tests in `./smoke-tests`, Matt
 
 The routine inbound wiring smoke tests should cover real email from mailbox to Memba and back again:
 
-- [ ] Unknown sender to `test@clubs.memba.io` is rejected and receives guidance.
-- [ ] Known active member `test@memba.io` to `test@clubs.memba.io` creates and distributes a club message.
-- [ ] Known active member `test@memba.io` with an attachment is rejected and receives attachment guidance.
+- [x] Unknown sender to `test@clubs.memba.io` is rejected and receives guidance.
+- [x] Known active member `test@memba.io` to `test@clubs.memba.io` creates and distributes a club message.
+- [x] Known active member `test@memba.io` with an attachment is rejected and receives attachment guidance.
+
+Validated on 2026-06-03 using Fastmail SMTP to the Postmark inbound address with visible `To: test@clubs.memba.io`. A sender outside Fastmail is still useful to prove the literal public-MX path, because Fastmail-hosted `memba.io` senders appear to bypass or delay public MX delivery for `clubs.memba.io`.
 
 HTML-only email is not required as a production smoke test because it mainly exercises the business rule for `plain_text_required`, which is covered by lower-level tests. The smoke tests should focus on production wiring and visible touch-points.
 

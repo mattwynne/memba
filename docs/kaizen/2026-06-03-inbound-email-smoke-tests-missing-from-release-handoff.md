@@ -206,3 +206,31 @@ Remaining follow-up:
 
 - Run the production smoke tests with `MEMBA_SMOKE_POSTMARK_SERVER_TOKEN` set to distinguish provider receiving failure from webhook/application failure.
 - If Postmark receives the message but Memba still has no visible outcome, add webhook delivery diagnostics as the next boundary check.
+
+### Production smoke completion
+
+Date: 2026-06-03
+
+Root cause: the production cutover still had two independent problems after the smoke runner existed. First, the Postmark `memba.io` server inbound hook was configured as `/webhooks/postmark` instead of the inbound-email route `/webhooks/postmark/inbound`. Second, Postmark rejected inbound rejection emails because the Postmark metadata keys for inbound rejection emails exceeded Postmark's 20-character metadata-key limit.
+
+Fix applied:
+
+- Postmark production configuration: updated the `memba.io` server inbound hook URL to `https://memba.io/webhooks/postmark/inbound`.
+- `web/lib/memba/messaging/inbound_club_rejection_email.ex`: shortened Postmark metadata keys for inbound rejection emails and capped metadata values to Postmark's 80-character value limit.
+- `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`: updated the Postmark rejection-email metadata expectation.
+- `smoke-tests/lib/config.js`, `smoke-tests/lib/smtp.js`, and `smoke-tests/features/step_definitions/inbound_club_email_steps.js`: added an optional SMTP envelope-recipient override so the production smoke can send to Postmark's inbound address while preserving the visible `To: test@clubs.memba.io` header for Memba parsing.
+- `smoke-tests/lib/browser.js`: made staff sign-in navigate explicitly to `/admin/clubs` after following the magic link, instead of assuming the auth callback lands on an admin page.
+- `smoke-tests/README.md`: documented the club-site base domain and SMTP recipient override.
+- Deployed the metadata fix to Fly app `memba` with `fly deploy -a memba --remote-only`.
+
+Validation:
+
+- `bin/mix test test/memba/messaging/inbound_club_message_acceptance_test.exs` — passed; 14 tests, 0 failures.
+- `dev check` — passed; 495 ExUnit tests and 34 acceptance scenarios.
+- `fly deploy -a memba --remote-only` — completed successfully; release command reported migrations already up.
+- Production smoke via Fastmail SMTP to the Postmark inbound address, with `To: test@clubs.memba.io` preserved — passed; 3 scenarios and 21 steps.
+
+Remaining follow-up:
+
+- The tested production path proves Fastmail SMTP → Postmark inbound → Memba webhook → Memba business rules → Postmark outbound/rejection email → Fastmail mailbox/UI outcomes.
+- The exact public-MX path `test@clubs.memba.io` still appears abnormal when the sender is also a Fastmail-hosted `memba.io` mailbox: Fastmail accepted the SMTP send but no Postmark inbound webhook arrived. This likely reflects Fastmail internal routing/caching for a domain it hosts, not the Memba/Postmark application path. To prove the public DNS/MX boundary literally, run the same smoke from a sender outside Fastmail or from an SMTP service that definitely resolves public MX for `clubs.memba.io`.

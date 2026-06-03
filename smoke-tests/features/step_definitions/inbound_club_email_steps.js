@@ -43,6 +43,7 @@ When("an unknown sender emails the smoke club", async function () {
 
   await sendEmail({
     body,
+    envelopeTo: this.config.smtpRecipient,
     from: this.config.unknown.email,
     password: this.config.unknown.smtpPassword,
     subject,
@@ -59,6 +60,7 @@ When("the smoke member emails the smoke club", async function () {
 
   await sendEmail({
     body,
+    envelopeTo: this.config.smtpRecipient,
     from: this.config.member.email,
     password: this.config.member.smtpPassword,
     subject,
@@ -80,6 +82,7 @@ When("the smoke member emails the smoke club with an attachment", async function
       filename: "memba-smoke-test.txt"
     },
     body,
+    envelopeTo: this.config.smtpRecipient,
     from: this.config.member.email,
     password: this.config.member.smtpPassword,
     subject,

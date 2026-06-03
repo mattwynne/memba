@@ -147,13 +147,20 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
   defp metadata(inbound_email, to_address, rejection_reason, delivery_reference) do
     %{
       "memba_email_kind" => "inbound_club_rejection",
-      "memba_inbound_email_id" => InboundEmail.identity(inbound_email),
-      "memba_inbound_provider" => inbound_email.provider,
-      "memba_inbound_provider_message_id" => inbound_email.provider_message_id,
-      "memba_inbound_to_address" => to_address,
-      "memba_rejection_reason" => rejection_reason,
-      "memba_rejection_delivery_reference" => delivery_reference
+      "memba_inbound_id" => InboundEmail.identity(inbound_email),
+      "memba_in_provider" => inbound_email.provider,
+      "memba_in_msg_id" => inbound_email.provider_message_id,
+      "memba_in_to" => to_address,
+      "memba_reject_reason" => rejection_reason,
+      "memba_reject_ref" => delivery_reference
     }
+    |> Map.new(fn {key, value} -> {key, postmark_metadata_value(value)} end)
+  end
+
+  defp postmark_metadata_value(value) do
+    value
+    |> to_string()
+    |> String.slice(0, 80)
   end
 
   defp reason_copy("attachments_not_supported"), do: "attachments are not supported yet"

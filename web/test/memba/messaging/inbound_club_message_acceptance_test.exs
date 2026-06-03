@@ -629,13 +629,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert rejection_email.provider_options[:metadata] == %{
              "memba_email_kind" => "inbound_club_rejection",
-             "memba_inbound_email_id" =>
-               "inbound-email:postmark:task-020-postmark-selected-rejection",
-             "memba_inbound_provider" => "postmark",
-             "memba_inbound_provider_message_id" => "task-020-postmark-selected-rejection",
-             "memba_inbound_to_address" => "kmc@clubs.memba.io",
-             "memba_rejection_reason" => "unknown_sender",
-             "memba_rejection_delivery_reference" => rejection_email_delivery_reference
+             "memba_inbound_id" => "inbound-email:postmark:task-020-postmark-selected-rejection",
+             "memba_in_provider" => "postmark",
+             "memba_in_msg_id" => "task-020-postmark-selected-rejection",
+             "memba_in_to" => "kmc@clubs.memba.io",
+             "memba_reject_reason" => "unknown_sender",
+             "memba_reject_ref" => rejection_email_delivery_reference
            }
   end
 
