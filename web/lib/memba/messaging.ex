@@ -13,6 +13,7 @@ defmodule Memba.Messaging do
   alias Memba.Messaging.Commands.SendMessage
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.InboundClubAuthorization
   alias Memba.Messaging.InboundClubDestination
   alias Memba.Messaging.InboundClubSender
   alias Memba.Messaging.InboundEmail
@@ -82,6 +83,17 @@ defmodule Memba.Messaging do
   """
   def resolve_inbound_club_email_sender(inbound_email_or_from_address) do
     InboundClubSender.resolve(inbound_email_or_from_address)
+  end
+
+  @doc """
+  Authorize a resolved inbound sender to post to a resolved club destination.
+
+  Only active members of the destination club may post by email. Known people who
+  belong only to another club, or whose destination-club membership is inactive,
+  receive a typed rejection reason for later rejection-email handling.
+  """
+  def authorize_inbound_club_email_sender(sender, destination) do
+    InboundClubAuthorization.authorize(sender, destination)
   end
 
   @doc """

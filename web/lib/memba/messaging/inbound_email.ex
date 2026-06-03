@@ -57,9 +57,14 @@ defmodule Memba.Messaging.InboundEmail do
          {:ok, subject} <- fetch_required(attrs, :subject),
          {:ok, subject} <- normalize_subject(subject),
          {:ok, provider_event_id} <-
-           normalize_optional_string(fetch_optional(attrs, :provider_event_id), :invalid_provider_event_id),
-         {:ok, text_body} <- normalize_optional_body(fetch_optional(attrs, :text_body), :invalid_text_body),
-         {:ok, html_body} <- normalize_optional_body(fetch_optional(attrs, :html_body), :invalid_html_body),
+           normalize_optional_string(
+             fetch_optional(attrs, :provider_event_id),
+             :invalid_provider_event_id
+           ),
+         {:ok, text_body} <-
+           normalize_optional_body(fetch_optional(attrs, :text_body), :invalid_text_body),
+         {:ok, html_body} <-
+           normalize_optional_body(fetch_optional(attrs, :html_body), :invalid_html_body),
          {:ok, attachments} <- normalize_attachments(fetch_optional(attrs, :attachments)) do
       {:ok,
        %__MODULE__{

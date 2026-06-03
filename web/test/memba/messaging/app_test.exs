@@ -19,9 +19,9 @@ defmodule Memba.Messaging.AppTest do
     assert is_pid(Process.whereis(Memba.Messaging.EventStore))
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
-              {App, pid, :supervisor, [App]} when is_pid(pid) -> true
-              _child -> false
-            end)
+             {App, pid, :supervisor, [App]} when is_pid(pid) -> true
+             _child -> false
+           end)
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{InboundEmailSourceProjector, _opts}, pid, :worker, [InboundEmailSourceProjector]}

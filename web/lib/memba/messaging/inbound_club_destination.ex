@@ -38,7 +38,8 @@ defmodule Memba.Messaging.InboundClubDestination do
   whole-club address shape is present.
   """
   @spec resolve(InboundEmail.t() | [String.t()] | term()) :: {:ok, t()} | rejection()
-  def resolve(%InboundEmail{recipient_addresses: recipient_addresses}), do: resolve(recipient_addresses)
+  def resolve(%InboundEmail{recipient_addresses: recipient_addresses}),
+    do: resolve(recipient_addresses)
 
   def resolve(recipient_addresses) when is_list(recipient_addresses) do
     recipient_addresses
@@ -92,7 +93,8 @@ defmodule Memba.Messaging.InboundClubDestination do
     |> resolve_accumulator()
   end
 
-  defp accumulate_candidate(_candidate, %{destination: %__MODULE__{}} = accumulator), do: accumulator
+  defp accumulate_candidate(_candidate, %{destination: %__MODULE__{}} = accumulator),
+    do: accumulator
 
   defp accumulate_candidate({:club_candidate, slug, to_address}, accumulator) do
     case Membership.get_club_by_slug(slug) do

@@ -33,7 +33,10 @@ defmodule Memba.Messaging.InboundEmailReceiptTest do
     end
 
     test "rejects commands whose aggregate identity is not derived from the inbound email" do
-      command = %ReceiveInboundEmail{receive_command() | inbound_email_id: "inbound-email:resend:other"}
+      command = %ReceiveInboundEmail{
+        receive_command()
+        | inbound_email_id: "inbound-email:resend:other"
+      }
 
       assert {:error, :inbound_email_id_mismatch} =
                InboundEmailReceipt.execute(%InboundEmailReceipt{}, command)
