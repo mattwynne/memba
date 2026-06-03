@@ -7,12 +7,16 @@ const {
   assertEveryAddressedMemberReceiptStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
+  assertInboundRejectionEmail,
+  assertInboundRejectionEmailSupportGuidance,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
+  assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
   assertMemberReceiptStatus,
   assertMemberSeesMessageInClub,
+  assertNoMemberMessageCreated,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
   assertOperatorDeliveryReason,
@@ -33,6 +37,8 @@ const {
   projectionPollIntervalMs,
   projectionTimeoutMs,
   reportRecipientEmailStatus,
+  resendInboundEmailPayload,
+  sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers
@@ -298,12 +304,28 @@ class FakeResponse {
   async text() {
     return typeof this.body === "string" ? this.body : JSON.stringify(this.body);
   }
+
+  async json() {
+    return this.body;
+  }
 }
 
 class FakeRequestContext {
-  constructor(response = new FakeResponse(202, { status: "accepted" })) {
+  constructor(response = new FakeResponse(202, { status: "accepted" }), getResponse = new FakeResponse(200, { data: [] })) {
+    this.gets = [];
     this.posts = [];
+    this.getResponses = Array.isArray(getResponse) ? getResponse : [getResponse];
     this.response = response;
+  }
+
+  async get(url) {
+    this.gets.push({ url });
+
+    if (this.getResponses.length > 1) {
+      return this.getResponses.shift();
+    }
+
+    return this.getResponses[0];
   }
 
   async post(url, options) {
@@ -1177,6 +1199,181 @@ test("Postmark webhook payloads map member-facing status events onto the app end
   assert.equal(memberReceiptStatusForEventType("delayed"), "delivery problem");
   assert.equal(memberReceiptStatusForEventType("bounced"), "delivery problem");
   assert.equal(memberReceiptStatusForEventType("spam_complaint"), "delivery problem");
+});
+
+test("Resend inbound email payloads express the browser acceptance webhook shape", () => {
+  const payload = resendInboundEmailPayload({
+    attachments: [{ filename: "route.gpx", content_type: "application/gpx+xml", size: 1234 }],
+    eventId: "evt-inbound-1",
+    fromAddress: "alice@example.test",
+    htmlBody: "<p>Trip planning night details.</p>",
+    providerMessageId: "email-inbound-1",
+    subject: "Trip planning night",
+    textBody: "Trip planning night details.",
+    toAddress: "kmc@clubs.memba.io"
+  });
+
+  assert.deepEqual(payload, {
+    id: "evt-inbound-1",
+    type: "email.received",
+    data: {
+      attachments: [{ filename: "route.gpx", content_type: "application/gpx+xml", size: 1234 }],
+      email_id: "email-inbound-1",
+      from: "alice@example.test",
+      html: "<p>Trip planning night details.</p>",
+      subject: "Trip planning night",
+      text: "Trip planning night details.",
+      to: ["kmc@clubs.memba.io"]
+    }
+  });
+});
+
+test("sending an inbound club email posts to the Resend inbound webhook and records browser scenario state", async () => {
+  const page = new FakePage();
+  page.rows.clubMessages.push(
+    rowWithAttrs({
+      "data-message-id": "message-inbound-1",
+      "data-message-subject": "Trip planning night"
+    })
+  );
+  const request = new FakeRequestContext(
+    new FakeResponse(202, { status: "accepted" }),
+    new FakeResponse(200, { data: [{ headers: { "Message-ID": "before-1" }, subject: "Earlier" }] })
+  );
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.request = request;
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kmc"
+    }
+  };
+  world.people = {
+    Alice: { email: "alice@example.test", personId: "person-alice-1" },
+    Bob: { email: "bob@example.test", personId: "person-bob-1" }
+  };
+  world.memberships = {
+    [`${kootenayClubName}:Alice`]: { clubName: kootenayClubName, personName: "Alice" },
+    [`${kootenayClubName}:Bob`]: { clubName: kootenayClubName, personName: "Bob" }
+  };
+
+  await sendInboundClubEmail(world, "Alice", "Trip planning night", "kmc@clubs.memba.io", {
+    expect: fakeExpect(expectations),
+    providerMessageId: "email-inbound-1"
+  });
+  await assertMemberSeesMessageInClub(world, "Trip planning night", kootenayClubName, {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(request.posts.map((post) => post.url), [
+    "http://127.0.0.1:4444/webhooks/resend/inbound"
+  ]);
+  assert.deepEqual(request.posts[0].options.data.data, {
+    email_id: "email-inbound-1",
+    from: "alice@example.test",
+    to: ["kmc@clubs.memba.io"],
+    subject: "Trip planning night",
+    text: "Trip planning night details."
+  });
+  assert.deepEqual(world.addressedMemberNames, ["Alice", "Bob"]);
+  assert.deepEqual(world.messages["Trip planning night"], {
+    body: "Trip planning night details.",
+    clubId: "club-1",
+    messageId: "message-inbound-1",
+    senderName: "Alice",
+    subject: "Trip planning night"
+  });
+});
+
+test("inbound rejection assertions inspect mailbox copy and support guidance", async () => {
+  const page = new FakePage();
+  const request = new FakeRequestContext(
+    new FakeResponse(202, { status: "accepted" }),
+    [
+      new FakeResponse(200, {
+        data: [{ headers: { "Message-ID": "before-1" }, subject: "Earlier", to: ["alice@example.test"] }]
+      }),
+      new FakeResponse(200, {
+        data: [
+          { headers: { "Message-ID": "before-1" }, subject: "Earlier", to: ["alice@example.test"] },
+          {
+            headers: { "Message-ID": "reject-1" },
+            subject: "Your email was not posted",
+            text_body:
+              "Your email was not posted: attachments are not supported yet.\n\nFor help, reply to this email or contact Memba support.\n",
+            to: ["alice@example.test"]
+          }
+        ]
+      })
+    ]
+  );
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.projectionPollIntervalMs = 0;
+  world.request = request;
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kmc"
+    }
+  };
+  world.people = { Alice: { email: "alice@example.test", personId: "person-alice-1" } };
+
+  await sendInboundClubEmail(world, "Alice", "Trip planning night", "kmc@clubs.memba.io", {
+    attachments: [{ filename: "route.gpx", size: 1234 }],
+    expect: false,
+    providerMessageId: "email-inbound-rejected"
+  });
+  await assertNoMemberMessageCreated(world, kootenayClubName, "Trip planning night", {
+    expect: fakeExpect(expectations)
+  });
+  await assertInboundRejectionEmail(world, "Alice", "attachments are not supported yet");
+  await assertInboundRejectionEmailSupportGuidance(world, "Alice");
+
+  assert.deepEqual(request.posts[0].options.data.data.attachments, [{ filename: "route.gpx", size: 1234 }]);
+  assert.equal(world.inboundRejectionEmails.Alice.subject, "Your email was not posted");
+  assert.ok(expectations.some((expectation) => expectation[0] === "count" && expectation[2] === 0));
+});
+
+test("member message body assertions use the member-facing message detail", async () => {
+  const page = new FakePage();
+  const expectations = [];
+  const world = worldWithPage(page);
+  world.clubs = {
+    [kootenayClubName]: {
+      clubId: "club-1",
+      name: kootenayClubName,
+      slug: "kmc"
+    }
+  };
+  world.messages = {
+    "Trip planning night": {
+      body: "Let's meet at 7pm in the clubhouse.",
+      clubId: "club-1",
+      messageId: "message-1",
+      subject: "Trip planning night"
+    }
+  };
+  world.lastMessageSubject = "Trip planning night";
+
+  await assertMemberMessageBody(world, "Let's meet at 7pm in the clubhouse.\n", {
+    expect: fakeExpect(expectations)
+  });
+
+  assert.deepEqual(page.actions, [
+    ["goto", "http://kmc.lvh.me:4444/messages/message-1"]
+  ]);
+  assert.ok(
+    expectations.some(
+      (expectation) =>
+        expectation[0] === "text" &&
+        expectation[1].includes("#member-message-body") &&
+        expectation[2] === "Let's meet at 7pm in the clubhouse."
+    )
+  );
 });
 
 test("reporting a recipient email status posts to POST /webhooks/postmark using browser-visible ids", async () => {

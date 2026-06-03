@@ -5,24 +5,30 @@ const {
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
+  assertInboundRejectionEmail,
+  assertInboundRejectionEmailSupportGuidance,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
+  assertMemberMessageBody,
   assertMemberMessageNotAddressedTo,
   assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
+  assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
   createClub,
   createPerson,
   createPeople,
+  ensureClubSlugMatchesInboundAddress,
   kootenayClubName,
   makeClubMessageSendingUnavailable,
   nelsonClubName,
   openMemberMessage,
   reportRecipientEmailStatus,
+  sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers
@@ -88,6 +94,51 @@ When(
   }
 );
 
+When(/^(\w+) emails "([^"]+)" to ([^\s]+)$/, async function (senderName, subject, toAddress) {
+  await prepareInboundClubEmailRouting(this, toAddress);
+  await sendInboundClubEmail(this, senderName, subject, toAddress);
+});
+
+When(
+  /^(\w+) emails "([^"]+)" to ([^\s]+) from "([^"]+)"$/,
+  async function (senderName, subject, toAddress, fromAddress) {
+    await prepareInboundClubEmailRouting(this, toAddress);
+    await sendInboundClubEmail(this, senderName, subject, toAddress, { fromAddress });
+  }
+);
+
+When(
+  /^(\w+) emails "([^"]+)" to ([^\s]+) with an attachment$/,
+  async function (senderName, subject, toAddress) {
+    await prepareInboundClubEmailRouting(this, toAddress);
+    await sendInboundClubEmail(this, senderName, subject, toAddress, {
+      attachments: [
+        {
+          filename: "route.gpx",
+          content_type: "application/gpx+xml",
+          size: 1234
+        }
+      ]
+    });
+  }
+);
+
+When(
+  /^(\w+) emails "([^"]+)" to ([^\s]+) with only an HTML body$/,
+  async function (senderName, subject, toAddress) {
+    await prepareInboundClubEmailRouting(this, toAddress);
+    await sendInboundClubEmail(this, senderName, subject, toAddress, { htmlOnly: true });
+  }
+);
+
+When(
+  /^(\w+) emails "([^"]+)" to ([^\s]+) with the body:$/,
+  async function (senderName, subject, toAddress, body) {
+    await prepareInboundClubEmailRouting(this, toAddress);
+    await sendInboundClubEmail(this, senderName, subject, toAddress, { textBody: body });
+  }
+);
+
 Given("club message sending is unavailable", async function () {
   await makeClubMessageSendingUnavailable(this);
 });
@@ -129,6 +180,44 @@ Then(
     );
   }
 );
+
+Then(
+  "no Kootenay Mountaineering Club message named {string} should be created",
+  async function (subject) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertNoMemberMessageCreated(member, kootenayClubName, subject)
+    );
+  }
+);
+
+Then(
+  "{word} should receive a rejection email explaining the message was not posted",
+  async function (senderName) {
+    await assertInboundRejectionEmail(this, senderName, "Your email was not posted");
+  }
+);
+
+Then(
+  "{word} should receive a rejection email explaining attachments are not supported",
+  async function (senderName) {
+    await assertInboundRejectionEmail(this, senderName, "attachments are not supported yet");
+  }
+);
+
+Then(
+  "{word} should receive a rejection email explaining a plain-text message body is required",
+  async function (senderName) {
+    await assertInboundRejectionEmail(this, senderName, "plain text message body is required");
+  }
+);
+
+Then("{word} should be told how to contact support", async function (senderName) {
+  await assertInboundRejectionEmailSupportGuidance(this, senderName);
+});
+
+Then("the message body should be:", async function (body) {
+  await withMemberHarness(this, "Alice", (member) => assertMemberMessageBody(member, body));
+});
 
 Then(/^(\w+) should see the message was addressed to (.+)$/, async function (
   viewerName,
@@ -304,4 +393,10 @@ async function ensureKootenayMember(world, personName) {
       await addMembers(staff, [personName], kootenayClubName);
     }
   });
+}
+
+async function prepareInboundClubEmailRouting(world, toAddress) {
+  await withStaffHarness(world, (staff) =>
+    ensureClubSlugMatchesInboundAddress(staff, kootenayClubName, toAddress)
+  );
 }
