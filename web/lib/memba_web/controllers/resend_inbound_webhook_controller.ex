@@ -6,7 +6,7 @@ defmodule MembaWeb.ResendInboundWebhookController do
   @successful_status :accepted
 
   def create(conn, params) do
-    case ResendInboundEmailParser.parse(params) do
+    case verify_and_parse_resend_inbound_event(conn, params) do
       {:ok, _attrs} ->
         conn
         |> put_status(@successful_status)
@@ -14,9 +14,41 @@ defmodule MembaWeb.ResendInboundWebhookController do
 
       {:error, reason} ->
         conn
-        |> put_status(:unprocessable_entity)
+        |> put_status(error_status(reason))
         |> json(%{errors: %{detail: error_detail(reason)}})
     end
+  end
+
+  defp verify_and_parse_resend_inbound_event(conn, params) do
+    with :ok <- verify_signature(conn) do
+      ResendInboundEmailParser.parse(params)
+    end
+  end
+
+  defp verify_signature(conn) do
+    if MembaWeb.ResendWebhookSignature.configured?() do
+      MembaWeb.ResendWebhookSignature.verify(conn)
+    else
+      :ok
+    end
+  end
+
+  defp error_status(:invalid_signature), do: :unauthorized
+  defp error_status(:stale_timestamp), do: :unauthorized
+  defp error_status(:invalid_timestamp), do: :unauthorized
+  defp error_status(:missing_signing_secret), do: :unauthorized
+  defp error_status(:missing_raw_body), do: :unauthorized
+  defp error_status({:missing_header, _header}), do: :unauthorized
+  defp error_status(_reason), do: :unprocessable_entity
+
+  defp error_detail(:invalid_signature), do: "Invalid Resend webhook signature"
+  defp error_detail(:stale_timestamp), do: "Stale Resend webhook timestamp"
+  defp error_detail(:invalid_timestamp), do: "Invalid Resend webhook timestamp"
+  defp error_detail(:missing_signing_secret), do: "Missing Resend webhook signing secret"
+  defp error_detail(:missing_raw_body), do: "Missing raw Resend webhook body"
+
+  defp error_detail({:missing_header, header}) do
+    "Missing Resend webhook signature header: #{header}"
   end
 
   defp error_detail({:unsupported_event_type, nil}) do

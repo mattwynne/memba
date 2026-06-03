@@ -20,7 +20,8 @@ if System.get_env("PHX_SERVER") do
   config :memba, MembaWeb.Endpoint, server: true
 end
 
-if resend_webhook_signing_secret = System.get_env("MEMBA_RESEND_WEBHOOK_SIGNING_SECRET") do
+if resend_webhook_signing_secret =
+     MembaWeb.ResendWebhookSignature.signing_secret_from_env!(config_env()) do
   config :memba, MembaWeb.ResendWebhookSignature, signing_secret: resend_webhook_signing_secret
 end
 

@@ -1,7 +1,24 @@
 defmodule MembaWeb.ResendWebhookSignature do
   @moduledoc false
 
+  @signing_secret_env_var "MEMBA_RESEND_WEBHOOK_SIGNING_SECRET"
   @max_timestamp_age_seconds 5 * 60
+
+  def signing_secret_from_env!(env, env_fun \\ &System.get_env/1) when is_function(env_fun, 1) do
+    case env_fun.(@signing_secret_env_var) |> normalize_config_value() do
+      nil when env == :prod ->
+        raise """
+        environment variable #{@signing_secret_env_var} is missing.
+        Production Resend inbound webhooks must be verified with a Svix signing secret.
+        """
+
+      nil ->
+        nil
+
+      signing_secret ->
+        signing_secret
+    end
+  end
 
   def verify(conn, secret \\ configured_secret()) do
     with {:ok, secret} <- normalize_secret(secret),
@@ -25,6 +42,15 @@ defmodule MembaWeb.ResendWebhookSignature do
       _other -> false
     end
   end
+
+  defp normalize_config_value(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp normalize_config_value(_value), do: nil
 
   defp configured_secret do
     Application.get_env(:memba, __MODULE__, [])
