@@ -78,6 +78,14 @@ defmodule Memba.Messaging.InboundEmail do
 
   def new(_attrs), do: {:error, :invalid_inbound_email}
 
+  @doc """
+  Return the deterministic aggregate identity for a provider message.
+  """
+  @spec identity(t()) :: String.t()
+  def identity(%__MODULE__{provider: provider, provider_message_id: provider_message_id}) do
+    "inbound-email:#{provider}:#{provider_message_id}"
+  end
+
   defp fetch_required(attrs, key) do
     string_key = Atom.to_string(key)
 

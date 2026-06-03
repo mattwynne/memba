@@ -8,6 +8,6 @@ defmodule Memba.Messaging.Commands.ReceiveInboundEmail do
   other provider payload.
   """
 
-  @enforce_keys [:inbound_email]
-  defstruct [:inbound_email]
+  @enforce_keys [:inbound_email_id, :inbound_email]
+  defstruct [:inbound_email_id, :inbound_email]
 end

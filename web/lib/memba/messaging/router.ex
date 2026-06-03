@@ -5,14 +5,19 @@ defmodule Memba.Messaging.Router do
 
   use Commanded.Commands.Router
 
+  alias Memba.Messaging.InboundEmailReceipt
   alias Memba.Messaging.Message
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
+  alias Memba.Messaging.Commands.ReceiveInboundEmail
   alias Memba.Messaging.Commands.SendMessage
 
+  identify(InboundEmailReceipt, by: :inbound_email_id)
   identify(Message, by: :message_id)
+
+  dispatch(ReceiveInboundEmail, to: InboundEmailReceipt)
 
   dispatch(
     [

@@ -48,7 +48,11 @@ defmodule Memba.Messaging do
   """
   def receive_inbound_club_email_command(attrs) when is_map(attrs) do
     with {:ok, inbound_email} <- InboundEmail.new(attrs) do
-      {:ok, %ReceiveInboundEmail{inbound_email: inbound_email}}
+      {:ok,
+       %ReceiveInboundEmail{
+         inbound_email_id: InboundEmail.identity(inbound_email),
+         inbound_email: inbound_email
+       }}
     end
   end
 

@@ -29,6 +29,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
 
       assert {:ok,
               %ReceiveInboundEmail{
+                inbound_email_id: "inbound-email:example mail:provider-message-123",
                 inbound_email: %InboundEmail{
                   provider: "example mail",
                   provider_message_id: "provider-message-123",
@@ -61,6 +62,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
 
       assert {:ok,
               %ReceiveInboundEmail{
+                inbound_email_id: "inbound-email:postmark:inbound-123",
                 inbound_email: %InboundEmail{
                   provider: "postmark",
                   provider_message_id: "inbound-123",
