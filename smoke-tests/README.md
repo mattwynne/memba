@@ -34,7 +34,8 @@ export MEMBA_SMOKE_BASE_URL="https://memba.io"
 export MEMBA_SMOKE_CLUB_NAME="Smoke Test Club"
 export MEMBA_SMOKE_CLUB_SLUG="test"
 export MEMBA_SMOKE_INBOUND_DOMAIN="clubs.memba.io"
-export MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN="memba.io"
+export MEMBA_SMOKE_SMTP_RECIPIENT="$MEMBA_SMOKE_CLUB_SLUG@$MEMBA_SMOKE_INBOUND_DOMAIN" # optional envelope recipient override for provider-boundary diagnostics
+export MEMBA_SMOKE_CLUB_SITE_BASE_DOMAIN="clubs.memba.io"
 export MEMBA_SMOKE_MEMBER_EMAIL="test@memba.io"
 export MEMBA_SMOKE_FASTMAIL_USER="test@memba.io"
 

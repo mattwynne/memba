@@ -52,6 +52,7 @@ async function ensureStaffSignedIn(world) {
     await world.page.getByRole("button", { name: "Continue to Memba staff" }).click();
   }
 
+  await world.page.goto(appUrl(world.config, "/admin/clubs"));
   await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
 }
 

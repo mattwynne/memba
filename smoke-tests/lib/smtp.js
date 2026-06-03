@@ -1,6 +1,6 @@
 const tls = require("node:tls");
 
-async function sendEmail({ attachment, body, from, password, subject, to, user }) {
+async function sendEmail({ attachment, body, envelopeTo, from, password, subject, to, user }) {
   const client = await SmtpClient.connect({ host: "smtp.fastmail.com", port: 465 });
 
   try {
@@ -8,7 +8,7 @@ async function sendEmail({ attachment, body, from, password, subject, to, user }
     await client.command("EHLO memba-smoke-tests", /^250[ -]/m);
     await client.command(`AUTH PLAIN ${Buffer.from(`\0${user}\0${password}`).toString("base64")}`, /^235/);
     await client.command(`MAIL FROM:<${from}>`, /^250/);
-    await client.command(`RCPT TO:<${to}>`, /^250/);
+    await client.command(`RCPT TO:<${envelopeTo || to}>`, /^250/);
     await client.command("DATA", /^354/);
     await client.writeData(mimeMessage({ attachment, body, from, subject, to }));
     await client.expect(/^250/);
