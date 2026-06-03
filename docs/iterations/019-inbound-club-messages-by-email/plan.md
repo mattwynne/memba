@@ -1,7 +1,7 @@
 # Inbound club messages by email
 
 Date: 2026-06-02
-Status: ready
+Status: validated
 
 ## Goal
 
