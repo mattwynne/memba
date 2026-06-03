@@ -1,0 +1,8 @@
+digraph PermissionProbe2 {
+  graph [goal="Probe direct bin/mix vs nested devenv shell format permissions"]
+  rankdir=LR
+  start [shape=Mdiamond, label="Start"]
+  probe [shape=parallelogram, label="Probe", script="set -ux\npwd\nid\nPROBE_REL=test/memba/messaging/fabro_format_probe_test.exs\nPROBE=web/$PROBE_REL\nmake_unformatted() { mkdir -p \"$(dirname \"$PROBE\")\"; cat > \"$PROBE\" <<'EOT'\ndefmodule FabroFormatProbeTest do\n  use ExUnit.Case\n  test \"probe\" do\n    assert true\n  end\nend\nEOT\n}\nshow_file() { ls -l \"$PROBE\"; if [ -w \"$PROBE\" ]; then echo writable; else echo NOT_writable; fi; }\nmake_unformatted\necho '== initial =='\nshow_file\necho '== direct bin/mix format current-owned =='\nPATH=\"$PWD/bin:$PATH\" bin/mix format \"$PROBE_REL\"; echo direct_current_exit=$?\nshow_file\nmake_unformatted\nif chown root:root \"$PROBE\" 2>/tmp/chown.err; then echo chown_root_ok; else echo chown_root_failed; cat /tmp/chown.err; fi\nchmod 0644 \"$PROBE\" || true\necho '== root-owned before direct =='\nshow_file\necho '== direct bin/mix format root-owned =='\nPATH=\"$PWD/bin:$PATH\" bin/mix format \"$PROBE_REL\"; echo direct_root_exit=$?\nshow_file\nmake_unformatted\nchown root:root \"$PROBE\" 2>/dev/null || true\nchmod 0644 \"$PROBE\" || true\necho '== root-owned before nested =='\nshow_file\necho '== nested devenv shell mix format root-owned =='\nPATH=\"$PWD/bin:$PATH\" devenv shell -- mix format \"$PROBE_REL\"; echo nested_root_exit=$?\nshow_file\nrm -f \"$PROBE\"\nexit 0\n"]
+  exit [shape=Msquare, label="Exit"]
+  start -> probe -> exit
+}
