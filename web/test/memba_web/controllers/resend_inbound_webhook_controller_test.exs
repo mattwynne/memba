@@ -293,7 +293,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
   defp post_resend_inbound_event(conn, payload) do
     conn
     |> put_req_header("content-type", "application/json")
-    |> post(~p"/webhooks/resend/inbound", Jason.encode!(payload))
+    |> post(~p"/webhooks/resend", Jason.encode!(payload))
   end
 
   defp post_signed_resend_inbound_event(conn, payload, opts \\ []) do
@@ -311,7 +311,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     |> put_req_header("svix-id", svix_id)
     |> put_req_header("svix-timestamp", svix_timestamp)
     |> put_req_header("svix-signature", signature)
-    |> post(~p"/webhooks/resend/inbound", body)
+    |> post(~p"/webhooks/resend", body)
   end
 
   defp configure_resend_webhook_signing_secret do
