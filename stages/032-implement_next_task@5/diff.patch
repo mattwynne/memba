@@ -1,0 +1,381 @@
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index d160423..a61208e 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add a small helper for deriving the club inbound address from the existing club slug and configured inbound domain, defaulting to `clubs.memba.io` for this slice.
+ - [x] 003 Show the derived inbound address on the member dashboard and member compose page for the selected club.
+ - [x] 004 Introduce an internal inbound email data structure and command/API in the messaging context that is independent of Resend. Include sender address, recipient addresses, subject, text body, HTML body if present, attachment metadata, provider message id, provider event id if present, and provider name.
+-- [ ] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
++- [x] 005 Model inbound email as a small aggregate/process keyed by deterministic identity such as `inbound-email:<provider>:<provider_message_id>`. The aggregate handles exactly one provider inbound message id and makes duplicate handling explicit.
+ - [ ] 006 Add inbound email events such as:
+ - [ ] 007 Add a projection/read model such as `messaging_inbound_email_sources` driven only by inbound email events. It should expose provider, provider message id, status, message id for accepted emails, rejection reason for rejected emails, and timestamps for audit/support. Add a unique index on `{provider, provider_message_id}` as a defensive database constraint, but do not rely on projection-only state as the source of truth.
+ - [ ] 008 Add destination resolution for `<club-slug>@clubs.memba.io` that finds the club by slug and rejects unsupported recipient addresses or unknown slugs.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index ac8edc7..fbb43a7 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -48,7 +48,11 @@ defmodule Memba.Messaging do
+   """
+   def receive_inbound_club_email_command(attrs) when is_map(attrs) do
+     with {:ok, inbound_email} <- InboundEmail.new(attrs) do
+-      {:ok, %ReceiveInboundEmail{inbound_email: inbound_email}}
++      {:ok,
++       %ReceiveInboundEmail{
++         inbound_email_id: InboundEmail.identity(inbound_email),
++         inbound_email: inbound_email
++       }}
+     end
+   end
+ 
+diff --git a/web/lib/memba/messaging/commands/receive_inbound_email.ex b/web/lib/memba/messaging/commands/receive_inbound_email.ex
+index 9af64d4..19cc0d1 100644
+--- a/web/lib/memba/messaging/commands/receive_inbound_email.ex
++++ b/web/lib/memba/messaging/commands/receive_inbound_email.ex
+@@ -8,6 +8,6 @@ defmodule Memba.Messaging.Commands.ReceiveInboundEmail do
+   other provider payload.
+   """
+ 
+-  @enforce_keys [:inbound_email]
+-  defstruct [:inbound_email]
++  @enforce_keys [:inbound_email_id, :inbound_email]
++  defstruct [:inbound_email_id, :inbound_email]
+ end
+diff --git a/web/lib/memba/messaging/events/inbound_email_received.ex b/web/lib/memba/messaging/events/inbound_email_received.ex
+new file mode 100644
+index 0000000..65ca46a
+--- /dev/null
++++ b/web/lib/memba/messaging/events/inbound_email_received.ex
+@@ -0,0 +1,13 @@
++defmodule Memba.Messaging.Events.InboundEmailReceived do
++  @moduledoc """
++  Event raised when a provider inbound email is first seen by Messaging.
++
++  Later inbound-email events record the accepted/rejected business outcome. This
++  event gives the inbound-email aggregate an event-sourced identity and makes
++  provider retry handling command-side rather than projection-invented.
++  """
++
++  @derive Jason.Encoder
++  @enforce_keys [:inbound_email_id, :provider, :provider_message_id]
++  defstruct [:inbound_email_id, :provider, :provider_message_id, :provider_event_id]
++end
+diff --git a/web/lib/memba/messaging/inbound_email.ex b/web/lib/memba/messaging/inbound_email.ex
+index f53b43f..e8bbe02 100644
+--- a/web/lib/memba/messaging/inbound_email.ex
++++ b/web/lib/memba/messaging/inbound_email.ex
+@@ -78,6 +78,14 @@ defmodule Memba.Messaging.InboundEmail do
+ 
+   def new(_attrs), do: {:error, :invalid_inbound_email}
+ 
++  @doc """
++  Return the deterministic aggregate identity for a provider message.
++  """
++  @spec identity(t()) :: String.t()
++  def identity(%__MODULE__{provider: provider, provider_message_id: provider_message_id}) do
++    "inbound-email:#{provider}:#{provider_message_id}"
++  end
++
+   defp fetch_required(attrs, key) do
+     string_key = Atom.to_string(key)
+ 
+diff --git a/web/lib/memba/messaging/inbound_email_receipt.ex b/web/lib/memba/messaging/inbound_email_receipt.ex
+new file mode 100644
+index 0000000..ab6db91
+--- /dev/null
++++ b/web/lib/memba/messaging/inbound_email_receipt.ex
+@@ -0,0 +1,79 @@
++defmodule Memba.Messaging.InboundEmailReceipt do
++  @moduledoc """
++  Inbound email aggregate for provider retry identity.
++
++  One aggregate instance represents exactly one provider inbound message id,
++  keyed by `inbound-email:<provider>:<provider_message_id>`. Duplicate receives
++  for the same provider message are explicit no-ops; later tasks add the
++  accepted/rejected business outcome events to this stream.
++  """
++
++  alias Commanded.Aggregates.Aggregate
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.Events.InboundEmailReceived
++  alias Memba.Messaging.InboundEmail
++
++  @behaviour Aggregate
++
++  defstruct [:inbound_email_id, :provider, :provider_message_id]
++
++  @impl Aggregate
++  def execute(%__MODULE__{inbound_email_id: nil}, %ReceiveInboundEmail{} = command) do
++    with {:ok, inbound_email_id} <- validate_command_identity(command) do
++      %InboundEmailReceived{
++        inbound_email_id: inbound_email_id,
++        provider: command.inbound_email.provider,
++        provider_message_id: command.inbound_email.provider_message_id,
++        provider_event_id: command.inbound_email.provider_event_id
++      }
++    end
++  end
++
++  def execute(%__MODULE__{} = receipt, %ReceiveInboundEmail{} = command) do
++    with {:ok, _inbound_email_id} <- validate_command_identity(command),
++         :ok <- validate_same_provider_message(receipt, command.inbound_email) do
++      []
++    end
++  end
++
++  @impl Aggregate
++  def apply(%__MODULE__{} = receipt, %InboundEmailReceived{} = event) do
++    %__MODULE__{
++      receipt
++      | inbound_email_id: event.inbound_email_id,
++        provider: event.provider,
++        provider_message_id: event.provider_message_id
++    }
++  end
++
++  defp validate_command_identity(%ReceiveInboundEmail{
++         inbound_email_id: inbound_email_id,
++         inbound_email: %InboundEmail{} = inbound_email
++       }) do
++    expected_inbound_email_id = InboundEmail.identity(inbound_email)
++
++    cond do
++      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
++        {:error, :invalid_inbound_email_id}
++
++      inbound_email_id == expected_inbound_email_id ->
++        {:ok, inbound_email_id}
++
++      true ->
++        {:error, :inbound_email_id_mismatch}
++    end
++  end
++
++  defp validate_command_identity(%ReceiveInboundEmail{}), do: {:error, :invalid_inbound_email}
++
++  defp validate_same_provider_message(
++         %__MODULE__{provider: provider, provider_message_id: provider_message_id},
++         %InboundEmail{provider: provider, provider_message_id: provider_message_id}
++       ) do
++    :ok
++  end
++
++  defp validate_same_provider_message(%__MODULE__{}, %InboundEmail{}) do
++    {:error, :provider_message_id_mismatch}
++  end
++end
+diff --git a/web/lib/memba/messaging/router.ex b/web/lib/memba/messaging/router.ex
+index 403e3ef..463c566 100644
+--- a/web/lib/memba/messaging/router.ex
++++ b/web/lib/memba/messaging/router.ex
+@@ -5,15 +5,20 @@ defmodule Memba.Messaging.Router do
+ 
+   use Commanded.Commands.Router
+ 
++  alias Memba.Messaging.InboundEmailReceipt
+   alias Memba.Messaging.Message
+   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+ 
++  identify(InboundEmailReceipt, by: :inbound_email_id)
+   identify(Message, by: :message_id)
+ 
++  dispatch(ReceiveInboundEmail, to: InboundEmailReceipt)
++
+   dispatch(
+     [
+       SendMessage,
+diff --git a/web/test/memba/messaging/app_test.exs b/web/test/memba/messaging/app_test.exs
+index becacd9..02fe3db 100644
+--- a/web/test/memba/messaging/app_test.exs
++++ b/web/test/memba/messaging/app_test.exs
+@@ -8,6 +8,7 @@ defmodule Memba.Messaging.AppTest do
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
+   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
+   alias Memba.Messaging.Commands.ReportEmailDeliverySpamComplaint
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
+   alias Memba.Messaging.Commands.SendMessage
+   alias Memba.Messaging.Router
+ 
+@@ -26,6 +27,7 @@ defmodule Memba.Messaging.AppTest do
+     expected_commands =
+       MapSet.new([
+         SendMessage,
++        ReceiveInboundEmail,
+         ReportEmailDeliveryDelivered,
+         ReportEmailDeliveryDelayed,
+         ReportEmailDeliveryBounced,
+diff --git a/web/test/memba/messaging/inbound_email_api_test.exs b/web/test/memba/messaging/inbound_email_api_test.exs
+index d508057..a3db895 100644
+--- a/web/test/memba/messaging/inbound_email_api_test.exs
++++ b/web/test/memba/messaging/inbound_email_api_test.exs
+@@ -29,6 +29,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
+ 
+       assert {:ok,
+               %ReceiveInboundEmail{
++                inbound_email_id: "inbound-email:example mail:provider-message-123",
+                 inbound_email: %InboundEmail{
+                   provider: "example mail",
+                   provider_message_id: "provider-message-123",
+@@ -61,6 +62,7 @@ defmodule Memba.Messaging.InboundEmailApiTest do
+ 
+       assert {:ok,
+               %ReceiveInboundEmail{
++                inbound_email_id: "inbound-email:postmark:inbound-123",
+                 inbound_email: %InboundEmail{
+                   provider: "postmark",
+                   provider_message_id: "inbound-123",
+diff --git a/web/test/memba/messaging/inbound_email_dispatch_test.exs b/web/test/memba/messaging/inbound_email_dispatch_test.exs
+new file mode 100644
+index 0000000..a2fd8c2
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_dispatch_test.exs
+@@ -0,0 +1,49 @@
++defmodule Memba.Messaging.InboundEmailDispatchTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Commanded.Commands.ExecutionResult
++  alias Memba.Messaging
++  alias Memba.Messaging.App
++  alias Memba.Messaging.Events.InboundEmailReceived
++  alias Memba.Messaging.InboundEmailReceipt
++
++  test "Messaging app dispatch routes ReceiveInboundEmail to the inbound email aggregate" do
++    assert {:ok, command} =
++             Messaging.receive_inbound_club_email_command(%{
++               provider: "resend",
++               provider_message_id: "email-123",
++               provider_event_id: "event-456",
++               from_address: "alice@example.com",
++               recipient_addresses: ["kmc@clubs.memba.io"],
++               subject: "Trip planning night",
++               text_body: "Bring route ideas."
++             })
++
++    inbound_email_id = command.inbound_email_id
++
++    assert {:ok,
++            %ExecutionResult{
++              aggregate_uuid: ^inbound_email_id,
++              aggregate_version: 1,
++              events: [
++                %InboundEmailReceived{
++                  inbound_email_id: ^inbound_email_id,
++                  provider: "resend",
++                  provider_message_id: "email-123",
++                  provider_event_id: "event-456"
++                }
++              ],
++              aggregate_state: %InboundEmailReceipt{
++                inbound_email_id: ^inbound_email_id,
++                provider: "resend",
++                provider_message_id: "email-123"
++              }
++            }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
++
++    assert %InboundEmailReceipt{
++             inbound_email_id: ^inbound_email_id,
++             provider: "resend",
++             provider_message_id: "email-123"
++           } = App.aggregate_state(InboundEmailReceipt, inbound_email_id)
++  end
++end
+diff --git a/web/test/memba/messaging/inbound_email_receipt_test.exs b/web/test/memba/messaging/inbound_email_receipt_test.exs
+new file mode 100644
+index 0000000..a4c566a
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_email_receipt_test.exs
+@@ -0,0 +1,89 @@
++defmodule Memba.Messaging.InboundEmailReceiptTest do
++  use ExUnit.Case, async: true
++
++  alias Memba.Messaging.Commands.ReceiveInboundEmail
++  alias Memba.Messaging.Events.InboundEmailReceived
++  alias Memba.Messaging.InboundEmail
++  alias Memba.Messaging.InboundEmailReceipt
++
++  describe "execute/2 ReceiveInboundEmail" do
++    test "records the first receipt for a provider message id" do
++      command = receive_command()
++
++      assert %InboundEmailReceived{
++               inbound_email_id: "inbound-email:resend:email-123",
++               provider: "resend",
++               provider_message_id: "email-123",
++               provider_event_id: "event-456"
++             } = InboundEmailReceipt.execute(%InboundEmailReceipt{}, command)
++    end
++
++    test "returns no events for duplicate provider message ids" do
++      command = receive_command()
++
++      receipt =
++        InboundEmailReceipt.apply(%InboundEmailReceipt{}, %InboundEmailReceived{
++          inbound_email_id: "inbound-email:resend:email-123",
++          provider: "resend",
++          provider_message_id: "email-123",
++          provider_event_id: "event-456"
++        })
++
++      assert [] = InboundEmailReceipt.execute(receipt, command)
++    end
++
++    test "rejects commands whose aggregate identity is not derived from the inbound email" do
++      command = %ReceiveInboundEmail{receive_command() | inbound_email_id: "inbound-email:resend:other"}
++
++      assert {:error, :inbound_email_id_mismatch} =
++               InboundEmailReceipt.execute(%InboundEmailReceipt{}, command)
++    end
++
++    test "rejects malformed command payloads" do
++      assert {:error, :invalid_inbound_email} =
++               InboundEmailReceipt.execute(%InboundEmailReceipt{}, %ReceiveInboundEmail{
++                 inbound_email_id: "inbound-email:resend:email-123",
++                 inbound_email: nil
++               })
++
++      assert {:error, :invalid_inbound_email_id} =
++               InboundEmailReceipt.execute(%InboundEmailReceipt{}, %ReceiveInboundEmail{
++                 receive_command()
++                 | inbound_email_id: " "
++               })
++    end
++  end
++
++  describe "apply/2 InboundEmailReceived" do
++    test "stores only the provider identity needed to reject duplicates" do
++      assert %InboundEmailReceipt{
++               inbound_email_id: "inbound-email:resend:email-123",
++               provider: "resend",
++               provider_message_id: "email-123"
++             } =
++               InboundEmailReceipt.apply(%InboundEmailReceipt{}, %InboundEmailReceived{
++                 inbound_email_id: "inbound-email:resend:email-123",
++                 provider: "resend",
++                 provider_message_id: "email-123",
++                 provider_event_id: nil
++               })
++    end
++  end
++
++  defp receive_command do
++    inbound_email = %InboundEmail{
++      provider: "resend",
++      provider_message_id: "email-123",
++      provider_event_id: "event-456",
++      from_address: "alice@example.com",
++      recipient_addresses: ["kmc@clubs.memba.io"],
++      subject: "Trip planning night",
++      text_body: "Bring route ideas."
++    }
++
++    %ReceiveInboundEmail{
++      inbound_email_id: InboundEmail.identity(inbound_email),
++      inbound_email: inbound_email
++    }
++  end
++end
