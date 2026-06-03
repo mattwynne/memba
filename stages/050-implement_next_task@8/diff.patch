@@ -1,0 +1,118 @@
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index 0dec315..7930326 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -5,6 +5,16 @@ const test = require("node:test");
+ 
+ const cucumberConfig = require("../cucumber");
+ 
++const inboundClubEmailScenarioNames = [
++  "Alice emails the KMC everyone address",
++  "Alice emails from an alternate address",
++  "An unknown sender emails the KMC everyone address",
++  "A member of another club emails the KMC everyone address",
++  "Alice emails an attachment to the KMC everyone address",
++  "Alice emails without a plain-text message body",
++  "Alice emails new text above a signature and quoted message"
++];
++
+ test("default browser Cucumber profile excludes deferred scenarios", () => {
+   assert.equal(cucumberConfig.default.tags, "not @todo-web and not @wip");
+ });
+@@ -32,6 +42,30 @@ test("only explicitly deferred features are skipped from the browser run", () =>
+   assert.deepEqual(skippedFeatures.map((feature) => feature.name), ["staff_club_slugs.feature"]);
+ });
+ 
++test("inbound club email scenarios remain tagged wip until enabled", () => {
++  const featurePath = browserFeaturePathNamed("member_message_deliverability.feature");
++  const scenarios = featureScenarios(featurePath);
++
++  assert.deepEqual(
++    inboundClubEmailScenarioNames.map((scenarioName) => scenarios.get(scenarioName)?.name),
++    inboundClubEmailScenarioNames
++  );
++
++  for (const scenarioName of inboundClubEmailScenarioNames) {
++    const scenario = scenarios.get(scenarioName);
++
++    assert.ok(
++      scenario.tags.includes("@wip"),
++      `Expected "${scenarioName}" to remain tagged @wip`
++    );
++    assert.equal(
++      matchesDefaultBrowserTags(scenario.tags),
++      false,
++      `Expected "${scenarioName}" to be excluded by the default browser profile`
++    );
++  }
++});
++
+ function browserSelectedFeatureNames() {
+   return browserFeatures()
+     .filter((feature) => matchesDefaultBrowserTags(feature.tags))
+@@ -56,6 +90,17 @@ function browserFeatures() {
+   }));
+ }
+ 
++function browserFeaturePathNamed(featureName) {
++  const featuresRoot = path.resolve(__dirname, "../features");
++  const featurePath = listFeatureFiles(featuresRoot).find(
++    (filePath) => path.basename(filePath) === featureName
++  );
++
++  assert.ok(featurePath, `Expected browser feature file ${featureName}`);
++
++  return featurePath;
++}
++
+ function listFeatureFiles(directory) {
+   return fs
+     .readdirSync(directory, { withFileTypes: true })
+@@ -94,6 +139,36 @@ function featureTags(filePath) {
+   return tags;
+ }
+ 
++function featureScenarios(filePath) {
++  const scenarios = new Map();
++  let pendingTags = [];
++
++  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
++    const trimmed = line.trim();
++    const scenarioMatch = trimmed.match(/^Scenario(?: Outline)?:\s*(.+)$/);
++
++    if (trimmed === "") {
++      continue;
++    }
++
++    if (trimmed.startsWith("@")) {
++      pendingTags.push(...trimmed.split(/\s+/));
++      continue;
++    }
++
++    if (scenarioMatch) {
++      const name = scenarioMatch[1];
++      scenarios.set(name, { name, tags: pendingTags });
++      pendingTags = [];
++      continue;
++    }
++
++    pendingTags = [];
++  }
++
++  return scenarios;
++}
++
+ function matchesDefaultBrowserTags(tags) {
+   assert.equal(cucumberConfig.default.tags, "not @todo-web and not @wip");
+ 
+diff --git a/docs/iterations/019-inbound-club-messages-by-email/todo.md b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+index bf4dc62..a604c7c 100644
+--- a/docs/iterations/019-inbound-club-messages-by-email/todo.md
++++ b/docs/iterations/019-inbound-club-messages-by-email/todo.md
+@@ -22,5 +22,5 @@
+ - [x] 020 Add tests for provider-neutral inbound behaviour:
+ - [x] 021 Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
+ - [x] 022 Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
+-- [ ] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
++- [x] 023 Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
+ - [ ] 024 Run `dev check`.
