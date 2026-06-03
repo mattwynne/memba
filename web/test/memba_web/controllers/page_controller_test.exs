@@ -171,6 +171,64 @@ defmodule MembaWeb.PageControllerTest do
     refute response =~ "Kootenay Mountaineering Club"
   end
 
+  test "GET / on the smoke-test club subdomain returns not found for public visitors", %{
+    conn: conn
+  } do
+    _club = create_club(name: "Smoke Test Club", slug: "test")
+
+    conn =
+      conn
+      |> Map.put(:host, "test.lvh.me")
+      |> get(~p"/")
+
+    response = html_response(conn, 404)
+
+    refute response =~ "Welcome to Smoke Test Club"
+    refute response =~ "Members can sign in to see club updates"
+  end
+
+  test "GET / with the smoke-test club_id returns not found for public visitors", %{conn: conn} do
+    club = create_club(name: "Smoke Test Club", slug: "test")
+
+    conn = get(conn, ~p"/?#{[club_id: club.club_id]}")
+
+    response = html_response(conn, 404)
+
+    refute response =~ "Welcome to Smoke Test Club"
+  end
+
+  test "GET / on the smoke-test club subdomain still shows the member dashboard to active members",
+       %{conn: conn} do
+    club = create_club(name: "Smoke Test Club", slug: "test")
+
+    tester =
+      create_active_member(
+        email: "test@memba.io",
+        name: "Smoke Tester",
+        club_name: club.name,
+        club_id: club.club_id
+      )
+
+    _message =
+      create_message(club_id: club.club_id, sender_id: tester.person_id, subject: "Smoke test")
+
+    conn =
+      conn
+      |> Map.put(:host, "test.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "test@memba.io"})
+      |> get(~p"/")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Hello, Smoke."
+    refute response =~ "Welcome to Smoke Test Club"
+
+    assert html
+           |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+           |> Enum.any?()
+  end
+
   test "GET / with a member club_id opens a useful member club page", %{conn: conn} do
     club =
       create_active_member(

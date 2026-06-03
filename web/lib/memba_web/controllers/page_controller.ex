@@ -5,6 +5,8 @@ defmodule MembaWeb.PageController do
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
+  @publicly_hidden_club_slugs MapSet.new(["test"])
+
   def home(conn, params) do
     case ClubSite.slug_from_host(conn.host) do
       {:ok, slug} -> home_for_public_club_slug(conn, slug)
@@ -25,14 +27,16 @@ defmodule MembaWeb.PageController do
         render_member_dashboard(conn, club_id, "query")
 
       true ->
-        render_public_club_page(conn, club_id)
+        club_id
+        |> Membership.get_club()
+        |> then(&render_public_club_page_or_not_found(conn, &1))
     end
   end
 
   defp home_for_params(conn, %{"club_id" => club_id}) do
     case Membership.get_club(club_id) do
       nil -> not_found(conn)
-      _club -> render_public_club_page(conn, club_id)
+      club -> render_public_club_page_or_not_found(conn, club)
     end
   end
 
@@ -58,7 +62,7 @@ defmodule MembaWeb.PageController do
         if signed_in_active_member?(conn, club.club_id) do
           render_member_dashboard(conn, club.club_id, "host")
         else
-          render_public_club_page(conn, club.club_id)
+          render_public_club_page_or_not_found(conn, club)
         end
     end
   end
@@ -101,6 +105,20 @@ defmodule MembaWeb.PageController do
         IdentityAuth.identity_session_key() => conn.assigns.current_identity.email
       }
     )
+  end
+
+  defp render_public_club_page_or_not_found(conn, nil), do: not_found(conn)
+
+  defp render_public_club_page_or_not_found(conn, club) do
+    if public_club_page_visible?(club) do
+      render_public_club_page(conn, club.club_id)
+    else
+      not_found(conn)
+    end
+  end
+
+  defp public_club_page_visible?(club) do
+    not MapSet.member?(@publicly_hidden_club_slugs, club.slug)
   end
 
   defp render_public_club_page(conn, club_id) do

@@ -7,16 +7,28 @@ const {
   requestSignInLinkForPerson
 } = require("../support/authentication");
 const {
+  addMembers,
+  appUrl,
   createClub,
+  createPerson,
+  cssString,
   kootenayClubName,
   updateClubSlug
 } = require("../support/member_message");
 const { withStaffHarness } = require("../support/member_harness");
 
 const productionClubBaseDomain = "clubs.memba.io";
+const smokeTestClubName = "Smoke Test Club";
+const smokeTestClubSlug = "test";
+const smokeTestPersonName = "Smoke Tester";
+const smokeTestMemberEmail = "test@memba.io";
 
 Given("Kootenay Mountaineering Club has the slug {string}", async function (slug) {
   await ensureClubHasSlug(this, kootenayClubName, slug);
+});
+
+Given("the smoke-test club has been seeded", async function () {
+  await ensureSmokeTestClubSeeded(this);
 });
 
 When("{word} signs in", async function (personName) {
@@ -61,6 +73,10 @@ When("{word} opens {string}", async function (_personName, host) {
   await this.page.goto(clubHostUrl(this, host));
 });
 
+When("{word} visits the Memba homepage", async function (_personName) {
+  await this.page.goto(appUrl(this.baseUrl, "/"));
+});
+
 Then("{word} should be on {string}", async function (_personName, host) {
   assert.equal(new URL(this.page.url()).hostname, localHostForProductionHost(host));
 });
@@ -94,12 +110,47 @@ Then("Robin should see a not found page", async function () {
   await playwrightExpect(this.page.locator("body")).toContainText(/Not Found|not found/i);
 });
 
+Then("{word} should see Smoke Test Club in the staff club list", async function (_personName) {
+  await playwrightExpect(
+    this.page.locator(`[data-testid="club-row"][data-club-name=${cssString(smokeTestClubName)}]`)
+  ).toBeVisible();
+});
+
+Then("Robin should not see the Smoke Test Club public page", async function () {
+  await playwrightExpect(this.page.locator("#public-club-page-page")).toHaveCount(0);
+  await playwrightExpect(this.page.locator("body")).not.toContainText(`Welcome to ${smokeTestClubName}`);
+});
+
+Then("Robin should not see Smoke Test Club", async function () {
+  await playwrightExpect(this.page.locator("body")).not.toContainText(smokeTestClubName);
+});
+
 async function ensureClubHasSlug(world, clubName, slug) {
   await withStaffHarness(world, async (staff) => {
     if (!staff.clubs || !staff.clubs[clubName]) {
       await createClub(staff, clubName, { slug });
     } else {
       await updateClubSlug(staff, clubName, slug);
+    }
+  });
+}
+
+async function ensureSmokeTestClubSeeded(world) {
+  await withStaffHarness(world, async (staff) => {
+    if (!staff.clubs || !staff.clubs[smokeTestClubName]) {
+      await createClub(staff, smokeTestClubName, { slug: smokeTestClubSlug });
+    } else {
+      await updateClubSlug(staff, smokeTestClubName, smokeTestClubSlug);
+    }
+
+    if (!staff.people || !staff.people[smokeTestPersonName]) {
+      await createPerson(staff, smokeTestPersonName, smokeTestClubName, {
+        email: smokeTestMemberEmail
+      });
+    }
+
+    if (!staff.memberships || !staff.memberships[`${smokeTestClubName}:${smokeTestPersonName}`]) {
+      await addMembers(staff, [smokeTestPersonName], smokeTestClubName);
     }
   });
 }

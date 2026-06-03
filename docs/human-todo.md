@@ -4,9 +4,9 @@
 
 Before running the production inbound email smoke tests in `./smoke-tests`, Matt needs to set up the following outside the codebase.
 
-- [ ] Create or confirm a controlled production club named `Test` with slug `test`.
-- [ ] Make sure the `Test` club does not appear in public-facing UI or ordinary member discovery surfaces.
-- [ ] Create or confirm a controlled active member of the `Test` club with primary email address `test@memba.io`.
+- [x] Automatically seed a controlled production club named `Smoke Test Club` with slug `test`.
+- [x] Hard-code the `test` club slug so the smoke-test club does not appear as a public club page.
+- [x] Automatically seed a controlled active member of the smoke-test club with primary email address `test@memba.io`.
 - [ ] Set up the `test@memba.io` Fastmail account so the smoke-test runner can send real emails and read resulting rejection/distribution emails.
 - [ ] Provide the smoke-test runner with the required Fastmail credentials or app passwords through local environment variables/secrets; do not commit them.
 - [ ] Confirm whether `test@memba.io` should also be usable for Memba sign-in during smoke tests, or whether the runner should sign in with a separate staff account.
