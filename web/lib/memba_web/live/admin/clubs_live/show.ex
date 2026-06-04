@@ -97,6 +97,28 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
     end
   end
 
+  def handle_event("remove_member", %{"membership_id" => membership_id}, socket) do
+    case Membership.remove_member(%{"membership_id" => membership_id}, consistency: :strong) do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Member removed")
+         |> refresh_members()}
+
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Member removed")
+         |> refresh_members()}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Could not remove member: #{format_reason(reason)}")
+         |> refresh_members()}
+    end
+  end
+
   def handle_event("send_message", %{"message" => message_params}, socket) do
     attrs =
       message_params
@@ -350,40 +372,54 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                   data-member-id={member.id}
                   data-member-name={member.name}
                   aria-label={"Member #{member.name}"}
-                  class="py-3"
+                  class="flex items-start justify-between gap-4 py-3"
                 >
-                  <p class="font-medium text-zinc-900">{member.name}</p>
-                  <p
-                    id={"member-primary-email-#{member.id}"}
-                    data-testid="member-primary-email"
-                    class="mt-1 text-sm text-zinc-600"
-                  >
-                    Primary: <span class="font-medium text-zinc-800">{member.primary_email}</span>
-                  </p>
-                  <div
-                    id={"member-alternate-emails-#{member.id}"}
-                    data-testid="member-alternate-emails"
-                    data-alternate-count={member.alternate_count}
-                    class="mt-1 space-y-1 text-sm text-zinc-500"
-                  >
-                    <p class="font-medium text-zinc-700">Alternate email addresses</p>
+                  <div class="min-w-0">
+                    <p class="font-medium text-zinc-900">{member.name}</p>
                     <p
-                      :if={member.alternate_count == 0}
-                      data-testid="member-alternate-empty"
-                      class="text-zinc-500"
+                      id={"member-primary-email-#{member.id}"}
+                      data-testid="member-primary-email"
+                      class="mt-1 text-sm text-zinc-600"
                     >
-                      No alternate email addresses
+                      Primary: <span class="font-medium text-zinc-800">{member.primary_email}</span>
                     </p>
-                    <ul :if={member.alternate_count > 0} class="space-y-0.5">
-                      <li
-                        :for={email <- member.alternate_emails}
-                        data-testid="member-alternate-email"
-                        class="font-medium text-zinc-700"
+                    <div
+                      id={"member-alternate-emails-#{member.id}"}
+                      data-testid="member-alternate-emails"
+                      data-alternate-count={member.alternate_count}
+                      class="mt-1 space-y-1 text-sm text-zinc-500"
+                    >
+                      <p class="font-medium text-zinc-700">Alternate email addresses</p>
+                      <p
+                        :if={member.alternate_count == 0}
+                        data-testid="member-alternate-empty"
+                        class="text-zinc-500"
                       >
-                        {email}
-                      </li>
-                    </ul>
+                        No alternate email addresses
+                      </p>
+                      <ul :if={member.alternate_count > 0} class="space-y-0.5">
+                        <li
+                          :for={email <- member.alternate_emails}
+                          data-testid="member-alternate-email"
+                          class="font-medium text-zinc-700"
+                        >
+                          {email}
+                        </li>
+                      </ul>
+                    </div>
                   </div>
+
+                  <button
+                    id={"remove-member-button-#{member.membership_id}"}
+                    type="button"
+                    data-testid="remove-member-button"
+                    phx-click="remove_member"
+                    phx-value-membership_id={member.membership_id}
+                    aria-label={"Remove #{member.name} from #{@club.name}"}
+                    class="shrink-0 rounded-full border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50"
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
             </section>
@@ -532,6 +568,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
       alternate_emails = Membership.list_person_alternate_emails(member.id)
 
       %{
+        membership_id: member.membership_id,
         id: member.id,
         name: member.name,
         email: member.email,

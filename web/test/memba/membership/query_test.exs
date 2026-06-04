@@ -58,14 +58,37 @@ defmodule Memba.Membership.QueryTest do
       add_member(kootenay_club_id, bob.person_id)
       add_member(nelson_club_id, pat.person_id)
 
-      assert Membership.list_active_members_of_club(kootenay_club_id) == [
-               %{id: alice.person_id, name: "Alice", email: "alice@example.com"},
-               %{id: bob.person_id, name: "Bob", email: "bob@example.com"}
-             ]
+      assert [
+               %{
+                 membership_id: alice_membership_id,
+                 id: alice_person_id,
+                 name: "Alice",
+                 email: "alice@example.com"
+               },
+               %{
+                 membership_id: bob_membership_id,
+                 id: bob_person_id,
+                 name: "Bob",
+                 email: "bob@example.com"
+               }
+             ] = Membership.list_active_members_of_club(kootenay_club_id)
 
-      assert Membership.list_active_members_of_club(nelson_club_id) == [
-               %{id: pat.person_id, name: "Pat", email: "pat@example.com"}
-             ]
+      assert alice_person_id == alice.person_id
+      assert bob_person_id == bob.person_id
+      assert {:ok, _} = Ecto.UUID.cast(alice_membership_id)
+      assert {:ok, _} = Ecto.UUID.cast(bob_membership_id)
+
+      assert [
+               %{
+                 membership_id: pat_membership_id,
+                 id: pat_person_id,
+                 name: "Pat",
+                 email: "pat@example.com"
+               }
+             ] = Membership.list_active_members_of_club(nelson_club_id)
+
+      assert pat_person_id == pat.person_id
+      assert {:ok, _} = Ecto.UUID.cast(pat_membership_id)
     end
 
     test "excludes inactive memberships" do
@@ -114,10 +137,13 @@ defmodule Memba.Membership.QueryTest do
       add_member(club_id, alice.person_id)
       add_member(club_id, bob.person_id)
 
-      assert Membership.list_active_members_of_club(club_id) == [
-               %{id: alice.person_id, name: "Alice", email: "alice@work.example"},
-               %{id: bob.person_id, name: "Bob", email: "bob@example.com"}
-             ]
+      assert [
+               %{id: alice_person_id, name: "Alice", email: "alice@work.example"},
+               %{id: bob_person_id, name: "Bob", email: "bob@example.com"}
+             ] = Membership.list_active_members_of_club(club_id)
+
+      assert alice_person_id == alice.person_id
+      assert bob_person_id == bob.person_id
     end
 
     test "returns an empty list for missing or invalid club IDs" do

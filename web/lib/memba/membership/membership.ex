@@ -5,7 +5,9 @@ defmodule Memba.Membership.Membership do
 
   alias Commanded.Aggregates.Aggregate
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.MemberRemoved
 
   @behaviour Aggregate
 
@@ -26,6 +28,17 @@ defmodule Memba.Membership.Membership do
 
   def execute(%__MODULE__{}, %AddMember{}), do: {:error, :already_added}
 
+  def execute(%__MODULE__{membership_id: nil}, %RemoveMember{}), do: {:error, :not_found}
+
+  def execute(%__MODULE__{active: false}, %RemoveMember{}), do: {:error, :already_removed}
+
+  def execute(%__MODULE__{} = membership, %RemoveMember{} = command) do
+    with :ok <- validate_uuid(command.membership_id, :invalid_membership_id),
+         :ok <- validate_same_membership(membership.membership_id, command.membership_id) do
+      %MemberRemoved{membership_id: command.membership_id}
+    end
+  end
+
   @impl Aggregate
   def apply(%__MODULE__{} = membership, %MemberAdded{} = event) do
     %__MODULE__{
@@ -36,6 +49,15 @@ defmodule Memba.Membership.Membership do
         active: true
     }
   end
+
+  def apply(%__MODULE__{} = membership, %MemberRemoved{}) do
+    %__MODULE__{membership | active: false}
+  end
+
+  defp validate_same_membership(membership_id, membership_id), do: :ok
+
+  defp validate_same_membership(_membership_id, _command_membership_id),
+    do: {:error, :membership_id_mismatch}
 
   defp validate_uuid(value, error) do
     case Ecto.UUID.cast(value) do

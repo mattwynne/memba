@@ -6,6 +6,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.ClubCreated
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
   alias Memba.Membership.Projections.Club, as: ClubProjection
@@ -401,6 +402,20 @@ defmodule Memba.Membership.PublicApiTest do
                consistency: :strong
              )
 
-    assert [%{id: ^person_id}] = Membership.list_active_members_of_club(club_id)
+    assert [%{id: ^person_id, membership_id: ^membership_id}] =
+             Membership.list_active_members_of_club(club_id)
+
+    assert {:ok,
+            %ExecutionResult{
+              aggregate_uuid: ^membership_id,
+              events: [%MemberRemoved{membership_id: ^membership_id}]
+            }} =
+             Membership.remove_member(%{membership_id: membership_id},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    refute Membership.active_member_of_club?(club_id, person_id)
+    assert [] = Membership.list_active_members_of_club(club_id)
   end
 end
