@@ -20,6 +20,13 @@ defmodule Memba.EventSourcedSetupTest do
     assert aliases[:"event_store.setup"] == ["event_store.create", "event_store.init"]
     assert aliases[:"event_store.reset"] == ["event_store.drop", "event_store.setup"]
 
+    assert aliases[:"dev.setup"] == [
+             "ecto.create --quiet",
+             "event_store.create --quiet",
+             "ecto.migrate",
+             "event_store.init --quiet"
+           ]
+
     assert aliases[:test] == [
              "ecto.drop --quiet",
              "ecto.create --quiet",
