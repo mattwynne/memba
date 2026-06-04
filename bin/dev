@@ -44,6 +44,13 @@ devenv_with_postgres_port() {
   )
 }
 
+load_local_secrets() {
+  if [ -f "$repo_root/.local/secrets.envrc" ]; then
+    # shellcheck source=/dev/null
+    source "$repo_root/.local/secrets.envrc"
+  fi
+}
+
 start_postgres() {
   if ! devenv_with_postgres_port processes status postgres >/dev/null 2>&1; then
     DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
@@ -63,12 +70,37 @@ migrate_databases() {
   )
 }
 
-# @cmd Start Postgres and the Phoenix web app
+dev_support_processes() {
+  printf '%s\n' postgres
+
+  if [ "${MEMBA_DEV_NGROK:-1}" != "0" ]; then
+    printf '%s\n' ngrok
+  fi
+}
+
+start_processes() {
+  DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d "$@"
+  devenv_with_postgres_port processes wait --timeout 120
+}
+
+# @cmd Start Postgres, the optional ngrok tunnel, and the Phoenix web app
+# @flag --foreground Keep Phoenix attached to the terminal instead of starting it as a managed background process
 up() {
-  start_postgres
-  migrate_databases
-  trap down EXIT
-  (cd "$repo_root/web" && mix phx.server)
+  load_local_secrets
+
+  local support_processes=()
+  while IFS= read -r process_name; do
+    support_processes+=("$process_name")
+  done < <(dev_support_processes)
+
+  if [ "${argc_foreground:-0}" = "1" ]; then
+    start_processes "${support_processes[@]}"
+    migrate_databases
+    trap down EXIT
+    (cd "$repo_root/web" && mix phx.server)
+  else
+    start_processes "${support_processes[@]}" web
+  fi
 }
 
 # @cmd Stop development services
@@ -144,7 +176,21 @@ sandbox_check() {
 
 # @cmd Run the acceptance test suite
 acceptance() {
-  (cd "$repo_root/acceptance-tests" && npm test -- "$@")
+  (
+    cd "$repo_root/acceptance-tests"
+
+    env \
+      -u MEMBA_CLUB_INBOUND_EMAIL_DOMAIN \
+      -u MEMBA_NGROK_DOMAIN \
+      -u MEMBA_NGROK_TARGET \
+      -u MEMBA_RESEND_API_KEY \
+      -u NGROK_AUTHTOKEN \
+      -u POSTMARK_ACCOUNT_TOKEN \
+      -u POSTMARK_SERVER_TOKEN \
+      -u RESEND_ADMIN_API_KEY \
+      -u RESEND_API_KEY \
+      npm test -- "$@"
+  )
 }
 
 # @cmd Save/fetch local secrets in 1Password
@@ -328,10 +374,7 @@ PY
 # @cmd Run production smoke tests
 # @arg args~ Extra arguments passed to cucumber-js
 smoke_test() {
-  if [ -f "$repo_root/.local/secrets.envrc" ]; then
-    # shellcheck source=/dev/null
-    source "$repo_root/.local/secrets.envrc"
-  fi
+  load_local_secrets
 
   export MEMBA_SMOKE_STAFF_EMAIL="${MEMBA_SMOKE_STAFF_EMAIL:-test@memba.io}"
   export MEMBA_SMOKE_UNKNOWN_EMAIL="${MEMBA_SMOKE_UNKNOWN_EMAIL:-test+unknown@memba.io}"

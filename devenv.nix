@@ -102,6 +102,7 @@ in
     fontconfig
     esbuild
     flyctl
+    ngrok
   ];
 
   languages.elixir.enable = true;
@@ -140,6 +141,51 @@ in
     initialDatabases = [{ name = "memba_dev"; }];
   };
 
+  processes.web = {
+    cwd = "web";
+    exec = ''
+      set -euo pipefail
+      mix ecto.create --quiet || true
+      mix event_store.create --quiet || true
+      mix ecto.migrate
+      mix event_store.init --quiet
+      exec mix phx.server
+    '';
+    restart.on = "never";
+  };
+
+  processes.ngrok = {
+    exec = ''
+      set -euo pipefail
+
+      if [ "''${MEMBA_DEV_NGROK:-1}" = "0" ]; then
+        echo "ngrok disabled because MEMBA_DEV_NGROK=0"
+        exit 0
+      fi
+
+      token="''${NGROK_AUTHTOKEN:-''${MEMBA_NGROK_AUTHTOKEN:-}}"
+      if [ -z "$token" ]; then
+        echo "ngrok disabled: set NGROK_AUTHTOKEN or MEMBA_NGROK_AUTHTOKEN in .local/secrets.envrc to expose local Phoenix"
+        exit 0
+      fi
+
+      target="''${MEMBA_NGROK_TARGET:-4000}"
+      args=(http --log stdout --log-format term --authtoken "$token")
+
+      if [ -n "''${MEMBA_NGROK_DOMAIN:-}" ]; then
+        args+=(--domain "''${MEMBA_NGROK_DOMAIN}")
+      fi
+
+      args+=("$target")
+
+      echo "Starting ngrok tunnel to $target"
+      echo "For Resend dev inbound, configure webhook URL as: https://<ngrok-host>/webhooks/resend"
+      echo "For Postmark dev inbound, configure webhook URL as: https://<ngrok-host>/webhooks/postmark/inbound"
+      exec ngrok "''${args[@]}"
+    '';
+    restart.on = "never";
+  };
+
   containers."fabro-dev" = {
     name = "mattwynne/memba-fabro-dev";
     registry = "docker://ghcr.io/";
@@ -173,6 +219,7 @@ in
               fontconfig
               esbuild
               flyctl
+              ngrok
               tini
               which
               (hiPrio fabroDevenv)
