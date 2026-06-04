@@ -206,6 +206,36 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
            )
   end
 
+  test "staff can remove a member from a club", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+    alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+    membership_id = Ecto.UUID.generate()
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: membership_id,
+                 club_id: club.club_id,
+                 person_id: alice.person_id
+               },
+               consistency: :strong
+             )
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    assert has_element?(view, "#member-#{alice.person_id}", "Alice Example")
+
+    view
+    |> element("#remove-member-button-#{membership_id}")
+    |> render_click()
+
+    refute has_element?(view, "#member-#{alice.person_id}")
+    refute Membership.active_member_of_club?(club.club_id, alice.person_id)
+  end
+
   defp input_value(html, selector) do
     values =
       html

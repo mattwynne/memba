@@ -10,6 +10,7 @@ defmodule Memba.Membership.Projectors.Membership do
     consistency: :strong
 
   alias Memba.Membership.Events.MemberAdded
+  alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
 
   project(%MemberAdded{} = event, fn multi ->
@@ -20,4 +21,21 @@ defmodule Memba.Membership.Projectors.Membership do
       active: true
     })
   end)
+
+  project(%MemberRemoved{} = event, fn multi ->
+    Ecto.Multi.update_all(
+      multi,
+      :membership_membership,
+      membership_query(event.membership_id),
+      set: [active: false]
+    )
+  end)
+
+  defp membership_query(membership_id) do
+    import Ecto.Query
+
+    from(membership in MembershipProjection,
+      where: membership.membership_id == ^membership_id
+    )
+  end
 end

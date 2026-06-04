@@ -9,6 +9,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.EmailAddresses
@@ -86,6 +87,18 @@ defmodule Memba.Membership do
   def add_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- add_member_command(attrs),
          :ok <- prevent_duplicate_active_membership(command) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Remove a person from active club membership through the Membership context.
+
+  The caller supplies the membership aggregate identity as `:membership_id` or
+  `"membership_id"`.
+  """
+  def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- remove_member_command(attrs) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -264,7 +277,8 @@ defmodule Memba.Membership do
         asc: person.name,
         asc: person.person_id
       )
-      |> select([_membership, person, primary_email_address], %{
+      |> select([membership, person, primary_email_address], %{
+        membership_id: membership.membership_id,
         id: person.person_id,
         name: person.name,
         email: primary_email_address.email
@@ -388,6 +402,12 @@ defmodule Memba.Membership do
          {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, person_id} <- fetch_required(attrs, :person_id) do
       {:ok, %AddMember{membership_id: membership_id, club_id: club_id, person_id: person_id}}
+    end
+  end
+
+  defp remove_member_command(attrs) do
+    with {:ok, membership_id} <- fetch_required(attrs, :membership_id) do
+      {:ok, %RemoveMember{membership_id: membership_id}}
     end
   end
 

@@ -10,6 +10,7 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     assert source =~ "def update_club("
     assert source =~ "def create_person("
     assert source =~ "def add_member("
+    assert source =~ "def remove_member("
     assert source =~ "def get_club("
     assert source =~ "def get_person_primary_email("
     assert source =~ "def list_clubs("
