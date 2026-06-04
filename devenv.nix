@@ -145,10 +145,7 @@ in
     cwd = "web";
     exec = ''
       set -euo pipefail
-      mix ecto.create --quiet || true
-      mix event_store.create --quiet || true
-      mix ecto.migrate
-      mix event_store.init --quiet
+      mix dev.setup
       exec mix phx.server
     '';
     restart.on = "never";

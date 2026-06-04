@@ -96,6 +96,12 @@ defmodule Memba.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       "event_store.setup": ["event_store.create", "event_store.init"],
       "event_store.reset": ["event_store.drop", "event_store.setup"],
+      "dev.setup": [
+        "ecto.create --quiet",
+        "event_store.create --quiet",
+        "ecto.migrate",
+        "event_store.init --quiet"
+      ],
       test: [
         "ecto.drop --quiet",
         "ecto.create --quiet",
