@@ -218,9 +218,9 @@ Fix applied:
 - Postmark production configuration: updated the `memba.io` server inbound hook URL to `https://memba.io/webhooks/postmark/inbound`.
 - `web/lib/memba/messaging/inbound_club_rejection_email.ex`: shortened Postmark metadata keys for inbound rejection emails and capped metadata values to Postmark's 80-character value limit.
 - `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`: updated the Postmark rejection-email metadata expectation.
-- `smoke-tests/lib/config.js`, `smoke-tests/lib/smtp.js`, and `smoke-tests/features/step_definitions/inbound_club_email_steps.js`: added an optional SMTP envelope-recipient override so the production smoke can send to Postmark's inbound address while preserving the visible `To: test@clubs.memba.io` header for Memba parsing.
-- `smoke-tests/lib/browser.js`: made staff sign-in navigate explicitly to `/admin/clubs` after following the magic link, instead of assuming the auth callback lands on an admin page.
-- `smoke-tests/README.md`: documented the club-site base domain and SMTP recipient override.
+- `smoke-tests/lib/browser.js`: made staff sign-in navigate explicitly to `/admin/clubs` after following the magic link, instead of assuming the auth callback lands on an admin page, and made message visibility polling reload the club page between checks.
+- `smoke-tests/lib/config.js`, `smoke-tests/lib/smtp.js`, `smoke-tests/lib/fastmail_imap.js`, and `smoke-tests/features/step_definitions/inbound_club_email_steps.js`: generalized SMTP/IMAP configuration so the smoke runner can use external Hotmail/Yahoo unknown-sender accounts.
+- `smoke-tests/README.md`: documented the club-site base domain and external unknown-sender SMTP/IMAP configuration.
 - Deployed the metadata fix to Fly app `memba` with `fly deploy -a memba --remote-only`.
 
 Validation:
@@ -228,9 +228,16 @@ Validation:
 - `bin/mix test test/memba/messaging/inbound_club_message_acceptance_test.exs` — passed; 14 tests, 0 failures.
 - `dev check` — passed; 495 ExUnit tests and 34 acceptance scenarios.
 - `fly deploy -a memba --remote-only` — completed successfully; release command reported migrations already up.
-- Production smoke via Fastmail SMTP to the Postmark inbound address, with `To: test@clubs.memba.io` preserved — passed; 3 scenarios and 21 steps.
+- Production smoke after changing Fastmail's `memba.io` subdomain routing to route mail externally — passed for the rejection scenarios and Postmark/Memba recorded the accepted member-message scenario through the public `test@clubs.memba.io` path. The smoke runner's member-visible UI polling was then tightened to reload while waiting for asynchronous delivery.
 
 Remaining follow-up:
 
-- The tested production path proves Fastmail SMTP → Postmark inbound → Memba webhook → Memba business rules → Postmark outbound/rejection email → Fastmail mailbox/UI outcomes.
-- The exact public-MX path `test@clubs.memba.io` still appears abnormal when the sender is also a Fastmail-hosted `memba.io` mailbox: Fastmail accepted the SMTP send but no Postmark inbound webhook arrived. This likely reflects Fastmail internal routing/caching for a domain it hosts, not the Memba/Postmark application path. To prove the public DNS/MX boundary literally, run the same smoke from a sender outside Fastmail or from an SMTP service that definitely resolves public MX for `clubs.memba.io`.
+- Add the Hotmail/Yahoo mailbox credentials to `.local/secrets.envrc` when the 1Password CLI can access Matt's Wynne Family vault, then run `bin/dev smoke-test` using one of those external accounts as the unknown sender.
+
+### Follow-up decision
+
+Date: 2026-06-04
+
+This remaining follow-up was deliberately abandoned. Hotmail's IMAP/SMTP endpoints were reachable, but basic username/password authentication was blocked (`BasicAuthBlocked` on IMAP and `535 5.7.3 Authentication unsuccessful` on SMTP). Yahoo was also not working reliably enough to use now.
+
+ADR 0020 records the replacement decision: keep the smoke runner Fastmail-only and use an unregistered Fastmail alias for the unknown-sender case, rather than expanding production smoke tests into arbitrary consumer-mailbox automation.

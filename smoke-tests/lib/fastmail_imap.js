@@ -2,16 +2,18 @@ const assert = require("node:assert/strict");
 const tls = require("node:tls");
 
 class FastmailImapClient {
-  constructor({ user, password }) {
-    assert.ok(user, "Expected a Fastmail IMAP user");
-    assert.ok(password, "Expected a Fastmail IMAP password");
+  constructor({ host = "imap.fastmail.com", port = 993, user, password }) {
+    assert.ok(user, "Expected an IMAP user");
+    assert.ok(password, "Expected an IMAP password");
+    this.host = host;
+    this.port = port;
     this.user = user;
     this.password = password;
     this.client = null;
   }
 
   async connect() {
-    this.client = await ImapClient.connect({ host: "imap.fastmail.com", port: 993 });
+    this.client = await ImapClient.connect({ host: this.host, port: this.port });
     await this.client.expectUntaggedOk();
     await this.client.command("LOGIN", [this.user, this.password]);
     await this.client.command("SELECT", ["INBOX"]);

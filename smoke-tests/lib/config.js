@@ -40,9 +40,6 @@ function smokeConfig() {
   );
 
   const unknownEmail = requiredEnv("MEMBA_SMOKE_UNKNOWN_EMAIL");
-  const unknownFastmailUser = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_USER", unknownEmail);
-  const unknownFastmailPassword = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_PASSWORD", fastmailPassword);
-  const unknownJmapToken = optionalEnv("MEMBA_SMOKE_UNKNOWN_FASTMAIL_JMAP_TOKEN", jmapToken);
 
   const staffFastmailUser = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_USER", fastmailUser);
   const staffFastmailPassword = optionalEnv("MEMBA_SMOKE_STAFF_FASTMAIL_PASSWORD", fastmailPassword);
@@ -54,16 +51,12 @@ function smokeConfig() {
   );
   const postmarkInboundMessageStream = optionalEnv("MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM", null);
 
-  const inboundAddress = `${clubSlug}@${inboundDomain}`;
-  const smtpRecipient = optionalEnv("MEMBA_SMOKE_SMTP_RECIPIENT", inboundAddress);
-
   return {
     baseUrl,
     clubName,
     clubSlug,
     clubSiteBaseDomain,
-    inboundAddress,
-    smtpRecipient,
+    inboundAddress: `${clubSlug}@${inboundDomain}`,
     member: {
       email: memberEmail,
       name: memberName,
@@ -75,11 +68,11 @@ function smokeConfig() {
     },
     unknown: {
       email: unknownEmail,
-      smtpUser: unknownFastmailUser,
-      smtpPassword: unknownFastmailPassword,
-      imapUser: unknownFastmailUser,
-      imapPassword: unknownFastmailPassword,
-      jmapToken: unknownJmapToken
+      smtpUser: fastmailUser,
+      smtpPassword: fastmailPassword,
+      imapUser: fastmailUser,
+      imapPassword: fastmailPassword,
+      jmapToken
     },
     staff: {
       email: staffEmail,

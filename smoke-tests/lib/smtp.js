@@ -1,14 +1,12 @@
 const tls = require("node:tls");
 
-async function sendEmail({ attachment, body, envelopeTo, from, password, subject, to, user }) {
-  const client = await SmtpClient.connect({ host: "smtp.fastmail.com", port: 465 });
+async function sendEmail({ attachment, body, from, password, subject, to, user }) {
+  const client = await SmtpClient.connect();
 
   try {
-    await client.expect(/^220/);
-    await client.command("EHLO memba-smoke-tests", /^250[ -]/m);
-    await client.command(`AUTH PLAIN ${Buffer.from(`\0${user}\0${password}`).toString("base64")}`, /^235/);
+    await client.authenticate({ password, user });
     await client.command(`MAIL FROM:<${from}>`, /^250/);
-    await client.command(`RCPT TO:<${envelopeTo || to}>`, /^250/);
+    await client.command(`RCPT TO:<${to}>`, /^250/);
     await client.command("DATA", /^354/);
     await client.writeData(mimeMessage({ attachment, body, from, subject, to }));
     await client.expect(/^250/);
@@ -19,6 +17,18 @@ async function sendEmail({ attachment, body, envelopeTo, from, password, subject
 }
 
 class SmtpClient {
+  static async connect() {
+    const socket = await new Promise((resolve, reject) => {
+      const socket = tls.connect({ host: "smtp.fastmail.com", port: 465, servername: "smtp.fastmail.com" }, () =>
+        resolve(socket)
+      );
+      socket.once("error", reject);
+    });
+    const client = new SmtpClient(socket);
+    await client.expect(/^220/);
+    return client;
+  }
+
   constructor(socket) {
     this.socket = socket;
     this.buffer = "";
@@ -26,11 +36,9 @@ class SmtpClient {
     socket.on("data", (chunk) => this.onData(chunk));
   }
 
-  static connect({ host, port }) {
-    return new Promise((resolve, reject) => {
-      const socket = tls.connect({ host, port, servername: host }, () => resolve(new SmtpClient(socket)));
-      socket.once("error", reject);
-    });
+  async authenticate({ password, user }) {
+    await this.command("EHLO memba-smoke-tests", /^250[ -]/m);
+    await this.command(`AUTH PLAIN ${Buffer.from(`\0${user}\0${password}`).toString("base64")}`, /^235/);
   }
 
   onData(chunk) {

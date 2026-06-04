@@ -82,16 +82,26 @@ async function openSmokeClubHome(world) {
 }
 
 async function assertMemberSeesMessage(world, subject, body) {
-  await openSmokeClubHome(world);
-  const row = messageRow(world, subject);
-  await expect(row).toBeVisible({ timeout: world.config.poll.timeoutMs });
-  const messageId = await row.getAttribute("data-message-id");
-  assert.ok(messageId, `Expected message row for ${subject} to expose data-message-id`);
+  const deadline = Date.now() + world.config.poll.timeoutMs;
 
-  await row.getByRole("link").first().click();
-  await expect(world.page.locator("#member-message-body")).toContainText(body, {
-    timeout: world.config.poll.timeoutMs
-  });
+  while (Date.now() <= deadline) {
+    await openSmokeClubHome(world);
+    const row = messageRow(world, subject);
+    if ((await row.count()) > 0) {
+      const messageId = await row.getAttribute("data-message-id");
+      assert.ok(messageId, `Expected message row for ${subject} to expose data-message-id`);
+
+      await row.getByRole("link").first().click();
+      await expect(world.page.locator("#member-message-body")).toContainText(body, {
+        timeout: world.config.poll.intervalMs
+      });
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, world.config.poll.intervalMs));
+  }
+
+  throw new Error(`Timed out waiting for member-visible club message: ${subject}`);
 }
 
 async function assertMemberDoesNotSeeMessage(world, subject) {
