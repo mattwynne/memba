@@ -96,3 +96,31 @@ A flaky required gate trains us to rerun rather than trust failures. That risks 
 - Make reset/setup endpoints return only after projectors are restarted and caught up enough for the next browser assertion.
 - Replace fixed projection waits in setup steps with a stronger application-level readiness check or direct support endpoint for setup completion.
 - Record acceptance flakes separately from product failures when the failing step is harness setup rather than the scenario behaviour.
+
+## Resolution
+
+Date: 2026-06-05
+
+Root cause: Acceptance setup steps used the staff browser UI as their data factory and then waited for projected rows by polling browser-visible state. That made setup depend on LiveView navigation, browser reload timing, and fixed projection timeouts even though the setup data could be created through application commands with strong consistency.
+
+Fix applied:
+
+- `acceptance-tests/features/support/server_commands.js`: added batched Elixir RPC setup helpers for clubs, people, members, smoke-test data, slugs, and person email addresses. The helpers dispatch through the application contexts with `consistency: :strong` and return projected IDs/state for the Cucumber world.
+- `acceptance-tests/features/step_definitions/member_message_steps.js`: changed grouped people/member Given steps to use batched server setup instead of repeated per-person RPC/browser work.
+- `acceptance-tests/features/step_definitions/member_club_subdomain_steps.js`: changed slug and smoke-test club Given setup to use Elixir setup methods instead of staff-browser setup.
+- `acceptance-tests/features/step_definitions/person_email_address_steps.js`: changed primary/alternate email Given setup to use Elixir setup methods instead of staff-browser setup.
+- `acceptance-tests/features/support/member_harness.js`: reused signed-in staff/member harness contexts within a scenario, reducing repeated login/page setup and making repeated assertions less timing-sensitive.
+- `acceptance-tests/features/support/member_message.js`: avoided redundant browser page opens for repeated assertions while keeping forced reloads where webhook-driven projection polling still needs a fresh read.
+- `web/lib/memba/read_model_changes.ex` and all Ecto projectors: added a general committed read-model change bus, published from `after_update/3`, so future tests and LiveViews can synchronize on committed projection changes rather than browser polling.
+- `docs/adr/0021-publish-committed-read-model-changes.md`: recorded the architectural decision to publish committed read-model changes.
+
+Validation:
+
+- `cd acceptance-tests && npm run test:config` — passed.
+- `cd acceptance-tests && ACCEPTANCE_LOG_PROGRESS=1 ACCEPTANCE_SLOW_STEP_THRESHOLD_MS=1000 npm test` — passed, 34 scenarios / 215 steps, about 1m01s.
+- `dev check` — passed, 511 ExUnit tests and 34 browser acceptance scenarios.
+
+Remaining follow-up:
+
+- Use the read-model change bus in webhook-driven acceptance steps so delivery-status steps can wait for `:read_model_changed` messages instead of page-reload polling.
+- Use the same bus from LiveViews to address `docs/problems/2026-06-01-delivery-status-not-live.md`, refreshing delivery-status UI when relevant read models change.

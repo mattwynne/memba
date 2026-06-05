@@ -107,3 +107,27 @@ Risks and checks:
 - Multiple Phoenix/Playwright processes may overload CPU or memory; tune shard count empirically.
 
 Status: recommended next approach after reverting the shared-app aliasing spike.
+
+## Progress update: serial suite speedups before sharding
+
+Date: 2026-06-05
+
+Relevant work completed before implementing isolated shards:
+
+- Batched acceptance setup through Elixir RPC helpers, so grouped Given steps no longer create people/members one process or one browser interaction at a time.
+- Converted non-behavioural Given setup for slugs, smoke-test club data, and person email addresses away from staff-browser setup and into application-level setup helpers.
+- Reused signed-in staff/member harness contexts within each scenario, removing repeated browser contexts and magic-link login work for consecutive assertions by the same actor.
+- Reused one Chromium browser for the full Cucumber run while keeping a fresh browser context/page per scenario for isolation.
+- Avoided redundant page opens for repeated assertions where the browser is already on the correct page.
+
+Validation:
+
+- `cd acceptance-tests && npm run test:config` — passed.
+- `cd acceptance-tests && ACCEPTANCE_LOG_PROGRESS=1 ACCEPTANCE_SLOW_STEP_THRESHOLD_MS=1000 npm test` — passed, 34 scenarios / 215 steps, about 1m01s.
+- `dev check` — passed, including 511 ExUnit tests and the browser acceptance suite.
+
+Impact:
+
+- The serial browser acceptance suite dropped from roughly 1m47–1m51 to roughly 1m01 on local runs.
+- This reduces the urgency of sharding, but does not remove the original global-state blocker: the suite still performs per-scenario global reset and remains unsafe for Cucumber worker parallelism inside one shared app.
+- The isolated-shards plan remains the safer parallelization path if the serial suite again becomes the long pole.
