@@ -30,7 +30,7 @@ green than before.
 | 018 | 2026-06-01 | merged | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |
 | 019 | 2026-06-02 | merged | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |
 | 020 | 2026-06-02 | merged | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |
-| 021 | 2026-06-05 | validated | Staff area redesign and read-only operations indexes | [plan](021-staff-area-redesign/plan.md) |
+| 021 | 2026-06-05 | implementing | Staff area redesign and read-only operations indexes | [plan](021-staff-area-redesign/plan.md) |
 
 Status notes:
 
