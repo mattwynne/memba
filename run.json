@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-05T17:37:18.912877214Z",
-  "last_event_at": "2026-06-05T18:16:36.825963598Z",
+  "last_event_at": "2026-06-05T18:17:01.693709951Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -8056,9 +8056,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1339,
       "checkpoint": {
-        "timestamp": "2026-06-05T18:16:58.135198303Z",
+        "timestamp": "2026-06-05T18:17:01.608704643Z",
         "current_node": "validate_task",
         "completed_nodes": [
           "start",
@@ -8092,12 +8092,328 @@
         ],
         "node_retries": {},
         "context_values": {
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.validate_task": 0,
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean working tree at validation time.\n  - Recent commits show the implementation checkpoint as `9797f9a fabro(...): implement_next_task (succeeded)`, followed by the validation snapshot commit.\n  - `git diff 9797f9a^ 9797f9a -- docs/iterations/021-staff-area-redesign/todo.md` shows exactly one ordinary task checked off:\n    - `004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n  - This was the first unchecked task in `todo.md` before the checkpoint.\n\n- **Implementation artifacts found**\n  - `web/lib/memba_web/router.ex` adds `/admin/people` and `/admin/messages` inside the existing `:memba_staff` live session.\n  - `web/lib/memba_web/live/admin/people_live/index.ex` adds a read-only People index with stable IDs/selectors and no edit/create affordance.\n  - `web/lib/memba_web/live/admin/messages_live/index.ex` adds a read-only Messages index with stable IDs/selectors and no unsupported actions.\n  - `web/test/memba_web/live/admin_operations_index_live_test.exs` adds route/auth/read-only coverage.\n  - No acceptance feature files were changed in this checkpoint.\n\n- **Tests run/results found**\n  - Implementation summary reported:\n    - focused admin operations index tests passed;\n    - formatting passed;\n    - `git diff --check` passed;\n    - full `dev check` passed.\n  - I corroborated live with:\n    - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n    - Result: `3 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- **ADR/plan conformance notes**\n  - Scope matches task 004: routes and read-only LiveView scaffolds only; query/data enrichment remains correctly deferred to task 005.\n  - Staff auth/authorization is preserved by placing routes under existing admin staff pipeline/live session.\n  - No out-of-scope filters, bulk actions, message composition, global editing, or new domain semantics were introduced.\n  - LiveView stream usage and stable selector testing are consistent with the project’s LiveView guidance.\n  - The checkpoint is small and reviewable: 5 files, focused on the selected task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "task_retry_available": false,
+          "current_node": "validate_task",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "response.implement_next_task": "1. **Selected todo line and task text**\n   - Selected first unchecked task:\n     - `004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n\n2. **Changes made**\n   - Added routes inside the existing `:memba_staff` live session in `web/lib/memba_web/router.ex`:\n     - `GET /admin/people` → `MembaWeb.Admin.PeopleLive.Index`\n     - `GET /admin/messages` → `MembaWeb.Admin.MessagesLive.Index`\n   - Added `web/lib/memba_web/live/admin/people_live/index.ex`:\n     - Read-only global People page scaffold.\n     - Staff operations header and read-only notice.\n     - Stable selectors including `#admin-people-index`, `#admin-people-read-only-notice`, and `#admin-people-table`.\n     - Empty streamed table ready for task 005’s query wiring.\n   - Added `web/lib/memba_web/live/admin/messages_live/index.ex`:\n     - Read-only global Messages page scaffold.\n     - Staff operations header and read-only notice.\n     - Stable selectors including `#admin-messages-index`, `#admin-messages-read-only-notice`, and `#admin-messages-table`.\n     - Empty streamed table ready for task 005’s query wiring and future diagnostics links.\n   - Added `web/test/memba_web/live/admin_operations_index_live_test.exs`:\n     - Verifies the new indexes require staff sign-in.\n     - Verifies signed-in Memba staff can open both pages.\n     - Verifies key read-only page selectors and absence of unsupported form/action selectors.\n\n3. **Focused validation commands run and results**\n   - Initial TDD/focused run attempted before implementation:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs`\n     - Failed due sandbox Postgres readiness wrapper issue before reaching route assertions.\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/router.ex lib/memba_web/live/admin/people_live/index.ex lib/memba_web/live/admin/messages_live/index.ex test/memba_web/live/admin_operations_index_live_test.exs`\n     - Passed.\n   - Focused tests:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n     - Passed: `3 tests, 0 failures`.\n     - Used `devenv shell` because the bare wrapper repeatedly failed to detect the ready Postgres socket.\n   - Whitespace check:\n     - `git diff --check`\n     - Passed.\n   - Full validation required for routing/LiveView/browser-facing changes:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed:\n       - ExUnit: `516 tests, 0 failures`\n       - Acceptance: `34 scenarios (34 passed), 215 steps (215 passed)`\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n   - To:\n     - `- [x] 004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n   - I did not check off `004a`; route-verifying the existing staff nav links remains the next explicit task.\n\n6. **ADR conformance evidence**\n   - ADR 0001: Kept the work in Phoenix/LiveView as the core application surface.\n   - ADR 0007: Did not introduce cross-context read-model coupling; Membership/Messaging query enrichment remains deferred to task 005.\n   - ADR 0013: Added Phoenix feature-style web coverage for route protection and user-visible page behavior.\n   - ADR 0015: Used LiveView for these staff application pages, consistent with the app-surface pattern.\n   - ADR 0021/0022: No read-model publication or projection-barrier behavior was changed; query/read-model wiring remains for later tasks.",
+          "thread.start.current_node": "read_plan",
+          "internal.thread_id": "pre_validate_snapshot",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.run_id": "01KTCDPDG5SWTYBV8QQYVE9S5C",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "thread.validate_task.current_node": "task_gate",
+          "task_list_needs_human": false,
+          "task_list_complete": false,
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.fidelity": "summary:high",
+          "internal.node_visit_count": 4,
+          "internal.retry_count.implement_next_task": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean working tree at validation time.\n  - Recent commits show th",
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "internal.retry_count.resume_gate": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "failure_signature": "",
+          "graph.rankdir": "LR",
+          "internal.retry_count.task_gate": 0,
+          "internal.retry_count.wip_gate": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "failure_class": "",
+          "command.output": "blob://sha256/71da53a3cc42096d024716f96ffb3bee761cf1b0c19cb0add049c536cf32a3ea",
+          "graph.max_node_visits": "80",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "last_stage": "validate_task",
+          "response.all_tasks_done": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nif [ ! -r \\\"$TODO_PATH\\\" ] || [ ! -s \\\"$TODO_PATH\\\" ]; then\\n  echo \\\"BLOCKING: missing, empty, or unreadable todo: $TODO_PATH\\\"\\n  exit 2\\nfi\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\ngrep -n -E '^[[:space:]]*- \\\\[ \\\\] ' \\\"$TODO_PATH\\\" || true\", \"timeout\": 120000}{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.retry_count.start": 0,
+          "task_valid": true,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "outcome": "succeeded",
+          "thread.read_plan.current_node": "wip_gate"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/9012b77194ab17ed1a148f86b85b499ac0c871c318704eb8c21083a0f31db9a2"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 175,
+              "active_time_ms": 175
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean working tree at validation time.\n  - Recent commits show the implementation checkpoint as `9797f9a fabro(...): implement_next_task (succeeded)`, followed by the validation snapshot commit.\n  - `git diff 9797f9a^ 9797f9a -- docs/iterations/021-staff-area-redesign/todo.md` shows exactly one ordinary task checked off:\n    - `004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n  - This was the first unchecked task in `todo.md` before the checkpoint.\n\n- **Implementation artifacts found**\n  - `web/lib/memba_web/router.ex` adds `/admin/people` and `/admin/messages` inside the existing `:memba_staff` live session.\n  - `web/lib/memba_web/live/admin/people_live/index.ex` adds a read-only People index with stable IDs/selectors and no edit/create affordance.\n  - `web/lib/memba_web/live/admin/messages_live/index.ex` adds a read-only Messages index with stable IDs/selectors and no unsupported actions.\n  - `web/test/memba_web/live/admin_operations_index_live_test.exs` adds route/auth/read-only coverage.\n  - No acceptance feature files were changed in this checkpoint.\n\n- **Tests run/results found**\n  - Implementation summary reported:\n    - focused admin operations index tests passed;\n    - formatting passed;\n    - `git diff --check` passed;\n    - full `dev check` passed.\n  - I corroborated live with:\n    - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n    - Result: `3 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- **ADR/plan conformance notes**\n  - Scope matches task 004: routes and read-only LiveView scaffolds only; query/data enrichment remains correctly deferred to task 005.\n  - Staff auth/authorization is preserved by placing routes under existing admin staff pipeline/live session.\n  - No out-of-scope filters, bulk actions, message composition, global editing, or new domain semantics were introduced.\n  - LiveView stream usage and stable selector testing are consistent with the project’s LiveView guidance.\n  - The checkpoint is small and reviewable: 5 files, focused on the selected task.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean working tree at validation time.\n  - Recent commits show th"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 276372,
+                    "output_tokens": 1447,
+                    "reasoning_tokens": 1658,
+                    "cache_read_tokens": 96256,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1523138
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 76708,
+              "tool_time_ms": 5177,
+              "active_time_ms": 81885
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/daece4e78b89d934ea6bf1bb7759852074043f42f33b012b3fe83d5af5b32c93"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 215,
+              "active_time_ms": 215
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7c2b381fbee697c1868be668989ab2a844f4580d22acef84443c479694ea416f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2392,
+              "active_time_ms": 2392
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/463d6573ed452df91537af650e5ebd0107f7bf049f4e0d618f332c06d14f7f1f"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 138596,
+              "active_time_ms": 138596
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false,
+              "task_list_complete": false,
+              "last_response": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nif [ ! -r \\\"$TODO_PATH\\\" ] || [ ! -s \\\"$TODO_PATH\\\" ]; then\\n  echo \\\"BLOCKING: ",
+              "response.all_tasks_done": "{\"cmd\": \"set -eu\\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\\nTODO_PATH=${PLAN_PATH%/plan.md}/todo.md\\nif [ ! -r \\\"$TODO_PATH\\\" ] || [ ! -s \\\"$TODO_PATH\\\" ]; then\\n  echo \\\"BLOCKING: missing, empty, or unreadable todo: $TODO_PATH\\\"\\n  exit 2\\nfi\\nprintf 'TODO_PATH=%s\\\\n' \\\"$TODO_PATH\\\"\\ngrep -n -E '^[[:space:]]*- \\\\[ \\\\] ' \\\"$TODO_PATH\\\" || true\", \"timeout\": 120000}{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 14977,
+                    "output_tokens": 171,
+                    "reasoning_tokens": 166,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 84995
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 7141,
+              "tool_time_ms": 0,
+              "active_time_ms": 7141
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "1. **Selected todo line and task text**\n   - Selected first unchecked task:\n     - `004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`",
+              "response.implement_next_task": "1. **Selected todo line and task text**\n   - Selected first unchecked task:\n     - `004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n\n2. **Changes made**\n   - Added routes inside the existing `:memba_staff` live session in `web/lib/memba_web/router.ex`:\n     - `GET /admin/people` → `MembaWeb.Admin.PeopleLive.Index`\n     - `GET /admin/messages` → `MembaWeb.Admin.MessagesLive.Index`\n   - Added `web/lib/memba_web/live/admin/people_live/index.ex`:\n     - Read-only global People page scaffold.\n     - Staff operations header and read-only notice.\n     - Stable selectors including `#admin-people-index`, `#admin-people-read-only-notice`, and `#admin-people-table`.\n     - Empty streamed table ready for task 005’s query wiring.\n   - Added `web/lib/memba_web/live/admin/messages_live/index.ex`:\n     - Read-only global Messages page scaffold.\n     - Staff operations header and read-only notice.\n     - Stable selectors including `#admin-messages-index`, `#admin-messages-read-only-notice`, and `#admin-messages-table`.\n     - Empty streamed table ready for task 005’s query wiring and future diagnostics links.\n   - Added `web/test/memba_web/live/admin_operations_index_live_test.exs`:\n     - Verifies the new indexes require staff sign-in.\n     - Verifies signed-in Memba staff can open both pages.\n     - Verifies key read-only page selectors and absence of unsupported form/action selectors.\n\n3. **Focused validation commands run and results**\n   - Initial TDD/focused run attempted before implementation:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs`\n     - Failed due sandbox Postgres readiness wrapper issue before reaching route assertions.\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/router.ex lib/memba_web/live/admin/people_live/index.ex lib/memba_web/live/admin/messages_live/index.ex test/memba_web/live/admin_operations_index_live_test.exs`\n     - Passed.\n   - Focused tests:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n     - Passed: `3 tests, 0 failures`.\n     - Used `devenv shell` because the bare wrapper repeatedly failed to detect the ready Postgres socket.\n   - Whitespace check:\n     - `git diff --check`\n     - Passed.\n   - Full validation required for routing/LiveView/browser-facing changes:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed:\n       - ExUnit: `516 tests, 0 failures`\n       - Acceptance: `34 scenarios (34 passed), 215 steps (215 passed)`\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n   - To:\n     - `- [x] 004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n   - I did not check off `004a`; route-verifying the existing staff nav links remains the next explicit task.\n\n6. **ADR conformance evidence**\n   - ADR 0001: Kept the work in Phoenix/LiveView as the core application surface.\n   - ADR 0007: Did not introduce cross-context read-model coupling; Membership/Messaging query enrichment remains deferred to task 005.\n   - ADR 0013: Added Phoenix feature-style web coverage for route protection and user-visible page behavior.\n   - ADR 0015: Used LiveView for these staff application pages, consistent with the app-surface pattern.\n   - ADR 0021/0022: No read-model publication or projection-barrier behavior was changed; query/read-model wiring remains for later tasks."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 928836,
+                    "output_tokens": 9151,
+                    "reasoning_tokens": 4422,
+                    "cache_read_tokens": 3125760,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6614250
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 389991,
+              "tool_time_ms": 206841,
+              "active_time_ms": 596832
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/375e7e5421c343289aa376b39788a25714296e7fb8da6a7797344ccaaa0cdff4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 243,
+              "active_time_ms": 243
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/71da53a3cc42096d024716f96ffb3bee761cf1b0c19cb0add049c536cf32a3ea"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 201,
+              "active_time_ms": 201
+            }
+          }
+        },
+        "next_node_id": "task_gate",
+        "git_commit_sha": "67b12181b1bb3f8da25fb7a728792422c054af1e",
+        "node_visits": {
+          "all_tasks_done": 4,
+          "start": 1,
+          "task_gate": 3,
+          "pre_validate_snapshot": 4,
+          "validate_task": 4,
+          "read_plan": 1,
+          "preflight_sandbox": 1,
+          "implement_next_task": 4,
+          "resume_gate": 1,
+          "sync_task_list": 4,
+          "wip_gate": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 9,
+          "additions": 938,
+          "deletions": 30
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-05T18:17:01.720074639Z",
+        "current_node": "task_gate",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "task_valid": true,
           "graph.default_fidelity": "summary:high",
           "internal.work_dir": "/workspace/memba",
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "thread.sync_task_list.current_node": "all_tasks_done",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "response.implement_next_task": "1. **Selected todo line and task text**\n   - Selected first unchecked task:\n     - `004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n\n2. **Changes made**\n   - Added routes inside the existing `:memba_staff` live session in `web/lib/memba_web/router.ex`:\n     - `GET /admin/people` → `MembaWeb.Admin.PeopleLive.Index`\n     - `GET /admin/messages` → `MembaWeb.Admin.MessagesLive.Index`\n   - Added `web/lib/memba_web/live/admin/people_live/index.ex`:\n     - Read-only global People page scaffold.\n     - Staff operations header and read-only notice.\n     - Stable selectors including `#admin-people-index`, `#admin-people-read-only-notice`, and `#admin-people-table`.\n     - Empty streamed table ready for task 005’s query wiring.\n   - Added `web/lib/memba_web/live/admin/messages_live/index.ex`:\n     - Read-only global Messages page scaffold.\n     - Staff operations header and read-only notice.\n     - Stable selectors including `#admin-messages-index`, `#admin-messages-read-only-notice`, and `#admin-messages-table`.\n     - Empty streamed table ready for task 005’s query wiring and future diagnostics links.\n   - Added `web/test/memba_web/live/admin_operations_index_live_test.exs`:\n     - Verifies the new indexes require staff sign-in.\n     - Verifies signed-in Memba staff can open both pages.\n     - Verifies key read-only page selectors and absence of unsupported form/action selectors.\n\n3. **Focused validation commands run and results**\n   - Initial TDD/focused run attempted before implementation:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs`\n     - Failed due sandbox Postgres readiness wrapper issue before reaching route assertions.\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/router.ex lib/memba_web/live/admin/people_live/index.ex lib/memba_web/live/admin/messages_live/index.ex test/memba_web/live/admin_operations_index_live_test.exs`\n     - Passed.\n   - Focused tests:\n     - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n     - Passed: `3 tests, 0 failures`.\n     - Used `devenv shell` because the bare wrapper repeatedly failed to detect the ready Postgres socket.\n   - Whitespace check:\n     - `git diff --check`\n     - Passed.\n   - Full validation required for routing/LiveView/browser-facing changes:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed:\n       - ExUnit: `516 tests, 0 failures`\n       - Acceptance: `34 scenarios (34 passed), 215 steps (215 passed)`\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n   - To:\n     - `- [x] 004 Add routes and LiveViews for read-only /admin/people and /admin/messages under the existing staff live session.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n   - I did not check off `004a`; route-verifying the existing staff nav links remains the next explicit task.\n\n6. **ADR conformance evidence**\n   - ADR 0001: Kept the work in Phoenix/LiveView as the core application surface.\n   - ADR 0007: Did not introduce cross-context read-model coupling; Membership/Messaging query enrichment remains deferred to task 005.\n   - ADR 0013: Added Phoenix feature-style web coverage for route protection and user-visible page behavior.\n   - ADR 0015: Used LiveView for these staff application pages, consistent with the app-surface pattern.\n   - ADR 0021/0022: No read-model publication or projection-barrier behavior was changed; query/read-model wiring remains for later tasks.",
@@ -8110,7 +8426,7 @@
           "thread.validate_task.current_node": "task_gate",
           "thread.read_plan.current_node": "wip_gate",
           "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - `/tmp/fabro-pre-validate-snapshot.md` shows a clean working tree at validation time.\n  - Recent commits show th",
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "graph.max_node_visits": "80",
           "internal.retry_count.task_gate": 0,
@@ -8346,14 +8662,14 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
           "validate_task": 4,
           "read_plan": 1,
           "preflight_sandbox": 1,
           "all_tasks_done": 4,
           "resume_gate": 1,
-          "task_gate": 3,
+          "task_gate": 4,
           "pre_validate_snapshot": 4,
           "wip_gate": 1,
           "sync_task_list": 4,
@@ -8596,248 +8912,6 @@
       },
       "state": "succeeded"
     },
-    "implement_next_task@3": {
-      "first_event_seq": 635,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: implement_next_task",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T18:03:09.859714013Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T17:51:00.660589983Z",
-      "handler": "agent",
-      "timing": {
-        "wall_time_ms": 729198,
-        "inference_time_ms": 372566,
-        "tool_time_ms": 356023,
-        "active_time_ms": 728589
-      },
-      "usage": {
-        "input_tokens": 855259,
-        "output_tokens": 8179,
-        "total_tokens": 3169127,
-        "reasoning_tokens": 6297,
-        "cache_read_tokens": 2299392,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 5860271
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "todos": {
-        "kind": "openai_plan",
-        "list_id": "openai_plan:755d35f7-79a7-47e1-88d0-fa91f0b06820",
-        "items": [
-          {
-            "id": "fdc53eaf6d3fcfae",
-            "status": "completed",
-            "order": 0,
-            "subject": "Read plan, todo, recent checkpoints, status, and relevant docs/ADRs"
-          },
-          {
-            "id": "7f4a89911d3cf550",
-            "status": "completed",
-            "order": 1,
-            "subject": "Inspect current admin layout/routes/tests and decide task scope"
-          },
-          {
-            "id": "1bcd6f91fbcffb88",
-            "status": "completed",
-            "order": 2,
-            "subject": "Implement selected task changes and any necessary focused tests"
-          },
-          {
-            "id": "2e62e8ce00aab36c",
-            "status": "completed",
-            "order": 3,
-            "subject": "Run focused validation and check off selected todo"
-          }
-        ]
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": true
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": true
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "context_window_tokens": 272000,
-        "input_tokens": 96409,
-        "usage_percent": 35.44448529411765,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-06-05T18:03:09.842595030Z",
-        "event_seq": 865,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 1008,
-            "usage_percent": 0.37058823529411766
-          },
-          {
-            "category": "tools",
-            "tokens": 1438,
-            "usage_percent": 0.5286764705882353
-          },
-          {
-            "category": "memory",
-            "tokens": 357,
-            "usage_percent": 0.13125
-          },
-          {
-            "category": "conversation",
-            "tokens": 93601,
-            "usage_percent": 34.41213235294118
-          },
-          {
-            "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
-          }
-        ],
-        "warnings": []
-      },
-      "state": "succeeded"
-    },
     "pre_validate_snapshot@1": {
       "first_event_seq": 194,
       "prompt": null,
@@ -8884,218 +8958,6 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "validate_task@3": {
-      "first_event_seq": 884,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: validate_task",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T18:05:08.790469692Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T18:03:17.769786356Z",
-      "handler": "agent",
-      "timing": {
-        "wall_time_ms": 111020,
-        "inference_time_ms": 104444,
-        "tool_time_ms": 6050,
-        "active_time_ms": 110494
-      },
-      "usage": {
-        "input_tokens": 216246,
-        "output_tokens": 1959,
-        "total_tokens": 408554,
-        "reasoning_tokens": 1933,
-        "cache_read_tokens": 188416,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 1292198
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "context_window_tokens": 272000,
-        "input_tokens": 30543,
-        "usage_percent": 11.229044117647058,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-06-05T18:05:08.789325717Z",
-        "event_seq": 965,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 1003,
-            "usage_percent": 0.36875
-          },
-          {
-            "category": "tools",
-            "tokens": 1426,
-            "usage_percent": 0.524264705882353
-          },
-          {
-            "category": "memory",
-            "tokens": 354,
-            "usage_percent": 0.13014705882352942
-          },
-          {
-            "category": "conversation",
-            "tokens": 27753,
-            "usage_percent": 10.203308823529412
-          },
-          {
-            "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
-          }
-        ],
-        "warnings": []
       },
       "state": "succeeded"
     },
@@ -9409,6 +9271,857 @@
       },
       "state": "succeeded"
     },
+    "pre_validate_snapshot@2": {
+      "first_event_seq": 539,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:49:52.835055416Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/b680af10af08d2294763bcc8d3e80d69589ee00c4e20ab6861f727e00fb498ca",
+        "exit_code": 0,
+        "duration_ms": 199,
+        "termination": "exited",
+        "output_bytes": 590,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 590,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T17:49:52.608940802Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 226,
+        "inference_time_ms": 0,
+        "tool_time_ms": 199,
+        "active_time_ms": 199
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "validate_task@2": {
+      "first_event_seq": 549,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:50:43.991601912Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T17:49:56.111391236Z",
+      "handler": "agent",
+      "timing": {
+        "wall_time_ms": 47880,
+        "inference_time_ms": 45893,
+        "tool_time_ms": 1469,
+        "active_time_ms": 47362
+      },
+      "usage": {
+        "input_tokens": 74776,
+        "output_tokens": 1843,
+        "total_tokens": 131370,
+        "reasoning_tokens": 991,
+        "cache_read_tokens": 53760,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 439774
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": false
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 23354,
+        "usage_percent": 8.586029411764706,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-05T17:50:43.991014773Z",
+        "event_seq": 600,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1108,
+            "usage_percent": 0.4073529411764706
+          },
+          {
+            "category": "tools",
+            "tokens": 1575,
+            "usage_percent": 0.5790441176470589
+          },
+          {
+            "category": "memory",
+            "tokens": 391,
+            "usage_percent": 0.14375
+          },
+          {
+            "category": "conversation",
+            "tokens": 20275,
+            "usage_percent": 7.454044117647059
+          },
+          {
+            "category": "other",
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
+          }
+        ],
+        "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "sync_task_list@2": {
+      "first_event_seq": 294,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:44:19.548459160Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/c0013f8e62ad16f5258773f6a1c05e9e237c2747796bbb93bd2a7cfea44ee1a1",
+        "exit_code": 0,
+        "duration_ms": 178,
+        "termination": "exited",
+        "output_bytes": 2143,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 2143,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T17:44:19.323900456Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 224,
+        "inference_time_ms": 0,
+        "tool_time_ms": 178,
+        "active_time_ms": 178
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "task_gate@3": {
+      "first_event_seq": 976,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: task_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T18:05:12.272887267Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T18:05:12.269430470Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "preflight_sandbox@1": {
+      "first_event_seq": 45,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:39:48.416526174Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "command": "exec 2>&1\nset -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "language": "shell",
+        "timeout_ms": 600000
+      },
+      "script_timing": {
+        "output": "blob://sha256/463d6573ed452df91537af650e5ebd0107f7bf049f4e0d618f332c06d14f7f1f",
+        "exit_code": 0,
+        "duration_ms": 138596,
+        "termination": "exited",
+        "output_bytes": 6244,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 6244,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T17:37:29.793664910Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 138622,
+        "inference_time_ms": 0,
+        "tool_time_ms": 138596,
+        "active_time_ms": 138596
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "validate_task@4": {
+      "first_event_seq": 1278,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T18:16:58.132508709Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T18:15:35.727526562Z",
+      "handler": "agent",
+      "timing": {
+        "wall_time_ms": 82405,
+        "inference_time_ms": 76708,
+        "tool_time_ms": 5177,
+        "active_time_ms": 81885
+      },
+      "usage": {
+        "input_tokens": 314444,
+        "output_tokens": 2004,
+        "total_tokens": 414878,
+        "reasoning_tokens": 2174,
+        "cache_read_tokens": 96256,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 1523138
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 38072,
+        "usage_percent": 13.99705882352941,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-05T18:16:58.132031547Z",
+        "event_seq": 1335,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1116,
+            "usage_percent": 0.4102941176470588
+          },
+          {
+            "category": "tools",
+            "tokens": 1586,
+            "usage_percent": 0.5830882352941177
+          },
+          {
+            "category": "memory",
+            "tokens": 394,
+            "usage_percent": 0.1448529411764706
+          },
+          {
+            "category": "conversation",
+            "tokens": 34971,
+            "usage_percent": 12.856985294117647
+          },
+          {
+            "category": "other",
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
+          }
+        ],
+        "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "implement_next_task@2": {
+      "first_event_seq": 314,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:49:49.230208496Z"
+      },
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T17:44:30.583978162Z",
+      "handler": "agent",
+      "timing": {
+        "wall_time_ms": 318646,
+        "inference_time_ms": 310598,
+        "tool_time_ms": 7468,
+        "active_time_ms": 318066
+      },
+      "usage": {
+        "input_tokens": 902277,
+        "output_tokens": 9216,
+        "total_tokens": 2255330,
+        "reasoning_tokens": 1885,
+        "cache_read_tokens": 1341952,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5515391
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 128779,
+        "usage_percent": 47.34522058823529,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-05T17:49:49.221933087Z",
+        "event_seq": 528,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1094,
+            "usage_percent": 0.4022058823529412
+          },
+          {
+            "category": "tools",
+            "tokens": 1559,
+            "usage_percent": 0.5731617647058823
+          },
+          {
+            "category": "memory",
+            "tokens": 387,
+            "usage_percent": 0.14227941176470588
+          },
+          {
+            "category": "conversation",
+            "tokens": 125732,
+            "usage_percent": 46.225
+          },
+          {
+            "category": "other",
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
+          }
+        ],
+        "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "start@1": {
+      "first_event_seq": 21,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:37:20.664138794Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T17:37:20.660369585Z",
+      "handler": "start",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
     "all_tasks_done@4": {
       "first_event_seq": 994,
       "prompt": null,
@@ -9450,6 +10163,104 @@
       "model": {
         "provider": "openai",
         "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@4": {
+      "first_event_seq": 1268,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T18:15:31.844313415Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/71da53a3cc42096d024716f96ffb3bee761cf1b0c19cb0add049c536cf32a3ea",
+        "exit_code": 0,
+        "duration_ms": 201,
+        "termination": "exited",
+        "output_bytes": 590,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 590,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T18:15:31.615086276Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 229,
+        "inference_time_ms": 0,
+        "tool_time_ms": 201,
+        "active_time_ms": 201
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "resume_gate@1": {
+      "first_event_seq": 55,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:39:51.905457637Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/daece4e78b89d934ea6bf1bb7759852074043f42f33b012b3fe83d5af5b32c93",
+        "exit_code": 0,
+        "duration_ms": 215,
+        "termination": "exited",
+        "output_bytes": 292,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 292,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T17:39:51.640583799Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 264,
+        "inference_time_ms": 0,
+        "tool_time_ms": 215,
+        "active_time_ms": 215
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     },
@@ -9735,598 +10546,28 @@
       },
       "state": "succeeded"
     },
-    "pre_validate_snapshot@4": {
-      "first_event_seq": 1268,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T18:15:31.844313415Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/71da53a3cc42096d024716f96ffb3bee761cf1b0c19cb0add049c536cf32a3ea",
-        "exit_code": 0,
-        "duration_ms": 201,
-        "termination": "exited",
-        "output_bytes": 590,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 590,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-05T18:15:31.615086276Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 229,
-        "inference_time_ms": 0,
-        "tool_time_ms": 201,
-        "active_time_ms": 201
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "pre_validate_snapshot@2": {
-      "first_event_seq": 539,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:49:52.835055416Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/b680af10af08d2294763bcc8d3e80d69589ee00c4e20ab6861f727e00fb498ca",
-        "exit_code": 0,
-        "duration_ms": 199,
-        "termination": "exited",
-        "output_bytes": 590,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 590,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-05T17:49:52.608940802Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 226,
-        "inference_time_ms": 0,
-        "tool_time_ms": 199,
-        "active_time_ms": 199
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "validate_task@2": {
-      "first_event_seq": 549,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: validate_task",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:50:43.991601912Z"
-      },
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T17:49:56.111391236Z",
-      "handler": "agent",
-      "timing": {
-        "wall_time_ms": 47880,
-        "inference_time_ms": 45893,
-        "tool_time_ms": 1469,
-        "active_time_ms": 47362
-      },
-      "usage": {
-        "input_tokens": 74776,
-        "output_tokens": 1843,
-        "total_tokens": 131370,
-        "reasoning_tokens": 991,
-        "cache_read_tokens": 53760,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 439774
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": false
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "context_window_tokens": 272000,
-        "input_tokens": 23354,
-        "usage_percent": 8.586029411764706,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-06-05T17:50:43.991014773Z",
-        "event_seq": 600,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 1108,
-            "usage_percent": 0.4073529411764706
-          },
-          {
-            "category": "tools",
-            "tokens": 1575,
-            "usage_percent": 0.5790441176470589
-          },
-          {
-            "category": "memory",
-            "tokens": 391,
-            "usage_percent": 0.14375
-          },
-          {
-            "category": "conversation",
-            "tokens": 20275,
-            "usage_percent": 7.454044117647059
-          },
-          {
-            "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
-          }
-        ],
-        "warnings": []
-      },
-      "state": "succeeded"
-    },
-    "validate_task@4": {
-      "first_event_seq": 1278,
+    "task_gate@4": {
+      "first_event_seq": 1342,
       "prompt": null,
       "response": null,
       "completion": null,
-      "provider_used": {
-        "mode": "agent",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
+      "provider_used": null,
       "diff": null,
       "script_invocation": null,
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-05T18:15:35.727526562Z",
-      "handler": "agent",
+      "started_at": "2026-06-05T18:17:01.693709951Z",
+      "handler": "conditional",
       "usage": {
-        "input_tokens": 238300,
-        "output_tokens": 890,
-        "total_tokens": 336588,
-        "reasoning_tokens": 1142,
-        "cache_read_tokens": 96256,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
         "cache_write_tokens": 0
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "permission_level": "full",
-      "agent_tools": [
-        {
-          "name": "apply_patch",
-          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        },
-        {
-          "name": "close_agent",
-          "description": "Close a running subagent that is no longer needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "glob",
-          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "grep",
-          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "read_file",
-          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "read",
-          "invoked": true
-        },
-        {
-          "name": "request_user_input",
-          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "send_input",
-          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "shell",
-          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "shell",
-          "invoked": true
-        },
-        {
-          "name": "spawn_agent",
-          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "update_plan",
-          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "wait",
-          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "subagent",
-          "invoked": false
-        },
-        {
-          "name": "web_fetch",
-          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "web_search",
-          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "other",
-          "invoked": false
-        },
-        {
-          "name": "write_file",
-          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
-          "source": {
-            "kind": "native"
-          },
-          "category": "write",
-          "invoked": false
-        }
-      ],
-      "context_window": {
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "context_window_tokens": 272000,
-        "input_tokens": 35275,
-        "usage_percent": 12.96875,
-        "count_method": "response_usage_scaled_breakdown",
-        "staleness": "live",
-        "generated_at": "2026-06-05T18:16:36.729380972Z",
-        "event_seq": 1328,
-        "breakdown": [
-          {
-            "category": "system_prompt",
-            "tokens": 1114,
-            "usage_percent": 0.40955882352941175
-          },
-          {
-            "category": "tools",
-            "tokens": 1584,
-            "usage_percent": 0.5823529411764706
-          },
-          {
-            "category": "memory",
-            "tokens": 393,
-            "usage_percent": 0.14448529411764705
-          },
-          {
-            "category": "conversation",
-            "tokens": 32177,
-            "usage_percent": 11.829779411764706
-          },
-          {
-            "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
-          }
-        ],
-        "warnings": []
       },
       "state": "running"
-    },
-    "sync_task_list@2": {
-      "first_event_seq": 294,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:44:19.548459160Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/c0013f8e62ad16f5258773f6a1c05e9e237c2747796bbb93bd2a7cfea44ee1a1",
-        "exit_code": 0,
-        "duration_ms": 178,
-        "termination": "exited",
-        "output_bytes": 2143,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 2143,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-05T17:44:19.323900456Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 224,
-        "inference_time_ms": 0,
-        "tool_time_ms": 178,
-        "active_time_ms": 178
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "task_gate@3": {
-      "first_event_seq": 976,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Conditional node evaluated: task_gate",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T18:05:12.272887267Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T18:05:12.269430470Z",
-      "handler": "conditional",
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
     },
     "pre_validate_snapshot@3": {
       "first_event_seq": 874,
@@ -10426,52 +10667,245 @@
       },
       "state": "succeeded"
     },
-    "preflight_sandbox@1": {
-      "first_event_seq": 45,
+    "implement_next_task@3": {
+      "first_event_seq": 635,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+        "notes": "Stage completed: implement_next_task",
         "failure_reason": null,
-        "timestamp": "2026-06-05T17:39:48.416526174Z"
+        "timestamp": "2026-06-05T18:03:09.859714013Z"
       },
-      "provider_used": null,
+      "provider_used": {
+        "mode": "agent",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
       "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "command": "exec 2>&1\nset -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
-        "language": "shell",
-        "timeout_ms": 600000
-      },
-      "script_timing": {
-        "output": "blob://sha256/463d6573ed452df91537af650e5ebd0107f7bf049f4e0d618f332c06d14f7f1f",
-        "exit_code": 0,
-        "duration_ms": 138596,
-        "termination": "exited",
-        "output_bytes": 6244,
-        "live_streaming": true
-      },
+      "script_invocation": null,
+      "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "output_bytes": 6244,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-05T17:37:29.793664910Z",
-      "handler": "command",
+      "started_at": "2026-06-05T17:51:00.660589983Z",
+      "handler": "agent",
       "timing": {
-        "wall_time_ms": 138622,
-        "inference_time_ms": 0,
-        "tool_time_ms": 138596,
-        "active_time_ms": 138596
+        "wall_time_ms": 729198,
+        "inference_time_ms": 372566,
+        "tool_time_ms": 356023,
+        "active_time_ms": 728589
       },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "input_tokens": 855259,
+        "output_tokens": 8179,
+        "total_tokens": 3169127,
+        "reasoning_tokens": 6297,
+        "cache_read_tokens": 2299392,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 5860271
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "todos": {
+        "kind": "openai_plan",
+        "list_id": "openai_plan:755d35f7-79a7-47e1-88d0-fa91f0b06820",
+        "items": [
+          {
+            "id": "fdc53eaf6d3fcfae",
+            "status": "completed",
+            "order": 0,
+            "subject": "Read plan, todo, recent checkpoints, status, and relevant docs/ADRs"
+          },
+          {
+            "id": "7f4a89911d3cf550",
+            "status": "completed",
+            "order": 1,
+            "subject": "Inspect current admin layout/routes/tests and decide task scope"
+          },
+          {
+            "id": "1bcd6f91fbcffb88",
+            "status": "completed",
+            "order": 2,
+            "subject": "Implement selected task changes and any necessary focused tests"
+          },
+          {
+            "id": "2e62e8ce00aab36c",
+            "status": "completed",
+            "order": 3,
+            "subject": "Run focused validation and check off selected todo"
+          }
+        ]
+      },
+      "permission_level": "full",
+      "agent_tools": [
+        {
+          "name": "apply_patch",
+          "description": "Use the `apply_patch` tool to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": true
+        },
+        {
+          "name": "close_agent",
+          "description": "Close a running subagent that is no longer needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "glob",
+          "description": "Find files by file names using a glob pattern. Use path to choose the search root. Prefer this over shell find or ls when locating repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "grep",
+          "description": "Search file contents with a regex pattern. Use path to choose the search root, glob_filter to limit matching files, case_insensitive for case folding, and max_results to cap output.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "read_file",
+          "description": "Read files before editing them. Returns line-numbered text and supports offset/limit for large files. Use this instead of shell cat, head, tail, or sed when inspecting repository files.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "read",
+          "invoked": true
+        },
+        {
+          "name": "request_user_input",
+          "description": "Ask the human one or more questions and wait for their answers before continuing this stage.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "send_input",
+          "description": "Send a follow-up message to a running subagent when new information or corrected instructions are needed.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "shell",
+          "description": "Execute shell commands for terminal operations, package managers, tests and builds. Use dedicated tools for file reads, file edits, filename searches, and content searches. Provide timeout_ms for long-running commands.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "shell",
+          "invoked": true
+        },
+        {
+          "name": "spawn_agent",
+          "description": "Spawn a subagent for independent work or context isolation. Use it for tasks that can proceed separately, and avoid duplicating the same work in the parent session.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "update_plan",
+          "description": "Update the multi-step plan for the current task. Submit the entire plan; existing steps are reconciled by exact step text.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": true
+        },
+        {
+          "name": "wait",
+          "description": "Wait for a subagent to complete, then use the result to synthesize the outcome for the user.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "subagent",
+          "invoked": false
+        },
+        {
+          "name": "web_fetch",
+          "description": "Fetch content from a URL that starts with http:// or https://. Pass a prompt to extract specific information or summarize the page; omit prompt to return the page content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "web_search",
+          "description": "Search the web using Brave Search when current external information is needed. Returns result titles, URLs, and descriptions; use web_fetch for a specific URL.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "other",
+          "invoked": false
+        },
+        {
+          "name": "write_file",
+          "description": "Create new files, or overwrite an existing file only when replacement is explicitly intended. Prefer edit_file for targeted changes to existing files because write_file overwrites the full file content.",
+          "source": {
+            "kind": "native"
+          },
+          "category": "write",
+          "invoked": false
+        }
+      ],
+      "context_window": {
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "context_window_tokens": 272000,
+        "input_tokens": 96409,
+        "usage_percent": 35.44448529411765,
+        "count_method": "response_usage_scaled_breakdown",
+        "staleness": "live",
+        "generated_at": "2026-06-05T18:03:09.842595030Z",
+        "event_seq": 865,
+        "breakdown": [
+          {
+            "category": "system_prompt",
+            "tokens": 1008,
+            "usage_percent": 0.37058823529411766
+          },
+          {
+            "category": "tools",
+            "tokens": 1438,
+            "usage_percent": 0.5286764705882353
+          },
+          {
+            "category": "memory",
+            "tokens": 357,
+            "usage_percent": 0.13125
+          },
+          {
+            "category": "conversation",
+            "tokens": 93601,
+            "usage_percent": 34.41213235294118
+          },
+          {
+            "category": "other",
+            "tokens": 5,
+            "usage_percent": 0.001838235294117647
+          }
+        ],
+        "warnings": []
       },
       "state": "succeeded"
     },
@@ -10519,224 +10953,15 @@
       },
       "state": "succeeded"
     },
-    "task_gate@1": {
-      "first_event_seq": 286,
+    "validate_task@3": {
+      "first_event_seq": 884,
       "prompt": null,
       "response": null,
       "completion": {
         "outcome": "succeeded",
-        "notes": "Conditional node evaluated: task_gate",
+        "notes": "Stage completed: validate_task",
         "failure_reason": null,
-        "timestamp": "2026-06-05T17:44:15.962482446Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T17:44:15.962040654Z",
-      "handler": "conditional",
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "read_plan@1": {
-      "first_event_seq": 25,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: PLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:37:20.941146738Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "PLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
-        "language": "shell"
-      },
-      "script_timing": {
-        "output": "blob://sha256/375e7e5421c343289aa376b39788a25714296e7fb8da6a7797344ccaaa0cdff4",
-        "exit_code": 0,
-        "duration_ms": 243,
-        "termination": "exited",
-        "output_bytes": 15065,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 15065,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-05T17:37:20.665172932Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 275,
-        "inference_time_ms": 0,
-        "tool_time_ms": 243,
-        "active_time_ms": 243
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "start@1": {
-      "first_event_seq": 21,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": null,
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:37:20.664138794Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T17:37:20.660369585Z",
-      "handler": "start",
-      "timing": {
-        "wall_time_ms": 0,
-        "inference_time_ms": 0,
-        "tool_time_ms": 0,
-        "active_time_ms": 0
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "resume_gate@1": {
-      "first_event_seq": 55,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:39:51.905457637Z"
-      },
-      "provider_used": null,
-      "diff": null,
-      "script_invocation": {
-        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
-        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
-        "language": "shell",
-        "timeout_ms": 120000
-      },
-      "script_timing": {
-        "output": "blob://sha256/daece4e78b89d934ea6bf1bb7759852074043f42f33b012b3fe83d5af5b32c93",
-        "exit_code": 0,
-        "duration_ms": 215,
-        "termination": "exited",
-        "output_bytes": 292,
-        "live_streaming": true
-      },
-      "parallel_results": null,
-      "output": null,
-      "output_bytes": 292,
-      "live_streaming": true,
-      "termination": "exited",
-      "started_at": "2026-06-05T17:39:51.640583799Z",
-      "handler": "command",
-      "timing": {
-        "wall_time_ms": 264,
-        "inference_time_ms": 0,
-        "tool_time_ms": 215,
-        "active_time_ms": 215
-      },
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
-      },
-      "state": "succeeded"
-    },
-    "all_tasks_done@2": {
-      "first_event_seq": 304,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: all_tasks_done",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:44:27.154645528Z"
-      },
-      "provider_used": {
-        "mode": "prompt",
-        "provider": "openai",
-        "model": "gpt-5.5",
-        "reasoning_effort": "high"
-      },
-      "diff": null,
-      "script_invocation": null,
-      "script_timing": null,
-      "parallel_results": null,
-      "output": null,
-      "started_at": "2026-06-05T17:44:22.784473549Z",
-      "handler": "prompt",
-      "timing": {
-        "wall_time_ms": 4370,
-        "inference_time_ms": 4303,
-        "tool_time_ms": 0,
-        "active_time_ms": 4303
-      },
-      "usage": {
-        "input_tokens": 7349,
-        "output_tokens": 28,
-        "total_tokens": 7432,
-        "reasoning_tokens": 55,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0,
-        "total_usd_micros": 39235
-      },
-      "model": {
-        "provider": "openai",
-        "model_id": "gpt-5.5"
-      },
-      "state": "succeeded"
-    },
-    "implement_next_task@2": {
-      "first_event_seq": 314,
-      "prompt": null,
-      "response": null,
-      "completion": {
-        "outcome": "succeeded",
-        "notes": "Stage completed: implement_next_task",
-        "failure_reason": null,
-        "timestamp": "2026-06-05T17:49:49.230208496Z"
+        "timestamp": "2026-06-05T18:05:08.790469692Z"
       },
       "provider_used": {
         "mode": "agent",
@@ -10749,22 +10974,22 @@
       "script_timing": null,
       "parallel_results": null,
       "output": null,
-      "started_at": "2026-06-05T17:44:30.583978162Z",
+      "started_at": "2026-06-05T18:03:17.769786356Z",
       "handler": "agent",
       "timing": {
-        "wall_time_ms": 318646,
-        "inference_time_ms": 310598,
-        "tool_time_ms": 7468,
-        "active_time_ms": 318066
+        "wall_time_ms": 111020,
+        "inference_time_ms": 104444,
+        "tool_time_ms": 6050,
+        "active_time_ms": 110494
       },
       "usage": {
-        "input_tokens": 902277,
-        "output_tokens": 9216,
-        "total_tokens": 2255330,
-        "reasoning_tokens": 1885,
-        "cache_read_tokens": 1341952,
+        "input_tokens": 216246,
+        "output_tokens": 1959,
+        "total_tokens": 408554,
+        "reasoning_tokens": 1933,
+        "cache_read_tokens": 188416,
         "cache_write_tokens": 0,
-        "total_usd_micros": 5515391
+        "total_usd_micros": 1292198
       },
       "model": {
         "provider": "openai",
@@ -10779,7 +11004,7 @@
             "kind": "native"
           },
           "category": "write",
-          "invoked": true
+          "invoked": false
         },
         {
           "name": "close_agent",
@@ -10903,32 +11128,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 128779,
-        "usage_percent": 47.34522058823529,
+        "input_tokens": 30543,
+        "usage_percent": 11.229044117647058,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-05T17:49:49.221933087Z",
-        "event_seq": 528,
+        "generated_at": "2026-06-05T18:05:08.789325717Z",
+        "event_seq": 965,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1094,
-            "usage_percent": 0.4022058823529412
+            "tokens": 1003,
+            "usage_percent": 0.36875
           },
           {
             "category": "tools",
-            "tokens": 1559,
-            "usage_percent": 0.5731617647058823
+            "tokens": 1426,
+            "usage_percent": 0.524264705882353
           },
           {
             "category": "memory",
-            "tokens": 387,
-            "usage_percent": 0.14227941176470588
+            "tokens": 354,
+            "usage_percent": 0.13014705882352942
           },
           {
             "category": "conversation",
-            "tokens": 125732,
-            "usage_percent": 46.225
+            "tokens": 27753,
+            "usage_percent": 10.203308823529412
           },
           {
             "category": "other",
@@ -10937,6 +11162,132 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "task_gate@1": {
+      "first_event_seq": 286,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: task_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:44:15.962482446Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T17:44:15.962040654Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "read_plan@1": {
+      "first_event_seq": 25,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: PLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:37:20.941146738Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "PLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "command": "exec 2>&1\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/375e7e5421c343289aa376b39788a25714296e7fb8da6a7797344ccaaa0cdff4",
+        "exit_code": 0,
+        "duration_ms": 243,
+        "termination": "exited",
+        "output_bytes": 15065,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 15065,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T17:37:20.665172932Z",
+      "handler": "command",
+      "timing": {
+        "wall_time_ms": 275,
+        "inference_time_ms": 0,
+        "tool_time_ms": 243,
+        "active_time_ms": 243
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "all_tasks_done@2": {
+      "first_event_seq": 304,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: all_tasks_done",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T17:44:27.154645528Z"
+      },
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T17:44:22.784473549Z",
+      "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 4370,
+        "inference_time_ms": 4303,
+        "tool_time_ms": 0,
+        "active_time_ms": 4303
+      },
+      "usage": {
+        "input_tokens": 7349,
+        "output_tokens": 28,
+        "total_tokens": 7432,
+        "reasoning_tokens": 55,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 39235
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
       },
       "state": "succeeded"
     },
