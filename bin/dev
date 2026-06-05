@@ -786,7 +786,7 @@ Commands:
   deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
   review <branch> <plan_path> [base_ref_or_base_sha]
   pull-todo <run_id> [plan_path] [destination]
-  progress <run_id> [plan_path]
+  progress <run_id> [plan_path] [--watch] [--interval seconds]
   clean-branches [--force]
 EOF
       ;;
@@ -889,53 +889,33 @@ _fabro_pull_todo() {
   fi
 }
 
-_fabro_progress() {
-  local run_id="${1:-}"
-  local plan_path="${2:-}"
-
-  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ] || [ $# -gt 2 ]; then
-    echo "Usage: $0 fabro progress <run_id> [plan_path]" >&2
-    echo "If plan_path is omitted, it is inferred from the run inputs." >&2
-    exit 2
-  fi
-  if [ -n "$plan_path" ]; then
-    case "$plan_path" in
-      */plan.md) ;;
-      *) echo "plan_path must end with /plan.md: $plan_path" >&2; exit 2 ;;
-    esac
-  fi
-
-  local tmp
-  tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-progress.XXXXXX.md")
-  if [ -n "$plan_path" ]; then
-    _fabro_pull_todo "$run_id" "$plan_path" "$tmp" >/dev/null
-  else
-    _fabro_pull_todo "$run_id" "$tmp" >/dev/null
-  fi
+_fabro_render_progress() {
+  local run_id="$1"
+  local todo_file="$2"
+  local total done remaining percent width filled bar next_task i
 
   _fabro_require_tool gum
 
-  local total done remaining percent width filled bar next_task i status
-  total=$(grep -E '^[[:space:]]*- \[[ xX]\]' "$tmp" | wc -l | tr -d ' ')
-  done=$(grep -E '^[[:space:]]*- \[[xX]\]' "$tmp" | wc -l | tr -d ' ')
-  next_task=$(grep -E '^[[:space:]]*- \[ \]' "$tmp" | head -1 | sed -E 's/^[[:space:]]*- \[ \][[:space:]]+//')
+  total=$(grep -E '^[[:space:]]*- \[[ xX]\]' "$todo_file" | wc -l | tr -d ' ')
+  done=$(grep -E '^[[:space:]]*- \[[xX]\]' "$todo_file" | wc -l | tr -d ' ')
+  next_task=$(grep -E '^[[:space:]]*- \[ \]' "$todo_file" | head -1 | sed -E 's/^[[:space:]]*- \[ \][[:space:]]+//')
   remaining=$((total - done))
+  width=30
   if [ "$total" -eq 0 ]; then
     percent=100
     filled=0
   else
     percent=$(((done * 100 + total / 2) / total))
-    width=30
     filled=$(((done * width + total / 2) / total))
   fi
 
   bar=""
   i=0
-  while [ "$i" -lt "${filled:-0}" ]; do
+  while [ "$i" -lt "$filled" ]; do
     bar="${bar}█"
     i=$((i + 1))
   done
-  while [ "$i" -lt 30 ]; do
+  while [ "$i" -lt "$width" ]; do
     bar="${bar}░"
     i=$((i + 1))
   done
@@ -948,9 +928,67 @@ _fabro_progress() {
   else
     gum style --foreground 214 "Next: all todo tasks are checked"
   fi
-  status=$?
-  rm -f "$tmp"
-  return "$status"
+}
+
+_fabro_progress() {
+  local run_id="${1:-}"
+  local plan_path=""
+  local watch=0
+  local interval=10
+
+  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ]; then
+    echo "Usage: $0 fabro progress <run_id> [plan_path] [--watch] [--interval seconds]" >&2
+    echo "If plan_path is omitted, it is inferred from the run inputs." >&2
+    exit 2
+  fi
+  if [ $# -gt 0 ]; then
+    shift
+  fi
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --watch) watch=1; shift ;;
+      --interval)
+        interval="${2:-}"
+        if ! [[ "$interval" =~ ^[0-9]+$ ]] || [ "$interval" -lt 1 ]; then
+          echo "--interval must be a positive integer number of seconds" >&2
+          exit 2
+        fi
+        shift 2
+        ;;
+      */plan.md)
+        if [ -n "$plan_path" ]; then
+          echo "Only one plan_path may be supplied." >&2
+          exit 2
+        fi
+        plan_path="$1"
+        shift
+        ;;
+      *) echo "Unknown progress argument: $1" >&2; exit 2 ;;
+    esac
+  done
+
+  local tmp status
+  tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-progress.XXXXXX.md")
+  while true; do
+    if [ -n "$plan_path" ]; then
+      _fabro_pull_todo "$run_id" "$plan_path" "$tmp" >/dev/null
+    else
+      _fabro_pull_todo "$run_id" "$tmp" >/dev/null
+    fi
+
+    if [ "$watch" -eq 1 ]; then
+      clear
+      gum style --foreground 245 "Updated: $(date '+%Y-%m-%d %H:%M:%S')"
+    fi
+    _fabro_render_progress "$run_id" "$tmp"
+    status=$?
+
+    if [ "$watch" -ne 1 ] || [ "$status" -ne 0 ]; then
+      rm -f "$tmp"
+      return "$status"
+    fi
+    sleep "$interval"
+  done
 }
 
 _fabro_plan_status() {
