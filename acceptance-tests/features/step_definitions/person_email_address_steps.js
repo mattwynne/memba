@@ -227,21 +227,20 @@ async function assertNoMessageEmailRecipient(world, recipientEmail) {
   const subject = world.lastMessageSubject;
   assert.ok(subject, "Expected a club message to have been sent before checking mailbox delivery");
 
-  const deadline = Date.now() + Math.min(1000, projectionTimeoutMs(world));
+  serverCommands.waitForProjectionBarrier({
+    projectors: ["Memba.Messaging.Projectors.EmailDelivery"],
+    timeoutMs: projectionTimeoutMs(world)
+  });
 
-  do {
-    const matchingEmail = newMessageEmails(world, await testMailboxEmails(world)).find((email) =>
-      messageEmailMatches(email, subject, recipientEmail)
-    );
+  const matchingEmail = newMessageEmails(world, await testMailboxEmails(world)).find((email) =>
+    messageEmailMatches(email, subject, recipientEmail)
+  );
 
-    assert.equal(
-      matchingEmail,
-      undefined,
-      `Expected no ${subject} email to ${recipientEmail}; saw ${JSON.stringify(mailboxEmailSummary(matchingEmail))}`
-    );
-
-    await delay(Math.min(100, projectionPollIntervalMs(world)));
-  } while (Date.now() <= deadline);
+  assert.equal(
+    matchingEmail,
+    undefined,
+    `Expected no ${subject} email to ${recipientEmail}; saw ${JSON.stringify(mailboxEmailSummary(matchingEmail))}`
+  );
 }
 
 async function waitForMessageEmailMatching(world, predicate) {

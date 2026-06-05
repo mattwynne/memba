@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const { expect: playwrightExpect } = require("@playwright/test");
+const serverCommands = require("./server_commands");
 
 const kootenayClubName = "Kootenay Mountaineering Club";
 const nelsonClubName = "Nelson Paddling Club";
@@ -1268,6 +1269,7 @@ async function assertMemberMessageNotAddressedTo(
   subject = world.lastMessageSubject,
   { expect = playwrightExpect } = {}
 ) {
+  await waitForProjectionBarrier(world, ["Memba.Messaging.Projectors.MemberEmailDelivery"]);
   await openMemberMessage(world, subject, { expect });
   await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
 
@@ -1320,6 +1322,7 @@ async function assertLastMessageNotAddressedTo(
   excludedName,
   { expect = playwrightExpect } = {}
 ) {
+  await waitForProjectionBarrier(world, ["Memba.Messaging.Projectors.EmailDelivery"]);
   await openMessage(world, world.lastMessageSubject, { expect });
 
   const rows = allRows(world.page, "addressed-recipients", "addressed-recipient");
@@ -2044,6 +2047,15 @@ function mailboxEmailSummary(email) {
     to: email.to,
     text_body: email.text_body
   };
+}
+
+async function waitForProjectionBarrier(world, projectors, { timeoutMs = projectionTimeoutMs(world) } = {}) {
+  if (Array.isArray(world.projectionBarriers)) {
+    world.projectionBarriers.push({ projectors, timeoutMs });
+    return { status: "satisfied", checkpoint: 0, projectors: Object.fromEntries(projectors.map((name) => [name, 0])) };
+  }
+
+  return serverCommands.waitForProjectionBarrier({ projectors, timeoutMs });
 }
 
 async function waitForReadModelChanges(world, predicates, action, { timeoutMs = projectionTimeoutMs(world) } = {}) {

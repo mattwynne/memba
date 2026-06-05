@@ -814,6 +814,7 @@ test("message assertions read addressed recipients, delivery records, email chan
   });
   const expectations = [];
   const world = worldWithPage(page);
+  world.projectionBarriers = [];
   world.lastMessageSubject = "Trip planning night";
   world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
   world.people = {
@@ -868,6 +869,7 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
   );
   const expectations = [];
   const world = worldWithPage(page);
+  world.projectionBarriers = [];
   world.clubs = {
     [kootenayClubName]: {
       clubId: "club-1",

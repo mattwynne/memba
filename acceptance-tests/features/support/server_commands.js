@@ -332,6 +332,24 @@ function ensureSmokeTestClub({ clubName, clubSlug, personName, email }) {
   return member;
 }
 
+function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
+  return runCommand(
+    `
+projectors = Map.fetch!(payload, "projectors")
+timeout = Map.get(payload, "timeoutMs", 1000)
+
+case Memba.ProjectionBarrier.await(projectors, timeout: timeout) do
+  {:ok, result} ->
+    Map.put(result, :status, "satisfied")
+
+  {:error, :timeout, result} ->
+    raise "Projection barrier timed out waiting for #{inspect(projectors)} to reach checkpoint #{result.checkpoint}; positions: #{inspect(result.projectors)}"
+end
+`,
+    { projectors, timeoutMs }
+  );
+}
+
 function runCommand(code, payload = {}) {
   const serverNode = acceptanceServerNode();
   const cookie = process.env.ACCEPTANCE_SERVER_COOKIE || defaultCookie;
@@ -389,5 +407,6 @@ module.exports = {
   ensurePerson,
   ensurePersonEmailAddresses,
   ensureSmokeTestClub,
-  runCommand
+  runCommand,
+  waitForProjectionBarrier
 };
