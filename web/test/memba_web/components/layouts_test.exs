@@ -69,7 +69,17 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-phx-link='redirect'][data-phx-link-state='push']"
+    )
+
+    assert_selector(
+      html,
       "nav[aria-label='Memba staff navigation'] a#admin-nav-messages[data-admin-nav-item='messages'][href='/admin/messages']"
+    )
+
+    assert_selector(
+      html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-messages[data-phx-link='redirect'][data-phx-link-state='push']"
     )
 
     assert_selector(

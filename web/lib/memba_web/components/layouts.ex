@@ -149,7 +149,7 @@ defmodule MembaWeb.Layouts do
                 </span>
               </.link>
               <.link
-                href="/admin/people"
+                navigate={~p"/admin/people"}
                 id="admin-nav-people"
                 data-admin-nav-item="people"
                 class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#d6d2c8] hover:bg-[#f7f6f3] hover:text-[#15201c]"
@@ -160,7 +160,7 @@ defmodule MembaWeb.Layouts do
                 </span>
               </.link>
               <.link
-                href="/admin/messages"
+                navigate={~p"/admin/messages"}
                 id="admin-nav-messages"
                 data-admin-nav-item="messages"
                 class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#d6d2c8] hover:bg-[#f7f6f3] hover:text-[#15201c]"
