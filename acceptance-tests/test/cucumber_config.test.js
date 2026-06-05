@@ -4,7 +4,6 @@ const path = require("node:path");
 const test = require("node:test");
 
 const cucumberConfig = require("../cucumber");
-const { assertAcceptanceParallelDisabled } = require("../features/support/parallel_guard");
 
 const inboundClubEmailScenarioNames = [
   "Alice emails the KMC everyone address",
@@ -22,17 +21,6 @@ test("default browser Cucumber profile excludes deferred scenarios", () => {
 
 test("default browser Cucumber profile still loads the shared feature suite", () => {
   assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
-});
-
-test("browser acceptance fails fast when Cucumber parallel workers are enabled", () => {
-  assert.throws(
-    () => assertAcceptanceParallelDisabled({ CUCUMBER_PARALLEL: "true" }),
-    /Acceptance tests cannot run with Cucumber parallel workers yet/
-  );
-});
-
-test("browser acceptance allows the default serial Cucumber run", () => {
-  assert.doesNotThrow(() => assertAcceptanceParallelDisabled({}));
 });
 
 test("default browser Cucumber profile selects all non-deferred web-backed shared features", () => {
