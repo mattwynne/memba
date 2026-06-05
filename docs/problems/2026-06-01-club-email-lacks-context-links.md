@@ -9,6 +9,7 @@ When a member receives an email from a club, the message arrives without enough 
 The email should be designed as a club communication, not just raw message content. It should include helpful context such as:
 
 - which club sent the message;
+- an option for club moderators to include the club slug in the subject line, for example `[kmc] Trip planning night`;
 - a link to the club's website;
 - a link to the online forum or message page where the message appears;
 - any other navigation that helps the recipient orient themselves and continue the conversation.
@@ -16,5 +17,6 @@ The email should be designed as a club communication, not just raw message conte
 Expected:
 
 - A recipient can tell at a glance which club the email is from.
+- Club moderators can choose whether outgoing club-message email subjects include the club slug, for example `[kmc]`.
 - The email provides clear links back to the club and to the relevant online context.
 - The email template supports club-specific context instead of sending an isolated message body.
