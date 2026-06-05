@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-05T17:37:18.912877214Z",
-  "last_event_at": "2026-06-05T18:50:51.851212850Z",
+  "last_event_at": "2026-06-05T18:50:55.631868120Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -13218,9 +13218,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2162,
       "checkpoint": {
-        "timestamp": "2026-06-05T18:50:51.883941285Z",
+        "timestamp": "2026-06-05T18:50:55.276820555Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -13270,12 +13270,345 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "task_retry_available": false,
+          "thread.start.current_node": "read_plan",
+          "failure_signature": "",
+          "outcome": "succeeded",
+          "internal.retry_count.wip_gate": 0,
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n\n2. **Changes made**\n   - Wired `/admin/people` to `Memba.Membership.list_operator_people/0`.\n   - Wired `/admin/messages` to `Memba.Messaging.list_operator_messages/0`.\n   - Kept both indexes simple/read-only:\n     - no filters;\n     - no pagination;\n     - no bulk actions;\n     - no new status display/actions.\n   - Added deterministic row rendering and data attributes for tests.\n   - Added simple presentation fallbacks:\n     - missing email → `—`;\n     - no memberships → `No active memberships`;\n     - missing message context → existing IDs / “Unknown …” labels.\n   - Updated `web/test/memba_web/live/admin_operations_index_live_test.exs` to prove:\n     - People rows render in deterministic query order with membership/email summaries;\n     - Messages rows render newest-first with diagnostics links;\n     - unsupported forms, filters, pagination, bulk actions remain absent.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/live/admin/people_live/index.ex lib/memba_web/live/admin/messages_live/index.ex test/memba_web/live/admin_operations_index_live_test.exs`\n     - Passed.\n   - Direct focused test command hit the sandbox Postgres readiness issue:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs`\n   - Reran focused tests inside `devenv shell` for that specific reason:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n     - Passed: `5 tests, 0 failures`.\n   - Full validation because this changed browser-facing LiveView UI:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed:\n       - ExUnit: `520 tests, 0 failures`\n       - Acceptance: `34 scenarios (34 passed), 215 steps (215 passed)`\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off**\n   - Changed exactly:\n     - `- [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n   - To:\n     - `- [x] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - The plan did not explicitly reference ADR files for this task.\n   - The change keeps the existing architecture boundaries:\n     - LiveViews call public context APIs only.\n     - Query data comes from existing read-model/projection APIs.\n     - No projection/event semantics changed.\n     - No CRUD helpers, filters, pagination, bulk actions, or new statuses were introduced.",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.start": 0,
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Read `/tmp/fabro-pre-validate-snapshot.md`: clean working tree at implementation checkpoint `752c17a`.\n  - Live `git status --short` is clean.\n  - Live `git log --oneline -5` shows:\n    - `655fe87 ... pre_validate_snapshot`\n    - `752c17a ... implement_next_task`\n  - `git diff 752c17a^ 752c17a -- docs/iterations/021-staff-area-redesign/todo.md` shows exactly one ordinary todo changed:\n    - `- [ ] 005 Add context/read-model queries as needed:`\n    - to `- [x] 005 Add context/read-model queries as needed:`\n  - Parent todo state had tasks through `004a` checked and `005` as the first unchecked task.\n\n- **Implementation artifacts found**\n  - `web/lib/memba/membership.ex`\n    - Added `list_operator_people/0` for one-row-per-person staff People summaries with primary email, alternate emails, and active membership summaries.\n    - Added `list_club_summaries/1`.\n    - Added `list_person_contact_summaries/1`.\n    - Query helpers batch read-model access rather than doing per-person follow-up queries.\n  - `web/lib/memba/messaging.ex`\n    - Added `list_operator_messages/0`, ordered newest-first, enriched with club and sender context where available through Membership public query APIs.\n  - Tests updated/added in:\n    - `web/test/memba/membership/query_test.exs`\n    - `web/test/memba/messaging/message_projection_test.exs`\n    - `web/test/memba/membership/no_crud_spike_test.exs`\n    - `web/test/memba/messaging/no_crud_spike_test.exs`\n  - No acceptance feature files were changed in the implementation commit.\n\n- **Tests run/results found**\n  - Reran focused tests live:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'bin/mix test test/memba/membership/query_test.exs test/memba/messaging/message_projection_test.exs test/memba/membership/no_crud_spike_test.exs test/memba/messaging/no_crud_spike_test.exs'`\n    - Result: `27 tests, 0 failures`.\n  - Implementation summary reports prior successful:\n    - focused query/API tests,\n    - `dev check --quick`,\n    - full `dev check`.\n  - Final live `git status --short` remains clean.\n\n- **ADR/plan conformance notes**\n  - Matches plan task 005:\n    - lists all person records with email and membership summaries;\n    - lists projected messages with club and sender context where available.\n  - Scope stays within the approved plan: no filters, pagination, bulk actions, new statuses, feature-file edits, or unsupported staff actions were added.\n  - ADR 0007 respected: Messaging enriches with Membership public query APIs, not Membership projection storage details.\n  - ADR 0009 respected: work uses existing Commanded Ecto projection/read-model tables for queries.\n  - ADR 0013 respected for relevant automated coverage at the context/query level; no web feature-style test obligation is introduced by this specific query-slice task.\n  - ADR 0021/0022 unaffected: no projector synchronization or read-your-writes semantics were changed.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "task_list_complete": false,
+          "internal.run_id": "01KTCDPDG5SWTYBV8QQYVE9S5C",
+          "task_list_needs_human": false,
+          "internal.retry_count.all_tasks_done": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.work_dir": "/workspace/memba",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "current_node": "implement_next_task",
+          "task_valid": true,
+          "failure_class": "",
+          "thread.task_gate.current_node": "sync_task_list",
+          "last_stage": "implement_next_task",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.task_gate": 0,
+          "graph.rankdir": "LR",
+          "internal.fidelity": "summary:high",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.validate_task": 0,
+          "graph.max_node_visits": "80",
+          "thread.validate_task.current_node": "task_gate",
+          "command.output": "blob://sha256/e03ceb819d048e137771e72fb46c6f424c4d17d8a5f7b74a1f6eeb088e41772b",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.resume_gate": 0,
+          "internal.node_visit_count": 7,
+          "internal.thread_id": "all_tasks_done",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new st",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.all_tasks_done.current_node": "implement_next_task"
+        },
+        "node_outcomes": {
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2f51b95b0340faf3bc7adcd3b965aade68fd2dc34fc9a388505c87159184a6d8"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 177,
+              "active_time_ms": 177
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7c2b381fbee697c1868be668989ab2a844f4580d22acef84443c479694ea416f"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2392,
+              "active_time_ms": 2392
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/375e7e5421c343289aa376b39788a25714296e7fb8da6a7797344ccaaa0cdff4"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 243,
+              "active_time_ms": 243
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "validate_task",
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Read `/tmp/fabro-pre-validate-snapshot.md`: clean working tree at implementation checkpoint `752c17a`.\n  - Live",
+              "task_valid": true,
+              "task_retry_available": false,
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Read `/tmp/fabro-pre-validate-snapshot.md`: clean working tree at implementation checkpoint `752c17a`.\n  - Live `git status --short` is clean.\n  - Live `git log --oneline -5` shows:\n    - `655fe87 ... pre_validate_snapshot`\n    - `752c17a ... implement_next_task`\n  - `git diff 752c17a^ 752c17a -- docs/iterations/021-staff-area-redesign/todo.md` shows exactly one ordinary todo changed:\n    - `- [ ] 005 Add context/read-model queries as needed:`\n    - to `- [x] 005 Add context/read-model queries as needed:`\n  - Parent todo state had tasks through `004a` checked and `005` as the first unchecked task.\n\n- **Implementation artifacts found**\n  - `web/lib/memba/membership.ex`\n    - Added `list_operator_people/0` for one-row-per-person staff People summaries with primary email, alternate emails, and active membership summaries.\n    - Added `list_club_summaries/1`.\n    - Added `list_person_contact_summaries/1`.\n    - Query helpers batch read-model access rather than doing per-person follow-up queries.\n  - `web/lib/memba/messaging.ex`\n    - Added `list_operator_messages/0`, ordered newest-first, enriched with club and sender context where available through Membership public query APIs.\n  - Tests updated/added in:\n    - `web/test/memba/membership/query_test.exs`\n    - `web/test/memba/messaging/message_projection_test.exs`\n    - `web/test/memba/membership/no_crud_spike_test.exs`\n    - `web/test/memba/messaging/no_crud_spike_test.exs`\n  - No acceptance feature files were changed in the implementation commit.\n\n- **Tests run/results found**\n  - Reran focused tests live:\n    - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'bin/mix test test/memba/membership/query_test.exs test/memba/messaging/message_projection_test.exs test/memba/membership/no_crud_spike_test.exs test/memba/messaging/no_crud_spike_test.exs'`\n    - Result: `27 tests, 0 failures`.\n  - Implementation summary reports prior successful:\n    - focused query/API tests,\n    - `dev check --quick`,\n    - full `dev check`.\n  - Final live `git status --short` remains clean.\n\n- **ADR/plan conformance notes**\n  - Matches plan task 005:\n    - lists all person records with email and membership summaries;\n    - lists projected messages with club and sender context where available.\n  - Scope stays within the approved plan: no filters, pagination, bulk actions, new statuses, feature-file edits, or unsupported staff actions were added.\n  - ADR 0007 respected: Messaging enriches with Membership public query APIs, not Membership projection storage details.\n  - ADR 0009 respected: work uses existing Commanded Ecto projection/read-model tables for queries.\n  - ADR 0013 respected for relevant automated coverage at the context/query level; no web feature-style test obligation is introduced by this specific query-slice task.\n  - ADR 0021/0022 unaffected: no projector synchronization or read-your-writes semantics were changed.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 488243,
+                    "output_tokens": 2500,
+                    "reasoning_tokens": 1178,
+                    "cache_read_tokens": 315904,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2709507
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 98157,
+              "tool_time_ms": 9112,
+              "active_time_ms": 107269
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n\n2. **Changes made**\n   - Wired `/admin/people` to `Memba.Membership.list_operator_people/0`.\n   - Wired `/admin/messages` to `Memba.Messaging.list_operator_messages/0`.\n   - Kept both indexes simple/read-only:\n     - no filters;\n     - no pagination;\n     - no bulk actions;\n     - no new status display/actions.\n   - Added deterministic row rendering and data attributes for tests.\n   - Added simple presentation fallbacks:\n     - missing email → `—`;\n     - no memberships → `No active memberships`;\n     - missing message context → existing IDs / “Unknown …” labels.\n   - Updated `web/test/memba_web/live/admin_operations_index_live_test.exs` to prove:\n     - People rows render in deterministic query order with membership/email summaries;\n     - Messages rows render newest-first with diagnostics links;\n     - unsupported forms, filters, pagination, bulk actions remain absent.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/live/admin/people_live/index.ex lib/memba_web/live/admin/messages_live/index.ex test/memba_web/live/admin_operations_index_live_test.exs`\n     - Passed.\n   - Direct focused test command hit the sandbox Postgres readiness issue:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs`\n   - Reran focused tests inside `devenv shell` for that specific reason:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n     - Passed: `5 tests, 0 failures`.\n   - Full validation because this changed browser-facing LiveView UI:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed:\n       - ExUnit: `520 tests, 0 failures`\n       - Acceptance: `34 scenarios (34 passed), 215 steps (215 passed)`\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off**\n   - Changed exactly:\n     - `- [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n   - To:\n     - `- [x] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - The plan did not explicitly reference ADR files for this task.\n   - The change keeps the existing architecture boundaries:\n     - LiveViews call public context APIs only.\n     - Query data comes from existing read-model/projection APIs.\n     - No projection/event semantics changed.\n     - No CRUD helpers, filters, pagination, bulk actions, or new statuses were introduced.",
+              "last_stage": "implement_next_task",
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new st"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 911674,
+                    "output_tokens": 8848,
+                    "reasoning_tokens": 4309,
+                    "cache_read_tokens": 2836992,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6371576
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 361701,
+              "tool_time_ms": 195640,
+              "active_time_ms": 557341
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e03ceb819d048e137771e72fb46c6f424c4d17d8a5f7b74a1f6eeb088e41772b"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 178,
+              "active_time_ms": 178
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/daece4e78b89d934ea6bf1bb7759852074043f42f33b012b3fe83d5af5b32c93"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 215,
+              "active_time_ms": 215
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/463d6573ed452df91537af650e5ebd0107f7bf049f4e0d618f332c06d14f7f1f"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 138596,
+              "active_time_ms": 138596
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false,
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 25183,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 94,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 129575
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3415,
+              "tool_time_ms": 0,
+              "active_time_ms": 3415
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "1f4a79fda1e637049d25092ab6d488eec8d55a6b",
+        "node_visits": {
+          "start": 1,
+          "sync_task_list": 7,
+          "resume_gate": 1,
+          "read_plan": 1,
+          "wip_gate": 1,
+          "pre_validate_snapshot": 6,
+          "all_tasks_done": 7,
+          "implement_next_task": 7,
+          "preflight_sandbox": 1,
+          "task_gate": 6,
+          "validate_task": 6
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/021-staff-area-redesign/todo.md b/docs/iterations/021-staff-area-redesign/todo.md\nindex fafec16..b46b58a 100644\n--- a/docs/iterations/021-staff-area-redesign/todo.md\n+++ b/docs/iterations/021-staff-area-redesign/todo.md\n@@ -6,7 +6,7 @@\n - [x] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.\n - [x] 004a Route-verify the People and Messages staff nav links after `/admin/people` and `/admin/messages` exist so the original task-003 working-link requirement is fully satisfied.\n - [x] 005 Add context/read-model queries as needed:\n-- [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.\n+- [x] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.\n - [ ] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.\n - [ ] 008 Restyle `/admin/clubs/:club_id` around club facts, people records, and memberships.\n - [ ] 009 Remove the staff send-message form, its form assign/event handling, and any no-longer-needed member sender options from club detail.\ndiff --git a/web/lib/memba_web/live/admin/messages_live/index.ex b/web/lib/memba_web/live/admin/messages_live/index.ex\nindex e9a7b5a..2894d64 100644\n--- a/web/lib/memba_web/live/admin/messages_live/index.ex\n+++ b/web/lib/memba_web/live/admin/messages_live/index.ex\n@@ -1,9 +1,14 @@\n defmodule MembaWeb.Admin.MessagesLive.Index do\n   use MembaWeb, :live_view\n \n+  alias Memba.Messaging\n+\n   @impl Phoenix.LiveView\n   def mount(_params, _session, socket) do\n-    {:ok, stream(socket, :messages, [], dom_id: &\"message-row-#{&1.message_id}\")}\n+    {:ok,\n+     stream(socket, :messages, Messaging.list_operator_messages(),\n+       dom_id: &\"message-row-#{&1.message_id}\"\n+     )}\n   end\n \n   @impl Phoenix.LiveView\n@@ -34,7 +39,7 @@ defmodule MembaWeb.Admin.MessagesLive.Index do\n           <div class=\"border-b border-[#e6e3dc] p-5\">\n             <h2 class=\"text-lg font-semibold text-[#15201c]\">Projected messages</h2>\n             <p class=\"mt-1 text-sm text-[#7d877f]\">\n-              Messages will appear once the global message summary read model is wired.\n+              Newest projected messages first, with club and sender context where available.\n             </p>\n           </div>\n \n@@ -63,11 +68,25 @@ defmodule MembaWeb.Admin.MessagesLive.Index do\n                     No projected messages to show yet.\n                   </td>\n                 </tr>\n-                <tr :for={{dom_id, message} <- @streams.messages} id={dom_id}>\n-                  <td class=\"px-4 py-4 font-medium text-[#15201c]\">{message.subject}</td>\n-                  <td class=\"px-4 py-4 text-[#4b5a55]\">{message.club_name}</td>\n-                  <td class=\"px-4 py-4 text-[#4b5a55]\">{message.sender_name}</td>\n-                  <td class=\"px-4 py-4 text-[#4b5a55]\">{message.projected_at}</td>\n+                <tr\n+                  :for={{dom_id, message} <- @streams.messages}\n+                  id={dom_id}\n+                  data-testid=\"admin-message-row\"\n+                  data-message-id={message.message_id}\n+                  data-message-subject={message.subject}\n+                >\n+                  <td data-testid=\"admin-message-subject\" class=\"px-4 py-4 font-medium text-[#15201c]\">\n+                    {subject_label(message.subject)}\n+                  </td>\n+                  <td data-testid=\"admin-message-club\" class=\"px-4 py-4 text-[#4b5a55]\">\n+                    {club_label(message)}\n+                  </td>\n+                  <td data-testid=\"admin-message-sender\" class=\"px-4 py-4 text-[#4b5a55]\">\n+                    {sender_label(message)}\n+                  </td>\n+                  <td data-testid=\"admin-message-projected-at\" class=\"px-4 py-4 text-[#4b5a55]\">\n+                    {format_projected_at(message.projected_at)}\n+                  </td>\n                   <td class=\"px-4 py-4\">\n                     <.link\n                       navigate={~p\"/admin/messages/#{message.message_id}\"}\n@@ -85,4 +104,30 @@ defmodule MembaWeb.Admin.MessagesLive.Index do\n     </Layouts.admin>\n     \"\"\"\n   end\n+\n+  defp subject_label(subject) when is_binary(subject) and subject != \"\", do: subject\n+  defp subject_label(_subject), do: \"Untitled message\"\n+\n+  defp club_label(%{club_name: name}) when is_binary(name) and name != \"\", do: name\n+  defp club_label(%{club_id: club_id}) when is_binary(club_id) and club_id != \"\", do: club_id\n+  defp club_label(_message), do: \"Unknown club\"\n+\n+  defp sender_label(%{sender_name: name, sender_email: email})\n+       when is_binary(name) and name != \"\" and is_binary(email) and email != \"\" do\n+    \"#{name} (#{email})\"\n+  end\n+\n+  defp sender_label(%{sender_name: name}) when is_binary(name) and name != \"\", do: name\n+  defp sender_label(%{sender_email: email}) when is_binary(email) and email != \"\", do: email\n+\n+  defp sender_label(%{sender_id: sender_id}) when is_binary(sender_id) and sender_id != \"\",\n+    do: sender_id\n+\n+  defp sender_label(_message), do: \"Unknown sender\"\n+\n+  defp format_projected_at(%DateTime{} = projected_at) do\n+    Calendar.strftime(projected_at, \"%Y-%m-%d %H:%M:%S UTC\")\n+  end\n+\n+  defp format_projected_at(nil), do: \"Unknown\"\n end\ndiff --git a/web/lib/memba_web/live/admin/people_live/index.ex b/web/lib/memba_web/live/admin/people_live/index.ex\nindex 3b3e0cf..d6a428e 100644\n--- a/web/lib/memba_web/live/admin/people_live/index.ex\n+++ b/web/lib/memba_web/live/admin/people_live/index.ex\n@@ -1,9 +1,14 @@\n defmodule MembaWeb.Admin.PeopleLive.Index do\n   use MembaWeb, :live_view\n \n+  alias Memba.Membership\n+\n   @impl Phoenix.LiveView\n   def mount(_params, _session, socket) do\n-    {:ok, stream(socket, :people, [], dom_id: &\"person-row-#{&1.person_id}\")}\n+    {:ok,\n+     stream(socket, :people, Membership.list_operator_people(),\n+       dom_id: &\"person-row-#{&1.person_id}\"\n+     )}\n   end\n \n   @impl Phoenix.LiveView\n@@ -34,7 +39,7 @@ defmodule MembaWeb.Admin.PeopleLive.Index do\n           <div class=\"border-b border-[#e6e3dc] p-5\">\n             <h2 class=\"text-lg font-semibold text-[#15201c]\">Person records</h2>\n             <p class=\"mt-1 text-sm text-[#7d877f]\">\n-              People will appear once the global person summary read model is wired.\n+              Sorted by person name, with active memberships shown as club summaries.\n             </p>\n           </div>\n \n@@ -62,11 +67,25 @@ defmodule MembaWeb.Admin.PeopleLive.Index do\n                     No person records to show yet.\n                   </td>\n                 </tr>\n-                <tr :for={{dom_id, person} <- @streams.people} id={dom_id}>\n-                  <td class=\"px-4 py-4 font-medium text-[#15201c]\">{person.name}</td>\n-                  <td class=\"px-4 py-4 text-[#4b5a55]\">{person.primary_email}</td>\n-                  <td class=\"px-4 py-4 text-[#4b5a55]\">{person.alternate_emails}</td>\n-                  <td class=\"px-4 py-4 text-[#4b5a55]\">{person.memberships}</td>\n+                <tr\n+                  :for={{dom_id, person} <- @streams.people}\n+                  id={dom_id}\n+                  data-testid=\"admin-person-row\"\n+                  data-person-id={person.person_id}\n+                  data-person-name={person.name}\n+                >\n+                  <td data-testid=\"admin-person-name\" class=\"px-4 py-4 font-medium text-[#15201c]\">\n+                    {person.name}\n+                  </td>\n+                  <td data-testid=\"admin-person-primary-email\" class=\"px-4 py-4 text-[#4b5a55]\">\n+                    {email_summary(person.primary_email)}\n+                  </td>\n+                  <td data-testid=\"admin-person-alternate-emails\" class=\"px-4 py-4 text-[#4b5a55]\">\n+                    {email_summary(person.alternate_emails)}\n+                  </td>\n+                  <td data-testid=\"admin-person-memberships\" class=\"px-4 py-4 text-[#4b5a55]\">\n+                    {membership_summary(person.memberships)}\n+                  </td>\n                 </tr>\n               </tbody>\n             </table>\n@@ -76,4 +95,23 @@ defmodule MembaWeb.Admin.PeopleLive.Index do\n     </Layouts.admin>\n     \"\"\"\n   end\n+\n+  defp email_summary(email) when is_binary(email) and email != \"\", do: email\n+  defp email_summary(emails) when is_list(emails) and emails != [], do: Enum.join(emails, \", \")\n+  defp email_summary(_empty), do: \"—\"\n+\n+  defp membership_summary([]), do: \"No active memberships\"\n+\n+  defp membership_summary(memberships) when is_list(memberships) do\n+    memberships\n+    |> Enum.map(&membership_label/1)\n+    |> Enum.join(\", \")\n+  end\n+\n+  defp membership_label(%{club_name: name}) when is_binary(name) and name != \"\", do: name\n+\n+  defp membership_label(%{club_id: club_id}) when is_binary(club_id) and club_id != \"\",\n+    do: club_id\n+\n+  defp membership_label(_membership), do: \"Unknown club\"\n end\ndiff --git a/web/test/memba_web/live/admin_operations_index_live_test.exs b/web/test/memba_web/live/admin_operations_index_live_test.exs\nindex 6ed18e1..ba6be4f 100644\n--- a/web/test/memba_web/live/admin_operations_index_live_test.exs\n+++ b/web/test/memba_web/live/admin_operations_index_live_test.exs\n@@ -1,6 +1,10 @@\n defmodule MembaWeb.AdminOperationsIndexLiveTest do\n   use MembaWeb.FeatureCase, async: false\n \n+  alias Memba.Membership.Projections.Membership, as: MembershipProjection\n+  alias Memba.Messaging.Projections.Message, as: MessageProjection\n+  alias Memba.Repo\n+\n   test \"global staff operations indexes require staff sign-in\" do\n     for path <- [\"/admin/people\", \"/admin/messages\"] do\n       conn =\n@@ -27,6 +31,77 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do\n     assert_selector_exists(html, \"#admin-people-read-only-notice\")\n     assert_selector_exists(html, \"#admin-people-table[aria-label='People records']\")\n     refute_selector_exists(html, \"#new-person-form\")\n+    refute_selector_exists(html, \"#admin-people-index form\")\n+    refute_selector_exists(html, \"#admin-people-index nav[aria-label='Pagination']\")\n+    refute_selector_exists(html, \"#admin-people-index [data-admin-person-action='bulk']\")\n+  end\n+\n+  test \"global People index streams deterministic read-only person summaries\", %{conn: conn} do\n+    kootenay = insert_membership_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    nelson = insert_membership_club!(name: \"Nelson Paddling Club\", slug: \"npc\")\n+\n+    alice =\n+      insert_membership_person!(\n+        person_id: Memba.ID.deterministic(:person, [\"admin-people-index\", \"alice\"]),\n+        name: \"Alice Adams\",\n+        email: \"alice@example.com\",\n+        email_addresses: [\n+          %{email: \"alice@example.com\", is_primary: true},\n+          %{email: \"alice@work.example\", is_primary: false}\n+        ]\n+      )\n+\n+    bob =\n+      insert_membership_person!(\n+        person_id: Memba.ID.deterministic(:person, [\"admin-people-index\", \"bob\"]),\n+        name: \"Bob Builder\",\n+        email: \"bob@example.com\"\n+      )\n+\n+    staff =\n+      insert_membership_person!(\n+        person_id: Memba.ID.deterministic(:person, [\"admin-people-index\", \"staff\"]),\n+        name: \"Zz Staff\",\n+        email: \"zz-staff@memba.io\"\n+      )\n+\n+    insert_membership!(kootenay, alice)\n+    insert_membership!(nelson, alice)\n+    insert_membership!(kootenay, bob)\n+\n+    response =\n+      conn\n+      |> sign_in_staff(staff.email)\n+      |> get(~p\"/admin/people\")\n+      |> html_response(200)\n+\n+    html = LazyHTML.from_fragment(response)\n+\n+    assert row_ids(html, \"[data-testid='admin-person-row']\") == [\n+             alice.person_id,\n+             bob.person_id,\n+             staff.person_id\n+           ]\n+\n+    assert text_for(\n+             html,\n+             \"#person-row-#{alice.person_id} [data-testid='admin-person-primary-email']\"\n+           ) =~\n+             \"alice@example.com\"\n+\n+    assert text_for(\n+             html,\n+             \"#person-row-#{alice.person_id} [data-testid='admin-person-alternate-emails']\"\n+           ) =~\n+             \"alice@work.example\"\n+\n+    memberships =\n+      text_for(html, \"#person-row-#{alice.person_id} [data-testid='admin-person-memberships']\")\n+\n+    assert memberships =~ \"Kootenay Mountaineering Club\"\n+    assert memberships =~ \"Nelson Paddling Club\"\n+\n+    refute_selector_exists(html, \"#person-row-#{alice.person_id} a\")\n   end\n \n   test \"Memba staff can open the read-only global Messages index\", %{conn: conn} do\n@@ -46,6 +121,107 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do\n     refute_selector_exists(html, \"#new-message-form\")\n     refute_selector_exists(html, \"[data-admin-message-action='resend']\")\n     refute_selector_exists(html, \"[data-admin-message-action='delete']\")\n+    refute_selector_exists(html, \"#admin-messages-index form\")\n+    refute_selector_exists(html, \"#admin-messages-index nav[aria-label='Pagination']\")\n+    refute_selector_exists(html, \"#admin-messages-index [data-admin-message-action='bulk']\")\n+    refute_selector_exists(html, \"#admin-messages-index [data-admin-message-filter]\")\n+  end\n+\n+  test \"global Messages index streams deterministic read-only projected message summaries\", %{\n+    conn: conn\n+  } do\n+    club = insert_membership_club!(name: \"Kootenay Mountaineering Club\", slug: \"kmc\")\n+    sender = insert_membership_person!(name: \"Alice Adams\", email: \"alice@example.com\")\n+\n+    older =\n+      insert_message_projection!(\n+        club_id: club.club_id,\n+        sender_id: sender.person_id,\n+        subject: \"Older trip planning note\",\n+        inserted_at: ~U[2026-06-05 10:00:00.000000Z]\n+      )\n+\n+    newer =\n+      insert_message_projection!(\n+        club_id: club.club_id,\n+        sender_id: sender.person_id,\n+        subject: \"Newer trip planning note\",\n+        inserted_at: ~U[2026-06-05 12:00:00.000000Z]\n+      )\n+\n+    response =\n+      conn\n+      |> sign_in_staff()\n+      |> get(~p\"/admin/messages\")\n+      |> html_response(200)\n+\n+    html = LazyHTML.from_fragment(response)\n+\n+    assert row_ids(html, \"[data-testid='admin-message-row']\") == [\n+             newer.message_id,\n+             older.message_id\n+           ]\n+\n+    assert text_for(html, \"#message-row-#{newer.message_id} [data-testid='admin-message-club']\") =~\n+             \"Kootenay Mountaineering Club\"\n+\n+    assert text_for(html, \"#message-row-#{newer.message_id} [data-testid='admin-message-sender']\") =~\n+             \"Alice Adams (alice@example.com)\"\n+\n+    assert text_for(\n+             html,\n+             \"#message-row-#{newer.message_id} [data-testid='admin-message-projected-at']\"\n+           ) =~\n+             \"2026-06-05 12:00:00 UTC\"\n+\n+    assert_selector_exists(\n+      html,\n+      \"#message-row-#{newer.message_id} a[href='/admin/messages/#{newer.message_id}']\"\n+    )\n+  end\n+\n+  defp insert_membership!(club, person) do\n+    Repo.insert!(%MembershipProjection{\n+      membership_id: Memba.ID.generate(:membership),\n+      club_id: club.club_id,\n+      person_id: person.person_id,\n+      active: true\n+    })\n+  end\n+\n+  defp insert_message_projection!(attrs) do\n+    inserted_at = Keyword.fetch!(attrs, :inserted_at)\n+\n+    Repo.insert!(%MessageProjection{\n+      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),\n+      club_id: Keyword.fetch!(attrs, :club_id),\n+      sender_id: Keyword.fetch!(attrs, :sender_id),\n+      subject: Keyword.fetch!(attrs, :subject),\n+      body: Keyword.get(attrs, :body, \"Message body.\"),\n+      inserted_at: inserted_at,\n+      updated_at: Keyword.get(attrs, :updated_at, inserted_at)\n+    })\n+  end\n+\n+  defp row_ids(html, selector) do\n+    html\n+    |> LazyHTML.query(selector)\n+    |> LazyHTML.attribute(\"data-person-id\")\n+    |> case do\n+      [] ->\n+        html\n+        |> LazyHTML.query(selector)\n+        |> LazyHTML.attribute(\"data-message-id\")\n+\n+      ids ->\n+        ids\n+    end\n+  end\n+\n+  defp text_for(html, selector) do\n+    html\n+    |> LazyHTML.query(selector)\n+    |> LazyHTML.text()\n   end\n \n   defp assert_selector_exists(html, selector) do\n",
+        "summary": {
+          "files_changed": 15,
+          "additions": 1598,
+          "deletions": 30
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-05T18:50:55.666208905Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "thread.resume_gate.current_node": "sync_task_list",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "task_valid": true,
           "graph.default_fidelity": "summary:high",
           "internal.work_dir": "/workspace/memba",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "thread.sync_task_list.current_node": "all_tasks_done",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n\n2. **Changes made**\n   - Wired `/admin/people` to `Memba.Membership.list_operator_people/0`.\n   - Wired `/admin/messages` to `Memba.Messaging.list_operator_messages/0`.\n   - Kept both indexes simple/read-only:\n     - no filters;\n     - no pagination;\n     - no bulk actions;\n     - no new status display/actions.\n   - Added deterministic row rendering and data attributes for tests.\n   - Added simple presentation fallbacks:\n     - missing email → `—`;\n     - no memberships → `No active memberships`;\n     - missing message context → existing IDs / “Unknown …” labels.\n   - Updated `web/test/memba_web/live/admin_operations_index_live_test.exs` to prove:\n     - People rows render in deterministic query order with membership/email summaries;\n     - Messages rows render newest-first with diagnostics links;\n     - unsupported forms, filters, pagination, bulk actions remain absent.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/live/admin/people_live/index.ex lib/memba_web/live/admin/messages_live/index.ex test/memba_web/live/admin_operations_index_live_test.exs`\n     - Passed.\n   - Direct focused test command hit the sandbox Postgres readiness issue:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/admin_operations_index_live_test.exs`\n   - Reran focused tests inside `devenv shell` for that specific reason:\n     - `PATH=\"$PWD/bin:$PATH\" devenv shell -- bash -lc 'bin/mix test test/memba_web/live/admin_operations_index_live_test.exs'`\n     - Passed: `5 tests, 0 failures`.\n   - Full validation because this changed browser-facing LiveView UI:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed:\n       - ExUnit: `520 tests, 0 failures`\n       - Acceptance: `34 scenarios (34 passed), 215 steps (215 passed)`\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off**\n   - Changed exactly:\n     - `- [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n   - To:\n     - `- [x] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - The plan did not explicitly reference ADR files for this task.\n   - The change keeps the existing architecture boundaries:\n     - LiveViews call public context APIs only.\n     - Query data comes from existing read-model/projection APIs.\n     - No projection/event semantics changed.\n     - No CRUD helpers, filters, pagination, bulk actions, or new statuses were introduced.",
@@ -13288,7 +13621,7 @@
           "thread.validate_task.current_node": "task_gate",
           "thread.read_plan.current_node": "wip_gate",
           "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new st",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.pre_validate_snapshot.current_node": "validate_task",
           "graph.max_node_visits": "80",
           "internal.retry_count.task_gate": 0,
@@ -13306,7 +13639,7 @@
           "task_list_complete": false,
           "internal.fidelity": "summary:high",
           "internal.run_id": "01KTCDPDG5SWTYBV8QQYVE9S5C",
-          "command.output": "blob://sha256/e03ceb819d048e137771e72fb46c6f424c4d17d8a5f7b74a1f6eeb088e41772b",
+          "command.output": "blob://sha256/c353e5c3e64a85773117e0f1466665afb9bf4e46cdf3f1fe0db759a5b0ffbd84",
           "internal.retry_count.start": 0,
           "internal.retry_count.all_tasks_done": 0,
           "internal.retry_count.read_plan": 0,
@@ -13340,15 +13673,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/2f51b95b0340faf3bc7adcd3b965aade68fd2dc34fc9a388505c87159184a6d8"
+              "command.output": "blob://sha256/c353e5c3e64a85773117e0f1466665afb9bf4e46cdf3f1fe0db759a5b0ffbd84"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 177,
-              "active_time_ms": 177
+              "tool_time_ms": 183,
+              "active_time_ms": 183
             }
           },
           "wip_gate": {
@@ -13524,7 +13857,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "validate_task": 6,
           "read_plan": 1,
@@ -13532,7 +13865,7 @@
           "all_tasks_done": 7,
           "resume_gate": 1,
           "task_gate": 6,
-          "pre_validate_snapshot": 6,
+          "pre_validate_snapshot": 7,
           "wip_gate": 1,
           "sync_task_list": 7,
           "start": 1,
@@ -16275,7 +16608,12 @@
       "first_event_seq": 1943,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T18:50:51.859667932Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -16289,13 +16627,20 @@
       "output": null,
       "started_at": "2026-06-05T18:41:33.877572178Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 557982,
+        "inference_time_ms": 361701,
+        "tool_time_ms": 195640,
+        "active_time_ms": 557341
+      },
       "usage": {
-        "input_tokens": 907096,
-        "output_tokens": 8183,
-        "total_tokens": 3653425,
-        "reasoning_tokens": 4066,
-        "cache_read_tokens": 2734080,
-        "cache_write_tokens": 0
+        "input_tokens": 911674,
+        "output_tokens": 8848,
+        "total_tokens": 3761823,
+        "reasoning_tokens": 4309,
+        "cache_read_tokens": 2836992,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6371576
       },
       "model": {
         "provider": "openai",
@@ -16464,32 +16809,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 107165,
-        "usage_percent": 39.39889705882353,
+        "input_tokens": 107490,
+        "usage_percent": 39.518382352941174,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-05T18:50:33.546253833Z",
-        "event_seq": 2150,
+        "generated_at": "2026-06-05T18:50:51.851096846Z",
+        "event_seq": 2157,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1031,
-            "usage_percent": 0.3790441176470588
+            "tokens": 1027,
+            "usage_percent": 0.3775735294117647
           },
           {
             "category": "tools",
-            "tokens": 1471,
-            "usage_percent": 0.5408088235294117
+            "tokens": 1465,
+            "usage_percent": 0.5386029411764706
           },
           {
             "category": "memory",
-            "tokens": 365,
-            "usage_percent": 0.13419117647058823
+            "tokens": 364,
+            "usage_percent": 0.1338235294117647
           },
           {
             "category": "conversation",
-            "tokens": 104292,
-            "usage_percent": 38.34264705882353
+            "tokens": 104628,
+            "usage_percent": 38.46617647058824
           },
           {
             "category": "other",
@@ -16499,7 +16844,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "task_gate@2": {
       "first_event_seq": 607,
@@ -16578,6 +16923,44 @@
         "model_id": "gpt-5.5"
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@7": {
+      "first_event_seq": 2165,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/021-staff-area-redesign/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": {
+        "output": "blob://sha256/c353e5c3e64a85773117e0f1466665afb9bf4e46cdf3f1fe0db759a5b0ffbd84",
+        "exit_code": 0,
+        "duration_ms": 183,
+        "termination": "exited",
+        "output_bytes": 590,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 590,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-05T18:50:55.389740191Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "task_gate@4": {
       "first_event_seq": 1342,

@@ -1,0 +1,389 @@
+diff --git a/docs/iterations/021-staff-area-redesign/todo.md b/docs/iterations/021-staff-area-redesign/todo.md
+index fafec16..b46b58a 100644
+--- a/docs/iterations/021-staff-area-redesign/todo.md
++++ b/docs/iterations/021-staff-area-redesign/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
+ - [x] 004a Route-verify the People and Messages staff nav links after `/admin/people` and `/admin/messages` exist so the original task-003 working-link requirement is fully satisfied.
+ - [x] 005 Add context/read-model queries as needed:
+-- [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
++- [x] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
+ - [ ] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.
+ - [ ] 008 Restyle `/admin/clubs/:club_id` around club facts, people records, and memberships.
+ - [ ] 009 Remove the staff send-message form, its form assign/event handling, and any no-longer-needed member sender options from club detail.
+diff --git a/web/lib/memba_web/live/admin/messages_live/index.ex b/web/lib/memba_web/live/admin/messages_live/index.ex
+index e9a7b5a..2894d64 100644
+--- a/web/lib/memba_web/live/admin/messages_live/index.ex
++++ b/web/lib/memba_web/live/admin/messages_live/index.ex
+@@ -1,9 +1,14 @@
+ defmodule MembaWeb.Admin.MessagesLive.Index do
+   use MembaWeb, :live_view
+ 
++  alias Memba.Messaging
++
+   @impl Phoenix.LiveView
+   def mount(_params, _session, socket) do
+-    {:ok, stream(socket, :messages, [], dom_id: &"message-row-#{&1.message_id}")}
++    {:ok,
++     stream(socket, :messages, Messaging.list_operator_messages(),
++       dom_id: &"message-row-#{&1.message_id}"
++     )}
+   end
+ 
+   @impl Phoenix.LiveView
+@@ -34,7 +39,7 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
+           <div class="border-b border-[#e6e3dc] p-5">
+             <h2 class="text-lg font-semibold text-[#15201c]">Projected messages</h2>
+             <p class="mt-1 text-sm text-[#7d877f]">
+-              Messages will appear once the global message summary read model is wired.
++              Newest projected messages first, with club and sender context where available.
+             </p>
+           </div>
+ 
+@@ -63,11 +68,25 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
+                     No projected messages to show yet.
+                   </td>
+                 </tr>
+-                <tr :for={{dom_id, message} <- @streams.messages} id={dom_id}>
+-                  <td class="px-4 py-4 font-medium text-[#15201c]">{message.subject}</td>
+-                  <td class="px-4 py-4 text-[#4b5a55]">{message.club_name}</td>
+-                  <td class="px-4 py-4 text-[#4b5a55]">{message.sender_name}</td>
+-                  <td class="px-4 py-4 text-[#4b5a55]">{message.projected_at}</td>
++                <tr
++                  :for={{dom_id, message} <- @streams.messages}
++                  id={dom_id}
++                  data-testid="admin-message-row"
++                  data-message-id={message.message_id}
++                  data-message-subject={message.subject}
++                >
++                  <td data-testid="admin-message-subject" class="px-4 py-4 font-medium text-[#15201c]">
++                    {subject_label(message.subject)}
++                  </td>
++                  <td data-testid="admin-message-club" class="px-4 py-4 text-[#4b5a55]">
++                    {club_label(message)}
++                  </td>
++                  <td data-testid="admin-message-sender" class="px-4 py-4 text-[#4b5a55]">
++                    {sender_label(message)}
++                  </td>
++                  <td data-testid="admin-message-projected-at" class="px-4 py-4 text-[#4b5a55]">
++                    {format_projected_at(message.projected_at)}
++                  </td>
+                   <td class="px-4 py-4">
+                     <.link
+                       navigate={~p"/admin/messages/#{message.message_id}"}
+@@ -85,4 +104,30 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
+     </Layouts.admin>
+     """
+   end
++
++  defp subject_label(subject) when is_binary(subject) and subject != "", do: subject
++  defp subject_label(_subject), do: "Untitled message"
++
++  defp club_label(%{club_name: name}) when is_binary(name) and name != "", do: name
++  defp club_label(%{club_id: club_id}) when is_binary(club_id) and club_id != "", do: club_id
++  defp club_label(_message), do: "Unknown club"
++
++  defp sender_label(%{sender_name: name, sender_email: email})
++       when is_binary(name) and name != "" and is_binary(email) and email != "" do
++    "#{name} (#{email})"
++  end
++
++  defp sender_label(%{sender_name: name}) when is_binary(name) and name != "", do: name
++  defp sender_label(%{sender_email: email}) when is_binary(email) and email != "", do: email
++
++  defp sender_label(%{sender_id: sender_id}) when is_binary(sender_id) and sender_id != "",
++    do: sender_id
++
++  defp sender_label(_message), do: "Unknown sender"
++
++  defp format_projected_at(%DateTime{} = projected_at) do
++    Calendar.strftime(projected_at, "%Y-%m-%d %H:%M:%S UTC")
++  end
++
++  defp format_projected_at(nil), do: "Unknown"
+ end
+diff --git a/web/lib/memba_web/live/admin/people_live/index.ex b/web/lib/memba_web/live/admin/people_live/index.ex
+index 3b3e0cf..d6a428e 100644
+--- a/web/lib/memba_web/live/admin/people_live/index.ex
++++ b/web/lib/memba_web/live/admin/people_live/index.ex
+@@ -1,9 +1,14 @@
+ defmodule MembaWeb.Admin.PeopleLive.Index do
+   use MembaWeb, :live_view
+ 
++  alias Memba.Membership
++
+   @impl Phoenix.LiveView
+   def mount(_params, _session, socket) do
+-    {:ok, stream(socket, :people, [], dom_id: &"person-row-#{&1.person_id}")}
++    {:ok,
++     stream(socket, :people, Membership.list_operator_people(),
++       dom_id: &"person-row-#{&1.person_id}"
++     )}
+   end
+ 
+   @impl Phoenix.LiveView
+@@ -34,7 +39,7 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
+           <div class="border-b border-[#e6e3dc] p-5">
+             <h2 class="text-lg font-semibold text-[#15201c]">Person records</h2>
+             <p class="mt-1 text-sm text-[#7d877f]">
+-              People will appear once the global person summary read model is wired.
++              Sorted by person name, with active memberships shown as club summaries.
+             </p>
+           </div>
+ 
+@@ -62,11 +67,25 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
+                     No person records to show yet.
+                   </td>
+                 </tr>
+-                <tr :for={{dom_id, person} <- @streams.people} id={dom_id}>
+-                  <td class="px-4 py-4 font-medium text-[#15201c]">{person.name}</td>
+-                  <td class="px-4 py-4 text-[#4b5a55]">{person.primary_email}</td>
+-                  <td class="px-4 py-4 text-[#4b5a55]">{person.alternate_emails}</td>
+-                  <td class="px-4 py-4 text-[#4b5a55]">{person.memberships}</td>
++                <tr
++                  :for={{dom_id, person} <- @streams.people}
++                  id={dom_id}
++                  data-testid="admin-person-row"
++                  data-person-id={person.person_id}
++                  data-person-name={person.name}
++                >
++                  <td data-testid="admin-person-name" class="px-4 py-4 font-medium text-[#15201c]">
++                    {person.name}
++                  </td>
++                  <td data-testid="admin-person-primary-email" class="px-4 py-4 text-[#4b5a55]">
++                    {email_summary(person.primary_email)}
++                  </td>
++                  <td data-testid="admin-person-alternate-emails" class="px-4 py-4 text-[#4b5a55]">
++                    {email_summary(person.alternate_emails)}
++                  </td>
++                  <td data-testid="admin-person-memberships" class="px-4 py-4 text-[#4b5a55]">
++                    {membership_summary(person.memberships)}
++                  </td>
+                 </tr>
+               </tbody>
+             </table>
+@@ -76,4 +95,23 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
+     </Layouts.admin>
+     """
+   end
++
++  defp email_summary(email) when is_binary(email) and email != "", do: email
++  defp email_summary(emails) when is_list(emails) and emails != [], do: Enum.join(emails, ", ")
++  defp email_summary(_empty), do: "—"
++
++  defp membership_summary([]), do: "No active memberships"
++
++  defp membership_summary(memberships) when is_list(memberships) do
++    memberships
++    |> Enum.map(&membership_label/1)
++    |> Enum.join(", ")
++  end
++
++  defp membership_label(%{club_name: name}) when is_binary(name) and name != "", do: name
++
++  defp membership_label(%{club_id: club_id}) when is_binary(club_id) and club_id != "",
++    do: club_id
++
++  defp membership_label(_membership), do: "Unknown club"
+ end
+diff --git a/web/test/memba_web/live/admin_operations_index_live_test.exs b/web/test/memba_web/live/admin_operations_index_live_test.exs
+index 6ed18e1..ba6be4f 100644
+--- a/web/test/memba_web/live/admin_operations_index_live_test.exs
++++ b/web/test/memba_web/live/admin_operations_index_live_test.exs
+@@ -1,6 +1,10 @@
+ defmodule MembaWeb.AdminOperationsIndexLiveTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Messaging.Projections.Message, as: MessageProjection
++  alias Memba.Repo
++
+   test "global staff operations indexes require staff sign-in" do
+     for path <- ["/admin/people", "/admin/messages"] do
+       conn =
+@@ -27,6 +31,77 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
+     assert_selector_exists(html, "#admin-people-read-only-notice")
+     assert_selector_exists(html, "#admin-people-table[aria-label='People records']")
+     refute_selector_exists(html, "#new-person-form")
++    refute_selector_exists(html, "#admin-people-index form")
++    refute_selector_exists(html, "#admin-people-index nav[aria-label='Pagination']")
++    refute_selector_exists(html, "#admin-people-index [data-admin-person-action='bulk']")
++  end
++
++  test "global People index streams deterministic read-only person summaries", %{conn: conn} do
++    kootenay = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    nelson = insert_membership_club!(name: "Nelson Paddling Club", slug: "npc")
++
++    alice =
++      insert_membership_person!(
++        person_id: Memba.ID.deterministic(:person, ["admin-people-index", "alice"]),
++        name: "Alice Adams",
++        email: "alice@example.com",
++        email_addresses: [
++          %{email: "alice@example.com", is_primary: true},
++          %{email: "alice@work.example", is_primary: false}
++        ]
++      )
++
++    bob =
++      insert_membership_person!(
++        person_id: Memba.ID.deterministic(:person, ["admin-people-index", "bob"]),
++        name: "Bob Builder",
++        email: "bob@example.com"
++      )
++
++    staff =
++      insert_membership_person!(
++        person_id: Memba.ID.deterministic(:person, ["admin-people-index", "staff"]),
++        name: "Zz Staff",
++        email: "zz-staff@memba.io"
++      )
++
++    insert_membership!(kootenay, alice)
++    insert_membership!(nelson, alice)
++    insert_membership!(kootenay, bob)
++
++    response =
++      conn
++      |> sign_in_staff(staff.email)
++      |> get(~p"/admin/people")
++      |> html_response(200)
++
++    html = LazyHTML.from_fragment(response)
++
++    assert row_ids(html, "[data-testid='admin-person-row']") == [
++             alice.person_id,
++             bob.person_id,
++             staff.person_id
++           ]
++
++    assert text_for(
++             html,
++             "#person-row-#{alice.person_id} [data-testid='admin-person-primary-email']"
++           ) =~
++             "alice@example.com"
++
++    assert text_for(
++             html,
++             "#person-row-#{alice.person_id} [data-testid='admin-person-alternate-emails']"
++           ) =~
++             "alice@work.example"
++
++    memberships =
++      text_for(html, "#person-row-#{alice.person_id} [data-testid='admin-person-memberships']")
++
++    assert memberships =~ "Kootenay Mountaineering Club"
++    assert memberships =~ "Nelson Paddling Club"
++
++    refute_selector_exists(html, "#person-row-#{alice.person_id} a")
+   end
+ 
+   test "Memba staff can open the read-only global Messages index", %{conn: conn} do
+@@ -46,6 +121,107 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
+     refute_selector_exists(html, "#new-message-form")
+     refute_selector_exists(html, "[data-admin-message-action='resend']")
+     refute_selector_exists(html, "[data-admin-message-action='delete']")
++    refute_selector_exists(html, "#admin-messages-index form")
++    refute_selector_exists(html, "#admin-messages-index nav[aria-label='Pagination']")
++    refute_selector_exists(html, "#admin-messages-index [data-admin-message-action='bulk']")
++    refute_selector_exists(html, "#admin-messages-index [data-admin-message-filter]")
++  end
++
++  test "global Messages index streams deterministic read-only projected message summaries", %{
++    conn: conn
++  } do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    sender = insert_membership_person!(name: "Alice Adams", email: "alice@example.com")
++
++    older =
++      insert_message_projection!(
++        club_id: club.club_id,
++        sender_id: sender.person_id,
++        subject: "Older trip planning note",
++        inserted_at: ~U[2026-06-05 10:00:00.000000Z]
++      )
++
++    newer =
++      insert_message_projection!(
++        club_id: club.club_id,
++        sender_id: sender.person_id,
++        subject: "Newer trip planning note",
++        inserted_at: ~U[2026-06-05 12:00:00.000000Z]
++      )
++
++    response =
++      conn
++      |> sign_in_staff()
++      |> get(~p"/admin/messages")
++      |> html_response(200)
++
++    html = LazyHTML.from_fragment(response)
++
++    assert row_ids(html, "[data-testid='admin-message-row']") == [
++             newer.message_id,
++             older.message_id
++           ]
++
++    assert text_for(html, "#message-row-#{newer.message_id} [data-testid='admin-message-club']") =~
++             "Kootenay Mountaineering Club"
++
++    assert text_for(html, "#message-row-#{newer.message_id} [data-testid='admin-message-sender']") =~
++             "Alice Adams (alice@example.com)"
++
++    assert text_for(
++             html,
++             "#message-row-#{newer.message_id} [data-testid='admin-message-projected-at']"
++           ) =~
++             "2026-06-05 12:00:00 UTC"
++
++    assert_selector_exists(
++      html,
++      "#message-row-#{newer.message_id} a[href='/admin/messages/#{newer.message_id}']"
++    )
++  end
++
++  defp insert_membership!(club, person) do
++    Repo.insert!(%MembershipProjection{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: club.club_id,
++      person_id: person.person_id,
++      active: true
++    })
++  end
++
++  defp insert_message_projection!(attrs) do
++    inserted_at = Keyword.fetch!(attrs, :inserted_at)
++
++    Repo.insert!(%MessageProjection{
++      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      sender_id: Keyword.fetch!(attrs, :sender_id),
++      subject: Keyword.fetch!(attrs, :subject),
++      body: Keyword.get(attrs, :body, "Message body."),
++      inserted_at: inserted_at,
++      updated_at: Keyword.get(attrs, :updated_at, inserted_at)
++    })
++  end
++
++  defp row_ids(html, selector) do
++    html
++    |> LazyHTML.query(selector)
++    |> LazyHTML.attribute("data-person-id")
++    |> case do
++      [] ->
++        html
++        |> LazyHTML.query(selector)
++        |> LazyHTML.attribute("data-message-id")
++
++      ids ->
++        ids
++    end
++  end
++
++  defp text_for(html, selector) do
++    html
++    |> LazyHTML.query(selector)
++    |> LazyHTML.text()
+   end
+ 
+   defp assert_selector_exists(html, selector) do
