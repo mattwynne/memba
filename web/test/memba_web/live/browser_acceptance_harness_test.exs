@@ -136,12 +136,13 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
     delivery_ids_by_name = Map.new(recipients, &{&1.name, &1.delivery_id})
 
-    conn
-    |> sign_in_staff()
-    |> visit("/admin/messages/#{message_id}")
-    |> assert_path("/admin/messages/*")
-    |> assert_has("#message-show", "Trip planning night")
-    |> assert_member_email_delivery("Alice", "sent")
+    session =
+      conn
+      |> sign_in_staff()
+      |> visit("/admin/messages/#{message_id}")
+      |> assert_path("/admin/messages/*")
+      |> assert_has("#message-show", "Trip planning night")
+      |> assert_member_email_delivery("Alice", "sent")
 
     assert :ok =
              report_email_delivery_delivered(%{
@@ -176,16 +177,15 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
                delivery_id: delivery_ids_by_name["Frank"]
              })
 
-    conn
-    |> sign_in_staff()
-    |> visit("/admin/messages/#{message_id}")
-    |> assert_path("/admin/messages/*")
-    |> assert_member_email_delivery("Alice", "sent")
-    |> assert_member_email_delivery("Bob", "delivered")
-    |> assert_member_email_delivery("Carol", "delivery problem")
-    |> assert_member_email_delivery("Dana", "delivery problem")
-    |> assert_member_email_delivery("Erin", "delivery problem")
-    |> assert_member_email_delivery("Frank", "delivered")
+    assert_eventually(fn ->
+      session
+      |> assert_member_email_delivery("Alice", "sent")
+      |> assert_member_email_delivery("Bob", "delivered")
+      |> assert_member_email_delivery("Carol", "delivery problem")
+      |> assert_member_email_delivery("Dana", "delivery problem")
+      |> assert_member_email_delivery("Erin", "delivery problem")
+      |> assert_member_email_delivery("Frank", "delivered")
+    end)
   end
 
   defp create_club(session, name) do

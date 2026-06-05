@@ -79,6 +79,52 @@ defmodule MembaWeb.DeliveriesLiveTest do
     ])
   end
 
+  test "operator deliveries refresh live after status reports", %{conn: conn} do
+    %{
+      subject: subject,
+      recipients: [recipient]
+    } =
+      send_projected_message(
+        subject: "Trail work party",
+        recipients: ["Bob"]
+      )
+
+    session =
+      conn
+      |> sign_in_staff()
+      |> visit("/admin/deliveries")
+      |> assert_path("/admin/deliveries")
+      |> assert_delivery_row(recipient.delivery_id, [
+        subject,
+        recipient.name,
+        recipient.email,
+        "email",
+        "sent",
+        "—"
+      ])
+
+    assert :ok =
+             Messaging.report_email_delivery_bounced(
+               %{
+                 message_id: recipient.message_id,
+                 delivery_id: recipient.delivery_id,
+                 reason: "mailbox does not exist"
+               },
+               consistency: :strong
+             )
+
+    assert_eventually(fn ->
+      assert_delivery_row(session, recipient.delivery_id, [
+        subject,
+        recipient.name,
+        recipient.email,
+        "email",
+        "bounced",
+        "mailbox does not exist"
+      ])
+    end)
+  end
+
   test "operators see historic opened delivery rows as delivered, never opened", %{
     conn: conn
   } do

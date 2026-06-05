@@ -9,8 +9,9 @@ defmodule MembaWeb.MemberDashboardLive do
   use MembaWeb, :live_view
 
   alias Memba.Accounts
-  alias MembaWeb.MemberDashboardPresentation
+  alias Memba.ReadModelChanges
   alias MembaWeb.IdentityAuth
+  alias MembaWeb.MemberDashboardPresentation
 
   @impl Phoenix.LiveView
   def mount(_params, session, socket) do
@@ -22,6 +23,10 @@ defmodule MembaWeb.MemberDashboardLive do
 
     case MemberDashboardPresentation.load(club_id, current_identity, current_identity_clubs) do
       {:ok, dashboard_assigns} ->
+        if connected?(socket) do
+          Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+        end
+
         {:ok,
          socket
          |> assign(:club_id_source, Map.get(session, "club_id_source", "query"))
@@ -33,8 +38,32 @@ defmodule MembaWeb.MemberDashboardLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
+        %{assigns: %{selected_club: selected_club}} = socket
+      ) do
+    {:noreply, refresh_dashboard(socket, selected_club.club_id)}
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
+
+  @impl Phoenix.LiveView
   def render(%{selected_club: _selected_club} = assigns) do
     MembaWeb.PageHTML.club(assigns)
+  end
+
+  defp refresh_dashboard(socket, club_id) do
+    case MemberDashboardPresentation.load(
+           club_id,
+           socket.assigns.current_identity,
+           socket.assigns.current_identity_clubs
+         ) do
+      {:ok, dashboard_assigns} ->
+        assign(socket, dashboard_assigns)
+
+      {:error, :forbidden} ->
+        forbidden!()
+    end
   end
 
   defp current_identity_from_session(session) do

@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
   """
   use MembaWeb, :live_view
 
+  alias Memba.ReadModelChanges
   alias MembaWeb.MemberMessageDetail
 
   @impl Phoenix.LiveView
@@ -19,6 +20,10 @@ defmodule MembaWeb.MemberMessageLive.Show do
       %{"club_id" => _club_id, "message_id" => _message_id} ->
         case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
           {:ok, detail_assigns} ->
+            if connected?(socket) do
+              Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+            end
+
             {:ok,
              socket
              |> assign(:route_params, params)
@@ -40,6 +45,21 @@ defmodule MembaWeb.MemberMessageLive.Show do
   def mount(_params, _session, socket) do
     {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
   end
+
+  @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed,
+         %{projector: Memba.Messaging.Projectors.MemberEmailDelivery, source_event: event}},
+        %{assigns: %{message: message}} = socket
+      ) do
+    if Map.get(event, :message_id) == message.message_id do
+      {:noreply, refresh_message_detail(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def handle_event("toggle_receipt_group", %{"status" => status}, socket) do
@@ -104,6 +124,22 @@ defmodule MembaWeb.MemberMessageLive.Show do
       MapSet.delete(expanded_receipt_groups, status)
     else
       MapSet.put(expanded_receipt_groups, status)
+    end
+  end
+
+  defp refresh_message_detail(socket) do
+    case MemberMessageDetail.load(
+           socket.assigns.route_params,
+           socket.assigns.current_identity_clubs
+         ) do
+      {:ok, detail_assigns} ->
+        assign(socket, detail_assigns)
+
+      {:error, :forbidden} ->
+        forbidden!(socket)
+
+      {:error, :not_found} ->
+        not_found!(socket)
     end
   end
 

@@ -200,6 +200,23 @@ Validation:
 - `cd acceptance-tests && npm run test:config` — passed, 48 tests.
 - `cd web && mix test test/memba/messaging/email_delivery_providers/local_test.exs` — passed, 2 tests.
 
+### Follow-up progress: LiveView read-model delivery-status updates
+
+Date: 2026-06-05
+
+Fix applied:
+
+- `web/lib/memba_web/live/admin/messages_live/show.ex`: subscribes to committed read-model changes and refreshes delivery/receipt streams for the open message.
+- `web/lib/memba_web/live/admin/deliveries_live/index.ex`: subscribes to staff delivery read-model changes and refreshes the deliveries overview stream/count.
+- `web/lib/memba_web/live/member_message_live/show.ex`: subscribes to member delivery read-model changes and refreshes member-facing message detail assigns for the open message.
+- `web/lib/memba_web/live/member_dashboard_live.ex`: subscribes to member delivery read-model changes and refreshes the selected club dashboard presentation.
+- `web/test/memba_web/live/browser_acceptance_harness_test.exs`: changed the delivery-status refresh coverage to assert live updates without revisiting the page.
+- `web/test/memba_web/live/deliveries_live_test.exs`: added coverage that the staff deliveries overview updates live after a delivery-status report.
+
+Validation:
+
+- `cd web && mix test test/memba_web/live/browser_acceptance_harness_test.exs test/memba_web/live/deliveries_live_test.exs` — passed, 7 tests.
+
 Remaining follow-up:
 
-- Use read-model changes for LiveView delivery-status updates.
+- None for this follow-up plan. Run full `dev check` after the final commit.

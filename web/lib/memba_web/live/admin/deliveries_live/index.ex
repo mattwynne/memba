@@ -2,16 +2,31 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Messaging
+  alias Memba.ReadModelChanges
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     deliveries = Messaging.list_operator_deliveries()
+
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+    end
 
     {:ok,
      socket
      |> assign(:deliveries_count, length(deliveries))
      |> stream(:deliveries, deliveries, dom_id: &"delivery-row-#{&1.delivery_id}")}
   end
+
+  @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed, %{projector: Memba.Messaging.Projectors.MembaStaffEmailDelivery}},
+        socket
+      ) do
+    {:noreply, refresh_deliveries(socket)}
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -146,4 +161,12 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   defp status_class("spam complaint"), do: "bg-red-100 text-red-800"
   defp status_class("delivered"), do: "bg-blue-100 text-blue-800"
   defp status_class(_status), do: "bg-zinc-100 text-zinc-700"
+
+  defp refresh_deliveries(socket) do
+    deliveries = Messaging.list_operator_deliveries()
+
+    socket
+    |> assign(:deliveries_count, length(deliveries))
+    |> stream(:deliveries, deliveries, reset: true)
+  end
 end

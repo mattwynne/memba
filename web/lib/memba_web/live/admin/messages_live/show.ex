@@ -2,12 +2,17 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   use MembaWeb, :live_view
 
   alias Memba.Messaging
+  alias Memba.ReadModelChanges
 
   @impl Phoenix.LiveView
   def mount(%{"message_id" => message_id}, _session, socket) do
     message = Messaging.get_message(message_id)
     deliveries = Messaging.list_recipient_deliveries(message_id)
     receipts = Messaging.list_member_email_deliverys(message_id)
+
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
+    end
 
     {:ok,
      socket
@@ -19,6 +24,24 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
      |> stream(:delivery_records, deliveries, dom_id: &"delivery-record-#{&1.delivery_id}")
      |> stream(:member_email_deliverys, receipts, dom_id: &"member-receipt-#{&1.delivery_id}")}
   end
+
+  @impl Phoenix.LiveView
+  def handle_info(
+        {:read_model_changed, %{projector: projector, source_event: event}},
+        %{assigns: %{message_id: message_id}} = socket
+      )
+      when projector in [
+             Memba.Messaging.Projectors.EmailDelivery,
+             Memba.Messaging.Projectors.MemberEmailDelivery
+           ] do
+    if Map.get(event, :message_id) == message_id do
+      {:noreply, refresh_delivery_streams(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -147,5 +170,15 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
       </main>
     </Layouts.admin>
     """
+  end
+
+  defp refresh_delivery_streams(socket) do
+    message_id = socket.assigns.message_id
+    deliveries = Messaging.list_recipient_deliveries(message_id)
+    receipts = Messaging.list_member_email_deliverys(message_id)
+
+    socket
+    |> stream(:delivery_records, deliveries, reset: true)
+    |> stream(:member_email_deliverys, receipts, reset: true)
   end
 end
