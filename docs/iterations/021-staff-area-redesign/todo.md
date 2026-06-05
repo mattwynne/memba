@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the mockup HTML files and extract reusable layout ideas: staff operations shell, page header, navigation grouping, table density, status chips, action placement, and card/table treatment.
-- [ ] 002 Inspect current admin routes, LiveViews, layouts, tests, and acceptance helpers.
+- [x] 002 Inspect current admin routes, LiveViews, layouts, tests, and acceptance helpers.
 - [ ] 003 Update `Layouts.admin` to the redesigned staff operations shell with working nav links: Clubs, People, Messages, Deliveries.
 - [ ] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
 - [ ] 005 Add context/read-model queries as needed:

@@ -1,0 +1,380 @@
+# Current admin surface notes for implementation
+
+Date: 2026-06-05
+
+These notes capture the current `/admin` routes, LiveViews, layouts, tests, and acceptance helpers before implementing the staff area redesign. They are an inventory for iteration 021, not a design change.
+
+## Files inspected
+
+- Routing and authorization:
+  - `web/lib/memba_web/router.ex`
+  - `web/lib/memba_web/identity_auth.ex`
+- Admin layout and LiveViews:
+  - `web/lib/memba_web/components/layouts.ex`
+  - `web/lib/memba_web/live/admin/clubs_live/index.ex`
+  - `web/lib/memba_web/live/admin/clubs_live/show.ex`
+  - `web/lib/memba_web/live/admin/people_live/new.ex`
+  - `web/lib/memba_web/live/admin/people_live/edit.ex`
+  - `web/lib/memba_web/live/admin/person_email_address_form.ex`
+  - `web/lib/memba_web/live/admin/deliveries_live/index.ex`
+  - `web/lib/memba_web/live/admin/messages_live/show.ex`
+- Query/read-model seams:
+  - `web/lib/memba/membership.ex`
+  - `web/lib/memba/messaging.ex`
+  - `web/lib/memba/membership/projections/*.ex`
+  - `web/lib/memba/messaging/projections/*.ex`
+- Phoenix tests:
+  - `web/test/memba_web/auth_gates_test.exs`
+  - `web/test/memba_web/live/admin_people_live_test.exs`
+  - `web/test/memba_web/live/admin_diagnostics_live_test.exs`
+  - `web/test/memba_web/live/deliveries_live_test.exs`
+  - `web/test/support/conn_case.ex`
+  - `web/test/support/feature_case.ex`
+- Elixir Cucumber plumbing:
+  - `web/test/features/cucumber_configuration_test.exs`
+  - `web/test/features/step_definitions/authentication_steps.exs`
+  - `web/test/features/step_definitions/membership_steps.exs`
+  - `web/test/features/step_definitions/messaging_steps.exs`
+- Browser acceptance feature/support:
+  - `acceptance-tests/features/memba_staff_operations.feature`
+  - `acceptance-tests/features/memba_staff_email_deliverability.feature`
+  - `acceptance-tests/features/person_email_addresses.feature`
+  - `acceptance-tests/features/staff_club_slugs.feature`
+  - `acceptance-tests/features/step_definitions/authentication_steps.js`
+  - `acceptance-tests/features/step_definitions/member_message_steps.js`
+  - `acceptance-tests/features/step_definitions/person_email_address_steps.js`
+  - `acceptance-tests/features/support/authentication.js`
+  - `acceptance-tests/features/support/member_harness.js`
+  - `acceptance-tests/features/support/member_message.js`
+  - `acceptance-tests/features/support/server_commands.js`
+
+## Current admin routing
+
+All current staff routes live under:
+
+```elixir
+scope "/admin", MembaWeb.Admin do
+  pipe_through :staff_browser
+
+  live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
+    ...
+  end
+end
+```
+
+The current route inventory is:
+
+- `GET /admin/clubs` → `MembaWeb.Admin.ClubsLive.Index`
+- `GET /admin/clubs/:club_id` → `MembaWeb.Admin.ClubsLive.Show`
+- `GET /admin/clubs/:club_id/people/new` → `MembaWeb.Admin.PeopleLive.New`
+- `GET /admin/clubs/:club_id/people/:person_id/edit` → `MembaWeb.Admin.PeopleLive.Edit`
+- `GET /admin/deliveries` → `MembaWeb.Admin.DeliveriesLive.Index`
+- `GET /admin/messages/:message_id` → `MembaWeb.Admin.MessagesLive.Show`
+
+There is currently no route for:
+
+- `GET /admin/people`
+- `GET /admin/messages`
+
+The `:staff_browser` pipeline already enforces:
+
+- browser/session/flash/CSRF/security header plugs;
+- `fetch_current_identity`;
+- `require_staff_identity`;
+- `require_staff_onboarding_completed`.
+
+The admin `live_session` repeats `IdentityAuth` staff checking at LiveView mount. New `/admin/people` and `/admin/messages` routes should stay inside this existing staff scope/session rather than adding a new authorization seam.
+
+## Current staff layout
+
+`Layouts.admin/1` currently renders a compact top header:
+
+- root element: `#admin-layout[data-surface="admin"]`;
+- brand link to `/admin/clubs`;
+- nav labelled `Memba staff navigation`;
+- links only for:
+  - Clubs;
+  - Deliveries;
+- sign-out form/button inside the nav.
+
+The redesign task needs to transform this into the staff operations shell and add working nav links for Clubs, People, Messages, and Deliveries. There are no current Incoming or Roles links to remove.
+
+All current admin LiveViews call:
+
+```elixir
+<Layouts.admin flash={@flash}>
+```
+
+None currently pass `current_scope` or current identity data into the admin layout.
+
+## Current admin LiveViews
+
+### Clubs index
+
+`MembaWeb.Admin.ClubsLive.Index`:
+
+- fetches `Membership.list_clubs()` on mount;
+- streams clubs with DOM IDs `club-#{club.club_id}`;
+- exposes `#clubs-index`;
+- supports club creation via:
+  - `#new-club-form`;
+  - `suggest_slug`;
+  - `create_club`;
+- uses `Membership.create_club(..., consistency: :strong)`;
+- resets the clubs stream after successful creation.
+
+Important selectors already covered by tests/acceptance helpers:
+
+- `#clubs-index`
+- `#new-club-form`
+- `#club-name-input`
+- `#club-slug-input`
+- `#create-club-button`
+- `[data-testid="club-row"]`
+- `[data-testid="club-link"]`
+
+### Club detail
+
+`MembaWeb.Admin.ClubsLive.Show` currently does a lot:
+
+- loads a club with `Membership.get_club/1`;
+- loads all people with `Membership.list_people()`;
+- loads active members for the club with `Membership.list_active_members_of_club/1`;
+- loads club-scoped messages with `Messaging.list_messages_for_club/1`;
+- streams:
+  - `:people`;
+  - `:members`;
+  - `:messages`;
+- renders:
+  - club name/slug header;
+  - a public club home link;
+  - club edit form;
+  - People section;
+  - Members section with add/remove membership form;
+  - Send a club message form;
+  - embedded club messages list linking to `/admin/messages/:message_id`.
+
+Existing behaviours to preserve during restyling:
+
+- club name/slug update through `update_club`;
+- slug validation/availability feedback;
+- person list and edit links;
+- membership add/remove with active member stream refresh.
+
+Existing behaviours to remove later per the plan:
+
+- `@empty_message`;
+- `assign(:message_form, ...)`;
+- `assign(:member_options, ...)` if no longer needed after staff composer removal;
+- `handle_event("send_message", ...)`;
+- `refresh_messages/1` if no embedded messages remain;
+- staff-side send-message form:
+  - `#new-message-form`;
+  - `#message-sender-select`;
+  - `#message-subject-input`;
+  - `#message-body-input`;
+  - `#send-message-button`;
+- embedded club messages stream:
+  - `#messages`;
+  - `[data-testid="message-row"]`;
+  - `[data-testid="message-link"]`.
+
+The current page language mixes "People" and "Members" but still has separate sections. The redesign can make the separation more explicit without changing membership semantics.
+
+One implementation caution: club detail currently builds email summaries by calling `Membership.list_person_alternate_emails/1` once per person/member. That is acceptable for existing small club pages but should not be copied into the new global People index if it would create an obvious N+1 query shape.
+
+### Person new/edit
+
+Current person pages are club-scoped routes:
+
+- `/admin/clubs/:club_id/people/new`
+- `/admin/clubs/:club_id/people/:person_id/edit`
+
+`PeopleLive.New`:
+
+- creates a person through `Membership.create_person/2`;
+- accepts primary and alternate email-address rows through `PersonEmailAddressForm`;
+- redirects back to `/admin/clubs/:club_id`.
+
+`PeopleLive.Edit`:
+
+- loads a person by `person_id`;
+- lists current email addresses;
+- replaces all email addresses through `Membership.replace_person_email_addresses/2`;
+- leaves the name input readonly;
+- redirects back to `/admin/clubs/:club_id`.
+
+These routes are useful for existing club-scoped editing but are not a complete global editing model. If a person belongs to multiple clubs, a global People page row could be ambiguous. The plan allows keeping `/admin/people` read-only rather than inventing a global edit workflow.
+
+### Deliveries index
+
+`MembaWeb.Admin.DeliveriesLive.Index`:
+
+- calls `Messaging.list_operator_deliveries()`;
+- assigns `deliveries_count`;
+- streams deliveries with DOM IDs `delivery-row-#{delivery.delivery_id}`;
+- renders `#deliveries-overview`;
+- renders `#deliveries-table[aria-label="Email deliveries"]`;
+- includes message subject, recipient name/address, channel, status, event time, and provider reason;
+- normalizes existing `"opened"` rows to `"delivered"` in the query API, not the template.
+
+The current table is already close to the mockup's diagnostics table pattern. Later restyling should preserve the raw staff-facing status/reason semantics that tests assert.
+
+### Message diagnostics show
+
+`MembaWeb.Admin.MessagesLive.Show`:
+
+- fetches `Messaging.get_message(message_id)`;
+- fetches recipient deliveries with `Messaging.list_recipient_deliveries/1`;
+- fetches member-facing receipts with `Messaging.list_member_email_deliverys/1`;
+- renders `#message-show`;
+- includes a back link to the club detail page;
+- renders three diagnostic sections:
+  - `#addressed-recipients`;
+  - `#delivery-records`;
+  - `#member-receipts`;
+- renders a "Message not found" fallback when the projection is absent.
+
+This page should remain the target diagnostics route for rows in the future global `/admin/messages` list.
+
+## Current query and read-model seams
+
+### Membership
+
+`Memba.Membership` is the public query/API boundary for the Membership bounded context. Useful existing queries:
+
+- `list_clubs/0`
+- `get_club/1`
+- `get_club_by_slug/1`
+- `list_people/0`
+- `get_person/1`
+- `get_person_by_email/1`
+- `get_person_primary_email/1`
+- `list_person_alternate_emails/1`
+- `list_person_email_addresses/1`
+- `list_active_members_of_club/1`
+- `active_member_of_club?/2`
+- `list_active_clubs_for_member_email/1`
+
+Current projection schemas relevant to global People:
+
+- `membership_people`
+  - `person_id`, `name`, `email`, timestamps;
+- `membership_person_email_addresses`
+  - `person_id`, `email`, `normalized_email`, `is_primary`, timestamps;
+- `membership_memberships`
+  - `membership_id`, `club_id`, `person_id`, `active`, timestamps;
+- `membership_clubs`
+  - club projection fields used by existing list/get queries.
+
+The new People page needs a single query shape that returns each person once with primary email, alternate email summary, and membership summaries. It should be implemented at the Membership query boundary rather than joining Membership projection tables from Messaging code.
+
+### Messaging
+
+Useful existing messaging queries:
+
+- `get_message/1`
+- `list_messages_for_club/1`
+- `list_recipient_deliveries/1`
+- `list_member_email_deliverys/1`
+- `list_operator_deliveries/1`
+- `list_operator_email_deliveries/1`
+
+Current message projection:
+
+- `messaging_messages`
+  - `message_id`, `club_id`, `sender_id`, `subject`, `body`, timestamps.
+
+Current delivery overview enrichment:
+
+- `Messaging.list_operator_deliveries/1` joins staff delivery projections to message projections to add `message_subject` and `event_at`.
+
+There is currently no public `Messaging.list_messages/0` or equivalent global message query. The future global Messages page needs a deterministic read-only list of projected messages. The plan calls out the enrichment tension: message projections hold `club_id` and `sender_id`, while club/sender names live in the Membership bounded context. ADR 0007 says Messaging must not depend on Membership read-model storage details. Any enrichment should respect context boundaries, either by using Membership public query APIs from web/admin presentation code or by adding narrow public query helpers without making Messaging own Membership storage concerns.
+
+## Current Phoenix test coverage
+
+Current staff/admin-focused test coverage includes:
+
+- `MembaWeb.AuthGatesTest`
+  - unauthenticated `/admin/clubs` redirects to `/auth` and preserves return path;
+  - signed-in non-staff is forbidden;
+  - first-time staff redirects to onboarding;
+  - onboarded staff can open `/admin/clubs`.
+- `MembaWeb.AdminPeopleLiveTest`
+  - opens club-scoped new/edit person LiveViews;
+  - creates a person with primary/alternate emails;
+  - rejects malformed/missing-primary/multiple-primary/duplicate email submissions;
+  - replaces email addresses and primary selection.
+- `MembaWeb.DeliveriesLiveTest`
+  - staff can review deliveries from multiple messages with provider reasons;
+  - historic `"opened"` delivery rows display as `"delivered"`, never `"opened"`.
+- `MembaWeb.AdminDiagnosticsLiveTest`
+  - message diagnostics keep addressed recipients, raw email deliveries, and member-facing receipt sections;
+  - deliveries overview keeps detailed staff statuses and provider reasons.
+
+`MembaWeb.FeatureCase.sign_in_staff/2` creates an onboarded staff person if needed and initializes the staff session. This is the likely helper for new LiveView/PhoenixTest coverage.
+
+Potential test additions later in the plan:
+
+- nav links for Clubs, People, Messages, Deliveries;
+- absence of Incoming/Roles links;
+- staff protection for new `/admin/people` and `/admin/messages`;
+- `/admin/people` one row per person with multi-club membership summary;
+- `/admin/messages` read-only list with diagnostics links;
+- absence of staff send-message form on club detail;
+- preservation tests for club create/edit, person email editing, and membership add/remove.
+
+## Current acceptance plumbing
+
+`acceptance-tests/features/memba_staff_operations.feature` already exists and is feature-level `@wip`. It covers:
+
+- staff operations nav links;
+- absence of Incoming/Roles;
+- one person with memberships in two clubs on global People;
+- global Messages list and diagnostics link;
+- no staff-side club-message composition affordance.
+
+Existing browser step support already provides:
+
+- `Given Pat is signed in as Memba staff` in `person_email_address_steps.js`;
+- club/person/member setup steps in `authentication_steps.js` and `member_message_steps.js`;
+- direct staff sign-in helpers in `support/authentication.js`;
+- reusable staff browser harness in `support/member_harness.js`;
+- admin helper flows in `support/member_message.js` for:
+  - `/admin/clubs`;
+  - club detail;
+  - club-scoped person new/edit;
+  - `/admin/deliveries`;
+  - `/admin/messages/:message_id`.
+
+Missing executable browser steps for `memba_staff_operations.feature`:
+
+- `When Pat opens the Memba staff area`
+- `Then Pat should be able to navigate to Clubs`
+- `Then Pat should be able to navigate to People`
+- `Then Pat should be able to navigate to Messages`
+- `Then Pat should be able to navigate to Deliveries`
+- `Then Pat should not be offered unavailable staff pages such as Incoming or Roles`
+- `When Pat opens the staff People page`
+- `Then Pat should see Alice as one person`
+- `Then Pat should see that Alice is a member of Kootenay Mountaineering Club`
+- `Then Pat should see that Alice is a member of Nelson Paddling Club`
+- `When Pat opens the staff Messages page`
+- `Then Pat should see "Trip planning night" for Kootenay Mountaineering Club`
+- `When Pat opens the message diagnostics for "Trip planning night"`
+- `Then Pat should see the staff delivery diagnostics for "Trip planning night"`
+- `When Pat opens Kootenay Mountaineering Club in the staff area`
+- `Then Pat should not be offered a way to send a club message as a member`
+
+Some of those can reuse existing helpers after new pages/selectors exist. Staff operations acceptance support should avoid member-browser helpers for staff routes except through the explicit staff harness; `member_harness.js` intentionally guards member helpers from accidentally navigating to `/admin`.
+
+## Implementation implications for later tasks
+
+- Add `/admin/people` and `/admin/messages` inside the existing `:memba_staff` live session.
+- Keep `/admin/people` read-only unless a club-scoped edit link is demonstrably unambiguous.
+- Add global People query support at the Membership context boundary to avoid obvious N+1 behaviour.
+- Add global Messages query support without making Messaging depend on Membership projection storage details.
+- Remove the staff-side `send_message` event and form from club detail in the later dedicated removal task.
+- Do not remove member-facing compose helpers; current acceptance plumbing already moved message sending toward member flows and direct domain setup.
+- Preserve existing selectors where practical because Phoenix tests and browser acceptance helpers use them heavily.
+- When selectors must change for the redesign, update the corresponding focused tests/helpers in the later test/acceptance tasks.
