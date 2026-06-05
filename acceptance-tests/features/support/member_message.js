@@ -31,18 +31,6 @@ function cssString(value) {
     .replace(/\n/g, "\\a ")}"`;
 }
 
-function scenarioScopingEnabled(world) {
-  return process.env.ACCEPTANCE_SCENARIO_SCOPING === "1" && world && world.scenarioId;
-}
-
-function scopedLabel(world, label) {
-  return scenarioScopingEnabled(world) ? `${label} ${world.scenarioId}` : label;
-}
-
-function displayedPersonName(world, name) {
-  return (world.people && world.people[name] && world.people[name].name) || scopedLabel(world, name);
-}
-
 function emailFor(name) {
   const normalizedName = name
     .toLowerCase()
@@ -425,7 +413,7 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs 
   );
   await waitForProjectedVisible(
     world,
-    world.page.getByRole("heading", { name: club.name }),
+    world.page.getByRole("heading", { name: clubName }),
     `club heading for ${clubName}`,
     { expect, timeoutMs }
   );
@@ -519,13 +507,12 @@ async function createClub(world, clubName, { expect = playwrightExpect, slug } =
 
   await visitClubsIndex(world, { expect });
 
-  const displayClubName = scopedLabel(world, clubName);
-  const clubRows = rowsByData(world.page, "club-row", "data-club-name", displayClubName);
+  const clubRows = rowsByData(world.page, "club-row", "data-club-name", clubName);
   const previousClubIds = await rowAttributeValues(clubRows, "data-club-id");
-  const requestedSlug = slug || clubSlugForOccurrence(displayClubName, previousClubIds.length + 1);
+  const requestedSlug = slug || clubSlugForOccurrence(clubName, previousClubIds.length + 1);
 
-  await browserInteraction(`submit club creation form for ${displayClubName}`, async () => {
-    await world.page.getByLabel("Club name").fill(displayClubName);
+  await browserInteraction(`submit club creation form for ${clubName}`, async () => {
+    await world.page.getByLabel("Club name").fill(clubName);
     await world.page.getByLabel("Club slug").fill(requestedSlug);
     await world.page.getByRole("button", { name: "Create club" }).click();
   });
@@ -541,7 +528,7 @@ async function createClub(world, clubName, { expect = playwrightExpect, slug } =
     clubRows,
     "data-club-id",
     previousClubIds,
-    `club row for ${displayClubName}`
+    `club row for ${clubName}`
   );
   await waitForProjectedVisible(
     world,
@@ -553,7 +540,7 @@ async function createClub(world, clubName, { expect = playwrightExpect, slug } =
     (await rowByData(world.page, "club-row", "data-club-id", clubId).getAttribute("data-club-slug")) ||
     requestedSlug;
 
-  world.clubs[clubName] = { clubId, name: displayClubName, slug: clubSlug };
+  world.clubs[clubName] = { clubId, name: clubName, slug: clubSlug };
 
   return world;
 }
@@ -636,10 +623,9 @@ async function createPersonOnCurrentClubPage(
 ) {
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before creating ${name}`);
-  const displayName = scopedLabel(world, name);
-  const normalizedEmailAddresses = personEmailAddressSet(displayName, { email, emailAddresses });
+  const normalizedEmailAddresses = personEmailAddressSet(name, { email, emailAddresses });
 
-  const personRows = rowsByData(world.page, "person-row", "data-person-name", displayName);
+  const personRows = rowsByData(world.page, "person-row", "data-person-name", name);
   const previousPersonIds = await rowAttributeValues(personRows, "data-person-id");
 
   await browserInteraction(`visit create-person page for ${name}`, () =>
@@ -653,7 +639,7 @@ async function createPersonOnCurrentClubPage(
   );
 
   await browserInteraction(`submit person creation form for ${name}`, async () => {
-    await world.page.getByLabel("Person name").fill(displayName);
+    await world.page.getByLabel("Person name").fill(name);
     await fillPersonEmailAddressRows(world, normalizedEmailAddresses, { expect, timeoutMs });
     await world.page.getByRole("button", { name: "Create person" }).click();
   });
@@ -669,7 +655,7 @@ async function createPersonOnCurrentClubPage(
     personRows,
     "data-person-id",
     previousPersonIds,
-    `person row for ${displayName}`
+    `person row for ${name}`
   );
   await waitForProjectedVisible(
     world,
@@ -678,7 +664,7 @@ async function createPersonOnCurrentClubPage(
     { expect }
   );
 
-  world.people[name] = personState({ emailAddresses: normalizedEmailAddresses, name: displayName, personId });
+  world.people[name] = personState({ emailAddresses: normalizedEmailAddresses, name, personId });
 }
 
 async function updatePersonEmailAddresses(
@@ -815,7 +801,7 @@ async function addMemberOnCurrentClubPage(
   const person = world.people[personName];
   assert.ok(person, `Expected ${personName} to have been created before adding them as a member`);
 
-  const memberRows = rowsByData(world.page, "member-row", "data-member-name", person.name);
+  const memberRows = rowsByData(world.page, "member-row", "data-member-name", personName);
   const previousMemberIds = await rowAttributeValues(memberRows, "data-member-id");
 
   await browserInteraction(`submit add-member form for ${personName} in ${clubName}`, async () => {
@@ -846,7 +832,7 @@ async function addMemberOnCurrentClubPage(
   world.memberships[`${clubName}:${personName}`] = {
     clubName,
     memberId,
-    personName: person.name
+    personName
   };
 }
 
@@ -1226,10 +1212,9 @@ async function assertMemberMessageAddressedTo(
     { expect }
   );
 
-  const expectedDisplayNames = expectedNames.map((name) => displayedPersonName(world, name));
   const actualNames = await rowDatasetValues(rows, "recipientName");
   assertFinalBrowserState(`member-facing recipients for ${JSON.stringify(subject)}`, () =>
-    assert.deepEqual(actualNames, expectedDisplayNames)
+    assert.deepEqual(actualNames, expectedNames)
   );
 
   world.addressedMemberNames = expectedNames;
@@ -1255,7 +1240,7 @@ async function assertMemberMessageNotAddressedTo(
   const actualNames = await rowDatasetValues(rows, "recipientName");
   assertFinalBrowserState(`member-facing recipients should not include ${excludedName}`, () =>
     assert.ok(
-      !actualNames.includes(displayedPersonName(world, excludedName)),
+      !actualNames.includes(excludedName),
       `Expected member-facing recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
     )
   );
@@ -1279,11 +1264,10 @@ async function assertLastMessageAddressedTo(
     { expect }
   );
 
-  const expectedDisplayNames = expectedNames.map((name) => displayedPersonName(world, name));
   const actualNames = await rowDatasetValues(rows, "recipientName");
   assertFinalBrowserState(
     `addressed recipients for ${JSON.stringify(world.lastMessageSubject)}`,
-    () => assert.deepEqual(actualNames, expectedDisplayNames)
+    () => assert.deepEqual(actualNames, expectedNames)
   );
 
   world.addressedMemberNames = expectedNames;
@@ -1309,7 +1293,7 @@ async function assertLastMessageNotAddressedTo(
     `addressed recipients should not include ${excludedName}`,
     () =>
       assert.ok(
-        !actualNames.includes(displayedPersonName(world, excludedName)),
+        !actualNames.includes(excludedName),
         `Expected addressed recipients not to include ${excludedName}; saw ${actualNames.join(", ")}`
       )
   );
@@ -1431,7 +1415,7 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
         email.subject === subject &&
         email.text_body === message.body &&
         email.to.some((recipient) => recipient.includes(person.email)) &&
-        (!sender || mailboxEmailFrom(email).includes(`${sender.name} via Memba`))
+        (!sender || mailboxEmailFrom(email).includes(`${senderName} via Memba`))
     );
 
     assertFinalBrowserState(`test mailbox email for ${recipientName}`, () =>
@@ -1542,19 +1526,18 @@ async function assertMemberEmailDeliveryStatusOnCurrentPage(
   expectedLabel,
   { expect = playwrightExpect } = {}
 ) {
-  const displayRecipientName = displayedPersonName(world, recipientName);
-  const row = rowByData(world.page, "member-receipt", "data-recipient-name", displayRecipientName);
+  const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
   await waitForProjectedVisible(
     world,
     row,
-    `${displayRecipientName}'s member-facing email delivery row for ${JSON.stringify(subject)}`,
+    `${recipientName}'s member-facing email delivery row for ${JSON.stringify(subject)}`,
     { expect }
   );
   await waitForProjectedText(
     world,
     row.locator("[data-testid=\"receipt-status\"]"),
     expectedLabel,
-    `${displayRecipientName}'s member-facing status label for ${JSON.stringify(subject)}`,
+    `${recipientName}'s member-facing status label for ${JSON.stringify(subject)}`,
     { expect }
   );
 
@@ -1563,12 +1546,12 @@ async function assertMemberEmailDeliveryStatusOnCurrentPage(
   await waitForProjectedVisible(
     world,
     icon,
-    `${displayRecipientName}'s member-facing status icon for ${JSON.stringify(subject)}`,
+    `${recipientName}'s member-facing status icon for ${JSON.stringify(subject)}`,
     { expect }
   );
 
   const actualIcon = await icon.getAttribute("data-icon-name");
-  assertFinalBrowserState(`${displayRecipientName}'s member-facing email delivery icon for ${JSON.stringify(subject)}`, () =>
+  assertFinalBrowserState(`${recipientName}'s member-facing email delivery icon for ${JSON.stringify(subject)}`, () =>
     assert.equal(actualIcon, expectedIcon)
   );
 
@@ -1851,12 +1834,11 @@ async function deliveryForRecipient(
 
   await openMessage(world, subject, { expect });
 
-  const displayRecipientName = displayedPersonName(world, recipientName);
-  const row = rowByData(world.page, "delivery-record", "data-recipient-name", displayRecipientName);
+  const row = rowByData(world.page, "delivery-record", "data-recipient-name", recipientName);
   await waitForProjectedVisible(
     world,
     row,
-    `${displayRecipientName}'s email delivery for ${JSON.stringify(subject)}`,
+    `${recipientName}'s email delivery for ${JSON.stringify(subject)}`,
     { expect }
   );
 
@@ -2153,7 +2135,6 @@ module.exports = {
   cssString,
   deliveryForRecipient,
   emailFor,
-  scopedLabel,
   ensureClubSlugMatchesInboundAddress,
   ensureState,
   kootenayClubName,
