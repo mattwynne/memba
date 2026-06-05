@@ -95,3 +95,35 @@ If plan validation can fail because its own evidence is summarized, longer or de
 - Reduce chunk sizes further only if evidence proves size is the cause; otherwise use a different evidence channel less likely to be summarized.
 - Add a plan-validation fixture that deliberately checks reviewer-visible evidence for every chunk, not just script stdout locally.
 - Add a `bin/dev fabro validation-report <run_id>` or improve `progress` so validation failures surface reviewer decisions and blocking gaps without assuming `todo.md` exists.
+
+## Resolution
+
+Date: 2026-06-05
+
+Root cause: Plan validation used command-stage stdout as the evidence channel for prompt-only reviewer nodes. Fabro captured the command output completely, but under `summary:high` fidelity the prompt preamble renderer omitted the beginning of each chunk before constructing reviewer prompts. Chunking lowered raw stdout size but did not guarantee prompt-visible plan text.
+
+Evidence:
+
+- `fabro dump --output /tmp/fabro-01KTD220-dump 01KTD220HT0QNQ3V119DSCHJRK` showed complete `stages/002-read_plan_001_060@1/output.log` and `stages/003-read_plan_061_120@1/output.log` files.
+- The dumped reviewer prompt `stages/008-gemini_review@1/prompt.md` already contained `(15 lines omitted)` and `(13 lines omitted)` markers in the rendered stage-output transcript.
+- `fabro events 01KTD220HT0QNQ3V119DSCHJRK` confirmed `graph.default_fidelity` and `internal.fidelity` were `summary:high`, all read stages succeeded, and reviewers failed closed on workflow-evidence gaps.
+
+Fix applied:
+
+- `.fabro/workflows/plan-validation/workflow.fabro`: replaced prompt-only reviewer nodes with agent nodes (`shape=box`) that have tool access, removed the chunked read stages and updated-read stages from the graph, and routed reviewers directly from `start` to synthesis. Reviewer nodes use `fidelity="truncate"` so each reviewer reads the plan independently instead of inheriting summarized prior context.
+- `.fabro/workflows/plan-validation/prompts/gemini_review.md`, `.fabro/workflows/plan-validation/prompts/claude_review.md`, and `.fabro/workflows/plan-validation/prompts/codex_review.md`: instructed reviewer agents to read `{{ inputs.plan_path }}` directly with file-reading tools, not rely on summarized context, and not edit files.
+- `.fabro/workflows/plan-validation/prompts/recheck.md`: instructed the recheck agent to read the current plan file directly after any Codex repair.
+- `.fabro/workflows/plan-validation/prompts/synthesize.md`: clarified that synthesis should use reviewer reports and routing fields, not require plan text in its own summarized context.
+- `.fabro/workflows/plan-validation/test.sh`: removed the unused chunk-printing helper from the eval input guard.
+
+Validation:
+
+- `fabro validate .fabro/workflows/plan-validation/workflow.toml --no-upgrade-check` — passed; workflow now has 12 nodes and 15 edges.
+- `fabro preflight .fabro/workflows/plan-validation/workflow.toml -I plan_path=docs/iterations/022-request-to-club-onboarding/plan.md -I publish=false --no-upgrade-check` — passed; repository access, Docker sandbox, and Claude/Gemini/GPT model probes all succeeded.
+- `dev check` — passed; 528 ExUnit tests and 38 acceptance scenarios passed.
+
+Remaining follow-up:
+
+- Run `.fabro/workflows/plan-validation/test.sh` after the workflow changes are pushed to `origin/main`. The eval harness intentionally refuses to run when visible workflow inputs differ from `origin/main`, because Fabro sandboxes clone origin rather than the local dirty working tree.
+- Consider deleting `.fabro/workflows/plan-validation/scripts/print_plan_chunk.sh` once no other workflow references it.
+- Consider improving `bin/dev fabro progress` or adding a validation-report command for plan-validation run diagnostics.

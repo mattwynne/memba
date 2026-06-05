@@ -1,8 +1,8 @@
 You are independently reviewing an iteration plan before implementation.
 
-Use the complete plan text from the preceding chunked `Read Plan ...` stages. Each chunk has `PLAN_CHUNK_LINES` markers. Do not assume any missing details. Be strict, practical, and specific.
+Use your file-reading tools to read the complete plan file directly from `{{ inputs.plan_path }}`. Do not rely on summarized prior-stage context for the plan text. Do not edit files.
 
-If a chunk says the plan exceeds the chunk limit, or if required chunks are missing/omitted from context, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.
+If you cannot read the plan file completely with tools, report NOT READY with a blocking workflow-evidence gap rather than treating unseen sections as absent from the plan.
 
 Review the plan against these readiness questions:
 
