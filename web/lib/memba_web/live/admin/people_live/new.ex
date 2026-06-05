@@ -71,143 +71,261 @@ defmodule MembaWeb.Admin.PeopleLive.New do
   def render(assigns) do
     ~H"""
     <Layouts.admin flash={@flash}>
-      <main id="person-new" data-club-id={@club_id} class="mx-auto max-w-4xl space-y-8 p-6">
-        <.link
-          id="back-to-club-link"
-          navigate={~p"/admin/clubs/#{@club_id}"}
-          aria-label="Back to club"
-          class="text-sm font-medium text-blue-700 hover:text-blue-900"
-        >
-          ← Club
-        </.link>
-
+      <main
+        id="person-new"
+        data-admin-page="person-new"
+        data-club-id={@club_id}
+        class="mx-auto max-w-7xl space-y-6 p-6"
+      >
         <%= if @club do %>
-          <section class="space-y-2">
-            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              {@club.name}
-            </p>
-            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">New person</h1>
-            <p class="text-zinc-600">
-              Create a person for this club context and manage their primary and alternate email addresses.
-            </p>
+          <section
+            id="person-page-header"
+            class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"
+          >
+            <div class="space-y-2">
+              <.link
+                id="back-to-club-link"
+                navigate={~p"/admin/clubs/#{@club_id}"}
+                aria-label="Back to club"
+                class="text-sm font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
+              >
+                ← Club
+              </.link>
+              <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
+                People operations
+              </p>
+              <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">New person</h1>
+              <p class="max-w-3xl text-[#4b5a55]">
+                Create a person identity and contact record for use in the existing club-scoped
+                workflow. Memberships stay separate and can be added from the club page.
+              </p>
+            </div>
+
+            <.link
+              id="global-people-link"
+              navigate={~p"/admin/people"}
+              aria-label="Open global People"
+              class="inline-flex items-center justify-center rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c] hover:shadow-md"
+            >
+              Global People
+            </.link>
           </section>
 
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <.form
-              for={@form}
-              id="person-form"
-              aria-label="Create person"
-              class="space-y-5"
-              phx-change="validate_person"
-              phx-submit="create_person"
+          <section
+            id="person-workflow-summary"
+            aria-label="Person workflow summary"
+            class="grid gap-4 md:grid-cols-3"
+          >
+            <article
+              id="person-club-context-card"
+              class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
             >
-              <div>
-                <h2 class="text-lg font-semibold text-zinc-900">Person details</h2>
-                <p class="mt-1 text-sm text-zinc-600">
-                  The first entered email address is selected as primary by default.
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Club context
+              </p>
+              <p class="mt-3 text-xl font-bold tracking-tight text-[#15201c]">{@club.name}</p>
+              <p class="mt-2 text-sm text-[#4b5a55]">
+                This route returns staff to the club record after creation.
+              </p>
+            </article>
+
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Person record
+              </p>
+              <p class="mt-3 text-lg font-semibold text-[#15201c]">Identity and contact</p>
+              <p class="mt-2 text-sm text-[#4b5a55]">
+                The record can later be linked to one or more club memberships.
+              </p>
+            </article>
+
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Email addresses
+              </p>
+              <p class="mt-3 text-lg font-semibold text-[#15201c]">One primary required</p>
+              <p class="mt-2 text-sm text-[#4b5a55]">
+                Alternate addresses remain attached to the same person identity.
+              </p>
+            </article>
+          </section>
+
+          <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.4fr)]">
+            <section
+              id="person-form-card"
+              class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+            >
+              <div class="border-b border-[#e6e3dc] p-5">
+                <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                  Person record
+                </p>
+                <h2 class="mt-1 text-lg font-semibold text-[#15201c]">Create person details</h2>
+                <p class="mt-1 text-sm text-[#7d877f]">
+                  Capture the name and email addresses without creating a membership automatically.
                 </p>
               </div>
 
-              <.input
-                name={@form[:name].name}
-                value={@form[:name].value}
-                id="person-name-input"
-                label="Name"
-                aria-label="Person name"
-                errors={@form_errors.name}
-                required
-              />
-
-              <div
-                id="person-email-addresses"
-                aria-label="Email addresses"
-                class="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+              <.form
+                for={@form}
+                id="person-form"
+                aria-label="Create person"
+                class="space-y-5 p-5"
+                phx-change="validate_person"
+                phx-submit="create_person"
               >
-                <div>
-                  <p class="text-sm font-medium text-zinc-700">
-                    Primary and alternate email addresses
-                  </p>
-                  <p class="mt-1 text-sm text-zinc-500">
-                    Choose exactly one primary address. Alternate addresses can still identify this person.
+                <div id="person-form-section" class="space-y-1">
+                  <h3 class="text-base font-semibold text-[#15201c]">Identity</h3>
+                  <p class="text-sm text-[#7d877f]">
+                    Names belong to person records; club participation is handled as a separate
+                    membership.
                   </p>
                 </div>
 
-                <p
-                  :if={@form_errors.global}
-                  id="person-email-addresses-error"
-                  role="alert"
-                  class="text-sm font-medium text-red-700"
-                >
-                  {@form_errors.global}
-                </p>
-
-                <input type="hidden" name="person[primary_email_index]" value="" />
-
-                <div
-                  :for={row <- @email_rows}
-                  id={"person-email-row-#{row.index}"}
-                  data-testid="person-email-row"
-                  data-primary={to_string(row.primary?)}
-                  class="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 sm:grid-cols-[auto_1fr_auto] sm:items-start"
-                >
-                  <label
-                    for={"person-primary-radio-#{row.index}"}
-                    class="mt-8 flex items-center gap-2 text-sm font-medium text-zinc-700"
-                  >
-                    <input
-                      id={"person-primary-radio-#{row.index}"}
-                      type="radio"
-                      name="person[primary_email_index]"
-                      value={row.index}
-                      checked={row.primary?}
-                      class="radio radio-sm"
-                    /> Primary
-                  </label>
-
+                <div class="rounded-2xl border border-[#e6e3dc] bg-[#f7f6f3] p-4">
                   <.input
-                    id={"person-email-input-#{row.index}"}
-                    name={"person[email_addresses][#{row.index}][email]"}
-                    type="email"
-                    label="Email address"
-                    aria-label={"Email address #{row.index}"}
-                    value={row.email}
-                    errors={Map.get(@form_errors.row_errors, row.index, [])}
+                    name={@form[:name].name}
+                    value={@form[:name].value}
+                    id="person-name-input"
+                    label="Name"
+                    aria-label="Person name"
+                    errors={@form_errors.name}
                     required
                   />
+                </div>
+
+                <div
+                  id="person-email-addresses"
+                  aria-label="Email addresses"
+                  class="space-y-4 rounded-2xl border border-[#e6e3dc] bg-[#f7f6f3] p-4"
+                >
+                  <div>
+                    <p class="text-sm font-semibold text-[#15201c]">
+                      Primary and alternate email addresses
+                    </p>
+                    <p class="mt-1 text-sm text-[#7d877f]">
+                      The first entered email address is selected as primary by default.
+                      Choose exactly one primary address. Alternate addresses can still identify
+                      this person.
+                    </p>
+                  </div>
+
+                  <p
+                    :if={@form_errors.global}
+                    id="person-email-addresses-error"
+                    role="alert"
+                    class="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700"
+                  >
+                    {@form_errors.global}
+                  </p>
+
+                  <input type="hidden" name="person[primary_email_index]" value="" />
+
+                  <div
+                    :for={row <- @email_rows}
+                    id={"person-email-row-#{row.index}"}
+                    data-testid="person-email-row"
+                    data-primary={to_string(row.primary?)}
+                    class="grid gap-3 rounded-xl border border-[#e6e3dc] bg-white p-3 shadow-sm sm:grid-cols-[auto_1fr_auto] sm:items-start"
+                  >
+                    <label
+                      for={"person-primary-radio-#{row.index}"}
+                      class="mt-8 flex items-center gap-2 text-sm font-semibold text-[#4b5a55]"
+                    >
+                      <input
+                        id={"person-primary-radio-#{row.index}"}
+                        type="radio"
+                        name="person[primary_email_index]"
+                        value={row.index}
+                        checked={row.primary?}
+                        class="radio radio-sm"
+                      /> Primary
+                    </label>
+
+                    <.input
+                      id={"person-email-input-#{row.index}"}
+                      name={"person[email_addresses][#{row.index}][email]"}
+                      type="email"
+                      label="Email address"
+                      aria-label={"Email address #{row.index}"}
+                      value={row.email}
+                      errors={Map.get(@form_errors.row_errors, row.index, [])}
+                      required
+                    />
+
+                    <button
+                      :if={length(@email_rows) > 1}
+                      id={"remove-person-email-address-#{row.index}"}
+                      type="button"
+                      phx-click="remove_email_address"
+                      phx-value-index={row.index}
+                      aria-label={"Remove email address #{row.index}"}
+                      class="mt-7 rounded-full border border-red-200 bg-white px-3 py-1.5 text-sm font-semibold text-red-700 transition duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
+                    >
+                      Remove
+                    </button>
+                  </div>
 
                   <button
-                    :if={length(@email_rows) > 1}
-                    id={"remove-person-email-address-#{row.index}"}
+                    id="add-person-email-address"
                     type="button"
-                    phx-click="remove_email_address"
-                    phx-value-index={row.index}
-                    aria-label={"Remove email address #{row.index}"}
-                    class="mt-7 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 hover:border-red-300 hover:text-red-700"
+                    phx-click="add_email_address"
+                    aria-label="Add email address"
+                    class="rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
                   >
-                    Remove
+                    Add email address
                   </button>
                 </div>
 
-                <button
-                  id="add-person-email-address"
-                  type="button"
-                  phx-click="add_email_address"
-                  aria-label="Add email address"
-                  class="rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700"
-                >
-                  Add email address
-                </button>
-              </div>
+                <div class="flex flex-col gap-3 border-t border-[#e6e3dc] pt-5 sm:flex-row sm:items-center">
+                  <.button
+                    id="create-person-button"
+                    type="submit"
+                    aria-label="Create person"
+                    class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+                  >
+                    Create person
+                  </.button>
+                  <.link
+                    id="cancel-person-link"
+                    navigate={~p"/admin/clubs/#{@club_id}"}
+                    class="inline-flex items-center justify-center rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
+                  >
+                    Cancel
+                  </.link>
+                </div>
+              </.form>
+            </section>
 
-              <.button id="create-person-button" type="submit" aria-label="Create person">
-                Create person
-              </.button>
-            </.form>
-          </section>
+            <aside
+              id="person-workflow-help-card"
+              class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+            >
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Workflow note
+              </p>
+              <h2 class="mt-1 text-lg font-semibold text-[#15201c]">
+                Person first, membership second
+              </h2>
+              <p class="mt-2 text-sm text-[#4b5a55]">
+                Saving this form creates the person and email-address set. Use the club detail page
+                to add that person as an active member of a club.
+              </p>
+            </aside>
+          </div>
         <% else %>
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h1 class="text-2xl font-bold text-zinc-900">Club not found</h1>
-            <p class="mt-2 text-zinc-600">No projected club exists for this URL.</p>
+          <section class="space-y-4">
+            <.link
+              id="back-to-club-link"
+              navigate={~p"/admin/clubs/#{@club_id}"}
+              aria-label="Back to club"
+              class="text-sm font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
+            >
+              ← Club
+            </.link>
+            <div class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <h1 class="text-2xl font-bold text-[#15201c]">Club not found</h1>
+              <p class="mt-2 text-[#4b5a55]">No projected club exists for this URL.</p>
+            </div>
           </section>
         <% end %>
       </main>
