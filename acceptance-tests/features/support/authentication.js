@@ -11,9 +11,10 @@ const {
   ensureState,
   kootenayClubName,
   nelsonClubName,
-  testMailboxEmails
+  scopedLabel,
+  testMailboxEmails,
+  waitForMailboxEmails
 } = require("./member_message");
-const { displayStaffEmail, scopedEmailAddress, scopedLabel } = require("./scoping");
 
 const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
 const signInSubject = "Sign in to Memba";
@@ -27,7 +28,11 @@ function authEmailFor(world, name) {
 }
 
 function staffEmailForWorld(world) {
-  return displayStaffEmail(world, staffEmail);
+  if (process.env.ACCEPTANCE_SCENARIO_SCOPING === "1" && world && world.scenarioId) {
+    return `acceptance-staff+${world.scenarioId}@memba.io`;
+  }
+
+  return staffEmail;
 }
 
 async function signInStaffForSetup(world) {
@@ -109,48 +114,37 @@ async function requestSignInLinkForEmail(world, email, personName = email) {
   world.signInRequests = world.signInRequests || {};
   world.signInLinks = world.signInLinks || {};
 
-  const displayEmail = scopedEmailAddress(world, email);
   const previousEmails = await testMailboxEmails(world);
   await world.page.goto(appUrl(world.baseUrl, "/auth"));
-  await world.page.getByLabel("Email address").fill(displayEmail);
+  await world.page.getByLabel("Email address").fill(email);
   await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await playwrightExpect(
     world.page.getByText("Thanks. You should have an email in your inbox with a sign-in link.")
   ).toBeVisible();
 
-  world.signInRequests[personName] = { email: displayEmail, previousEmails };
+  world.signInRequests[personName] = { email, previousEmails };
 }
 
 async function assertReceivesSignInLink(world, personName) {
   const request = signInRequestFor(world, personName);
-  const { email, newEmails } = await waitForSignInEmail(world, request);
+  const emails = await waitForMailboxEmails(
+    world,
+    request.previousEmails.length + 1,
+    `sign-in email for ${request.email}`
+  );
+  const previousIds = request.previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
+  const email = newEmails.find((mailboxEmail) => signInEmailMatches(mailboxEmail, request.email));
+
+  assert.ok(
+    email,
+    `Expected ${request.email} to receive a sign-in email; saw ${JSON.stringify(newEmails.map(emailSummary))}`
+  );
 
   const signInLink = signInLinkFromTextBody(email.text_body);
   assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${email.text_body}`);
 
   world.signInLinks[personName] = browserAppUrl(world, signInLink);
-}
-
-async function waitForSignInEmail(world, request) {
-  const deadline = Date.now() + 10000;
-  const previousIds = request.previousEmails.map(mailboxMessageId).filter(Boolean);
-  let newEmails = [];
-
-  do {
-    const emails = await testMailboxEmails(world);
-    newEmails = emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
-    const email = newEmails.find((mailboxEmail) => signInEmailMatches(mailboxEmail, request.email));
-
-    if (email) {
-      return { email, newEmails };
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  } while (Date.now() <= deadline);
-
-  throw new assert.AssertionError({
-    message: `Expected ${request.email} to receive a sign-in email; saw ${JSON.stringify(newEmails.map(emailSummary))}`
-  });
 }
 
 async function assertDoesNotReceiveSignInLink(world, personName) {

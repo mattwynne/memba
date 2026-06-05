@@ -15,7 +15,6 @@ const {
   kootenayClubName,
   updateClubSlug
 } = require("../support/member_message");
-const { displayClubName, scopedSlug } = require("../support/scoping");
 const { withStaffHarness } = require("../support/member_harness");
 
 const productionClubBaseDomain = "clubs.memba.io";
@@ -38,7 +37,7 @@ When("{word} signs in", async function (personName) {
 
 When("{word} opens Kootenay Mountaineering Club from her clubs", async function (_personName) {
   await this.page
-    .locator('[data-testid="my-club-link"]', { hasText: displayClubName(this, kootenayClubName) })
+    .locator('[data-testid="my-club-link"]', { hasText: kootenayClubName })
     .click();
   await playwrightExpect(this.page.locator("#member-club-home")).toBeVisible();
 });
@@ -79,28 +78,27 @@ When("{word} visits the Memba homepage", async function (_personName) {
 });
 
 Then("{word} should be on {string}", async function (_personName, host) {
-  assert.equal(new URL(this.page.url()).hostname, localHostForProductionHost(this, host));
+  assert.equal(new URL(this.page.url()).hostname, localHostForProductionHost(host));
 });
 
 Then("{word} should see the Kootenay Mountaineering Club member dashboard", async function (_personName) {
   const club = this.clubs && this.clubs[kootenayClubName];
   assert.ok(club, `Expected ${kootenayClubName} to be known in the scenario`);
   await playwrightExpect(this.page.locator(`#member-club-home[data-club-id="${club.clubId}"]`)).toBeVisible();
-  await playwrightExpect(this.page.locator("#member-dashboard-hero")).toContainText(displayClubName(this, kootenayClubName));
+  await playwrightExpect(this.page.locator("#member-dashboard-hero")).toContainText(kootenayClubName);
 });
 
 Then("the message should be addressed to Kootenay Mountaineering Club members", async function () {
-  const clubName = displayClubName(this, kootenayClubName);
-  await playwrightExpect(this.page.locator("#member-compose-selected-club")).toHaveText(clubName);
+  await playwrightExpect(this.page.locator("#member-compose-selected-club")).toHaveText(kootenayClubName);
   await playwrightExpect(this.page.locator("#member-compose-recipient-summary")).toContainText(
-    `of ${clubName}`
+    `of ${kootenayClubName}`
   );
 });
 
 Then("{word} should return to the private message URL on {string}", async function (_personName, host) {
   const subject = this.lastMessageSubject;
   const currentUrl = new URL(this.page.url());
-  assert.equal(currentUrl.hostname, localHostForProductionHost(this, host));
+  assert.equal(currentUrl.hostname, localHostForProductionHost(host));
   assert.equal(currentUrl.pathname, `/messages/${messageIdFor(this, subject)}`);
 });
 
@@ -114,17 +112,17 @@ Then("Robin should see a not found page", async function () {
 
 Then("{word} should see Smoke Test Club in the staff club list", async function (_personName) {
   await playwrightExpect(
-    this.page.locator(`[data-testid="club-row"][data-club-name=${cssString(displayClubName(this, smokeTestClubName))}]`)
+    this.page.locator(`[data-testid="club-row"][data-club-name=${cssString(smokeTestClubName)}]`)
   ).toBeVisible();
 });
 
 Then("Robin should not see the Smoke Test Club public page", async function () {
   await playwrightExpect(this.page.locator("#public-club-page-page")).toHaveCount(0);
-  await playwrightExpect(this.page.locator("body")).not.toContainText(`Welcome to ${displayClubName(this, smokeTestClubName)}`);
+  await playwrightExpect(this.page.locator("body")).not.toContainText(`Welcome to ${smokeTestClubName}`);
 });
 
 Then("Robin should not see Smoke Test Club", async function () {
-  await playwrightExpect(this.page.locator("body")).not.toContainText(displayClubName(this, smokeTestClubName));
+  await playwrightExpect(this.page.locator("body")).not.toContainText(smokeTestClubName);
 });
 
 async function ensureClubHasSlug(world, clubName, slug) {
@@ -171,11 +169,11 @@ function messageIdFor(world, subject) {
 
 function clubHostUrl(world, host, path = "/") {
   const baseUrl = new URL(world.baseUrl);
-  const url = new URL(path, `${baseUrl.protocol}//${localHostForProductionHost(world, host)}:${baseUrl.port || defaultPort(baseUrl.protocol)}`);
+  const url = new URL(path, `${baseUrl.protocol}//${localHostForProductionHost(host)}:${baseUrl.port || defaultPort(baseUrl.protocol)}`);
   return url.toString();
 }
 
-function localHostForProductionHost(world, host) {
+function localHostForProductionHost(host) {
   const normalizedHost = String(host)
     .replace(/^https?:\/\//, "")
     .replace(/\/.*$/, "")
@@ -183,7 +181,7 @@ function localHostForProductionHost(world, host) {
 
   if (normalizedHost.endsWith(`.${productionClubBaseDomain}`)) {
     const slug = normalizedHost.slice(0, -1 * (`.${productionClubBaseDomain}`).length);
-    return `${scopedSlug(world, slug)}.${localClubBaseDomain()}`;
+    return `${slug}.${localClubBaseDomain()}`;
   }
 
   return normalizedHost;

@@ -25,7 +25,6 @@ async function main() {
     process.exitCode = await runCucumber(args, {
       ...process.env,
       ACCEPTANCE_SKIP_APP_START: "1",
-      ACCEPTANCE_PROJECTION_TIMEOUT_MS: process.env.ACCEPTANCE_PROJECTION_TIMEOUT_MS || "20000",
       ACCEPTANCE_RESET_STATE: "0",
       ACCEPTANCE_SCENARIO_SCOPING: "1",
       BASE_URL: lifecycle.baseUrl

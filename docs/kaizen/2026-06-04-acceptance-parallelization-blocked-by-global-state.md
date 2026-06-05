@@ -95,4 +95,4 @@ Validation:
 
 Remaining follow-up:
 
-- Full-suite `bin/dev acceptance --parallel 2` is not complete yet. After centralising alias/scoping helpers and broadening them to explicit emails, slugs, staff sign-in, receipt lookups, and smoke-test scheduling, the latest trial reached 29/34 passing scenarios. Remaining failures are concentrated in a few membership setup/projection waits, one cross-club Pat sign-in path, and smoke-test fixture reuse across isolated scenarios. The serial `bin/dev check` remains green.
+- Full-suite `bin/dev acceptance --parallel 2` is not complete yet. A trial run exposed remaining aliasing work around delivery-recipient lookup, explicit duplicate subdomain slugs such as `kmc`, smoke-test fixtures, and explicit email-address scenarios; later failures also saw the shared app become unreachable, so the next pass should inspect Phoenix logs around the first full-suite failure before assuming all remaining issues are simple scoping gaps.
