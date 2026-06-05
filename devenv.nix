@@ -96,6 +96,7 @@ in
     argc
     devenv
     git
+    gum
     nodejs_22
     python3
     tailwindcss_4

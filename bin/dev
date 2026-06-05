@@ -922,6 +922,7 @@ _fabro_progress() {
 
   python3 - "$run_id" "$tmp" <<'PY'
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -941,17 +942,19 @@ percent = 100 if total == 0 else round(done * 100 / total)
 width = 30
 filled = 0 if total == 0 else round(done * width / total)
 bar = "█" * filled + "░" * (width - filled)
+next_task = next((text for checked, text in tasks if not checked), None) if tasks else None
 
-print(f"Fabro run {run_id}")
-print(f"Progress: [{bar}] {done}/{total} ({percent}%)")
-print(f"Remaining: {remaining}")
+lines = [
+    f"Fabro run {run_id}",
+    f"Progress: [{bar}] {done}/{total} ({percent}%)",
+    f"Remaining: {remaining}",
+    f"Next: {next_task}" if next_task else "Next: all todo tasks are checked",
+]
 
-if tasks:
-    next_task = next((text for checked, text in tasks if not checked), None)
-    if next_task:
-        print(f"Next: {next_task}")
-    else:
-        print("Next: all todo tasks are checked")
+subprocess.run(["gum", "style", "--bold", "--foreground", "212", lines[0]], check=True)
+subprocess.run(["gum", "style", "--foreground", "42", lines[1]], check=True)
+subprocess.run(["gum", "style", "--foreground", "245", lines[2]], check=True)
+subprocess.run(["gum", "style", "--foreground", "214", lines[3]], check=True)
 PY
   local status=$?
   rm -f "$tmp"
