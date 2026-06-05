@@ -1034,7 +1034,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-05T16:56:35.331126565Z",
-  "last_event_at": "2026-06-05T16:59:37.503637252Z",
+  "last_event_at": "2026-06-05T16:59:42.515047590Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3238,9 +3238,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 137,
       "checkpoint": {
-        "timestamp": "2026-06-05T16:59:39.426497542Z",
+        "timestamp": "2026-06-05T16:59:42.514848387Z",
         "current_node": "publish_ready",
         "completed_nodes": [
           "start",
@@ -3259,85 +3259,71 @@
         ],
         "node_retries": {},
         "context_values": {
-          "thread.claude_review.current_node": "codex_review",
-          "command.output": "blob://sha256/870da332d8c90fa1851eefdf455af58420b6e202914aae48fc87d2032daa893d",
-          "response.synthesize": "{\"cmd\": \"ls\"}{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "thread.read_plan_301_360.current_node": "gemini_review",
-          "codex_review_required_edits": "None",
-          "codex_review_blocking_gap_count": 0,
-          "plan_needs_fix": false,
-          "thread.read_plan_181_240.current_node": "read_plan_241_300",
-          "internal.retry_count.read_plan_301_360": 0,
-          "plan_ready": true,
-          "internal.retry_count.codex_review": 0,
-          "thread.synthesis_gate.current_node": "publish_ready",
-          "response.claude_review": "# Independent Plan Review: Staff Area Redesign\n\n## Decision: READY\n\n## Confidence: High\n\nThis plan is exceptionally well-structured and thorough. It demonstrates clear goal articulation, appropriate scope boundaries, comprehensive acceptance criteria with explicit BDD decisions, detailed implementation guidance, and a robust validation approach.\n\n---\n\n## Blocking gaps\n\n**None identified.**\n\nThe plan addresses all readiness criteria:\n- Goal and beneficiary are clear (Memba staff operations clarity)\n- Domain rule (person vs membership distinction) is explicitly stated and drives scope decisions\n- Acceptance criteria are concrete, testable, and comprehensive\n- BDD decision is explicit with feature file named: `acceptance-tests/features/memba_staff_operations.feature`\n- Business decisions are resolved; open decisions from planning are documented as closed\n- Implementation steps are numbered, sequenced, and name specific files/modules/patterns\n- Technical decisions are appropriately deferred to implementation with clear guidance and fallback positions\n- Expected capability is clear and testable\n- Validation plan includes multiple approaches (tests, acceptance scenarios, dev check, manual demo)\n- Risks and follow-ups are identified\n\nGemini's assessment of READY/High confidence/0 blocking gaps is correct.\n\n---\n\n## Non-blocking improvements\n\n1. **Composer removal timing**: The plan could defer removing the staff message composer to a follow-up, making this iteration purely additive (no breaking changes). This would reduce risk and complexity while still delivering the core goal of \"clearer operations area showing the domain model.\" The removal could be a quick subsequent iteration.\n\n2. **Effort sizing**: The plan could include a rough effort estimate or t-shirt sizing. The iteration touches 6 existing pages, adds 2 new pages, updates layout/navigation, and requires feature file scenarios—this is medium-large in scope. An explicit acknowledgment of expected effort would help with implementation planning.\n\n3. **Acceptance scenario update specificity**: Line 157 states \"Existing acceptance scenarios... keep passing unless intentionally updated for route/nav copy.\" The plan could be more specific about which scenarios are likely to need updates (e.g., any that reference `/admin/clubs/:club_id` navigation or staff composer affordances).\n\n4. **Mockup reference completeness**: The plan lists 5 mockup files but doesn't clarify if all 5 are relevant or if some are examples of what NOT to copy. The \"Deliveries _ full diagnostics.html\" mockup is mentioned but the plan keeps existing diagnostics—clarifying which mockups inform which pages would be helpful.\n\nNone of these improvements are required for implementation to proceed safely.\n\n---\n\n## Smallest viable iteration\n\nThe current scope is coherent and represents a reasonable minimum to deliver the stated goal: \"Memba staff have a clearer operations area that shows the real domain model.\"\n\n**If the iteration must be smaller**, the most viable reduction would be:\n\n### Option A: Defer message composer removal\n- Keep: Layout shell, navigation, restyle 6 pages, add 2 new read-only pages\n- Defer: Removing staff message composer\n- Benefit: Makes the iteration purely additive with no breaking changes\n- Tradeoff: Staff area temporarily shows an action that doesn't align with the \"read-only diagnostics\" direction, requiring a quick follow-up\n\nThis reduction would still deliver:\n- Clearer navigation structure\n- New People page demonstrating person/membership distinction\n- New Messages page for cross-club diagnostics\n- Consistent restyling\n\nThe composer removal would become a small follow-up iteration focused solely on cleaning up that affordance and updating related acceptance helpers.\n\n**Current scope assessment**: While medium-large, the current scope is defensible. The plan argues that layout, navigation, new views, and existing page updates need to be done together for coherence. Splitting would create inconsistent intermediate states where some pages follow the new design system and others don't, or where navigation points to pages that don't exist yet.\n\n---\n\n## Required plan edits\n\n**None.**\n\nThe plan is ready for implementation as written. The non-blocking improvements above are suggestions for consideration, not requirements.\n\n---\n\n## Validation plan\n\nThe plan includes a comprehensive validation approach that should prove iteration success:\n\n### Automated validation\n1. **LiveView tests** for:\n   - Staff navigation links (4 working pages only)\n   - `/admin/people` read-only list with multi-club membership summary\n   - `/admin/messages` read-only list and diagnostics links\n   - Absence of staff-side send-message affordance\n   - Preservation of existing club/person/membership workflows\n\n2. **Acceptance scenarios** (after removing `@wip` tag):\n   - Staff navigation offers only working pages\n   - One person with memberships in multiple clubs appears correctly\n   - Messages across clubs are visible with diagnostics access\n   - Staff cannot send club messages from staff pages\n\n3. **Existing regression protection**:\n   - Existing acceptance scenarios for staff sign-in, club visibility, slug management, person email addresses, and deliverability\n   - Acceptance configuration checks (can run while scenarios are `@wip`)\n\n4. **`dev check`**: Must pass before delivery complete\n\n### Manual validation\n8-step demo checklist (lines 221-230):\n1. Sign in as Memba staff\n2. Verify nav shows only Clubs, People, Messages, Deliveries\n3. Open Clubs, create/inspect club\n4. Open club, verify distinction of facts/people/memberships\n5. Confirm no staff-side message composer\n6. Open People, verify person with multiple memberships shown correctly\n7. Open Messages, open message diagnostics\n8. Open Deliveries, verify existing diagnostics\n\n### Review validation\n- Compare implemented pages to mockups for operations feel\n- Verify domain language remains honest (people ≠ memberships)\n\n### Stop condition\nClear: When acceptance scenarios pass without `@wip` tag and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan demonstrates excellent planning discipline:\n- Clear domain modeling decisions documented\n- Explicit BDD approach with feature file named\n- Comprehensive acceptance criteria covering happy paths, edge cases, and removals\n- Detailed implementation guidance with appropriate technical decision deferrals\n- Robust validation combining automated tests, acceptance scenarios, and manual verification\n- Risk awareness with follow-up planning\n\nThe iteration is medium-large in scope but makes a coherent argument for why everything needs to be done together. If timeline is a concern, the message composer removal could be deferred, but the current scope is defensible and ready for implementation.\n\n**Recommendation**: Proceed with validation and mark plan as validated.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
-          "current_node": "publish_ready",
-          "codex_review_confidence": "High",
           "internal.retry_count.read_plan_061_120": 0,
-          "failure_class": "",
-          "internal.node_visit_count": 1,
-          "outcome": "succeeded",
-          "internal.work_dir": "/workspace/memba",
-          "gemini_review_required_edits": "None",
-          "internal.thread_id": "synthesis_gate",
-          "internal.retry_count.gemini_review": 0,
-          "graph.default_fidelity": "summary:high",
-          "thread.codex_review.current_node": "synthesize",
-          "internal.retry_count.claude_review": 0,
+          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
           "gemini_review_decision": "READY",
-          "last_response": "{\"cmd\": \"ls\"}{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "thread.read_plan_241_300.current_node": "read_plan_301_360",
-          "internal.retry_count.synthesize": 0,
-          "gemini_review_blocking_gap_count": 0,
-          "internal.retry_count.start": 0,
-          "thread.read_plan_061_120.current_node": "read_plan_121_180",
-          "internal.run_id": "01KTCBE0T63WC73TTCR5RZNJ6W",
-          "claude_review_required_edits": "None",
-          "codex_review_blocking_gaps": "None",
-          "claude_review_decision": "READY",
           "internal.fidelity": "summary:high",
-          "gemini_review_blocking_gaps": "None",
-          "plan_needs_human": false,
-          "thread.start.current_node": "read_plan_001_060",
-          "thread.read_plan_121_180.current_node": "read_plan_181_240",
-          "gemini_review_confidence": "High",
-          "thread.synthesize.current_node": "synthesis_gate",
-          "thread.read_plan_001_060.current_node": "read_plan_061_120",
-          "internal.retry_count.publish_ready": 0,
-          "failure_signature": "",
-          "graph.rankdir": "LR",
-          "claude_review_blocking_gaps": "None",
-          "claude_review_blocking_gap_count": 0,
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "internal.retry_count.synthesis_gate": 0,
           "claude_review_confidence": "High",
+          "internal.thread_id": "synthesis_gate",
+          "plan_ready": true,
+          "gemini_review_required_edits": "None",
+          "gemini_review_blocking_gaps": "None",
+          "response.synthesize": "{\"cmd\": \"ls\"}{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.synthesize": 0,
+          "claude_review_blocking_gaps": "None",
+          "thread.read_plan_121_180.current_node": "read_plan_181_240",
+          "thread.read_plan_181_240.current_node": "read_plan_241_300",
+          "gemini_review_confidence": "High",
+          "thread.gemini_review.current_node": "claude_review",
+          "command.output": "blob://sha256/870da332d8c90fa1851eefdf455af58420b6e202914aae48fc87d2032daa893d",
+          "claude_review_blocking_gap_count": 0,
+          "internal.retry_count.publish_ready": 0,
+          "claude_review_required_edits": "None",
+          "internal.retry_count.synthesis_gate": 0,
+          "internal.retry_count.gemini_review": 0,
+          "thread.read_plan_001_060.current_node": "read_plan_061_120",
           "internal.retry_count.read_plan_181_240": 0,
           "codex_review_decision": "READY",
-          "internal.retry_count.read_plan_001_060": 0,
+          "plan_needs_human": false,
+          "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "thread.read_plan_061_120.current_node": "read_plan_121_180",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.read_plan_121_180": 0,
           "internal.retry_count.read_plan_241_300": 0,
-          "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
-          "thread.gemini_review.current_node": "claude_review",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.run_id": "01KTCBE0T63WC73TTCR5RZNJ6W",
+          "plan_needs_fix": false,
+          "thread.read_plan_241_300.current_node": "read_plan_301_360",
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.read_plan_301_360": 0,
+          "outcome": "succeeded",
+          "graph.rankdir": "LR",
+          "codex_review_blocking_gap_count": 0,
+          "claude_review_decision": "READY",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.read_plan_001_060": 0,
+          "last_response": "{\"cmd\": \"ls\"}{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
+          "codex_review_required_edits": "None",
+          "codex_review_blocking_gaps": "None",
+          "failure_class": "",
+          "graph.default_fidelity": "summary:high",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan_001_060 { reasoning_effort: low; }\n            #read_plan_061_120 { reasoning_effort: low; }\n            #read_plan_121_180 { reasoning_effort: low; }\n            #read_plan_181_240 { reasoning_effort: low; }\n            #read_plan_241_300 { reasoning_effort: low; }\n            #read_plan_301_360 { reasoning_effort: low; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #read_updated_plan_001_060 { reasoning_effort: low; }\n            #read_updated_plan_061_120 { reasoning_effort: low; }\n            #read_updated_plan_121_180 { reasoning_effort: low; }\n            #read_updated_plan_181_240 { reasoning_effort: low; }\n            #read_updated_plan_241_300 { reasoning_effort: low; }\n            #read_updated_plan_301_360 { reasoning_effort: low; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "gemini_review_blocking_gap_count": 0,
+          "internal.retry_count.codex_review": 0,
           "last_stage": "synthesize",
-          "internal.retry_count.read_plan_121_180": 0
+          "thread.codex_review.current_node": "synthesize",
+          "internal.retry_count.start": 0,
+          "thread.read_plan_301_360.current_node": "gemini_review",
+          "response.claude_review": "# Independent Plan Review: Staff Area Redesign\n\n## Decision: READY\n\n## Confidence: High\n\nThis plan is exceptionally well-structured and thorough. It demonstrates clear goal articulation, appropriate scope boundaries, comprehensive acceptance criteria with explicit BDD decisions, detailed implementation guidance, and a robust validation approach.\n\n---\n\n## Blocking gaps\n\n**None identified.**\n\nThe plan addresses all readiness criteria:\n- Goal and beneficiary are clear (Memba staff operations clarity)\n- Domain rule (person vs membership distinction) is explicitly stated and drives scope decisions\n- Acceptance criteria are concrete, testable, and comprehensive\n- BDD decision is explicit with feature file named: `acceptance-tests/features/memba_staff_operations.feature`\n- Business decisions are resolved; open decisions from planning are documented as closed\n- Implementation steps are numbered, sequenced, and name specific files/modules/patterns\n- Technical decisions are appropriately deferred to implementation with clear guidance and fallback positions\n- Expected capability is clear and testable\n- Validation plan includes multiple approaches (tests, acceptance scenarios, dev check, manual demo)\n- Risks and follow-ups are identified\n\nGemini's assessment of READY/High confidence/0 blocking gaps is correct.\n\n---\n\n## Non-blocking improvements\n\n1. **Composer removal timing**: The plan could defer removing the staff message composer to a follow-up, making this iteration purely additive (no breaking changes). This would reduce risk and complexity while still delivering the core goal of \"clearer operations area showing the domain model.\" The removal could be a quick subsequent iteration.\n\n2. **Effort sizing**: The plan could include a rough effort estimate or t-shirt sizing. The iteration touches 6 existing pages, adds 2 new pages, updates layout/navigation, and requires feature file scenarios—this is medium-large in scope. An explicit acknowledgment of expected effort would help with implementation planning.\n\n3. **Acceptance scenario update specificity**: Line 157 states \"Existing acceptance scenarios... keep passing unless intentionally updated for route/nav copy.\" The plan could be more specific about which scenarios are likely to need updates (e.g., any that reference `/admin/clubs/:club_id` navigation or staff composer affordances).\n\n4. **Mockup reference completeness**: The plan lists 5 mockup files but doesn't clarify if all 5 are relevant or if some are examples of what NOT to copy. The \"Deliveries _ full diagnostics.html\" mockup is mentioned but the plan keeps existing diagnostics—clarifying which mockups inform which pages would be helpful.\n\nNone of these improvements are required for implementation to proceed safely.\n\n---\n\n## Smallest viable iteration\n\nThe current scope is coherent and represents a reasonable minimum to deliver the stated goal: \"Memba staff have a clearer operations area that shows the real domain model.\"\n\n**If the iteration must be smaller**, the most viable reduction would be:\n\n### Option A: Defer message composer removal\n- Keep: Layout shell, navigation, restyle 6 pages, add 2 new read-only pages\n- Defer: Removing staff message composer\n- Benefit: Makes the iteration purely additive with no breaking changes\n- Tradeoff: Staff area temporarily shows an action that doesn't align with the \"read-only diagnostics\" direction, requiring a quick follow-up\n\nThis reduction would still deliver:\n- Clearer navigation structure\n- New People page demonstrating person/membership distinction\n- New Messages page for cross-club diagnostics\n- Consistent restyling\n\nThe composer removal would become a small follow-up iteration focused solely on cleaning up that affordance and updating related acceptance helpers.\n\n**Current scope assessment**: While medium-large, the current scope is defensible. The plan argues that layout, navigation, new views, and existing page updates need to be done together for coherence. Splitting would create inconsistent intermediate states where some pages follow the new design system and others don't, or where navigation points to pages that don't exist yet.\n\n---\n\n## Required plan edits\n\n**None.**\n\nThe plan is ready for implementation as written. The non-blocking improvements above are suggestions for consideration, not requirements.\n\n---\n\n## Validation plan\n\nThe plan includes a comprehensive validation approach that should prove iteration success:\n\n### Automated validation\n1. **LiveView tests** for:\n   - Staff navigation links (4 working pages only)\n   - `/admin/people` read-only list with multi-club membership summary\n   - `/admin/messages` read-only list and diagnostics links\n   - Absence of staff-side send-message affordance\n   - Preservation of existing club/person/membership workflows\n\n2. **Acceptance scenarios** (after removing `@wip` tag):\n   - Staff navigation offers only working pages\n   - One person with memberships in multiple clubs appears correctly\n   - Messages across clubs are visible with diagnostics access\n   - Staff cannot send club messages from staff pages\n\n3. **Existing regression protection**:\n   - Existing acceptance scenarios for staff sign-in, club visibility, slug management, person email addresses, and deliverability\n   - Acceptance configuration checks (can run while scenarios are `@wip`)\n\n4. **`dev check`**: Must pass before delivery complete\n\n### Manual validation\n8-step demo checklist (lines 221-230):\n1. Sign in as Memba staff\n2. Verify nav shows only Clubs, People, Messages, Deliveries\n3. Open Clubs, create/inspect club\n4. Open club, verify distinction of facts/people/memberships\n5. Confirm no staff-side message composer\n6. Open People, verify person with multiple memberships shown correctly\n7. Open Messages, open message diagnostics\n8. Open Deliveries, verify existing diagnostics\n\n### Review validation\n- Compare implemented pages to mockups for operations feel\n- Verify domain language remains honest (people ≠ memberships)\n\n### Stop condition\nClear: When acceptance scenarios pass without `@wip` tag and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan demonstrates excellent planning discipline:\n- Clear domain modeling decisions documented\n- Explicit BDD approach with feature file named\n- Comprehensive acceptance criteria covering happy paths, edge cases, and removals\n- Detailed implementation guidance with appropriate technical decision deferrals\n- Robust validation combining automated tests, acceptance scenarios, and manual verification\n- Risk awareness with follow-up planning\n\nThe iteration is medium-large in scope but makes a coherent argument for why everything needs to be done together. If timeline is a concern, the message composer removal could be deferred, but the current scope is defensible and ready for implementation.\n\n**Recommendation**: Proceed with validation and mark plan as validated.\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
+          "codex_review_confidence": "High",
+          "thread.start.current_node": "read_plan_001_060",
+          "thread.synthesis_gate.current_node": "publish_ready",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "current_node": "publish_ready",
+          "failure_signature": ""
         },
         "node_outcomes": {
-          "read_plan_181_240": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/27a9cb62a0dec39c769bdefe849b44d9855c24e5a65a4755666837fc8ffe3b52"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/021-staff-area-redesign/plan.md' 181 240 360 'original plan chunk 181-240'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 186,
-              "active_time_ms": 186
-            }
-          },
           "read_plan_061_120": {
             "status": "succeeded",
             "context_updates": {
@@ -3366,10 +3352,46 @@
               "active_time_ms": 196
             }
           },
-          "synthesis_gate": {
+          "codex_review": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
-            "usage": null
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_decision": "READY",
+              "codex_review_blocking_gaps": "None",
+              "codex_review_blocking_gap_count": 0,
+              "codex_review_required_edits": "None",
+              "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+              "codex_review_confidence": "High",
+              "last_stage": "codex_review"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6523,
+                    "output_tokens": 58,
+                    "reasoning_tokens": 379,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 45725
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 9827,
+              "tool_time_ms": 0,
+              "active_time_ms": 9827
+            }
           },
           "read_plan_121_180": {
             "status": "succeeded",
@@ -3383,20 +3405,6 @@
               "inference_time_ms": 0,
               "tool_time_ms": 195,
               "active_time_ms": 195
-            }
-          },
-          "read_plan_241_300": {
-            "status": "succeeded",
-            "context_updates": {
-              "command.output": "blob://sha256/be26323e59bf365b1de4cb34b8680fb11afcae4cce6805eb2e0093eeaed967fb"
-            },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/021-staff-area-redesign/plan.md' 241 300 360 'original plan chunk 241-300'",
-            "usage": null,
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 0,
-              "tool_time_ms": 162,
-              "active_time_ms": 162
             }
           },
           "claude_review": {
@@ -3442,47 +3450,6 @@
               "active_time_ms": 99614
             }
           },
-          "codex_review": {
-            "status": "succeeded",
-            "context_updates": {
-              "last_response": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-              "codex_review_decision": "READY",
-              "codex_review_blocking_gaps": "None",
-              "codex_review_blocking_gap_count": 0,
-              "codex_review_required_edits": "None",
-              "response.codex_review": "{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-              "codex_review_confidence": "High",
-              "last_stage": "codex_review"
-            },
-            "notes": "Stage completed: codex_review",
-            "usage": {
-              "input": {
-                "usage": {
-                  "model": {
-                    "provider": "openai",
-                    "model_id": "gpt-5.5"
-                  },
-                  "tokens": {
-                    "input_tokens": 6523,
-                    "output_tokens": 58,
-                    "reasoning_tokens": 379,
-                    "cache_read_tokens": 0,
-                    "cache_write_tokens": 0
-                  }
-                },
-                "facts": {
-                  "algorithm": "openai"
-                }
-              },
-              "total_usd_micros": 45725
-            },
-            "timing": {
-              "wall_time_ms": 0,
-              "inference_time_ms": 9827,
-              "tool_time_ms": 0,
-              "active_time_ms": 9827
-            }
-          },
           "gemini_review": {
             "status": "succeeded",
             "context_updates": {
@@ -3525,19 +3492,38 @@
               "active_time_ms": 18679
             }
           },
-          "read_plan_301_360": {
+          "publish_ready": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/43a2cea5b5b32bafcfc0d64c294240f07960f09ff8e498b371be68d9b9867486"
+              "command.output": "blob://sha256/870da332d8c90fa1851eefdf455af58420b6e202914aae48fc87d2032daa893d"
             },
-            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/021-staff-area-redesign/plan.md' 301 360 360 'original plan chunk 301-360'",
+            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/021-staff-area-redesign/plan.md'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 188,
-              "active_time_ms": 188
+              "tool_time_ms": 1880,
+              "active_time_ms": 1880
             }
+          },
+          "read_plan_181_240": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/27a9cb62a0dec39c769bdefe849b44d9855c24e5a65a4755666837fc8ffe3b52"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/021-staff-area-redesign/plan.md' 181 240 360 'original plan chunk 181-240'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 186,
+              "active_time_ms": 186
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
           },
           "synthesize": {
             "status": "succeeded",
@@ -3578,46 +3564,238 @@
               "active_time_ms": 15369
             }
           },
-          "publish_ready": {
+          "read_plan_301_360": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/870da332d8c90fa1851eefdf455af58420b6e202914aae48fc87d2032daa893d"
+              "command.output": "blob://sha256/43a2cea5b5b32bafcfc0d64c294240f07960f09ff8e498b371be68d9b9867486"
             },
-            "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/021-staff-area-redesign/plan.md'",
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/021-staff-area-redesign/plan.md' 301 360 360 'original plan chunk 301-360'",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 1880,
-              "active_time_ms": 1880
+              "tool_time_ms": 188,
+              "active_time_ms": 188
             }
           },
           "start": {
             "status": "succeeded",
             "usage": null
+          },
+          "read_plan_241_300": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/be26323e59bf365b1de4cb34b8680fb11afcae4cce6805eb2e0093eeaed967fb"
+            },
+            "notes": "Script completed: .fabro/workflows/plan-validation/scripts/print_plan_chunk.sh 'docs/iterations/021-staff-area-redesign/plan.md' 241 300 360 'original plan chunk 241-300'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 162,
+              "active_time_ms": 162
+            }
           }
         },
         "next_node_id": "exit",
+        "git_commit_sha": "8d7cd23f8db41f60e7f89b7ca0f107d68c4cb835",
         "node_visits": {
-          "read_plan_121_180": 1,
-          "read_plan_061_120": 1,
-          "claude_review": 1,
-          "start": 1,
-          "codex_review": 1,
-          "read_plan_181_240": 1,
-          "read_plan_001_060": 1,
           "synthesize": 1,
-          "read_plan_301_360": 1,
-          "read_plan_241_300": 1,
+          "read_plan_001_060": 1,
+          "codex_review": 1,
+          "read_plan_061_120": 1,
           "gemini_review": 1,
+          "read_plan_121_180": 1,
+          "read_plan_301_360": 1,
+          "publish_ready": 1,
+          "read_plan_181_240": 1,
+          "read_plan_241_300": 1,
           "synthesis_gate": 1,
-          "publish_ready": 1
+          "start": 1,
+          "claude_review": 1
         }
       },
-      "diff": {}
+      "diff": {
+        "patch": "diff --git a/docs/iterations/021-staff-area-redesign/plan.md b/docs/iterations/021-staff-area-redesign/plan.md\nindex ece6011..1d67cf0 100644\n--- a/docs/iterations/021-staff-area-redesign/plan.md\n+++ b/docs/iterations/021-staff-area-redesign/plan.md\n@@ -1,7 +1,7 @@\n # Staff area redesign and read-only operations indexes\n \n Date: 2026-06-05\n-Status: ready\n+Status: validated\n \n ## Goal\n \ndiff --git a/docs/iterations/README.md b/docs/iterations/README.md\nindex af02996..01b7c40 100644\n--- a/docs/iterations/README.md\n+++ b/docs/iterations/README.md\n@@ -30,7 +30,7 @@ green than before.\n | 018 | 2026-06-01 | merged | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |\n | 019 | 2026-06-02 | merged | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |\n | 020 | 2026-06-02 | merged | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |\n-| 021 | 2026-06-05 | ready | Staff area redesign and read-only operations indexes | [plan](021-staff-area-redesign/plan.md) |\n+| 021 | 2026-06-05 | validated | Staff area redesign and read-only operations indexes | [plan](021-staff-area-redesign/plan.md) |\n \n Status notes:\n \n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 2,
+          "deletions": 2
+        }
+      }
     }
   ],
-  "conclusion": null,
+  "conclusion": {
+    "timestamp": "2026-06-05T16:59:42.629117619Z",
+    "status": "succeeded",
+    "timing": {
+      "wall_time_ms": 187194,
+      "inference_time_ms": 143489,
+      "tool_time_ms": 2991,
+      "active_time_ms": 146480
+    },
+    "final_git_commit_sha": "8d7cd23f8db41f60e7f89b7ca0f107d68c4cb835",
+    "stages": [
+      {
+        "stage_id": "start",
+        "stage_label": "start",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_001_060",
+        "stage_label": "read_plan_001_060",
+        "timing": {
+          "wall_time_ms": 230,
+          "inference_time_ms": 0,
+          "tool_time_ms": 196,
+          "active_time_ms": 196
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_061_120",
+        "stage_label": "read_plan_061_120",
+        "timing": {
+          "wall_time_ms": 210,
+          "inference_time_ms": 0,
+          "tool_time_ms": 184,
+          "active_time_ms": 184
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_121_180",
+        "stage_label": "read_plan_121_180",
+        "timing": {
+          "wall_time_ms": 240,
+          "inference_time_ms": 0,
+          "tool_time_ms": 195,
+          "active_time_ms": 195
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_181_240",
+        "stage_label": "read_plan_181_240",
+        "timing": {
+          "wall_time_ms": 209,
+          "inference_time_ms": 0,
+          "tool_time_ms": 186,
+          "active_time_ms": 186
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_241_300",
+        "stage_label": "read_plan_241_300",
+        "timing": {
+          "wall_time_ms": 205,
+          "inference_time_ms": 0,
+          "tool_time_ms": 162,
+          "active_time_ms": 162
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "read_plan_301_360",
+        "stage_label": "read_plan_301_360",
+        "timing": {
+          "wall_time_ms": 210,
+          "inference_time_ms": 0,
+          "tool_time_ms": 188,
+          "active_time_ms": 188
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "gemini_review",
+        "stage_label": "gemini_review",
+        "timing": {
+          "wall_time_ms": 18760,
+          "inference_time_ms": 18679,
+          "tool_time_ms": 0,
+          "active_time_ms": 18679
+        },
+        "billing_usd_micros": 35340,
+        "retries": 0
+      },
+      {
+        "stage_id": "claude_review",
+        "stage_label": "claude_review",
+        "timing": {
+          "wall_time_ms": 99681,
+          "inference_time_ms": 99614,
+          "tool_time_ms": 0,
+          "active_time_ms": 99614
+        },
+        "billing_usd_micros": 81501,
+        "retries": 0
+      },
+      {
+        "stage_id": "codex_review",
+        "stage_label": "codex_review",
+        "timing": {
+          "wall_time_ms": 9898,
+          "inference_time_ms": 9827,
+          "tool_time_ms": 0,
+          "active_time_ms": 9827
+        },
+        "billing_usd_micros": 45725,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesize",
+        "stage_label": "synthesize",
+        "timing": {
+          "wall_time_ms": 15440,
+          "inference_time_ms": 15369,
+          "tool_time_ms": 0,
+          "active_time_ms": 15369
+        },
+        "billing_usd_micros": 58315,
+        "retries": 0
+      },
+      {
+        "stage_id": "synthesis_gate",
+        "stage_label": "synthesis_gate",
+        "timing": {
+          "wall_time_ms": 0,
+          "inference_time_ms": 0,
+          "tool_time_ms": 0,
+          "active_time_ms": 0
+        },
+        "retries": 0
+      },
+      {
+        "stage_id": "publish_ready",
+        "stage_label": "publish_ready",
+        "timing": {
+          "wall_time_ms": 1924,
+          "inference_time_ms": 0,
+          "tool_time_ms": 1880,
+          "active_time_ms": 1880
+        },
+        "retries": 0
+      }
+    ],
+    "billing": {
+      "input_tokens": 24249,
+      "output_tokens": 4520,
+      "total_tokens": 31869,
+      "reasoning_tokens": 3100,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "total_usd_micros": 220881
+    },
+    "total_retries": 0,
+    "diff": {}
+  },
   "sandbox": {
     "provider": "docker",
     "image": "buildpack-deps:noble",
@@ -4125,7 +4303,12 @@
       "first_event_seq": 130,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: if [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/021-staff-area-redesign/plan.md'",
+        "failure_reason": null,
+        "timestamp": "2026-06-05T16:59:39.406149389Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -4133,11 +4316,27 @@
         "command": "exec 2>&1\nif [ 'true' = 'false' ]; then\n  echo 'Plan validation would publish READY, but publish=false for eval/test.'\n  exit 0\nfi\n.fabro/workflows/plan-validation/scripts/publish_ready.sh 'docs/iterations/021-staff-area-redesign/plan.md'",
         "language": "shell"
       },
-      "script_timing": null,
+      "script_timing": {
+        "output": "blob://sha256/870da332d8c90fa1851eefdf455af58420b6e202914aae48fc87d2032daa893d",
+        "exit_code": 0,
+        "duration_ms": 1880,
+        "termination": "exited",
+        "output_bytes": 352,
+        "live_streaming": true
+      },
       "parallel_results": null,
       "output": null,
+      "output_bytes": 352,
+      "live_streaming": true,
+      "termination": "exited",
       "started_at": "2026-06-05T16:59:37.481697512Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 1924,
+        "inference_time_ms": 0,
+        "tool_time_ms": 1880,
+        "active_time_ms": 1880
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -4146,7 +4345,7 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "read_plan_241_300@1": {
       "first_event_seq": 62,
@@ -4185,6 +4384,40 @@
         "inference_time_ms": 0,
         "tool_time_ms": 162,
         "active_time_ms": 162
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "exit@1": {
+      "first_event_seq": 140,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": null,
+        "failure_reason": null,
+        "timestamp": "2026-06-05T16:59:42.515047590Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-05T16:59:42.515034391Z",
+      "handler": "exit",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
       },
       "usage": {
         "input_tokens": 0,
