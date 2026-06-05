@@ -97,6 +97,7 @@ in
     devenv
     git
     gum
+    jq
     nodejs_22
     python3
     tailwindcss_4

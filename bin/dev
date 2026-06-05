@@ -855,20 +855,13 @@ _fabro_pull_todo() {
   _fabro_require_tool fabro
 
   if [ -z "$plan_path" ]; then
-    plan_path=$(command fabro inspect "$run_id" --json | python3 -c '
-import json
-import sys
-
-payload = json.load(sys.stdin)
-run = payload[0] if isinstance(payload, list) else payload
-try:
-    plan_path = run["run_spec"]["settings"]["run"]["inputs"]["plan_path"]
-except KeyError:
-    plan_path = None
-if not plan_path:
-    raise SystemExit("Could not infer plan_path from run inputs; pass it explicitly.")
-print(plan_path)
-')
+    _fabro_require_tool jq
+    plan_path=$(command fabro inspect "$run_id" --json \
+      | jq -r 'if type == "array" then .[0] else . end | .run_spec.settings.run.inputs.plan_path // empty')
+    if [ -z "$plan_path" ]; then
+      echo "Could not infer plan_path from run inputs; pass it explicitly." >&2
+      exit 1
+    fi
   fi
 
   case "$plan_path" in
@@ -920,43 +913,42 @@ _fabro_progress() {
     _fabro_pull_todo "$run_id" "$tmp" >/dev/null
   fi
 
-  python3 - "$run_id" "$tmp" <<'PY'
-import re
-import subprocess
-import sys
-from pathlib import Path
+  _fabro_require_tool gum
 
-run_id = sys.argv[1]
-todo_path = Path(sys.argv[2])
-lines = todo_path.read_text().splitlines()
-tasks = []
-for line in lines:
-    match = re.match(r"\s*- \[([ xX])\]\s+(.*)", line)
-    if match:
-        tasks.append((match.group(1).lower() == "x", match.group(2)))
+  local total done remaining percent width filled bar next_task i status
+  total=$(grep -E '^[[:space:]]*- \[[ xX]\]' "$tmp" | wc -l | tr -d ' ')
+  done=$(grep -E '^[[:space:]]*- \[[xX]\]' "$tmp" | wc -l | tr -d ' ')
+  next_task=$(grep -E '^[[:space:]]*- \[ \]' "$tmp" | head -1 | sed -E 's/^[[:space:]]*- \[ \][[:space:]]+//')
+  remaining=$((total - done))
+  if [ "$total" -eq 0 ]; then
+    percent=100
+    filled=0
+  else
+    percent=$(((done * 100 + total / 2) / total))
+    width=30
+    filled=$(((done * width + total / 2) / total))
+  fi
 
-total = len(tasks)
-done = sum(1 for checked, _ in tasks if checked)
-remaining = total - done
-percent = 100 if total == 0 else round(done * 100 / total)
-width = 30
-filled = 0 if total == 0 else round(done * width / total)
-bar = "█" * filled + "░" * (width - filled)
-next_task = next((text for checked, text in tasks if not checked), None) if tasks else None
+  bar=""
+  i=0
+  while [ "$i" -lt "${filled:-0}" ]; do
+    bar="${bar}█"
+    i=$((i + 1))
+  done
+  while [ "$i" -lt 30 ]; do
+    bar="${bar}░"
+    i=$((i + 1))
+  done
 
-lines = [
-    f"Fabro run {run_id}",
-    f"Progress: [{bar}] {done}/{total} ({percent}%)",
-    f"Remaining: {remaining}",
-    f"Next: {next_task}" if next_task else "Next: all todo tasks are checked",
-]
-
-subprocess.run(["gum", "style", "--bold", "--foreground", "212", lines[0]], check=True)
-subprocess.run(["gum", "style", "--foreground", "42", lines[1]], check=True)
-subprocess.run(["gum", "style", "--foreground", "245", lines[2]], check=True)
-subprocess.run(["gum", "style", "--foreground", "214", lines[3]], check=True)
-PY
-  local status=$?
+  gum style --bold --foreground 212 "Fabro run $run_id"
+  gum style --foreground 42 "Progress: [$bar] $done/$total (${percent}%)"
+  gum style --foreground 245 "Remaining: $remaining"
+  if [ -n "$next_task" ]; then
+    gum style --foreground 214 "Next: $next_task"
+  else
+    gum style --foreground 214 "Next: all todo tasks are checked"
+  fi
+  status=$?
   rm -f "$tmp"
   return "$status"
 }
