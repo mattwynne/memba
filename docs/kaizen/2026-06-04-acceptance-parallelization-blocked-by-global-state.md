@@ -1,4 +1,4 @@
-# Problem: Acceptance tests cannot safely run in parallel because scenarios share global state
+# Problem: Browser acceptance tests are slow, and shared global state blocks the parallelism that should speed them up
 
 Date: 2026-06-04
 
@@ -20,11 +20,11 @@ Measured locally during the investigation:
 
 ## Expected standard
 
-The quality gate should provide fast enough feedback for everyday development. If browser acceptance tests dominate the gate, the test harness should make safe parallelization either available or clearly ruled out.
+The quality gate should provide fast enough feedback for everyday development. When browser acceptance tests dominate the gate, we should be able to use Cucumber's worker parallelism to reduce wall-clock time, provided scenarios use isolated data and do not race over shared test-support state.
 
 ## What happened
 
-Cucumber JS supports parallel execution with `--parallel N`, but the current acceptance harness is not safe to parallelize by simply adding that flag.
+Cucumber JS supports parallel execution with `--parallel N`, and that is the speedup path we want. The current acceptance harness is not safe to parallelize by simply adding that flag because scenario isolation depends on global reset state.
 
 The current harness relies on shared global state:
 
@@ -37,25 +37,25 @@ Running multiple Cucumber workers against this model would make workers race ove
 
 ## Impact
 
-Acceptance tests are the long pole in `dev check`, but the obvious Cucumber parallel flag is unsafe. This keeps the local quality gate slow and makes future speedups require harness design work rather than a small config change.
+Acceptance tests are the long pole in `dev check`. If scenario data were isolated, Cucumber workers could run scenarios concurrently and reduce the wall-clock time of the browser acceptance stage. Because the current harness depends on shared global state, that speedup is blocked until the harness is made parallel-safe.
 
 ## What allowed it to happen
 
 The acceptance harness optimizes for serial isolation by resetting shared state before each scenario. That makes individual scenarios easy to write, but it creates a hidden coupling: scenario isolation depends on no other scenario running at the same time.
 
-The harness does not currently have a guardrail that prevents accidental `--parallel` use or a standard for scenario-scoped data isolation.
+The harness does not currently have a standard for scenario-scoped data isolation, so tests that are individually isolated in serial become coupled when run concurrently.
 
 ## Observations
 
 - This is delivery-pipeline friction, not a product bug.
 - The slow part of `dev check` is browser acceptance, not ExUnit/precommit.
 - The current global reset model is incompatible with safe parallel workers.
+- The desired outcome is to make `cucumber-js --parallel N` safe and useful for the browser acceptance suite.
 - A likely improvement path is “single shared app, isolated scenario data”: stop resetting global state before every scenario, give each scenario unique clubs/people/email addresses, and scope mailbox/test-support APIs by scenario.
-- A safer short-term guardrail may be to make the harness detect Cucumber parallel mode and fail with a clear error until isolation is implemented.
 
 ## Why this matters
 
-Slow acceptance feedback increases waiting time and discourages frequent full checks. A naive attempt to parallelize could introduce flakes that are harder to diagnose than the current slowness.
+Slow acceptance feedback increases waiting time and discourages frequent full checks. Parallel execution is the intended improvement path, but attempting it before removing the shared-state coupling would introduce flakes that are harder to diagnose than the current slowness.
 
 ## Open questions
 
@@ -65,10 +65,10 @@ Slow acceptance feedback increases waiting time and discourages frequent full ch
 - Which current scenarios genuinely require a clean empty system, and can they be rewritten to assert on scoped data instead?
 - What level of Cucumber parallelism gives the best speedup without overloading Phoenix, Postgres, or Playwright?
 
-## Possible prevention ideas
+## Improvement ideas
 
-- Add a documented acceptance parallelization plan before changing `cucumber.js`.
-- Add a guardrail that fails fast if Cucumber parallel mode is enabled while global reset remains in use.
+- Add a documented acceptance parallelization plan that targets safe `cucumber-js --parallel N` execution.
 - Introduce a scenario/run ID in the Cucumber world and propagate it into generated names, emails, mailbox filtering, and test-support APIs.
 - Replace global reset-before-each-scenario with scoped data factories plus cleanup only where necessary.
-- Measure `--parallel 2` only after scenario-scoped isolation is in place.
+- Identify and rewrite scenarios that require an empty system so they assert on their own scoped data instead.
+- Measure `--parallel 2` after scenario-scoped isolation is in place, then tune worker count for the best wall-clock speedup without overloading Phoenix, Postgres, or Playwright.
