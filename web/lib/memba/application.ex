@@ -10,6 +10,7 @@ defmodule Memba.Application do
     children = [
       MembaWeb.Telemetry,
       Memba.Repo,
+      {Phoenix.PubSub, name: Memba.PubSub},
       Memba.Membership.App,
       Memba.Messaging.App,
       Memba.Messaging.EmailDeliveryProviders.Fake,
@@ -22,7 +23,6 @@ defmodule Memba.Application do
       Memba.Membership.Projectors.Membership,
       Memba.Membership.Projectors.Person,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Memba.PubSub},
       # Start a worker by calling: Memba.Worker.start_link(arg)
       # {Memba.Worker, arg},
       # Start to serve requests, typically the last entry

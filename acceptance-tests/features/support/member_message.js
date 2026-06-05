@@ -378,6 +378,26 @@ async function waitForProjectedVisible(
   );
 }
 
+function currentPageMatches(page, targetUrl) {
+  if (!page || typeof page.url !== "function") {
+    return false;
+  }
+
+  try {
+    return new URL(page.url()).href === new URL(targetUrl).href;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function gotoUnlessCurrent(world, targetUrl, description) {
+  if (currentPageMatches(world.page, targetUrl)) {
+    return;
+  }
+
+  await browserInteraction(description, () => world.page.goto(targetUrl));
+}
+
 async function newRowAttributeValue(rows, attributeName, previousValues, description) {
   const currentValues = await rowAttributeValues(rows, attributeName);
   const newValues = currentValues.filter((value) => !previousValues.includes(value));
@@ -393,7 +413,10 @@ async function newRowAttributeValue(rows, attributeName, previousValues, descrip
 
 async function visitClubsIndex(world, { expect = playwrightExpect, timeoutMs = projectionTimeoutMs(world) } = {}) {
   await browserInteraction("visit /admin/clubs", async () => {
-    await world.page.goto(appUrl(world.baseUrl, "/admin/clubs"));
+    const targetUrl = appUrl(world.baseUrl, "/admin/clubs");
+    if (!currentPageMatches(world.page, targetUrl)) {
+      await world.page.goto(targetUrl);
+    }
     if (expect === playwrightExpect) {
       await expect(world.page.getByRole("heading", { name: "Clubs", exact: true })).toBeVisible({
         timeout: timeoutMs
@@ -408,8 +431,10 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs 
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before opening it`);
 
-  await browserInteraction(`visit club page for ${clubName}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`))
+  await gotoUnlessCurrent(
+    world,
+    appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`),
+    `visit club page for ${clubName}`
   );
   await waitForProjectedVisible(
     world,
@@ -419,15 +444,23 @@ async function openClub(world, clubName, { expect = playwrightExpect, timeoutMs 
   );
 }
 
-async function openMessage(world, subject, { expect = playwrightExpect, timeoutMs } = {}) {
+async function openMessage(world, subject, { expect = playwrightExpect, force = false, timeoutMs } = {}) {
   ensureState(world);
 
   const message = world.messages[subject];
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
 
-  await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () =>
-    world.page.goto(appUrl(world.baseUrl, `/admin/messages/${message.messageId}`))
-  );
+  const targetUrl = appUrl(world.baseUrl, `/admin/messages/${message.messageId}`);
+
+  if (force) {
+    await browserInteraction(`visit message page for ${JSON.stringify(subject)}`, () => world.page.goto(targetUrl));
+  } else {
+    await gotoUnlessCurrent(
+      world,
+      targetUrl,
+      `visit message page for ${JSON.stringify(subject)}`
+    );
+  }
   await waitForProjectedVisible(
     world,
     world.page.getByRole("heading", { name: subject }),
@@ -442,8 +475,10 @@ async function openMemberClubHome(world, clubName, { expect = playwrightExpect, 
   const club = world.clubs[clubName];
   assert.ok(club, `Expected ${clubName} to have been created before opening the member club home`);
 
-  await browserInteraction(`visit member club home for ${clubName}`, () =>
-    world.page.goto(clubSiteUrl(world.baseUrl, club))
+  await gotoUnlessCurrent(
+    world,
+    clubSiteUrl(world.baseUrl, club),
+    `visit member club home for ${clubName}`
   );
   await waitForProjectedVisible(
     world,
@@ -479,8 +514,10 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
   assert.ok(message, `Expected message ${JSON.stringify(subject)} to have been sent`);
   assert.ok(message.clubId, `Expected message ${JSON.stringify(subject)} to have a club id`);
 
-  await browserInteraction(`visit member message page for ${JSON.stringify(subject)}`, () =>
-    world.page.goto(memberMessageUrl(world, message))
+  await gotoUnlessCurrent(
+    world,
+    memberMessageUrl(world, message),
+    `visit member message page for ${JSON.stringify(subject)}`
   );
   await waitForProjectedVisible(
     world,
@@ -491,9 +528,7 @@ async function openMemberMessage(world, subject, { expect = playwrightExpect, ti
 }
 
 async function openDeliveriesOverview(world, { expect = playwrightExpect, timeoutMs } = {}) {
-  await browserInteraction("visit /admin/deliveries", () =>
-    world.page.goto(appUrl(world.baseUrl, "/admin/deliveries"))
-  );
+  await gotoUnlessCurrent(world, appUrl(world.baseUrl, "/admin/deliveries"), "visit /admin/deliveries");
   await waitForProjectedVisible(
     world,
     world.page.getByRole("heading", { name: "Deliveries", exact: true }),
@@ -1717,7 +1752,7 @@ async function waitForProjectedReceiptStatus(
     const assertionTimeoutMs = Math.max(1, Math.min(1000, deadline - Date.now()));
 
     try {
-      await openMessage(world, subject, { expect, timeoutMs: assertionTimeoutMs });
+      await openMessage(world, subject, { expect, force: true, timeoutMs: assertionTimeoutMs });
 
       const row = rowByData(world.page, "member-receipt", "data-recipient-name", recipientName);
       await waitForProjectedVisible(

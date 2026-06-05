@@ -21,4 +21,9 @@ defmodule Memba.Messaging.Projectors.Message do
       body: event.body
     })
   end)
+
+  @impl Commanded.Projections.Ecto
+  def after_update(event, metadata, changes) do
+    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
 end

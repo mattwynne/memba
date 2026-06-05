@@ -92,4 +92,9 @@ defmodule Memba.Membership.Projectors.Person do
       where: email_address.person_id == ^person_id
     )
   end
+
+  @impl Commanded.Projections.Ecto
+  def after_update(event, metadata, changes) do
+    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
 end

@@ -11,18 +11,28 @@ const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba
 const signInSubject = "Sign in to Memba";
 
 async function withStaffHarness(world, action) {
-  await withIsolatedHarnessWorld(world, async (harnessWorld) => {
-    await signInStaff(harnessWorld);
+  await withReusableHarnessWorld(world, "staff", async (harnessWorld) => {
+    if (!harnessWorld.signedInStaff) {
+      await signInStaff(harnessWorld);
+      harnessWorld.signedInStaff = true;
+    }
+
     await action(harnessWorld);
   });
 }
 
 async function withMemberHarness(world, memberName, action) {
-  await withIsolatedHarnessWorld(
+  await withReusableHarnessWorld(
     world,
+    `member:${memberName}`,
     async (harnessWorld) => {
       guardPageAgainstAdminRoutes(harnessWorld, memberName);
-      await signInMember(harnessWorld, memberName);
+
+      if (!harnessWorld.signedInMember) {
+        await signInMember(harnessWorld, memberName);
+        harnessWorld.signedInMember = true;
+      }
+
       await memberBrowserAction(harnessWorld, `member action for ${memberName}`, () => action(harnessWorld));
     },
     { memberName }
@@ -45,15 +55,46 @@ function assertMemberPageIsNotAdmin(world, description = "member browser helper"
   }
 }
 
-async function withIsolatedHarnessWorld(world, action, options = {}) {
+async function withReusableHarnessWorld(world, key, action, options = {}) {
   ensureHarnessState(world);
+  world.harnesses = world.harnesses || {};
 
-  const context = await world.browser.newContext();
-  const page = await context.newPage();
-  const harnessWorld = {
-    ...world,
-    context,
-    page,
+  let harnessWorld = world.harnesses[key];
+
+  if (!harnessWorld) {
+    const context = await world.browser.newContext();
+    const page = await context.newPage();
+    harnessWorld = {
+      ...world,
+      context,
+      page,
+      harnessKey: key
+    };
+    world.harnesses[key] = harnessWorld;
+  }
+
+  syncHarnessState(world, harnessWorld, options);
+
+  await action(harnessWorld);
+  copyHarnessState(world, harnessWorld);
+}
+
+async function closeHarnesses(world) {
+  const harnesses = Object.values((world && world.harnesses) || {});
+  world.harnesses = {};
+
+  await Promise.all(
+    harnesses.map(async (harnessWorld) => {
+      if (harnessWorld.context) {
+        await harnessWorld.context.close();
+      }
+    })
+  );
+}
+
+function syncHarnessState(world, harnessWorld, options = {}) {
+  Object.assign(harnessWorld, {
+    baseUrl: world.baseUrl,
     clubs: world.clubs,
     people: world.people,
     memberships: world.memberships,
@@ -62,17 +103,10 @@ async function withIsolatedHarnessWorld(world, action, options = {}) {
     reportedDeliveryStatuses: world.reportedDeliveryStatuses,
     signInRequests: world.signInRequests,
     signInLinks: world.signInLinks
-  };
+  });
 
   if (options.memberName) {
     harnessWorld.memberName = options.memberName;
-  }
-
-  try {
-    await action(harnessWorld);
-    copyHarnessState(world, harnessWorld);
-  } finally {
-    await context.close();
   }
 }
 
@@ -261,6 +295,7 @@ function emailSummary(email) {
 module.exports = {
   assertMemberPageIsNotAdmin,
   memberBrowserAction,
+  closeHarnesses,
   signInMember,
   withMemberHarness,
   withStaffHarness

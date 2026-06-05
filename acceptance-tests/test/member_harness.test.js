@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const {
   assertMemberPageIsNotAdmin,
+  closeHarnesses,
   memberBrowserAction,
   withMemberHarness
 } = require("../features/support/member_harness");
@@ -152,6 +153,8 @@ test("withMemberHarness signs in with the member email and shares scenario state
 
   const context = world.browser.contexts[0];
 
+  assert.equal(context.closed, false);
+  await closeHarnesses(world);
   assert.equal(context.closed, true);
   assert.equal(world.lastMessageSubject, "Trip planning night");
   assert.deepEqual(context.page.actions, [
@@ -174,6 +177,8 @@ test("withMemberHarness fails fast when member helpers navigate to admin routes"
     /Member browser helper attempted to navigate to staff\/admin route for Alice:/
   );
 
+  assert.equal(world.browser.contexts[0].closed, false);
+  await closeHarnesses(world);
   assert.equal(world.browser.contexts[0].closed, true);
   assert.equal(
     world.browser.contexts[0].page.actions.some(

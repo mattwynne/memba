@@ -912,9 +912,6 @@ test("member assertions read member-facing recipient rows, labels, and Heroicon 
     page.actions.filter((action) => action[0] === "goto"),
     [
       ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/"],
-      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"],
-      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"],
-      ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"],
       ["goto", "http://kootenay-mountaineering-club.lvh.me:4444/messages/message-1"]
     ]
   );
@@ -1068,7 +1065,7 @@ test("operator delivery assertions inspect the /deliveries overview by message a
 
   assert.deepEqual(
     page.actions.filter((action) => action[0] === "goto").map((action) => action[1]),
-    ["http://127.0.0.1:4444/admin/deliveries", "http://127.0.0.1:4444/admin/deliveries"]
+    ["http://127.0.0.1:4444/admin/deliveries"]
   );
   assert.deepEqual(world.currentOperatorDelivery, {
     recipientName: "Bob",

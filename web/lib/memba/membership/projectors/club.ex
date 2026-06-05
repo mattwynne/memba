@@ -52,4 +52,9 @@ defmodule Memba.Membership.Projectors.Club do
   defp club_query(club_id) do
     Ecto.Query.from(club in ClubProjection, where: club.club_id == ^club_id)
   end
+
+  @impl Commanded.Projections.Ecto
+  def after_update(event, metadata, changes) do
+    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
 end

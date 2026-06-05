@@ -7,15 +7,11 @@ const {
   requestSignInLinkForPerson
 } = require("../support/authentication");
 const {
-  addMembers,
   appUrl,
-  createClub,
-  createPerson,
   cssString,
-  kootenayClubName,
-  updateClubSlug
+  kootenayClubName
 } = require("../support/member_message");
-const { withStaffHarness } = require("../support/member_harness");
+const serverCommands = require("../support/server_commands");
 
 const productionClubBaseDomain = "clubs.memba.io";
 const smokeTestClubName = "Smoke Test Club";
@@ -126,33 +122,42 @@ Then("Robin should not see Smoke Test Club", async function () {
 });
 
 async function ensureClubHasSlug(world, clubName, slug) {
-  await withStaffHarness(world, async (staff) => {
-    if (!staff.clubs || !staff.clubs[clubName]) {
-      await createClub(staff, clubName, { slug });
-    } else {
-      await updateClubSlug(staff, clubName, slug);
-    }
+  const currentClub = world.clubs && world.clubs[clubName];
+  const result = serverCommands.ensureClubSlug({
+    clubId: currentClub && currentClub.clubId,
+    clubName,
+    clubSlug: slug
   });
+  world.clubs = world.clubs || {};
+  world.clubs[clubName] = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
 }
 
 async function ensureSmokeTestClubSeeded(world) {
-  await withStaffHarness(world, async (staff) => {
-    if (!staff.clubs || !staff.clubs[smokeTestClubName]) {
-      await createClub(staff, smokeTestClubName, { slug: smokeTestClubSlug });
-    } else {
-      await updateClubSlug(staff, smokeTestClubName, smokeTestClubSlug);
-    }
-
-    if (!staff.people || !staff.people[smokeTestPersonName]) {
-      await createPerson(staff, smokeTestPersonName, smokeTestClubName, {
-        email: smokeTestMemberEmail
-      });
-    }
-
-    if (!staff.memberships || !staff.memberships[`${smokeTestClubName}:${smokeTestPersonName}`]) {
-      await addMembers(staff, [smokeTestPersonName], smokeTestClubName);
-    }
+  const result = serverCommands.ensureSmokeTestClub({
+    clubName: smokeTestClubName,
+    clubSlug: smokeTestClubSlug,
+    personName: smokeTestPersonName,
+    email: smokeTestMemberEmail
   });
+
+  world.clubs = world.clubs || {};
+  world.people = world.people || {};
+  world.memberships = world.memberships || {};
+
+  world.clubs[smokeTestClubName] = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
+  world.people[smokeTestPersonName] = {
+    alternateEmails: [],
+    email: result.email,
+    emailAddresses: [{ email: result.email, isPrimary: true }],
+    name: result.personName,
+    personId: result.personId,
+    primaryEmail: result.email
+  };
+  world.memberships[`${smokeTestClubName}:${smokeTestPersonName}`] = {
+    clubId: result.clubId,
+    membershipId: result.membershipId,
+    personId: result.personId
+  };
 }
 
 async function signIn(world, personName) {

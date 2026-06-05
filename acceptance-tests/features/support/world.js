@@ -13,8 +13,10 @@ const { chromium } = require("playwright");
 const { configureBrowserEnvironment } = require("./browser_environment");
 const { createBrowserAcceptanceLifecycle } = require("./lifecycle");
 const { restoreClubMessageSending } = require("./member_message");
+const { closeHarnesses } = require("./member_harness");
 
 const lifecycle = createBrowserAcceptanceLifecycle();
+let sharedBrowser = null;
 const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
 const progressLoggingEnabled = !new Set(["0", "false", "no"]).has(
   String(process.env.ACCEPTANCE_LOG_PROGRESS || "").toLowerCase()
@@ -52,9 +54,19 @@ BeforeAll({ name: "Start Phoenix browser acceptance lifecycle", timeout: 360000 
   acceptanceLog("BeforeAll: starting Phoenix browser acceptance lifecycle");
   await lifecycle.start();
   acceptanceLog("BeforeAll: Phoenix browser acceptance lifecycle ready");
+  acceptanceLog("BeforeAll: launching shared browser");
+  sharedBrowser = await chromium.launch({ headless: process.env.HEADLESS !== "false" });
+  acceptanceLog("BeforeAll: shared browser ready");
 });
 
 AfterAll({ name: "Stop Phoenix browser acceptance lifecycle", timeout: 120000 }, async function () {
+  if (sharedBrowser) {
+    acceptanceLog("AfterAll: closing shared browser");
+    await sharedBrowser.close();
+    sharedBrowser = null;
+    acceptanceLog("AfterAll: closed shared browser");
+  }
+
   acceptanceLog("AfterAll: stopping Phoenix browser acceptance lifecycle");
   await lifecycle.stop();
   acceptanceLog("AfterAll: stopped Phoenix browser acceptance lifecycle");
@@ -79,7 +91,7 @@ Before(async function ({ pickle } = {}) {
   this.scenarioStartedAt = nowMs();
   acceptanceLog(`scenario start: ${this.scenarioName || "(unknown scenario)"}`);
 
-  this.browser = await chromium.launch({ headless: process.env.HEADLESS !== "false" });
+  this.browser = sharedBrowser;
   this.context = await this.browser.newContext();
   this.page = await this.context.newPage();
 
@@ -137,12 +149,10 @@ After(async function ({ result } = {}) {
     }
   }
 
+  await closeHarnesses(this);
+
   if (this.context) {
     await this.context.close();
-  }
-
-  if (this.browser) {
-    await this.browser.close();
   }
 
   const durationMs = this.scenarioStartedAt ? Math.round(nowMs() - this.scenarioStartedAt) : "unknown";

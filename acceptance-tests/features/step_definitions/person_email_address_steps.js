@@ -2,8 +2,6 @@ const assert = require("node:assert/strict");
 const { Given, When, Then } = require("@cucumber/cucumber");
 const { expect: playwrightExpect } = require("@playwright/test");
 const {
-  addMembers,
-  createClub,
   createPerson,
   cssString,
   kootenayClubName,
@@ -18,34 +16,30 @@ const {
   followSignInLink,
   requestSignInLinkForEmail
 } = require("../support/authentication");
-const { withStaffHarness } = require("../support/member_harness");
+const serverCommands = require("../support/server_commands");
 
 Given("{word}'s primary email address is {string}", async function (personName, primaryEmail) {
-  await withStaffHarness(this, async (staff) => {
-    await ensurePersonEmailAddresses(staff, personName, [
-      { email: primaryEmail, isPrimary: true },
-      ...alternateEmailAddressesFor(staff, personName)
-    ]);
-  });
+  await ensurePersonEmailAddresses(this, personName, [
+    { email: primaryEmail, isPrimary: true },
+    ...alternateEmailAddressesFor(this, personName)
+  ]);
 });
 
 Given("{word}'s alternate email address is {string}", async function (personName, alternateEmail) {
-  await withStaffHarness(this, async (staff) => {
-    const current = personEmailAddressesFor(staff, personName);
-    const primary = current.find((emailAddress) => emailAddress.isPrimary) || {
-      email: defaultPrimaryEmailFor(personName),
-      isPrimary: true
-    };
-    const alternates = current.filter(
-      (emailAddress) => !emailAddress.isPrimary && emailAddress.email !== alternateEmail
-    );
+  const current = this.people && this.people[personName] ? personEmailAddressesFor(this, personName) : [];
+  const primary = current.find((emailAddress) => emailAddress.isPrimary) || {
+    email: defaultPrimaryEmailFor(personName),
+    isPrimary: true
+  };
+  const alternates = current.filter(
+    (emailAddress) => !emailAddress.isPrimary && emailAddress.email !== alternateEmail
+  );
 
-    await ensurePersonEmailAddresses(staff, personName, [
-      primary,
-      ...alternates,
-      { email: alternateEmail, isPrimary: false }
-    ]);
-  });
+  await ensurePersonEmailAddresses(this, personName, [
+    primary,
+    ...alternates,
+    { email: alternateEmail, isPrimary: false }
+  ]);
 });
 
 Then("{word} should receive a sign-in link at {string}", async function (personName, expectedEmail) {
@@ -134,16 +128,24 @@ Then("{word}'s alternate email addresses should include {string}", async functio
 async function ensurePersonEmailAddresses(world, personName, emailAddresses) {
   await ensureStaffClub(world);
 
-  if (world.people && world.people[personName]) {
-    await updatePersonEmailAddresses(world, personName, kootenayClubName, emailAddresses);
-  } else {
-    await createPerson(world, personName, kootenayClubName, { emailAddresses });
-  }
+  const currentPerson = world.people && world.people[personName];
+  const result = serverCommands.ensurePersonEmailAddresses({
+    personId: currentPerson && currentPerson.personId,
+    personName,
+    emailAddresses
+  });
+  world.people = world.people || {};
+  world.people[personName] = personStateFromServer(result);
 }
 
 async function ensureStaffClub(world) {
   if (!world.clubs || !world.clubs[kootenayClubName]) {
-    await createClub(world, kootenayClubName);
+    const result = serverCommands.ensureClubSlug({
+      clubName: kootenayClubName,
+      clubSlug: defaultClubSlugFor(kootenayClubName)
+    });
+    world.clubs = world.clubs || {};
+    world.clubs[kootenayClubName] = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
   }
 }
 
@@ -184,6 +186,34 @@ function staffEmailFor(personName) {
 
 function defaultPrimaryEmailFor(personName) {
   return `${String(personName).trim().toLowerCase()}@example.test`;
+}
+
+function defaultClubSlugFor(clubName) {
+  return String(clubName)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+}
+
+function personStateFromServer(result) {
+  const emailAddresses = result.emailAddresses.map((emailAddress) => ({
+    email: emailAddress.email,
+    isPrimary: Boolean(emailAddress["primary?"] || emailAddress.is_primary || emailAddress.isPrimary)
+  }));
+  const primaryEmailAddress = emailAddresses.find((emailAddress) => emailAddress.isPrimary);
+  assert.ok(primaryEmailAddress, `Expected ${result.personName} to have a primary email address`);
+
+  return {
+    alternateEmails: emailAddresses
+      .filter((emailAddress) => !emailAddress.isPrimary)
+      .map((emailAddress) => emailAddress.email),
+    email: primaryEmailAddress.email,
+    emailAddresses,
+    name: result.personName,
+    personId: result.personId,
+    primaryEmail: primaryEmailAddress.email
+  };
 }
 
 async function assertMessageEmailRecipient(world, recipientEmail) {

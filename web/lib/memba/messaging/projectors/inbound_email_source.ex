@@ -41,4 +41,9 @@ defmodule Memba.Messaging.Projectors.InboundEmailSource do
       rejection_email_delivery_reference: event.rejection_email_delivery_reference
     })
   end)
+
+  @impl Commanded.Projections.Ecto
+  def after_update(event, metadata, changes) do
+    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
 end

@@ -382,28 +382,52 @@ function ensurePersonState(world, personName) {
 }
 
 function ensurePeopleState(world, personNames) {
-  return personNames.map((personName) => ensurePersonState(world, personName));
+  ensureState(world);
+
+  const unknownPeople = personNames.filter((personName) => !world.people[personName]);
+
+  if (unknownPeople.length > 0) {
+    const results = serverCommands.ensurePeople(
+      unknownPeople.map((personName) => ({ personName, email: emailFor(personName) }))
+    );
+
+    for (const result of results) {
+      world.people[result.personName] = personStateFromCommand(result);
+    }
+  }
+
+  return personNames.map((personName) => world.people[personName]);
 }
 
 function ensureMembersState(world, personNames, clubName) {
-  ensureClubState(world, clubName);
+  ensureState(world);
 
-  for (const personName of personNames) {
-    const result = serverCommands.ensureMember({
-      clubName,
-      clubSlug: clubSlugFor(clubName),
-      personName,
-      email: emailFor(personName)
-    });
+  const unknownMemberships = personNames.filter(
+    (personName) => !world.memberships[`${clubName}:${personName}`]
+  );
 
-    world.clubs[clubName] = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
-    world.people[personName] = personStateFromCommand(result);
-    world.memberships[`${clubName}:${personName}`] = {
-      clubId: result.clubId,
-      membershipId: result.membershipId,
-      personId: result.personId
-    };
+  if (unknownMemberships.length > 0) {
+    const results = serverCommands.ensureMembers(
+      unknownMemberships.map((personName) => ({
+        clubName,
+        clubSlug: clubSlugFor(clubName),
+        personName,
+        email: emailFor(personName)
+      }))
+    );
+
+    for (const result of results) {
+      world.clubs[clubName] = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
+      world.people[result.personName] = personStateFromCommand(result);
+      world.memberships[`${clubName}:${result.personName}`] = {
+        clubId: result.clubId,
+        membershipId: result.membershipId,
+        personId: result.personId
+      };
+    }
   }
+
+  return personNames.map((personName) => world.memberships[`${clubName}:${personName}`]);
 }
 
 function personStateFromCommand(result) {

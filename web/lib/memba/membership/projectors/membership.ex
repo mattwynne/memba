@@ -38,4 +38,9 @@ defmodule Memba.Membership.Projectors.Membership do
       where: membership.membership_id == ^membership_id
     )
   end
+
+  @impl Commanded.Projections.Ecto
+  def after_update(event, metadata, changes) do
+    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
 end

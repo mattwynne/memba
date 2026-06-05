@@ -23,4 +23,9 @@ defmodule Memba.Messaging.Projectors.EmailDelivery do
       status: "sent"
     })
   end)
+
+  @impl Commanded.Projections.Ecto
+  def after_update(event, metadata, changes) do
+    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
+  end
 end
