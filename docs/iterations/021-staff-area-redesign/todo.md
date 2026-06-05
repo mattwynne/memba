@@ -16,5 +16,5 @@
 - [x] 013 Restyle `/admin/messages/:message_id` consistently without changing diagnostics semantics.
 - [x] 014 Update or add LiveView tests for:
 - [x] 015 Update acceptance step support and remove the feature-level `@wip` tag from `memba_staff_operations.feature` once its scenarios pass.
-- [ ] 016 Run targeted tests for admin LiveViews and acceptance configuration.
+- [x] 016 Run targeted tests for admin LiveViews and acceptance configuration.
 - [ ] 017 Run `dev check`.
