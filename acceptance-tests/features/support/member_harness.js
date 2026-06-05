@@ -3,9 +3,9 @@ const { expect: playwrightExpect } = require("@playwright/test");
 const {
   appUrl,
   ensureState,
-  testMailboxEmails
+  testMailboxEmails,
+  waitForMailboxEmails
 } = require("./member_message");
-const { displayStaffEmail } = require("./scoping");
 
 const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
 const signInSubject = "Sign in to Memba";
@@ -99,7 +99,11 @@ function copyHarnessState(world, harnessWorld) {
 }
 
 function staffEmailForWorld(world) {
-  return displayStaffEmail(world, staffEmail);
+  if (process.env.ACCEPTANCE_SCENARIO_SCOPING === "1" && world && world.scenarioId) {
+    return `acceptance-staff+${world.scenarioId}@memba.io`;
+  }
+
+  return staffEmail;
 }
 
 async function signInStaff(world) {
@@ -137,35 +141,25 @@ async function signInByMagicLink(world, email, label) {
   await world.page.getByLabel("Email address").fill(email);
   await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
 
-  const signInEmail = await waitForSignInEmail(world, previousEmails, email, label);
+  const emails = await waitForMailboxEmails(
+    world,
+    previousEmails.length + 1,
+    `sign-in email for ${label} <${email}>`
+  );
+  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const signInEmail = emails
+    .filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)))
+    .find((mailboxEmail) => signInEmailMatches(mailboxEmail, email));
+
+  assert.ok(
+    signInEmail,
+    `Expected ${label} <${email}> to receive a sign-in email; saw ${JSON.stringify(emails.map(emailSummary))}`
+  );
 
   const signInLink = signInLinkFromTextBody(signInEmail.text_body);
   assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${signInEmail.text_body}`);
 
   await world.page.goto(browserAppUrl(world, signInLink));
-}
-
-async function waitForSignInEmail(world, previousEmails, email, label) {
-  const deadline = Date.now() + 10000;
-  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
-  let emails = [];
-
-  do {
-    emails = await testMailboxEmails(world);
-    const signInEmail = emails
-      .filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)))
-      .find((mailboxEmail) => signInEmailMatches(mailboxEmail, email));
-
-    if (signInEmail) {
-      return signInEmail;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  } while (Date.now() <= deadline);
-
-  throw new assert.AssertionError({
-    message: `Expected ${label} <${email}> to receive a sign-in email; saw ${JSON.stringify(emails.map(emailSummary))}`
-  });
 }
 
 function guardPageAgainstAdminRoutes(world, memberName) {
