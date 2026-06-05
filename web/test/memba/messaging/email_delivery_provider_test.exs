@@ -47,7 +47,7 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
 
     assert message =~ "Postmark email delivery provider is enabled"
     assert message =~ "MEMBA_POSTMARK_SERVER_TOKEN"
-    assert message =~ "MEMBA_POSTMARK_FROM_ADDRESS"
+    assert message =~ "MEMBA_MESSAGING_FROM_ADDRESS"
     assert Fake.deliveries() == []
   end
 

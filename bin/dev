@@ -4,39 +4,17 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+default_postgres_port_value=15432
 
 default_postgres_port() {
-  printf '%s\n' "${MEMBA_POSTGRES_PORT:-15432}"
+  printf '%s\n' "${MEMBA_POSTGRES_PORT:-$default_postgres_port_value}"
 }
-
-if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
-  memba_postgres_port="$(default_postgres_port)"
-
-  exec env \
-    -u DEVENV_DOTFILE \
-    -u DEVENV_PROFILE \
-    -u DEVENV_ROOT \
-    -u DEVENV_STATE \
-    -u DEVENV_TASKS \
-    -u DEVENV_TASK_FILE \
-    -u PGDATA \
-    -u PGHOST \
-    -u PGPORT \
-    MEMBA_DEVENV_SHELL=1 \
-    MEMBA_POSTGRES_PORT="$memba_postgres_port" \
-    devenv shell -O services.postgres.port:int "$memba_postgres_port" -- "$0" "$@"
-fi
-
-if ! command -v argc >/dev/null 2>&1; then
-  echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
-  exit 1
-fi
 
 devenv_with_postgres_port() {
   (
     cd "$repo_root"
 
-    if [ -n "${MEMBA_POSTGRES_PORT:-}" ]; then
+    if [ -n "${MEMBA_POSTGRES_PORT:-}" ] && [ "$MEMBA_POSTGRES_PORT" != "$default_postgres_port_value" ]; then
       devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" "$@"
     else
       devenv "$@"
@@ -51,6 +29,97 @@ load_local_secrets() {
   fi
 }
 
+dev_support_processes() {
+  printf '%s\n' postgres
+
+  if [ "${MEMBA_DEV_NGROK:-1}" != "0" ]; then
+    printf '%s\n' ngrok
+  fi
+}
+
+start_managed_processes() {
+  if DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d "$@"; then
+    return
+  fi
+
+  devenv_with_postgres_port processes list >/dev/null
+
+  for process_name in "$@"; do
+    if devenv_with_postgres_port processes status "$process_name" 2>/dev/null | grep -Eq '\b(ready|running|starting)\b'; then
+      continue
+    fi
+
+    start_output="$(devenv_with_postgres_port processes start "$process_name" 2>&1)" || {
+      if grep -q "already running" <<<"$start_output"; then
+        continue
+      fi
+
+      if grep -q "not found" <<<"$start_output"; then
+        devenv_with_postgres_port processes down || true
+        DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d "$@"
+        return
+      fi
+
+      printf '%s\n' "$start_output" >&2
+      return 1
+    }
+  done
+}
+
+memba_postgres_port="$(default_postgres_port)"
+export MEMBA_POSTGRES_PORT="$memba_postgres_port"
+
+case "${1:-}" in
+  up)
+    if [ "${2:-}" != "--foreground" ] && [ "${2:-}" != "-h" ] && [ "${2:-}" != "--help" ] && [ "$#" -le 1 ]; then
+      # Start detached processes directly, not through a nested `devenv shell`,
+      # so `devenv processes ...` can find the same process manager afterwards.
+      load_local_secrets
+
+      support_processes=()
+      while IFS= read -r process_name; do
+        support_processes+=("$process_name")
+      done < <(dev_support_processes)
+
+      start_managed_processes "${support_processes[@]}" web
+      devenv_with_postgres_port processes wait --timeout 120
+      exit 0
+    fi
+    ;;
+  down)
+    if [ "$#" -eq 1 ]; then
+      devenv_with_postgres_port processes down || true
+      exit 0
+    fi
+    ;;
+esac
+
+if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
+  devenv_shell_args=(shell)
+  if [ "$memba_postgres_port" != "$default_postgres_port_value" ]; then
+    devenv_shell_args+=(-O services.postgres.port:int "$memba_postgres_port")
+  fi
+
+  exec env \
+    -u DEVENV_DOTFILE \
+    -u DEVENV_PROFILE \
+    -u DEVENV_ROOT \
+    -u DEVENV_STATE \
+    -u DEVENV_TASKS \
+    -u DEVENV_TASK_FILE \
+    -u PGDATA \
+    -u PGHOST \
+    -u PGPORT \
+    MEMBA_DEVENV_SHELL=1 \
+    MEMBA_POSTGRES_PORT="$memba_postgres_port" \
+    devenv "${devenv_shell_args[@]}" -- "$0" "$@"
+fi
+
+if ! command -v argc >/dev/null 2>&1; then
+  echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
+  exit 1
+fi
+
 start_postgres() {
   if ! devenv_with_postgres_port processes status postgres >/dev/null 2>&1; then
     DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
@@ -63,23 +132,12 @@ migrate_databases() {
   (
     cd "$repo_root/web"
 
-    mix ecto.create --quiet || true
-    mix event_store.create --quiet || true
-    mix ecto.migrate
-    mix event_store.init --quiet
+    mix dev.setup
   )
 }
 
-dev_support_processes() {
-  printf '%s\n' postgres
-
-  if [ "${MEMBA_DEV_NGROK:-1}" != "0" ]; then
-    printf '%s\n' ngrok
-  fi
-}
-
 start_processes() {
-  DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d "$@"
+  start_managed_processes "$@"
   devenv_with_postgres_port processes wait --timeout 120
 }
 

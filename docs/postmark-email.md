@@ -6,9 +6,11 @@ Memba has Postmark-backed and Resend-backed email paths:
 - shared magic-link authentication email for members and Memba staff;
 - inbound club-message email sent to `<club-slug>@clubs.memba.io`.
 
-Each path opts in to real provider sending explicitly. Leaving the relevant
-provider unset keeps routine local development and automated tests from sending
-real email.
+One environment-wide provider setting, `MEMBA_EMAIL_PROVIDER`, selects the
+outbound email provider for both member messages and magic-link authentication.
+Leaving it unset preserves the configured environment default. Automated tests
+should use local/fake delivery; manual development may use a real provider so it
+acts like production.
 
 ## Production Postmark setup at a glance
 
@@ -16,8 +18,8 @@ Postmark should be configured with distinct production responsibilities:
 
 | Email path | Postmark setup | Memba configuration |
 | --- | --- | --- |
-| Outbound member broadcasts and rejection emails | Member broadcast message stream, currently named `outbound-member-broadcasts`; verified sender such as `messages@mail.memba.io`; delivery-status webhook on the same stream | `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_POSTMARK_FROM_ADDRESS`, optional `MEMBA_POSTMARK_REPLY_TO_ADDRESS` for rejection/contact replies |
-| Magic-link authentication | Dedicated auth Transactional Message Stream, recommended ID `outbound-authentication`; verified sender such as `auth@mail.memba.io` | `MEMBA_AUTH_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` |
+| Outbound member broadcasts and rejection emails | Member broadcast message stream, currently named `outbound-member-broadcasts`; verified sender such as `messages@mail.memba.io`; delivery-status webhook on the same stream | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_MESSAGING_FROM_ADDRESS`, optional `MEMBA_MESSAGING_REPLY_TO_ADDRESS` for rejection/contact replies |
+| Magic-link authentication | Dedicated auth Transactional Message Stream, recommended ID `outbound-authentication`; verified sender such as `auth@mail.memba.io` | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` |
 | Inbound club messages | Inbound Message Stream for `clubs.memba.io`; MX for `clubs.memba.io` points to Postmark inbound; inbound webhook URL configured on the inbound stream | No runtime provider variable. Postmark sends JSON to `POST /webhooks/postmark/inbound`, and Memba derives the club from the recipient address such as `kmc@clubs.memba.io`. |
 
 Keep these Postmark paths separate. Delivery-status webhooks for outbound member
@@ -27,43 +29,39 @@ webhook.
 
 ## Enable real provider sending
 
-### Member-message email
-
 Set these environment variables for the environment that should send real email:
 
 | Variable | Required? | Purpose |
 | --- | --- | --- |
-| `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark` | Yes | Opts the environment into the Postmark delivery provider. If unset or blank, Memba keeps the configured default provider, which is fake in local/test defaults. |
+| `MEMBA_EMAIL_PROVIDER=postmark` or `resend` | Yes for real email | Selects the one outbound provider for member-message and auth email. If unset or blank, Memba keeps the configured environment default. |
 | `MEMBA_POSTMARK_SERVER_TOKEN` | Yes with Postmark | Postmark server token used by Swoosh as the Postmark API key. Keep this secret out of the repository. |
-| `MEMBA_POSTMARK_FROM_ADDRESS` | Yes with Postmark | Sender/from address for member-message email. Use a verified, monitored Memba-controlled sending address. |
-| `MEMBA_POSTMARK_REPLY_TO_ADDRESS` | Recommended | Reply-To/contact address available to provider-backed rejection/contact email when configured. This inbox should be monitored by a human. Member broadcasts reply to the member sender. |
+| `MEMBA_RESEND_API_KEY` | Yes with Resend | Resend API key used by Swoosh. Keep this secret out of the repository. |
+| `MEMBA_MESSAGING_FROM_ADDRESS` | Yes with real email | Sender/from address for member-message email. Use a verified, monitored Memba-controlled sending address. |
+| `MEMBA_MESSAGING_REPLY_TO_ADDRESS` | Recommended | Reply-To/contact address available to provider-backed rejection/contact email when configured. This inbox should be monitored by a human. Member broadcasts reply to the member sender. |
+| `MEMBA_AUTH_EMAIL_FROM_ADDRESS` | Yes with real email | Sender/from address for magic-link email. Use a verified Memba-controlled sending address such as `auth@mail.memba.io`. |
+| `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` | Yes with real email | Dedicated auth stream/category. Postmark sends this as `MessageStream`; Resend uses it as local categorisation. |
 
-Example local opt-in for a controlled real-send test:
+Example local Resend configuration for production-like manual development:
 
 ```sh
-export MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark
-export MEMBA_POSTMARK_SERVER_TOKEN="postmark-server-token"
-export MEMBA_POSTMARK_FROM_ADDRESS="messages@mail.memba.io"
-export MEMBA_POSTMARK_REPLY_TO_ADDRESS="support@memba.io"
+export MEMBA_EMAIL_PROVIDER=resend
+export MEMBA_RESEND_API_KEY="re_..."
+export MEMBA_MESSAGING_FROM_ADDRESS="messages@clubs-dev.memba.io"
+export MEMBA_MESSAGING_REPLY_TO_ADDRESS="support@memba.io"
+export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@clubs-dev.memba.io"
+export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="auth"
 ./bin/dev up
 ```
 
-For a Resend fallback, set these instead:
-
-| Variable | Required? | Purpose |
-| --- | --- | --- |
-| `MEMBA_MESSAGING_DELIVERY_PROVIDER=resend` | Yes | Opts the environment into the Resend delivery provider. |
-| `MEMBA_RESEND_API_KEY` | Yes with Resend | Resend API key used by Swoosh. Keep this secret out of the repository. |
-| `MEMBA_RESEND_FROM_ADDRESS` | Yes with Resend | Sender/from address for member-message email. Use a verified sender where possible; Resend's sandbox sender is only suitable for smoke tests. |
-| `MEMBA_RESEND_REPLY_TO_ADDRESS` | Recommended | Reply-To/contact address added to outbound email when configured. |
-
-Example local Resend opt-in:
+Example Postmark configuration:
 
 ```sh
-export MEMBA_MESSAGING_DELIVERY_PROVIDER=resend
-export MEMBA_RESEND_API_KEY="re_..."
-export MEMBA_RESEND_FROM_ADDRESS="messages@mail.memba.io"
-export MEMBA_RESEND_REPLY_TO_ADDRESS="support@memba.io"
+export MEMBA_EMAIL_PROVIDER=postmark
+export MEMBA_POSTMARK_SERVER_TOKEN="postmark-server-token"
+export MEMBA_MESSAGING_FROM_ADDRESS="messages@mail.memba.io"
+export MEMBA_MESSAGING_REPLY_TO_ADDRESS="support@memba.io"
+export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail.memba.io"
+export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="outbound-authentication"
 ./bin/dev up
 ```
 
@@ -71,59 +69,20 @@ Do not set a real delivery provider in routine automated test environments.
 Acceptance and domain tests should continue to use fake or test adapters unless
 a manual smoke test explicitly needs real email.
 
-When a real provider is selected, Memba fails clearly if required credentials or
-from-address configuration is missing. It does not silently fall back to fake
-delivery.
-
-### Magic-link authentication email
-
-Set these environment variables for each environment that should deliver real
-magic-link sign-in email:
-
-| Variable | Required? | Purpose |
-| --- | --- | --- |
-| `MEMBA_AUTH_EMAIL_PROVIDER=postmark` or `resend` | Yes | Opts shared auth magic links into real provider delivery. If unset or blank, Memba does not configure real auth delivery from environment variables. |
-| `MEMBA_POSTMARK_SERVER_TOKEN` | Yes with Postmark | Shared Postmark server token used by Swoosh as the Postmark API key. Keep this secret out of the repository. |
-| `MEMBA_RESEND_API_KEY` | Yes with Resend | Resend API key used by Swoosh. Keep this secret out of the repository. |
-| `MEMBA_AUTH_EMAIL_FROM_ADDRESS` | Yes with real auth email | Sender/from address for magic-link email. Use a verified Memba-controlled sending address such as `auth@mail.memba.io`. |
-| `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` | Yes | Dedicated auth stream/category. Postmark sends this as `MessageStream`; Resend uses it only as local categorisation. |
-
-Example local opt-in for a controlled real magic-link test:
-
-```sh
-export MEMBA_AUTH_EMAIL_PROVIDER=postmark
-export MEMBA_POSTMARK_SERVER_TOKEN="postmark-server-token"
-export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail.memba.io"
-export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="outbound-authentication"
-./bin/dev up
-```
-
-For Resend auth email:
-
-```sh
-export MEMBA_AUTH_EMAIL_PROVIDER=resend
-export MEMBA_RESEND_API_KEY="re_..."
-export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail.memba.io"
-export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="auth"
-./bin/dev up
-```
-
-When real auth delivery is selected, Memba fails clearly if the provider token,
-auth from address, or auth message stream/category is missing. It does not
-silently send auth email through an unconfigured provider.
+When a real provider is selected, Memba fails clearly if required credentials,
+messaging sender, auth sender, or auth stream/category configuration is missing.
+It does not silently fall back to fake delivery.
 
 ### Production Postmark environment variables
 
-For a production cutover where all real email paths use Postmark, set or confirm
-these deployment secrets/config values together:
+For production, all outbound real email paths use Postmark. Set or confirm these
+deployment secrets/config values together:
 
 ```text
-MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark
+MEMBA_EMAIL_PROVIDER=postmark
 MEMBA_POSTMARK_SERVER_TOKEN=<Postmark server token>
-MEMBA_POSTMARK_FROM_ADDRESS=messages@mail.memba.io
-MEMBA_POSTMARK_REPLY_TO_ADDRESS=<monitored reply/contact address>
-
-MEMBA_AUTH_EMAIL_PROVIDER=postmark
+MEMBA_MESSAGING_FROM_ADDRESS=messages@mail.memba.io
+MEMBA_MESSAGING_REPLY_TO_ADDRESS=<monitored reply/contact address>
 MEMBA_AUTH_EMAIL_FROM_ADDRESS=auth@mail.memba.io
 MEMBA_AUTH_EMAIL_MESSAGE_STREAM=outbound-authentication
 ```
@@ -239,7 +198,7 @@ Memba uses the provider-neutral inbound email handling shared with Resend:
 - inbound emails with attachments are rejected;
 - inbound emails without usable plain text are rejected;
 - rejection emails are delivered through the configured real provider, so they
-  go through Postmark when `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`.
+  go through Postmark when `MEMBA_EMAIL_PROVIDER=postmark`.
 
 Webhook authentication/signature verification for Postmark inbound webhooks is a
 follow-up security concern. Do not put other applications behind this route, and
@@ -345,7 +304,7 @@ member-message Postmark environment variables, start the app, send one message t
 a controlled inbox, and confirm:
 
 - Postmark accepts the email;
-- the email arrives from `MEMBA_POSTMARK_FROM_ADDRESS`;
+- the email arrives from `MEMBA_MESSAGING_FROM_ADDRESS`;
 - replies go to the member sender/contact address expected for the message;
 - Postmark shows the `memba_message_id`, `memba_delivery_id`, and
   `memba_club_id` metadata.
@@ -363,10 +322,37 @@ http://localhost:4000/webhooks/postmark/inbound
 
 Use a payload with `MessageID`, `From`, `OriginalRecipient` such as
 `kmc@clubs.memba.io`, `Subject`, and `TextBody`. This tests Memba's inbound route
-without changing DNS. A real Postmark inbound smoke test requires public HTTPS
-access to the running environment, so use the deployed host or a temporary tunnel
-and set the Postmark inbound stream webhook URL to the public `/webhooks/postmark/inbound`
-URL for that controlled test.
+without changing DNS.
+
+For a real local inbound email smoke test, use Resend with the existing
+receiving-enabled `clubs-dev.memba.io` domain:
+
+1. Add ngrok and inbound-domain settings to `.local/secrets.envrc`:
+
+   ```sh
+   export NGROK_AUTHTOKEN="..."
+   export MEMBA_CLUB_INBOUND_EMAIL_DOMAIN="clubs-dev.memba.io"
+   export MEMBA_RESEND_API_KEY="..." # API key that can read Resend received-email content
+   ```
+
+2. Run `bin/dev up`. The dev command starts the `ngrok` process through
+   devenv/process-compose when an ngrok token is configured.
+3. Configure the Resend webhook URL as:
+
+   ```text
+   https://<ngrok-host>/webhooks/resend
+   ```
+
+4. Send real email to a local club address such as `test@clubs-dev.memba.io`.
+   Memba dev resolves the club from the configured
+   `MEMBA_CLUB_INBOUND_EMAIL_DOMAIN` value while Resend reaches the local app
+   through ngrok.
+5. After local testing, restore the Resend webhook URL to the production/fallback
+   URL if needed:
+
+   ```text
+   https://memba.io/webhooks/resend
+   ```
 
 ## Manual production smoke test
 
@@ -385,9 +371,8 @@ For a controlled magic-link auth smoke test:
 
 1. Verify the sending subdomain and auth sender address in Postmark.
 2. Create or confirm the `outbound-authentication` Transactional Message Stream.
-3. Set `MEMBA_AUTH_EMAIL_PROVIDER=postmark`,
-   `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and
-   `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`.
+3. Set `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`,
+   `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and `MEMBA_AUTH_EMAIL_MESSAGE_STREAM`.
 4. Create a club member with a controlled recipient email, or use a `memba.io`
    staff email.
 5. Visit `/auth`, submit the email address, and confirm Postmark accepts the

@@ -12,8 +12,8 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendConfigTest do
             }} =
              ResendConfig.from_env(fn
                "MEMBA_RESEND_API_KEY" -> "  resend-key  "
-               "MEMBA_RESEND_FROM_ADDRESS" -> " messages@mail.memba.io "
-               "MEMBA_RESEND_REPLY_TO_ADDRESS" -> " help@memba.io "
+               "MEMBA_MESSAGING_FROM_ADDRESS" -> " messages@mail.memba.io "
+               "MEMBA_MESSAGING_REPLY_TO_ADDRESS" -> " help@memba.io "
              end)
   end
 
@@ -21,23 +21,23 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendConfigTest do
     assert {:error, message} =
              ResendConfig.from_env(fn
                "MEMBA_RESEND_API_KEY" -> "  "
-               "MEMBA_RESEND_FROM_ADDRESS" -> nil
-               "MEMBA_RESEND_REPLY_TO_ADDRESS" -> "  "
+               "MEMBA_MESSAGING_FROM_ADDRESS" -> nil
+               "MEMBA_MESSAGING_REPLY_TO_ADDRESS" -> "  "
              end)
 
     assert message =~ "Resend email delivery provider is enabled"
     assert message =~ "required environment configuration is missing"
     assert message =~ "MEMBA_RESEND_API_KEY"
-    assert message =~ "MEMBA_RESEND_FROM_ADDRESS"
-    assert message =~ "MEMBA_MESSAGING_DELIVERY_PROVIDER"
+    assert message =~ "MEMBA_MESSAGING_FROM_ADDRESS"
+    assert message =~ "MEMBA_EMAIL_PROVIDER"
   end
 
   test "raises clearly for missing required environment settings" do
-    assert_raise ArgumentError, ~r/MEMBA_RESEND_FROM_ADDRESS/, fn ->
+    assert_raise ArgumentError, ~r/MEMBA_MESSAGING_FROM_ADDRESS/, fn ->
       ResendConfig.from_env!(fn
         "MEMBA_RESEND_API_KEY" -> "resend-key"
-        "MEMBA_RESEND_FROM_ADDRESS" -> nil
-        "MEMBA_RESEND_REPLY_TO_ADDRESS" -> nil
+        "MEMBA_MESSAGING_FROM_ADDRESS" -> nil
+        "MEMBA_MESSAGING_REPLY_TO_ADDRESS" -> nil
       end)
     end
   end

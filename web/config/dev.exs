@@ -121,5 +121,8 @@ config :memba, :club_site,
   scheme: "http",
   port: 4000
 
+config :memba, :club_inbound_email,
+  domain: System.get_env("MEMBA_CLUB_INBOUND_EMAIL_DOMAIN") || "clubs.memba.io"
+
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false

@@ -3,55 +3,53 @@ defmodule Memba.Messaging.EmailDeliveryProviderConfigTest do
 
   alias Memba.Messaging.EmailDeliveryProviderConfig
   alias Memba.Messaging.EmailDeliveryProviders.Fake
+  alias Memba.Messaging.EmailDeliveryProviders.Local
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
   alias Memba.Messaging.EmailDeliveryProviders.Resend
 
   @runtime_env_keys [
-    "MEMBA_MESSAGING_DELIVERY_PROVIDER",
+    "MEMBA_EMAIL_PROVIDER",
     "MEMBA_POSTMARK_SERVER_TOKEN",
-    "MEMBA_POSTMARK_FROM_ADDRESS",
-    "MEMBA_POSTMARK_REPLY_TO_ADDRESS",
-    "MEMBA_AUTH_EMAIL_PROVIDER",
+    "MEMBA_MESSAGING_FROM_ADDRESS",
+    "MEMBA_MESSAGING_REPLY_TO_ADDRESS",
     "MEMBA_AUTH_EMAIL_FROM_ADDRESS",
     "MEMBA_AUTH_EMAIL_MESSAGE_STREAM",
     "MEMBA_RESEND_API_KEY",
     "MEMBA_RESEND_WEBHOOK_SIGNING_SECRET"
   ]
 
-  test "does not override the configured provider when no explicit provider is named" do
+  test "does not override configured defaults when no explicit provider is named" do
     assert EmailDeliveryProviderConfig.provider_override(nil) == :default
     assert EmailDeliveryProviderConfig.provider_override("") == :default
     assert EmailDeliveryProviderConfig.provider_override("   ") == :default
   end
 
-  test "selects the fake provider only when explicitly named" do
+  test "selects supported environment-wide email providers" do
     assert EmailDeliveryProviderConfig.provider_override("fake") == {:ok, Fake}
-  end
-
-  test "selects the Postmark provider only when explicitly named" do
+    assert EmailDeliveryProviderConfig.provider_override("local") == {:ok, Local}
     assert EmailDeliveryProviderConfig.provider_override("postmark") == {:ok, Postmark}
-  end
-
-  test "selects the Resend provider only when explicitly named" do
     assert EmailDeliveryProviderConfig.provider_override("resend") == {:ok, Resend}
   end
 
   test "rejects unknown provider names" do
     assert {:error, message} = EmailDeliveryProviderConfig.provider_override("smtp")
 
-    assert message =~ "Unsupported MEMBA_MESSAGING_DELIVERY_PROVIDER"
+    assert message =~ "Unsupported MEMBA_EMAIL_PROVIDER"
     assert message =~ "fake"
+    assert message =~ "local"
     assert message =~ "postmark"
     assert message =~ "resend"
   end
 
-  test "runtime config selects Postmark messaging delivery and configures the shared mailer path" do
+  test "runtime config selects Postmark once for messaging, auth, and the shared mailer" do
     runtime_config =
       read_runtime_config(%{
-        "MEMBA_MESSAGING_DELIVERY_PROVIDER" => "postmark",
+        "MEMBA_EMAIL_PROVIDER" => "postmark",
         "MEMBA_POSTMARK_SERVER_TOKEN" => "server-token",
-        "MEMBA_POSTMARK_FROM_ADDRESS" => "messages@mail.memba.io",
-        "MEMBA_POSTMARK_REPLY_TO_ADDRESS" => "help@memba.io"
+        "MEMBA_MESSAGING_FROM_ADDRESS" => "messages@mail.memba.io",
+        "MEMBA_MESSAGING_REPLY_TO_ADDRESS" => "help@memba.io",
+        "MEMBA_AUTH_EMAIL_FROM_ADDRESS" => "auth@mail.memba.io",
+        "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" => "outbound-authentication"
       })
 
     memba_config = Keyword.fetch!(runtime_config, :memba)
@@ -66,6 +64,47 @@ defmodule Memba.Messaging.EmailDeliveryProviderConfigTest do
     assert Keyword.fetch!(memba_config, Postmark) == [
              from: "messages@mail.memba.io",
              reply_to: "help@memba.io"
+           ]
+
+    assert Keyword.fetch!(memba_config, Memba.Accounts.AuthEmail) == [
+             provider: :postmark,
+             from: "auth@mail.memba.io",
+             message_stream: "outbound-authentication"
+           ]
+
+    assert Keyword.fetch!(Keyword.fetch!(runtime_config, :swoosh), :api_client) ==
+             Swoosh.ApiClient.Req
+  end
+
+  test "runtime config selects Resend once for messaging, auth, and the shared mailer" do
+    runtime_config =
+      read_runtime_config(%{
+        "MEMBA_EMAIL_PROVIDER" => "resend",
+        "MEMBA_RESEND_API_KEY" => "resend-key",
+        "MEMBA_MESSAGING_FROM_ADDRESS" => "messages@clubs-dev.memba.io",
+        "MEMBA_MESSAGING_REPLY_TO_ADDRESS" => "support@memba.io",
+        "MEMBA_AUTH_EMAIL_FROM_ADDRESS" => "auth@clubs-dev.memba.io",
+        "MEMBA_AUTH_EMAIL_MESSAGE_STREAM" => "auth"
+      })
+
+    memba_config = Keyword.fetch!(runtime_config, :memba)
+
+    assert Keyword.fetch!(memba_config, :messaging_email_delivery_provider) == Resend
+
+    assert Keyword.fetch!(memba_config, Memba.Mailer) == [
+             adapter: Swoosh.Adapters.Resend,
+             api_key: "resend-key"
+           ]
+
+    assert Keyword.fetch!(memba_config, Resend) == [
+             from: "messages@clubs-dev.memba.io",
+             reply_to: "support@memba.io"
+           ]
+
+    assert Keyword.fetch!(memba_config, Memba.Accounts.AuthEmail) == [
+             provider: :resend,
+             from: "auth@clubs-dev.memba.io",
+             message_stream: "auth"
            ]
 
     assert Keyword.fetch!(Keyword.fetch!(runtime_config, :swoosh), :api_client) ==

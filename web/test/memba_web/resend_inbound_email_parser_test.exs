@@ -78,6 +78,12 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
              ResendInboundEmailParser.parse(payload)
   end
 
+  test "parses valid received email metadata without a body so domain policy can reject it" do
+    payload = update_in(valid_payload(), ["data"], &Map.delete(&1, "text"))
+
+    assert {:ok, %{text_body: nil}} = ResendInboundEmailParser.parse(payload)
+  end
+
   test "treats missing required fields as malformed" do
     required_field_removals = [
       {"data", fn payload -> Map.delete(payload, "data") end},
@@ -87,9 +93,7 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
        end},
       {"data.from", fn payload -> update_in(payload, ["data"], &Map.delete(&1, "from")) end},
       {"data.to", fn payload -> update_in(payload, ["data"], &Map.delete(&1, "to")) end},
-      {"data.subject",
-       fn payload -> update_in(payload, ["data"], &Map.delete(&1, "subject")) end},
-      {"data.text", fn payload -> update_in(payload, ["data"], &Map.delete(&1, "text")) end}
+      {"data.subject", fn payload -> update_in(payload, ["data"], &Map.delete(&1, "subject")) end}
     ]
 
     for {field, remove_field} <- required_field_removals do
@@ -112,6 +116,7 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
     malformed_payloads = [
       {:invalid_provider_message_id, put_in(valid_payload(), ["data", "email_id"], %{})},
       {:invalid_from_address, put_in(valid_payload(), ["data", "from"], "Alice Example")},
+      {:invalid_text_body, put_in(valid_payload(), ["data", "text"], %{"body" => "Hi"})},
       {:invalid_html_body, put_in(valid_payload(), ["data", "html"], %{"body" => "<p>Hi</p>"})},
       {:invalid_attachments,
        put_in(valid_payload(), ["data", "attachments"], [

@@ -2,18 +2,19 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendConfig do
   @moduledoc """
   Required runtime configuration for the Resend email delivery provider.
 
-  Real Resend delivery is only enabled when explicitly selected. When it is
-  selected, the API key and sender/from address must be present so the failure
-  mode is clear instead of silently falling back to fake delivery. A monitored
-  reply-to address is optional but used when configured.
+  Real Resend delivery is only enabled when the environment-wide email provider
+  selects Resend. When it is selected, the API key and sender/from address must
+  be present so the failure mode is clear instead of silently falling back to
+  fake delivery. A monitored reply-to address is optional but used when
+  configured.
   """
 
   @enforce_keys [:api_key, :from]
   defstruct [:api_key, :from, :reply_to]
 
   @api_key_env "MEMBA_RESEND_API_KEY"
-  @from_address_env "MEMBA_RESEND_FROM_ADDRESS"
-  @reply_to_address_env "MEMBA_RESEND_REPLY_TO_ADDRESS"
+  @from_address_env "MEMBA_MESSAGING_FROM_ADDRESS"
+  @reply_to_address_env "MEMBA_MESSAGING_REPLY_TO_ADDRESS"
 
   @type t :: %__MODULE__{
           api_key: String.t(),
@@ -113,7 +114,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendConfig do
     "Resend email delivery provider is enabled, but required #{source_label(source)} " <>
       "configuration is missing: #{Enum.join(missing, ", ")}. " <>
       "Set #{@api_key_env} and #{@from_address_env}, or leave " <>
-      "MEMBA_MESSAGING_DELIVERY_PROVIDER unset to use the fake provider."
+      "MEMBA_EMAIL_PROVIDER unset to use the configured default provider."
   end
 
   defp source_label(:application), do: "application"

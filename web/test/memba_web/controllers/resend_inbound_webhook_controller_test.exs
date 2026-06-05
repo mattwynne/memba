@@ -13,8 +13,16 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
     previous_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
     previous_config = Application.get_env(:memba, MembaWeb.ResendWebhookSignature, :unset)
 
+    previous_received_email_config =
+      Application.get_env(:memba, MembaWeb.ResendReceivedEmail, :unset)
+
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Application.delete_env(:memba, MembaWeb.ResendWebhookSignature)
+
+    Application.put_env(:memba, MembaWeb.ResendReceivedEmail,
+      client: MembaWeb.Support.ResendReceivedEmailClient
+    )
+
     Fake.reset()
 
     on_exit(fn ->
@@ -23,6 +31,11 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
       case previous_config do
         :unset -> Application.delete_env(:memba, MembaWeb.ResendWebhookSignature)
         config -> Application.put_env(:memba, MembaWeb.ResendWebhookSignature, config)
+      end
+
+      case previous_received_email_config do
+        :unset -> Application.delete_env(:memba, MembaWeb.ResendReceivedEmail)
+        config -> Application.put_env(:memba, MembaWeb.ResendReceivedEmail, config)
       end
 
       Fake.reset()
@@ -281,13 +294,85 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
              json_response(conn, 401)
   end
 
-  test "returns unprocessable for malformed Resend inbound payloads", %{conn: conn} do
-    payload = update_in(valid_payload(), ["data"], &Map.delete(&1, "text"))
+  test "fetches received email content when real Resend inbound webhooks omit the body", %{
+    conn: conn
+  } do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+    bob = create_person!(name: "Bob Example", email: "bob@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+    add_member!(kmc.club_id, bob.person_id)
+
+    payload =
+      valid_payload(%{
+        "id" => "evt_controller_fetched_content",
+        "data" => %{
+          "email_id" => "email_fetched_content",
+          "from" => "Alice Example <Alice@Example.COM>",
+          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "subject" => "Trip planning night"
+        }
+      })
+      |> update_in(["data"], &Map.delete(&1, "text"))
+
+    conn = post_resend_inbound_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %{message_id: message_id} =
+             Messaging.get_inbound_email_source("resend", "email_fetched_content")
+
+    assert %{body: "Bring route ideas from fetched content."} = Messaging.get_message(message_id)
+  end
+
+  test "accepts valid received email webhooks with no body and records a domain rejection", %{
+    conn: conn
+  } do
+    kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    alice = create_person!(name: "Alice Example", email: "alice@example.com")
+
+    add_member!(kmc.club_id, alice.person_id)
+
+    payload =
+      valid_payload(%{
+        "id" => "evt_controller_no_body",
+        "data" => %{
+          "email_id" => "email_no_body",
+          "from" => "Alice Example <Alice@Example.COM>",
+          "to" => ["KMC <kmc@clubs.memba.io>"],
+          "subject" => "Trip planning night"
+        }
+      })
+      |> update_in(["data"], &Map.delete(&1, "text"))
+
+    conn = post_resend_inbound_event(conn, payload)
+
+    assert %{"status" => "accepted"} = json_response(conn, 202)
+
+    assert %{
+             status: "rejected",
+             message_id: nil,
+             rejection_reason: "plain_text_required",
+             rejection_email_delivery_reference: rejection_email_delivery_reference
+           } = Messaging.get_inbound_email_source("resend", "email_no_body")
+
+    assert is_binary(rejection_email_delivery_reference)
+  end
+
+  test "returns unprocessable when received email content lookup fails", %{conn: conn} do
+    payload =
+      valid_payload(%{
+        "data" => %{
+          "email_id" => "api_error",
+          "text" => nil
+        }
+      })
 
     conn = post_resend_inbound_event(conn, payload)
 
     assert %{"errors" => %{"detail" => detail}} = json_response(conn, 422)
-    assert detail =~ "Missing required Resend inbound webhook attribute: data.text"
+    assert detail =~ "Could not retrieve Resend received email content: HTTP 404"
   end
 
   defp post_resend_inbound_event(conn, payload) do

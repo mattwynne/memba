@@ -3,6 +3,7 @@ defmodule MembaWeb.ResendInboundWebhookController do
 
   alias Memba.Messaging
   alias MembaWeb.ResendInboundEmailParser
+  alias MembaWeb.ResendReceivedEmail
 
   @successful_status :accepted
 
@@ -29,7 +30,8 @@ defmodule MembaWeb.ResendInboundWebhookController do
   end
 
   defp verify_and_parse_resend_inbound_event(conn, params) do
-    with :ok <- verify_signature(conn) do
+    with :ok <- verify_signature(conn),
+         {:ok, params} <- ResendReceivedEmail.enrich_payload(params) do
       ResendInboundEmailParser.parse(params)
     end
   end
@@ -91,6 +93,21 @@ defmodule MembaWeb.ResendInboundWebhookController do
   defp error_detail(:invalid_attachments), do: "Invalid Resend inbound webhook attachments"
   defp error_detail(:invalid_html_body), do: "Invalid Resend inbound webhook HTML body"
   defp error_detail(:invalid_payload), do: "Invalid Resend inbound webhook payload"
+
+  defp error_detail(:missing_resend_api_key),
+    do: "Missing Resend API key for received email lookup"
+
+  defp error_detail({:resend_received_email_api_error, status, _body}) when is_integer(status) do
+    "Could not retrieve Resend received email content: HTTP #{status}"
+  end
+
+  defp error_detail({:resend_received_email_api_error, _reason}) do
+    "Could not retrieve Resend received email content"
+  end
+
+  defp error_detail(:invalid_resend_received_email_response) do
+    "Invalid Resend received email API response"
+  end
 
   defp error_detail(reason) do
     "Could not process Resend inbound webhook: #{inspect(reason)}"
