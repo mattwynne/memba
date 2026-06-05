@@ -72,3 +72,26 @@ Slow acceptance feedback increases waiting time and discourages frequent full ch
 - Introduce a scenario/run ID in the Cucumber world and propagate it into generated names, emails, mailbox filtering, and test-support APIs.
 - Replace global reset-before-each-scenario with scoped data factories plus cleanup only where necessary.
 - Measure `--parallel 2` only after scenario-scoped isolation is in place.
+
+## Resolution
+
+Date: 2026-06-04
+
+Root cause: The browser acceptance harness still isolates scenarios by resetting shared suite-level state, but there was no explicit guardrail preventing Cucumber's parallel worker mode from being used against that shared state.
+
+Fix applied:
+
+- `acceptance-tests/features/support/parallel_guard.js`: added a small guard that detects Cucumber worker processes through `CUCUMBER_PARALLEL=true` and explains why parallel acceptance is currently unsafe.
+- `acceptance-tests/features/support/world.js`: runs the guard before starting the Phoenix browser acceptance lifecycle, so `--parallel` fails before touching the shared app/database lifecycle.
+- `acceptance-tests/test/cucumber_config.test.js`: covers both the failing parallel-worker case and the normal serial case.
+
+Validation:
+
+- `cd acceptance-tests && npm run test:config` — passed, 49 tests.
+- `bin/dev check --quick` — blocked before project tests by existing `memba_test` database connections: PostgreSQL reported 52 other sessions using the database.
+- `MEMBA_POSTGRES_PORT=15433 bin/dev check --quick` — same database-in-use failure, so the full local gate could not complete in the current environment.
+
+Remaining follow-up:
+
+- Implement scenario-scoped data isolation before enabling Cucumber parallelism.
+- Re-run `bin/dev check --quick` or full `bin/dev check` once the existing test database sessions have been cleared.
