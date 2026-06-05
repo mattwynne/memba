@@ -36,6 +36,36 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     assert has_element?(view, "#memberships-card #member-#{person.person_id}", "Alice Example")
   end
 
+  test "club detail does not offer staff-side message composition", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club.club_id,
+                 person_id: person.person_id
+               },
+               consistency: :strong
+             )
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    assert has_element?(view, "#club-messaging-card")
+    assert has_element?(view, "#messages[aria-label='Messages']")
+    refute has_element?(view, "#new-message-form")
+    refute has_element?(view, "#message-sender-select")
+    refute has_element?(view, "#message-subject-input")
+    refute has_element?(view, "#message-body-input")
+    refute has_element?(view, "#send-message-button")
+    refute has_element?(view, "#club-messaging-card form")
+    refute has_element?(view, "#club-messaging-card [aria-label='Send a club message']")
+  end
+
   test "edit form displays and saves a club name and slug", %{conn: conn} do
     club_id = Memba.ID.generate(:club)
 

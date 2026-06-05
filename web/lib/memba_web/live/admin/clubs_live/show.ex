@@ -7,7 +7,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   @empty_club %{"name" => "", "slug" => ""}
   @empty_membership %{"person_id" => ""}
-  @empty_message %{"sender_id" => "", "subject" => "", "body" => ""}
 
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
@@ -26,7 +25,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
      |> assign(:member_count, length(members))
      |> assign(:message_count, length(messages))
      |> assign(:person_options, person_options(people))
-     |> assign(:member_options, member_options(members))
      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
      |> stream(:members, members, dom_id: &"member-#{&1.id}")
      |> stream(:messages, messages, dom_id: &"message-#{&1.message_id}")}
@@ -119,38 +117,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
          socket
          |> put_flash(:error, "Could not remove member: #{format_reason(reason)}")
          |> refresh_members()}
-    end
-  end
-
-  def handle_event("send_message", %{"message" => message_params}, socket) do
-    attrs =
-      message_params
-      |> Map.take(["sender_id", "subject", "body"])
-      |> Map.merge(%{
-        "message_id" => Memba.ID.generate(:message),
-        "club_id" => socket.assigns.club_id
-      })
-
-    case Messaging.send_club_message(attrs, consistency: :strong) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Message sent")
-         |> assign(:message_form, to_form(@empty_message, as: :message))
-         |> refresh_messages()}
-
-      {:ok, _result} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Message sent")
-         |> assign(:message_form, to_form(@empty_message, as: :message))
-         |> refresh_messages()}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Could not send message: #{format_reason(reason)}")
-         |> assign(:message_form, to_form(message_params, as: :message))}
     end
   end
 
@@ -568,58 +534,12 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
             class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
           >
             <div class="flex flex-col gap-1">
-              <h2 class="text-lg font-semibold text-[#15201c]">Send a club message</h2>
+              <h2 class="text-lg font-semibold text-[#15201c]">Club messages</h2>
               <p class="text-sm text-[#7d877f]">
-                Existing staff-side messaging workflow. Projected messages for this club:
+                Projected messages for this club:
                 <span class="font-semibold text-[#15201c]">{@message_count}</span>
               </p>
             </div>
-
-            <.form
-              for={@message_form}
-              id="new-message-form"
-              aria-label="Send a club message"
-              class="mt-5 grid gap-4 lg:grid-cols-2"
-              phx-submit="send_message"
-            >
-              <.input
-                field={@message_form[:sender_id]}
-                id="message-sender-select"
-                label="Sender"
-                type="select"
-                aria-label="Message sender"
-                prompt="Choose a sender"
-                options={@member_options}
-                required
-              />
-              <.input
-                field={@message_form[:subject]}
-                id="message-subject-input"
-                label="Subject"
-                aria-label="Message subject"
-                required
-              />
-              <div class="lg:col-span-2">
-                <.input
-                  field={@message_form[:body]}
-                  id="message-body-input"
-                  label="Body"
-                  type="textarea"
-                  aria-label="Message body"
-                  required
-                />
-              </div>
-              <div class="lg:col-span-2">
-                <.button
-                  id="send-message-button"
-                  type="submit"
-                  aria-label="Send club message"
-                  class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
-                >
-                  Send message
-                </.button>
-              </div>
-            </.form>
 
             <div
               id="messages"
@@ -677,7 +597,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
     socket
     |> assign(:club_form, to_form(club_form_params(socket.assigns.club), as: :club))
     |> assign(:membership_form, to_form(@empty_membership, as: :membership))
-    |> assign(:message_form, to_form(@empty_message, as: :message))
   end
 
   defp refresh_club(socket) do
@@ -697,24 +616,10 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
     socket
     |> assign(:member_count, length(members))
-    |> assign(:member_options, member_options(members))
     |> stream(:members, members, reset: true, dom_id: &"member-#{&1.id}")
   end
 
-  defp refresh_messages(socket) do
-    messages = Messaging.list_messages_for_club(socket.assigns.club_id)
-
-    socket
-    |> assign(:message_count, length(messages))
-    |> stream(:messages, messages,
-      reset: true,
-      dom_id: &"message-#{&1.message_id}"
-    )
-  end
-
   defp person_options(people), do: Enum.map(people, &{&1.name, &1.person_id})
-
-  defp member_options(members), do: Enum.map(members, &{&1.name, &1.id})
 
   defp people_with_email_summaries(people) do
     Enum.map(people, fn person ->

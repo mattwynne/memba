@@ -44,17 +44,17 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has("#member-person-select[aria-label='Person to add as member']")
     |> assert_has("#add-member-button[aria-label='Add selected person as member']")
     |> assert_has("#members[aria-label='Members']")
-    |> assert_has("#new-message-form[aria-label='Send a club message']")
-    |> assert_has("#message-sender-select[aria-label='Message sender']")
-    |> assert_has("#message-subject-input[aria-label='Message subject']")
-    |> assert_has("#message-body-input[aria-label='Message body']")
-    |> assert_has("#send-message-button[aria-label='Send club message']")
+    |> refute_has("#new-message-form")
+    |> refute_has("#message-sender-select")
+    |> refute_has("#message-subject-input")
+    |> refute_has("#message-body-input")
+    |> refute_has("#send-message-button")
     |> assert_has("#messages[aria-label='Messages']")
     |> create_person("Alice")
     |> assert_has("#people [data-testid='person-row'][data-person-name='Alice']")
     |> add_member("Alice")
     |> assert_has("#members [data-testid='member-row'][data-member-name='Alice']")
-    |> send_club_message("Alice", "Trip planning night", "Bring route ideas.")
+    |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
     |> assert_has(
       "#messages [data-testid='message-row'][data-message-subject='Trip planning night']"
     )
@@ -94,9 +94,10 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> refute_has("#member-club-home")
   end
 
-  test "developers can use browser routes to send a club message to active members", %{
-    conn: conn
-  } do
+  test "developers can use browser routes to inspect an existing club message to active members",
+       %{
+         conn: conn
+       } do
     conn
     |> sign_in_staff()
     |> visit("/admin/clubs")
@@ -113,7 +114,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> add_member("Alice")
     |> add_member("Bob")
     |> add_member("Carol")
-    |> send_club_message("Alice", "Trip planning night", "Bring route ideas.")
+    |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
     |> click_link("Trip planning night")
     |> assert_path("/admin/messages/*")
     |> assert_has("#message-show", "Trip planning night")
@@ -228,15 +229,33 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> assert_has("#members [data-testid='member-row']", name)
   end
 
-  defp send_club_message(session, sender_name, subject, body) do
+  defp project_club_message(session, sender_name, subject, body) do
+    current_path = PhoenixTest.Driver.current_path(session)
+    club_id = current_path |> String.split("/", trim: true) |> List.last()
+
+    sender =
+      club_id
+      |> Membership.list_active_members_of_club()
+      |> Enum.find(&(&1.name == sender_name))
+
+    assert sender
+
+    result =
+      Messaging.send_club_message(
+        %{
+          message_id: Memba.ID.generate(:message),
+          club_id: club_id,
+          sender_id: sender.id,
+          subject: subject,
+          body: body
+        },
+        consistency: :strong
+      )
+
+    assert result == :ok or match?({:ok, _result}, result)
+
     session
-    |> within("#new-message-form", fn session ->
-      session
-      |> select("Sender", option: sender_name)
-      |> fill_in("Subject", with: subject)
-      |> fill_in("Body", with: body)
-      |> click_button("Send message")
-    end)
+    |> visit(current_path)
     |> assert_has("#messages [data-testid='message-row']", subject)
   end
 

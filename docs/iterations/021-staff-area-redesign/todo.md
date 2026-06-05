@@ -9,7 +9,7 @@
 - [x] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
 - [x] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.
 - [x] 008 Restyle `/admin/clubs/:club_id` around club facts, people records, and memberships.
-- [ ] 009 Remove the staff send-message form, its form assign/event handling, and any no-longer-needed member sender options from club detail.
+- [x] 009 Remove the staff send-message form, its form assign/event handling, and any no-longer-needed member sender options from club detail.
 - [ ] 010 Remove the embedded club messages list from club detail and replace it with a clear link/copy toward `/admin/messages` or future club-filtered messages.
 - [ ] 011 Restyle person new/edit pages enough that they feel part of the redesigned staff area; preserve existing behaviour.
 - [ ] 012 Restyle `/admin/deliveries` consistently without changing delivery semantics.
