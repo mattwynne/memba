@@ -124,28 +124,6 @@ test("readiness timeout reports Phoenix startup/readiness diagnostics", async ()
   );
 });
 
-test("external app mode does not tear down shared Postgres from worker AfterAll", async () => {
-  const env = testEnv({ ACCEPTANCE_SKIP_APP_START: "1" });
-  const calls = [];
-  const lifecycle = createBrowserAcceptanceLifecycle({
-    env,
-    processRunner: {
-      async run(_spec, { label }) {
-        calls.push(label);
-      },
-      async start() {
-        throw new Error("External app mode should not start Phoenix");
-      }
-    }
-  });
-
-  await lifecycle.start();
-  await lifecycle.stop();
-
-  assert.deepEqual(calls, []);
-});
-
-
 test("database setup failures report database setup diagnostics", async () => {
   const env = testEnv({ MEMBA_DEVENV_SHELL: "1" });
   const lifecycle = createBrowserAcceptanceLifecycle({

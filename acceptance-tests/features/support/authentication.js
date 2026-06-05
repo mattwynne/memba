@@ -11,7 +11,6 @@ const {
   ensureState,
   kootenayClubName,
   nelsonClubName,
-  scopedLabel,
   testMailboxEmails,
   waitForMailboxEmails
 } = require("./member_message");
@@ -19,24 +18,16 @@ const {
 const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
 const signInSubject = "Sign in to Memba";
 
-function authEmailFor(world, name) {
-  if (name === "Pat" && process.env.ACCEPTANCE_SCENARIO_SCOPING !== "1") {
+function authEmailFor(name) {
+  if (name === "Pat") {
     return "pat@memba.io";
   }
 
-  return emailFor(scopedLabel(world, name));
-}
-
-function staffEmailForWorld(world) {
-  if (process.env.ACCEPTANCE_SCENARIO_SCOPING === "1" && world && world.scenarioId) {
-    return `acceptance-staff+${world.scenarioId}@memba.io`;
-  }
-
-  return staffEmail;
+  return emailFor(name);
 }
 
 async function signInStaffForSetup(world) {
-  await requestSignInLinkForEmail(world, staffEmailForWorld(world), "Setup Staff");
+  await requestSignInLinkForEmail(world, staffEmail, "Setup Staff");
   await assertReceivesSignInLink(world, "Setup Staff");
   await followSignInLink(world, "Setup Staff");
   await completeStaffOnboardingIfNeeded(world);
@@ -78,7 +69,7 @@ async function ensurePerson(world, personName, clubName) {
   ensureState(world);
 
   if (!world.people[personName]) {
-    await createPerson(world, personName, clubName, { email: authEmailFor(world, personName) });
+    await createPerson(world, personName, clubName, { email: authEmailFor(personName) });
   }
 }
 
@@ -92,7 +83,7 @@ async function ensureMember(world, personName, clubName) {
 
 async function recordNonMember(world, personName) {
   ensureState(world);
-  const email = authEmailFor(world, personName);
+  const email = authEmailFor(personName);
 
   world.people[personName] = world.people[personName] || {
     alternateEmails: [],
@@ -259,7 +250,7 @@ async function assertClubMarketingPage(world, clubName) {
   assert.ok(club, `Expected ${clubName} to be known in the scenario`);
   await playwrightExpect(world.page.locator("#public-club-page-page")).toBeVisible();
   await playwrightExpect(world.page.locator("#public-club-page-page")).toHaveAttribute("data-club-id", club.clubId);
-  await playwrightExpect(world.page.getByRole("heading", { name: `Welcome to ${club.name}` })).toBeVisible();
+  await playwrightExpect(world.page.getByRole("heading", { name: `Welcome to ${clubName}` })).toBeVisible();
   await playwrightExpect(world.page.getByRole("link", { name: "Sign in to continue" })).toBeVisible();
   await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
 }
@@ -291,10 +282,8 @@ async function assertOnHomepage(world) {
 }
 
 async function assertSeesClub(world, clubName) {
-  const club = world.clubs && world.clubs[clubName];
-  const displayClubName = (club && club.name) || clubName;
-  const clubCard = world.page.getByRole("heading", { name: displayClubName }).first();
-  const adminClubRow = world.page.locator(`[data-testid="club-row"][data-club-name=${cssString(displayClubName)}]`).first();
+  const clubCard = world.page.getByRole("heading", { name: clubName }).first();
+  const adminClubRow = world.page.locator(`[data-testid="club-row"][data-club-name=${cssString(clubName)}]`).first();
 
   if (await clubCard.count()) {
     await playwrightExpect(clubCard).toBeVisible();

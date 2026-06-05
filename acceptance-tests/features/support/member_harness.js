@@ -98,16 +98,8 @@ function copyHarnessState(world, harnessWorld) {
   }
 }
 
-function staffEmailForWorld(world) {
-  if (process.env.ACCEPTANCE_SCENARIO_SCOPING === "1" && world && world.scenarioId) {
-    return `acceptance-staff+${world.scenarioId}@memba.io`;
-  }
-
-  return staffEmail;
-}
-
 async function signInStaff(world) {
-  await signInByMagicLink(world, staffEmailForWorld(world), "staff harness");
+  await signInByMagicLink(world, staffEmail, "staff harness");
   await completeStaffOnboardingIfNeeded(world);
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
 }
