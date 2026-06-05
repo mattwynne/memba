@@ -30,6 +30,7 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
          subject: String.trim(subject),
          text_body: text_body,
          html_body: html_body,
+         original_message_id: original_message_id(value(payload, [:Headers, "Headers"])),
          attachments: attachments,
          headers: value(payload, [:Headers, "Headers"])
        }}
@@ -220,6 +221,42 @@ defmodule MembaWeb.PostmarkInboundEmailParser do
   end
 
   defp fetch_required(_map, _keys, label), do: {:error, {:missing_required_attribute, label}}
+
+  defp original_message_id(headers) do
+    headers
+    |> header_value("message-id")
+    |> optional_trimmed_string()
+  end
+
+  defp header_value(headers, name) when is_map(headers) do
+    Enum.find_value(headers, fn {header_name, value} ->
+      if normalize_header_name(header_name) == name, do: value
+    end)
+  end
+
+  defp header_value(headers, name) when is_list(headers) do
+    Enum.find_value(headers, fn
+      header when is_map(header) ->
+        header_name = value(header, [:Name, "Name", :name, "name"])
+
+        if normalize_header_name(header_name) == name do
+          value(header, [:Value, "Value", :value, "value"])
+        end
+
+      _header ->
+        nil
+    end)
+  end
+
+  defp header_value(_headers, _name), do: nil
+
+  defp normalize_header_name(name) when is_binary(name) do
+    name
+    |> String.trim()
+    |> String.downcase()
+  end
+
+  defp normalize_header_name(_name), do: nil
 
   defp value(map, keys) when is_map(map) do
     Enum.find_value(keys, fn key ->

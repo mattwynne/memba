@@ -13,12 +13,13 @@ defmodule Memba.Messaging.InboundClubDestination do
   alias Memba.Membership.Slug
   alias Memba.Messaging.InboundEmail
 
-  @enforce_keys [:club_id, :club_slug, :to_address]
-  defstruct [:club_id, :club_slug, :to_address]
+  @enforce_keys [:club_id, :club_slug, :club_name, :to_address]
+  defstruct [:club_id, :club_slug, :club_name, :to_address]
 
   @type t :: %__MODULE__{
           club_id: Ecto.UUID.t(),
           club_slug: String.t(),
+          club_name: String.t(),
           to_address: String.t()
         }
 
@@ -129,6 +130,7 @@ defmodule Memba.Messaging.InboundClubDestination do
     %__MODULE__{
       club_id: club.club_id,
       club_slug: club.slug,
+      club_name: club.name,
       to_address: to_address
     }
   end

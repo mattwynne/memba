@@ -191,7 +191,8 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_rejection_email_received(
       to: "mystery@example.com",
-      reason: "we could not find a member account for your sender address"
+      reason:
+        "we weren't able to find a member account for this email address so your message has not been posted"
     )
   end
 
@@ -519,7 +520,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_received {:email, %Swoosh.Email{} = rejection_email}
     assert rejection_email.to == [{"", to_address}]
-    assert rejection_email.subject == "Your email was not posted"
+    assert rejection_email.subject in ["Your email was not posted", "Re: Trip planning night"]
     assert rejection_email.text_body =~ reason
 
     rejection_email

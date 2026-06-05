@@ -56,6 +56,7 @@ defmodule MembaWeb.ResendInboundEmailParserTest do
                   content_id: "attachment-1"
                 }
               ],
+              original_message_id: "<email_123@example.com>",
               headers: [
                 %{"name" => "Message-ID", "value" => "<email_123@example.com>"}
               ]

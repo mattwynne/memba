@@ -25,6 +25,7 @@ defmodule Memba.Messaging.InboundEmail do
     :subject,
     :text_body,
     :html_body,
+    :original_message_id,
     attachments: []
   ]
 
@@ -37,6 +38,7 @@ defmodule Memba.Messaging.InboundEmail do
           subject: String.t(),
           text_body: String.t() | nil,
           html_body: String.t() | nil,
+          original_message_id: String.t() | nil,
           attachments: [InboundEmailAttachment.t()]
         }
 
@@ -65,6 +67,11 @@ defmodule Memba.Messaging.InboundEmail do
            normalize_optional_body(fetch_optional(attrs, :text_body), :invalid_text_body),
          {:ok, html_body} <-
            normalize_optional_body(fetch_optional(attrs, :html_body), :invalid_html_body),
+         {:ok, original_message_id} <-
+           normalize_optional_string(
+             fetch_optional(attrs, :original_message_id),
+             :invalid_original_message_id
+           ),
          {:ok, attachments} <- normalize_attachments(fetch_optional(attrs, :attachments)) do
       {:ok,
        %__MODULE__{
@@ -76,6 +83,7 @@ defmodule Memba.Messaging.InboundEmail do
          subject: subject,
          text_body: text_body,
          html_body: html_body,
+         original_message_id: original_message_id,
          attachments: attachments
        }}
     end

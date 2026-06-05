@@ -549,7 +549,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
                  from_address: "unknown@example.com",
                  recipient_addresses: ["kmc@clubs.memba.io"],
                  subject: "Trip planning night",
-                 text_body: "Bring route ideas."
+                 text_body: "Bring route ideas.",
+                 original_message_id: "<original-trip-planning@example.com>"
                },
                consistency: :strong
              )
@@ -574,10 +575,24 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert is_binary(rejection_email_delivery_reference)
 
-    assert_rejection_email_received(
-      to: "unknown@example.com",
-      reason: "we could not find a member account for your sender address"
-    )
+    rejection_email =
+      assert_rejection_email_received(
+        to: "unknown@example.com",
+        reason:
+          "we weren't able to find a member account for this email address so your message has not been posted",
+        subject: "Re: Trip planning night",
+        from: {"Memba support for Kootenay Mountaineering Club", "messages@mail.memba.test"},
+        support_copy: "For help, reply to this email to contact our support team."
+      )
+
+    assert rejection_email.text_body =~ "Hi, sorry about this"
+    assert rejection_email.text_body =~ "membership of Kootenay Mountaineering Club"
+
+    assert rejection_email.text_body =~
+             "For help, reply to this email to contact our support team."
+
+    assert rejection_email.headers["In-Reply-To"] == "<original-trip-planning@example.com>"
+    assert rejection_email.headers["References"] == "<original-trip-planning@example.com>"
   end
 
   test "rejection emails use Postmark mailer/provider configuration when Postmark is selected" do
@@ -627,7 +642,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     rejection_email =
       assert_rejection_email_received(
         to: "unknown@example.com",
-        reason: "we could not find a member account for your sender address"
+        reason:
+          "we weren't able to find a member account for this email address so your message has not been posted"
       )
 
     assert rejection_email.provider_options[:metadata] == %{
@@ -672,7 +688,8 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     rejection_email =
       assert_rejection_email_received(
         to: "unknown@example.com",
-        reason: "we could not find a member account for your sender address",
+        reason:
+          "we weren't able to find a member account for this email address so your message has not been posted",
         metadata?: false
       )
 
@@ -960,13 +977,27 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"Memba", "messages@mail.memba.test"}
+    case Keyword.fetch(opts, :from) do
+      {:ok, from} ->
+        assert email.from == from
+
+      :error ->
+        assert email.from in [
+                 {"Memba", "messages@mail.memba.test"},
+                 {"Memba support for Kootenay Mountaineering Club", "messages@mail.memba.test"}
+               ]
+    end
+
     assert email.reply_to == {"Memba support", "support@memba.test"}
     assert email.to == [{"", to_address}]
-    assert email.subject == "Your email was not posted"
-    assert email.text_body =~ "Your email was not posted: #{reason}."
-    assert email.text_body =~ "For help, reply to this email or contact Memba support."
-    assert email.html_body =~ reason
+    assert email.subject == Keyword.get(opts, :subject, "Your email was not posted")
+    assert email.text_body =~ reason
+
+    assert email.text_body =~
+             Keyword.get_lazy(opts, :support_copy, fn -> support_copy_for(reason) end)
+
+    escaped_reason = reason |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+    assert email.html_body =~ escaped_reason
 
     if Keyword.get(opts, :metadata?, true) do
       assert email.provider_options[:metadata]["memba_email_kind"] == "inbound_club_rejection"
@@ -974,6 +1005,12 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     email
   end
+
+  defp support_copy_for("we weren't able to find a member account" <> _rest) do
+    "For help, reply to this email to contact our support team."
+  end
+
+  defp support_copy_for(_reason), do: "For help, reply to this email or contact Memba support."
 
   defp count_events(event_module) when is_atom(event_module) do
     event_type = Atom.to_string(event_module)
