@@ -1,0 +1,247 @@
+diff --git a/docs/iterations/021-staff-area-redesign/todo.md b/docs/iterations/021-staff-area-redesign/todo.md
+index 6d91639..290585d 100644
+--- a/docs/iterations/021-staff-area-redesign/todo.md
++++ b/docs/iterations/021-staff-area-redesign/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.
+ - [x] 008 Restyle `/admin/clubs/:club_id` around club facts, people records, and memberships.
+ - [x] 009 Remove the staff send-message form, its form assign/event handling, and any no-longer-needed member sender options from club detail.
+-- [ ] 010 Remove the embedded club messages list from club detail and replace it with a clear link/copy toward `/admin/messages` or future club-filtered messages.
++- [x] 010 Remove the embedded club messages list from club detail and replace it with a clear link/copy toward `/admin/messages` or future club-filtered messages.
+ - [ ] 011 Restyle person new/edit pages enough that they feel part of the redesigned staff area; preserve existing behaviour.
+ - [ ] 012 Restyle `/admin/deliveries` consistently without changing delivery semantics.
+ - [ ] 013 Restyle `/admin/messages/:message_id` consistently without changing diagnostics semantics.
+diff --git a/web/lib/memba_web/live/admin/clubs_live/show.ex b/web/lib/memba_web/live/admin/clubs_live/show.ex
+index 6fa356f..8ff0b38 100644
+--- a/web/lib/memba_web/live/admin/clubs_live/show.ex
++++ b/web/lib/memba_web/live/admin/clubs_live/show.ex
+@@ -3,7 +3,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+ 
+   alias Memba.Membership
+   alias Memba.Membership.Slug
+-  alias Memba.Messaging
+ 
+   @empty_club %{"name" => "", "slug" => ""}
+   @empty_membership %{"person_id" => ""}
+@@ -13,7 +12,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+     club = Membership.get_club(club_id)
+     people = Membership.list_people() |> people_with_email_summaries()
+     members = Membership.list_active_members_of_club(club_id) |> members_with_email_summaries()
+-    messages = Messaging.list_messages_for_club(club_id)
+ 
+     {:ok,
+      socket
+@@ -23,11 +21,9 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+      |> assign_club_slug_feedback(current_club_slug(club))
+      |> assign(:people_count, length(people))
+      |> assign(:member_count, length(members))
+-     |> assign(:message_count, length(messages))
+      |> assign(:person_options, person_options(people))
+      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
+-     |> stream(:members, members, dom_id: &"member-#{&1.id}")
+-     |> stream(:messages, messages, dom_id: &"message-#{&1.message_id}")}
++     |> stream(:members, members, dom_id: &"member-#{&1.id}")}
+   end
+ 
+   @impl Phoenix.LiveView
+@@ -531,45 +527,29 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
+ 
+           <section
+             id="club-messaging-card"
+-            class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
++            class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+           >
+-            <div class="flex flex-col gap-1">
+-              <h2 class="text-lg font-semibold text-[#15201c]">Club messages</h2>
+-              <p class="text-sm text-[#7d877f]">
+-                Projected messages for this club:
+-                <span class="font-semibold text-[#15201c]">{@message_count}</span>
+-              </p>
+-            </div>
++            <div class="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
++              <div>
++                <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
++                  Message diagnostics
++                </p>
++                <h2 class="mt-1 text-lg font-semibold text-[#15201c]">Messages live globally</h2>
++                <p class="mt-2 max-w-3xl text-sm text-[#4b5a55]">
++                  Club-scoped message rows are no longer embedded on this page. Use the global
++                  Messages area to review projected messages across clubs and open delivery
++                  diagnostics. A future club-filtered view can build from that operations index.
++                </p>
++              </div>
+ 
+-            <div
+-              id="messages"
+-              aria-label="Messages"
+-              class="mt-5 divide-y divide-[#e6e3dc] overflow-hidden rounded-2xl border border-[#e6e3dc]"
+-              phx-update="stream"
+-            >
+-              <p id="messages-empty" class="hidden p-4 text-sm text-[#7d877f] only:block">
+-                No messages yet.
+-              </p>
+-              <div
+-                :for={{dom_id, message} <- @streams.messages}
+-                id={dom_id}
+-                data-testid="message-row"
+-                data-message-id={message.message_id}
+-                data-message-subject={message.subject}
+-                aria-label={"Message #{message.subject}"}
+-                class="bg-white p-4 transition duration-200 hover:bg-[#f7f6f3]"
++              <.link
++                id="club-messages-link"
++                navigate={~p"/admin/messages"}
++                aria-label="Open global Messages"
++                class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+               >
+-                <.link
+-                  id={"message-link-#{message.message_id}"}
+-                  navigate={~p"/admin/messages/#{message.message_id}"}
+-                  data-testid="message-link"
+-                  aria-label={"Open message #{message.subject}"}
+-                  class="font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
+-                >
+-                  {message.subject}
+-                </.link>
+-                <p class="mt-1 text-sm text-[#4b5a55]">{message.body}</p>
+-              </div>
++                Open global Messages
++              </.link>
+             </div>
+           </section>
+         <% else %>
+diff --git a/web/test/memba_web/live/admin/clubs_live/show_test.exs b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+index 4112749..35df9fd 100644
+--- a/web/test/memba_web/live/admin/clubs_live/show_test.exs
++++ b/web/test/memba_web/live/admin/clubs_live/show_test.exs
+@@ -5,6 +5,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+ 
+   alias Memba.Membership
+   alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Messaging
+ 
+   test "club detail separates club facts, person records, and memberships", %{conn: conn} do
+     club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+@@ -56,7 +57,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+       |> live(~p"/admin/clubs/#{club.club_id}")
+ 
+     assert has_element?(view, "#club-messaging-card")
+-    assert has_element?(view, "#messages[aria-label='Messages']")
++    assert has_element?(view, "#club-messages-link[href='/admin/messages']")
++    assert has_element?(view, "#club-messages-link[aria-label='Open global Messages']")
+     refute has_element?(view, "#new-message-form")
+     refute has_element?(view, "#message-sender-select")
+     refute has_element?(view, "#message-subject-input")
+@@ -66,6 +68,55 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
+     refute has_element?(view, "#club-messaging-card [aria-label='Send a club message']")
+   end
+ 
++  test "club detail points message review to global Messages instead of embedding club rows", %{
++    conn: conn
++  } do
++    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
++
++    assert :ok =
++             Membership.add_member(
++               %{
++                 membership_id: Memba.ID.generate(:membership),
++                 club_id: club.club_id,
++                 person_id: person.person_id
++               },
++               consistency: :strong
++             )
++
++    result =
++      Messaging.send_club_message(
++        %{
++          message_id: Memba.ID.generate(:message),
++          club_id: club.club_id,
++          sender_id: person.person_id,
++          subject: "Trip planning night",
++          body: "Bring route ideas."
++        },
++        consistency: :strong
++      )
++
++    assert result == :ok or match?({:ok, _result}, result)
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/clubs/#{club.club_id}")
++
++    assert has_element?(view, "#club-messaging-card", "Messages live globally")
++
++    assert has_element?(
++             view,
++             "#club-messages-link[href='/admin/messages']",
++             "Open global Messages"
++           )
++
++    refute has_element?(view, "#messages")
++    refute has_element?(view, "[data-testid='message-row']")
++    refute has_element?(view, "[data-testid='message-link']")
++    refute has_element?(view, "#club-messaging-card", "Trip planning night")
++  end
++
+   test "edit form displays and saves a club name and slug", %{conn: conn} do
+     club_id = Memba.ID.generate(:club)
+ 
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 646e166..7fd0923 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -49,18 +49,23 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     |> refute_has("#message-subject-input")
+     |> refute_has("#message-body-input")
+     |> refute_has("#send-message-button")
+-    |> assert_has("#messages[aria-label='Messages']")
++    |> assert_has("#club-messaging-card")
++    |> assert_has("#club-messages-link[aria-label='Open global Messages']")
++    |> assert_has("#club-messages-link[href='/admin/messages']")
++    |> refute_has("#messages")
++    |> refute_has("[data-testid='message-row']")
+     |> create_person("Alice")
+     |> assert_has("#people [data-testid='person-row'][data-person-name='Alice']")
+     |> add_member("Alice")
+     |> assert_has("#members [data-testid='member-row'][data-member-name='Alice']")
+     |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
++    |> click_link("Open global Messages")
++    |> assert_path("/admin/messages")
++    |> assert_has("#admin-messages-index")
+     |> assert_has(
+-      "#messages [data-testid='message-row'][data-message-subject='Trip planning night']"
++      "#admin-messages-table-body [data-testid='admin-message-row'][data-message-subject='Trip planning night']"
+     )
+-    |> assert_has("a[data-testid='message-link'][aria-label='Open message Trip planning night']")
+-    |> assert_has("a[data-testid='message-link'][href^='/admin/messages/']")
+-    |> click_link("Trip planning night")
++    |> click_link("Open diagnostics")
+     |> assert_path("/admin/messages/*")
+     |> assert_has("#message-show")
+     |> assert_has("#back-to-club-link[aria-label='Back to club']")
+@@ -115,7 +120,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+     |> add_member("Bob")
+     |> add_member("Carol")
+     |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
+-    |> click_link("Trip planning night")
++    |> click_link("Open global Messages")
++    |> assert_path("/admin/messages")
++    |> assert_has(
++      "#admin-messages-table-body [data-testid='admin-message-row'][data-message-subject='Trip planning night']"
++    )
++    |> click_link("Open diagnostics")
+     |> assert_path("/admin/messages/*")
+     |> assert_has("#message-show", "Trip planning night")
+     |> assert_addressed_recipient("Alice")
+@@ -256,7 +266,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+ 
+     session
+     |> visit(current_path)
+-    |> assert_has("#messages [data-testid='message-row']", subject)
++    |> assert_has("#club-messages-link[href='/admin/messages']")
++    |> refute_has("#messages [data-testid='message-row']", subject)
+   end
+ 
+   defp assert_addressed_recipient(session, name) do
