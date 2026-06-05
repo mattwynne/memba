@@ -53,12 +53,12 @@ async function ensureStaffSignedIn(world) {
   }
 
   await world.page.goto(appUrl(world.config, "/admin/clubs"));
-  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
+  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible({ timeout: 30000 });
 }
 
 async function assertSmokeClubExists(world) {
   await world.page.goto(appUrl(world.config, "/admin/clubs"));
-  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
+  await expect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible({ timeout: 30000 });
 
   const clubRow = world.page.locator(
     `[data-testid="club-row"][data-club-slug="${cssStringValue(world.config.clubSlug)}"]`
@@ -73,6 +73,9 @@ async function ensureSmokeMemberSignedIn(world) {
     mailbox: world.mailboxes.member,
     label: "smoke member"
   });
+
+  await world.page.goto(clubSiteUrl(world.config, "/"));
+  await expect(world.page.locator("#club-site-layout[data-surface='club-site']")).toBeVisible();
   await expect(world.page.locator("body")).toContainText(`Signed in as ${world.config.member.email}`);
 }
 

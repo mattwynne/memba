@@ -116,20 +116,10 @@ class FastmailJmapClient {
   }
 
   async waitForEmailEvent({ timeoutMs = 5000 } = {}) {
-    if (!this.session || !this.session.eventSourceUrl || timeoutMs <= 0) {
-      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
-      return;
-    }
-
-    try {
-      await waitForJmapEvent({
-        eventSourceUrl: this.session.eventSourceUrl,
-        token: this.token,
-        timeoutMs
-      });
-    } catch (_error) {
-      await new Promise((resolve) => setTimeout(resolve, timeoutMs));
-    }
+    // Polling is more reliable for production smoke tests than holding a JMAP
+    // EventSource open inside Cucumber step timeouts. We still use JMAP for reads,
+    // but avoid event waits that can overrun the scenario timeout.
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, timeoutMs)));
   }
 }
 
