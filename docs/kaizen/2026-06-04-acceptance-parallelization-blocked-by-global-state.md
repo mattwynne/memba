@@ -72,3 +72,27 @@ Slow acceptance feedback increases waiting time and discourages frequent full ch
 - Replace global reset-before-each-scenario with scoped data factories plus cleanup only where necessary.
 - Identify and rewrite scenarios that require an empty system so they assert on their own scoped data instead.
 - Measure `--parallel 2` after scenario-scoped isolation is in place, then tune worker count for the best wall-clock speedup without overloading Phoenix, Postgres, or Playwright.
+
+## Resolution
+
+Date: 2026-06-04
+
+Root cause: Cucumber parallel workers run support code in separate child processes, so `BeforeAll` runs once per worker. Sharing one app safely requires the parent process to own the Phoenix lifecycle while workers use `ACCEPTANCE_SKIP_APP_START=1`; otherwise workers can start or tear down shared state independently. Scenario isolation also depended on per-scenario global reset and literal fixture names/emails, so parallel scenarios could collide over clubs, people, staff sign-in email, mailbox contents, and global provider configuration.
+
+Fix applied:
+
+- `acceptance-tests/cucumber_runner.js` and `acceptance-tests/package.json`: added a runner that, for `--parallel` runs, starts one shared Phoenix acceptance lifecycle in the parent process, gives the run a unique `MIX_TEST_PARTITION`, and runs Cucumber workers against that app with per-scenario reset disabled and scenario scoping enabled.
+- `acceptance-tests/features/support/world.js`: added stable scenario IDs, optional reset-before-scenario control, and `@isolated-app` scheduling so global-configuration scenarios run exclusively when parallel mode is used.
+- `acceptance-tests/features/support/member_message.js`, `authentication.js`, and `member_harness.js`: added scenario-scoped display names/emails/staff emails and taught key assertions to compare against the generated app-visible names while preserving Gherkin aliases.
+- `acceptance-tests/features/member_message_deliverability.feature`: tagged the provider-mutating failed-send scenario with `@isolated-app`.
+- `acceptance-tests/features/support/lifecycle.js` and `acceptance-tests/test/lifecycle.test.js`: made external-app worker lifecycle shutdown a no-op so worker `AfterAll` hooks do not tear down the parent-owned shared app/Postgres.
+
+Validation:
+
+- `cd acceptance-tests && npm run test:config` — passed, 48/48 tests.
+- `bin/dev acceptance --parallel 2 --name "A club member signs in and sees their club|Alice sends a club message"` — passed, 2 scenarios / 21 steps.
+- `bin/dev check` — passed, 503 ExUnit tests and 34 serial browser acceptance scenarios.
+
+Remaining follow-up:
+
+- Full-suite `bin/dev acceptance --parallel 2` is not complete yet. A trial run exposed remaining aliasing work around delivery-recipient lookup, explicit duplicate subdomain slugs such as `kmc`, smoke-test fixtures, and explicit email-address scenarios; later failures also saw the shared app become unreachable, so the next pass should inspect Phoenix logs around the first full-suite failure before assuming all remaining issues are simple scoping gaps.

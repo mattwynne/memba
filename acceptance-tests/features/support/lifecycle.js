@@ -462,6 +462,12 @@ Cause: ${error.message}`, {
     },
 
     async stop() {
+      const currentConfig = await ensureConfig();
+
+      if (currentConfig.skipAppStart) {
+        return;
+      }
+
       await stopPhoenix();
       await tearDownPostgres();
     }
