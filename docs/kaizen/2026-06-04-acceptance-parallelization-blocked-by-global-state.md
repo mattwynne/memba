@@ -72,3 +72,38 @@ Slow acceptance feedback increases waiting time and discourages frequent full ch
 - Replace global reset-before-each-scenario with scoped data factories plus cleanup only where necessary.
 - Identify and rewrite scenarios that require an empty system so they assert on their own scoped data instead.
 - Measure `--parallel 2` after scenario-scoped isolation is in place, then tune worker count for the best wall-clock speedup without overloading Phoenix, Postgres, or Playwright.
+
+## Resolution plan: isolated acceptance shards
+
+Date: 2026-06-04
+
+Root cause: The shared-app parallelization spike showed that making one Phoenix app safe for concurrent Cucumber workers requires broad aliasing of names, slugs, emails, mailbox assertions, provider state, and smoke-test fixtures. That added too much harness complexity before reliability was proven. A safer path is to preserve today's serial scenario model and run multiple isolated serial shards instead.
+
+Plan:
+
+1. Run N independent acceptance processes concurrently. Each shard uses the same Postgres server/port but gets a unique `MIX_TEST_PARTITION`, unique Phoenix `ACCEPTANCE_PORT`, its own Phoenix BEAM process, its own Swoosh mailbox, and its own app-global provider configuration.
+2. Keep Cucumber serial inside each shard. Use Cucumber's `--shard i/n` to divide scenarios between processes rather than `--parallel N` workers inside one process.
+3. Preserve existing Gherkin and fixture assumptions. Keep per-scenario `/dev/test-support/reset`, literal club names, literal slugs such as `kmc`, fixed smoke-test fixtures, and fixed staff/member emails within each isolated shard.
+4. Add or verify lifecycle tests proving `MIX_TEST_PARTITION` propagates into all database setup commands and the Phoenix server command.
+5. Avoid asset build races by building assets once in a parent/orchestrator step, then letting shard lifecycles skip asset building with a new option such as `ACCEPTANCE_SKIP_ASSET_BUILD=1`.
+6. Avoid Postgres startup races by having the parent/orchestrator start/wait for Postgres once before launching shard processes.
+7. Add a sharded runner, probably `bin/dev acceptance-sharded 2`, that launches commands shaped like:
+
+   ```bash
+   MIX_TEST_PARTITION=_acceptance_1 ACCEPTANCE_PORT=4101 npm test -- --shard 1/2
+   MIX_TEST_PARTITION=_acceptance_2 ACCEPTANCE_PORT=4102 npm test -- --shard 2/2
+   ```
+
+   The runner should prefix logs by shard and exit non-zero if any shard fails.
+8. Measure `time bin/dev acceptance` against `time bin/dev acceptance-sharded 2`. Try 3 shards only if 2 is stable and faster.
+9. Keep `bin/dev check` on the serial acceptance suite until sharded acceptance is demonstrably reliable. Once stable, switch `dev check` to the sharded command while keeping `bin/dev acceptance` as a serial escape hatch.
+
+Risks and checks:
+
+- Partitioned database setup should be straightforward because `web/config/test.exs` already names test databases with `MIX_TEST_PARTITION`; verify this rather than assuming it.
+- Concurrent database setup may stress Postgres but should not conflict if partitions are unique.
+- Concurrent asset builds can race on shared output files; prevent this explicitly.
+- Cucumber shards may not balance scenario duration evenly, so wall-clock gains may be less than the shard count suggests.
+- Multiple Phoenix/Playwright processes may overload CPU or memory; tune shard count empirically.
+
+Status: recommended next approach after reverting the shared-app aliasing spike.
