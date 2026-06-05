@@ -5,7 +5,7 @@
 - [x] 003a Update `Layouts.admin` to the redesigned staff operations shell with the iteration-021 nav entries: Clubs, People, Messages, Deliveries.
 - [x] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
 - [x] 004a Route-verify the People and Messages staff nav links after `/admin/people` and `/admin/messages` exist so the original task-003 working-link requirement is fully satisfied.
-- [ ] 005 Add context/read-model queries as needed:
+- [x] 005 Add context/read-model queries as needed:
 - [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
 - [ ] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.
 - [ ] 008 Restyle `/admin/clubs/:club_id` around club facts, people records, and memberships.

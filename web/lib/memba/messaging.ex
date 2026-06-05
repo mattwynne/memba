@@ -201,6 +201,47 @@ defmodule Memba.Messaging do
   end
 
   @doc """
+  List projected messages for the Memba staff operations Messages index.
+
+  Results include club and sender context where the Membership read models can
+  provide it. Messaging enriches rows through Membership's public query API so
+  it does not depend on Membership projection storage details.
+  """
+  def list_operator_messages() do
+    messages =
+      MessageProjection
+      |> order_by([message], desc: message.inserted_at, desc: message.message_id)
+      |> Repo.all()
+
+    club_summaries =
+      messages
+      |> Enum.map(& &1.club_id)
+      |> Membership.list_club_summaries()
+
+    sender_summaries =
+      messages
+      |> Enum.map(& &1.sender_id)
+      |> Membership.list_person_contact_summaries()
+
+    Enum.map(messages, fn message ->
+      club = Map.get(club_summaries, message.club_id, %{})
+      sender = Map.get(sender_summaries, message.sender_id, %{})
+
+      %{
+        message_id: message.message_id,
+        subject: message.subject,
+        club_id: message.club_id,
+        club_name: Map.get(club, :name),
+        club_slug: Map.get(club, :slug),
+        sender_id: message.sender_id,
+        sender_name: Map.get(sender, :name),
+        sender_email: Map.get(sender, :primary_email),
+        projected_at: message.inserted_at
+      }
+    end)
+  end
+
+  @doc """
   Fetch a projected email delivery read model by caller-generated UUID.
 
   Returns `nil` when the ID is absent or is not a valid UUID.
