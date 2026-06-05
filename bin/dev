@@ -29,6 +29,12 @@ load_local_secrets() {
   fi
 }
 
+configure_dev_up_email_provider() {
+  # This is local development policy, not a secret. Keep provider selection out of
+  # .local/secrets.envrc; that file should hold tokens and addresses only.
+  export MEMBA_EMAIL_PROVIDER="${MEMBA_DEV_EMAIL_PROVIDER:-postmark}"
+}
+
 dev_support_processes() {
   printf '%s\n' postgres
 
@@ -199,6 +205,7 @@ case "${1:-}" in
       # Start detached processes directly, not through a nested `devenv shell`,
       # so `devenv processes ...` can find the same process manager afterwards.
       load_local_secrets
+      configure_dev_up_email_provider
 
       support_processes=()
       while IFS= read -r process_name; do
@@ -221,6 +228,7 @@ case "${1:-}" in
     if [ "$#" -eq 1 ]; then
       devenv_with_postgres_port processes down || true
       load_local_secrets
+      configure_dev_up_email_provider
 
       support_processes=()
       while IFS= read -r process_name; do
@@ -287,6 +295,7 @@ start_processes() {
 # @flag --foreground Keep Phoenix attached to the terminal instead of starting it as a managed background process
 up() {
   load_local_secrets
+  configure_dev_up_email_provider
 
   local support_processes=()
   while IFS= read -r process_name; do
@@ -327,6 +336,7 @@ local_test_email_env() {
     -u MEMBA_AUTH_EMAIL_MESSAGE_STREAM \
     -u MEMBA_RESEND_WEBHOOK_SIGNING_SECRET \
     -u MEMBA_CLUB_INBOUND_EMAIL_DOMAIN \
+    -u MEMBA_DEV_EMAIL_PROVIDER \
     -u MEMBA_NGROK_DOMAIN \
     -u MEMBA_NGROK_TARGET \
     -u NGROK_AUTHTOKEN \
