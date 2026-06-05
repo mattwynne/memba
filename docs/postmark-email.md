@@ -18,7 +18,7 @@ Postmark should be configured with distinct production responsibilities:
 
 | Email path | Postmark setup | Memba configuration |
 | --- | --- | --- |
-| Outbound member broadcasts and rejection emails | Member broadcast message stream, currently named `outbound-member-broadcasts`; verified sender such as `messages@mail.memba.io`; delivery-status webhook on the same stream | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_MESSAGING_FROM_ADDRESS`, optional `MEMBA_MESSAGING_REPLY_TO_ADDRESS` for rejection/contact replies |
+| Outbound member broadcasts and rejection emails | Default transactional stream `outbound`; verified sender such as `messages@mail.memba.io`; delivery-status webhook on the same stream | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_MESSAGING_FROM_ADDRESS`, optional `MEMBA_MESSAGING_REPLY_TO_ADDRESS` for rejection/contact replies |
 | Magic-link authentication | Dedicated auth Transactional Message Stream, recommended ID `outbound-authentication`; verified sender such as `auth@mail.memba.io` | `MEMBA_EMAIL_PROVIDER=postmark`, `MEMBA_POSTMARK_SERVER_TOKEN`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` |
 | Inbound club messages | Inbound Message Stream for `clubs.memba.io`; MX for `clubs.memba.io` points to Postmark inbound; inbound webhook URL configured on the inbound stream | No runtime provider variable. Postmark sends JSON to `POST /webhooks/postmark/inbound`, and Memba derives the club from the recipient address such as `kmc@clubs.memba.io`. |
 
@@ -41,23 +41,24 @@ Set these environment variables for the environment that should send real email:
 | `MEMBA_AUTH_EMAIL_FROM_ADDRESS` | Yes with real email | Sender/from address for magic-link email. Use a verified Memba-controlled sending address such as `auth@mail.memba.io`. |
 | `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` | Yes with real email | Dedicated auth stream/category. Postmark sends this as `MessageStream`; Resend uses it as local categorisation. |
 
-Example local Resend configuration for production-like manual development:
-
-```sh
-export MEMBA_EMAIL_PROVIDER=resend
-export MEMBA_RESEND_API_KEY="re_..."
-export MEMBA_MESSAGING_FROM_ADDRESS="messages@clubs-dev.memba.io"
-export MEMBA_MESSAGING_REPLY_TO_ADDRESS="support@memba.io"
-export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@clubs-dev.memba.io"
-export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="auth"
-./bin/dev up
-```
-
-Example Postmark configuration:
+Example local Postmark configuration for production-like manual development:
 
 ```sh
 export MEMBA_EMAIL_PROVIDER=postmark
-export MEMBA_POSTMARK_SERVER_TOKEN="postmark-server-token"
+export MEMBA_POSTMARK_SERVER_TOKEN="postmark-dev-server-token"
+export MEMBA_MESSAGING_FROM_ADDRESS="messages@mail-dev.memba.io"
+export MEMBA_MESSAGING_REPLY_TO_ADDRESS="support@memba.io"
+export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail-dev.memba.io"
+export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="outbound-authentication"
+export MEMBA_CLUB_INBOUND_EMAIL_DOMAIN="clubs-dev.memba.io"
+./bin/dev up
+```
+
+Example production Postmark configuration:
+
+```sh
+export MEMBA_EMAIL_PROVIDER=postmark
+export MEMBA_POSTMARK_SERVER_TOKEN="postmark-production-server-token"
 export MEMBA_MESSAGING_FROM_ADDRESS="messages@mail.memba.io"
 export MEMBA_MESSAGING_REPLY_TO_ADDRESS="support@memba.io"
 export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail.memba.io"
@@ -109,14 +110,13 @@ Memba-controlled sender for this first real-send slice.
 
 ## Member broadcast stream
 
-Create or confirm the Postmark member broadcast stream:
+Memba currently sends member broadcasts and inbound-rejection emails through the
+Postmark server's default transactional stream:
 
 ```text
-outbound-member-broadcasts
+outbound
 ```
 
-Use this stream, or the server/default stream that Postmark records for this
-Memba server token, for outbound member-message delivery and rejection emails.
 The delivery-status webhook for this stream must point at Memba's Postmark
 delivery-status route:
 
@@ -127,9 +127,10 @@ https://<memba-host>/webhooks/postmark
 Member-message sends include correlation metadata (`memba_message_id`,
 `memba_delivery_id`, and `memba_club_id`) so delivery-status webhooks can update
 Memba records. The current member-message runtime configuration does not expose a
-`MEMBA_*` variable for choosing a Postmark `MessageStream`; before cutover,
-confirm a controlled member-message send appears in the intended member broadcast
-stream in Postmark. Do not reuse the auth stream for member broadcasts.
+`MEMBA_*` variable for choosing a Postmark `MessageStream`; before cutover or
+after provider maintenance, confirm a controlled member-message send appears in
+`outbound` and that the delivery-status webhook is configured there. Do not reuse
+the auth stream for member broadcasts.
 
 ## Auth message stream
 
@@ -324,35 +325,34 @@ Use a payload with `MessageID`, `From`, `OriginalRecipient` such as
 `kmc@clubs.memba.io`, `Subject`, and `TextBody`. This tests Memba's inbound route
 without changing DNS.
 
-For a real local inbound email smoke test, use Resend with the existing
-receiving-enabled `clubs-dev.memba.io` domain:
+For a real local inbound email smoke test, use the dedicated Postmark dev server
+with the receiving-enabled `clubs-dev.memba.io` domain:
 
-1. Add ngrok and inbound-domain settings to `.local/secrets.envrc`:
+1. Add ngrok, Postmark, and inbound-domain settings to `.local/secrets.envrc`:
 
    ```sh
    export NGROK_AUTHTOKEN="..."
+   export MEMBA_EMAIL_PROVIDER=postmark
+   export MEMBA_POSTMARK_SERVER_TOKEN="postmark-dev-server-token"
+   export MEMBA_MESSAGING_FROM_ADDRESS="messages@mail-dev.memba.io"
+   export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail-dev.memba.io"
+   export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="outbound-authentication"
    export MEMBA_CLUB_INBOUND_EMAIL_DOMAIN="clubs-dev.memba.io"
-   export MEMBA_RESEND_API_KEY="..." # API key that can read Resend received-email content
    ```
 
 2. Run `bin/dev up`. The dev command starts the `ngrok` process through
-   devenv/process-compose when an ngrok token is configured.
-3. Configure the Resend webhook URL as:
+   devenv/process-compose when an ngrok token is configured, reads the current
+   ngrok HTTPS URL, and syncs the dedicated Postmark dev server webhooks to:
 
    ```text
-   https://<ngrok-host>/webhooks/resend
+   https://<ngrok-host>/webhooks/postmark
+   https://<ngrok-host>/webhooks/postmark/inbound
    ```
 
-4. Send real email to a local club address such as `test@clubs-dev.memba.io`.
+3. Send real email to a local club address such as `test@clubs-dev.memba.io`.
    Memba dev resolves the club from the configured
-   `MEMBA_CLUB_INBOUND_EMAIL_DOMAIN` value while Resend reaches the local app
+   `MEMBA_CLUB_INBOUND_EMAIL_DOMAIN` value while Postmark reaches the local app
    through ngrok.
-5. After local testing, restore the Resend webhook URL to the production/fallback
-   URL if needed:
-
-   ```text
-   https://memba.io/webhooks/resend
-   ```
 
 ## Manual production smoke test
 

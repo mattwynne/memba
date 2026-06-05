@@ -156,6 +156,129 @@ start_processes() {
   devenv_with_postgres_port processes wait --timeout 120
 }
 
+current_ngrok_url() {
+  local api_url="${MEMBA_NGROK_API_URL:-http://127.0.0.1:4040/api/tunnels}"
+  local attempts=30
+  local url=""
+
+  while [ "$attempts" -gt 0 ]; do
+    url=$(curl -fsS "$api_url" 2>/dev/null \
+      | jq -r '.tunnels[]? | select(.proto == "https") | .public_url' \
+      | head -n 1 || true)
+
+    if [ -n "$url" ] && [ "$url" != "null" ]; then
+      printf '%s\n' "$url"
+      return 0
+    fi
+
+    attempts=$((attempts - 1))
+    sleep 1
+  done
+
+  return 1
+}
+
+sync_postmark_dev_webhooks() {
+  if [ "${MEMBA_DEV_POSTMARK_WEBHOOK_SYNC:-1}" = "0" ]; then
+    return 0
+  fi
+
+  if [ "${MEMBA_DEV_NGROK:-1}" = "0" ]; then
+    return 0
+  fi
+
+  if [ "${MEMBA_EMAIL_PROVIDER:-}" != "postmark" ]; then
+    return 0
+  fi
+
+  local server_token="${MEMBA_POSTMARK_SERVER_TOKEN:-${POSTMARK_SERVER_TOKEN:-}}"
+  local account_token="${POSTMARK_ACCOUNT_TOKEN:-}"
+
+  if [ -z "$server_token" ] || [ -z "$account_token" ]; then
+    echo "Skipping Postmark dev webhook sync: missing Postmark server/account token."
+    return 0
+  fi
+
+  local ngrok_url
+  if ! ngrok_url=$(current_ngrok_url); then
+    echo "Skipping Postmark dev webhook sync: ngrok URL not available."
+    return 0
+  fi
+
+  mkdir -p "$repo_root/.local"
+  printf '%s\n' "$ngrok_url" > "$repo_root/.local/ngrok-url"
+
+  local base_url="${POSTMARK_BASE_URL:-https://api.postmarkapp.com}"
+  local server_json server_id server_name server_color
+  server_json=$(curl -fsS \
+    -H "X-Postmark-Server-Token: $server_token" \
+    -H "Accept: application/json" \
+    "$base_url/server")
+  server_id=$(printf '%s' "$server_json" | jq -r '.ID')
+  server_name=$(printf '%s' "$server_json" | jq -r '.Name')
+  server_color=$(printf '%s' "$server_json" | jq -r '.Color // "purple"')
+
+  if ! printf '%s' "$server_name" | grep -Eiq 'dev|local'; then
+    echo "Skipping Postmark dev webhook sync: server '$server_name' does not look like a dev/local server."
+    return 0
+  fi
+
+  local delivery_url="$ngrok_url/webhooks/postmark"
+  local inbound_url="$ngrok_url/webhooks/postmark/inbound"
+  local webhooks_json webhook_id
+  webhooks_json=$(curl -fsS \
+    -H "X-Postmark-Server-Token: $server_token" \
+    -H "Accept: application/json" \
+    "$base_url/webhooks")
+  webhook_id=$(printf '%s' "$webhooks_json" \
+    | jq -r '.Webhooks[]? | select(.MessageStream == "outbound" and (.Url | endswith("/webhooks/postmark"))) | .ID' \
+    | head -n 1)
+
+  jq -n --arg url "$delivery_url" '{
+    Url: $url,
+    MessageStream: "outbound",
+    Triggers: {
+      Delivery: {Enabled: true},
+      Bounce: {Enabled: true, IncludeContent: false},
+      SpamComplaint: {Enabled: true, IncludeContent: false},
+      Open: {Enabled: false},
+      Click: {Enabled: false}
+    }
+  }' > "$repo_root/.local/postmark-delivery-webhook.json"
+
+  if [ -n "$webhook_id" ]; then
+    curl -fsS -X PUT \
+      -H "X-Postmark-Server-Token: $server_token" \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/json" \
+      "$base_url/webhooks/$webhook_id" \
+      -d @"$repo_root/.local/postmark-delivery-webhook.json" >/dev/null
+  else
+    curl -fsS -X POST \
+      -H "X-Postmark-Server-Token: $server_token" \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/json" \
+      "$base_url/webhooks" \
+      -d @"$repo_root/.local/postmark-delivery-webhook.json" >/dev/null
+  fi
+
+  jq -n --arg name "$server_name" --arg color "$server_color" --arg inbound "$inbound_url" '{
+    Name: $name,
+    Color: $color,
+    InboundHookUrl: $inbound
+  }' > "$repo_root/.local/postmark-server-webhook.json"
+
+  curl -fsS -X PUT \
+    -H "X-Postmark-Account-Token: $account_token" \
+    -H "Accept: application/json" \
+    -H "Content-Type: application/json" \
+    "$base_url/servers/$server_id" \
+    -d @"$repo_root/.local/postmark-server-webhook.json" >/dev/null
+
+  rm -f "$repo_root/.local/postmark-delivery-webhook.json" "$repo_root/.local/postmark-server-webhook.json"
+  echo "Synced Postmark dev webhooks for '$server_name' to $ngrok_url."
+}
+
 # @cmd Start Postgres, the optional ngrok tunnel, and the Phoenix web app
 # @flag --foreground Keep Phoenix attached to the terminal instead of starting it as a managed background process
 up() {
@@ -168,11 +291,13 @@ up() {
 
   if [ "${argc_foreground:-0}" = "1" ]; then
     start_processes "${support_processes[@]}"
+    sync_postmark_dev_webhooks
     migrate_databases
     trap down EXIT
     (cd "$repo_root/web" && mix phx.server)
   else
     start_processes "${support_processes[@]}" web
+    sync_postmark_dev_webhooks
   fi
 }
 
