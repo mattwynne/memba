@@ -762,7 +762,7 @@ _iteration_status_tool() {
 }
 
 # @cmd Run Fabro workflow helpers
-# @arg command![validate-plan|deliver|review|pull-todo|clean-branches] Helper command
+# @arg command![validate-plan|deliver|review|pull-todo|progress|clean-branches] Helper command
 # @arg args~ Arguments for the helper command
 fabro() {
   local command_name="${1:-}"
@@ -775,6 +775,7 @@ fabro() {
     deliver) _fabro_deliver "$@" ;;
     review) _fabro_review "$@" ;;
     pull-todo) _fabro_pull_todo "$@" ;;
+    progress) _fabro_progress "$@" ;;
     clean-branches) _fabro_clean_branches "$@" ;;
     -h|--help|"")
       cat >&2 <<EOF
@@ -785,6 +786,7 @@ Commands:
   deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
   review <branch> <plan_path> [base_ref_or_base_sha]
   pull-todo <run_id> [plan_path] [destination]
+  progress <run_id> [plan_path]
   clean-branches [--force]
 EOF
       ;;
@@ -892,6 +894,68 @@ print(plan_path)
     rm -f "$tmp"
     return "$status"
   fi
+}
+
+_fabro_progress() {
+  local run_id="${1:-}"
+  local plan_path="${2:-}"
+
+  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ] || [ $# -gt 2 ]; then
+    echo "Usage: $0 fabro progress <run_id> [plan_path]" >&2
+    echo "If plan_path is omitted, it is inferred from the run inputs." >&2
+    exit 2
+  fi
+  if [ -n "$plan_path" ]; then
+    case "$plan_path" in
+      */plan.md) ;;
+      *) echo "plan_path must end with /plan.md: $plan_path" >&2; exit 2 ;;
+    esac
+  fi
+
+  local tmp
+  tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-progress.XXXXXX.md")
+  if [ -n "$plan_path" ]; then
+    _fabro_pull_todo "$run_id" "$plan_path" "$tmp" >/dev/null
+  else
+    _fabro_pull_todo "$run_id" "$tmp" >/dev/null
+  fi
+
+  python3 - "$run_id" "$tmp" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+run_id = sys.argv[1]
+todo_path = Path(sys.argv[2])
+lines = todo_path.read_text().splitlines()
+tasks = []
+for line in lines:
+    match = re.match(r"\s*- \[([ xX])\]\s+(.*)", line)
+    if match:
+        tasks.append((match.group(1).lower() == "x", match.group(2)))
+
+total = len(tasks)
+done = sum(1 for checked, _ in tasks if checked)
+remaining = total - done
+percent = 100 if total == 0 else round(done * 100 / total)
+width = 30
+filled = 0 if total == 0 else round(done * width / total)
+bar = "█" * filled + "░" * (width - filled)
+
+print(f"Fabro run {run_id}")
+print(f"Progress: [{bar}] {done}/{total} ({percent}%)")
+print(f"Remaining: {remaining}")
+
+if tasks:
+    next_task = next((text for checked, text in tasks if not checked), None)
+    if next_task:
+        print(f"Next: {next_task}")
+    else:
+        print("Next: all todo tasks are checked")
+PY
+  local status=$?
+  rm -f "$tmp"
+  return "$status"
 }
 
 _fabro_plan_status() {
