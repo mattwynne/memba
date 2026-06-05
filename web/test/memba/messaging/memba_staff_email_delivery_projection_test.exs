@@ -271,22 +271,28 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
   end
 
   test "Memba staff email delivery queries return empty results for missing or invalid IDs" do
-    assert is_nil(Messaging.get_memba_staff_email_delivery(Ecto.UUID.generate()))
+    assert is_nil(Messaging.get_memba_staff_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_memba_staff_email_delivery(nil))
     assert is_nil(Messaging.get_memba_staff_email_delivery("not-a-uuid"))
 
     assert is_nil(
-             Messaging.get_memba_staff_email_delivery(Ecto.UUID.generate(), Ecto.UUID.generate())
+             Messaging.get_memba_staff_email_delivery(
+               Memba.ID.generate(:message),
+               Memba.ID.generate(:person)
+             )
            )
 
-    assert is_nil(Messaging.get_memba_staff_email_delivery(nil, Ecto.UUID.generate()))
-    assert is_nil(Messaging.get_memba_staff_email_delivery(Ecto.UUID.generate(), "not-a-uuid"))
+    assert is_nil(Messaging.get_memba_staff_email_delivery(nil, Memba.ID.generate(:person)))
 
-    assert Messaging.list_operator_email_deliveries(Ecto.UUID.generate()) == []
+    assert is_nil(
+             Messaging.get_memba_staff_email_delivery(Memba.ID.generate(:message), "not-a-uuid")
+           )
+
+    assert Messaging.list_operator_email_deliveries(Memba.ID.generate(:message)) == []
     assert Messaging.list_operator_email_deliveries(nil) == []
     assert Messaging.list_operator_email_deliveries("not-a-uuid") == []
 
-    assert Messaging.list_operator_deliveries(message_id: Ecto.UUID.generate()) == []
+    assert Messaging.list_operator_deliveries(message_id: Memba.ID.generate(:message)) == []
     assert Messaging.list_operator_deliveries(message_id: nil) == []
     assert Messaging.list_operator_deliveries(message_id: "not-a-uuid") == []
     assert Messaging.list_operator_deliveries(nil) == []
@@ -299,20 +305,20 @@ defmodule Memba.Messaging.MembaStaffEmailDeliveryProjectionTest do
       recipients =
       Enum.map(names, fn name ->
         %Recipient{
-          delivery_id: Ecto.UUID.generate(),
-          person_id: Ecto.UUID.generate(),
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: Memba.ID.generate(:person),
           name: name,
           email: email_for(name)
         }
       end)
 
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
 
     assert :ok =
              App.dispatch(
                %SendMessage{
                  message_id: message_id,
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  sender_id: sender.person_id,
                  subject: subject,
                  body: "Bring route ideas.",

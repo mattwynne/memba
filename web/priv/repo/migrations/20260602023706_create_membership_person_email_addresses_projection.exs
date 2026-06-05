@@ -3,12 +3,12 @@ defmodule Memba.Repo.Migrations.CreateMembershipPersonEmailAddressesProjection d
 
   def change do
     create table(:membership_person_email_addresses, primary_key: false) do
-      add :id, :uuid, primary_key: true
+      add :id, :text, primary_key: true
 
       add :person_id,
           references(:membership_people,
             column: :person_id,
-            type: :uuid,
+            type: :text,
             on_delete: :delete_all
           )
 

@@ -10,7 +10,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   alias Memba.Membership.Events.ClubUpdated
 
   test "Membership app dispatch routes CreateClub to the Club aggregate" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     command = %CreateClub{
       club_id: club_id,
@@ -46,7 +46,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
 
   test "Membership app rejects a duplicate CreateClub for the same aggregate identity" do
     command = %CreateClub{
-      club_id: Ecto.UUID.generate(),
+      club_id: Memba.ID.generate(:club),
       name: "Kootenay Mountaineering Club",
       slug: "kmc"
     }
@@ -56,7 +56,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
   end
 
   test "Membership app dispatch routes UpdateClub to the Club aggregate" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              App.dispatch(

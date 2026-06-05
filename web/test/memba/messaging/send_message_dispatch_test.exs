@@ -15,12 +15,12 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
   alias Memba.Messaging.Recipient
 
   test "Messaging app dispatch routes SendMessage to the Message aggregate" do
-    message_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    bob_id = Ecto.UUID.generate()
-    alice_delivery_id = Ecto.UUID.generate()
-    bob_delivery_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
+    alice_delivery_id = Memba.ID.generate(:delivery)
+    bob_delivery_id = Memba.ID.generate(:delivery)
 
     command = %SendMessage{
       message_id: message_id,
@@ -97,9 +97,9 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
   test "Messaging app rejects a duplicate SendMessage for the same aggregate identity" do
     command = %SendMessage{
-      message_id: Ecto.UUID.generate(),
-      club_id: Ecto.UUID.generate(),
-      sender_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
+      club_id: Memba.ID.generate(:club),
+      sender_id: Memba.ID.generate(:person),
       subject: "Trail day",
       body: "Meet at 9am.",
       recipients: []
@@ -115,9 +115,9 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
 
   test "Messaging app dispatch routes delivery status reports to the Message aggregate" do
     command = %SendMessage{
-      message_id: Ecto.UUID.generate(),
-      club_id: Ecto.UUID.generate(),
-      sender_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
+      club_id: Memba.ID.generate(:club),
+      sender_id: Memba.ID.generate(:person),
       subject: "Trail day",
       body: "Meet at 9am.",
       recipients: []
@@ -174,7 +174,7 @@ defmodule Memba.Messaging.SendMessageDispatchTest do
   defp with_sender_recipient(%SendMessage{} = command) do
     [
       %Recipient{
-        delivery_id: Ecto.UUID.generate(),
+        delivery_id: Memba.ID.generate(:delivery),
         person_id: command.sender_id,
         name: "Alice Sender",
         email: "alice@example.com"

@@ -9,12 +9,12 @@ defmodule Memba.Messaging.MessageProjectionTest do
   alias Memba.Messaging.Recipient
 
   test "SendMessage is projected into public Messaging message and delivery queries" do
-    message_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    bob_id = Ecto.UUID.generate()
-    alice_delivery_id = Ecto.UUID.generate()
-    bob_delivery_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
+    alice_delivery_id = Memba.ID.generate(:delivery)
+    bob_delivery_id = Memba.ID.generate(:delivery)
 
     assert is_nil(Messaging.get_message(message_id))
     assert Messaging.list_recipient_deliveries(message_id) == []
@@ -82,15 +82,15 @@ defmodule Memba.Messaging.MessageProjectionTest do
   end
 
   test "message and delivery queries return empty results for missing or invalid IDs" do
-    assert is_nil(Messaging.get_message(Ecto.UUID.generate()))
+    assert is_nil(Messaging.get_message(Memba.ID.generate(:message)))
     assert is_nil(Messaging.get_message(nil))
     assert is_nil(Messaging.get_message("not-a-uuid"))
 
-    assert is_nil(Messaging.get_email_delivery(Ecto.UUID.generate()))
+    assert is_nil(Messaging.get_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_email_delivery(nil))
     assert is_nil(Messaging.get_email_delivery("not-a-uuid"))
 
-    assert Messaging.list_recipient_deliveries(Ecto.UUID.generate()) == []
+    assert Messaging.list_recipient_deliveries(Memba.ID.generate(:message)) == []
     assert Messaging.list_recipient_deliveries(nil) == []
     assert Messaging.list_recipient_deliveries("not-a-uuid") == []
   end

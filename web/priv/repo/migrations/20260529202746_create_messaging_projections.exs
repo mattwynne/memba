@@ -3,9 +3,9 @@ defmodule Memba.Repo.Migrations.CreateMessagingProjections do
 
   def change do
     create table(:messaging_messages, primary_key: false) do
-      add :message_id, :uuid, primary_key: true
-      add :club_id, :uuid, null: false
-      add :sender_id, :uuid, null: false
+      add :message_id, :text, primary_key: true
+      add :club_id, :text, null: false
+      add :sender_id, :text, null: false
       add :subject, :text, null: false
       add :body, :text, null: false
 
@@ -16,9 +16,9 @@ defmodule Memba.Repo.Migrations.CreateMessagingProjections do
     create index(:messaging_messages, [:sender_id])
 
     create table(:messaging_email_deliveries, primary_key: false) do
-      add :delivery_id, :uuid, primary_key: true
-      add :message_id, :uuid, null: false
-      add :recipient_id, :uuid, null: false
+      add :delivery_id, :text, primary_key: true
+      add :message_id, :text, null: false
+      add :recipient_id, :text, null: false
       add :recipient_name, :text, null: false
       add :recipient_address, :text, null: false
       add :channel, :text, null: false

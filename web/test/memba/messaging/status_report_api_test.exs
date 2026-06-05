@@ -7,7 +7,7 @@ defmodule Memba.Messaging.StatusReportApiTest do
   alias Memba.Messaging.Recipient
 
   test "public status reporting APIs dispatch delivery status commands" do
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
     recipients = recipients(["Alice", "Bob", "Carol", "Dana"])
     [alice, bob, carol, dana] = recipients
 
@@ -15,7 +15,7 @@ defmodule Memba.Messaging.StatusReportApiTest do
              App.dispatch(
                %SendMessage{
                  message_id: message_id,
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  sender_id: alice.person_id,
                  subject: "Trip planning night",
                  body: "Bring route ideas.",
@@ -89,16 +89,16 @@ defmodule Memba.Messaging.StatusReportApiTest do
   test "public status reporting APIs surface aggregate validation errors" do
     assert {:error, :message_not_sent} =
              Messaging.report_email_delivery_delivered(%{
-               message_id: Ecto.UUID.generate(),
-               delivery_id: Ecto.UUID.generate()
+               message_id: Memba.ID.generate(:message),
+               delivery_id: Memba.ID.generate(:delivery)
              })
   end
 
   defp recipients(names) do
     Enum.map(names, fn name ->
       %Recipient{
-        delivery_id: Ecto.UUID.generate(),
-        person_id: Ecto.UUID.generate(),
+        delivery_id: Memba.ID.generate(:delivery),
+        person_id: Memba.ID.generate(:person),
         name: name,
         email: email_for(name)
       }

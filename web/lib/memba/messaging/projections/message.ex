@@ -5,10 +5,10 @@ defmodule Memba.Messaging.Projections.Message do
 
   use Ecto.Schema
 
-  @primary_key {:message_id, :binary_id, autogenerate: false}
+  @primary_key {:message_id, :string, autogenerate: false}
   schema "messaging_messages" do
-    field :club_id, :binary_id
-    field :sender_id, :binary_id
+    field :club_id, :string
+    field :sender_id, :string
     field :subject, :string
     field :body, :string
 

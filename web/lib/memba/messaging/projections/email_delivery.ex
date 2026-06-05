@@ -5,10 +5,10 @@ defmodule Memba.Messaging.Projections.EmailDelivery do
 
   use Ecto.Schema
 
-  @primary_key {:delivery_id, :binary_id, autogenerate: false}
+  @primary_key {:delivery_id, :string, autogenerate: false}
   schema "messaging_email_deliveries" do
-    field :message_id, :binary_id
-    field :recipient_id, :binary_id
+    field :message_id, :string
+    field :recipient_id, :string
     field :recipient_name, :string
     field :recipient_address, :string
     field :channel, :string

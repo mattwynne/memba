@@ -8,9 +8,9 @@ defmodule Memba.Membership.AddMemberDispatchTest do
   alias Memba.Membership.Membership
 
   test "Membership app dispatch routes AddMember to the Membership aggregate" do
-    membership_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    person_id = Ecto.UUID.generate()
+    membership_id = Memba.ID.generate(:membership)
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
 
     command = %AddMember{
       membership_id: membership_id,
@@ -47,9 +47,9 @@ defmodule Memba.Membership.AddMemberDispatchTest do
 
   test "Membership app rejects a duplicate AddMember for the same aggregate identity" do
     command = %AddMember{
-      membership_id: Ecto.UUID.generate(),
-      club_id: Ecto.UUID.generate(),
-      person_id: Ecto.UUID.generate()
+      membership_id: Memba.ID.generate(:membership),
+      club_id: Memba.ID.generate(:club),
+      person_id: Memba.ID.generate(:person)
     }
 
     assert :ok = App.dispatch(command, consistency: :strong)

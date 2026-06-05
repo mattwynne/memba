@@ -7,6 +7,7 @@ defmodule Memba.Messaging.Message do
   """
 
   alias Commanded.Aggregates.Aggregate
+  alias Memba.ID
   alias Memba.Messaging.Commands.ReportEmailDeliveryBounced
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelayed
   alias Memba.Messaging.Commands.ReportEmailDeliveryDelivered
@@ -36,9 +37,9 @@ defmodule Memba.Messaging.Message do
 
   @impl Aggregate
   def execute(%__MODULE__{message_id: nil}, %SendMessage{} = command) do
-    with :ok <- validate_uuid(command.message_id, :invalid_message_id),
-         :ok <- validate_uuid(command.club_id, :invalid_club_id),
-         :ok <- validate_uuid(command.sender_id, :invalid_sender_id),
+    with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+         :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
          {:ok, subject} <- normalize_text(command.subject, :invalid_subject),
          {:ok, body} <- normalize_text(command.body, :invalid_body),
          {:ok, recipients} <- normalize_recipients(command.recipients),
@@ -139,8 +140,8 @@ defmodule Memba.Messaging.Message do
   end
 
   defp validate_delivery_command(%__MODULE__{} = message, command) do
-    with :ok <- validate_uuid(command.message_id, :invalid_message_id),
-         :ok <- validate_uuid(command.delivery_id, :invalid_delivery_id),
+    with :ok <- validate_id(:message, command.message_id, :invalid_message_id),
+         :ok <- validate_id(:delivery, command.delivery_id, :invalid_delivery_id),
          :ok <- validate_message_sent(message),
          :ok <- validate_message_identity(message, command.message_id) do
       validate_known_delivery(message, command.delivery_id)
@@ -210,8 +211,8 @@ defmodule Memba.Messaging.Message do
     }
   end
 
-  defp validate_uuid(value, error) do
-    case Ecto.UUID.cast(value) do
+  defp validate_id(type, value, error) do
+    case ID.cast(type, value) do
       {:ok, ^value} -> :ok
       _other -> {:error, error}
     end
@@ -253,8 +254,8 @@ defmodule Memba.Messaging.Message do
   end
 
   defp normalize_recipient(%Recipient{} = recipient) do
-    with :ok <- validate_uuid(recipient.delivery_id, :invalid_delivery_id),
-         :ok <- validate_uuid(recipient.person_id, :invalid_recipient_id),
+    with :ok <- validate_id(:delivery, recipient.delivery_id, :invalid_delivery_id),
+         :ok <- validate_id(:person, recipient.person_id, :invalid_recipient_id),
          {:ok, name} <- normalize_text(recipient.name, :invalid_recipient_name),
          {:ok, email} <- normalize_email(recipient.email) do
       {:ok, %Recipient{recipient | name: name, email: email}}

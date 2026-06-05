@@ -69,10 +69,10 @@ defmodule Memba.Messaging.EmailDeliveryProviderTest do
 
   defp email_delivery_request do
     %EmailDeliveryRequest{
-      message_id: Ecto.UUID.generate(),
-      club_id: Ecto.UUID.generate(),
-      delivery_id: Ecto.UUID.generate(),
-      recipient_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
+      club_id: Memba.ID.generate(:club),
+      delivery_id: Memba.ID.generate(:delivery),
+      recipient_id: Memba.ID.generate(:person),
       recipient_name: "Alice",
       recipient_address: "alice@example.com",
       sender_name: "Bob",

@@ -5,12 +5,13 @@ defmodule Memba.Messaging.InboundEmailEventsTest do
   alias Memba.Messaging.Events.InboundClubEmailRejected
 
   test "InboundClubEmailAccepted records provider identity, routing, sender, and message identity" do
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    message_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    message_id = Memba.ID.generate(:message)
+    inbound_email_id = Memba.ID.generate(:inbound_email)
 
     event = %InboundClubEmailAccepted{
-      inbound_email_id: "inbound-email:resend:email-123",
+      inbound_email_id: inbound_email_id,
       provider: "resend",
       provider_message_id: "email-123",
       provider_event_id: "event-456",
@@ -22,7 +23,7 @@ defmodule Memba.Messaging.InboundEmailEventsTest do
     }
 
     assert %{
-             "inbound_email_id" => "inbound-email:resend:email-123",
+             "inbound_email_id" => ^inbound_email_id,
              "provider" => "resend",
              "provider_message_id" => "email-123",
              "provider_event_id" => "event-456",
@@ -35,8 +36,10 @@ defmodule Memba.Messaging.InboundEmailEventsTest do
   end
 
   test "InboundClubEmailRejected records provider identity, available addresses, reason, and rejection delivery reference" do
+    inbound_email_id = Memba.ID.generate(:inbound_email)
+
     event = %InboundClubEmailRejected{
-      inbound_email_id: "inbound-email:resend:email-123",
+      inbound_email_id: inbound_email_id,
       provider: "resend",
       provider_message_id: "email-123",
       provider_event_id: "event-456",
@@ -47,7 +50,7 @@ defmodule Memba.Messaging.InboundEmailEventsTest do
     }
 
     assert %{
-             "inbound_email_id" => "inbound-email:resend:email-123",
+             "inbound_email_id" => ^inbound_email_id,
              "provider" => "resend",
              "provider_message_id" => "email-123",
              "provider_event_id" => "event-456",
@@ -59,8 +62,10 @@ defmodule Memba.Messaging.InboundEmailEventsTest do
   end
 
   test "InboundClubEmailRejected can omit destination and rejection delivery reference" do
+    inbound_email_id = Memba.ID.generate(:inbound_email)
+
     event = %InboundClubEmailRejected{
-      inbound_email_id: "inbound-email:resend:email-123",
+      inbound_email_id: inbound_email_id,
       provider: "resend",
       provider_message_id: "email-123",
       from_address: "unknown@example.com",

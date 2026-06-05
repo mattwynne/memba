@@ -7,7 +7,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
   test "edit form displays and saves a club name and slug", %{conn: conn} do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -44,7 +44,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "invalid edit submissions leave the form editable without changing the projection", %{
     conn: conn
   } do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -70,7 +70,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   end
 
   test "slug validation feedback updates live while editing", %{conn: conn} do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -99,8 +99,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   end
 
   test "slug availability feedback updates live while editing", %{conn: conn} do
-    club_id = Ecto.UUID.generate()
-    other_club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
+    other_club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -149,7 +149,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club.club_id,
                  person_id: person.person_id
                },
@@ -209,7 +209,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   test "staff can remove a member from a club", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
     alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
-    membership_id = Ecto.UUID.generate()
+    membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
              Membership.add_member(

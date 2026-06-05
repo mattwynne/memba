@@ -281,9 +281,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   test "dashboard omits timestamp label when a message row has no inserted_at timestamp" do
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    message_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    message_id = Memba.ID.generate(:message)
 
     message = %Message{
       message_id: message_id,
@@ -550,8 +550,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   end
 
   defp create_member(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
-    person_id = Ecto.UUID.generate()
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+    person_id = Memba.ID.generate(:person)
     club_name = Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
 
     Repo.get(Club, club_id) ||
@@ -567,7 +567,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       )
 
     Repo.insert!(%Membership{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club_id,
       person_id: person.person_id,
       active: Keyword.get(attrs, :active, true)
@@ -595,7 +595,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
 
     Repo.insert!(%Message{
-      message_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
@@ -607,7 +607,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
   defp create_member_email_delivery(attrs) do
     Repo.insert!(%MemberEmailDelivery{
-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
+      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
@@ -632,7 +632,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     %{
       flash: %{},
       current_identity: %{email: "alice@example.com"},
-      selected_club: %{club_id: Ecto.UUID.generate(), name: "Alpine Club"},
+      selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
       current_member: %{name: "Alice Adams"},
       members: [],
       active_member_count: 0,

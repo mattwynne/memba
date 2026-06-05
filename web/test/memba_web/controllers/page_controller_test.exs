@@ -817,8 +817,8 @@ defmodule MembaWeb.PageControllerTest do
   end
 
   defp create_active_member(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
-    person_id = Ecto.UUID.generate()
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+    person_id = Memba.ID.generate(:person)
     club_name = Keyword.fetch!(attrs, :club_name)
 
     club =
@@ -836,7 +836,7 @@ defmodule MembaWeb.PageControllerTest do
       )
 
     Repo.insert!(%Membership{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club_id,
       person_id: person.person_id,
       active: true
@@ -849,7 +849,7 @@ defmodule MembaWeb.PageControllerTest do
 
   defp create_message(attrs) do
     Repo.insert!(%Message{
-      message_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
@@ -859,7 +859,7 @@ defmodule MembaWeb.PageControllerTest do
 
   defp create_member_email_delivery(attrs) do
     Repo.insert!(%MemberEmailDelivery{
-      delivery_id: Ecto.UUID.generate(),
+      delivery_id: Memba.ID.generate(:delivery),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),

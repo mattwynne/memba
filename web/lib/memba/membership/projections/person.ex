@@ -5,7 +5,7 @@ defmodule Memba.Membership.Projections.Person do
 
   use Ecto.Schema
 
-  @primary_key {:person_id, :binary_id, autogenerate: false}
+  @primary_key {:person_id, :string, autogenerate: false}
   schema "membership_people" do
     field :name, :string
     field :email, :string

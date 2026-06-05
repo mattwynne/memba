@@ -285,8 +285,8 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
   end
 
   defp create_active_member(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
-    person_id = Ecto.UUID.generate()
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+    person_id = Memba.ID.generate(:person)
 
     Repo.get(Club, club_id) ||
       attrs
@@ -301,7 +301,7 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
       )
 
     Repo.insert!(%Membership{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club_id,
       person_id: person.person_id,
       active: true

@@ -9,7 +9,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   alias Memba.Membership.Projections.PersonEmailAddress
 
   test "CreatePerson is projected into the public Membership person query API" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert is_nil(Membership.get_person(person_id))
 
@@ -31,7 +31,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   end
 
   test "legacy CreatePerson projects one primary email-address row" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              App.dispatch(
@@ -59,7 +59,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   end
 
   test "CreatePerson with multiple email addresses replaces the legacy primary projection" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              App.dispatch(
@@ -96,7 +96,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   end
 
   test "ReplacePersonEmailAddresses atomically replaces rows and updates denormalized primary email" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              App.dispatch(
@@ -142,7 +142,7 @@ defmodule Memba.Membership.PersonProjectionTest do
   end
 
   test "get_person/1 returns nil for missing or invalid person IDs" do
-    assert is_nil(Membership.get_person(Ecto.UUID.generate()))
+    assert is_nil(Membership.get_person(Memba.ID.generate(:person)))
     assert is_nil(Membership.get_person(nil))
     assert is_nil(Membership.get_person("not-a-uuid"))
   end

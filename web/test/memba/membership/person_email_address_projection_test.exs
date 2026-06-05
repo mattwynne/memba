@@ -11,8 +11,8 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
                            )
 
   test "backfill migration creates one primary address row for each existing person email" do
-    alice_id = Ecto.UUID.generate()
-    bob_id = Ecto.UUID.generate()
+    alice_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
 
     Repo.insert!(%Person{
       person_id: alice_id,
@@ -53,7 +53,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   end
 
   test "person email address projection rows can be persisted and read" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     Repo.insert!(%Person{
       person_id: person_id,
@@ -77,13 +77,13 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
              is_primary: true
            } = Repo.get!(PersonEmailAddress, projection.id)
 
-    assert Ecto.UUID.cast(id) != :error
+    assert Memba.ID.valid?(:email_address, id)
     assert %DateTime{} = projection.inserted_at
     assert %DateTime{} = projection.updated_at
   end
 
   test "changeset trims display email, stores lowercase lookup email, and validates malformed addresses" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     Repo.insert!(%Person{
       person_id: person_id,
@@ -116,8 +116,8 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   end
 
   test "changeset reports unique normalized-email and one-primary constraint errors" do
-    alice_id = Ecto.UUID.generate()
-    bob_id = Ecto.UUID.generate()
+    alice_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
 
     Repo.insert!(%Person{person_id: alice_id, name: "Alice", email: "alice@example.com"})
     Repo.insert!(%Person{person_id: bob_id, name: "Bob", email: "bob@example.com"})
@@ -155,7 +155,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   end
 
   test "is_primary defaults to false and is not nullable" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     Repo.insert!(%Person{
@@ -166,7 +166,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
 
     Repo.insert_all(PersonEmailAddress, [
       %{
-        id: Ecto.UUID.generate(),
+        id: Memba.ID.generate(:email_address),
         person_id: person_id,
         email: "alice@example.com",
         normalized_email: "alice@example.com",
@@ -180,7 +180,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert_raise Postgrex.Error, ~r/null value in column "is_primary"/, fn ->
       Repo.insert_all(PersonEmailAddress, [
         %{
-          id: Ecto.UUID.generate(),
+          id: Memba.ID.generate(:email_address),
           person_id: person_id,
           email: "other@example.com",
           normalized_email: "other@example.com",
@@ -193,7 +193,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   end
 
   test "database constraints require person_id, email, and normalized_email" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     Repo.insert!(%Person{person_id: person_id, name: "Alice", email: "alice@example.com"})
@@ -201,7 +201,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert_raise Postgrex.Error, ~r/null value in column "person_id"/, fn ->
       Repo.insert_all(PersonEmailAddress, [
         %{
-          id: Ecto.UUID.generate(),
+          id: Memba.ID.generate(:email_address),
           email: "missing-person@example.com",
           normalized_email: "missing-person@example.com",
           is_primary: true,
@@ -214,7 +214,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert_raise Postgrex.Error, ~r/null value in column "email"/, fn ->
       Repo.insert_all(PersonEmailAddress, [
         %{
-          id: Ecto.UUID.generate(),
+          id: Memba.ID.generate(:email_address),
           person_id: person_id,
           normalized_email: "missing-email@example.com",
           is_primary: true,
@@ -227,7 +227,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert_raise Postgrex.Error, ~r/null value in column "normalized_email"/, fn ->
       Repo.insert_all(PersonEmailAddress, [
         %{
-          id: Ecto.UUID.generate(),
+          id: Memba.ID.generate(:email_address),
           person_id: person_id,
           email: "missing-normalized@example.com",
           is_primary: true,
@@ -239,8 +239,8 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   end
 
   test "database constraints reject duplicate normalized email addresses and multiple primaries" do
-    person_id = Ecto.UUID.generate()
-    other_person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
+    other_person_id = Memba.ID.generate(:person)
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     Repo.insert!(%Person{person_id: person_id, name: "Alice", email: "alice@example.com"})
@@ -248,7 +248,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
 
     Repo.insert_all(PersonEmailAddress, [
       %{
-        id: Ecto.UUID.generate(),
+        id: Memba.ID.generate(:email_address),
         person_id: person_id,
         email: "alice@example.com",
         normalized_email: "alice@example.com",
@@ -261,7 +261,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert_raise Postgrex.Error, ~r/normalized_email_index/, fn ->
       Repo.insert_all(PersonEmailAddress, [
         %{
-          id: Ecto.UUID.generate(),
+          id: Memba.ID.generate(:email_address),
           person_id: other_person_id,
           email: "Alice Duplicate",
           normalized_email: "alice@example.com",
@@ -275,7 +275,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
     assert_raise Postgrex.Error, ~r/one_primary_per_person_index/, fn ->
       Repo.insert_all(PersonEmailAddress, [
         %{
-          id: Ecto.UUID.generate(),
+          id: Memba.ID.generate(:email_address),
           person_id: person_id,
           email: "alice@work.example",
           normalized_email: "alice@work.example",
@@ -288,7 +288,7 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
   end
 
   test "person email address rows are deleted when the person projection is deleted" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     person =
       Repo.insert!(%Person{

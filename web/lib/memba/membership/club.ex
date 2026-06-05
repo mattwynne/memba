@@ -4,6 +4,7 @@ defmodule Memba.Membership.Club do
   """
 
   alias Commanded.Aggregates.Aggregate
+  alias Memba.ID
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Events.ClubCreated
@@ -45,7 +46,7 @@ defmodule Memba.Membership.Club do
   end
 
   defp validate_club_id(club_id) do
-    case Ecto.UUID.cast(club_id) do
+    case ID.cast(:club, club_id) do
       {:ok, ^club_id} -> :ok
       _other -> {:error, :invalid_club_id}
     end

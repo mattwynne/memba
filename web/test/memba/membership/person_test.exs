@@ -9,7 +9,7 @@ defmodule Memba.Membership.PersonTest do
 
   describe "execute/2 CreatePerson" do
     test "emits PersonCreated using the caller-supplied UUID identity" do
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
 
       command = %CreatePerson{
         person_id: person_id,
@@ -25,7 +25,7 @@ defmodule Memba.Membership.PersonTest do
     end
 
     test "accepts a replace-all email-address set and emits the compatibility event followed by the replacement event" do
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
 
       command = %CreatePerson{
         person_id: person_id,
@@ -80,7 +80,7 @@ defmodule Memba.Membership.PersonTest do
     test "rejects blank person names" do
       assert {:error, :invalid_name} =
                Person.execute(%Person{}, %CreatePerson{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "  ",
                  email: "alice@example.com"
                })
@@ -89,14 +89,14 @@ defmodule Memba.Membership.PersonTest do
     test "rejects blank or malformed email addresses" do
       assert {:error, :invalid_email} =
                Person.execute(%Person{}, %CreatePerson{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "Alice",
                  email: "  "
                })
 
       assert {:error, :invalid_email} =
                Person.execute(%Person{}, %CreatePerson{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "Alice",
                  email: "alice.example.com"
                })
@@ -105,7 +105,7 @@ defmodule Memba.Membership.PersonTest do
     test "rejects invalid replace-all email-address sets on create" do
       assert {:error, :exactly_one_primary_email_required} =
                Person.execute(%Person{}, %CreatePerson{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "Alice",
                  email_addresses: [
                    %{email: "alice@example.com", is_primary: false},
@@ -115,7 +115,7 @@ defmodule Memba.Membership.PersonTest do
 
       assert {:error, :duplicate_email_address} =
                Person.execute(%Person{}, %CreatePerson{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "Alice",
                  email_addresses: [
                    %{email: "alice@example.com", is_primary: true},
@@ -127,7 +127,7 @@ defmodule Memba.Membership.PersonTest do
     test "rejects a legacy email that disagrees with the replace-all primary address" do
       assert {:error, :primary_email_mismatch} =
                Person.execute(%Person{}, %CreatePerson{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "Alice",
                  email: "alice@old.example",
                  email_addresses: [
@@ -138,7 +138,7 @@ defmodule Memba.Membership.PersonTest do
     end
 
     test "rejects creating the same aggregate twice" do
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
 
       person =
         Person.apply(%Person{}, %PersonCreated{
@@ -158,7 +158,7 @@ defmodule Memba.Membership.PersonTest do
 
   describe "execute/2 ReplacePersonEmailAddresses" do
     test "emits a replace-all email-address event for an existing person" do
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
 
       person =
         Person.apply(%Person{}, %PersonCreated{
@@ -196,13 +196,13 @@ defmodule Memba.Membership.PersonTest do
     test "rejects replacement before the person is created" do
       assert {:error, :person_not_created} =
                Person.execute(%Person{}, %ReplacePersonEmailAddresses{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  email_addresses: [%{email: "alice@example.com", is_primary: true}]
                })
     end
 
     test "rejects invalid person IDs and invalid address sets" do
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
 
       person =
         Person.apply(%Person{}, %PersonCreated{
@@ -229,7 +229,7 @@ defmodule Memba.Membership.PersonTest do
   end
 
   test "apply/2 records the created person identity, name, and email" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert %Person{
              person_id: ^person_id,
@@ -244,7 +244,7 @@ defmodule Memba.Membership.PersonTest do
   end
 
   test "apply/2 records replaced email addresses and primary email" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     person =
       Person.apply(%Person{}, %PersonCreated{

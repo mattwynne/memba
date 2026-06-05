@@ -21,7 +21,7 @@ defmodule Memba.Repo.Migrations.BackfillMembershipPersonEmailAddresses do
       updated_at
     )
     SELECT
-      gen_random_uuid(),
+      'ead_' || gen_random_uuid()::text,
       person.person_id,
       btrim(person.email),
       lower(btrim(person.email)),

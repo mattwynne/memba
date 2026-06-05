@@ -7,6 +7,7 @@ defmodule Memba.Messaging.InboundEmail do
   authorization, body policy, and idempotency rules.
   """
 
+  alias Memba.ID
   alias Memba.Messaging.InboundEmailAttachment
 
   @enforce_keys [
@@ -96,7 +97,7 @@ defmodule Memba.Messaging.InboundEmail do
   """
   @spec identity(t()) :: String.t()
   def identity(%__MODULE__{provider: provider, provider_message_id: provider_message_id}) do
-    "inbound-email:#{provider}:#{provider_message_id}"
+    ID.deterministic(:inbound_email, [provider, provider_message_id])
   end
 
   defp fetch_required(attrs, key) do

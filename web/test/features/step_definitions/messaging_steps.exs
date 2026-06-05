@@ -266,7 +266,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   defp send_message_to_kootenay_members(context, sender_name, subject) do
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
     club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
     sender_id = fetch_from_context!(context, :people, sender_name)
     body = "#{subject} details."
@@ -304,7 +304,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   defp try_send_message_to_kootenay_members(context, sender_name, subject) do
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
     club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
     sender_id = fetch_from_context!(context, :people, sender_name)
     body = "#{subject} details."

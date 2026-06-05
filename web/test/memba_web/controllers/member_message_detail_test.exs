@@ -231,7 +231,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
           body: "Members should only see the simple receipt."
         )
 
-      delivery_id = Ecto.UUID.generate()
+      delivery_id = Memba.ID.generate(:delivery)
       provider_reason = "Postmark webhook reported SpamComplaint from mx.example.invalid"
 
       create_member_email_delivery(
@@ -284,8 +284,8 @@ defmodule MembaWeb.MemberMessageDetailTest do
   end
 
   defp create_member(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
-    person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+    person_id = Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
     club =
       Repo.get(Club, club_id) ||
@@ -302,7 +302,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
       )
 
     Repo.insert!(%Membership{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club_id,
       person_id: person.person_id,
       active: Keyword.get(attrs, :active, true)
@@ -317,7 +317,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
   defp create_message(attrs) do
     Repo.insert!(%Message{
-      message_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
       club_id: Keyword.fetch!(attrs, :club_id),
       sender_id: Keyword.fetch!(attrs, :sender_id),
       subject: Keyword.fetch!(attrs, :subject),
@@ -327,7 +327,7 @@ defmodule MembaWeb.MemberMessageDetailTest do
 
   defp create_member_email_delivery(attrs) do
     Repo.insert!(%MemberEmailDelivery{
-      delivery_id: Keyword.get_lazy(attrs, :delivery_id, &Ecto.UUID.generate/0),
+      delivery_id: Keyword.get_lazy(attrs, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
       message_id: Keyword.fetch!(attrs, :message_id),
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),

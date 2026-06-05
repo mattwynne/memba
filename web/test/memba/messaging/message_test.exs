@@ -18,12 +18,12 @@ defmodule Memba.Messaging.MessageTest do
 
   describe "execute/2 SendMessage" do
     test "emits MessageSent and one EmailDeliveryCreated per resolved recipient" do
-      message_id = Ecto.UUID.generate()
-      club_id = Ecto.UUID.generate()
-      sender_id = Ecto.UUID.generate()
-      alice_delivery_id = Ecto.UUID.generate()
-      bob_delivery_id = Ecto.UUID.generate()
-      bob_id = Ecto.UUID.generate()
+      message_id = Memba.ID.generate(:message)
+      club_id = Memba.ID.generate(:club)
+      sender_id = Memba.ID.generate(:person)
+      alice_delivery_id = Memba.ID.generate(:delivery)
+      bob_delivery_id = Memba.ID.generate(:delivery)
+      bob_id = Memba.ID.generate(:person)
 
       command = %SendMessage{
         message_id: message_id,
@@ -123,7 +123,7 @@ defmodule Memba.Messaging.MessageTest do
                  valid_command
                  | recipients: [
                      recipient,
-                     %Recipient{recipient | delivery_id: Ecto.UUID.generate()}
+                     %Recipient{recipient | delivery_id: Memba.ID.generate(:delivery)}
                    ]
                })
 
@@ -132,7 +132,7 @@ defmodule Memba.Messaging.MessageTest do
                  valid_command
                  | recipients: [
                      recipient,
-                     %Recipient{recipient | person_id: Ecto.UUID.generate()}
+                     %Recipient{recipient | person_id: Memba.ID.generate(:person)}
                    ]
                })
     end
@@ -144,18 +144,18 @@ defmodule Memba.Messaging.MessageTest do
       assert {:error, :sender_not_in_recipients} =
                Message.execute(%Message{}, %SendMessage{
                  valid_command
-                 | recipients: [%Recipient{recipient | person_id: Ecto.UUID.generate()}]
+                 | recipients: [%Recipient{recipient | person_id: Memba.ID.generate(:person)}]
                })
     end
 
     test "rejects sending the same message aggregate twice" do
-      message_id = Ecto.UUID.generate()
+      message_id = Memba.ID.generate(:message)
 
       message =
         Message.apply(%Message{}, %MessageSent{
           message_id: message_id,
-          club_id: Ecto.UUID.generate(),
-          sender_id: Ecto.UUID.generate(),
+          club_id: Memba.ID.generate(:club),
+          sender_id: Memba.ID.generate(:person),
           subject: "Trail day",
           body: "Meet at 9am."
         })
@@ -245,14 +245,14 @@ defmodule Memba.Messaging.MessageTest do
 
       assert {:error, :message_id_mismatch} =
                Message.execute(message, %ReportEmailDeliveryDelivered{
-                 message_id: Ecto.UUID.generate(),
+                 message_id: Memba.ID.generate(:message),
                  delivery_id: ids.delivery_id
                })
 
       assert {:error, :unknown_delivery} =
                Message.execute(message, %ReportEmailDeliveryDelivered{
                  message_id: ids.message_id,
-                 delivery_id: Ecto.UUID.generate()
+                 delivery_id: Memba.ID.generate(:delivery)
                })
     end
 
@@ -356,10 +356,10 @@ defmodule Memba.Messaging.MessageTest do
   end
 
   test "apply/2 records message identity and email delivery state" do
-    message_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    delivery_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    delivery_id = Memba.ID.generate(:delivery)
 
     message =
       %Message{}
@@ -427,17 +427,17 @@ defmodule Memba.Messaging.MessageTest do
   end
 
   defp valid_send_message do
-    sender_id = Ecto.UUID.generate()
+    sender_id = Memba.ID.generate(:person)
 
     %SendMessage{
-      message_id: Ecto.UUID.generate(),
-      club_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
+      club_id: Memba.ID.generate(:club),
       sender_id: sender_id,
       subject: "Trail day",
       body: "Meet at 9am.",
       recipients: [
         %Recipient{
-          delivery_id: Ecto.UUID.generate(),
+          delivery_id: Memba.ID.generate(:delivery),
           person_id: sender_id,
           name: "Alice Sender",
           email: "alice@example.com"
@@ -447,10 +447,10 @@ defmodule Memba.Messaging.MessageTest do
   end
 
   defp sent_message do
-    message_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    delivery_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    delivery_id = Memba.ID.generate(:delivery)
 
     message =
       %Message{}

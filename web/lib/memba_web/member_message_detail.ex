@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageDetail do
   initial controller pipeline.
   """
 
+  alias Memba.ID
   alias Memba.Membership
   alias Memba.Messaging
   alias MembaWeb.MemberEmailDeliveryPresentation
@@ -33,7 +34,7 @@ defmodule MembaWeb.MemberMessageDetail do
   def load(_params, _active_clubs), do: {:error, :forbidden}
 
   defp cast_selected_club_id(params) do
-    case Ecto.UUID.cast(Map.get(params, "club_id")) do
+    case ID.cast(:club, Map.get(params, "club_id")) do
       {:ok, club_id} -> {:ok, club_id}
       :error -> {:error, :forbidden}
     end

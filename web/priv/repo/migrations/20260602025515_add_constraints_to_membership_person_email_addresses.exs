@@ -3,7 +3,7 @@ defmodule Memba.Repo.Migrations.AddConstraintsToMembershipPersonEmailAddresses d
 
   def change do
     alter table(:membership_person_email_addresses) do
-      modify :person_id, :uuid, null: false
+      modify :person_id, :text, null: false
       modify :email, :text, null: false
       modify :normalized_email, :text, null: false
     end

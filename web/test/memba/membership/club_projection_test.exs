@@ -10,7 +10,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
   test "club projection struct exposes the public slug attribute" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert %ClubProjection{
              club_id: ^club_id,
@@ -25,7 +25,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   end
 
   test "CreateClub is projected into the public Membership club query API" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert is_nil(Membership.get_club(club_id))
 
@@ -47,7 +47,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   end
 
   test "UpdateClub updates the projected club name and slug" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              App.dispatch(
@@ -80,7 +80,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   end
 
   test "slug-less ClubCreated events are not replay-compatible" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert {:error, {:invalid_club_created_slug, :invalid_format}} =
              ClubProjector.handle(
@@ -99,7 +99,7 @@ defmodule Memba.Membership.ClubProjectionTest do
   end
 
   test "get_club/1 returns nil for missing or invalid club IDs" do
-    assert is_nil(Membership.get_club(Ecto.UUID.generate()))
+    assert is_nil(Membership.get_club(Memba.ID.generate(:club)))
     assert is_nil(Membership.get_club(nil))
     assert is_nil(Membership.get_club("not-a-uuid"))
   end

@@ -3,9 +3,9 @@ defmodule Memba.Repo.Migrations.CreateMembershipMembershipsProjection do
 
   def change do
     create table(:membership_memberships, primary_key: false) do
-      add :membership_id, :uuid, primary_key: true
-      add :club_id, :uuid, null: false
-      add :person_id, :uuid, null: false
+      add :membership_id, :text, primary_key: true
+      add :club_id, :text, null: false
+      add :person_id, :text, null: false
       add :active, :boolean, null: false, default: true
 
       timestamps(type: :utc_datetime_usec)

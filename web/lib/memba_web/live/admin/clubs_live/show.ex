@@ -70,7 +70,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
       membership_params
       |> Map.take(["person_id"])
       |> Map.merge(%{
-        "membership_id" => Ecto.UUID.generate(),
+        "membership_id" => Memba.ID.generate(:membership),
         "club_id" => socket.assigns.club_id
       })
 
@@ -124,7 +124,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
       message_params
       |> Map.take(["sender_id", "subject", "body"])
       |> Map.merge(%{
-        "message_id" => Ecto.UUID.generate(),
+        "message_id" => Memba.ID.generate(:message),
         "club_id" => socket.assigns.club_id
       })
 

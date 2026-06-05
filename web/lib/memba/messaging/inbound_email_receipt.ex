@@ -3,12 +3,13 @@ defmodule Memba.Messaging.InboundEmailReceipt do
   Inbound email aggregate for provider retry identity.
 
   One aggregate instance represents exactly one provider inbound message id,
-  keyed by `inbound-email:<provider>:<provider_message_id>`. Duplicate receives
+  keyed by a deterministic `inb_...` ID derived from provider and provider message. Duplicate receives
   for the same provider message are explicit no-ops; accepted/rejected business
   outcomes are recorded in this same stream.
   """
 
   alias Commanded.Aggregates.Aggregate
+  alias Memba.ID
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
   alias Memba.Messaging.Commands.RejectInboundClubEmail
   alias Memba.Messaging.Commands.ReceiveInboundEmail
@@ -56,9 +57,9 @@ defmodule Memba.Messaging.InboundEmailReceipt do
   def execute(%__MODULE__{status: nil} = receipt, %AcceptInboundClubEmail{} = command) do
     with {:ok, inbound_email_id} <- validate_command_identity(command),
          :ok <- validate_same_provider_message(receipt, command.inbound_email),
-         :ok <- validate_uuid(command.club_id, :invalid_club_id),
-         :ok <- validate_uuid(command.sender_id, :invalid_sender_id),
-         :ok <- validate_uuid(command.message_id, :invalid_message_id),
+         :ok <- validate_id(:club, command.club_id, :invalid_club_id),
+         :ok <- validate_id(:person, command.sender_id, :invalid_sender_id),
+         :ok <- validate_id(:message, command.message_id, :invalid_message_id),
          {:ok, to_address} <- normalize_email(command.to_address, :invalid_to_address) do
       %InboundClubEmailAccepted{
         inbound_email_id: inbound_email_id,
@@ -166,7 +167,7 @@ defmodule Memba.Messaging.InboundEmailReceipt do
     expected_inbound_email_id = InboundEmail.identity(inbound_email)
 
     cond do
-      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
+      ID.cast(:inbound_email, inbound_email_id) == :error ->
         {:error, :invalid_inbound_email_id}
 
       inbound_email_id == expected_inbound_email_id ->
@@ -186,7 +187,7 @@ defmodule Memba.Messaging.InboundEmailReceipt do
     expected_inbound_email_id = InboundEmail.identity(inbound_email)
 
     cond do
-      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
+      ID.cast(:inbound_email, inbound_email_id) == :error ->
         {:error, :invalid_inbound_email_id}
 
       inbound_email_id == expected_inbound_email_id ->
@@ -206,7 +207,7 @@ defmodule Memba.Messaging.InboundEmailReceipt do
     expected_inbound_email_id = InboundEmail.identity(inbound_email)
 
     cond do
-      not is_binary(inbound_email_id) or String.trim(inbound_email_id) == "" ->
+      ID.cast(:inbound_email, inbound_email_id) == :error ->
         {:error, :invalid_inbound_email_id}
 
       inbound_email_id == expected_inbound_email_id ->
@@ -247,8 +248,8 @@ defmodule Memba.Messaging.InboundEmailReceipt do
     {:error, :inbound_email_already_rejected}
   end
 
-  defp validate_uuid(value, error) do
-    case Ecto.UUID.cast(value) do
+  defp validate_id(type, value, error) do
+    case ID.cast(type, value) do
       {:ok, ^value} -> :ok
       _other -> {:error, error}
     end

@@ -205,7 +205,7 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     assert :ok =
              Membership.create_person(
                %{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: name,
                  email: email,
                  email_addresses: [%{email: email, is_primary: true}]
@@ -269,20 +269,20 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
       recipients =
       Enum.map(names, fn name ->
         %Recipient{
-          delivery_id: Ecto.UUID.generate(),
-          person_id: Ecto.UUID.generate(),
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: Memba.ID.generate(:person),
           name: name,
           email: email_for(name)
         }
       end)
 
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
 
     assert :ok =
              MessagingApp.dispatch(
                %SendMessage{
                  message_id: message_id,
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  sender_id: sender.person_id,
                  subject: "Trip planning night",
                  body: "Bring route ideas.",

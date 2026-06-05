@@ -4,6 +4,7 @@ defmodule Memba.Messaging do
   """
 
   alias Commanded.Commands.ExecutionResult
+  alias Memba.ID
   alias Memba.Membership
   alias Memba.Messaging.App
   alias Memba.Messaging.Commands.AcceptInboundClubEmail
@@ -175,7 +176,7 @@ defmodule Memba.Messaging do
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
   def get_message(message_id) do
-    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id) do
       Repo.get(MessageProjection, message_id)
     else
       :error -> nil
@@ -189,7 +190,7 @@ defmodule Memba.Messaging do
   insertion time and ID for stable browser/test output.
   """
   def list_messages_for_club(club_id) do
-    with {:ok, club_id} <- Ecto.UUID.cast(club_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id) do
       MessageProjection
       |> where([message], message.club_id == ^club_id)
       |> order_by([message], asc: message.inserted_at, asc: message.message_id)
@@ -205,7 +206,7 @@ defmodule Memba.Messaging do
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
   def get_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
       Repo.get(EmailDeliveryProjection, delivery_id)
     else
       :error -> nil
@@ -243,7 +244,7 @@ defmodule Memba.Messaging do
   plumbing.
   """
   def list_recipient_deliveries(message_id) do
-    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id) do
       EmailDeliveryProjection
       |> where([delivery], delivery.message_id == ^message_id)
       |> order_by([delivery], asc: delivery.recipient_name, asc: delivery.recipient_id)
@@ -259,7 +260,7 @@ defmodule Memba.Messaging do
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
   def get_member_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
       MemberEmailDeliveryProjection
       |> Repo.get(delivery_id)
       |> normalize_member_email_delivery()
@@ -275,8 +276,8 @@ defmodule Memba.Messaging do
   member vocabulary: sent, delivered, or delivery problem.
   """
   def get_member_email_delivery(message_id, recipient_id) do
-    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
-         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id),
+         {:ok, recipient_id} <- ID.cast(:person, recipient_id) do
       Repo.get_by(MemberEmailDeliveryProjection,
         message_id: message_id,
         recipient_id: recipient_id
@@ -295,7 +296,7 @@ defmodule Memba.Messaging do
   plumbing.
   """
   def list_member_email_deliverys(message_id) do
-    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id) do
       MemberEmailDeliveryProjection
       |> where([receipt], receipt.message_id == ^message_id)
       |> order_by([receipt], asc: receipt.recipient_name, asc: receipt.recipient_id)
@@ -312,7 +313,7 @@ defmodule Memba.Messaging do
   Returns `nil` when the ID is absent or is not a valid UUID.
   """
   def get_memba_staff_email_delivery(delivery_id) do
-    with {:ok, delivery_id} <- Ecto.UUID.cast(delivery_id) do
+    with {:ok, delivery_id} <- ID.cast(:delivery, delivery_id) do
       MembaStaffEmailDeliveryProjection
       |> Repo.get(delivery_id)
       |> normalize_memba_staff_email_delivery()
@@ -328,8 +329,8 @@ defmodule Memba.Messaging do
   and reason text for delayed, bounced, and spam complaint reports.
   """
   def get_memba_staff_email_delivery(message_id, recipient_id) do
-    with {:ok, message_id} <- Ecto.UUID.cast(message_id),
-         {:ok, recipient_id} <- Ecto.UUID.cast(recipient_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id),
+         {:ok, recipient_id} <- ID.cast(:person, recipient_id) do
       Repo.get_by(MembaStaffEmailDeliveryProjection,
         message_id: message_id,
         recipient_id: recipient_id
@@ -369,7 +370,7 @@ defmodule Memba.Messaging do
   plumbing.
   """
   def list_operator_email_deliveries(message_id) do
-    with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+    with {:ok, message_id} <- ID.cast(:message, message_id) do
       MembaStaffEmailDeliveryProjection
       |> where([deliverability], deliverability.message_id == ^message_id)
       |> order_by([deliverability],
@@ -416,7 +417,7 @@ defmodule Memba.Messaging do
 
     case Keyword.fetch(opts, :message_id) do
       {:ok, message_id} ->
-        with {:ok, message_id} <- Ecto.UUID.cast(message_id) do
+        with {:ok, message_id} <- ID.cast(:message, message_id) do
           {:ok,
            where(query, [deliverability, _message], deliverability.message_id == ^message_id)}
         else
@@ -590,7 +591,7 @@ defmodule Memba.Messaging do
          body,
          dispatch_opts
        ) do
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
 
     with :ok <-
            send_inbound_club_message(
@@ -628,7 +629,7 @@ defmodule Memba.Messaging do
          dispatch_opts,
          opts \\ []
        ) do
-    rejection_email_delivery_reference = Ecto.UUID.generate()
+    rejection_email_delivery_reference = ID.generate(:delivery)
 
     with :ok <-
            record_inbound_club_email_rejected(
@@ -805,7 +806,7 @@ defmodule Memba.Messaging do
 
   defp resolved_recipient(%{id: person_id, name: name, email: email}) do
     %Recipient{
-      delivery_id: Ecto.UUID.generate(),
+      delivery_id: Memba.ID.generate(:delivery),
       person_id: person_id,
       name: name,
       email: email

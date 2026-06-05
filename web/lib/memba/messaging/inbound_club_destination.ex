@@ -17,7 +17,7 @@ defmodule Memba.Messaging.InboundClubDestination do
   defstruct [:club_id, :club_slug, :club_name, :to_address]
 
   @type t :: %__MODULE__{
-          club_id: Ecto.UUID.t(),
+          club_id: String.t(),
           club_slug: String.t(),
           club_name: String.t(),
           to_address: String.t()

@@ -36,10 +36,10 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
   ]
 
   @type t :: %__MODULE__{
-          message_id: Ecto.UUID.t(),
-          club_id: Ecto.UUID.t(),
-          delivery_id: Ecto.UUID.t(),
-          recipient_id: Ecto.UUID.t(),
+          message_id: String.t(),
+          club_id: String.t(),
+          delivery_id: String.t(),
+          recipient_id: String.t(),
           recipient_name: String.t(),
           recipient_address: String.t(),
           sender_name: String.t(),

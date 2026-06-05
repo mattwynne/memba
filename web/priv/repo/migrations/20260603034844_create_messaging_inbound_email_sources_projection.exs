@@ -10,9 +10,9 @@ defmodule Memba.Repo.Migrations.CreateMessagingInboundEmailSourcesProjection do
       add :from_address, :text, null: false
       add :to_address, :text
       add :status, :text, null: false
-      add :club_id, :uuid
-      add :sender_id, :uuid
-      add :message_id, :uuid
+      add :club_id, :text
+      add :sender_id, :text
+      add :message_id, :text
       add :rejection_reason, :text
       add :rejection_email_delivery_reference, :text
 

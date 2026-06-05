@@ -4,6 +4,7 @@ defmodule Memba.Membership.Person do
   """
 
   alias Commanded.Aggregates.Aggregate
+  alias Memba.ID
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.EmailAddresses
@@ -83,7 +84,7 @@ defmodule Memba.Membership.Person do
   end
 
   defp validate_person_id(person_id) do
-    case Ecto.UUID.cast(person_id) do
+    case ID.cast(:person, person_id) do
       {:ok, ^person_id} -> :ok
       _other -> {:error, :invalid_person_id}
     end

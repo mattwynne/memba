@@ -105,7 +105,7 @@ defmodule MembaWeb.AuthLive.Onboard do
 
   defp create_staff_person(email, name) do
     Membership.create_person(
-      %{person_id: Ecto.UUID.generate(), name: name, email: email},
+      %{person_id: Memba.ID.generate(:person), name: name, email: email},
       consistency: :strong
     )
   end

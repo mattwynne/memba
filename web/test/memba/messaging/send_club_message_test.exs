@@ -30,8 +30,8 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   test "resolves active club members via Membership and dispatches SendMessage" do
-    kootenay_club_id = Ecto.UUID.generate()
-    nelson_club_id = Ecto.UUID.generate()
+    kootenay_club_id = Memba.ID.generate(:club)
+    nelson_club_id = Memba.ID.generate(:club)
 
     alice = create_person(name: "Alice", email: "alice@example.com")
     bob = create_person(name: "Bob", email: "bob@example.com")
@@ -43,7 +43,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_member(kootenay_club_id, carol.person_id)
     add_member(nelson_club_id, pat.person_id)
 
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
 
     assert {:ok,
             %ExecutionResult{
@@ -100,7 +100,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     delivery_ids = Enum.map(delivery_events, & &1.delivery_id)
 
-    assert Enum.all?(delivery_ids, &(Ecto.UUID.cast(&1) != :error))
+    assert Enum.all?(delivery_ids, &Memba.ID.valid?(:delivery, &1))
     assert Enum.uniq(delivery_ids) == delivery_ids
 
     assert [
@@ -149,7 +149,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   test "sends each active member once at the person's primary email address" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     alice =
       create_person(
@@ -174,7 +174,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     add_member(club_id, alice.person_id)
     add_member(club_id, bob.person_id)
 
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
     alice_id = alice.person_id
     bob_id = bob.person_id
 
@@ -238,13 +238,13 @@ defmodule Memba.Messaging.SendClubMessageTest do
   end
 
   test "does not call the provider when the send command is rejected" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
 
     assert {:error, :invalid_subject} =
              Messaging.send_club_message(%{
-               message_id: Ecto.UUID.generate(),
+               message_id: Memba.ID.generate(:message),
                club_id: club_id,
                sender_id: alice.person_id,
                subject: "  ",
@@ -266,11 +266,11 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
 
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")
     add_member(club_id, alice.person_id)
 
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
 
     assert {:error, {:postmark_delivery_error, :timeout}} =
              Messaging.send_club_message(
@@ -296,7 +296,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
 
     person = %{
-      person_id: Ecto.UUID.generate(),
+      person_id: Memba.ID.generate(:person),
       name: Keyword.fetch!(attrs, :name),
       email: email,
       email_addresses: email_addresses
@@ -325,7 +325,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
     assert :ok =
              MembershipApp.dispatch(
                %AddMember{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },

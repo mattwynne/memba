@@ -195,7 +195,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     if get_in(context, [:clubs, club_name]) do
       context
     else
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
       slug = scenario_slug(context, club_name)
 
       assert :ok =
@@ -212,7 +212,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     if get_in(context, [:people, person_name, :person_id]) do
       context
     else
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
       email = default_email_for(context, person_name)
 
       assert :ok =
@@ -243,7 +243,11 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     else
       assert :ok =
                Membership.add_member(
-                 %{membership_id: Ecto.UUID.generate(), club_id: club_id, person_id: person_id},
+                 %{
+                   membership_id: Memba.ID.generate(:membership),
+                   club_id: club_id,
+                   person_id: person_id
+                 },
                  consistency: :strong
                )
 

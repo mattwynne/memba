@@ -57,10 +57,12 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
 
   defp email_delivery_request(overrides) do
     %EmailDeliveryRequest{
-      message_id: Keyword.get_lazy(overrides, :message_id, &Ecto.UUID.generate/0),
-      club_id: Keyword.get_lazy(overrides, :club_id, &Ecto.UUID.generate/0),
-      delivery_id: Keyword.get_lazy(overrides, :delivery_id, &Ecto.UUID.generate/0),
-      recipient_id: Keyword.get_lazy(overrides, :recipient_id, &Ecto.UUID.generate/0),
+      message_id: Keyword.get_lazy(overrides, :message_id, fn -> Memba.ID.generate(:message) end),
+      club_id: Keyword.get_lazy(overrides, :club_id, fn -> Memba.ID.generate(:club) end),
+      delivery_id:
+        Keyword.get_lazy(overrides, :delivery_id, fn -> Memba.ID.generate(:delivery) end),
+      recipient_id:
+        Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.test"),
       sender_name: Keyword.get(overrides, :sender_name, "Bob"),

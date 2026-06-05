@@ -153,15 +153,21 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
   end
 
   test "member email delivery queries return empty results for missing or invalid IDs" do
-    assert is_nil(Messaging.get_member_email_delivery(Ecto.UUID.generate()))
+    assert is_nil(Messaging.get_member_email_delivery(Memba.ID.generate(:delivery)))
     assert is_nil(Messaging.get_member_email_delivery(nil))
     assert is_nil(Messaging.get_member_email_delivery("not-a-uuid"))
 
-    assert is_nil(Messaging.get_member_email_delivery(Ecto.UUID.generate(), Ecto.UUID.generate()))
-    assert is_nil(Messaging.get_member_email_delivery(nil, Ecto.UUID.generate()))
-    assert is_nil(Messaging.get_member_email_delivery(Ecto.UUID.generate(), "not-a-uuid"))
+    assert is_nil(
+             Messaging.get_member_email_delivery(
+               Memba.ID.generate(:message),
+               Memba.ID.generate(:person)
+             )
+           )
 
-    assert Messaging.list_member_email_deliverys(Ecto.UUID.generate()) == []
+    assert is_nil(Messaging.get_member_email_delivery(nil, Memba.ID.generate(:person)))
+    assert is_nil(Messaging.get_member_email_delivery(Memba.ID.generate(:message), "not-a-uuid"))
+
+    assert Messaging.list_member_email_deliverys(Memba.ID.generate(:message)) == []
     assert Messaging.list_member_email_deliverys(nil) == []
     assert Messaging.list_member_email_deliverys("not-a-uuid") == []
   end
@@ -171,20 +177,20 @@ defmodule Memba.Messaging.MemberEmailDeliveryProjectionTest do
       recipients =
       Enum.map(names, fn name ->
         %Recipient{
-          delivery_id: Ecto.UUID.generate(),
-          person_id: Ecto.UUID.generate(),
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: Memba.ID.generate(:person),
           name: name,
           email: email_for(name)
         }
       end)
 
-    message_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
 
     assert :ok =
              App.dispatch(
                %SendMessage{
                  message_id: message_id,
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  sender_id: sender.person_id,
                  subject: "Trip planning night",
                  body: "Bring route ideas.",

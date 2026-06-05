@@ -10,7 +10,7 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
   alias Memba.Membership.Person
 
   test "Membership app dispatch routes CreatePerson to the Person aggregate" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     command = %CreatePerson{
       person_id: person_id,
@@ -42,7 +42,7 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
 
   test "Membership app rejects a duplicate CreatePerson for the same aggregate identity" do
     command = %CreatePerson{
-      person_id: Ecto.UUID.generate(),
+      person_id: Memba.ID.generate(:person),
       name: "Alice",
       email: "alice@example.com"
     }
@@ -52,7 +52,7 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
   end
 
   test "Membership app dispatches CreatePerson with multiple addresses as an atomic event pair" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     command = %CreatePerson{
       person_id: person_id,
@@ -111,7 +111,7 @@ defmodule Memba.Membership.CreatePersonDispatchTest do
   end
 
   test "Membership app dispatches ReplacePersonEmailAddresses to the Person aggregate" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              App.dispatch(

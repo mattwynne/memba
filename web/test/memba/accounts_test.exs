@@ -156,15 +156,15 @@ defmodule Memba.AccountsTest do
       assert Accounts.active_member_of_club?(club.club_id, " ALICE@EXAMPLE.COM ")
 
       refute Accounts.active_member_of_club?(club.club_id, "other@example.com")
-      refute Accounts.active_member_of_club?(Ecto.UUID.generate(), "alice@example.com")
+      refute Accounts.active_member_of_club?(Memba.ID.generate(:club), "alice@example.com")
       refute Accounts.active_member_of_club?("not-a-uuid", "alice@example.com")
       refute Accounts.active_member_of_club?(club.club_id, nil)
     end
   end
 
   defp create_active_member(attrs) do
-    club_id = Ecto.UUID.generate()
-    person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
+    club_id = Memba.ID.generate(:club)
+    person_id = Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
     assert :ok =
              Membership.create_club(
@@ -182,7 +182,11 @@ defmodule Memba.AccountsTest do
 
     assert :ok =
              Membership.add_member(
-               %{membership_id: Ecto.UUID.generate(), club_id: club_id, person_id: person_id},
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club_id,
+                 person_id: person_id
+               },
                consistency: :strong
              )
 

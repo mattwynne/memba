@@ -7,9 +7,9 @@ defmodule Memba.Membership.MembershipProjectionTest do
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
 
   test "AddMember is projected into the Membership read model" do
-    membership_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    person_id = Ecto.UUID.generate()
+    membership_id = Memba.ID.generate(:membership)
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
 
     assert is_nil(Repo.get(MembershipProjection, membership_id))
 
@@ -32,9 +32,9 @@ defmodule Memba.Membership.MembershipProjectionTest do
   end
 
   test "RemoveMember marks the projected Membership row inactive" do
-    membership_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
-    person_id = Ecto.UUID.generate()
+    membership_id = Memba.ID.generate(:membership)
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              App.dispatch(

@@ -29,7 +29,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
     attrs =
       club_params
       |> Map.take(["name", "slug"])
-      |> Map.put("club_id", Ecto.UUID.generate())
+      |> Map.put("club_id", Memba.ID.generate(:club))
 
     case Membership.create_club(attrs, consistency: :strong) do
       :ok ->

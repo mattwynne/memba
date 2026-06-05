@@ -3,9 +3,9 @@ defmodule Memba.Repo.Migrations.CreateMessagingMemberReceiptsProjection do
 
   def change do
     create table(:messaging_member_email_deliveries, primary_key: false) do
-      add :delivery_id, :uuid, primary_key: true
-      add :message_id, :uuid, null: false
-      add :recipient_id, :uuid, null: false
+      add :delivery_id, :text, primary_key: true
+      add :message_id, :text, null: false
+      add :recipient_id, :text, null: false
       add :recipient_name, :text, null: false
       add :status, :text, null: false
 

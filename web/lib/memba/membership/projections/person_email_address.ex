@@ -7,11 +7,12 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
 
   import Ecto.Changeset
 
+  alias Memba.ID
   alias Memba.Membership.EmailAddresses
 
-  @primary_key {:id, :binary_id, autogenerate: true}
+  @primary_key {:id, :string, autogenerate: {Memba.ID, :generate, [:email_address]}}
   schema "membership_person_email_addresses" do
-    field :person_id, :binary_id
+    field :person_id, :string
     field :email, :string
     field :normalized_email, :string
     field :is_primary, :boolean, default: false
@@ -22,6 +23,7 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
   def changeset(email_address, attrs) do
     email_address
     |> cast(attrs, [:person_id, :email, :is_primary])
+    |> put_id()
     |> validate_required([:person_id, :email, :is_primary])
     |> normalize_email()
     |> validate_required([:normalized_email])
@@ -33,6 +35,13 @@ defmodule Memba.Membership.Projections.PersonEmailAddress do
       name: :membership_person_email_addresses_one_primary_per_person_index,
       message: "already has a primary email address"
     )
+  end
+
+  defp put_id(changeset) do
+    case get_field(changeset, :id) do
+      nil -> put_change(changeset, :id, ID.generate(:email_address))
+      _id -> changeset
+    end
   end
 
   defp normalize_email(changeset) do

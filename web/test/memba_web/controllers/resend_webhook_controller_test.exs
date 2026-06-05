@@ -217,15 +217,15 @@ defmodule MembaWeb.ResendWebhookControllerTest do
       recipients =
       Enum.map(names, fn name ->
         %Recipient{
-          delivery_id: Ecto.UUID.generate(),
-          person_id: Ecto.UUID.generate(),
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: Memba.ID.generate(:person),
           name: name,
           email: email_for(name)
         }
       end)
 
-    message_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              MessagingApp.dispatch(

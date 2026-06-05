@@ -217,8 +217,8 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       post_postmark_event(conn, %{
         "RecordType" => "SubscriptionChange",
         "Metadata" => %{
-          "message_id" => Ecto.UUID.generate(),
-          "delivery_id" => Ecto.UUID.generate()
+          "message_id" => Memba.ID.generate(:message),
+          "delivery_id" => Memba.ID.generate(:delivery)
         }
       })
 
@@ -237,15 +237,15 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
       recipients =
       Enum.map(names, fn name ->
         %Recipient{
-          delivery_id: Ecto.UUID.generate(),
-          person_id: Ecto.UUID.generate(),
+          delivery_id: Memba.ID.generate(:delivery),
+          person_id: Memba.ID.generate(:person),
           name: name,
           email: email_for(name)
         }
       end)
 
-    message_id = Ecto.UUID.generate()
-    club_id = Ecto.UUID.generate()
+    message_id = Memba.ID.generate(:message)
+    club_id = Memba.ID.generate(:club)
     subject = Keyword.get(opts, :subject, "Trip planning night")
     body = Keyword.get(opts, :body, "Bring route ideas.")
 

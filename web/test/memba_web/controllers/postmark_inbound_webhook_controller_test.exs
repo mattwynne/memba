@@ -466,7 +466,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
   end
 
   defp create_club!(attrs) do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -482,7 +482,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
   end
 
   defp create_person!(attrs) do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     create_attrs =
       attrs
@@ -503,7 +503,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },

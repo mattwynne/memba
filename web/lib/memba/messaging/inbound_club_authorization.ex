@@ -12,8 +12,8 @@ defmodule Memba.Messaging.InboundClubAuthorization do
 
   @type rejection_reason :: :sender_not_active_member | :invalid_inbound_authorization
   @type rejection_details :: %{
-          sender_id: Ecto.UUID.t(),
-          club_id: Ecto.UUID.t(),
+          sender_id: String.t(),
+          club_id: String.t(),
           from_address: String.t(),
           to_address: String.t()
         }

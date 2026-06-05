@@ -47,8 +47,8 @@ defmodule Memba.Membership.QueryTest do
 
   describe "list_active_members_of_club/1" do
     test "returns active members of the given club and excludes members of other clubs" do
-      kootenay_club_id = Ecto.UUID.generate()
-      nelson_club_id = Ecto.UUID.generate()
+      kootenay_club_id = Memba.ID.generate(:club)
+      nelson_club_id = Memba.ID.generate(:club)
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       bob = create_person(name: "Bob", email: "bob@example.com")
@@ -75,8 +75,8 @@ defmodule Memba.Membership.QueryTest do
 
       assert alice_person_id == alice.person_id
       assert bob_person_id == bob.person_id
-      assert {:ok, _} = Ecto.UUID.cast(alice_membership_id)
-      assert {:ok, _} = Ecto.UUID.cast(bob_membership_id)
+      assert Memba.ID.valid?(:membership, alice_membership_id)
+      assert Memba.ID.valid?(:membership, bob_membership_id)
 
       assert [
                %{
@@ -88,12 +88,12 @@ defmodule Memba.Membership.QueryTest do
              ] = Membership.list_active_members_of_club(nelson_club_id)
 
       assert pat_person_id == pat.person_id
-      assert {:ok, _} = Ecto.UUID.cast(pat_membership_id)
+      assert Memba.ID.valid?(:membership, pat_membership_id)
     end
 
     test "excludes inactive memberships" do
-      club_id = Ecto.UUID.generate()
-      person_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
+      person_id = Memba.ID.generate(:person)
 
       Repo.insert!(%PersonProjection{
         person_id: person_id,
@@ -102,7 +102,7 @@ defmodule Memba.Membership.QueryTest do
       })
 
       Repo.insert!(%MembershipProjection{
-        membership_id: Ecto.UUID.generate(),
+        membership_id: Memba.ID.generate(:membership),
         club_id: club_id,
         person_id: person_id,
         active: false
@@ -112,7 +112,7 @@ defmodule Memba.Membership.QueryTest do
     end
 
     test "returns one row per active member using each person's primary email address" do
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       alice =
         create_person(
@@ -147,7 +147,7 @@ defmodule Memba.Membership.QueryTest do
     end
 
     test "returns an empty list for missing or invalid club IDs" do
-      assert Membership.list_active_members_of_club(Ecto.UUID.generate()) == []
+      assert Membership.list_active_members_of_club(Memba.ID.generate(:club)) == []
       assert Membership.list_active_members_of_club(nil) == []
       assert Membership.list_active_members_of_club("not-a-uuid") == []
     end
@@ -193,15 +193,15 @@ defmodule Memba.Membership.QueryTest do
     end
 
     test "returns nil or empty lists for missing or invalid person IDs" do
-      assert Membership.get_person_primary_email(Ecto.UUID.generate()) == nil
+      assert Membership.get_person_primary_email(Memba.ID.generate(:person)) == nil
       assert Membership.get_person_primary_email(nil) == nil
       assert Membership.get_person_primary_email("not-a-uuid") == nil
 
-      assert Membership.list_person_alternate_emails(Ecto.UUID.generate()) == []
+      assert Membership.list_person_alternate_emails(Memba.ID.generate(:person)) == []
       assert Membership.list_person_alternate_emails(nil) == []
       assert Membership.list_person_alternate_emails("not-a-uuid") == []
 
-      assert Membership.list_person_email_addresses(Ecto.UUID.generate()) == []
+      assert Membership.list_person_email_addresses(Memba.ID.generate(:person)) == []
       assert Membership.list_person_email_addresses(nil) == []
       assert Membership.list_person_email_addresses("not-a-uuid") == []
     end
@@ -209,8 +209,8 @@ defmodule Memba.Membership.QueryTest do
 
   describe "active_member_of_club?/2" do
     test "returns true only when the person has an active membership in the club" do
-      kootenay_club_id = Ecto.UUID.generate()
-      nelson_club_id = Ecto.UUID.generate()
+      kootenay_club_id = Memba.ID.generate(:club)
+      nelson_club_id = Memba.ID.generate(:club)
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       pat = create_person(name: "Pat", email: "pat@example.com")
@@ -231,7 +231,7 @@ defmodule Memba.Membership.QueryTest do
       kootenay = create_club("Kootenay Mountaineering Club")
       nelson = create_club("Nelson Cycling Club")
       other_club = create_club("Other Club")
-      inactive_club_id = Ecto.UUID.generate()
+      inactive_club_id = Memba.ID.generate(:club)
 
       alice = create_person(name: "Alice", email: "alice@example.com")
       other_person = create_person(name: "Other", email: "other@example.com")
@@ -243,7 +243,7 @@ defmodule Memba.Membership.QueryTest do
       insert_membership_club!(club_id: inactive_club_id, name: "Inactive Club")
 
       Repo.insert!(%MembershipProjection{
-        membership_id: Ecto.UUID.generate(),
+        membership_id: Memba.ID.generate(:membership),
         club_id: inactive_club_id,
         person_id: alice.person_id,
         active: false
@@ -300,7 +300,12 @@ defmodule Memba.Membership.QueryTest do
 
       refute Membership.active_member_of_club_by_email?(club.club_id, "other@example.com")
       refute Membership.active_member_of_club_by_email?(other_club.club_id, "alice@example.com")
-      refute Membership.active_member_of_club_by_email?(Ecto.UUID.generate(), "alice@example.com")
+
+      refute Membership.active_member_of_club_by_email?(
+               Memba.ID.generate(:club),
+               "alice@example.com"
+             )
+
       refute Membership.active_member_of_club_by_email?("not-a-uuid", "alice@example.com")
       refute Membership.active_member_of_club_by_email?(club.club_id, "   ")
       refute Membership.active_member_of_club_by_email?(club.club_id, nil)
@@ -327,7 +332,7 @@ defmodule Memba.Membership.QueryTest do
 
   defp create_club(name, opts \\ []) do
     club = %{
-      club_id: Ecto.UUID.generate(),
+      club_id: Memba.ID.generate(:club),
       name: name,
       slug: Keyword.get_lazy(opts, :slug, fn -> slug_for(name) end)
     }
@@ -350,7 +355,7 @@ defmodule Memba.Membership.QueryTest do
     email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
 
     person = %{
-      person_id: Ecto.UUID.generate(),
+      person_id: Memba.ID.generate(:person),
       name: Keyword.fetch!(attrs, :name),
       email: email,
       email_addresses: email_addresses
@@ -383,7 +388,7 @@ defmodule Memba.Membership.QueryTest do
     assert :ok =
              App.dispatch(
                %AddMember{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },

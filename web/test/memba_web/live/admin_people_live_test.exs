@@ -103,7 +103,7 @@ defmodule MembaWeb.AdminPeopleLiveTest do
     assert :ok =
              Membership.create_person(
                %{
-                 person_id: Ecto.UUID.generate(),
+                 person_id: Memba.ID.generate(:person),
                  name: "Existing Alice",
                  email: "alice@example.com",
                  email_addresses: [%{email: "alice@example.com", is_primary: true}]
@@ -175,7 +175,7 @@ defmodule MembaWeb.AdminPeopleLiveTest do
 
   test "staff edit form replaces addresses and primary selection", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              Membership.create_person(

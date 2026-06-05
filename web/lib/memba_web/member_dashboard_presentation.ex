@@ -10,6 +10,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   import Ecto.Query
 
   alias Memba.Accounts
+  alias Memba.ID
   alias Memba.Membership
   alias Memba.Messaging
   alias Memba.Messaging.Projections.MemberEmailDelivery
@@ -53,7 +54,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   def load(_club_id, _current_identity, _active_clubs), do: {:error, :forbidden}
 
   defp cast_selected_club_id(club_id) do
-    case Ecto.UUID.cast(club_id) do
+    case ID.cast(:club, club_id) do
       {:ok, club_id} -> {:ok, club_id}
       :error -> {:error, :forbidden}
     end

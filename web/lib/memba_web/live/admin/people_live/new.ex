@@ -34,7 +34,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
          :ok <-
            Membership.create_person(
              %{
-               "person_id" => Ecto.UUID.generate(),
+               "person_id" => Memba.ID.generate(:person),
                "name" => attrs.name,
                "email_addresses" => attrs.email_addresses
              },

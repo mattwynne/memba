@@ -43,7 +43,7 @@ defmodule MembaWeb.Admin.ClubsLive.IndexTest do
   test "duplicate slug create submissions show a server error and keep the form editable", %{
     conn: conn
   } do
-    existing_club_id = Ecto.UUID.generate()
+    existing_club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(

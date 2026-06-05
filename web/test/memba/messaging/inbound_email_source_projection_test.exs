@@ -8,10 +8,10 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
   alias Memba.Messaging.Projections.InboundEmailSource, as: InboundEmailSourceProjection
 
   test "accepted inbound club email events project source status and created message identity" do
-    inbound_email_id = "inbound-email:resend:email-123"
-    club_id = Ecto.UUID.generate()
-    sender_id = Ecto.UUID.generate()
-    message_id = Ecto.UUID.generate()
+    inbound_email_id = Memba.ID.deterministic(:inbound_email, ["resend", "email-123"])
+    club_id = Memba.ID.generate(:club)
+    sender_id = Memba.ID.generate(:person)
+    message_id = Memba.ID.generate(:message)
 
     assert :ok =
              InboundEmailSourceProjector.handle(
@@ -48,7 +48,7 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
   end
 
   test "rejected inbound club email events project source status and rejection audit fields" do
-    inbound_email_id = "inbound-email:resend:email-456"
+    inbound_email_id = Memba.ID.deterministic(:inbound_email, ["resend", "email-456"])
 
     assert :ok =
              InboundEmailSourceProjector.handle(
@@ -85,13 +85,13 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     Repo.insert!(%InboundEmailSourceProjection{
-      inbound_email_id: "inbound-email:resend:duplicate-a",
+      inbound_email_id: Memba.ID.generate(:inbound_email),
       provider: "resend",
       provider_message_id: "duplicate",
       from_address: "alice@example.com",
       to_address: "kmc@clubs.memba.io",
       status: "accepted",
-      message_id: Ecto.UUID.generate(),
+      message_id: Memba.ID.generate(:message),
       inserted_at: now,
       updated_at: now
     })
@@ -100,13 +100,13 @@ defmodule Memba.Messaging.InboundEmailSourceProjectionTest do
                  ~r/messaging_inbound_email_sources_provider_message_id_index/,
                  fn ->
                    Repo.insert!(%InboundEmailSourceProjection{
-                     inbound_email_id: "inbound-email:resend:duplicate-b",
+                     inbound_email_id: Memba.ID.generate(:inbound_email),
                      provider: "resend",
                      provider_message_id: "duplicate",
                      from_address: "alice@example.com",
                      to_address: "kmc@clubs.memba.io",
                      status: "accepted",
-                     message_id: Ecto.UUID.generate(),
+                     message_id: Memba.ID.generate(:message),
                      inserted_at: now,
                      updated_at: now
                    })

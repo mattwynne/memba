@@ -13,7 +13,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Projections.Person, as: PersonProjection
 
   test "create_club/2 dispatches CreateClub through the Membership context" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert {:ok,
             %ExecutionResult{
@@ -37,7 +37,7 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert {:ok,
             %ExecutionResult{
@@ -58,15 +58,15 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert {:error, :invalid_format} =
              Membership.create_club(%{
-               club_id: Ecto.UUID.generate(),
+               club_id: Memba.ID.generate(:club),
                name: "Kootenay Mountaineering Club",
                slug: "kmc club!"
              })
   end
 
   test "create_club/2 rejects duplicate slugs before dispatching a new club" do
-    existing_club_id = Ecto.UUID.generate()
-    duplicate_club_id = Ecto.UUID.generate()
+    existing_club_id = Memba.ID.generate(:club)
+    duplicate_club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -91,7 +91,7 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "update_club/2 edits a projected club name and slug" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -128,8 +128,8 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "update_club/2 rejects invalid and duplicate slugs" do
-    kootenay_id = Ecto.UUID.generate()
-    nelson_id = Ecto.UUID.generate()
+    kootenay_id = Memba.ID.generate(:club)
+    nelson_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -159,7 +159,7 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "create_person/2 dispatches CreatePerson through the Membership context" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert {:ok,
             %ExecutionResult{
@@ -183,7 +183,7 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "create_person/2 accepts an email-address set for new staff create flows" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert {:ok,
             %ExecutionResult{
@@ -227,9 +227,9 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "create_person/2 rejects globally duplicate normalized email addresses before dispatch" do
-    existing_person_id = Ecto.UUID.generate()
-    duplicate_person_id = Ecto.UUID.generate()
-    duplicate_alternate_person_id = Ecto.UUID.generate()
+    existing_person_id = Memba.ID.generate(:person)
+    duplicate_person_id = Memba.ID.generate(:person)
+    duplicate_alternate_person_id = Memba.ID.generate(:person)
 
     assert :ok =
              Membership.create_person(
@@ -271,7 +271,7 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "replace_person_email_addresses/2 dispatches ReplacePersonEmailAddresses through the Membership context" do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     assert :ok =
              Membership.create_person(
@@ -315,8 +315,8 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "replace_person_email_addresses/2 rejects addresses already attached to another person" do
-    alice_id = Ecto.UUID.generate()
-    bob_id = Ecto.UUID.generate()
+    alice_id = Memba.ID.generate(:person)
+    bob_id = Memba.ID.generate(:person)
 
     assert :ok =
              Membership.create_person(
@@ -353,9 +353,9 @@ defmodule Memba.Membership.PublicApiTest do
   end
 
   test "add_member/2 dispatches AddMember and prevents duplicate active club memberships" do
-    club_id = Ecto.UUID.generate()
-    person_id = Ecto.UUID.generate()
-    membership_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
              Membership.create_club(
@@ -395,7 +395,7 @@ defmodule Memba.Membership.PublicApiTest do
     assert {:error, :already_active_member} =
              Membership.add_member(
                %{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },

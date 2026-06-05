@@ -3,7 +3,7 @@ defmodule Memba.Repo.Migrations.CreateMembershipPeopleProjection do
 
   def change do
     create table(:membership_people, primary_key: false) do
-      add :person_id, :uuid, primary_key: true
+      add :person_id, :text, primary_key: true
       add :name, :text, null: false
       add :email, :text, null: false
 

@@ -13,9 +13,9 @@ defmodule Memba.Messaging.Projections.InboundEmailSource do
     field :from_address, :string
     field :to_address, :string
     field :status, :string
-    field :club_id, :binary_id
-    field :sender_id, :binary_id
-    field :message_id, :binary_id
+    field :club_id, :string
+    field :sender_id, :string
+    field :message_id, :string
     field :rejection_reason, :string
     field :rejection_email_delivery_reference, :string
 

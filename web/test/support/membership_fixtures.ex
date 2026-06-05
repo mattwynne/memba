@@ -11,7 +11,7 @@ defmodule Memba.MembershipFixtures do
   alias Memba.Repo
 
   def membership_club_attrs(attrs \\ []) when is_list(attrs) do
-    club_id = Keyword.get_lazy(attrs, :club_id, &Ecto.UUID.generate/0)
+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
 
     name =
       Keyword.get(attrs, :name, Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club"))
@@ -26,6 +26,8 @@ defmodule Memba.MembershipFixtures do
   def membership_club_slug(name, club_id) when is_binary(name) and is_binary(club_id) do
     suffix =
       club_id
+      |> String.split("_", parts: 2)
+      |> List.last()
       |> String.replace("-", "")
       |> String.slice(0, 8)
 
@@ -54,7 +56,7 @@ defmodule Memba.MembershipFixtures do
   end
 
   def membership_person_attrs(attrs \\ []) when is_list(attrs) do
-    person_id = Keyword.get_lazy(attrs, :person_id, &Ecto.UUID.generate/0)
+    person_id = Keyword.get_lazy(attrs, :person_id, fn -> Memba.ID.generate(:person) end)
 
     email_addresses =
       Keyword.get_lazy(attrs, :email_addresses, fn -> primary_email_addresses(attrs) end)

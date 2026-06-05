@@ -29,7 +29,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
        %{
          conn: conn
        } do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
     alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
     bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
@@ -49,7 +49,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     })
 
     assert [message] = Messaging.list_messages_for_club(club_id)
-    assert Ecto.UUID.cast(message.message_id) != :error
+    assert Memba.ID.valid?(:message, message.message_id)
     assert message.sender_id == alice.person_id
     assert message.subject == "Trip planning night"
     assert message.body == "Bring route ideas."
@@ -107,7 +107,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   } do
     Application.put_env(:memba, :messaging_email_delivery_provider, Unavailable)
 
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
     _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
     _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
 
@@ -170,7 +170,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
   end
 
   defp create_active_member(club_id, attrs) do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
     email = Keyword.fetch!(attrs, :email)
 
     if is_nil(Membership.get_club(club_id)) do
@@ -195,7 +195,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },

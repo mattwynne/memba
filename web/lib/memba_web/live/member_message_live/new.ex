@@ -344,7 +344,7 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   defp send_current_member_message(socket, message_params) do
     with %{selected_club: %{club_id: club_id}, current_member: %{id: sender_id}} <- socket.assigns do
-      message_id = Ecto.UUID.generate()
+      message_id = Memba.ID.generate(:message)
 
       attrs = %{
         "message_id" => message_id,

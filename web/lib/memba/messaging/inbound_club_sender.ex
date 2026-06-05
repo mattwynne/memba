@@ -14,7 +14,7 @@ defmodule Memba.Messaging.InboundClubSender do
   defstruct [:person_id, :name, :from_address]
 
   @type t :: %__MODULE__{
-          person_id: Ecto.UUID.t(),
+          person_id: String.t(),
           name: String.t(),
           from_address: String.t()
         }

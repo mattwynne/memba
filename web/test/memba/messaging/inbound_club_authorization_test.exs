@@ -76,7 +76,7 @@ defmodule Memba.Messaging.InboundClubAuthorizationTest do
 
   defp insert_membership!(club, person, attrs) do
     Repo.insert!(%MembershipProjection{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club.club_id,
       person_id: person.person_id,
       active: Keyword.fetch!(attrs, :active)

@@ -73,7 +73,7 @@ defmodule Memba.EventSourcedSetupTest do
                ) AS index_definition
                """).rows
 
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       query!("""
       INSERT INTO membership_clubs (club_id, name, inserted_at, updated_at)
@@ -85,7 +85,7 @@ defmodule Memba.EventSourcedSetupTest do
 
       duplicate_error =
         assert_raise Postgrex.Error, fn ->
-          duplicate_club_id = Ecto.UUID.generate()
+          duplicate_club_id = Memba.ID.generate(:club)
 
           query!("""
           INSERT INTO membership_clubs (club_id, name, slug, inserted_at, updated_at)
@@ -169,21 +169,21 @@ defmodule Memba.EventSourcedSetupTest do
     VALUES ('setup-test-projector', 1, now(), now())
     """)
 
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     query!("""
     INSERT INTO membership_clubs (club_id, name, inserted_at, updated_at)
     VALUES ('#{club_id}', 'Kootenay Mountaineering Club', now(), now())
     """)
 
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     query!("""
     INSERT INTO membership_people (person_id, name, email, inserted_at, updated_at)
     VALUES ('#{person_id}', 'Alice', 'alice@example.com', now(), now())
     """)
 
-    membership_id = Ecto.UUID.generate()
+    membership_id = Memba.ID.generate(:membership)
 
     query!("""
     INSERT INTO membership_memberships (

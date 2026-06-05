@@ -5,6 +5,7 @@ defmodule Memba.Membership do
 
   import Ecto.Query
 
+  alias Memba.ID
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
@@ -104,12 +105,12 @@ defmodule Memba.Membership do
   end
 
   @doc """
-  Fetch a projected club read model by caller-generated UUID.
+  Fetch a projected club read model by typed club ID.
 
-  Returns `nil` when the ID is absent or is not a valid UUID.
+  Returns `nil` when the ID is absent or is not a valid club ID.
   """
   def get_club(club_id) do
-    with {:ok, club_id} <- Ecto.UUID.cast(club_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id) do
       Repo.get(Club, club_id)
     else
       :error -> nil
@@ -132,12 +133,12 @@ defmodule Memba.Membership do
   end
 
   @doc """
-  Fetch a projected person read model by caller-generated UUID.
+  Fetch a projected person read model by typed person ID.
 
-  Returns `nil` when the ID is absent or is not a valid UUID.
+  Returns `nil` when the ID is absent or is not a valid person ID.
   """
   def get_person(person_id) do
-    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id) do
       Repo.get(Person, person_id)
     else
       :error -> nil
@@ -196,7 +197,7 @@ defmodule Memba.Membership do
   projected primary email-address row.
   """
   def get_person_primary_email(person_id) do
-    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id) do
       PersonEmailAddress
       |> where([email_address], email_address.person_id == ^person_id)
       |> where([email_address], email_address.is_primary == true)
@@ -213,7 +214,7 @@ defmodule Memba.Membership do
   Invalid, missing, or unknown person IDs return an empty list.
   """
   def list_person_alternate_emails(person_id) do
-    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id) do
       PersonEmailAddress
       |> where([email_address], email_address.person_id == ^person_id)
       |> where([email_address], email_address.is_primary == false)
@@ -233,7 +234,7 @@ defmodule Memba.Membership do
   Membership projection schemas.
   """
   def list_person_email_addresses(person_id) do
-    with {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+    with {:ok, person_id} <- ID.cast(:person, person_id) do
       PersonEmailAddress
       |> where([email_address], email_address.person_id == ^person_id)
       |> order_by([email_address],
@@ -261,7 +262,7 @@ defmodule Memba.Membership do
   IDs are excluded.
   """
   def list_active_members_of_club(club_id) do
-    with {:ok, club_id} <- Ecto.UUID.cast(club_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id) do
       MembershipProjection
       |> join(:inner, [membership], person in Person,
         on: person.person_id == membership.person_id
@@ -327,8 +328,8 @@ defmodule Memba.Membership do
   Invalid club or person IDs return `false`.
   """
   def active_member_of_club?(club_id, person_id) do
-    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
-         {:ok, person_id} <- Ecto.UUID.cast(person_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id) do
       MembershipProjection
       |> where([membership], membership.club_id == ^club_id)
       |> where([membership], membership.person_id == ^person_id)
@@ -346,7 +347,7 @@ defmodule Memba.Membership do
   case-insensitively. Invalid club IDs and blank email addresses return `false`.
   """
   def active_member_of_club_by_email?(club_id, email) do
-    with {:ok, club_id} <- Ecto.UUID.cast(club_id),
+    with {:ok, club_id} <- ID.cast(:club, club_id),
          normalized_email when is_binary(normalized_email) <- normalize_email(email) do
       MembershipProjection
       |> join(:inner, [membership], email_address in PersonEmailAddress,
@@ -514,14 +515,14 @@ defmodule Memba.Membership do
   end
 
   defp cast_club_id(club_id) do
-    case Ecto.UUID.cast(club_id) do
+    case ID.cast(:club, club_id) do
       {:ok, club_id} -> {:ok, club_id}
       :error -> {:error, :invalid_club_id}
     end
   end
 
   defp cast_person_id(person_id) do
-    case Ecto.UUID.cast(person_id) do
+    case ID.cast(:person, person_id) do
       {:ok, person_id} -> {:ok, person_id}
       :error -> {:error, :invalid_person_id}
     end

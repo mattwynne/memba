@@ -3,7 +3,7 @@ defmodule Memba.Repo.Migrations.CreateMembershipClubsProjection do
 
   def change do
     create table(:membership_clubs, primary_key: false) do
-      add :club_id, :uuid, primary_key: true
+      add :club_id, :text, primary_key: true
       add :name, :text, null: false
 
       timestamps(type: :utc_datetime_usec)

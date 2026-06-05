@@ -211,7 +211,7 @@ defmodule MembaWeb.IdentityAuthTest do
     end
 
     test "redirects unauthenticated requests to auth and preserves the club_id return path" do
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       conn =
         build_conn(:get, "/member-area?club_id=#{club_id}")
@@ -226,8 +226,8 @@ defmodule MembaWeb.IdentityAuthTest do
   end
 
   defp create_active_member(attrs) do
-    club_id = Ecto.UUID.generate()
-    person_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
 
     club =
       insert_membership_club!(
@@ -243,7 +243,7 @@ defmodule MembaWeb.IdentityAuthTest do
       )
 
     Repo.insert!(%Membership{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club_id,
       person_id: person.person_id,
       active: true

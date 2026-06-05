@@ -53,7 +53,7 @@ defmodule Memba.Cucumber.MembershipSteps do
   end
 
   defp create_club(context, club_name) do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              App.dispatch(
@@ -104,7 +104,7 @@ defmodule Memba.Cucumber.MembershipSteps do
     if get_in(context, [:people, name]) do
       context
     else
-      person_id = Ecto.UUID.generate()
+      person_id = Memba.ID.generate(:person)
       email = email_for(context, name)
 
       assert :ok =
@@ -141,7 +141,7 @@ defmodule Memba.Cucumber.MembershipSteps do
 
     refute Membership.active_member_of_club?(club_id, person_id)
 
-    membership_id = Ecto.UUID.generate()
+    membership_id = Memba.ID.generate(:membership)
 
     assert :ok =
              App.dispatch(

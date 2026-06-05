@@ -54,7 +54,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-011-email",
+              inbound_email_id: _inbound_email_id,
               message_id: message_id,
               club_id: kmc_id,
               sender_id: alice_id,
@@ -137,7 +137,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     refute pat.person_id in delivered_recipient_ids
 
     assert %InboundEmailSourceProjection{
-             inbound_email_id: "inbound-email:resend:task-011-email",
+             inbound_email_id: _inbound_email_id,
              provider: "resend",
              provider_message_id: "task-011-email",
              provider_event_id: "task-011-event",
@@ -178,7 +178,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-012-duplicate-email",
+              inbound_email_id: _inbound_email_id,
               duplicate?: true,
               status: :accepted,
               message_id: ^message_id
@@ -333,7 +333,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-013-html-only",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "plain_text_required",
               from_address: "alice@example.com",
@@ -359,7 +359,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(InboundClubEmailRejected)
 
     assert %InboundEmailSourceProjection{
-             inbound_email_id: "inbound-email:resend:task-013-html-only",
+             inbound_email_id: _inbound_email_id,
              provider: "resend",
              provider_message_id: "task-013-html-only",
              from_address: "alice@example.com",
@@ -386,7 +386,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-020-blank-plain-text",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "plain_text_required",
               from_address: "alice@example.com",
@@ -433,7 +433,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-020-html-only",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "plain_text_required",
               from_address: "alice@example.com",
@@ -480,7 +480,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-014-attachments",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "attachments_not_supported",
               from_address: "alice@example.com",
@@ -512,7 +512,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(InboundClubEmailRejected)
 
     assert %InboundEmailSourceProjection{
-             inbound_email_id: "inbound-email:resend:task-014-attachments",
+             inbound_email_id: _inbound_email_id,
              provider: "resend",
              provider_message_id: "task-014-attachments",
              from_address: "alice@example.com",
@@ -536,7 +536,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-015-unknown-sender",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "unknown_sender",
               from_address: "unknown@example.com",
@@ -562,7 +562,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert 1 == count_events(InboundClubEmailRejected)
 
     assert %InboundEmailSourceProjection{
-             inbound_email_id: "inbound-email:resend:task-015-unknown-sender",
+             inbound_email_id: _inbound_email_id,
              provider: "resend",
              provider_message_id: "task-015-unknown-sender",
              from_address: "unknown@example.com",
@@ -602,7 +602,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:postmark:task-020-postmark-selected-rejection",
+              inbound_email_id: inbound_email_id,
               status: :rejected,
               rejection_reason: "unknown_sender",
               from_address: "unknown@example.com",
@@ -648,7 +648,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert rejection_email.provider_options[:metadata] == %{
              "memba_email_kind" => "inbound_club_rejection",
-             "memba_inbound_id" => "inbound-email:postmark:task-020-postmark-selected-rejection",
+             "memba_inbound_id" => inbound_email_id,
              "memba_in_provider" => "postmark",
              "memba_in_msg_id" => "task-020-postmark-selected-rejection",
              "memba_in_to" => "kmc@clubs.memba.io",
@@ -706,8 +706,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
              }
            ]
 
-    assert rejection_email.headers["X-Memba-Inbound-Email-ID"] ==
-             "inbound-email:resend:1b700cb9-3a48-460d-a2d1-255fe01ed4e2"
+    assert Memba.ID.valid?(:inbound_email, rejection_email.headers["X-Memba-Inbound-Email-ID"])
 
     assert rejection_email.headers["X-Memba-Rejection-Delivery-Reference"] ==
              rejection_email_delivery_reference
@@ -728,7 +727,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-020-non-member",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "sender_not_active_member",
               from_address: "pat@example.com",
@@ -776,7 +775,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-020-inactive-member",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "sender_not_active_member",
               from_address: "alice@example.com",
@@ -823,7 +822,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-020-unknown-club",
+              inbound_email_id: _inbound_email_id,
               status: :rejected,
               rejection_reason: "unknown_club_slug",
               from_address: "alice@example.com",
@@ -894,7 +893,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert {:ok,
             %{
-              inbound_email_id: "inbound-email:resend:task-015-duplicate-rejected",
+              inbound_email_id: _inbound_email_id,
               duplicate?: true,
               status: :rejected,
               rejection_reason: "attachments_not_supported"
@@ -915,7 +914,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   end
 
   defp create_club!(attrs) do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert :ok =
              Membership.create_club(
@@ -931,7 +930,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   end
 
   defp create_person!(attrs) do
-    person_id = Ecto.UUID.generate()
+    person_id = Memba.ID.generate(:person)
 
     create_attrs =
       attrs
@@ -951,7 +950,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert :ok =
              Membership.add_member(
                %{
-                 membership_id: Ecto.UUID.generate(),
+                 membership_id: Memba.ID.generate(:membership),
                  club_id: club_id,
                  person_id: person_id
                },
@@ -961,7 +960,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
   defp insert_inactive_membership!(club_id, person_id) do
     Repo.insert!(%MembershipProjection{
-      membership_id: Ecto.UUID.generate(),
+      membership_id: Memba.ID.generate(:membership),
       club_id: club_id,
       person_id: person_id,
       active: false

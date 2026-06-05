@@ -9,7 +9,7 @@ defmodule Memba.Membership.ClubTest do
 
   describe "execute/2 CreateClub" do
     test "emits ClubCreated using the caller-supplied UUID identity" do
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       command = %CreateClub{
         club_id: club_id,
@@ -43,7 +43,7 @@ defmodule Memba.Membership.ClubTest do
     test "rejects blank club names" do
       assert {:error, :invalid_name} =
                Club.execute(%Club{}, %CreateClub{
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  name: "  ",
                  slug: "kmc"
                })
@@ -52,13 +52,13 @@ defmodule Memba.Membership.ClubTest do
     test "rejects missing club slugs" do
       assert {:error, :invalid_format} =
                Club.execute(%Club{}, %CreateClub{
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  name: "Kootenay Mountaineering Club"
                })
     end
 
     test "rejects creating the same aggregate twice" do
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       club =
         Club.apply(%Club{}, %ClubCreated{
@@ -78,7 +78,7 @@ defmodule Memba.Membership.ClubTest do
 
   describe "execute/2 UpdateClub" do
     test "emits ClubUpdated for an existing club" do
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       club =
         Club.apply(%Club{}, %ClubCreated{
@@ -102,14 +102,14 @@ defmodule Memba.Membership.ClubTest do
     test "rejects updating a club that has not been created" do
       assert {:error, :not_created} =
                Club.execute(%Club{}, %UpdateClub{
-                 club_id: Ecto.UUID.generate(),
+                 club_id: Memba.ID.generate(:club),
                  name: "KMC Alpine Club",
                  slug: "kmc-alpine"
                })
     end
 
     test "rejects invalid updated club names and slugs" do
-      club_id = Ecto.UUID.generate()
+      club_id = Memba.ID.generate(:club)
 
       club =
         Club.apply(%Club{}, %ClubCreated{
@@ -135,7 +135,7 @@ defmodule Memba.Membership.ClubTest do
   end
 
   test "apply/2 records the created club identity and name" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     assert %Club{
              club_id: ^club_id,
@@ -150,7 +150,7 @@ defmodule Memba.Membership.ClubTest do
   end
 
   test "apply/2 records updated club name and slug" do
-    club_id = Ecto.UUID.generate()
+    club_id = Memba.ID.generate(:club)
 
     club =
       Club.apply(%Club{}, %ClubCreated{
