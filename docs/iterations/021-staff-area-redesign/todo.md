@@ -12,7 +12,7 @@
 - [x] 009 Remove the staff send-message form, its form assign/event handling, and any no-longer-needed member sender options from club detail.
 - [x] 010 Remove the embedded club messages list from club detail and replace it with a clear link/copy toward `/admin/messages` or future club-filtered messages.
 - [x] 011 Restyle person new/edit pages enough that they feel part of the redesigned staff area; preserve existing behaviour.
-- [ ] 012 Restyle `/admin/deliveries` consistently without changing delivery semantics.
+- [x] 012 Restyle `/admin/deliveries` consistently without changing delivery semantics.
 - [ ] 013 Restyle `/admin/messages/:message_id` consistently without changing diagnostics semantics.
 - [ ] 014 Update or add LiveView tests for:
 - [ ] 015 Update acceptance step support and remove the feature-level `@wip` tag from `memba_staff_operations.feature` once its scenarios pass.
