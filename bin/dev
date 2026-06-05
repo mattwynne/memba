@@ -92,6 +92,21 @@ case "${1:-}" in
       exit 0
     fi
     ;;
+  restart)
+    if [ "$#" -eq 1 ]; then
+      devenv_with_postgres_port processes down || true
+      load_local_secrets
+
+      support_processes=()
+      while IFS= read -r process_name; do
+        support_processes+=("$process_name")
+      done < <(dev_support_processes)
+
+      start_managed_processes "${support_processes[@]}" web
+      devenv_with_postgres_port processes wait --timeout 120
+      exit 0
+    fi
+    ;;
 esac
 
 if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
@@ -164,6 +179,12 @@ up() {
 # @cmd Stop development services
 down() {
   devenv_with_postgres_port processes down || true
+}
+
+# @cmd Stop and then start development services, waiting until they are ready
+restart() {
+  down
+  up
 }
 
 precommit() {
