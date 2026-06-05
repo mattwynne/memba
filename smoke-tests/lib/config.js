@@ -47,7 +47,7 @@ function smokeConfig() {
 
   const postmarkServerToken = optionalEnv(
     "MEMBA_SMOKE_POSTMARK_SERVER_TOKEN",
-    optionalEnv("MEMBA_POSTMARK_SERVER_TOKEN", optionalEnv("POSTMARK_SERVER_TOKEN", null))
+    optionalEnv("MEMBA_POSTMARK_SERVER_TOKEN", null)
   );
   const postmarkInboundMessageStream = optionalEnv("MEMBA_SMOKE_POSTMARK_INBOUND_MESSAGE_STREAM", null);
 

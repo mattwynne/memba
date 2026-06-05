@@ -107,7 +107,7 @@ sync_postmark_dev_webhooks() {
     return 0
   fi
 
-  local server_token="${MEMBA_POSTMARK_SERVER_TOKEN:-${POSTMARK_SERVER_TOKEN:-}}"
+  local server_token="${MEMBA_POSTMARK_SERVER_TOKEN:-}"
   local account_token="${POSTMARK_ACCOUNT_TOKEN:-}"
 
   if [ -z "$server_token" ] || [ -z "$account_token" ]; then
@@ -125,7 +125,7 @@ sync_postmark_dev_webhooks() {
   printf '%s\n' "$ngrok_url" > "$repo_root/.local/ngrok-url"
 
   local base_url="${POSTMARK_BASE_URL:-https://api.postmarkapp.com}"
-  local server_json server_id server_name server_color
+  local server_json server_id server_name server_color inbound_domain
   server_json=$(curl -fsS \
     -H "X-Postmark-Server-Token: $server_token" \
     -H "Accept: application/json" \
@@ -133,6 +133,11 @@ sync_postmark_dev_webhooks() {
   server_id=$(printf '%s' "$server_json" | jq -r '.ID')
   server_name=$(printf '%s' "$server_json" | jq -r '.Name')
   server_color=$(printf '%s' "$server_json" | jq -r '.Color // "purple"')
+  inbound_domain="${MEMBA_CLUB_INBOUND_EMAIL_DOMAIN:-}"
+
+  if [ -z "$inbound_domain" ]; then
+    inbound_domain=$(printf '%s' "$server_json" | jq -r '.InboundDomain // ""')
+  fi
 
   if ! printf '%s' "$server_name" | grep -Eiq 'dev|local'; then
     echo "Skipping Postmark dev webhook sync: server '$server_name' does not look like a dev/local server."
@@ -178,9 +183,10 @@ sync_postmark_dev_webhooks() {
       -d @"$repo_root/.local/postmark-delivery-webhook.json" >/dev/null
   fi
 
-  jq -n --arg name "$server_name" --arg color "$server_color" --arg inbound "$inbound_url" '{
+  jq -n --arg name "$server_name" --arg color "$server_color" --arg inbound_domain "$inbound_domain" --arg inbound "$inbound_url" '{
     Name: $name,
     Color: $color,
+    InboundDomain: $inbound_domain,
     InboundHookUrl: $inbound
   }' > "$repo_root/.local/postmark-server-webhook.json"
 
@@ -341,7 +347,6 @@ local_test_email_env() {
     -u MEMBA_NGROK_TARGET \
     -u NGROK_AUTHTOKEN \
     -u POSTMARK_ACCOUNT_TOKEN \
-    -u POSTMARK_SERVER_TOKEN \
     -u RESEND_ADMIN_API_KEY \
     -u RESEND_API_KEY \
     "$@"
