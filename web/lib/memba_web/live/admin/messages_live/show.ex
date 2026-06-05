@@ -18,6 +18,9 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
      socket
      |> assign(:message_id, message_id)
      |> assign(:message, message)
+     |> assign(:addressed_recipient_count, length(deliveries))
+     |> assign(:delivery_record_count, length(deliveries))
+     |> assign(:member_receipt_count, length(receipts))
      |> stream(:addressed_recipients, deliveries,
        dom_id: &"addressed-recipient-#{&1.delivery_id}"
      )
@@ -47,31 +50,113 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.admin flash={@flash}>
-      <main id="message-show" class="mx-auto max-w-6xl space-y-8 p-6">
+      <main
+        id="message-show"
+        data-admin-page="message-diagnostics"
+        class="mx-auto max-w-7xl space-y-6 p-6"
+      >
         <%= if @message do %>
-          <section class="space-y-2">
+          <section class="space-y-3">
             <.link
               id="back-to-club-link"
               navigate={~p"/admin/clubs/#{@message.club_id}"}
               aria-label="Back to club"
-              class="text-sm font-medium text-blue-700 hover:text-blue-900"
+              class="inline-flex items-center gap-2 text-sm font-semibold text-[#1f4842] hover:text-[#15201c]"
             >
               ← Club
             </.link>
-            <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Message</p>
-            <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@message.subject}</h1>
-            <p class="max-w-3xl whitespace-pre-wrap text-zinc-700">{@message.body}</p>
+            <div class="space-y-2">
+              <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
+                Memba staff operations
+              </p>
+              <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">
+                {subject_label(@message.subject)}
+              </h1>
+              <p class="max-w-3xl text-[#4b5a55]">
+                Review the existing delivery diagnostics for this projected club message.
+              </p>
+            </div>
           </section>
 
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Addressed recipients</h2>
+          <section
+            id="message-diagnostics-summary-cards"
+            aria-label="Message delivery diagnostics summary"
+            class="grid gap-4 md:grid-cols-3"
+          >
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Addressed recipients
+              </p>
+              <p class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">
+                {@addressed_recipient_count}
+              </p>
+              <p class="mt-1 text-sm text-[#4b5a55]">
+                Recipients captured when the message was sent.
+              </p>
+            </article>
+
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Email deliveries
+              </p>
+              <p class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">
+                {@delivery_record_count}
+              </p>
+              <p class="mt-1 text-sm text-[#4b5a55]">
+                Raw delivery records for this message.
+              </p>
+            </article>
+
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Member receipts
+              </p>
+              <p class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">
+                {@member_receipt_count}
+              </p>
+              <p class="mt-1 text-sm text-[#4b5a55]">
+                Member-facing status projections for receipt views.
+              </p>
+            </article>
+          </section>
+
+          <section
+            id="message-diagnostics-note"
+            class="rounded-2xl border border-[#d6d2c8] bg-[#e6ece4] p-4 text-sm text-[#1f4842]"
+          >
+            This page is read-only diagnostics for one existing message. It does not add resend,
+            delete, bulk action, filtering, or staff-side message composition behaviour in this
+            slice.
+          </section>
+
+          <section
+            id="message-body-card"
+            class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+          >
+            <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">Message body</p>
+            <p class="mt-3 max-w-4xl whitespace-pre-wrap text-[#4b5a55]">{@message.body}</p>
+          </section>
+
+          <section
+            id="addressed-recipients-card"
+            class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+          >
+            <div class="border-b border-[#e6e3dc] p-5">
+              <h2 class="text-lg font-semibold text-[#15201c]">Addressed recipients</h2>
+              <p class="mt-1 text-sm text-[#7d877f]">
+                Original recipient names and email addresses from the message send command.
+              </p>
+            </div>
             <div
               id="addressed-recipients"
               aria-label="Addressed recipients"
-              class="mt-4 divide-y divide-zinc-100"
+              class="divide-y divide-[#e6e3dc]"
               phx-update="stream"
             >
-              <p id="addressed-recipients-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+              <p
+                id="addressed-recipients-empty"
+                class="hidden px-5 py-4 text-sm text-[#7d877f] only:block"
+              >
                 No addressed recipients.
               </p>
               <div
@@ -82,23 +167,34 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                 data-recipient-id={delivery.recipient_id}
                 data-recipient-name={delivery.recipient_name}
                 aria-label={"Addressed recipient #{delivery.recipient_name}"}
-                class="py-3"
+                class="grid gap-2 px-5 py-4 transition-colors hover:bg-[#fbfaf8] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"
               >
-                <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
-                <p class="text-sm text-zinc-500">{delivery.recipient_address}</p>
+                <p class="font-medium text-[#15201c]">{delivery.recipient_name}</p>
+                <p class="text-sm text-[#4b5a55]">{delivery.recipient_address}</p>
               </div>
             </div>
           </section>
 
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Email deliveries</h2>
+          <section
+            id="delivery-records-card"
+            class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+          >
+            <div class="border-b border-[#e6e3dc] p-5">
+              <h2 class="text-lg font-semibold text-[#15201c]">Email deliveries</h2>
+              <p class="mt-1 text-sm text-[#7d877f]">
+                Existing per-recipient delivery projection for this message.
+              </p>
+            </div>
             <div
               id="delivery-records"
               aria-label="Email deliveries"
-              class="mt-4 divide-y divide-zinc-100"
+              class="divide-y divide-[#e6e3dc]"
               phx-update="stream"
             >
-              <p id="delivery-records-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+              <p
+                id="delivery-records-empty"
+                class="hidden px-5 py-4 text-sm text-[#7d877f] only:block"
+              >
                 No email deliveries.
               </p>
               <div
@@ -109,17 +205,20 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                 data-recipient-id={delivery.recipient_id}
                 data-recipient-name={delivery.recipient_name}
                 aria-label={"Email delivery for #{delivery.recipient_name}"}
-                class="grid gap-2 py-3 sm:grid-cols-4"
+                class="grid gap-3 px-5 py-4 transition-colors hover:bg-[#fbfaf8] sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,0.7fr)]"
               >
-                <p class="font-medium text-zinc-900">{delivery.recipient_name}</p>
-                <p class="text-sm text-zinc-500">{delivery.recipient_address}</p>
-                <p class="text-sm text-zinc-500">{delivery.channel}</p>
+                <p class="font-medium text-[#15201c]">{delivery.recipient_name}</p>
+                <p class="text-sm text-[#4b5a55]">{delivery.recipient_address}</p>
+                <p class="text-sm text-[#4b5a55]">{delivery.channel}</p>
                 <p
                   id={"delivery-status-#{delivery.delivery_id}"}
                   data-testid="delivery-status"
                   data-delivery-status={delivery.status}
                   aria-label={"Delivery status for #{delivery.recipient_name}: #{delivery.status}"}
-                  class="text-sm font-medium text-zinc-700"
+                  class={[
+                    "inline-flex w-fit rounded-full px-2.5 py-1 text-xs font-semibold",
+                    delivery_status_class(delivery.status)
+                  ]}
                 >
                   {delivery.status}
                 </p>
@@ -127,15 +226,23 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
             </div>
           </section>
 
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Member email delivery statuses</h2>
+          <section
+            id="member-receipts-card"
+            class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+          >
+            <div class="border-b border-[#e6e3dc] p-5">
+              <h2 class="text-lg font-semibold text-[#15201c]">Member email delivery statuses</h2>
+              <p class="mt-1 text-sm text-[#7d877f]">
+                Simplified member-facing receipt statuses remain visible for comparison.
+              </p>
+            </div>
             <div
               id="member-receipts"
               aria-label="Member email delivery statuses"
-              class="mt-4 divide-y divide-zinc-100"
+              class="divide-y divide-[#e6e3dc]"
               phx-update="stream"
             >
-              <p id="member-receipts-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+              <p id="member-receipts-empty" class="hidden px-5 py-4 text-sm text-[#7d877f] only:block">
                 No member email deliveries.
               </p>
               <div
@@ -146,15 +253,18 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
                 data-recipient-id={receipt.recipient_id}
                 data-recipient-name={receipt.recipient_name}
                 aria-label={"Member email delivery for #{receipt.recipient_name}"}
-                class="flex items-center justify-between gap-4 py-3"
+                class="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-[#fbfaf8]"
               >
-                <p class="font-medium text-zinc-900">{receipt.recipient_name}</p>
+                <p class="font-medium text-[#15201c]">{receipt.recipient_name}</p>
                 <p
                   id={"receipt-status-#{receipt.delivery_id}"}
                   data-testid="receipt-status"
                   data-receipt-status={receipt.status}
                   aria-label={"Status for #{receipt.recipient_name}: #{receipt.status}"}
-                  class="rounded-full bg-zinc-100 px-3 py-1 text-sm font-medium text-zinc-700"
+                  class={[
+                    "rounded-full px-3 py-1 text-sm font-medium",
+                    receipt_status_class(receipt.status)
+                  ]}
                 >
                   {receipt.status}
                 </p>
@@ -162,9 +272,12 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
             </div>
           </section>
         <% else %>
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h1 class="text-2xl font-bold text-zinc-900">Message not found</h1>
-            <p class="mt-2 text-zinc-600">No projected message exists for this URL.</p>
+          <section class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+            <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
+              Memba staff operations
+            </p>
+            <h1 class="mt-2 text-2xl font-bold text-[#15201c]">Message not found</h1>
+            <p class="mt-2 text-[#4b5a55]">No projected message exists for this URL.</p>
           </section>
         <% end %>
       </main>
@@ -181,4 +294,17 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
     |> stream(:delivery_records, deliveries, reset: true)
     |> stream(:member_email_deliverys, receipts, reset: true)
   end
+
+  defp subject_label(subject) when is_binary(subject) and subject != "", do: subject
+  defp subject_label(_subject), do: "Untitled message"
+
+  defp delivery_status_class("delayed"), do: "bg-[#f3ecd8] text-[#7a5416]"
+  defp delivery_status_class("bounced"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+  defp delivery_status_class("spam complaint"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+  defp delivery_status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
+  defp delivery_status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
+
+  defp receipt_status_class("delivery problem"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+  defp receipt_status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
+  defp receipt_status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
 end

@@ -15,6 +15,9 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     assert source =~ "def get_person_primary_email("
     assert source =~ "def list_clubs("
     assert source =~ "def list_people("
+    assert source =~ "def list_operator_people("
+    assert source =~ "def list_club_summaries("
+    assert source =~ "def list_person_contact_summaries("
     assert source =~ "def list_person_alternate_emails("
     assert source =~ "def list_person_email_addresses("
     assert source =~ "def list_active_members_of_club("
@@ -29,6 +32,9 @@ defmodule Memba.Membership.NoCrudSpikeTest do
     assert list_functions == [
              "list_clubs",
              "list_people",
+             "list_operator_people",
+             "list_club_summaries",
+             "list_person_contact_summaries",
              "list_person_alternate_emails",
              "list_person_email_addresses",
              "list_active_members_of_club",

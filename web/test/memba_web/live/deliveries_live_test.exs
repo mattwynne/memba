@@ -58,7 +58,11 @@ defmodule MembaWeb.DeliveriesLiveTest do
     |> assert_path("/admin/deliveries")
     |> assert_has("#admin-layout[data-surface='admin']")
     |> assert_has("nav[aria-label='Memba staff navigation'] a[href='/admin/deliveries']")
-    |> assert_has("#deliveries-overview")
+    |> assert_has("#deliveries-overview[data-admin-page='deliveries']")
+    |> assert_has("#deliveries-summary-cards[aria-label='Delivery diagnostics summary']")
+    |> assert_has("#deliveries-summary-total", "2")
+    |> assert_has("#deliveries-diagnostics-note")
+    |> assert_has("#deliveries-table-card")
     |> assert_has("#deliveries-table[aria-label='Email deliveries']")
     |> assert_has("[data-test-id^='delivery-row-']", count: 2)
     |> assert_delivery_row(first_recipient.delivery_id, [

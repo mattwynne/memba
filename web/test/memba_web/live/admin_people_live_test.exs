@@ -14,7 +14,11 @@ defmodule MembaWeb.AdminPeopleLiveTest do
     |> visit(~p"/admin/clubs/#{club.club_id}/people/new")
     |> assert_path("/admin/clubs/*/people/new")
     |> assert_has("#admin-layout[data-surface='admin']")
-    |> assert_has("#person-new[data-club-id='#{club.club_id}']")
+    |> assert_has("#person-new[data-admin-page='person-new'][data-club-id='#{club.club_id}']")
+    |> assert_has("#person-page-header", "New person")
+    |> assert_has("#person-workflow-summary")
+    |> assert_has("#person-form-card")
+    |> assert_has("#person-club-context-card", "Kootenay Mountaineering Club")
     |> assert_has("#back-to-club-link[href='/admin/clubs/#{club.club_id}']")
     |> assert_has("#person-form[aria-label='Create person']")
     |> assert_has("#person-name-input[aria-label='Person name']")
@@ -41,8 +45,12 @@ defmodule MembaWeb.AdminPeopleLiveTest do
     |> assert_path("/admin/clubs/*/people/*/edit")
     |> assert_has("#admin-layout[data-surface='admin']")
     |> assert_has(
-      "#person-edit[data-club-id='#{club.club_id}'][data-person-id='#{person.person_id}']"
+      "#person-edit[data-admin-page='person-edit'][data-club-id='#{club.club_id}'][data-person-id='#{person.person_id}']"
     )
+    |> assert_has("#person-page-header", "Edit Alice Example")
+    |> assert_has("#person-workflow-summary")
+    |> assert_has("#person-form-card")
+    |> assert_has("#person-club-context-card", "Kootenay Mountaineering Club")
     |> assert_has("#back-to-club-link[href='/admin/clubs/#{club.club_id}']")
     |> assert_has("#person-form[aria-label='Edit person']")
     |> assert_has("#person-name-input[aria-label='Person name']")

@@ -207,6 +207,84 @@ defmodule Memba.Membership.QueryTest do
     end
   end
 
+  describe "list_operator_people/0" do
+    test "returns one row per person with email and active membership summaries" do
+      kootenay = create_club("Kootenay Mountaineering Club")
+      nelson = create_club("Nelson Cycling Club")
+      archived = create_club("Archived Club")
+
+      alice =
+        create_person(
+          name: "Alice",
+          email: "alice@primary.example",
+          email_addresses: [
+            %{email: "alice@work.example", is_primary: false},
+            %{email: "alice@primary.example", is_primary: true},
+            %{email: "alice+old@example.com", is_primary: false}
+          ]
+        )
+
+      bob = create_person(name: "Bob", email: "bob@example.com")
+
+      add_member(nelson.club_id, alice.person_id)
+      add_member(kootenay.club_id, alice.person_id)
+      add_member(kootenay.club_id, bob.person_id)
+
+      Repo.insert!(%MembershipProjection{
+        membership_id: Memba.ID.generate(:membership),
+        club_id: archived.club_id,
+        person_id: alice.person_id,
+        active: false
+      })
+
+      assert [
+               %{
+                 person_id: alice_person_id,
+                 name: "Alice",
+                 primary_email: "alice@primary.example",
+                 alternate_emails: ["alice+old@example.com", "alice@work.example"],
+                 memberships: [
+                   %{
+                     membership_id: alice_kootenay_membership_id,
+                     club_id: alice_kootenay_club_id,
+                     club_name: "Kootenay Mountaineering Club",
+                     club_slug: "kootenay-mountaineering-club"
+                   },
+                   %{
+                     membership_id: alice_nelson_membership_id,
+                     club_id: alice_nelson_club_id,
+                     club_name: "Nelson Cycling Club",
+                     club_slug: "nelson-cycling-club"
+                   }
+                 ]
+               },
+               %{
+                 person_id: bob_person_id,
+                 name: "Bob",
+                 primary_email: "bob@example.com",
+                 alternate_emails: [],
+                 memberships: [
+                   %{
+                     membership_id: bob_kootenay_membership_id,
+                     club_id: bob_kootenay_club_id,
+                     club_name: "Kootenay Mountaineering Club",
+                     club_slug: "kootenay-mountaineering-club"
+                   }
+                 ]
+               }
+             ] = Membership.list_operator_people()
+
+      assert alice_person_id == alice.person_id
+      assert bob_person_id == bob.person_id
+      assert alice_kootenay_club_id == kootenay.club_id
+      assert alice_nelson_club_id == nelson.club_id
+      assert bob_kootenay_club_id == kootenay.club_id
+      assert Memba.ID.valid?(:membership, alice_kootenay_membership_id)
+      assert Memba.ID.valid?(:membership, alice_nelson_membership_id)
+      assert Memba.ID.valid?(:membership, bob_kootenay_membership_id)
+    end
+  end
+
   describe "active_member_of_club?/2" do
     test "returns true only when the person has an active membership in the club" do
       kootenay_club_id = Memba.ID.generate(:club)

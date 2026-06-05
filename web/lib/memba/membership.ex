@@ -191,6 +191,105 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  List global person summaries for the Memba staff operations People index.
+
+  Each person appears once with structured email and active membership summaries.
+  The query uses batched read-model lookups so one person with memberships in
+  multiple clubs does not require per-row follow-up queries.
+  """
+  def list_operator_people() do
+    people =
+      Person
+      |> order_by([person], asc: person.name, asc: person.person_id)
+      |> Repo.all()
+
+    person_ids = Enum.map(people, & &1.person_id)
+    email_summaries = person_email_summaries(person_ids)
+    membership_summaries = person_membership_summaries(person_ids)
+
+    Enum.map(people, fn person ->
+      emails = Map.get(email_summaries, person.person_id, %{alternate_emails: []})
+
+      %{
+        person_id: person.person_id,
+        name: person.name,
+        primary_email: Map.get(emails, :primary_email) || person.email,
+        alternate_emails: Map.get(emails, :alternate_emails, []),
+        memberships: Map.get(membership_summaries, person.person_id, [])
+      }
+    end)
+  end
+
+  @doc """
+  Return projected club summaries keyed by club ID.
+
+  Invalid IDs are ignored. Results are plain maps so other contexts can enrich
+  their read models through Membership's public query API rather than joining
+  directly against Membership projection tables.
+  """
+  def list_club_summaries(club_ids) do
+    if is_list(club_ids) do
+      club_ids = cast_ids(:club, club_ids)
+
+      if club_ids == [] do
+        %{}
+      else
+        Club
+        |> where([club], club.club_id in ^club_ids)
+        |> select([club], %{
+          club_id: club.club_id,
+          name: club.name,
+          slug: club.slug
+        })
+        |> Repo.all()
+        |> Map.new(&{&1.club_id, &1})
+      end
+    else
+      %{}
+    end
+  end
+
+  @doc """
+  Return projected person contact summaries keyed by person ID.
+
+  Invalid IDs are ignored. Primary email addresses are read from the dedicated
+  email-address projection, falling back to the historical person email field
+  when a primary email row is not available.
+  """
+  def list_person_contact_summaries(person_ids) do
+    if is_list(person_ids) do
+      person_ids = cast_ids(:person, person_ids)
+
+      if person_ids == [] do
+        %{}
+      else
+        email_summaries = person_email_summaries(person_ids)
+
+        Person
+        |> where([person], person.person_id in ^person_ids)
+        |> select([person], %{
+          person_id: person.person_id,
+          name: person.name,
+          email: person.email
+        })
+        |> Repo.all()
+        |> Map.new(fn person ->
+          emails = Map.get(email_summaries, person.person_id, %{})
+
+          {person.person_id,
+           %{
+             person_id: person.person_id,
+             name: person.name,
+             primary_email: Map.get(emails, :primary_email) || person.email
+           }}
+        end)
+      end
+    else
+      %{}
+    end
+  end
+
+  @doc """
   Fetch the primary projected email address for a person.
 
   Returns `nil` when the person ID is absent, invalid, unknown, or has no
@@ -363,6 +462,76 @@ defmodule Memba.Membership do
     else
       _invalid -> false
     end
+  end
+
+  defp cast_ids(type, ids) do
+    ids
+    |> Enum.reduce([], fn id, valid_ids ->
+      case ID.cast(type, id) do
+        {:ok, id} -> [id | valid_ids]
+        :error -> valid_ids
+      end
+    end)
+    |> Enum.uniq()
+    |> Enum.reverse()
+  end
+
+  defp person_email_summaries([]), do: %{}
+
+  defp person_email_summaries(person_ids) do
+    PersonEmailAddress
+    |> where([email_address], email_address.person_id in ^person_ids)
+    |> order_by([email_address],
+      desc: email_address.is_primary,
+      asc: email_address.email,
+      asc: email_address.id
+    )
+    |> select([email_address], %{
+      person_id: email_address.person_id,
+      email: email_address.email,
+      primary?: email_address.is_primary
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.person_id)
+    |> Map.new(fn {person_id, email_addresses} ->
+      primary_email =
+        email_addresses
+        |> Enum.find(& &1.primary?)
+        |> case do
+          nil -> nil
+          email_address -> email_address.email
+        end
+
+      alternate_emails =
+        for %{primary?: false, email: email} <- email_addresses do
+          email
+        end
+
+      {person_id, %{primary_email: primary_email, alternate_emails: alternate_emails}}
+    end)
+  end
+
+  defp person_membership_summaries([]), do: %{}
+
+  defp person_membership_summaries(person_ids) do
+    MembershipProjection
+    |> join(:left, [membership], club in Club, on: club.club_id == membership.club_id)
+    |> where([membership, _club], membership.person_id in ^person_ids)
+    |> where([membership, _club], membership.active == true)
+    |> order_by([membership, club],
+      asc: club.name,
+      asc: club.club_id,
+      asc: membership.membership_id
+    )
+    |> select([membership, club], %{
+      person_id: membership.person_id,
+      membership_id: membership.membership_id,
+      club_id: membership.club_id,
+      club_name: club.name,
+      club_slug: club.slug
+    })
+    |> Repo.all()
+    |> Enum.group_by(& &1.person_id)
   end
 
   defp create_club_command(attrs) do
