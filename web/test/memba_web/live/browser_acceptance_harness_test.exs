@@ -49,18 +49,23 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> refute_has("#message-subject-input")
     |> refute_has("#message-body-input")
     |> refute_has("#send-message-button")
-    |> assert_has("#messages[aria-label='Messages']")
+    |> assert_has("#club-messaging-card")
+    |> assert_has("#club-messages-link[aria-label='Open global Messages']")
+    |> assert_has("#club-messages-link[href='/admin/messages']")
+    |> refute_has("#messages")
+    |> refute_has("[data-testid='message-row']")
     |> create_person("Alice")
     |> assert_has("#people [data-testid='person-row'][data-person-name='Alice']")
     |> add_member("Alice")
     |> assert_has("#members [data-testid='member-row'][data-member-name='Alice']")
     |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
+    |> click_link("Open global Messages")
+    |> assert_path("/admin/messages")
+    |> assert_has("#admin-messages-index")
     |> assert_has(
-      "#messages [data-testid='message-row'][data-message-subject='Trip planning night']"
+      "#admin-messages-table-body [data-testid='admin-message-row'][data-message-subject='Trip planning night']"
     )
-    |> assert_has("a[data-testid='message-link'][aria-label='Open message Trip planning night']")
-    |> assert_has("a[data-testid='message-link'][href^='/admin/messages/']")
-    |> click_link("Trip planning night")
+    |> click_link("Open diagnostics")
     |> assert_path("/admin/messages/*")
     |> assert_has("#message-show")
     |> assert_has("#back-to-club-link[aria-label='Back to club']")
@@ -115,7 +120,12 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     |> add_member("Bob")
     |> add_member("Carol")
     |> project_club_message("Alice", "Trip planning night", "Bring route ideas.")
-    |> click_link("Trip planning night")
+    |> click_link("Open global Messages")
+    |> assert_path("/admin/messages")
+    |> assert_has(
+      "#admin-messages-table-body [data-testid='admin-message-row'][data-message-subject='Trip planning night']"
+    )
+    |> click_link("Open diagnostics")
     |> assert_path("/admin/messages/*")
     |> assert_has("#message-show", "Trip planning night")
     |> assert_addressed_recipient("Alice")
@@ -256,7 +266,8 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
 
     session
     |> visit(current_path)
-    |> assert_has("#messages [data-testid='message-row']", subject)
+    |> assert_has("#club-messages-link[href='/admin/messages']")
+    |> refute_has("#messages [data-testid='message-row']", subject)
   end
 
   defp assert_addressed_recipient(session, name) do

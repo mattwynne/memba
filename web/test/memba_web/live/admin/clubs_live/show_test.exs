@@ -5,6 +5,7 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
 
   alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
+  alias Memba.Messaging
 
   test "club detail separates club facts, person records, and memberships", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
@@ -56,7 +57,8 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
       |> live(~p"/admin/clubs/#{club.club_id}")
 
     assert has_element?(view, "#club-messaging-card")
-    assert has_element?(view, "#messages[aria-label='Messages']")
+    assert has_element?(view, "#club-messages-link[href='/admin/messages']")
+    assert has_element?(view, "#club-messages-link[aria-label='Open global Messages']")
     refute has_element?(view, "#new-message-form")
     refute has_element?(view, "#message-sender-select")
     refute has_element?(view, "#message-subject-input")
@@ -64,6 +66,55 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     refute has_element?(view, "#send-message-button")
     refute has_element?(view, "#club-messaging-card form")
     refute has_element?(view, "#club-messaging-card [aria-label='Send a club message']")
+  end
+
+  test "club detail points message review to global Messages instead of embedding club rows", %{
+    conn: conn
+  } do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club.club_id,
+                 person_id: person.person_id
+               },
+               consistency: :strong
+             )
+
+    result =
+      Messaging.send_club_message(
+        %{
+          message_id: Memba.ID.generate(:message),
+          club_id: club.club_id,
+          sender_id: person.person_id,
+          subject: "Trip planning night",
+          body: "Bring route ideas."
+        },
+        consistency: :strong
+      )
+
+    assert result == :ok or match?({:ok, _result}, result)
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    assert has_element?(view, "#club-messaging-card", "Messages live globally")
+
+    assert has_element?(
+             view,
+             "#club-messages-link[href='/admin/messages']",
+             "Open global Messages"
+           )
+
+    refute has_element?(view, "#messages")
+    refute has_element?(view, "[data-testid='message-row']")
+    refute has_element?(view, "[data-testid='message-link']")
+    refute has_element?(view, "#club-messaging-card", "Trip planning night")
   end
 
   test "edit form displays and saves a club name and slug", %{conn: conn} do

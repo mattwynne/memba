@@ -3,7 +3,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   alias Memba.Membership
   alias Memba.Membership.Slug
-  alias Memba.Messaging
 
   @empty_club %{"name" => "", "slug" => ""}
   @empty_membership %{"person_id" => ""}
@@ -13,7 +12,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
     club = Membership.get_club(club_id)
     people = Membership.list_people() |> people_with_email_summaries()
     members = Membership.list_active_members_of_club(club_id) |> members_with_email_summaries()
-    messages = Messaging.list_messages_for_club(club_id)
 
     {:ok,
      socket
@@ -23,11 +21,9 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
      |> assign_club_slug_feedback(current_club_slug(club))
      |> assign(:people_count, length(people))
      |> assign(:member_count, length(members))
-     |> assign(:message_count, length(messages))
      |> assign(:person_options, person_options(people))
      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
-     |> stream(:members, members, dom_id: &"member-#{&1.id}")
-     |> stream(:messages, messages, dom_id: &"message-#{&1.message_id}")}
+     |> stream(:members, members, dom_id: &"member-#{&1.id}")}
   end
 
   @impl Phoenix.LiveView
@@ -531,45 +527,29 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
           <section
             id="club-messaging-card"
-            class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+            class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
           >
-            <div class="flex flex-col gap-1">
-              <h2 class="text-lg font-semibold text-[#15201c]">Club messages</h2>
-              <p class="text-sm text-[#7d877f]">
-                Projected messages for this club:
-                <span class="font-semibold text-[#15201c]">{@message_count}</span>
-              </p>
-            </div>
-
-            <div
-              id="messages"
-              aria-label="Messages"
-              class="mt-5 divide-y divide-[#e6e3dc] overflow-hidden rounded-2xl border border-[#e6e3dc]"
-              phx-update="stream"
-            >
-              <p id="messages-empty" class="hidden p-4 text-sm text-[#7d877f] only:block">
-                No messages yet.
-              </p>
-              <div
-                :for={{dom_id, message} <- @streams.messages}
-                id={dom_id}
-                data-testid="message-row"
-                data-message-id={message.message_id}
-                data-message-subject={message.subject}
-                aria-label={"Message #{message.subject}"}
-                class="bg-white p-4 transition duration-200 hover:bg-[#f7f6f3]"
-              >
-                <.link
-                  id={"message-link-#{message.message_id}"}
-                  navigate={~p"/admin/messages/#{message.message_id}"}
-                  data-testid="message-link"
-                  aria-label={"Open message #{message.subject}"}
-                  class="font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
-                >
-                  {message.subject}
-                </.link>
-                <p class="mt-1 text-sm text-[#4b5a55]">{message.body}</p>
+            <div class="grid gap-5 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                  Message diagnostics
+                </p>
+                <h2 class="mt-1 text-lg font-semibold text-[#15201c]">Messages live globally</h2>
+                <p class="mt-2 max-w-3xl text-sm text-[#4b5a55]">
+                  Club-scoped message rows are no longer embedded on this page. Use the global
+                  Messages area to review projected messages across clubs and open delivery
+                  diagnostics. A future club-filtered view can build from that operations index.
+                </p>
               </div>
+
+              <.link
+                id="club-messages-link"
+                navigate={~p"/admin/messages"}
+                aria-label="Open global Messages"
+                class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+              >
+                Open global Messages
+              </.link>
             </div>
           </section>
         <% else %>
