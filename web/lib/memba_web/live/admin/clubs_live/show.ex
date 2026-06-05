@@ -22,6 +22,9 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
      |> assign(:club, club)
      |> assign_forms()
      |> assign_club_slug_feedback(current_club_slug(club))
+     |> assign(:people_count, length(people))
+     |> assign(:member_count, length(members))
+     |> assign(:message_count, length(messages))
      |> assign(:person_options, person_options(people))
      |> assign(:member_options, member_options(members))
      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
@@ -155,26 +158,25 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.admin flash={@flash}>
-      <main id="club-show" class="mx-auto max-w-6xl space-y-8 p-6">
-        <.link
-          id="back-to-clubs-link"
-          navigate={~p"/admin/clubs"}
-          aria-label="Back to clubs"
-          class="text-sm font-medium text-blue-700 hover:text-blue-900"
-        >
-          ← Clubs
-        </.link>
-
+      <main id="club-show" data-admin-page="club-detail" class="mx-auto max-w-7xl space-y-6 p-6">
         <%= if @club do %>
-          <section class="space-y-4">
+          <section class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div class="space-y-2">
-              <p class="text-sm font-semibold uppercase tracking-wide text-zinc-500">Club</p>
-              <h1 class="text-3xl font-bold tracking-tight text-zinc-900">{@club.name}</h1>
-              <p id="club-slug-display" class="text-sm font-medium text-zinc-600">
-                Slug: <span class="font-mono">{@club.slug}</span>
+              <.link
+                id="back-to-clubs-link"
+                navigate={~p"/admin/clubs"}
+                aria-label="Back to clubs"
+                class="text-sm font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
+              >
+                ← Clubs
+              </.link>
+              <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
+                Club operations
               </p>
-              <p class="text-zinc-600">
-                Add people to this club, then send a message to the active members.
+              <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">{@club.name}</h1>
+              <p class="max-w-3xl text-[#4b5a55]">
+                Keep club facts current, maintain person records, and manage the memberships that
+                connect people to this club.
               </p>
             </div>
 
@@ -182,20 +184,67 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
               id="staff-club-home-link"
               href={~p"/?#{[club_id: @club.club_id]}"}
               aria-label={"Open #{@club.name} home page"}
-              class="inline-flex rounded-full border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-blue-300 hover:text-blue-700"
+              class="inline-flex items-center justify-center rounded-full border border-[#d6d2c8] bg-white px-4 py-2 text-sm font-semibold text-[#4b5a55] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c] hover:shadow-md"
             >
               Open club home page
             </.link>
           </section>
 
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Edit club</h2>
+          <section
+            id="club-operation-summary"
+            aria-label="Club operations summary"
+            class="grid gap-4 md:grid-cols-3"
+          >
+            <article
+              id="club-facts-card"
+              class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+            >
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">Club facts</p>
+              <p class="mt-3 text-xl font-bold tracking-tight text-[#15201c]">{@club.name}</p>
+              <p id="club-slug-display" class="mt-2 text-sm font-medium text-[#4b5a55]">
+                Slug
+                <span class="ml-1 rounded-full bg-[#f7f6f3] px-2 py-1 font-mono text-xs text-[#4b5a55]">
+                  {@club.slug}
+                </span>
+              </p>
+              <p class="mt-3 break-all font-mono text-xs text-[#7d877f]">{@club.club_id}</p>
+            </article>
+
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                Person records
+              </p>
+              <p class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">{@people_count}</p>
+              <p class="mt-1 text-sm text-[#4b5a55]">
+                Staff-created identity and email records available to club workflows.
+              </p>
+            </article>
+
+            <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">Memberships</p>
+              <p class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">{@member_count}</p>
+              <p class="mt-1 text-sm text-[#4b5a55]">
+                Active links between person records and this club.
+              </p>
+            </article>
+          </section>
+
+          <section
+            id="club-facts-edit-card"
+            class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+          >
+            <div class="flex flex-col gap-1">
+              <h2 class="text-lg font-semibold text-[#15201c]">Edit club facts</h2>
+              <p class="text-sm text-[#7d877f]">
+                Update the operational club record without changing people or memberships.
+              </p>
+            </div>
 
             <.form
               for={@club_form}
               id="edit-club-form"
               aria-label="Edit club"
-              class="mt-4 grid gap-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+              class="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] lg:items-end"
               phx-change="validate_club_slug"
               phx-submit="update_club"
             >
@@ -235,19 +284,26 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                 type="submit"
                 aria-label="Save club"
                 disabled={not @club_slug_feedback.valid}
+                class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Save club
               </.button>
             </.form>
           </section>
 
-          <div class="grid gap-6 lg:grid-cols-2">
-            <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-              <div class="flex items-start justify-between gap-4">
+          <div class="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+            <section
+              id="people-records-card"
+              class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+            >
+              <div class="flex items-start justify-between gap-4 border-b border-[#e6e3dc] p-5">
                 <div>
-                  <h2 class="text-lg font-semibold text-zinc-900">People</h2>
-                  <p class="mt-1 text-sm text-zinc-600">
-                    Manage staff-created people and their primary and alternate email addresses.
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                    Person records
+                  </p>
+                  <h2 class="mt-1 text-lg font-semibold text-[#15201c]">People</h2>
+                  <p class="mt-1 text-sm text-[#7d877f]">
+                    Identity and contact records stay separate from club memberships.
                   </p>
                 </div>
 
@@ -255,86 +311,129 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                   id="new-person-link"
                   navigate={~p"/admin/clubs/#{@club_id}/people/new"}
                   aria-label="New person"
-                  class="inline-flex shrink-0 rounded-full bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800"
+                  class="inline-flex shrink-0 rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
                 >
                   New person
                 </.link>
               </div>
 
-              <div
-                id="people"
-                aria-label="People"
-                class="mt-5 divide-y divide-zinc-100"
-                phx-update="stream"
-              >
-                <p id="people-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
-                  No people yet.
-                </p>
-                <div
-                  :for={{dom_id, person} <- @streams.people}
-                  id={dom_id}
-                  data-testid="person-row"
-                  data-person-id={person.person_id}
-                  data-person-name={person.name}
-                  aria-label={"Person #{person.name}"}
-                  class="flex items-start justify-between gap-4 py-3"
+              <div class="overflow-x-auto">
+                <table
+                  id="people-records-table"
+                  aria-label="Person records"
+                  class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
                 >
-                  <div class="min-w-0 space-y-1">
-                    <p class="font-medium text-zinc-900">{person.name}</p>
-                    <p
-                      id={"person-primary-email-#{person.person_id}"}
-                      data-testid="person-primary-email"
-                      class="text-sm text-zinc-600"
-                    >
-                      Primary: <span class="font-medium text-zinc-800">{person.primary_email}</span>
-                    </p>
-                    <div
-                      id={"person-alternate-emails-#{person.person_id}"}
-                      data-testid="person-alternate-emails"
-                      data-alternate-count={person.alternate_count}
-                      class="space-y-1 text-sm text-zinc-500"
-                    >
-                      <p class="font-medium text-zinc-700">Alternate email addresses</p>
-                      <p
-                        :if={person.alternate_count == 0}
-                        data-testid="person-alternate-empty"
-                        class="text-zinc-500"
-                      >
-                        No alternate email addresses
-                      </p>
-                      <ul :if={person.alternate_count > 0} class="space-y-0.5">
-                        <li
-                          :for={email <- person.alternate_emails}
-                          data-testid="person-alternate-email"
-                          class="font-medium text-zinc-700"
-                        >
-                          {email}
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  <.link
-                    id={"edit-person-link-#{person.person_id}"}
-                    navigate={~p"/admin/clubs/#{@club_id}/people/#{person.person_id}/edit"}
-                    data-testid="edit-person-link"
-                    aria-label={"Edit #{person.name}"}
-                    class="shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-sm font-semibold text-zinc-700 transition hover:border-blue-300 hover:text-blue-700"
+                  <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                    <tr>
+                      <th scope="col" class="px-4 py-3">Person</th>
+                      <th scope="col" class="px-4 py-3">Primary email</th>
+                      <th scope="col" class="px-4 py-3">Alternate emails</th>
+                      <th scope="col" class="px-4 py-3">Edit</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    id="people"
+                    aria-label="People"
+                    class="divide-y divide-[#e6e3dc]"
+                    phx-update="stream"
                   >
-                    Edit
-                  </.link>
-                </div>
+                    <tr id="people-empty" class="hidden only:table-row">
+                      <td colspan="4" class="px-4 py-6 text-center text-sm text-[#7d877f]">
+                        No people yet.
+                      </td>
+                    </tr>
+                    <tr
+                      :for={{dom_id, person} <- @streams.people}
+                      id={dom_id}
+                      data-testid="person-row"
+                      data-person-id={person.person_id}
+                      data-person-name={person.name}
+                      aria-label={"Person #{person.name}"}
+                    >
+                      <td class="px-4 py-4">
+                        <div class="flex items-center gap-3">
+                          <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e6ece4] text-xs font-bold text-[#1f4842]">
+                            {initials(person.name)}
+                          </div>
+                          <div>
+                            <p class="font-semibold text-[#15201c]">{person.name}</p>
+                            <p class="mt-1 break-all font-mono text-xs text-[#7d877f]">
+                              {person.person_id}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-4">
+                        <p
+                          id={"person-primary-email-#{person.person_id}"}
+                          data-testid="person-primary-email"
+                          class="font-medium text-[#4b5a55]"
+                        >
+                          {person.primary_email}
+                        </p>
+                      </td>
+                      <td class="px-4 py-4">
+                        <div
+                          id={"person-alternate-emails-#{person.person_id}"}
+                          data-testid="person-alternate-emails"
+                          data-alternate-count={person.alternate_count}
+                          class="space-y-1 text-sm text-[#4b5a55]"
+                        >
+                          <p class="font-medium text-[#15201c]">Alternate email addresses</p>
+                          <p
+                            :if={person.alternate_count == 0}
+                            data-testid="person-alternate-empty"
+                            class="text-[#7d877f]"
+                          >
+                            No alternate email addresses
+                          </p>
+                          <ul :if={person.alternate_count > 0} class="space-y-1">
+                            <li
+                              :for={email <- person.alternate_emails}
+                              data-testid="person-alternate-email"
+                              class="font-medium text-[#4b5a55]"
+                            >
+                              {email}
+                            </li>
+                          </ul>
+                        </div>
+                      </td>
+                      <td class="px-4 py-4">
+                        <.link
+                          id={"edit-person-link-#{person.person_id}"}
+                          navigate={~p"/admin/clubs/#{@club_id}/people/#{person.person_id}/edit"}
+                          data-testid="edit-person-link"
+                          aria-label={"Edit #{person.name}"}
+                          class="inline-flex rounded-full border border-[#d6d2c8] px-3 py-1.5 text-xs font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
+                        >
+                          Edit
+                        </.link>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </section>
 
-            <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-              <h2 class="text-lg font-semibold text-zinc-900">Members</h2>
+            <section
+              id="memberships-card"
+              class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+            >
+              <div class="border-b border-[#e6e3dc] p-5">
+                <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                  Memberships
+                </p>
+                <h2 class="mt-1 text-lg font-semibold text-[#15201c]">Active club memberships</h2>
+                <p class="mt-1 text-sm text-[#7d877f]">
+                  Add or remove the links that make existing people active members of this club.
+                </p>
+              </div>
 
               <.form
                 for={@membership_form}
                 id="add-member-form"
                 aria-label="Add a member"
-                class="mt-4 space-y-4"
+                class="space-y-4 border-b border-[#e6e3dc] bg-[#f7f6f3] p-5"
                 phx-submit="add_member"
               >
                 <.input
@@ -351,88 +450,136 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                   id="add-member-button"
                   type="submit"
                   aria-label="Add selected person as member"
+                  class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
                 >
                   Add member
                 </.button>
               </.form>
 
-              <div
-                id="members"
-                aria-label="Members"
-                class="mt-5 divide-y divide-zinc-100"
-                phx-update="stream"
-              >
-                <p id="members-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
-                  No members yet.
-                </p>
-                <div
-                  :for={{dom_id, member} <- @streams.members}
-                  id={dom_id}
-                  data-testid="member-row"
-                  data-member-id={member.id}
-                  data-member-name={member.name}
-                  aria-label={"Member #{member.name}"}
-                  class="flex items-start justify-between gap-4 py-3"
+              <div class="overflow-x-auto">
+                <table
+                  id="memberships-table"
+                  aria-label="Memberships"
+                  class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
                 >
-                  <div class="min-w-0">
-                    <p class="font-medium text-zinc-900">{member.name}</p>
-                    <p
-                      id={"member-primary-email-#{member.id}"}
-                      data-testid="member-primary-email"
-                      class="mt-1 text-sm text-zinc-600"
-                    >
-                      Primary: <span class="font-medium text-zinc-800">{member.primary_email}</span>
-                    </p>
-                    <div
-                      id={"member-alternate-emails-#{member.id}"}
-                      data-testid="member-alternate-emails"
-                      data-alternate-count={member.alternate_count}
-                      class="mt-1 space-y-1 text-sm text-zinc-500"
-                    >
-                      <p class="font-medium text-zinc-700">Alternate email addresses</p>
-                      <p
-                        :if={member.alternate_count == 0}
-                        data-testid="member-alternate-empty"
-                        class="text-zinc-500"
-                      >
-                        No alternate email addresses
-                      </p>
-                      <ul :if={member.alternate_count > 0} class="space-y-0.5">
-                        <li
-                          :for={email <- member.alternate_emails}
-                          data-testid="member-alternate-email"
-                          class="font-medium text-zinc-700"
-                        >
-                          {email}
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  <button
-                    id={"remove-member-button-#{member.membership_id}"}
-                    type="button"
-                    data-testid="remove-member-button"
-                    phx-click="remove_member"
-                    phx-value-membership_id={member.membership_id}
-                    aria-label={"Remove #{member.name} from #{@club.name}"}
-                    class="shrink-0 rounded-full border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50"
+                  <thead class="bg-white text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                    <tr>
+                      <th scope="col" class="px-4 py-3">Person</th>
+                      <th scope="col" class="px-4 py-3">Primary email</th>
+                      <th scope="col" class="px-4 py-3">Membership</th>
+                      <th scope="col" class="px-4 py-3">Remove</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    id="members"
+                    aria-label="Members"
+                    class="divide-y divide-[#e6e3dc]"
+                    phx-update="stream"
                   >
-                    Remove
-                  </button>
-                </div>
+                    <tr id="members-empty" class="hidden only:table-row">
+                      <td colspan="4" class="px-4 py-6 text-center text-sm text-[#7d877f]">
+                        No members yet.
+                      </td>
+                    </tr>
+                    <tr
+                      :for={{dom_id, member} <- @streams.members}
+                      id={dom_id}
+                      data-testid="member-row"
+                      data-member-id={member.id}
+                      data-member-name={member.name}
+                      aria-label={"Member #{member.name}"}
+                    >
+                      <td class="px-4 py-4">
+                        <div class="flex items-center gap-3">
+                          <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e6ece4] text-xs font-bold text-[#1f4842]">
+                            {initials(member.name)}
+                          </div>
+                          <div>
+                            <p class="font-semibold text-[#15201c]">{member.name}</p>
+                            <p class="mt-1 break-all font-mono text-xs text-[#7d877f]">
+                              {member.id}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="px-4 py-4">
+                        <p
+                          id={"member-primary-email-#{member.id}"}
+                          data-testid="member-primary-email"
+                          class="font-medium text-[#4b5a55]"
+                        >
+                          {member.primary_email}
+                        </p>
+                        <div
+                          id={"member-alternate-emails-#{member.id}"}
+                          data-testid="member-alternate-emails"
+                          data-alternate-count={member.alternate_count}
+                          class="mt-2 space-y-1 text-sm text-[#4b5a55]"
+                        >
+                          <p class="font-medium text-[#15201c]">Alternate email addresses</p>
+                          <p
+                            :if={member.alternate_count == 0}
+                            data-testid="member-alternate-empty"
+                            class="text-[#7d877f]"
+                          >
+                            No alternate email addresses
+                          </p>
+                          <ul :if={member.alternate_count > 0} class="space-y-1">
+                            <li
+                              :for={email <- member.alternate_emails}
+                              data-testid="member-alternate-email"
+                              class="font-medium text-[#4b5a55]"
+                            >
+                              {email}
+                            </li>
+                          </ul>
+                        </div>
+                      </td>
+                      <td class="px-4 py-4">
+                        <span class="rounded-full bg-[#e6ece4] px-2.5 py-1 text-xs font-semibold text-[#1f4842]">
+                          Active membership
+                        </span>
+                        <p class="mt-2 break-all font-mono text-xs text-[#7d877f]">
+                          {member.membership_id}
+                        </p>
+                      </td>
+                      <td class="px-4 py-4">
+                        <button
+                          id={"remove-member-button-#{member.membership_id}"}
+                          type="button"
+                          data-testid="remove-member-button"
+                          phx-click="remove_member"
+                          phx-value-membership_id={member.membership_id}
+                          aria-label={"Remove #{member.name} from #{@club.name}"}
+                          class="rounded-full border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition duration-200 hover:-translate-y-0.5 hover:border-red-300 hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </section>
           </div>
 
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h2 class="text-lg font-semibold text-zinc-900">Send a club message</h2>
+          <section
+            id="club-messaging-card"
+            class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+          >
+            <div class="flex flex-col gap-1">
+              <h2 class="text-lg font-semibold text-[#15201c]">Send a club message</h2>
+              <p class="text-sm text-[#7d877f]">
+                Existing staff-side messaging workflow. Projected messages for this club:
+                <span class="font-semibold text-[#15201c]">{@message_count}</span>
+              </p>
+            </div>
 
             <.form
               for={@message_form}
               id="new-message-form"
               aria-label="Send a club message"
-              class="mt-4 grid gap-4 lg:grid-cols-2"
+              class="mt-5 grid gap-4 lg:grid-cols-2"
               phx-submit="send_message"
             >
               <.input
@@ -463,7 +610,12 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                 />
               </div>
               <div class="lg:col-span-2">
-                <.button id="send-message-button" type="submit" aria-label="Send club message">
+                <.button
+                  id="send-message-button"
+                  type="submit"
+                  aria-label="Send club message"
+                  class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+                >
                   Send message
                 </.button>
               </div>
@@ -472,10 +624,10 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
             <div
               id="messages"
               aria-label="Messages"
-              class="mt-5 divide-y divide-zinc-100"
+              class="mt-5 divide-y divide-[#e6e3dc] overflow-hidden rounded-2xl border border-[#e6e3dc]"
               phx-update="stream"
             >
-              <p id="messages-empty" class="hidden py-4 text-sm text-zinc-500 only:block">
+              <p id="messages-empty" class="hidden p-4 text-sm text-[#7d877f] only:block">
                 No messages yet.
               </p>
               <div
@@ -485,25 +637,35 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
                 data-message-id={message.message_id}
                 data-message-subject={message.subject}
                 aria-label={"Message #{message.subject}"}
-                class="py-3"
+                class="bg-white p-4 transition duration-200 hover:bg-[#f7f6f3]"
               >
                 <.link
                   id={"message-link-#{message.message_id}"}
                   navigate={~p"/admin/messages/#{message.message_id}"}
                   data-testid="message-link"
                   aria-label={"Open message #{message.subject}"}
-                  class="font-medium text-blue-700 hover:text-blue-900"
+                  class="font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
                 >
                   {message.subject}
                 </.link>
-                <p class="mt-1 text-sm text-zinc-600">{message.body}</p>
+                <p class="mt-1 text-sm text-[#4b5a55]">{message.body}</p>
               </div>
             </div>
           </section>
         <% else %>
-          <section class="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <h1 class="text-2xl font-bold text-zinc-900">Club not found</h1>
-            <p class="mt-2 text-zinc-600">No projected club exists for this URL.</p>
+          <section class="space-y-4">
+            <.link
+              id="back-to-clubs-link"
+              navigate={~p"/admin/clubs"}
+              aria-label="Back to clubs"
+              class="text-sm font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
+            >
+              ← Clubs
+            </.link>
+            <div class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
+              <h1 class="text-2xl font-bold text-[#15201c]">Club not found</h1>
+              <p class="mt-2 text-[#4b5a55]">No projected club exists for this URL.</p>
+            </div>
           </section>
         <% end %>
       </main>
@@ -534,12 +696,17 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
       |> members_with_email_summaries()
 
     socket
+    |> assign(:member_count, length(members))
     |> assign(:member_options, member_options(members))
     |> stream(:members, members, reset: true, dom_id: &"member-#{&1.id}")
   end
 
   defp refresh_messages(socket) do
-    stream(socket, :messages, Messaging.list_messages_for_club(socket.assigns.club_id),
+    messages = Messaging.list_messages_for_club(socket.assigns.club_id)
+
+    socket
+    |> assign(:message_count, length(messages))
+    |> stream(:messages, messages,
       reset: true,
       dom_id: &"message-#{&1.message_id}"
     )
@@ -645,6 +812,21 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
 
   defp slug_feedback_class(%{status: "taken"}), do: "mt-1 text-xs font-medium text-red-700"
   defp slug_feedback_class(_feedback), do: "mt-1 text-xs font-medium text-amber-700"
+
+  defp initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "?"
+      initials -> initials
+    end
+  end
+
+  defp initials(_name), do: "?"
 
   defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 end

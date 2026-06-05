@@ -6,6 +6,36 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
   alias Memba.Membership
   alias Memba.Membership.Projections.Club, as: ClubProjection
 
+  test "club detail separates club facts, person records, and memberships", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+    person = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club.club_id,
+                 person_id: person.person_id
+               },
+               consistency: :strong
+             )
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    assert has_element?(view, "#club-show[data-admin-page='club-detail']")
+    assert has_element?(view, "#club-facts-card", "Club facts")
+    assert has_element?(view, "#club-facts-edit-card #edit-club-form[aria-label='Edit club']")
+    assert has_element?(view, "#people-records-card #people[aria-label='People']")
+    assert has_element?(view, "#people-records-card #person-#{person.person_id}", "Alice Example")
+    assert has_element?(view, "#memberships-card", "Memberships")
+    assert has_element?(view, "#memberships-card #add-member-form[aria-label='Add a member']")
+    assert has_element?(view, "#memberships-card #members[aria-label='Members']")
+    assert has_element?(view, "#memberships-card #member-#{person.person_id}", "Alice Example")
+  end
+
   test "edit form displays and saves a club name and slug", %{conn: conn} do
     club_id = Memba.ID.generate(:club)
 
