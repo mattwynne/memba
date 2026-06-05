@@ -121,6 +121,7 @@ function copyHarnessState(world, harnessWorld) {
     "addressedMemberNames",
     "currentOperatorDelivery",
     "lastMessageSubject",
+    "localDeliveryFactsBeforeSend",
     "mailboxEmailsBeforeSend"
   ]) {
     if (Object.prototype.hasOwnProperty.call(harnessWorld, key)) {

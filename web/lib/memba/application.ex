@@ -14,6 +14,7 @@ defmodule Memba.Application do
       Memba.Membership.App,
       Memba.Messaging.App,
       Memba.Messaging.EmailDeliveryProviders.Fake,
+      Memba.Messaging.LocalDeliveryFacts,
       Memba.Messaging.Projectors.Message,
       Memba.Messaging.Projectors.EmailDelivery,
       Memba.Messaging.Projectors.MemberEmailDelivery,

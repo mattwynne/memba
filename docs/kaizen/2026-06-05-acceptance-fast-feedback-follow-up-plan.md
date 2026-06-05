@@ -180,7 +180,26 @@ Fix applied:
 
 - `acceptance-tests/features/step_definitions/person_email_address_steps.js`: awaited the existing projection barrier before checking that no club-message email was delivered to the removed address.
 
+### Follow-up progress: deterministic local delivery facts
+
+Date: 2026-06-05
+
+Fix applied:
+
+- `web/lib/memba/messaging/local_delivery_facts.ex`: added an in-memory local-provider delivery-facts recorder for deterministic acceptance assertions.
+- `web/lib/memba/application.ex`: supervised the delivery-facts recorder with the application.
+- `web/lib/memba/messaging/email_delivery_providers/local.ex`: records a delivery fact after a local provider email is successfully handed to Swoosh.
+- `web/test/memba/messaging/email_delivery_providers/local_test.exs`: covered the recorded fact shape and unsupported-channel behaviour.
+- `acceptance-tests/features/support/server_commands.js`: exposed local delivery facts through the existing Elixir RPC command channel.
+- `acceptance-tests/features/support/member_message.js`: changed member-message email assertions to wait on local delivery facts instead of polling `/dev/mailbox/json`.
+- `acceptance-tests/features/step_definitions/person_email_address_steps.js`: changed person email-address delivery assertions to query local delivery facts.
+- `acceptance-tests/features/support/member_harness.js`: copied local delivery-fact checkpoints between harness worlds.
+
+Validation:
+
+- `cd acceptance-tests && npm run test:config` — passed, 48 tests.
+- `cd web && mix test test/memba/messaging/email_delivery_providers/local_test.exs` — passed, 2 tests.
+
 Remaining follow-up:
 
-- Replace mailbox polling with deterministic delivery facts.
 - Use read-model changes for LiveView delivery-status updates.

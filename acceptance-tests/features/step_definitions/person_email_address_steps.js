@@ -7,7 +7,7 @@ const {
   kootenayClubName,
   projectionPollIntervalMs,
   projectionTimeoutMs,
-  testMailboxEmails,
+  testLocalDeliveryFacts,
   updatePersonEmailAddresses
 } = require("../support/member_message");
 const {
@@ -231,7 +231,7 @@ async function assertNoMessageEmailRecipient(world, recipientEmail) {
     timeoutMs: projectionTimeoutMs(world)
   });
 
-  const matchingEmail = newMessageEmails(world, await testMailboxEmails(world)).find((email) =>
+  const matchingEmail = newMessageEmails(world, await testLocalDeliveryFacts(world)).find((email) =>
     messageEmailMatches(email, subject, recipientEmail)
   );
 
@@ -247,7 +247,7 @@ async function waitForMessageEmailMatching(world, predicate) {
   let emails = [];
 
   do {
-    emails = newMessageEmails(world, await testMailboxEmails(world));
+    emails = newMessageEmails(world, await testLocalDeliveryFacts(world));
     const matchingEmail = emails.find(predicate);
 
     if (matchingEmail) {
@@ -263,7 +263,9 @@ async function waitForMessageEmailMatching(world, predicate) {
 }
 
 function newMessageEmails(world, emails) {
-  const previousIds = (world.mailboxEmailsBeforeSend || []).map(mailboxMessageId).filter(Boolean);
+  const previousIds = (world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [])
+    .map(mailboxMessageId)
+    .filter(Boolean);
 
   return emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
 }
@@ -278,7 +280,7 @@ function messageEmailMatches(email, subject, recipientEmail) {
 }
 
 function mailboxMessageId(email) {
-  return email && email.headers && email.headers["Message-ID"];
+  return email && (email.id || (email.headers && email.headers["Message-ID"]));
 }
 
 function mailboxEmailSummary(email) {

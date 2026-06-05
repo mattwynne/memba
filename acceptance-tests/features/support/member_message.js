@@ -882,7 +882,7 @@ async function sendMemberMessageToKootenayMembers(
 
   const body = `${subject} details.`;
 
-  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
 
   await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
 
@@ -916,7 +916,7 @@ async function sendMemberMessageToKootenayMembers(
     senderName,
     subject
   };
-  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
+  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
   world.lastMessageSubject = subject;
 
   return world;
@@ -1111,7 +1111,7 @@ async function sendMessageToKootenayMembers(
   const sender = world.people[senderName];
   assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
 
-  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
 
   await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Message sender").selectOption(sender.personId);
@@ -1147,7 +1147,7 @@ async function sendMessageToKootenayMembers(
     senderName,
     subject
   };
-  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
+  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
   world.lastMessageSubject = subject;
 
   await openMessage(world, subject, { expect });
@@ -1429,11 +1429,11 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
     "Expected addressed members to be asserted before checking the mailbox"
   );
 
-  const previousEmails = world.mailboxEmailsBeforeSend || [];
-  const emails = await waitForMailboxEmails(
+  const previousEmails = world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [];
+  const emails = await waitForLocalDeliveryFacts(
     world,
     previousEmails.length + addressedMemberNames.length,
-    `Swoosh test mailbox emails for ${JSON.stringify(subject)}`
+    `local provider delivery facts for ${JSON.stringify(subject)}`
   );
   const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
   const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
@@ -1947,6 +1947,49 @@ async function deliveryForRecipient(
   };
 }
 
+async function testLocalDeliveryFacts(_world) {
+  try {
+    return serverCommands.listLocalDeliveryFacts();
+  } catch (error) {
+    if (process.env.npm_lifecycle_event === "test:config" && String(error.message || "").includes(":noconnection")) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+async function waitForLocalDeliveryFacts(world, expectedCount, description) {
+  const timeoutMs = projectionTimeoutMs(world);
+  const deadline = Date.now() + timeoutMs;
+  let facts = [];
+  let lastError = null;
+
+  do {
+    try {
+      facts = await testLocalDeliveryFacts(world);
+
+      if (facts.length >= expectedCount) {
+        return facts;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    const remainingMs = deadline - Date.now();
+
+    if (remainingMs > 0) {
+      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
+    }
+  } while (Date.now() <= deadline);
+
+  throw new Error(
+    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for ${description}. ` +
+      `Expected at least ${expectedCount} local delivery facts; saw ${facts.length}.\n` +
+      `Last delivery-facts error: ${lastError ? errorMessage(lastError) : "(none)"}`
+  );
+}
+
 async function testMailboxEmails(world) {
   const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
   if (!request || typeof request.get !== "function") {
@@ -2013,7 +2056,7 @@ async function waitForMailboxEmails(world, expectedCount, description) {
 }
 
 function mailboxMessageId(email) {
-  return email && email.headers && email.headers["Message-ID"];
+  return email && (email.id || (email.headers && email.headers["Message-ID"]));
 }
 
 function mailboxEmailTo(email) {
@@ -2379,10 +2422,12 @@ module.exports = {
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
   sendMessageToKootenayMembers,
+  testLocalDeliveryFacts,
   testMailboxEmails,
   trySendMemberMessageToKootenayMembers,
   updateClubSlug,
   updatePersonEmailAddresses,
   visitClubsIndex,
+  waitForLocalDeliveryFacts,
   waitForMailboxEmails
 };

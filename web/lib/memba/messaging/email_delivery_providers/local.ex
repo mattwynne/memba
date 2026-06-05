@@ -11,6 +11,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
 
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.LocalDeliveryFacts
 
   @behaviour EmailDeliveryProvider
 
@@ -19,6 +20,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
     request
     |> email()
     |> deliver_email()
+    |> record_delivery_fact(request)
   end
 
   def deliver(%EmailDeliveryRequest{channel: channel}),
@@ -92,4 +94,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
 
   defp normalize_delivery_result(result),
     do: {:error, {:local_delivery_error, {:unexpected_delivery_result, result}}}
+
+  defp record_delivery_fact(:ok, %EmailDeliveryRequest{} = request) do
+    LocalDeliveryFacts.record(request)
+    :ok
+  end
+
+  defp record_delivery_fact(result, %EmailDeliveryRequest{}), do: result
 end

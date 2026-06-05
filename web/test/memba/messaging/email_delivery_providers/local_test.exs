@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
 
   alias Memba.Messaging.EmailDeliveryProviders.Local
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.LocalDeliveryFacts
 
   setup do
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
@@ -19,7 +20,10 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       reply_to: {"Matt Wynne", "matt@mattwynne.net"}
     )
 
+    LocalDeliveryFacts.reset()
+
     on_exit(fn ->
+      LocalDeliveryFacts.reset()
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Memba.Messaging.EmailDeliveryProviders.Postmark, original_provider_config)
     end)
@@ -46,6 +50,15 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
                "memba_club_id" => request.club_id
              }
     end)
+
+    assert [fact] = LocalDeliveryFacts.list()
+    assert fact.delivery_id == request.delivery_id
+    assert fact.message_id == request.message_id
+    assert fact.recipient_address == "alice@example.test"
+    assert fact.to == ["Alice <alice@example.test>"]
+    assert fact.from == "Bob via Memba <messages@mail.memba.io>"
+    assert fact.subject == "Trip planning night"
+    assert fact.text_body == "Hello <Alice> & Bob\nBring route ideas."
   end
 
   test "does not hand unsupported delivery channels to Swoosh" do
@@ -53,6 +66,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
              Local.deliver(email_delivery_request(channel: :sms))
 
     refute_email_sent()
+    assert LocalDeliveryFacts.list() == []
   end
 
   defp email_delivery_request(overrides) do

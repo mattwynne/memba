@@ -370,6 +370,15 @@ Memba.ProjectionBarrier.await!(
   );
 }
 
+function listLocalDeliveryFacts() {
+  return runCommand(
+    `
+Memba.Messaging.LocalDeliveryFacts.list()
+`,
+    {}
+  );
+}
+
 function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
   return runCommand(
     `
@@ -445,6 +454,7 @@ module.exports = {
   ensurePerson,
   ensurePersonEmailAddresses,
   ensureSmokeTestClub,
+  listLocalDeliveryFacts,
   runCommand,
   sendClubMessage,
   waitForProjectionBarrier
