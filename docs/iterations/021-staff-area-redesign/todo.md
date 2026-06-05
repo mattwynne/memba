@@ -13,7 +13,7 @@
 - [x] 010 Remove the embedded club messages list from club detail and replace it with a clear link/copy toward `/admin/messages` or future club-filtered messages.
 - [x] 011 Restyle person new/edit pages enough that they feel part of the redesigned staff area; preserve existing behaviour.
 - [x] 012 Restyle `/admin/deliveries` consistently without changing delivery semantics.
-- [ ] 013 Restyle `/admin/messages/:message_id` consistently without changing diagnostics semantics.
+- [x] 013 Restyle `/admin/messages/:message_id` consistently without changing diagnostics semantics.
 - [ ] 014 Update or add LiveView tests for:
 - [ ] 015 Update acceptance step support and remove the feature-level `@wip` tag from `memba_staff_operations.feature` once its scenarios pass.
 - [ ] 016 Run targeted tests for admin LiveViews and acceptance configuration.

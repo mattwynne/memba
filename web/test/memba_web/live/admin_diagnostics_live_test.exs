@@ -34,9 +34,15 @@ defmodule MembaWeb.AdminDiagnosticsLiveTest do
     assert response =~ bob.delivery_id
 
     assert_selector_exists(html, "#admin-layout[data-surface='admin']")
-    assert_selector_exists(html, "#message-show")
+    assert_selector_exists(html, "#message-show[data-admin-page='message-diagnostics']")
+    assert_selector_exists(html, "#message-diagnostics-summary-cards")
+    assert_selector_exists(html, "#message-diagnostics-note")
+    assert_selector_exists(html, "#message-body-card")
+    assert_selector_exists(html, "#addressed-recipients-card")
     assert_selector_exists(html, "#addressed-recipients[aria-label='Addressed recipients']")
+    assert_selector_exists(html, "#delivery-records-card")
     assert_selector_exists(html, "#delivery-records[aria-label='Email deliveries']")
+    assert_selector_exists(html, "#member-receipts-card")
     assert_selector_exists(html, "#member-receipts[aria-label='Member email delivery statuses']")
 
     assert_selector_exists(
