@@ -1,9 +1,14 @@
 defmodule MembaWeb.Admin.PeopleLive.Index do
   use MembaWeb, :live_view
 
+  alias Memba.Membership
+
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
-    {:ok, stream(socket, :people, [], dom_id: &"person-row-#{&1.person_id}")}
+    {:ok,
+     stream(socket, :people, Membership.list_operator_people(),
+       dom_id: &"person-row-#{&1.person_id}"
+     )}
   end
 
   @impl Phoenix.LiveView
@@ -34,7 +39,7 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
           <div class="border-b border-[#e6e3dc] p-5">
             <h2 class="text-lg font-semibold text-[#15201c]">Person records</h2>
             <p class="mt-1 text-sm text-[#7d877f]">
-              People will appear once the global person summary read model is wired.
+              Sorted by person name, with active memberships shown as club summaries.
             </p>
           </div>
 
@@ -62,11 +67,25 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
                     No person records to show yet.
                   </td>
                 </tr>
-                <tr :for={{dom_id, person} <- @streams.people} id={dom_id}>
-                  <td class="px-4 py-4 font-medium text-[#15201c]">{person.name}</td>
-                  <td class="px-4 py-4 text-[#4b5a55]">{person.primary_email}</td>
-                  <td class="px-4 py-4 text-[#4b5a55]">{person.alternate_emails}</td>
-                  <td class="px-4 py-4 text-[#4b5a55]">{person.memberships}</td>
+                <tr
+                  :for={{dom_id, person} <- @streams.people}
+                  id={dom_id}
+                  data-testid="admin-person-row"
+                  data-person-id={person.person_id}
+                  data-person-name={person.name}
+                >
+                  <td data-testid="admin-person-name" class="px-4 py-4 font-medium text-[#15201c]">
+                    {person.name}
+                  </td>
+                  <td data-testid="admin-person-primary-email" class="px-4 py-4 text-[#4b5a55]">
+                    {email_summary(person.primary_email)}
+                  </td>
+                  <td data-testid="admin-person-alternate-emails" class="px-4 py-4 text-[#4b5a55]">
+                    {email_summary(person.alternate_emails)}
+                  </td>
+                  <td data-testid="admin-person-memberships" class="px-4 py-4 text-[#4b5a55]">
+                    {membership_summary(person.memberships)}
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -76,4 +95,23 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
     </Layouts.admin>
     """
   end
+
+  defp email_summary(email) when is_binary(email) and email != "", do: email
+  defp email_summary(emails) when is_list(emails) and emails != [], do: Enum.join(emails, ", ")
+  defp email_summary(_empty), do: "—"
+
+  defp membership_summary([]), do: "No active memberships"
+
+  defp membership_summary(memberships) when is_list(memberships) do
+    memberships
+    |> Enum.map(&membership_label/1)
+    |> Enum.join(", ")
+  end
+
+  defp membership_label(%{club_name: name}) when is_binary(name) and name != "", do: name
+
+  defp membership_label(%{club_id: club_id}) when is_binary(club_id) and club_id != "",
+    do: club_id
+
+  defp membership_label(_membership), do: "Unknown club"
 end
