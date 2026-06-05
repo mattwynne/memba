@@ -145,6 +145,12 @@ in
     cwd = "web";
     exec = ''
       set -euo pipefail
+
+      if [ "''${CI:-}" = "true" ]; then
+        echo "web disabled during CI devenv test; ./bin/dev check starts the test Phoenix server"
+        exit 0
+      fi
+
       mix dev.setup
       exec mix phx.server
     '';
@@ -157,6 +163,11 @@ in
 
       if [ "''${MEMBA_DEV_NGROK:-1}" = "0" ]; then
         echo "ngrok disabled because MEMBA_DEV_NGROK=0"
+        exit 0
+      fi
+
+      if [ "''${CI:-}" = "true" ]; then
+        echo "ngrok disabled during CI devenv test"
         exit 0
       fi
 
