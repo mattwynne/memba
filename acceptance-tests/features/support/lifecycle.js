@@ -4,6 +4,18 @@ const https = require("node:https");
 const net = require("node:net");
 const path = require("node:path");
 
+const progressLoggingEnabled = new Set(["1", "true", "yes"]).has(
+  String(process.env.ACCEPTANCE_LOG_PROGRESS || "").toLowerCase()
+);
+
+function acceptanceLog(message) {
+  if (!progressLoggingEnabled) {
+    return;
+  }
+
+  process.stderr.write(`[acceptance ${new Date().toISOString()}] ${message}\n`);
+}
+
 const repoRoot = path.resolve(__dirname, "../../..");
 const binDevPath = path.join(repoRoot, "bin", "dev");
 const binMixPath = path.join(repoRoot, "bin", "mix");
@@ -178,6 +190,9 @@ function killProcessGroup(child, signal) {
 
 function runCommand(spec, { label, timeoutMs, logBuffer }) {
   return new Promise((resolve, reject) => {
+    const startedAt = Date.now();
+    acceptanceLog(`start command: ${label}: ${commandLine(spec)}`);
+
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
       env: spec.env,
@@ -192,6 +207,7 @@ function runCommand(spec, { label, timeoutMs, logBuffer }) {
 
     const timeout = setTimeout(() => {
       timedOut = true;
+      acceptanceLog(`timeout command after ${timeoutMs}ms: ${label}: ${commandLine(spec)}`);
       killProcessGroup(child, "SIGTERM");
       killTimeout = setTimeout(() => {
         killProcessGroup(child, "SIGKILL");
@@ -223,6 +239,7 @@ function runCommand(spec, { label, timeoutMs, logBuffer }) {
       clearTimeout(killTimeout);
 
       if (code === 0) {
+        acceptanceLog(`finish command: ${label}: ${Date.now() - startedAt}ms`);
         resolve({ stdout, stderr });
         return;
       }
@@ -230,6 +247,8 @@ function runCommand(spec, { label, timeoutMs, logBuffer }) {
       const reason = timedOut
         ? `timed out after ${timeoutMs}ms`
         : `exited with code ${code}${signal ? ` and signal ${signal}` : ""}`;
+
+      acceptanceLog(`fail command: ${label}: ${reason}: ${Date.now() - startedAt}ms`);
 
       reject(
         new Error(
@@ -243,6 +262,8 @@ function runCommand(spec, { label, timeoutMs, logBuffer }) {
 }
 
 function startManagedProcess(spec, { label, logBuffer, shutdownTimeoutMs }) {
+  acceptanceLog(`start managed process: ${label}: ${commandLine(spec)}`);
+
   const child = spawn(spec.command, spec.args, {
     cwd: spec.cwd,
     env: spec.env,
@@ -262,6 +283,7 @@ function startManagedProcess(spec, { label, logBuffer, shutdownTimeoutMs }) {
   const exited = new Promise((resolve) => {
     child.once("exit", (code, signal) => {
       exitStatus = { code, signal };
+      acceptanceLog(`managed process exited: ${label}: ${JSON.stringify(exitStatus)}`);
       resolve(exitStatus);
     });
   });
@@ -386,6 +408,8 @@ function createBrowserAcceptanceLifecycle(options = {}) {
       await wait(250);
     }
 
+    acceptanceLog(`Phoenix readiness timed out for ${currentConfig.baseUrl}`);
+
     throw new Error(
       `Phoenix startup/readiness failed: timed out after ${currentConfig.httpReadyTimeoutMs}ms waiting for ` +
         `${currentConfig.baseUrl}.\nLast readiness error: ${
@@ -405,6 +429,9 @@ function createBrowserAcceptanceLifecycle(options = {}) {
 
     async start() {
       const currentConfig = await ensureConfig();
+      acceptanceLog(
+        `lifecycle start: baseUrl=${currentConfig.baseUrl} phoenixPort=${currentConfig.phoenixPort} postgresPort=${currentConfig.postgresPort} inDevShell=${currentConfig.inDevShell}`
+      );
 
       if (currentConfig.skipAppStart) {
         logBuffer.append("lifecycle", `Using external browser acceptance app at ${currentConfig.baseUrl}`);
@@ -412,6 +439,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
       }
 
       try {
+        acceptanceLog("lifecycle phase: Postgres readiness");
         await processRunner.run(buildPostgresReadinessCommand(currentConfig), {
           label: "Postgres readiness",
           timeoutMs: currentConfig.commandTimeoutMs,
@@ -420,6 +448,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
 
         for (const step of databaseSetupSteps) {
           try {
+            acceptanceLog(`lifecycle phase: ${step.label}`);
             await processRunner.run(buildMixCommand(currentConfig, step.mixArgs), {
               label: `Database setup: ${step.label}`,
               timeoutMs: currentConfig.commandTimeoutMs,
@@ -433,6 +462,7 @@ function createBrowserAcceptanceLifecycle(options = {}) {
         }
 
         try {
+          acceptanceLog(`lifecycle phase: ${assetBuildStep.label}`);
           await processRunner.run(buildMixCommand(currentConfig, assetBuildStep.mixArgs), {
             label: `Asset setup: ${assetBuildStep.label}`,
             timeoutMs: currentConfig.commandTimeoutMs,
@@ -445,13 +475,16 @@ Cause: ${error.message}`, {
           });
         }
 
+        acceptanceLog("lifecycle phase: start Phoenix");
         phoenixProcess = await processRunner.start(buildPhoenixCommand(currentConfig), {
           label: "Phoenix server",
           logBuffer,
           shutdownTimeoutMs: currentConfig.shutdownTimeoutMs
         });
 
+        acceptanceLog("lifecycle phase: wait for Phoenix readiness");
         await waitForPhoenixReadiness(currentConfig);
+        acceptanceLog("lifecycle ready");
       } catch (error) {
         await stopPhoenix();
         await tearDownPostgres().catch((teardownError) => {
@@ -462,8 +495,10 @@ Cause: ${error.message}`, {
     },
 
     async stop() {
+      acceptanceLog("lifecycle stop");
       await stopPhoenix();
       await tearDownPostgres();
+      acceptanceLog("lifecycle stopped");
     }
   };
 }
