@@ -163,6 +163,30 @@ async function followSignInLinkUrl(world, url) {
   await world.page.goto(browserAppUrl(world, url));
 }
 
+async function signInDirectly(world, personNameOrEmail, options = {}) {
+  const email = options.email || emailForDirectSignIn(world, personNameOrEmail);
+  const signInLink = serverCommands.createSignInLink({ email });
+  await followSignInLinkUrl(world, signInLink.path);
+}
+
+async function signInAsStaffDirectly(world, personName, options = {}) {
+  const email = options.email || staffEmailFor(personName);
+  serverCommands.ensurePerson({ personName: options.staffName || personName, email });
+  await signInDirectly(world, email, { email });
+}
+
+function emailForDirectSignIn(world, personNameOrEmail) {
+  if (String(personNameOrEmail).includes("@")) {
+    return personNameOrEmail;
+  }
+
+  return personFromWorld(world, personNameOrEmail).email;
+}
+
+function staffEmailFor(personName) {
+  return `${String(personName).trim().toLowerCase()}@memba.io`;
+}
+
 async function expireSignInLink(world, personName) {
   const request = signInRequestFor(world, personName);
   const response = await world.context.request.post(appUrl(world.baseUrl, "/dev/test-support/auth-links/expire"), {
@@ -366,6 +390,8 @@ module.exports = {
   recordNonMember,
   requestSignInLinkForEmail,
   requestSignInLinkForPerson,
+  signInAsStaffDirectly,
+  signInDirectly,
   signOut,
   assertSignedOut,
   assertSignedInOnClubPage,

@@ -14,7 +14,8 @@ const {
   assertReceivesSignInLink,
   assertSignedInAsStaff,
   followSignInLink,
-  requestSignInLinkForEmail
+  requestSignInLinkForEmail,
+  signInAsStaffDirectly
 } = require("../support/authentication");
 const serverCommands = require("../support/server_commands");
 
@@ -58,9 +59,7 @@ Then("{word} should not receive the email at {string}", async function (_personN
 });
 
 Given("{word} is signed in as Memba staff", async function (personName) {
-  await requestSignInLinkForEmail(this, staffEmailFor(personName), personName);
-  await assertReceivesSignInLink(this, personName);
-  await followSignInLink(this, personName);
+  await signInAsStaffDirectly(this, personName, { email: staffEmailFor(personName) });
   await assertSignedInAsStaff(this, personName);
 });
 

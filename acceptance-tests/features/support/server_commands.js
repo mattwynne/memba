@@ -332,6 +332,61 @@ function ensureSmokeTestClub({ clubName, clubSlug, personName, email }) {
   return member;
 }
 
+function createSignInLink({ email }) {
+  return runCommand(
+    `
+email = Map.fetch!(payload, "email")
+
+case Memba.Accounts.create_sign_in_token(email) do
+  {:ok, %{email: normalized_email, token: token}} ->
+    %{email: normalized_email, path: "/auth/sign-in/#{token}"}
+
+  {:error, reason} ->
+    raise "Could not create acceptance sign-in token for #{email}: #{inspect(reason)}"
+end
+`,
+    { email }
+  );
+}
+
+function sendClubMessage({ clubId, senderId, senderName, subject, body, timeoutMs = 1000 }) {
+  return runCommand(
+    `
+club_id = Map.fetch!(payload, "clubId")
+sender_id = Map.fetch!(payload, "senderId")
+sender_name = Map.fetch!(payload, "senderName")
+subject = Map.fetch!(payload, "subject")
+body = Map.fetch!(payload, "body")
+timeout = Map.get(payload, "timeoutMs", 1000)
+message_id = Memba.ID.generate(:message)
+
+:ok = Memba.Messaging.send_club_message(
+  %{message_id: message_id, club_id: club_id, sender_id: sender_id, subject: subject, body: body},
+  consistency: :strong
+)
+
+Memba.ProjectionBarrier.await!(
+  [
+    Memba.Messaging.Projectors.EmailDelivery,
+    Memba.Messaging.Projectors.MemberEmailDelivery,
+    Memba.Messaging.Projectors.MembaStaffEmailDelivery
+  ],
+  timeout: timeout
+)
+
+%{
+  messageId: message_id,
+  clubId: club_id,
+  senderId: sender_id,
+  senderName: sender_name,
+  subject: subject,
+  body: body
+}
+`,
+    { clubId, senderId, senderName, subject, body, timeoutMs }
+  );
+}
+
 function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
   return runCommand(
     `
@@ -399,6 +454,7 @@ function shortHostname() {
 
 module.exports = {
   acceptanceServerNode,
+  createSignInLink,
   ensureClub,
   ensureClubSlug,
   ensureMember,
@@ -408,5 +464,6 @@ module.exports = {
   ensurePersonEmailAddresses,
   ensureSmokeTestClub,
   runCommand,
+  sendClubMessage,
   waitForProjectionBarrier
 };

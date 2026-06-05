@@ -128,6 +128,7 @@ function worldWithBrowser() {
         slug: "kootenay-mountaineering-club"
       }
     },
+    directSignInLinks: { "alice@example.test": "/auth/sign-in/token-1" },
     people: {
       Alice: {
         alternateEmails: [],
@@ -158,9 +159,6 @@ test("withMemberHarness signs in with the member email and shares scenario state
   assert.equal(context.closed, true);
   assert.equal(world.lastMessageSubject, "Trip planning night");
   assert.deepEqual(context.page.actions, [
-    ["goto", "http://127.0.0.1:4444/auth"],
-    ["fill", "Email address", "alice@example.test"],
-    ["click", "button", { name: "Email me a sign-in link" }],
     ["goto", "http://127.0.0.1:4444/auth/sign-in/token-1"],
     ["goto", "http://127.0.0.1:4444/?club_id=club-1"]
   ]);

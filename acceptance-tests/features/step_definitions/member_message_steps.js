@@ -28,7 +28,6 @@ const {
   reportRecipientEmailStatus,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
-  sendMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers
 } = require("../support/member_message");
 const {
@@ -143,7 +142,7 @@ When(
 Given(
   "{word} has sent the message {string} to Kootenay Mountaineering Club members",
   async function (senderName, subject) {
-    await withStaffHarness(this, (staff) => sendMessageToKootenayMembers(staff, senderName, subject));
+    await sendMessageToKootenayMembersDirectly(this, senderName, subject);
   }
 );
 
@@ -428,6 +427,32 @@ function ensureMembersState(world, personNames, clubName) {
   }
 
   return personNames.map((personName) => world.memberships[`${clubName}:${personName}`]);
+}
+
+async function sendMessageToKootenayMembersDirectly(world, senderName, subject) {
+  ensureState(world);
+  await ensureKootenayMember(world, senderName);
+
+  const club = world.clubs[kootenayClubName];
+  const sender = world.people[senderName];
+  const body = `${subject} details.`;
+
+  const result = serverCommands.sendClubMessage({
+    clubId: club.clubId,
+    senderId: sender.personId,
+    senderName,
+    subject,
+    body
+  });
+
+  world.messages[subject] = {
+    body: result.body,
+    clubId: result.clubId,
+    messageId: result.messageId,
+    senderName: result.senderName,
+    subject: result.subject
+  };
+  world.lastMessageSubject = subject;
 }
 
 function personStateFromCommand(result) {

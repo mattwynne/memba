@@ -1,11 +1,7 @@
 const assert = require("node:assert/strict");
 const { Given, When, Then } = require("@cucumber/cucumber");
 const { expect: playwrightExpect } = require("@playwright/test");
-const {
-  assertReceivesSignInLink,
-  followSignInLink,
-  requestSignInLinkForPerson
-} = require("../support/authentication");
+const { signInDirectly } = require("../support/authentication");
 const {
   appUrl,
   cssString,
@@ -161,9 +157,7 @@ async function ensureSmokeTestClubSeeded(world) {
 }
 
 async function signIn(world, personName) {
-  await requestSignInLinkForPerson(world, personName);
-  await assertReceivesSignInLink(world, personName);
-  await followSignInLink(world, personName);
+  await signInDirectly(world, personName);
 }
 
 function messageIdFor(world, subject) {

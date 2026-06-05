@@ -6,6 +6,7 @@ const {
   testMailboxEmails,
   waitForMailboxEmails
 } = require("./member_message");
+const serverCommands = require("./server_commands");
 
 const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
 const signInSubject = "Sign in to Memba";
@@ -133,8 +134,8 @@ function copyHarnessState(world, harnessWorld) {
 }
 
 async function signInStaff(world) {
-  await signInByMagicLink(world, staffEmail, "staff harness");
-  await completeStaffOnboardingIfNeeded(world);
+  serverCommands.ensurePerson({ personName: "Acceptance Staff", email: staffEmail });
+  await signInDirectly(world, staffEmail);
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
 }
 
@@ -156,8 +157,14 @@ async function signInMember(world, memberName) {
   const person = personFromWorld(world, memberName);
   const email = signInEmailForPerson(person);
 
-  await signInByMagicLink(world, email, memberName);
+  await signInDirectly(world, email);
   assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
+}
+
+async function signInDirectly(world, email) {
+  const configuredPath = world.directSignInLinks && world.directSignInLinks[email];
+  const signInPath = configuredPath || serverCommands.createSignInLink({ email }).path;
+  await world.page.goto(browserAppUrl(world, signInPath));
 }
 
 async function signInByMagicLink(world, email, label) {
