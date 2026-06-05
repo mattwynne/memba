@@ -69,6 +69,7 @@ defmodule Memba.Messaging.InboundClubAuthorizationTest do
     %InboundClubDestination{
       club_id: club.club_id,
       club_slug: club.slug,
+      club_name: club.name,
       to_address: to_address
     }
   end

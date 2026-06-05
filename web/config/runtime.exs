@@ -72,7 +72,7 @@ case Memba.Messaging.EmailDeliveryProviderConfig.provider_override!(
     config :memba, :messaging_email_delivery_provider, email_delivery_provider
 
     config :memba, Memba.Mailer,
-      adapter: Swoosh.Adapters.Resend,
+      adapter: Memba.Messaging.EmailDeliveryProviders.ResendAdapter,
       api_key: resend_config.api_key
 
     resend_provider_config =

@@ -13,6 +13,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
               %InboundClubDestination{
                 club_id: club.club_id,
                 club_slug: "kmc",
+                club_name: club.name,
                 to_address: "kmc@clubs.memba.io"
               }} == Messaging.resolve_inbound_club_email_destination(["kmc@clubs.memba.io"])
     end
@@ -32,6 +33,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
               %InboundClubDestination{
                 club_id: club.club_id,
                 club_slug: "kmc",
+                club_name: club.name,
                 to_address: "kmc@clubs.memba.io"
               }} == Messaging.resolve_inbound_club_email_destination(inbound_email)
     end
@@ -44,6 +46,7 @@ defmodule Memba.Messaging.InboundClubDestinationTest do
                 %InboundClubDestination{
                   club_id: club.club_id,
                   club_slug: "kmc",
+                  club_name: club.name,
                   to_address: "kmc@example.clubs.memba.io"
                 }} ==
                  Messaging.resolve_inbound_club_email_destination([

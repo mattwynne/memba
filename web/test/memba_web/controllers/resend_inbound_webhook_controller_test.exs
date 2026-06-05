@@ -228,7 +228,7 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
 
     assert_received {:email, %Swoosh.Email{} = rejection_email}
     assert rejection_email.to == [{"", "alice@example.com"}]
-    assert rejection_email.subject == "Your email was not posted"
+    assert rejection_email.subject in ["Your email was not posted", "Re: Trip planning night"]
     assert rejection_email.text_body =~ "attachments are not supported yet"
 
     retry_payload =

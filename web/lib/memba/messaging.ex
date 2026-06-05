@@ -509,7 +509,8 @@ defmodule Memba.Messaging do
           receive_command,
           destination.to_address,
           rejection_reason(reason),
-          dispatch_opts
+          dispatch_opts,
+          club_name: destination.club_name
         )
     end
   end
@@ -534,7 +535,8 @@ defmodule Memba.Messaging do
           receive_command,
           destination.to_address,
           rejection_reason(reason),
-          dispatch_opts
+          dispatch_opts,
+          club_name: destination.club_name
         )
     end
   end
@@ -550,7 +552,8 @@ defmodule Memba.Messaging do
         receive_command,
         destination.to_address,
         "attachments_not_supported",
-        dispatch_opts
+        dispatch_opts,
+        club_name: destination.club_name
       )
     else
       case InboundEmailBody.normalize_text_body(receive_command.inbound_email) do
@@ -568,7 +571,8 @@ defmodule Memba.Messaging do
             receive_command,
             destination.to_address,
             "plain_text_required",
-            dispatch_opts
+            dispatch_opts,
+            club_name: destination.club_name
           )
       end
     end
@@ -621,7 +625,8 @@ defmodule Memba.Messaging do
          receive_command,
          to_address,
          rejection_reason,
-         dispatch_opts
+         dispatch_opts,
+         opts \\ []
        ) do
     rejection_email_delivery_reference = Ecto.UUID.generate()
 
@@ -638,7 +643,8 @@ defmodule Memba.Messaging do
              receive_command.inbound_email,
              to_address,
              rejection_reason,
-             rejection_email_delivery_reference
+             rejection_email_delivery_reference,
+             opts
            ) do
       {:ok,
        %{

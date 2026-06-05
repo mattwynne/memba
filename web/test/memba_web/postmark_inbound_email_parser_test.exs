@@ -60,6 +60,7 @@ defmodule MembaWeb.PostmarkInboundEmailParserTest do
               subject: "Trip planning night",
               text_body: "Bring route ideas.",
               html_body: "<p>Bring route ideas.</p>",
+              original_message_id: "<postmark-message@example.com>",
               attachments: [
                 %{
                   filename: "route.gpx",

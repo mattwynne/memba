@@ -20,11 +20,12 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
         %InboundEmail{} = inbound_email,
         to_address,
         rejection_reason,
-        delivery_reference
+        delivery_reference,
+        opts \\ []
       )
-      when is_binary(rejection_reason) and is_binary(delivery_reference) do
+      when is_binary(rejection_reason) and is_binary(delivery_reference) and is_list(opts) do
     inbound_email
-    |> email(to_address, rejection_reason, delivery_reference)
+    |> email(to_address, rejection_reason, delivery_reference, opts)
     |> deliver_email()
   end
 
@@ -32,24 +33,36 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
          %InboundEmail{} = inbound_email,
          to_address,
          rejection_reason,
-         delivery_reference
+         delivery_reference,
+         opts
        ) do
-    reason = reason_copy(rejection_reason)
-    body = text_body(reason)
+    body = rejection_text_body(rejection_reason, opts)
 
     new()
-    |> from(from_address())
+    |> from(from_address(opts))
     |> maybe_reply_to(reply_to_address())
+    |> maybe_thread_as_reply(inbound_email)
     |> to(inbound_email.from_address)
-    |> subject(@subject)
+    |> subject(subject(inbound_email))
     |> text_body(body)
     |> html_body(html_body(body))
     |> put_provider_options(inbound_email, to_address, rejection_reason, delivery_reference)
   end
 
-  defp from_address do
-    configured_from_address() || @fallback_from
+  defp from_address(opts) do
+    configured_from_address()
+    |> Kernel.||(@fallback_from)
+    |> maybe_put_club_from_name(Keyword.get(opts, :club_name))
   end
+
+  defp maybe_put_club_from_name({_name, address}, club_name) when is_binary(club_name) do
+    case String.trim(club_name) do
+      "" -> {"Memba", address}
+      club_name -> {"Memba support for #{club_name}", address}
+    end
+  end
+
+  defp maybe_put_club_from_name(from_address, _club_name), do: from_address
 
   defp configured_from_address do
     case selected_provider() do
@@ -115,6 +128,22 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
   defp maybe_reply_to(email, nil), do: email
   defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
 
+  defp subject(%InboundEmail{original_message_id: original_message_id, subject: subject})
+       when is_binary(original_message_id) do
+    "Re: #{subject}"
+  end
+
+  defp subject(%InboundEmail{}), do: @subject
+
+  defp maybe_thread_as_reply(email, %InboundEmail{original_message_id: original_message_id})
+       when is_binary(original_message_id) do
+    email
+    |> header("In-Reply-To", original_message_id)
+    |> header("References", original_message_id)
+  end
+
+  defp maybe_thread_as_reply(email, %InboundEmail{}), do: email
+
   defp put_provider_options(
          email,
          inbound_email,
@@ -170,7 +199,8 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
   defp reason_copy("plain_text_required"), do: "a plain text message body is required"
 
   defp reason_copy("unknown_sender"),
-    do: "we could not find a member account for your sender address"
+    do:
+      "we weren't able to find a member account for this email address so your message has not been posted"
 
   defp reason_copy("sender_not_active_member"),
     do: "your sender address is not an active member of that club"
@@ -180,9 +210,27 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
 
   defp reason_copy(_reason), do: "the email could not be posted"
 
-  defp text_body(reason) do
+  defp rejection_text_body("unknown_sender", opts) do
+    club_name = Keyword.get(opts, :club_name)
+
+    membership_hint =
+      if is_binary(club_name) and String.trim(club_name) != "" do
+        "\n\nIs it possible you signed up for membership of #{String.trim(club_name)} with a different email address?"
+      else
+        ""
+      end
+
     """
-    Your email was not posted: #{reason}.
+    Hi, sorry about this, but #{reason_copy("unknown_sender")}.
+    #{membership_hint}
+
+    For help, reply to this email to contact our support team.
+    """
+  end
+
+  defp rejection_text_body(reason, _opts) do
+    """
+    Your email was not posted: #{reason_copy(reason)}.
 
     For help, reply to this email or contact Memba support.
     """

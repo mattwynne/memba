@@ -92,7 +92,7 @@ defmodule Memba.Messaging.EmailDeliveryProviderConfigTest do
     assert Keyword.fetch!(memba_config, :messaging_email_delivery_provider) == Resend
 
     assert Keyword.fetch!(memba_config, Memba.Mailer) == [
-             adapter: Swoosh.Adapters.Resend,
+             adapter: Memba.Messaging.EmailDeliveryProviders.ResendAdapter,
              api_key: "resend-key"
            ]
 
