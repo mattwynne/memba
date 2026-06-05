@@ -66,96 +66,6 @@ start_managed_processes() {
   done
 }
 
-memba_postgres_port="$(default_postgres_port)"
-export MEMBA_POSTGRES_PORT="$memba_postgres_port"
-
-case "${1:-}" in
-  up)
-    if [ "${2:-}" != "--foreground" ] && [ "${2:-}" != "-h" ] && [ "${2:-}" != "--help" ] && [ "$#" -le 1 ]; then
-      # Start detached processes directly, not through a nested `devenv shell`,
-      # so `devenv processes ...` can find the same process manager afterwards.
-      load_local_secrets
-
-      support_processes=()
-      while IFS= read -r process_name; do
-        support_processes+=("$process_name")
-      done < <(dev_support_processes)
-
-      start_managed_processes "${support_processes[@]}" web
-      devenv_with_postgres_port processes wait --timeout 120
-      exit 0
-    fi
-    ;;
-  down)
-    if [ "$#" -eq 1 ]; then
-      devenv_with_postgres_port processes down || true
-      exit 0
-    fi
-    ;;
-  restart)
-    if [ "$#" -eq 1 ]; then
-      devenv_with_postgres_port processes down || true
-      load_local_secrets
-
-      support_processes=()
-      while IFS= read -r process_name; do
-        support_processes+=("$process_name")
-      done < <(dev_support_processes)
-
-      start_managed_processes "${support_processes[@]}" web
-      devenv_with_postgres_port processes wait --timeout 120
-      exit 0
-    fi
-    ;;
-esac
-
-if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
-  devenv_shell_args=(shell)
-  if [ "$memba_postgres_port" != "$default_postgres_port_value" ]; then
-    devenv_shell_args+=(-O services.postgres.port:int "$memba_postgres_port")
-  fi
-
-  exec env \
-    -u DEVENV_DOTFILE \
-    -u DEVENV_PROFILE \
-    -u DEVENV_ROOT \
-    -u DEVENV_STATE \
-    -u DEVENV_TASKS \
-    -u DEVENV_TASK_FILE \
-    -u PGDATA \
-    -u PGHOST \
-    -u PGPORT \
-    MEMBA_DEVENV_SHELL=1 \
-    MEMBA_POSTGRES_PORT="$memba_postgres_port" \
-    devenv "${devenv_shell_args[@]}" -- "$0" "$@"
-fi
-
-if ! command -v argc >/dev/null 2>&1; then
-  echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
-  exit 1
-fi
-
-start_postgres() {
-  if ! devenv_with_postgres_port processes status postgres >/dev/null 2>&1; then
-    DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
-  fi
-
-  devenv_with_postgres_port processes wait --timeout 120
-}
-
-migrate_databases() {
-  (
-    cd "$repo_root/web"
-
-    mix dev.setup
-  )
-}
-
-start_processes() {
-  start_managed_processes "$@"
-  devenv_with_postgres_port processes wait --timeout 120
-}
-
 current_ngrok_url() {
   local api_url="${MEMBA_NGROK_API_URL:-http://127.0.0.1:4040/api/tunnels}"
   local attempts=30
@@ -279,6 +189,100 @@ sync_postmark_dev_webhooks() {
   echo "Synced Postmark dev webhooks for '$server_name' to $ngrok_url."
 }
 
+
+memba_postgres_port="$(default_postgres_port)"
+export MEMBA_POSTGRES_PORT="$memba_postgres_port"
+
+case "${1:-}" in
+  up)
+    if [ "${2:-}" != "--foreground" ] && [ "${2:-}" != "-h" ] && [ "${2:-}" != "--help" ] && [ "$#" -le 1 ]; then
+      # Start detached processes directly, not through a nested `devenv shell`,
+      # so `devenv processes ...` can find the same process manager afterwards.
+      load_local_secrets
+
+      support_processes=()
+      while IFS= read -r process_name; do
+        support_processes+=("$process_name")
+      done < <(dev_support_processes)
+
+      start_managed_processes "${support_processes[@]}" web
+      devenv_with_postgres_port processes wait --timeout 120
+      sync_postmark_dev_webhooks
+      exit 0
+    fi
+    ;;
+  down)
+    if [ "$#" -eq 1 ]; then
+      devenv_with_postgres_port processes down || true
+      exit 0
+    fi
+    ;;
+  restart)
+    if [ "$#" -eq 1 ]; then
+      devenv_with_postgres_port processes down || true
+      load_local_secrets
+
+      support_processes=()
+      while IFS= read -r process_name; do
+        support_processes+=("$process_name")
+      done < <(dev_support_processes)
+
+      start_managed_processes "${support_processes[@]}" web
+      devenv_with_postgres_port processes wait --timeout 120
+      sync_postmark_dev_webhooks
+      exit 0
+    fi
+    ;;
+esac
+
+if [ "${MEMBA_DEVENV_SHELL:-}" != "1" ]; then
+  devenv_shell_args=(shell)
+  if [ "$memba_postgres_port" != "$default_postgres_port_value" ]; then
+    devenv_shell_args+=(-O services.postgres.port:int "$memba_postgres_port")
+  fi
+
+  exec env \
+    -u DEVENV_DOTFILE \
+    -u DEVENV_PROFILE \
+    -u DEVENV_ROOT \
+    -u DEVENV_STATE \
+    -u DEVENV_TASKS \
+    -u DEVENV_TASK_FILE \
+    -u PGDATA \
+    -u PGHOST \
+    -u PGPORT \
+    MEMBA_DEVENV_SHELL=1 \
+    MEMBA_POSTGRES_PORT="$memba_postgres_port" \
+    devenv "${devenv_shell_args[@]}" -- "$0" "$@"
+fi
+
+if ! command -v argc >/dev/null 2>&1; then
+  echo "Missing required tool: argc. devenv shell did not provide the expected environment." >&2
+  exit 1
+fi
+
+start_postgres() {
+  if ! devenv_with_postgres_port processes status postgres >/dev/null 2>&1; then
+    DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
+  fi
+
+  devenv_with_postgres_port processes wait --timeout 120
+}
+
+migrate_databases() {
+  (
+    cd "$repo_root/web"
+
+    mix dev.setup
+  )
+}
+
+start_processes() {
+  start_managed_processes "$@"
+  devenv_with_postgres_port processes wait --timeout 120
+}
+
+
 # @cmd Start Postgres, the optional ngrok tunnel, and the Phoenix web app
 # @flag --foreground Keep Phoenix attached to the terminal instead of starting it as a managed background process
 up() {
@@ -312,8 +316,29 @@ restart() {
   up
 }
 
+local_test_email_env() {
+  env \
+    -u MEMBA_EMAIL_PROVIDER \
+    -u MEMBA_POSTMARK_SERVER_TOKEN \
+    -u MEMBA_RESEND_API_KEY \
+    -u MEMBA_MESSAGING_FROM_ADDRESS \
+    -u MEMBA_MESSAGING_REPLY_TO_ADDRESS \
+    -u MEMBA_AUTH_EMAIL_FROM_ADDRESS \
+    -u MEMBA_AUTH_EMAIL_MESSAGE_STREAM \
+    -u MEMBA_RESEND_WEBHOOK_SIGNING_SECRET \
+    -u MEMBA_CLUB_INBOUND_EMAIL_DOMAIN \
+    -u MEMBA_NGROK_DOMAIN \
+    -u MEMBA_NGROK_TARGET \
+    -u NGROK_AUTHTOKEN \
+    -u POSTMARK_ACCOUNT_TOKEN \
+    -u POSTMARK_SERVER_TOKEN \
+    -u RESEND_ADMIN_API_KEY \
+    -u RESEND_API_KEY \
+    "$@"
+}
+
 precommit() {
-  (cd "$repo_root/web" && mix precommit)
+  (cd "$repo_root/web" && local_test_email_env mix precommit)
 }
 
 # @cmd Run the standard local quality gate with required services
@@ -383,17 +408,7 @@ acceptance() {
   (
     cd "$repo_root/acceptance-tests"
 
-    env \
-      -u MEMBA_CLUB_INBOUND_EMAIL_DOMAIN \
-      -u MEMBA_NGROK_DOMAIN \
-      -u MEMBA_NGROK_TARGET \
-      -u MEMBA_RESEND_API_KEY \
-      -u NGROK_AUTHTOKEN \
-      -u POSTMARK_ACCOUNT_TOKEN \
-      -u POSTMARK_SERVER_TOKEN \
-      -u RESEND_ADMIN_API_KEY \
-      -u RESEND_API_KEY \
-      npm test -- "$@"
+    local_test_email_env npm test -- "$@"
   )
 }
 
