@@ -30,6 +30,7 @@ green than before.
 | 018 | 2026-06-01 | merged | Member-facing club subdomains | [plan](018-member-club-subdomains/plan.md) |
 | 019 | 2026-06-02 | merged | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |
 | 020 | 2026-06-02 | merged | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |
+| 021 | 2026-06-05 | ready | Staff area redesign and read-only operations indexes | [plan](021-staff-area-redesign/plan.md) |
 
 Status notes:
 
@@ -45,3 +46,4 @@ Shared acceptance feature files used across these iterations:
 - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@wip` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
 - [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@wip` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
 - [`member_club_subdomains.feature`](../../acceptance-tests/features/member_club_subdomains.feature) (`@wip` planning scenarios for iteration 018 until member-facing club subdomain routing and navigation are implemented)
+- [`memba_staff_operations.feature`](../../acceptance-tests/features/memba_staff_operations.feature) (`@wip` planning scenarios for iteration 021 until the redesigned staff operations pages, global People page, and global Messages page are implemented)
