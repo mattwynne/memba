@@ -19,11 +19,12 @@ const {
   requestSignInLinkForEmail
 } = require("../support/authentication");
 const { withStaffHarness } = require("../support/member_harness");
+const { scopedEmailAddress } = require("../support/scoping");
 
 Given("{word}'s primary email address is {string}", async function (personName, primaryEmail) {
   await withStaffHarness(this, async (staff) => {
     await ensurePersonEmailAddresses(staff, personName, [
-      { email: primaryEmail, isPrimary: true },
+      { email: scopedEmailAddress(this, primaryEmail), isPrimary: true },
       ...alternateEmailAddressesFor(staff, personName)
     ]);
   });
@@ -36,14 +37,15 @@ Given("{word}'s alternate email address is {string}", async function (personName
       email: defaultPrimaryEmailFor(personName),
       isPrimary: true
     };
+    const displayAlternateEmail = scopedEmailAddress(this, alternateEmail);
     const alternates = current.filter(
-      (emailAddress) => !emailAddress.isPrimary && emailAddress.email !== alternateEmail
+      (emailAddress) => !emailAddress.isPrimary && emailAddress.email !== displayAlternateEmail
     );
 
     await ensurePersonEmailAddresses(staff, personName, [
       primary,
       ...alternates,
-      { email: alternateEmail, isPrimary: false }
+      { email: displayAlternateEmail, isPrimary: false }
     ]);
   });
 });
@@ -52,19 +54,19 @@ Then("{word} should receive a sign-in link at {string}", async function (personN
   await assertReceivesSignInLink(this, personName);
   const request = this.signInRequests && this.signInRequests[personName];
 
-  assert.equal(request && request.email, expectedEmail);
+  assert.equal(request && request.email, scopedEmailAddress(this, expectedEmail));
 });
 
 Then("{word} should receive the email at {string}", async function (_personName, recipientEmail) {
-  await assertMessageEmailRecipient(this, recipientEmail);
+  await assertMessageEmailRecipient(this, scopedEmailAddress(this, recipientEmail));
 });
 
 Then("{word} should not receive the email at {string}", async function (_personName, recipientEmail) {
-  await assertNoMessageEmailRecipient(this, recipientEmail);
+  await assertNoMessageEmailRecipient(this, scopedEmailAddress(this, recipientEmail));
 });
 
 Given("{word} is signed in as Memba staff", async function (personName) {
-  await requestSignInLinkForEmail(this, staffEmailFor(personName), personName);
+  await requestSignInLinkForEmail(this, scopedEmailAddress(this, staffEmailFor(personName)), personName);
   await assertReceivesSignInLink(this, personName);
   await followSignInLink(this, personName);
   await assertSignedInAsStaff(this, personName);
@@ -76,8 +78,8 @@ When(
     await ensureStaffClub(this);
     await createPerson(this, personName, kootenayClubName, {
       emailAddresses: [
-        { email: primaryEmail, isPrimary: true },
-        { email: alternateEmail, isPrimary: false }
+        { email: scopedEmailAddress(this, primaryEmail), isPrimary: true },
+        { email: scopedEmailAddress(this, alternateEmail), isPrimary: false }
       ]
     });
   }
@@ -87,8 +89,8 @@ Given(
   "{word} has primary email {string} and alternate email {string}",
   async function (personName, primaryEmail, alternateEmail) {
     await ensurePersonEmailAddresses(this, personName, [
-      { email: primaryEmail, isPrimary: true },
-      { email: alternateEmail, isPrimary: false }
+      { email: scopedEmailAddress(this, primaryEmail), isPrimary: true },
+      { email: scopedEmailAddress(this, alternateEmail), isPrimary: false }
     ]);
   }
 );
@@ -96,9 +98,10 @@ Given(
 When(
   "{word} makes {string} {word}'s primary email address",
   async function (_staffName, newPrimaryEmail, personName) {
+    const displayNewPrimaryEmail = scopedEmailAddress(this, newPrimaryEmail);
     const nextEmailAddresses = personEmailAddressesFor(this, personName).map((emailAddress) => ({
       email: emailAddress.email,
-      isPrimary: emailAddress.email === newPrimaryEmail
+      isPrimary: emailAddress.email === displayNewPrimaryEmail
     }));
 
     assert.ok(
@@ -112,22 +115,24 @@ When(
 
 Then("{word}'s primary email address should be {string}", async function (personName, expectedEmail) {
   const person = personFor(this, personName);
-  assert.equal(person.primaryEmail, expectedEmail);
+  const displayExpectedEmail = scopedEmailAddress(this, expectedEmail);
+  assert.equal(person.primaryEmail, displayExpectedEmail);
 
   await playwrightExpect(personRow(this, personName).locator('[data-testid="person-primary-email"]')).toContainText(
-    expectedEmail
+    displayExpectedEmail
   );
 });
 
 Then("{word}'s alternate email addresses should include {string}", async function (personName, expectedEmail) {
   const person = personFor(this, personName);
+  const displayExpectedEmail = scopedEmailAddress(this, expectedEmail);
   assert.ok(
-    person.alternateEmails.includes(expectedEmail),
-    `Expected ${personName}'s alternate emails to include ${expectedEmail}; saw ${person.alternateEmails.join(", ")}`
+    person.alternateEmails.includes(displayExpectedEmail),
+    `Expected ${personName}'s alternate emails to include ${displayExpectedEmail}; saw ${person.alternateEmails.join(", ")}`
   );
 
   await playwrightExpect(personRow(this, personName).locator('[data-testid="person-alternate-emails"]')).toContainText(
-    expectedEmail
+    displayExpectedEmail
   );
 });
 
