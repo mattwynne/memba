@@ -317,6 +317,27 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
            )
   end
 
+  test "staff can add an existing person as a club member", %{conn: conn} do
+    club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+    alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/clubs/#{club.club_id}")
+
+    assert has_element?(view, "#people [data-testid='person-row']", "Alice Example")
+    refute has_element?(view, "#members [data-testid='member-row']", "Alice Example")
+
+    view
+    |> form("#add-member-form", membership: %{person_id: alice.person_id})
+    |> render_submit()
+
+    assert has_element?(view, "#flash-info", "Member added")
+    assert has_element?(view, "#members [data-testid='member-row']", "Alice Example")
+    assert Membership.active_member_of_club?(club.club_id, alice.person_id)
+  end
+
   test "staff can remove a member from a club", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
     alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")

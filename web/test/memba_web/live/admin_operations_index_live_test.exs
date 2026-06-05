@@ -16,6 +16,36 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
     end
   end
 
+  test "live-rendered staff navigation exposes only working operations pages", %{conn: conn} do
+    response =
+      conn
+      |> sign_in_staff()
+      |> get(~p"/admin/people")
+      |> html_response(200)
+
+    html = LazyHTML.from_fragment(response)
+    nav_selector = "nav[aria-label='Memba staff navigation']"
+
+    assert_selector_exists(html, "#{nav_selector} #admin-nav-clubs[href='/admin/clubs']")
+    assert_selector_exists(html, "#{nav_selector} #admin-nav-people[href='/admin/people']")
+    assert_selector_exists(html, "#{nav_selector} #admin-nav-messages[href='/admin/messages']")
+
+    assert_selector_exists(
+      html,
+      "#{nav_selector} #admin-nav-deliveries[href='/admin/deliveries']"
+    )
+
+    assert_selector_count(html, "#{nav_selector} a", 4)
+
+    nav_text = text_for(html, nav_selector)
+    assert nav_text =~ "Clubs"
+    assert nav_text =~ "People"
+    assert nav_text =~ "Messages"
+    assert nav_text =~ "Deliveries"
+    refute nav_text =~ "Incoming"
+    refute nav_text =~ "Roles"
+  end
+
   test "Memba staff can open the read-only global People index", %{conn: conn} do
     response =
       conn
@@ -226,6 +256,11 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
 
   defp assert_selector_exists(html, selector) do
     assert html |> LazyHTML.query(selector) |> Enum.any?(), "Expected selector #{selector}"
+  end
+
+  defp assert_selector_count(html, selector, expected_count) do
+    actual_count = html |> LazyHTML.query(selector) |> Enum.count()
+    assert actual_count == expected_count, "Expected #{expected_count} matches for #{selector}"
   end
 
   defp refute_selector_exists(html, selector) do

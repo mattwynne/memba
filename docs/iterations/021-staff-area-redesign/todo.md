@@ -14,7 +14,7 @@
 - [x] 011 Restyle person new/edit pages enough that they feel part of the redesigned staff area; preserve existing behaviour.
 - [x] 012 Restyle `/admin/deliveries` consistently without changing delivery semantics.
 - [x] 013 Restyle `/admin/messages/:message_id` consistently without changing diagnostics semantics.
-- [ ] 014 Update or add LiveView tests for:
+- [x] 014 Update or add LiveView tests for:
 - [ ] 015 Update acceptance step support and remove the feature-level `@wip` tag from `memba_staff_operations.feature` once its scenarios pass.
 - [ ] 016 Run targeted tests for admin LiveViews and acceptance configuration.
 - [ ] 017 Run `dev check`.
