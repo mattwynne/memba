@@ -228,6 +228,7 @@ in
               esbuild
               flyctl
               ngrok
+              nix
               tini
               which
               (hiPrio fabroDevenv)
