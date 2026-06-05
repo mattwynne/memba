@@ -1,10 +1,24 @@
 defmodule MembaWeb.LayoutsTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.ConnCase, async: false
 
   import Phoenix.Component
   import Phoenix.LiveViewTest
 
   alias MembaWeb.Layouts
+
+  @sha "abcdef0123456789abcdef0123456789abcdef01"
+
+  setup do
+    original_env = System.get_env("MEMBA_GIT_SHA")
+    original_footer_config = Application.get_env(:memba, :show_git_commit_in_footer)
+
+    System.delete_env("MEMBA_GIT_SHA")
+
+    on_exit(fn ->
+      restore_system_env("MEMBA_GIT_SHA", original_env)
+      Application.put_env(:memba, :show_git_commit_in_footer, original_footer_config)
+    end)
+  end
 
   test "public app layout keeps Memba-branded chrome for public pages" do
     assigns = %{flash: %{}}
@@ -76,6 +90,7 @@ defmodule MembaWeb.LayoutsTest do
     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
     assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
     assert_selector(html, "button#club-site-sign-out-button[type='submit']")
+    refute_text(html, "#club-site-footer", "Commit")
 
     style = only_attribute(html, "#club-site-layout", "style")
     assert style =~ "--club-site-bg: #f1f5f9;"
@@ -84,6 +99,22 @@ defmodule MembaWeb.LayoutsTest do
     assert style =~ "--club-site-muted: #64748b;"
     assert style =~ "--club-site-accent: #0f766e;"
     assert style =~ "--club-site-line: #e2e8f0;"
+  end
+
+  test "root footer shows linked git commit when enabled" do
+    System.put_env("MEMBA_GIT_SHA", @sha)
+    Application.put_env(:memba, :show_git_commit_in_footer, true)
+
+    html = rendered_to_string(Layouts.root(%{inner_content: "Page content"}))
+
+    assert_text(html, "footer", "Commit")
+
+    assert_selector(
+      html,
+      "footer a[href='https://github.com/mattwynne/memba/commit/#{@sha}']"
+    )
+
+    assert_text(html, "footer a", "abcdef0")
   end
 
   defp assert_selector(html, selector) do
@@ -123,4 +154,7 @@ defmodule MembaWeb.LayoutsTest do
     assert [value] = attributes
     value
   end
+
+  defp restore_system_env(key, nil), do: System.delete_env(key)
+  defp restore_system_env(key, value), do: System.put_env(key, value)
 end

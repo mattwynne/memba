@@ -94,6 +94,10 @@ config :memba, MembaWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :memba, dev_routes: true
 
+# Show the current working tree commit in the footer during development.
+config :memba, :show_git_commit_in_footer, true
+config :memba, :read_git_commit_from_git, true
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

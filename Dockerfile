@@ -5,8 +5,11 @@ ARG OTP_VERSION=27
 ARG DEBIAN_VERSION=bookworm
 ARG BUILDER_IMAGE="elixir:${ELIXIR_VERSION}-otp-${OTP_VERSION}-slim"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}-slim"
+ARG MEMBA_GIT_SHA=""
 
 FROM ${BUILDER_IMAGE} AS builder
+
+ARG MEMBA_GIT_SHA
 
 RUN apt-get update -y && apt-get install -y build-essential git \
     && apt-get clean && rm -f /var/lib/apt/lists/*_*
@@ -25,6 +28,7 @@ COPY web/config/config.exs web/config/${MIX_ENV}.exs config/
 RUN mix deps.compile
 
 COPY web/priv priv
+RUN printf '%s' "$MEMBA_GIT_SHA" > priv/git_sha
 COPY web/lib lib
 COPY web/assets assets
 

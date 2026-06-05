@@ -34,6 +34,8 @@ config :memba, :club_site,
 # "My clubs" links can land members directly on their club dashboard.
 config :memba, :session_cookie_domain, ".memba.io"
 
+config :memba, :show_git_commit_in_footer, true
+
 # Do not print debug messages in production
 config :logger, level: :info
 

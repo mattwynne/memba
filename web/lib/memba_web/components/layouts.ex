@@ -11,6 +11,8 @@ defmodule MembaWeb.Layouts do
   # and other static content.
   embed_templates "layouts/*"
 
+  defp git_commit_footer_link, do: Memba.BuildInfo.footer_commit()
+
   @doc """
   Renders your app layout.
 

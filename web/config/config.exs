@@ -44,6 +44,9 @@ config :memba, :messaging_email_delivery_provider, Memba.Messaging.EmailDelivery
 
 config :memba, :club_inbound_email, domain: "clubs.memba.io"
 
+config :memba, :show_git_commit_in_footer, false
+config :memba, :read_git_commit_from_git, false
+
 config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
   from: {"Memba", "messages@mail.memba.io"},
   reply_to: {"Matt Wynne", "matt@mattwynne.net"},
