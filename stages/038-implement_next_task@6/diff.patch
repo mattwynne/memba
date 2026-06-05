@@ -1,0 +1,489 @@
+diff --git a/docs/iterations/021-staff-area-redesign/todo.md b/docs/iterations/021-staff-area-redesign/todo.md
+index e840ffe..fafec16 100644
+--- a/docs/iterations/021-staff-area-redesign/todo.md
++++ b/docs/iterations/021-staff-area-redesign/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003a Update `Layouts.admin` to the redesigned staff operations shell with the iteration-021 nav entries: Clubs, People, Messages, Deliveries.
+ - [x] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
+ - [x] 004a Route-verify the People and Messages staff nav links after `/admin/people` and `/admin/messages` exist so the original task-003 working-link requirement is fully satisfied.
+-- [ ] 005 Add context/read-model queries as needed:
++- [x] 005 Add context/read-model queries as needed:
+ - [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
+ - [ ] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.
+ - [ ] 008 Restyle `/admin/clubs/:club_id` around club facts, people records, and memberships.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 3c285be..8780425 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -190,6 +190,105 @@ defmodule Memba.Membership do
+     |> Repo.all()
+   end
+ 
++  @doc """
++  List global person summaries for the Memba staff operations People index.
++
++  Each person appears once with structured email and active membership summaries.
++  The query uses batched read-model lookups so one person with memberships in
++  multiple clubs does not require per-row follow-up queries.
++  """
++  def list_operator_people() do
++    people =
++      Person
++      |> order_by([person], asc: person.name, asc: person.person_id)
++      |> Repo.all()
++
++    person_ids = Enum.map(people, & &1.person_id)
++    email_summaries = person_email_summaries(person_ids)
++    membership_summaries = person_membership_summaries(person_ids)
++
++    Enum.map(people, fn person ->
++      emails = Map.get(email_summaries, person.person_id, %{alternate_emails: []})
++
++      %{
++        person_id: person.person_id,
++        name: person.name,
++        primary_email: Map.get(emails, :primary_email) || person.email,
++        alternate_emails: Map.get(emails, :alternate_emails, []),
++        memberships: Map.get(membership_summaries, person.person_id, [])
++      }
++    end)
++  end
++
++  @doc """
++  Return projected club summaries keyed by club ID.
++
++  Invalid IDs are ignored. Results are plain maps so other contexts can enrich
++  their read models through Membership's public query API rather than joining
++  directly against Membership projection tables.
++  """
++  def list_club_summaries(club_ids) do
++    if is_list(club_ids) do
++      club_ids = cast_ids(:club, club_ids)
++
++      if club_ids == [] do
++        %{}
++      else
++        Club
++        |> where([club], club.club_id in ^club_ids)
++        |> select([club], %{
++          club_id: club.club_id,
++          name: club.name,
++          slug: club.slug
++        })
++        |> Repo.all()
++        |> Map.new(&{&1.club_id, &1})
++      end
++    else
++      %{}
++    end
++  end
++
++  @doc """
++  Return projected person contact summaries keyed by person ID.
++
++  Invalid IDs are ignored. Primary email addresses are read from the dedicated
++  email-address projection, falling back to the historical person email field
++  when a primary email row is not available.
++  """
++  def list_person_contact_summaries(person_ids) do
++    if is_list(person_ids) do
++      person_ids = cast_ids(:person, person_ids)
++
++      if person_ids == [] do
++        %{}
++      else
++        email_summaries = person_email_summaries(person_ids)
++
++        Person
++        |> where([person], person.person_id in ^person_ids)
++        |> select([person], %{
++          person_id: person.person_id,
++          name: person.name,
++          email: person.email
++        })
++        |> Repo.all()
++        |> Map.new(fn person ->
++          emails = Map.get(email_summaries, person.person_id, %{})
++
++          {person.person_id,
++           %{
++             person_id: person.person_id,
++             name: person.name,
++             primary_email: Map.get(emails, :primary_email) || person.email
++           }}
++        end)
++      end
++    else
++      %{}
++    end
++  end
++
+   @doc """
+   Fetch the primary projected email address for a person.
+ 
+@@ -365,6 +464,76 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp cast_ids(type, ids) do
++    ids
++    |> Enum.reduce([], fn id, valid_ids ->
++      case ID.cast(type, id) do
++        {:ok, id} -> [id | valid_ids]
++        :error -> valid_ids
++      end
++    end)
++    |> Enum.uniq()
++    |> Enum.reverse()
++  end
++
++  defp person_email_summaries([]), do: %{}
++
++  defp person_email_summaries(person_ids) do
++    PersonEmailAddress
++    |> where([email_address], email_address.person_id in ^person_ids)
++    |> order_by([email_address],
++      desc: email_address.is_primary,
++      asc: email_address.email,
++      asc: email_address.id
++    )
++    |> select([email_address], %{
++      person_id: email_address.person_id,
++      email: email_address.email,
++      primary?: email_address.is_primary
++    })
++    |> Repo.all()
++    |> Enum.group_by(& &1.person_id)
++    |> Map.new(fn {person_id, email_addresses} ->
++      primary_email =
++        email_addresses
++        |> Enum.find(& &1.primary?)
++        |> case do
++          nil -> nil
++          email_address -> email_address.email
++        end
++
++      alternate_emails =
++        for %{primary?: false, email: email} <- email_addresses do
++          email
++        end
++
++      {person_id, %{primary_email: primary_email, alternate_emails: alternate_emails}}
++    end)
++  end
++
++  defp person_membership_summaries([]), do: %{}
++
++  defp person_membership_summaries(person_ids) do
++    MembershipProjection
++    |> join(:left, [membership], club in Club, on: club.club_id == membership.club_id)
++    |> where([membership, _club], membership.person_id in ^person_ids)
++    |> where([membership, _club], membership.active == true)
++    |> order_by([membership, club],
++      asc: club.name,
++      asc: club.club_id,
++      asc: membership.membership_id
++    )
++    |> select([membership, club], %{
++      person_id: membership.person_id,
++      membership_id: membership.membership_id,
++      club_id: membership.club_id,
++      club_name: club.name,
++      club_slug: club.slug
++    })
++    |> Repo.all()
++    |> Enum.group_by(& &1.person_id)
++  end
++
+   defp create_club_command(attrs) do
+     with {:ok, club_id} <- fetch_required(attrs, :club_id),
+          {:ok, name} <- fetch_required(attrs, :name),
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 66355ef..184323e 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -200,6 +200,47 @@ defmodule Memba.Messaging do
+     end
+   end
+ 
++  @doc """
++  List projected messages for the Memba staff operations Messages index.
++
++  Results include club and sender context where the Membership read models can
++  provide it. Messaging enriches rows through Membership's public query API so
++  it does not depend on Membership projection storage details.
++  """
++  def list_operator_messages() do
++    messages =
++      MessageProjection
++      |> order_by([message], desc: message.inserted_at, desc: message.message_id)
++      |> Repo.all()
++
++    club_summaries =
++      messages
++      |> Enum.map(& &1.club_id)
++      |> Membership.list_club_summaries()
++
++    sender_summaries =
++      messages
++      |> Enum.map(& &1.sender_id)
++      |> Membership.list_person_contact_summaries()
++
++    Enum.map(messages, fn message ->
++      club = Map.get(club_summaries, message.club_id, %{})
++      sender = Map.get(sender_summaries, message.sender_id, %{})
++
++      %{
++        message_id: message.message_id,
++        subject: message.subject,
++        club_id: message.club_id,
++        club_name: Map.get(club, :name),
++        club_slug: Map.get(club, :slug),
++        sender_id: message.sender_id,
++        sender_name: Map.get(sender, :name),
++        sender_email: Map.get(sender, :primary_email),
++        projected_at: message.inserted_at
++      }
++    end)
++  end
++
+   @doc """
+   Fetch a projected email delivery read model by caller-generated UUID.
+ 
+diff --git a/web/test/memba/membership/no_crud_spike_test.exs b/web/test/memba/membership/no_crud_spike_test.exs
+index 6f1a97f..a8fec8b 100644
+--- a/web/test/memba/membership/no_crud_spike_test.exs
++++ b/web/test/memba/membership/no_crud_spike_test.exs
+@@ -15,6 +15,9 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert source =~ "def get_person_primary_email("
+     assert source =~ "def list_clubs("
+     assert source =~ "def list_people("
++    assert source =~ "def list_operator_people("
++    assert source =~ "def list_club_summaries("
++    assert source =~ "def list_person_contact_summaries("
+     assert source =~ "def list_person_alternate_emails("
+     assert source =~ "def list_person_email_addresses("
+     assert source =~ "def list_active_members_of_club("
+@@ -29,6 +32,9 @@ defmodule Memba.Membership.NoCrudSpikeTest do
+     assert list_functions == [
+              "list_clubs",
+              "list_people",
++             "list_operator_people",
++             "list_club_summaries",
++             "list_person_contact_summaries",
+              "list_person_alternate_emails",
+              "list_person_email_addresses",
+              "list_active_members_of_club",
+diff --git a/web/test/memba/membership/query_test.exs b/web/test/memba/membership/query_test.exs
+index 1300cf8..bba5b11 100644
+--- a/web/test/memba/membership/query_test.exs
++++ b/web/test/memba/membership/query_test.exs
+@@ -207,6 +207,84 @@ defmodule Memba.Membership.QueryTest do
+     end
+   end
+ 
++  describe "list_operator_people/0" do
++    test "returns one row per person with email and active membership summaries" do
++      kootenay = create_club("Kootenay Mountaineering Club")
++      nelson = create_club("Nelson Cycling Club")
++      archived = create_club("Archived Club")
++
++      alice =
++        create_person(
++          name: "Alice",
++          email: "alice@primary.example",
++          email_addresses: [
++            %{email: "alice@work.example", is_primary: false},
++            %{email: "alice@primary.example", is_primary: true},
++            %{email: "alice+old@example.com", is_primary: false}
++          ]
++        )
++
++      bob = create_person(name: "Bob", email: "bob@example.com")
++
++      add_member(nelson.club_id, alice.person_id)
++      add_member(kootenay.club_id, alice.person_id)
++      add_member(kootenay.club_id, bob.person_id)
++
++      Repo.insert!(%MembershipProjection{
++        membership_id: Memba.ID.generate(:membership),
++        club_id: archived.club_id,
++        person_id: alice.person_id,
++        active: false
++      })
++
++      assert [
++               %{
++                 person_id: alice_person_id,
++                 name: "Alice",
++                 primary_email: "alice@primary.example",
++                 alternate_emails: ["alice+old@example.com", "alice@work.example"],
++                 memberships: [
++                   %{
++                     membership_id: alice_kootenay_membership_id,
++                     club_id: alice_kootenay_club_id,
++                     club_name: "Kootenay Mountaineering Club",
++                     club_slug: "kootenay-mountaineering-club"
++                   },
++                   %{
++                     membership_id: alice_nelson_membership_id,
++                     club_id: alice_nelson_club_id,
++                     club_name: "Nelson Cycling Club",
++                     club_slug: "nelson-cycling-club"
++                   }
++                 ]
++               },
++               %{
++                 person_id: bob_person_id,
++                 name: "Bob",
++                 primary_email: "bob@example.com",
++                 alternate_emails: [],
++                 memberships: [
++                   %{
++                     membership_id: bob_kootenay_membership_id,
++                     club_id: bob_kootenay_club_id,
++                     club_name: "Kootenay Mountaineering Club",
++                     club_slug: "kootenay-mountaineering-club"
++                   }
++                 ]
++               }
++             ] = Membership.list_operator_people()
++
++      assert alice_person_id == alice.person_id
++      assert bob_person_id == bob.person_id
++      assert alice_kootenay_club_id == kootenay.club_id
++      assert alice_nelson_club_id == nelson.club_id
++      assert bob_kootenay_club_id == kootenay.club_id
++      assert Memba.ID.valid?(:membership, alice_kootenay_membership_id)
++      assert Memba.ID.valid?(:membership, alice_nelson_membership_id)
++      assert Memba.ID.valid?(:membership, bob_kootenay_membership_id)
++    end
++  end
++
+   describe "active_member_of_club?/2" do
+     test "returns true only when the person has an active membership in the club" do
+       kootenay_club_id = Memba.ID.generate(:club)
+diff --git a/web/test/memba/messaging/message_projection_test.exs b/web/test/memba/messaging/message_projection_test.exs
+index d0b6a03..959554d 100644
+--- a/web/test/memba/messaging/message_projection_test.exs
++++ b/web/test/memba/messaging/message_projection_test.exs
+@@ -94,4 +94,99 @@ defmodule Memba.Messaging.MessageProjectionTest do
+     assert Messaging.list_recipient_deliveries(nil) == []
+     assert Messaging.list_recipient_deliveries("not-a-uuid") == []
+   end
++
++  describe "list_operator_messages/0" do
++    test "returns projected messages with club and sender context where available" do
++      kootenay = insert_membership_club!(name: "Kootenay Mountaineering Club")
++      nelson = insert_membership_club!(name: "Nelson Cycling Club")
++      alice = insert_membership_person!(name: "Alice", email: "alice@example.com")
++      bob = insert_membership_person!(name: "Bob", email: "bob@example.com")
++
++      older_projected_at = ~U[2026-06-05 10:00:00.000000Z]
++      missing_context_projected_at = ~U[2026-06-05 11:00:00.000000Z]
++      newer_projected_at = ~U[2026-06-05 12:00:00.000000Z]
++
++      older =
++        insert_message_projection!(
++          club_id: kootenay.club_id,
++          sender_id: alice.person_id,
++          subject: "Trip planning night",
++          inserted_at: older_projected_at
++        )
++
++      missing_context =
++        insert_message_projection!(
++          club_id: Memba.ID.generate(:club),
++          sender_id: Memba.ID.generate(:person),
++          subject: "Context not projected",
++          inserted_at: missing_context_projected_at
++        )
++
++      newer =
++        insert_message_projection!(
++          club_id: nelson.club_id,
++          sender_id: bob.person_id,
++          subject: "Ride update",
++          inserted_at: newer_projected_at
++        )
++
++      assert [
++               %{
++                 message_id: newer_id,
++                 subject: "Ride update",
++                 club_id: newer_club_id,
++                 club_name: "Nelson Cycling Club",
++                 club_slug: nelson_slug,
++                 sender_id: newer_sender_id,
++                 sender_name: "Bob",
++                 sender_email: "bob@example.com",
++                 projected_at: ^newer_projected_at
++               },
++               %{
++                 message_id: missing_context_id,
++                 subject: "Context not projected",
++                 club_name: nil,
++                 club_slug: nil,
++                 sender_name: nil,
++                 sender_email: nil,
++                 projected_at: ^missing_context_projected_at
++               },
++               %{
++                 message_id: older_id,
++                 subject: "Trip planning night",
++                 club_id: older_club_id,
++                 club_name: "Kootenay Mountaineering Club",
++                 club_slug: kootenay_slug,
++                 sender_id: older_sender_id,
++                 sender_name: "Alice",
++                 sender_email: "alice@example.com",
++                 projected_at: ^older_projected_at
++               }
++             ] = Messaging.list_operator_messages()
++
++      assert newer_id == newer.message_id
++      assert newer_club_id == nelson.club_id
++      assert newer_sender_id == bob.person_id
++      assert older_id == older.message_id
++      assert older_club_id == kootenay.club_id
++      assert older_sender_id == alice.person_id
++      assert missing_context_id == missing_context.message_id
++      assert nelson_slug == nelson.slug
++      assert kootenay_slug == kootenay.slug
++    end
++  end
++
++  defp insert_message_projection!(attrs) when is_list(attrs) do
++    inserted_at = Keyword.fetch!(attrs, :inserted_at)
++
++    Repo.insert!(%MessageProjection{
++      message_id: Keyword.get_lazy(attrs, :message_id, fn -> Memba.ID.generate(:message) end),
++      club_id: Keyword.fetch!(attrs, :club_id),
++      sender_id: Keyword.fetch!(attrs, :sender_id),
++      subject: Keyword.fetch!(attrs, :subject),
++      body: Keyword.get(attrs, :body, "Message body."),
++      inserted_at: inserted_at,
++      updated_at: Keyword.get(attrs, :updated_at, inserted_at)
++    })
++  end
+ end
+diff --git a/web/test/memba/messaging/no_crud_spike_test.exs b/web/test/memba/messaging/no_crud_spike_test.exs
+index 3eb5473..f9857fe 100644
+--- a/web/test/memba/messaging/no_crud_spike_test.exs
++++ b/web/test/memba/messaging/no_crud_spike_test.exs
+@@ -9,6 +9,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+     assert source =~ "def send_club_message("
+     assert source =~ "def get_message("
+     assert source =~ "def list_messages_for_club("
++    assert source =~ "def list_operator_messages("
+     assert source =~ "def get_email_delivery("
+     assert source =~ "def get_member_email_delivery("
+     assert source =~ "def get_memba_staff_email_delivery("
+@@ -27,6 +28,7 @@ defmodule Memba.Messaging.NoCrudSpikeTest do
+ 
+     assert list_functions == [
+              "list_messages_for_club",
++             "list_operator_messages",
+              "list_recipient_deliveries",
+              "list_member_email_deliverys",
+              "list_operator_deliveries",
