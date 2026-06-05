@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Deploy Memba to Fly.io using the current Git commit as build metadata.
+
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$repo_root"
+
+app="${MEMBA_FLY_APP:-memba}"
+sha="${MEMBA_GIT_SHA:-$(git rev-parse HEAD)}"
+
+if ! [[ "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  echo "MEMBA_GIT_SHA must be a full 40-character Git SHA: $sha" >&2
+  exit 2
+fi
+
+if [ "${MEMBA_ALLOW_DIRTY_DEPLOY:-0}" != "1" ] && [ -n "$(git status --porcelain)" ]; then
+  echo "Refusing to deploy from a dirty working tree." >&2
+  echo "Commit or stash changes, or set MEMBA_ALLOW_DIRTY_DEPLOY=1 for an explicitly approved emergency deploy." >&2
+  git status --short >&2
+  exit 1
+fi
+
+flyctl deploy --remote-only --app "$app" --build-arg "MEMBA_GIT_SHA=$sha" "$@"

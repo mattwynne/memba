@@ -23,7 +23,7 @@ defmodule Memba.BuildInfo do
 
   @spec git_sha :: {:ok, String.t()} | :error
   def git_sha do
-    [System.get_env(@git_sha_env), git_sha_file_contents(), git_sha_from_git()]
+    [git_sha_file_contents(), System.get_env(@git_sha_env), git_sha_from_git()]
     |> Enum.find_value(&normalize_git_sha/1)
     |> case do
       nil -> :error
