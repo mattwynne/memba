@@ -122,5 +122,28 @@ Validation:
 
 Remaining follow-up:
 
-- Use the read-model change bus in webhook-driven acceptance steps so delivery-status steps can wait for `:read_model_changed` messages instead of page-reload polling.
-- Use the same bus from LiveViews to address `docs/problems/2026-06-01-delivery-status-not-live.md`, refreshing delivery-status UI when relevant read models change.
+- Use the read-model change bus from LiveViews to address `docs/problems/2026-06-01-delivery-status-not-live.md`, refreshing delivery-status UI when relevant read models change.
+
+## Follow-up: committed read-model waits and projection barriers
+
+Date: 2026-06-05
+
+Additional synchronization work completed:
+
+- `web/lib/memba_web/controllers/dev_test_support_controller.ex` and `web/lib/memba_web/router.ex`: added a dev/test-only server-sent events stream for committed read-model changes at `/dev/test-support/read-model-changes/events`.
+- `acceptance-tests/features/support/member_message.js`: changed Postmark delivery-status steps to subscribe to the read-model change stream before posting the webhook, then wait for both member-facing and Memba-staff-facing delivery projections before asserting browser state.
+- `web/lib/memba/projection_barrier.ex`: added a reusable Elixir projection barrier that waits until selected Commanded Ecto projectors have caught up to the current EventStore `$all` checkpoint.
+- `acceptance-tests/features/support/server_commands.js`: exposed projection barriers through the existing Elixir RPC/server-command mechanism rather than adding another HTTP endpoint.
+- Negative acceptance assertions that depend on messaging projections now wait for a projection barrier before checking absence, replacing timeout-based waits in the addressed-recipient and alternate-email mailbox checks.
+- `docs/adr/0022-use-projection-barriers-for-read-your-writes.md`: recorded the projection-barrier decision and vocabulary.
+
+Validation:
+
+- `dev check` — passed, 513 ExUnit tests and 34 browser acceptance scenarios.
+- Full browser acceptance in that run completed in about 0m58.9s, with executing steps about 0m51.6s.
+
+Impact:
+
+- Delivery-status webhook waits now synchronize on committed read-model changes rather than browser page polling.
+- Negative assertions no longer need to wait for a fixed timeout just to prove absence when the relevant projections have already caught up.
+- The projection flake prevention mechanism is now split along standard event-sourced lines: read-model change notifications for positive waits, projection barriers for read-your-writes and absence checks.

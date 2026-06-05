@@ -131,3 +131,25 @@ Impact:
 - The serial browser acceptance suite dropped from roughly 1m47–1m51 to roughly 1m01 on local runs.
 - This reduces the urgency of sharding, but does not remove the original global-state blocker: the suite still performs per-scenario global reset and remains unsafe for Cucumber worker parallelism inside one shared app.
 - The isolated-shards plan remains the safer parallelization path if the serial suite again becomes the long pole.
+
+## Progress update: synchronization improvements before sharding
+
+Date: 2026-06-05
+
+Further serial-suite reliability and speed work completed:
+
+- Added a dev/test-only read-model change SSE stream and used it for webhook-driven delivery-status waits.
+- Added `Memba.ProjectionBarrier`, a reusable Elixir read-your-writes barrier for Commanded Ecto projections.
+- Exposed projection barriers to acceptance tests through the existing Elixir RPC/server-command path, avoiding another test-support HTTP endpoint.
+- Replaced selected timeout-based negative waits with projection-barrier waits followed by immediate absence assertions.
+
+Validation:
+
+- `dev check` — passed, including 513 ExUnit tests and 34 browser acceptance scenarios.
+- The full browser acceptance run in that check completed in about 0m58.9s, with executing steps about 0m51.6s.
+
+Impact:
+
+- Serial acceptance is now consistently around one minute locally, sometimes just under.
+- Projection-related waits are less dependent on arbitrary browser timeouts.
+- This still does not solve shared global state, so it does not make same-app Cucumber `--parallel` safe. It does, however, further reduces the pressure to implement sharded acceptance immediately.
