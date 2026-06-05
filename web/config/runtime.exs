@@ -26,13 +26,22 @@ if resend_webhook_signing_secret =
 end
 
 case Memba.Messaging.EmailDeliveryProviderConfig.provider_override!(
-       System.get_env("MEMBA_MESSAGING_DELIVERY_PROVIDER")
+       System.get_env("MEMBA_EMAIL_PROVIDER")
      ) do
   :default ->
     :ok
 
+  Memba.Messaging.EmailDeliveryProviders.Fake = email_delivery_provider ->
+    config :memba, :messaging_email_delivery_provider, email_delivery_provider
+
+  Memba.Messaging.EmailDeliveryProviders.Local = email_delivery_provider ->
+    config :memba, :messaging_email_delivery_provider, email_delivery_provider
+    config :memba, Memba.Mailer, adapter: Swoosh.Adapters.Local
+    config :swoosh, :api_client, false
+
   Memba.Messaging.EmailDeliveryProviders.Postmark = email_delivery_provider ->
     postmark_config = Memba.Messaging.EmailDeliveryProviders.PostmarkConfig.from_env!()
+    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!(:postmark, &System.get_env/1)
 
     config :memba, :messaging_email_delivery_provider, email_delivery_provider
 
@@ -48,10 +57,17 @@ case Memba.Messaging.EmailDeliveryProviderConfig.provider_override!(
       end
 
     config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark, postmark_provider_config
+
+    config :memba, Memba.Accounts.AuthEmail,
+      provider: :postmark,
+      from: auth_email_config.from,
+      message_stream: auth_email_config.message_stream
+
     config :swoosh, :api_client, Swoosh.ApiClient.Req
 
   Memba.Messaging.EmailDeliveryProviders.Resend = email_delivery_provider ->
     resend_config = Memba.Messaging.EmailDeliveryProviders.ResendConfig.from_env!()
+    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!(:resend, &System.get_env/1)
 
     config :memba, :messaging_email_delivery_provider, email_delivery_provider
 
@@ -67,38 +83,6 @@ case Memba.Messaging.EmailDeliveryProviderConfig.provider_override!(
       end
 
     config :memba, Memba.Messaging.EmailDeliveryProviders.Resend, resend_provider_config
-    config :swoosh, :api_client, Swoosh.ApiClient.Req
-
-  email_delivery_provider ->
-    config :memba, :messaging_email_delivery_provider, email_delivery_provider
-end
-
-case Memba.Accounts.AuthEmailConfig.provider_override!(
-       System.get_env("MEMBA_AUTH_EMAIL_PROVIDER")
-     ) do
-  :default ->
-    :ok
-
-  :postmark ->
-    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!(:postmark, &System.get_env/1)
-
-    config :memba, Memba.Mailer,
-      adapter: Swoosh.Adapters.Postmark,
-      api_key: auth_email_config.server_token
-
-    config :memba, Memba.Accounts.AuthEmail,
-      provider: :postmark,
-      from: auth_email_config.from,
-      message_stream: auth_email_config.message_stream
-
-    config :swoosh, :api_client, Swoosh.ApiClient.Req
-
-  :resend ->
-    auth_email_config = Memba.Accounts.AuthEmailConfig.from_env!(:resend, &System.get_env/1)
-
-    config :memba, Memba.Mailer,
-      adapter: Swoosh.Adapters.Resend,
-      api_key: auth_email_config.api_key
 
     config :memba, Memba.Accounts.AuthEmail,
       provider: :resend,
@@ -173,54 +157,4 @@ if config_env() == :prod do
       ip: {0, 0, 0, 0, 0, 0, 0, 0}
     ],
     secret_key_base: secret_key_base
-
-  # ## SSL Support
-  #
-  # To get SSL working, you will need to add the `https` key
-  # to your endpoint configuration:
-  #
-  #     config :memba, MembaWeb.Endpoint,
-  #       https: [
-  #         ...,
-  #         port: 443,
-  #         cipher_suite: :strong,
-  #         keyfile: System.get_env("SOME_APP_SSL_KEY_PATH"),
-  #         certfile: System.get_env("SOME_APP_SSL_CERT_PATH")
-  #       ]
-  #
-  # The `cipher_suite` is set to `:strong` to support only the
-  # latest and more secure SSL ciphers. This means old browsers
-  # and clients may not be supported. You can set it to
-  # `:compatible` for wider support.
-  #
-  # `:keyfile` and `:certfile` expect an absolute path to the key
-  # and cert in disk or a relative path inside priv, for example
-  # "priv/ssl/server.key". For all supported SSL configuration
-  # options, see https://hexdocs.pm/plug/Plug.SSL.html#configure/1
-  #
-  # We also recommend setting `force_ssl` in your config/prod.exs,
-  # ensuring no data is ever sent via http, always redirecting to https:
-  #
-  #     config :memba, MembaWeb.Endpoint,
-  #       force_ssl: [hsts: true]
-  #
-  # Check `Plug.SSL` for all available options in `force_ssl`.
-
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :memba, Memba.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://hexdocs.pm/swoosh/Swoosh.html#module-installation for details.
 end

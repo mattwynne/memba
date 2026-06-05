@@ -2,18 +2,19 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkConfig do
   @moduledoc """
   Required runtime configuration for the Postmark email delivery provider.
 
-  Real Postmark delivery is only enabled when explicitly selected. When it is
-  selected, the server token and sender/from address must be present so the
-  failure mode is clear instead of silently falling back to fake delivery. A
-  monitored reply-to address is optional but used when configured.
+  Real Postmark delivery is only enabled when the environment-wide email provider
+  selects Postmark. When it is selected, the server token and sender/from address
+  must be present so the failure mode is clear instead of silently falling back
+  to fake delivery. A monitored reply-to address is optional but used when
+  configured.
   """
 
   @enforce_keys [:server_token, :from]
   defstruct [:server_token, :from, :reply_to]
 
   @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
-  @from_address_env "MEMBA_POSTMARK_FROM_ADDRESS"
-  @reply_to_address_env "MEMBA_POSTMARK_REPLY_TO_ADDRESS"
+  @from_address_env "MEMBA_MESSAGING_FROM_ADDRESS"
+  @reply_to_address_env "MEMBA_MESSAGING_REPLY_TO_ADDRESS"
 
   @type t :: %__MODULE__{
           server_token: String.t(),
@@ -116,7 +117,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkConfig do
     "Postmark email delivery provider is enabled, but required #{source_label(source)} " <>
       "configuration is missing: #{Enum.join(missing, ", ")}. " <>
       "Set #{@server_token_env} and #{@from_address_env}, or leave " <>
-      "MEMBA_MESSAGING_DELIVERY_PROVIDER unset to use the fake provider."
+      "MEMBA_EMAIL_PROVIDER unset to use the configured default provider."
   end
 
   defp source_label(:application), do: "application"

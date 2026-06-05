@@ -79,7 +79,7 @@ constraint and provides a dedicated runbook.
 - [ ] Keep the Resend API key available in the private secret store:
       `MEMBA_RESEND_API_KEY`.
 - [ ] Keep the Resend member-message sender values available:
-      `MEMBA_RESEND_FROM_ADDRESS` and `MEMBA_RESEND_REPLY_TO_ADDRESS`.
+      `MEMBA_MESSAGING_FROM_ADDRESS` and `MEMBA_MESSAGING_REPLY_TO_ADDRESS`.
 - [ ] Keep the Resend auth values available:
       `MEMBA_AUTH_EMAIL_PROVIDER=resend`, `MEMBA_AUTH_EMAIL_FROM_ADDRESS`, and a
       Resend-compatible `MEMBA_AUTH_EMAIL_MESSAGE_STREAM` category/stream value.
@@ -107,8 +107,8 @@ constraint and provides a dedicated runbook.
    fly secrets set --app memba \
      MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark \
      MEMBA_POSTMARK_SERVER_TOKEN=<postmark-server-token> \
-     MEMBA_POSTMARK_FROM_ADDRESS=messages@mail.memba.io \
-     MEMBA_POSTMARK_REPLY_TO_ADDRESS=<monitored-reply-address> \
+     MEMBA_MESSAGING_FROM_ADDRESS=messages@mail.memba.io \
+     MEMBA_MESSAGING_REPLY_TO_ADDRESS=<monitored-reply-address> \
      MEMBA_AUTH_EMAIL_PROVIDER=postmark \
      MEMBA_AUTH_EMAIL_FROM_ADDRESS=auth@mail.memba.io \
      MEMBA_AUTH_EMAIL_MESSAGE_STREAM=outbound-authentication
@@ -151,7 +151,7 @@ or screenshot, and Memba observation for each step.
 - [ ] Confirm the Postmark message includes metadata/custom fields for
       `memba_message_id`, `memba_delivery_id`, and `memba_club_id`.
 - [ ] Confirm the controlled inbox receives the email from
-      `MEMBA_POSTMARK_FROM_ADDRESS` with the expected reply/contact behaviour.
+      `MEMBA_MESSAGING_FROM_ADDRESS` with the expected reply/contact behaviour.
 - [ ] Observe or trigger a delivery/problem event in Postmark.
 - [ ] Confirm `POST /webhooks/postmark` returns accepted responses and Memba's
       delivery records or `/deliveries` view update as expected.
@@ -215,8 +215,8 @@ Restore these Fly secrets for Resend-backed member-message delivery and auth:
 fly secrets set --app memba \
   MEMBA_MESSAGING_DELIVERY_PROVIDER=resend \
   MEMBA_RESEND_API_KEY=<resend-api-key> \
-  MEMBA_RESEND_FROM_ADDRESS=<resend-member-from-address> \
-  MEMBA_RESEND_REPLY_TO_ADDRESS=<monitored-reply-address> \
+  MEMBA_MESSAGING_FROM_ADDRESS=<resend-member-from-address> \
+  MEMBA_MESSAGING_REPLY_TO_ADDRESS=<monitored-reply-address> \
   MEMBA_AUTH_EMAIL_PROVIDER=resend \
   MEMBA_AUTH_EMAIL_FROM_ADDRESS=<resend-auth-from-address> \
   MEMBA_AUTH_EMAIL_MESSAGE_STREAM=<resend-auth-category-or-stream> \

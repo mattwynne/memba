@@ -17,7 +17,7 @@ defmodule MembaWeb.ResendInboundEmailParser do
          {:ok, from_address} <- from_address(data),
          {:ok, recipient_addresses} <- recipient_addresses(data),
          {:ok, subject} <- required_binary(data, [:subject, "subject"], "data.subject"),
-         {:ok, text_body} <- required_binary(data, [:text, "text"], "data.text"),
+         {:ok, text_body} <- optional_binary(data, [:text, "text"], :invalid_text_body),
          {:ok, html_body} <- optional_binary(data, [:html, "html"], :invalid_html_body),
          {:ok, attachments} <- attachments(data) do
       {:ok,

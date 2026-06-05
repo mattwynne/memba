@@ -5,6 +5,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Postmark
+  alias Memba.Messaging.EmailDeliveryProviders.Resend
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.Events.InboundClubEmailAccepted
   alias Memba.Messaging.Events.InboundClubEmailRejected
@@ -16,6 +17,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
     original_postmark_config = Application.get_env(:memba, Postmark)
+    original_resend_config = Application.get_env(:memba, Resend)
 
     Application.put_env(:memba, :messaging_email_delivery_provider, Fake)
     Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
@@ -31,6 +33,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
       restore_env(:messaging_email_delivery_provider, original_provider)
       restore_env(Memba.Mailer, original_mailer_config)
       restore_env(Postmark, original_postmark_config)
+      restore_env(Resend, original_resend_config)
       Fake.reset()
     end)
 
@@ -638,6 +641,67 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
            }
   end
 
+  test "rejection emails use Resend-safe tag values when Resend is selected" do
+    Application.put_env(:memba, :messaging_email_delivery_provider, Resend)
+
+    Application.put_env(:memba, Resend,
+      from: {"Memba", "messages@mail.memba.test"},
+      reply_to: {"Memba support", "support@memba.test"}
+    )
+
+    _kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
+
+    assert {:ok,
+            %{
+              status: :rejected,
+              rejection_reason: "unknown_sender",
+              rejection_email_delivery_reference: rejection_email_delivery_reference
+            }} =
+             Messaging.receive_inbound_club_email(
+               %{
+                 provider: "resend",
+                 provider_message_id: "1b700cb9-3a48-460d-a2d1-255fe01ed4e2",
+                 from_address: "unknown@example.com",
+                 recipient_addresses: ["kmc@clubs.memba.io"],
+                 subject: "Trip planning night",
+                 text_body: "Can I post through Resend?"
+               },
+               consistency: :strong
+             )
+
+    rejection_email =
+      assert_rejection_email_received(
+        to: "unknown@example.com",
+        reason: "we could not find a member account for your sender address",
+        metadata?: false
+      )
+
+    assert rejection_email.provider_options[:tags] == [
+             %{name: "memba_email_kind", value: "inbound_club_rejection"},
+             %{
+               name: "memba_inbound_provider_message_id",
+               value: "1b700cb9-3a48-460d-a2d1-255fe01ed4e2"
+             },
+             %{name: "memba_rejection_reason", value: "unknown_sender"},
+             %{
+               name: "memba_rejection_delivery_reference",
+               value: rejection_email_delivery_reference
+             }
+           ]
+
+    assert rejection_email.headers["X-Memba-Inbound-Email-ID"] ==
+             "inbound-email:resend:1b700cb9-3a48-460d-a2d1-255fe01ed4e2"
+
+    assert rejection_email.headers["X-Memba-Rejection-Delivery-Reference"] ==
+             rejection_email_delivery_reference
+
+    assert Enum.all?(rejection_email.provider_options[:tags], fn %{name: name, value: value} ->
+             name =~ ~r/\A[A-Za-z0-9_-]+\z/ and value =~ ~r/\A[A-Za-z0-9_-]+\z/
+           end)
+
+    assert [] = Fake.deliveries()
+  end
+
   test "known sender who is not a member of the destination club is rejected" do
     kmc = create_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
     npc = create_club!(name: "Nelson Paddling Club", slug: "npc")
@@ -903,7 +967,10 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     assert email.text_body =~ "Your email was not posted: #{reason}."
     assert email.text_body =~ "For help, reply to this email or contact Memba support."
     assert email.html_body =~ reason
-    assert email.provider_options[:metadata]["memba_email_kind"] == "inbound_club_rejection"
+
+    if Keyword.get(opts, :metadata?, true) do
+      assert email.provider_options[:metadata]["memba_email_kind"] == "inbound_club_rejection"
+    end
 
     email
   end

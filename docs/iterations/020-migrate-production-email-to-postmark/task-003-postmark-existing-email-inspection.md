@@ -92,11 +92,11 @@ The provider deliberately normalizes hard failures visibly:
 - `Memba.Mailer` adapter: `Swoosh.Adapters.Postmark`
 - `Memba.Mailer` `api_key`: `MEMBA_POSTMARK_SERVER_TOKEN`
 - provider config from:
-  - `MEMBA_POSTMARK_FROM_ADDRESS` (required)
-  - `MEMBA_POSTMARK_REPLY_TO_ADDRESS` (optional)
+  - `MEMBA_MESSAGING_FROM_ADDRESS` (required)
+  - `MEMBA_MESSAGING_REPLY_TO_ADDRESS` (optional)
 - Swoosh API client: `Swoosh.ApiClient.Req`
 
-`PostmarkConfig` fails clearly when selected Postmark delivery lacks `MEMBA_POSTMARK_SERVER_TOKEN` or `MEMBA_POSTMARK_FROM_ADDRESS`; the missing-config message points operators back to `MEMBA_MESSAGING_DELIVERY_PROVIDER`.
+`PostmarkConfig` fails clearly when selected Postmark delivery lacks `MEMBA_POSTMARK_SERVER_TOKEN` or `MEMBA_MESSAGING_FROM_ADDRESS`; the missing-config message points operators back to `MEMBA_MESSAGING_DELIVERY_PROVIDER`.
 
 ### Existing coverage
 
@@ -229,8 +229,8 @@ The current document is a general "Email delivery" page for Postmark and Resend,
 - member-message Postmark variables:
   - `MEMBA_MESSAGING_DELIVERY_PROVIDER=postmark`
   - `MEMBA_POSTMARK_SERVER_TOKEN`
-  - `MEMBA_POSTMARK_FROM_ADDRESS`
-  - `MEMBA_POSTMARK_REPLY_TO_ADDRESS`
+  - `MEMBA_MESSAGING_FROM_ADDRESS`
+  - `MEMBA_MESSAGING_REPLY_TO_ADDRESS`
 - Resend member-message fallback variables;
 - auth email variables:
   - `MEMBA_AUTH_EMAIL_PROVIDER=postmark` or `resend`

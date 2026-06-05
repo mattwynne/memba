@@ -2,15 +2,15 @@ defmodule Memba.Accounts.AuthEmailConfig do
   @moduledoc """
   Runtime configuration for shared sign-in-link auth emails.
 
-  Auth email delivery is enabled explicitly with `MEMBA_AUTH_EMAIL_PROVIDER`.
-  When Postmark delivery is enabled, the shared Postmark server token, auth
-  sender, and dedicated auth message stream must all be configured.
+  Real auth email delivery follows the environment-wide `MEMBA_EMAIL_PROVIDER`.
+  When a real provider is enabled, the auth sender and dedicated auth message
+  stream must be configured.
   """
 
   @enforce_keys [:from, :message_stream]
   defstruct [:provider, :api_key, :server_token, :from, :message_stream]
 
-  @provider_env "MEMBA_AUTH_EMAIL_PROVIDER"
+  @provider_env "MEMBA_EMAIL_PROVIDER"
   @server_token_env "MEMBA_POSTMARK_SERVER_TOKEN"
   @resend_api_key_env "MEMBA_RESEND_API_KEY"
   @from_address_env "MEMBA_AUTH_EMAIL_FROM_ADDRESS"

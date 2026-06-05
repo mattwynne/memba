@@ -124,12 +124,15 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
        ) do
     case selected_provider() do
       Memba.Messaging.EmailDeliveryProviders.Resend ->
-        put_provider_option(email, :tags, [
+        email
+        |> put_provider_option(:tags, [
           %{name: "memba_email_kind", value: "inbound_club_rejection"},
-          %{name: "memba_inbound_email_id", value: InboundEmail.identity(inbound_email)},
+          %{name: "memba_inbound_provider_message_id", value: inbound_email.provider_message_id},
           %{name: "memba_rejection_reason", value: rejection_reason},
           %{name: "memba_rejection_delivery_reference", value: delivery_reference}
         ])
+        |> header("X-Memba-Inbound-Email-ID", InboundEmail.identity(inbound_email))
+        |> header("X-Memba-Rejection-Delivery-Reference", delivery_reference)
 
       _provider ->
         put_provider_option(
