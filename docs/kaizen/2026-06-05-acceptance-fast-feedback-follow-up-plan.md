@@ -165,4 +165,22 @@ Remaining follow-up:
 
 - Replace mailbox polling with deterministic delivery facts.
 - Use read-model changes for LiveView delivery-status updates.
-- Audit remaining projection-backed negative assertions for additional projection-barrier opportunities.
+
+### Follow-up progress: projection-backed negative assertions
+
+Date: 2026-06-05
+
+Audit result:
+
+- Member/staff addressed-recipient absence assertions already wait for `Memba.Messaging.Projectors.MemberEmailDelivery` or `Memba.Messaging.Projectors.EmailDelivery` before checking absence.
+- Club-subdomain and auth/session absence assertions are browser/session checks rather than projection-backed checks.
+- Person email-address delivery absence had the right `Memba.Messaging.Projectors.EmailDelivery` barrier, but the Promise was not awaited.
+
+Fix applied:
+
+- `acceptance-tests/features/step_definitions/person_email_address_steps.js`: awaited the existing projection barrier before checking that no club-message email was delivered to the removed address.
+
+Remaining follow-up:
+
+- Replace mailbox polling with deterministic delivery facts.
+- Use read-model changes for LiveView delivery-status updates.

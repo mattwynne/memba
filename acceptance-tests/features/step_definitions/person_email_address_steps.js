@@ -226,7 +226,7 @@ async function assertNoMessageEmailRecipient(world, recipientEmail) {
   const subject = world.lastMessageSubject;
   assert.ok(subject, "Expected a club message to have been sent before checking mailbox delivery");
 
-  serverCommands.waitForProjectionBarrier({
+  await serverCommands.waitForProjectionBarrier({
     projectors: ["Memba.Messaging.Projectors.EmailDelivery"],
     timeoutMs: projectionTimeoutMs(world)
   });
