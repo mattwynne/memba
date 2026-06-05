@@ -2,8 +2,9 @@
 
 - [x] 001 Inspect the mockup HTML files and extract reusable layout ideas: staff operations shell, page header, navigation grouping, table density, status chips, action placement, and card/table treatment.
 - [x] 002 Inspect current admin routes, LiveViews, layouts, tests, and acceptance helpers.
-- [ ] 003 Update `Layouts.admin` to the redesigned staff operations shell with working nav links: Clubs, People, Messages, Deliveries.
+- [x] 003a Update `Layouts.admin` to the redesigned staff operations shell with the iteration-021 nav entries: Clubs, People, Messages, Deliveries.
 - [ ] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
+- [ ] 004a Route-verify the People and Messages staff nav links after `/admin/people` and `/admin/messages` exist so the original task-003 working-link requirement is fully satisfied.
 - [ ] 005 Add context/read-model queries as needed:
 - [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
 - [ ] 007 Restyle `/admin/clubs` to match the new staff operations direction while preserving club creation behaviour.

@@ -41,7 +41,7 @@ defmodule MembaWeb.LayoutsTest do
     refute_selector(html, "#club-site-layout")
   end
 
-  test "admin layout provides utilitarian staff chrome and admin navigation" do
+  test "admin layout provides the staff operations shell and iteration nav" do
     assigns = %{flash: %{}}
 
     html =
@@ -52,9 +52,39 @@ defmodule MembaWeb.LayoutsTest do
       """)
 
     assert_selector(html, "#admin-layout[data-surface='admin']")
+    assert_selector(html, "#admin-sidebar")
+    assert_selector(html, "#admin-content")
     assert_selector(html, "a[aria-label='Memba staff home'][href='/admin/clubs']")
-    assert_selector(html, "nav[aria-label='Memba staff navigation'] a[href='/admin/clubs']")
-    assert_selector(html, "nav[aria-label='Memba staff navigation'] a[href='/admin/deliveries']")
+    assert_selector(html, "#admin-navigation-group")
+
+    assert_selector(
+      html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-clubs[data-admin-nav-item='clubs'][href='/admin/clubs']"
+    )
+
+    assert_selector(
+      html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-admin-nav-item='people'][href='/admin/people']"
+    )
+
+    assert_selector(
+      html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-messages[data-admin-nav-item='messages'][href='/admin/messages']"
+    )
+
+    assert_selector(
+      html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-deliveries[data-admin-nav-item='deliveries'][href='/admin/deliveries']"
+    )
+
+    assert_selector_count(html, "nav[aria-label='Memba staff navigation'] a", 4)
+    assert_text(html, "nav[aria-label='Memba staff navigation']", "Clubs")
+    assert_text(html, "nav[aria-label='Memba staff navigation']", "People")
+    assert_text(html, "nav[aria-label='Memba staff navigation']", "Messages")
+    assert_text(html, "nav[aria-label='Memba staff navigation']", "Deliveries")
+    refute_text(html, "nav[aria-label='Memba staff navigation']", "Incoming")
+    refute_text(html, "nav[aria-label='Memba staff navigation']", "Roles")
+    assert_selector(html, "#admin-staff-identity-block")
     assert_selector(html, "form#admin-sign-out-form[action='/auth'][method='post']")
     assert_selector(html, "input[name='_method'][value='delete']")
     assert_selector(html, "button#admin-sign-out-button[type='submit']")
@@ -125,6 +155,17 @@ defmodule MembaWeb.LayoutsTest do
   defp refute_selector(html, selector) do
     refute html |> LazyHTML.from_fragment() |> LazyHTML.query(selector) |> Enum.any?(),
            "Expected rendered layout not to include selector #{inspect(selector)}"
+  end
+
+  defp assert_selector_count(html, selector, expected_count) do
+    actual_count =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(selector)
+      |> Enum.count()
+
+    assert actual_count == expected_count,
+           "Expected #{inspect(selector)} to match #{expected_count} elements, got #{actual_count}"
   end
 
   defp assert_text(html, selector, expected_text) do
