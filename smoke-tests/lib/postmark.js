@@ -36,7 +36,10 @@ class PostmarkInboundDiagnostics {
     if (subject) url.searchParams.set("subject", subject);
     if (from) url.searchParams.set("fromemail", from);
     if (recipient) url.searchParams.set("recipient", recipient);
-    if (after) url.searchParams.set("fromdate", toPostmarkDate(after));
+    // Postmark's inbound list API currently returns ReceivedAt as null for inbound
+    // messages and its fromdate filter can hide messages that are otherwise visible
+    // by exact subject/from/recipient. Smoke-test subjects are unique, so avoid the
+    // unreliable date filter here.
     if (this.messageStream) url.searchParams.set("messagestream", this.messageStream);
 
     const response = await fetch(url, {

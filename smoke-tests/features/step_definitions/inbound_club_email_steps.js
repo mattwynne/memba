@@ -180,9 +180,14 @@ function subjectTimestamp(subject) {
     return new Date(Date.now() - 60_000);
   }
   const value = match[1];
-  return new Date(
+  const timestamp = new Date(
     `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}T${value.slice(9, 11)}:${value.slice(11, 13)}:${value.slice(13, 15)}Z`
   );
+
+  // Mailbox providers store receivedAt with second-level granularity and JMAP's
+  // `after` filter is strict. Start just before the unique subject timestamp so
+  // a fast rejection/distribution email received in the same second is visible.
+  return new Date(timestamp.getTime() - 60_000);
 }
 
 function currentMessage(world) {
