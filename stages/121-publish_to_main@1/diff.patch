@@ -1,0 +1,1579 @@
+diff --git a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+index bd1c049..c847373 100644
+--- a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
++++ b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+@@ -1,7 +1,12 @@
+ const assert = require("node:assert/strict");
+ const { Given, When, Then } = require("@cucumber/cucumber");
+ const { expect: playwrightExpect } = require("@playwright/test");
+-const { signInDirectly } = require("../support/authentication");
++const {
++  assertReceivesSignInLink,
++  followSignInLink,
++  requestSignInLinkForPerson,
++  signInDirectly
++} = require("../support/authentication");
+ const {
+   appUrl,
+   cssString,
+@@ -157,7 +162,13 @@ async function ensureSmokeTestClubSeeded(world) {
+ }
+ 
+ async function signIn(world, personName) {
+-  await signInDirectly(world, personName);
++  if (new URL(world.page.url()).pathname === "/auth") {
++    await requestSignInLinkForPerson(world, personName);
++    await assertReceivesSignInLink(world, personName);
++    await followSignInLink(world, personName);
++  } else {
++    await signInDirectly(world, personName);
++  }
+ }
+ 
+ function messageIdFor(world, subject) {
+diff --git a/acceptance-tests/features/step_definitions/person_email_address_steps.js b/acceptance-tests/features/step_definitions/person_email_address_steps.js
+index 9263151..410a19c 100644
+--- a/acceptance-tests/features/step_definitions/person_email_address_steps.js
++++ b/acceptance-tests/features/step_definitions/person_email_address_steps.js
+@@ -7,7 +7,7 @@ const {
+   kootenayClubName,
+   projectionPollIntervalMs,
+   projectionTimeoutMs,
+-  testMailboxEmails,
++  testLocalDeliveryFacts,
+   updatePersonEmailAddresses
+ } = require("../support/member_message");
+ const {
+@@ -226,12 +226,12 @@ async function assertNoMessageEmailRecipient(world, recipientEmail) {
+   const subject = world.lastMessageSubject;
+   assert.ok(subject, "Expected a club message to have been sent before checking mailbox delivery");
+ 
+-  serverCommands.waitForProjectionBarrier({
++  await serverCommands.waitForProjectionBarrier({
+     projectors: ["Memba.Messaging.Projectors.EmailDelivery"],
+     timeoutMs: projectionTimeoutMs(world)
+   });
+ 
+-  const matchingEmail = newMessageEmails(world, await testMailboxEmails(world)).find((email) =>
++  const matchingEmail = newMessageEmails(world, await testLocalDeliveryFacts(world)).find((email) =>
+     messageEmailMatches(email, subject, recipientEmail)
+   );
+ 
+@@ -247,7 +247,7 @@ async function waitForMessageEmailMatching(world, predicate) {
+   let emails = [];
+ 
+   do {
+-    emails = newMessageEmails(world, await testMailboxEmails(world));
++    emails = newMessageEmails(world, await testLocalDeliveryFacts(world));
+     const matchingEmail = emails.find(predicate);
+ 
+     if (matchingEmail) {
+@@ -263,7 +263,9 @@ async function waitForMessageEmailMatching(world, predicate) {
+ }
+ 
+ function newMessageEmails(world, emails) {
+-  const previousIds = (world.mailboxEmailsBeforeSend || []).map(mailboxMessageId).filter(Boolean);
++  const previousIds = (world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [])
++    .map(mailboxMessageId)
++    .filter(Boolean);
+ 
+   return emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
+ }
+@@ -278,7 +280,7 @@ function messageEmailMatches(email, subject, recipientEmail) {
+ }
+ 
+ function mailboxMessageId(email) {
+-  return email && email.headers && email.headers["Message-ID"];
++  return email && (email.id || (email.headers && email.headers["Message-ID"]));
+ }
+ 
+ function mailboxEmailSummary(email) {
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index 3367f4a..f5a0ec7 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -165,14 +165,26 @@ async function followSignInLinkUrl(world, url) {
+ 
+ async function signInDirectly(world, personNameOrEmail, options = {}) {
+   const email = options.email || emailForDirectSignIn(world, personNameOrEmail);
+-  const signInLink = serverCommands.createSignInLink({ email });
+-  await followSignInLinkUrl(world, signInLink.path);
++  const returnTo = options.returnTo || "/";
++
++  if (world.directSignInLinks && world.directSignInLinks[email]) {
++    await followSignInLinkUrl(world, world.directSignInLinks[email]);
++    return;
++  }
++
++  const response = await world.context.request.post(appUrl(world.baseUrl, "/dev/test-support/sign-in"), {
++    data: { email },
++    headers: { "content-type": "application/json" }
++  });
++
++  assert.equal(response.status(), 204, `Expected direct sign-in route to return 204, got ${response.status()}`);
++  await world.page.goto(appUrl(world.baseUrl, returnTo));
+ }
+ 
+ async function signInAsStaffDirectly(world, personName, options = {}) {
+   const email = options.email || staffEmailFor(personName);
+   serverCommands.ensurePerson({ personName: options.staffName || personName, email });
+-  await signInDirectly(world, email, { email });
++  await signInDirectly(world, email, { email, returnTo: options.returnTo || "/admin/clubs" });
+ }
+ 
+ function emailForDirectSignIn(world, personNameOrEmail) {
+diff --git a/acceptance-tests/features/support/member_harness.js b/acceptance-tests/features/support/member_harness.js
+index 57abb91..73c7e4b 100644
+--- a/acceptance-tests/features/support/member_harness.js
++++ b/acceptance-tests/features/support/member_harness.js
+@@ -2,15 +2,11 @@ const assert = require("node:assert/strict");
+ const { expect: playwrightExpect } = require("@playwright/test");
+ const {
+   appUrl,
+-  ensureState,
+-  testMailboxEmails,
+-  waitForMailboxEmails
++  ensureState
+ } = require("./member_message");
+ const serverCommands = require("./server_commands");
+ 
+ const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
+-const signInSubject = "Sign in to Memba";
+-
+ async function withStaffHarness(world, action) {
+   await withReusableHarnessWorld(world, "staff", async (harnessWorld) => {
+     if (!harnessWorld.signedInStaff) {
+@@ -125,6 +121,7 @@ function copyHarnessState(world, harnessWorld) {
+     "addressedMemberNames",
+     "currentOperatorDelivery",
+     "lastMessageSubject",
++    "localDeliveryFactsBeforeSend",
+     "mailboxEmailsBeforeSend"
+   ]) {
+     if (Object.prototype.hasOwnProperty.call(harnessWorld, key)) {
+@@ -135,7 +132,7 @@ function copyHarnessState(world, harnessWorld) {
+ 
+ async function signInStaff(world) {
+   serverCommands.ensurePerson({ personName: "Acceptance Staff", email: staffEmail });
+-  await signInDirectly(world, staffEmail);
++  await signInDirectly(world, staffEmail, { returnTo: "/admin/clubs" });
+   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
+ }
+ 
+@@ -161,38 +158,21 @@ async function signInMember(world, memberName) {
+   assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
+ }
+ 
+-async function signInDirectly(world, email) {
++async function signInDirectly(world, email, options = {}) {
+   const configuredPath = world.directSignInLinks && world.directSignInLinks[email];
+-  const signInPath = configuredPath || serverCommands.createSignInLink({ email }).path;
+-  await world.page.goto(browserAppUrl(world, signInPath));
+-}
+-
+-async function signInByMagicLink(world, email, label) {
+-  const previousEmails = await testMailboxEmails(world);
+ 
+-  await world.page.goto(appUrl(world.baseUrl, "/auth"));
+-  await world.page.getByLabel("Email address").fill(email);
+-  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
+-
+-  const emails = await waitForMailboxEmails(
+-    world,
+-    previousEmails.length + 1,
+-    `sign-in email for ${label} <${email}>`
+-  );
+-  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+-  const signInEmail = emails
+-    .filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)))
+-    .find((mailboxEmail) => signInEmailMatches(mailboxEmail, email));
+-
+-  assert.ok(
+-    signInEmail,
+-    `Expected ${label} <${email}> to receive a sign-in email; saw ${JSON.stringify(emails.map(emailSummary))}`
+-  );
++  if (configuredPath) {
++    await world.page.goto(browserAppUrl(world, configuredPath));
++    return;
++  }
+ 
+-  const signInLink = signInLinkFromTextBody(signInEmail.text_body);
+-  assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${signInEmail.text_body}`);
++  const response = await world.context.request.post(appUrl(world.baseUrl, "/dev/test-support/sign-in"), {
++    data: { email },
++    headers: { "content-type": "application/json" }
++  });
+ 
+-  await world.page.goto(browserAppUrl(world, signInLink));
++  assert.equal(response.status(), 204, `Expected direct sign-in route to return 204, got ${response.status()}`);
++  await world.page.goto(appUrl(world.baseUrl, options.returnTo || "/"));
+ }
+ 
+ function guardPageAgainstAdminRoutes(world, memberName) {
+@@ -265,19 +245,6 @@ function signInEmailForPerson(person) {
+   return person.email || person.primaryEmail;
+ }
+ 
+-function signInEmailMatches(email, recipientEmail) {
+-  return (
+-    email.subject === signInSubject &&
+-    Array.isArray(email.to) &&
+-    email.to.some((recipient) => String(recipient).includes(recipientEmail))
+-  );
+-}
+-
+-function signInLinkFromTextBody(textBody) {
+-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
+-  return match && match[0];
+-}
+-
+ function browserAppUrl(world, url) {
+   const parsed = new URL(url, `${world.baseUrl}/`);
+   const base = new URL(world.baseUrl);
+@@ -291,14 +258,6 @@ function browserAppUrl(world, url) {
+   return parsed.toString();
+ }
+ 
+-function mailboxMessageId(email) {
+-  return email && email.headers && email.headers["Message-ID"];
+-}
+-
+-function emailSummary(email) {
+-  return { subject: email.subject, to: email.to, text_body: email.text_body };
+-}
+-
+ module.exports = {
+   assertMemberPageIsNotAdmin,
+   memberBrowserAction,
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 205f443..3e19c89 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -882,7 +882,7 @@ async function sendMemberMessageToKootenayMembers(
+ 
+   const body = `${subject} details.`;
+ 
+-  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
++  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
+ 
+   await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
+ 
+@@ -916,7 +916,7 @@ async function sendMemberMessageToKootenayMembers(
+     senderName,
+     subject
+   };
+-  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
++  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
+   world.lastMessageSubject = subject;
+ 
+   return world;
+@@ -1111,7 +1111,7 @@ async function sendMessageToKootenayMembers(
+   const sender = world.people[senderName];
+   assert.ok(sender, `Expected ${senderName} to have been created before sending a message`);
+ 
+-  const mailboxEmailsBeforeSend = await testMailboxEmails(world);
++  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
+ 
+   await browserInteraction(`submit message form for ${JSON.stringify(subject)}`, async () => {
+     await world.page.getByLabel("Message sender").selectOption(sender.personId);
+@@ -1147,7 +1147,7 @@ async function sendMessageToKootenayMembers(
+     senderName,
+     subject
+   };
+-  world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
++  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
+   world.lastMessageSubject = subject;
+ 
+   await openMessage(world, subject, { expect });
+@@ -1429,11 +1429,11 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
+     "Expected addressed members to be asserted before checking the mailbox"
+   );
+ 
+-  const previousEmails = world.mailboxEmailsBeforeSend || [];
+-  const emails = await waitForMailboxEmails(
++  const previousEmails = world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [];
++  const emails = await waitForLocalDeliveryFacts(
+     world,
+     previousEmails.length + addressedMemberNames.length,
+-    `Swoosh test mailbox emails for ${JSON.stringify(subject)}`
++    `local provider delivery facts for ${JSON.stringify(subject)}`
+   );
+   const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+   const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+@@ -1947,6 +1947,49 @@ async function deliveryForRecipient(
+   };
+ }
+ 
++async function testLocalDeliveryFacts(_world) {
++  try {
++    return serverCommands.listLocalDeliveryFacts();
++  } catch (error) {
++    if (process.env.npm_lifecycle_event === "test:config" && String(error.message || "").includes(":noconnection")) {
++      return [];
++    }
++
++    throw error;
++  }
++}
++
++async function waitForLocalDeliveryFacts(world, expectedCount, description) {
++  const timeoutMs = projectionTimeoutMs(world);
++  const deadline = Date.now() + timeoutMs;
++  let facts = [];
++  let lastError = null;
++
++  do {
++    try {
++      facts = await testLocalDeliveryFacts(world);
++
++      if (facts.length >= expectedCount) {
++        return facts;
++      }
++    } catch (error) {
++      lastError = error;
++    }
++
++    const remainingMs = deadline - Date.now();
++
++    if (remainingMs > 0) {
++      await delay(Math.min(projectionPollIntervalMs(world), remainingMs));
++    }
++  } while (Date.now() <= deadline);
++
++  throw new Error(
++    `Projection timing timeout: timed out after ${timeoutMs}ms waiting for ${description}. ` +
++      `Expected at least ${expectedCount} local delivery facts; saw ${facts.length}.\n` +
++      `Last delivery-facts error: ${lastError ? errorMessage(lastError) : "(none)"}`
++  );
++}
++
+ async function testMailboxEmails(world) {
+   const request = world.request || (world.context && world.context.request) || (world.page && world.page.request);
+   if (!request || typeof request.get !== "function") {
+@@ -2013,7 +2056,7 @@ async function waitForMailboxEmails(world, expectedCount, description) {
+ }
+ 
+ function mailboxMessageId(email) {
+-  return email && email.headers && email.headers["Message-ID"];
++  return email && (email.id || (email.headers && email.headers["Message-ID"]));
+ }
+ 
+ function mailboxEmailTo(email) {
+@@ -2379,10 +2422,12 @@ module.exports = {
+   sendInboundClubEmail,
+   sendMemberMessageToKootenayMembers,
+   sendMessageToKootenayMembers,
++  testLocalDeliveryFacts,
+   testMailboxEmails,
+   trySendMemberMessageToKootenayMembers,
+   updateClubSlug,
+   updatePersonEmailAddresses,
+   visitClubsIndex,
++  waitForLocalDeliveryFacts,
+   waitForMailboxEmails
+ };
+diff --git a/acceptance-tests/features/support/server_commands.js b/acceptance-tests/features/support/server_commands.js
+index 6dc029b..c3a4111 100644
+--- a/acceptance-tests/features/support/server_commands.js
++++ b/acceptance-tests/features/support/server_commands.js
+@@ -332,23 +332,6 @@ function ensureSmokeTestClub({ clubName, clubSlug, personName, email }) {
+   return member;
+ }
+ 
+-function createSignInLink({ email }) {
+-  return runCommand(
+-    `
+-email = Map.fetch!(payload, "email")
+-
+-case Memba.Accounts.create_sign_in_token(email) do
+-  {:ok, %{email: normalized_email, token: token}} ->
+-    %{email: normalized_email, path: "/auth/sign-in/#{token}"}
+-
+-  {:error, reason} ->
+-    raise "Could not create acceptance sign-in token for #{email}: #{inspect(reason)}"
+-end
+-`,
+-    { email }
+-  );
+-}
+-
+ function sendClubMessage({ clubId, senderId, senderName, subject, body, timeoutMs = 1000 }) {
+   return runCommand(
+     `
+@@ -387,6 +370,15 @@ Memba.ProjectionBarrier.await!(
+   );
+ }
+ 
++function listLocalDeliveryFacts() {
++  return runCommand(
++    `
++Memba.Messaging.LocalDeliveryFacts.list()
++`,
++    {}
++  );
++}
++
+ function waitForProjectionBarrier({ projectors, timeoutMs = 1000 }) {
+   return runCommand(
+     `
+@@ -454,7 +446,6 @@ function shortHostname() {
+ 
+ module.exports = {
+   acceptanceServerNode,
+-  createSignInLink,
+   ensureClub,
+   ensureClubSlug,
+   ensureMember,
+@@ -463,6 +454,7 @@ module.exports = {
+   ensurePerson,
+   ensurePersonEmailAddresses,
+   ensureSmokeTestClub,
++  listLocalDeliveryFacts,
+   runCommand,
+   sendClubMessage,
+   waitForProjectionBarrier
+diff --git a/bin/dev b/bin/dev
+index 8b0e66a..860d9cd 100755
+--- a/bin/dev
++++ b/bin/dev
+@@ -762,7 +762,7 @@ _iteration_status_tool() {
+ }
+ 
+ # @cmd Run Fabro workflow helpers
+-# @arg command![validate-plan|deliver|review|clean-branches] Helper command
++# @arg command![validate-plan|deliver|review|pull-todo|progress|clean-branches] Helper command
+ # @arg args~ Arguments for the helper command
+ fabro() {
+   local command_name="${1:-}"
+@@ -774,6 +774,8 @@ fabro() {
+     validate-plan) _fabro_validate_plan "$@" ;;
+     deliver) _fabro_deliver "$@" ;;
+     review) _fabro_review "$@" ;;
++    pull-todo) _fabro_pull_todo "$@" ;;
++    progress) _fabro_progress "$@" ;;
+     clean-branches) _fabro_clean_branches "$@" ;;
+     -h|--help|"")
+       cat >&2 <<EOF
+@@ -783,6 +785,8 @@ Commands:
+   validate-plan <plan_path>
+   deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
+   review <branch> <plan_path> [base_ref_or_base_sha]
++  pull-todo <run_id> [plan_path] [destination]
++  progress <run_id> [plan_path] [--watch] [--interval seconds]
+   clean-branches [--force]
+ EOF
+       ;;
+@@ -822,6 +826,190 @@ _fabro_validate_plan() {
+     --auto-approve)
+ }
+ 
++_fabro_pull_todo() {
++  local run_id="${1:-}"
++  local plan_path=""
++  local destination=""
++
++  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ] || [ $# -gt 3 ]; then
++    echo "Usage: $0 fabro pull-todo <run_id> [plan_path] [destination]" >&2
++    echo "If plan_path is omitted, it is inferred from the run inputs." >&2
++    echo "If destination is omitted, prints the sandbox todo.md to stdout." >&2
++    exit 2
++  fi
++
++  if [ $# -ge 2 ]; then
++    case "${2:-}" in
++      */plan.md) plan_path="$2" ;;
++      *) destination="$2" ;;
++    esac
++  fi
++  if [ $# -eq 3 ]; then
++    if [ -z "$plan_path" ]; then
++      echo "A destination cannot be supplied as the third argument unless the second argument is a plan_path ending in /plan.md." >&2
++      exit 2
++    fi
++    destination="$3"
++  fi
++
++  _fabro_require_tool fabro
++
++  if [ -z "$plan_path" ]; then
++    _fabro_require_tool jq
++    plan_path=$(command fabro inspect "$run_id" --json \
++      | jq -r 'if type == "array" then .[0] else . end | .run_spec.settings.run.inputs.plan_path // empty')
++    if [ -z "$plan_path" ]; then
++      echo "Could not infer plan_path from run inputs; pass it explicitly." >&2
++      exit 1
++    fi
++  fi
++
++  case "$plan_path" in
++    */plan.md) ;;
++    *) echo "plan_path must end with /plan.md: $plan_path" >&2; exit 2 ;;
++  esac
++
++  local todo_path="${plan_path%/plan.md}/todo.md"
++  local sandbox_path="/workspace/memba/$todo_path"
++
++  if [ -n "$destination" ]; then
++    command fabro sandbox cp "$run_id:$sandbox_path" "$destination"
++    return
++  fi
++
++  local tmp
++  tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-todo.XXXXXX.md")
++  if command fabro sandbox cp --quiet "$run_id:$sandbox_path" "$tmp"; then
++    cat "$tmp"
++    rm -f "$tmp"
++  else
++    local status=$?
++    rm -f "$tmp"
++    return "$status"
++  fi
++}
++
++_fabro_render_progress() {
++  local run_id="$1"
++  local todo_file="$2"
++  local run_url="$3"
++  local total done remaining percent width filled bar next_task i linked_run
++
++  _fabro_require_tool gum
++
++  total=$(grep -E '^[[:space:]]*- \[[ xX]\]' "$todo_file" | wc -l | tr -d ' ')
++  done=$(grep -E '^[[:space:]]*- \[[xX]\]' "$todo_file" | wc -l | tr -d ' ')
++  next_task=$(grep -E '^[[:space:]]*- \[ \]' "$todo_file" | head -1 | sed -E 's/^[[:space:]]*- \[ \][[:space:]]+//')
++  remaining=$((total - done))
++  width=30
++  if [ "$total" -eq 0 ]; then
++    percent=100
++    filled=0
++  else
++    percent=$(((done * 100 + total / 2) / total))
++    filled=$(((done * width + total / 2) / total))
++  fi
++
++  bar=""
++  i=0
++  while [ "$i" -lt "$filled" ]; do
++    bar="${bar}█"
++    i=$((i + 1))
++  done
++  while [ "$i" -lt "$width" ]; do
++    bar="${bar}░"
++    i=$((i + 1))
++  done
++
++  linked_run=$(printf '\033]8;;%s\033\\%s\033]8;;\033\\' "$run_url" "$run_id")
++  gum style --bold --foreground 212 "Fabro run $linked_run"
++  gum style --foreground 42 "Progress: [$bar] $done/$total (${percent}%)"
++  gum style --foreground 245 "Remaining: $remaining"
++  if [ -n "$next_task" ]; then
++    gum style --foreground 214 "Next: $next_task"
++  else
++    gum style --foreground 214 "Next: all todo tasks are checked"
++  fi
++}
++
++_fabro_progress() {
++  local run_id="${1:-}"
++  local plan_path=""
++  local watch=0
++  local interval=30
++
++  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ]; then
++    echo "Usage: $0 fabro progress <run_id> [plan_path] [--watch] [--interval seconds]" >&2
++    echo "If plan_path is omitted, it is inferred from the run inputs." >&2
++    exit 2
++  fi
++  if [ $# -gt 0 ]; then
++    shift
++  fi
++  while [ $# -gt 0 ]; do
++    case "$1" in
++      --watch) watch=1; shift ;;
++      --interval)
++        interval="${2:-}"
++        if ! [[ "$interval" =~ ^[0-9]+$ ]] || [ "$interval" -lt 1 ]; then
++          echo "--interval must be a positive integer number of seconds" >&2
++          exit 2
++        fi
++        shift 2
++        ;;
++      */plan.md)
++        if [ -n "$plan_path" ]; then
++          echo "Only one plan_path may be supplied." >&2
++          exit 2
++        fi
++        plan_path="$1"
++        shift
++        ;;
++      *) echo "Unknown progress argument: $1" >&2; exit 2 ;;
++    esac
++  done
++
++  if [ -z "$plan_path" ]; then
++    _fabro_require_tool jq
++    plan_path=$(command fabro inspect "$run_id" --json \
++      | jq -r 'if type == "array" then .[0] else . end | .run_spec.settings.run.inputs.plan_path // empty')
++    if [ -z "$plan_path" ]; then
++      echo "Could not infer plan_path from run inputs; pass it explicitly." >&2
++      exit 1
++    fi
++  fi
++
++  local iteration_name
++  iteration_name=$(basename "${plan_path%/plan.md}" | sed -E 's/^[0-9]+-//' | tr '-' ' ')
++
++  local run_url
++  run_url=$(command fabro inspect "$run_id" --json \
++    | jq -r 'if type == "array" then .[0] else . end | .web_url // .url // empty')
++  if [ -z "$run_url" ]; then
++    run_url="https://fabro.home.wynne.family/runs/$run_id"
++  fi
++
++  local tmp status
++  tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-progress.XXXXXX.md")
++  while true; do
++    _fabro_pull_todo "$run_id" "$plan_path" "$tmp" >/dev/null
++
++    if [ "$watch" -eq 1 ]; then
++      clear
++      gum style --foreground 245 "Updated: $(date '+%Y-%m-%d %H:%M:%S') — polling every ${interval}s"
++    fi
++    gum style --bold --foreground 99 "Iteration: $iteration_name"
++    _fabro_render_progress "$run_id" "$tmp" "$run_url"
++    status=$?
++
++    if [ "$watch" -ne 1 ] || [ "$status" -ne 0 ]; then
++      rm -f "$tmp"
++      return "$status"
++    fi
++    sleep "$interval"
++  done
++}
++
+ _fabro_plan_status() {
+   local plan_path="$1"
+   awk -F': *' '/^Status:/ {print tolower($2); exit}' "$repo_root/$plan_path"
+diff --git a/devenv.nix b/devenv.nix
+index b69d1a1..7562f3f 100644
+--- a/devenv.nix
++++ b/devenv.nix
+@@ -96,6 +96,8 @@ in
+     argc
+     devenv
+     git
++    gum
++    jq
+     nodejs_22
+     python3
+     tailwindcss_4
+diff --git a/docs/kaizen/2026-06-05-acceptance-fast-feedback-follow-up-plan.md b/docs/kaizen/2026-06-05-acceptance-fast-feedback-follow-up-plan.md
+new file mode 100644
+index 0000000..45a37b3
+--- /dev/null
++++ b/docs/kaizen/2026-06-05-acceptance-fast-feedback-follow-up-plan.md
+@@ -0,0 +1,222 @@
++# Plan: Continue acceptance fast-feedback improvements without sharding
++
++Date: 2026-06-05
++
++## Context
++
++The browser acceptance suite has been reduced from roughly 1m47–1m51 to roughly 55 seconds locally through setup batching, shared browser reuse, committed read-model change waits, projection barriers, and direct Given setup for message creation.
++
++Sharding remains a possible future wall-clock optimization, but it carries more harness complexity and global-state isolation work. Before taking that on, there are smaller serial-suite improvements that preserve the current one-app, one-scenario-at-a-time model.
++
++## Expected standard
++
++Acceptance tests should use the browser for behaviour under test, not for incidental data setup. Given/setup steps may cheat through Elixir/application APIs when they are arranging preconditions.
++
++Tests should synchronize on application facts where possible:
++
++- committed read-model changes for positive projection waits;
++- projection barriers for read-your-writes and absence checks;
++- direct application/test-support state for setup and delivery facts.
++
++Swoosh/dev mailbox remains useful as a local email viewer, but it should not be the main synchronization primitive for acceptance tests when a deterministic application signal or query would be clearer.
++
++## Current state
++
++Completed improvements include:
++
++- Given setup for clubs, people, members, slugs, person email addresses, and smoke-test fixtures uses Elixir RPC helpers.
++- Given message setup uses `Memba.Messaging.send_club_message/2` through Elixir RPC instead of staff-browser UI.
++- Staff/member harness sign-in for non-auth scenarios creates sign-in tokens directly through Elixir RPC and visits the callback.
++- Postmark delivery-status waits subscribe to committed read-model changes before posting webhooks.
++- Selected negative assertions use `Memba.ProjectionBarrier` instead of fixed timeout waits.
++
++The full acceptance suite passed after these changes:
++
++```text
++34 scenarios (34 passed)
++215 steps (215 passed)
++0m55.267s total
++0m48.061s executing steps
++```
++
++## Follow-up plan
++
++### 1. Replace callback-token auth with direct session setup for non-auth scenarios
++
++Current non-auth harnesses still create a sign-in token and visit `/auth/sign-in/:token`. This avoids mailbox polling, but it still exercises callback routing, token consumption, redirects, and staff onboarding checks.
++
++Plan:
++
++- Add a dev/test-only way to create an authenticated browser context or session cookie directly.
++- Keep `features/authentication.feature` on the real magic-link flow.
++- Use direct session setup only in non-auth setup helpers such as member/staff harness sign-in and `Given Pat is signed in as Memba staff`.
++- Prefer an Elixir/server-command helper if Playwright can set the resulting cookie cleanly; otherwise add a very small dev/test support route whose only job is to set the session using `MembaWeb.IdentityAuth.log_in_identity/2`.
++- Validate that member and staff LiveViews receive the same session shape as production login.
++
++Expected benefit:
++
++- Remove remaining sign-in-token callback overhead from non-auth scenarios.
++- Reduce auth-related incidental failures in tests that are not about auth.
++
++### 2. Replace mailbox polling with deterministic delivery facts
++
++Positive and negative mailbox assertions still inspect Swoosh/dev mailbox state. Some of these waits are slow because they poll for email arrival or absence.
++
++Plan:
++
++- Keep Swoosh as the local developer mailbox/viewer.
++- Add an acceptance-friendly delivery record or query path for local/fake provider deliveries.
++- Prefer querying application/provider delivery facts through Elixir RPC over scraping `/dev/mailbox`.
++- For positive assertions, wait for a deterministic delivery fact rather than polling the mailbox UI/API.
++- For negative assertions, use projection barriers or delivery-provider completion facts before checking absence once.
++- Preserve enough assertion detail to prove recipient, subject, body, sender, and provider metadata when those are behaviourally relevant.
++
++Expected benefit:
++
++- Reduce 1-second mailbox waits.
++- Separate “email was handed to provider” from “developer mailbox rendered the email”.
++- Make email assertions easier to diagnose.
++
++### 3. Use read-model changes for LiveView updates
++
++ADR 21 added a committed read-model changes bus, and acceptance tests now use it for webhook-driven projection waits. Product LiveViews do not yet use it broadly.
++
++Plan:
++
++- Start with delivery-status surfaces called out by `docs/problems/2026-06-01-delivery-status-not-live.md`.
++- Subscribe relevant LiveViews to `Memba.ReadModelChanges.topic()` on mount when connected.
++- Filter by projector and affected IDs, then refresh only the relevant assigns/streams.
++- Keep refresh code read-model-driven; do not expose raw internal event bus data as a product API.
++- Add LiveView tests for updating delivery status without manual page reload where practical.
++
++Expected benefit:
++
++- Users see delivery-status changes live.
++- The same committed-projection boundary serves tests and product UI.
++
++### 4. Apply projection barriers to remaining projection-backed negative assertions
++
++Some absence assertions still use Playwright timeouts. Not all of them are projection-backed, but the ones that are should use projection barriers.
++
++Plan:
++
++- Audit acceptance steps for `not.toContainText`, `toHaveCount(0)`, “should not see”, and “should not receive”.
++- Classify each as:
++  - projection/read-model absence;
++  - mailbox/provider absence;
++  - pure browser/UI absence;
++  - auth/session absence.
++- Add `Memba.ProjectionBarrier` waits before projection/read-model absence assertions.
++- Use delivery facts or provider completion for mailbox/provider absence assertions.
++- Leave pure browser/UI absence assertions on short Playwright checks where no server-side barrier applies.
++
++Expected benefit:
++
++- Remove avoidable fixed waits.
++- Make absence checks deterministic and faster.
++
++## Out of scope
++
++- Acceptance sharding or Cucumber `--parallel` work.
++- Broad scenario-scoped data isolation for same-app parallelism.
++- Replacing Swoosh as the developer mailbox.
++
++## Validation approach
++
++For each increment:
++
++```sh
++cd acceptance-tests && npm run test:config
++cd acceptance-tests && npm test
++```
++
++For code/config/app-behaviour changes, finish with:
++
++```sh
++dev check
++```
++
++Track total and executing acceptance time after each change so improvements are measured rather than assumed.
++
++## Resolution
++
++Date: 2026-06-05
++
++Root cause: Non-auth acceptance helpers still used sign-in-token callback routing as their shortcut. That removed mailbox polling, but still exercised auth-token creation, callback consumption, redirects, and staff onboarding paths in scenarios that were not about authentication. The earlier direct-token shortcut also broke one interrupted-journey scenario when used where the real auth redirect behaviour was the behaviour under test.
++
++Fix applied:
++
++- `web/lib/memba_web/router.ex`: added a dev/test-only session pipeline and `POST /dev/test-support/sign-in` route. The route has session access but stays outside the production router surface.
++- `web/lib/memba_web/controllers/dev_test_support_controller.ex`: added `sign_in/2`, which stores the requested signed-in identity in the browser session through `MembaWeb.IdentityAuth.log_in_identity/2`.
++- `web/test/memba_web/controllers/dev_test_support_controller_test.exs`: added coverage proving the direct sign-in route normalizes and stores the session identity.
++- `acceptance-tests/features/support/authentication.js`: changed non-auth direct sign-in helper to call the dev/test session route and navigate to a requested return path.
++- `acceptance-tests/features/support/member_harness.js`: changed staff/member harness sign-in to use the direct session route instead of creating and consuming sign-in tokens.
++- `acceptance-tests/features/step_definitions/member_club_subdomain_steps.js`: kept the real magic-link flow when the browser is already on `/auth`, preserving the interrupted-private-URL sign-in behaviour under test, while using direct session setup for ordinary non-auth sign-in setup.
++- `acceptance-tests/features/support/server_commands.js`: removed the no-longer-used sign-in-token server command helper.
++
++Validation:
++
++- `cd web && mix test test/memba_web/controllers/dev_test_support_controller_test.exs` — passed, 3 tests.
++- `cd acceptance-tests && npm run test:config` — passed, 48 tests.
++- `cd acceptance-tests && ACCEPTANCE_LOG_PROGRESS=1 npx cucumber-js features/member_club_subdomains.feature --name 'Alice signs in after opening a private club message URL|Alice opens Kootenay|Alice composes'` — passed, 3 scenarios.
++- `dev check` — passed, 514 ExUnit tests and 34 browser acceptance scenarios. Browser acceptance completed in about 0m48.0 total, with about 0m41.4 executing steps.
++
++Remaining follow-up:
++
++- Replace mailbox polling with deterministic delivery facts.
++- Use read-model changes for LiveView delivery-status updates.
++
++### Follow-up progress: projection-backed negative assertions
++
++Date: 2026-06-05
++
++Audit result:
++
++- Member/staff addressed-recipient absence assertions already wait for `Memba.Messaging.Projectors.MemberEmailDelivery` or `Memba.Messaging.Projectors.EmailDelivery` before checking absence.
++- Club-subdomain and auth/session absence assertions are browser/session checks rather than projection-backed checks.
++- Person email-address delivery absence had the right `Memba.Messaging.Projectors.EmailDelivery` barrier, but the Promise was not awaited.
++
++Fix applied:
++
++- `acceptance-tests/features/step_definitions/person_email_address_steps.js`: awaited the existing projection barrier before checking that no club-message email was delivered to the removed address.
++
++### Follow-up progress: deterministic local delivery facts
++
++Date: 2026-06-05
++
++Fix applied:
++
++- `web/lib/memba/messaging/local_delivery_facts.ex`: added an in-memory local-provider delivery-facts recorder for deterministic acceptance assertions.
++- `web/lib/memba/application.ex`: supervised the delivery-facts recorder with the application.
++- `web/lib/memba/messaging/email_delivery_providers/local.ex`: records a delivery fact after a local provider email is successfully handed to Swoosh.
++- `web/test/memba/messaging/email_delivery_providers/local_test.exs`: covered the recorded fact shape and unsupported-channel behaviour.
++- `acceptance-tests/features/support/server_commands.js`: exposed local delivery facts through the existing Elixir RPC command channel.
++- `acceptance-tests/features/support/member_message.js`: changed member-message email assertions to wait on local delivery facts instead of polling `/dev/mailbox/json`.
++- `acceptance-tests/features/step_definitions/person_email_address_steps.js`: changed person email-address delivery assertions to query local delivery facts.
++- `acceptance-tests/features/support/member_harness.js`: copied local delivery-fact checkpoints between harness worlds.
++
++Validation:
++
++- `cd acceptance-tests && npm run test:config` — passed, 48 tests.
++- `cd web && mix test test/memba/messaging/email_delivery_providers/local_test.exs` — passed, 2 tests.
++
++### Follow-up progress: LiveView read-model delivery-status updates
++
++Date: 2026-06-05
++
++Fix applied:
++
++- `web/lib/memba_web/live/admin/messages_live/show.ex`: subscribes to committed read-model changes and refreshes delivery/receipt streams for the open message.
++- `web/lib/memba_web/live/admin/deliveries_live/index.ex`: subscribes to staff delivery read-model changes and refreshes the deliveries overview stream/count.
++- `web/lib/memba_web/live/member_message_live/show.ex`: subscribes to member delivery read-model changes and refreshes member-facing message detail assigns for the open message.
++- `web/lib/memba_web/live/member_dashboard_live.ex`: subscribes to member delivery read-model changes and refreshes the selected club dashboard presentation.
++- `web/test/memba_web/live/browser_acceptance_harness_test.exs`: changed the delivery-status refresh coverage to assert live updates without revisiting the page.
++- `web/test/memba_web/live/deliveries_live_test.exs`: added coverage that the staff deliveries overview updates live after a delivery-status report.
++
++Validation:
++
++- `cd web && mix test test/memba_web/live/browser_acceptance_harness_test.exs test/memba_web/live/deliveries_live_test.exs` — passed, 7 tests.
++
++Remaining follow-up:
++
++- None for this follow-up plan. Run full `dev check` after the final commit.
+diff --git a/docs/tools/README.md b/docs/tools/README.md
+index bdf29e4..1c7f312 100644
+--- a/docs/tools/README.md
++++ b/docs/tools/README.md
+@@ -29,6 +29,7 @@ Local copies of upstream documentation that are useful while working on Memba.
+ 
+ - `devenv/` — devenv documentation used for local development environment setup.
+ - `fabro/` — Fabro documentation used by the iteration workflow.
++- `gum/` — project-local Gum CLI usage notes for styled terminal output.
+ - `fly.md` — Memba production Fly.io operations policy and diagnostics guidance.
+ - `lvh-me/` — local notes on using `lvh.me` wildcard loopback DNS for subdomain-based local development.
+ 
+diff --git a/docs/tools/gum/README.md b/docs/tools/gum/README.md
+new file mode 100644
+index 0000000..2f6ffb2
+--- /dev/null
++++ b/docs/tools/gum/README.md
+@@ -0,0 +1,51 @@
++# Gum CLI notes
++
++Gum is Charm's command-line UI helper. Use it from project scripts when a small amount of terminal formatting improves readability without changing command semantics.
++
++## Project usage
++
++`bin/dev fabro progress <run_id> [plan_path]` uses `gum style` for terminal output.
++
++For project scripts that run through `bin/dev`, Gum is part of the expected devenv toolchain. Commands that must run outside `bin/dev` should avoid depending on Gum unless they arrange their own tool availability.
++
++## Common commands
++
++### `gum style`
++
++Style text with color, bold, borders, padding, and alignment.
++
++Examples:
++
++```sh
++gum style --bold --foreground 212 "Fabro run 01ABC..."
++gum style --foreground 42 "Progress: [████░░░] 4/10 (40%)"
++gum style --border rounded --padding "0 1" "Delivery running"
++```
++
++Useful options used by this project:
++
++- `--bold` — bold text.
++- `--foreground <color>` — set foreground color. Gum accepts ANSI color numbers such as `42`, `212`, `214`, and `245`.
++- `--border rounded` — draw a rounded border.
++- `--padding "Y X"` — add vertical/horizontal padding.
++
++### `gum format`
++
++Render Markdown-like text in the terminal.
++
++```sh
++gum format <<'MD'
++# Progress
++
++- Task 001 complete
++- Task 002 running
++MD
++```
++
++### `gum choose`, `gum confirm`, `gum input`
++
++Interactive prompts. Avoid these in unattended Fabro workflow scripts because they can block automation.
++
++## Dependency
++
++`gum` is included in `devenv.nix` for local `dev` commands. If a command runs outside the project devenv shell, enter through `bin/dev` or arrange `gum` separately.
+diff --git a/docs/tools/gum/SOURCE.md b/docs/tools/gum/SOURCE.md
+new file mode 100644
+index 0000000..07efc81
+--- /dev/null
++++ b/docs/tools/gum/SOURCE.md
+@@ -0,0 +1,8 @@
++# Source
++
++- Tool: Gum
++- Upstream: https://github.com/charmbracelet/gum
++- Docs: https://github.com/charmbracelet/gum and `gum --help`
++- Added: 2026-06-05
++
++These are project-local usage notes rather than a complete vendored upstream documentation snapshot.
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index 879082b..a838aaf 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -14,6 +14,7 @@ defmodule Memba.Application do
+       Memba.Membership.App,
+       Memba.Messaging.App,
+       Memba.Messaging.EmailDeliveryProviders.Fake,
++      Memba.Messaging.LocalDeliveryFacts,
+       Memba.Messaging.Projectors.Message,
+       Memba.Messaging.Projectors.EmailDelivery,
+       Memba.Messaging.Projectors.MemberEmailDelivery,
+diff --git a/web/lib/memba/messaging/email_delivery_providers/local.ex b/web/lib/memba/messaging/email_delivery_providers/local.ex
+index 97a2972..769dafe 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/local.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/local.ex
+@@ -11,6 +11,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+ 
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.LocalDeliveryFacts
+ 
+   @behaviour EmailDeliveryProvider
+ 
+@@ -19,6 +20,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+     request
+     |> email()
+     |> deliver_email()
++    |> record_delivery_fact(request)
+   end
+ 
+   def deliver(%EmailDeliveryRequest{channel: channel}),
+@@ -92,4 +94,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+ 
+   defp normalize_delivery_result(result),
+     do: {:error, {:local_delivery_error, {:unexpected_delivery_result, result}}}
++
++  defp record_delivery_fact(:ok, %EmailDeliveryRequest{} = request) do
++    LocalDeliveryFacts.record(request)
++    :ok
++  end
++
++  defp record_delivery_fact(result, %EmailDeliveryRequest{}), do: result
+ end
+diff --git a/web/lib/memba/messaging/local_delivery_facts.ex b/web/lib/memba/messaging/local_delivery_facts.ex
+new file mode 100644
+index 0000000..5db2c08
+--- /dev/null
++++ b/web/lib/memba/messaging/local_delivery_facts.ex
+@@ -0,0 +1,66 @@
++defmodule Memba.Messaging.LocalDeliveryFacts do
++  @moduledoc """
++  In-memory delivery facts recorded by the local email delivery provider.
++
++  Browser acceptance tests use these facts to assert that the application handed
++  message emails to the local provider without polling Swoosh's developer mailbox
++  preview.
++  """
++
++  use Agent
++
++  alias Memba.Messaging.EmailDeliveryRequest
++
++  @name __MODULE__
++
++  def start_link(_opts) do
++    Agent.start_link(fn -> [] end, name: @name)
++  end
++
++  @doc "Record a successfully delivered local-provider email request."
++  def record(%EmailDeliveryRequest{} = request) do
++    fact = %{
++      id: request.delivery_id,
++      message_id: request.message_id,
++      club_id: request.club_id,
++      delivery_id: request.delivery_id,
++      recipient_id: request.recipient_id,
++      recipient_name: request.recipient_name,
++      recipient_address: request.recipient_address,
++      sender_name: request.sender_name,
++      sender_address: request.sender_address,
++      from: "#{request.sender_name} via Memba <#{from_address()}>",
++      to: ["#{request.recipient_name} <#{request.recipient_address}>"],
++      subject: request.subject,
++      text_body: request.body,
++      metadata: %{
++        "memba_message_id" => request.message_id,
++        "memba_delivery_id" => request.delivery_id,
++        "memba_club_id" => request.club_id
++      }
++    }
++
++    Agent.update(@name, fn facts -> [fact | facts] end)
++    :ok
++  end
++
++  @doc "List recorded facts in delivery order."
++  def list do
++    Agent.get(@name, &Enum.reverse/1)
++  end
++
++  @doc "Clear recorded facts. Intended for tests."
++  def reset do
++    Agent.update(@name, fn _facts -> [] end)
++  end
++
++  defp from_address do
++    :memba
++    |> Application.get_env(Memba.Messaging.EmailDeliveryProviders.Postmark, [])
++    |> Keyword.get(:from, "messages@mail.memba.local")
++    |> normalize_address()
++  end
++
++  defp normalize_address({_name, address}), do: address
++  defp normalize_address(address), do: address
++end
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index ceda1b5..c607081 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -77,6 +77,12 @@ defmodule MembaWeb.DevTestSupportController do
+     end
+   end
+ 
++  def sign_in(conn, %{"email" => email}) do
++    conn
++    |> MembaWeb.IdentityAuth.log_in_identity(email)
++    |> send_resp(:no_content, "")
++  end
++
+   def read_model_change_events(conn, _params) do
+     Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
+ 
+diff --git a/web/lib/memba_web/live/admin/deliveries_live/index.ex b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+index c5335a4..f434d51 100644
+--- a/web/lib/memba_web/live/admin/deliveries_live/index.ex
++++ b/web/lib/memba_web/live/admin/deliveries_live/index.ex
+@@ -2,17 +2,32 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Messaging
++  alias Memba.ReadModelChanges
+ 
+   @impl Phoenix.LiveView
+   def mount(_params, _session, socket) do
+     deliveries = Messaging.list_operator_deliveries()
+ 
++    if connected?(socket) do
++      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++    end
++
+     {:ok,
+      socket
+      |> assign(:deliveries_count, length(deliveries))
+      |> stream(:deliveries, deliveries, dom_id: &"delivery-row-#{&1.delivery_id}")}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_info(
++        {:read_model_changed, %{projector: Memba.Messaging.Projectors.MembaStaffEmailDelivery}},
++        socket
++      ) do
++    {:noreply, refresh_deliveries(socket)}
++  end
++
++  def handle_info(_message, socket), do: {:noreply, socket}
++
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+@@ -197,9 +212,25 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
+   defp reason_text(reason) when is_binary(reason) and reason != "", do: reason
+   defp reason_text(_reason), do: "—"
+ 
++<<<<<<< HEAD
++  defp status_class("delayed"), do: "bg-amber-100 text-amber-800"
++  defp status_class("bounced"), do: "bg-red-100 text-red-800"
++  defp status_class("spam complaint"), do: "bg-red-100 text-red-800"
++  defp status_class("delivered"), do: "bg-blue-100 text-blue-800"
++  defp status_class(_status), do: "bg-zinc-100 text-zinc-700"
++
++  defp refresh_deliveries(socket) do
++    deliveries = Messaging.list_operator_deliveries()
++
++    socket
++    |> assign(:deliveries_count, length(deliveries))
++    |> stream(:deliveries, deliveries, reset: true)
++  end
++=======
+   defp status_class("delayed"), do: "bg-[#f3ecd8] text-[#7a5416]"
+   defp status_class("bounced"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+   defp status_class("spam complaint"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+   defp status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
+   defp status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
++>>>>>>> c62e011 (iteration 021: Staff area redesign and read-only operations indexes)
+ end
+diff --git a/web/lib/memba_web/live/admin/messages_live/show.ex b/web/lib/memba_web/live/admin/messages_live/show.ex
+index 167140b..80eabda 100644
+--- a/web/lib/memba_web/live/admin/messages_live/show.ex
++++ b/web/lib/memba_web/live/admin/messages_live/show.ex
+@@ -2,6 +2,7 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Messaging
++  alias Memba.ReadModelChanges
+ 
+   @impl Phoenix.LiveView
+   def mount(%{"message_id" => message_id}, _session, socket) do
+@@ -9,6 +10,10 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+     deliveries = Messaging.list_recipient_deliveries(message_id)
+     receipts = Messaging.list_member_email_deliverys(message_id)
+ 
++    if connected?(socket) do
++      Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++    end
++
+     {:ok,
+      socket
+      |> assign(:message_id, message_id)
+@@ -23,6 +28,24 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+      |> stream(:member_email_deliverys, receipts, dom_id: &"member-receipt-#{&1.delivery_id}")}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_info(
++        {:read_model_changed, %{projector: projector, source_event: event}},
++        %{assigns: %{message_id: message_id}} = socket
++      )
++      when projector in [
++             Memba.Messaging.Projectors.EmailDelivery,
++             Memba.Messaging.Projectors.MemberEmailDelivery
++           ] do
++    if Map.get(event, :message_id) == message_id do
++      {:noreply, refresh_delivery_streams(socket)}
++    else
++      {:noreply, socket}
++    end
++  end
++
++  def handle_info(_message, socket), do: {:noreply, socket}
++
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+@@ -262,6 +285,17 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+     """
+   end
+ 
++<<<<<<< HEAD
++  defp refresh_delivery_streams(socket) do
++    message_id = socket.assigns.message_id
++    deliveries = Messaging.list_recipient_deliveries(message_id)
++    receipts = Messaging.list_member_email_deliverys(message_id)
++
++    socket
++    |> stream(:delivery_records, deliveries, reset: true)
++    |> stream(:member_email_deliverys, receipts, reset: true)
++  end
++=======
+   defp subject_label(subject) when is_binary(subject) and subject != "", do: subject
+   defp subject_label(_subject), do: "Untitled message"
+ 
+@@ -274,4 +308,5 @@ defmodule MembaWeb.Admin.MessagesLive.Show do
+   defp receipt_status_class("delivery problem"), do: "bg-[#f6e0c9] text-[#8a3d21]"
+   defp receipt_status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
+   defp receipt_status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
++>>>>>>> c62e011 (iteration 021: Staff area redesign and read-only operations indexes)
+ end
+diff --git a/web/lib/memba_web/live/member_dashboard_live.ex b/web/lib/memba_web/live/member_dashboard_live.ex
+index a5bee79..ef8a976 100644
+--- a/web/lib/memba_web/live/member_dashboard_live.ex
++++ b/web/lib/memba_web/live/member_dashboard_live.ex
+@@ -9,8 +9,9 @@ defmodule MembaWeb.MemberDashboardLive do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Accounts
+-  alias MembaWeb.MemberDashboardPresentation
++  alias Memba.ReadModelChanges
+   alias MembaWeb.IdentityAuth
++  alias MembaWeb.MemberDashboardPresentation
+ 
+   @impl Phoenix.LiveView
+   def mount(_params, session, socket) do
+@@ -22,6 +23,10 @@ defmodule MembaWeb.MemberDashboardLive do
+ 
+     case MemberDashboardPresentation.load(club_id, current_identity, current_identity_clubs) do
+       {:ok, dashboard_assigns} ->
++        if connected?(socket) do
++          Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++        end
++
+         {:ok,
+          socket
+          |> assign(:club_id_source, Map.get(session, "club_id_source", "query"))
+@@ -32,11 +37,35 @@ defmodule MembaWeb.MemberDashboardLive do
+     end
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_info(
++        {:read_model_changed, %{projector: Memba.Messaging.Projectors.MemberEmailDelivery}},
++        %{assigns: %{selected_club: selected_club}} = socket
++      ) do
++    {:noreply, refresh_dashboard(socket, selected_club.club_id)}
++  end
++
++  def handle_info(_message, socket), do: {:noreply, socket}
++
+   @impl Phoenix.LiveView
+   def render(%{selected_club: _selected_club} = assigns) do
+     MembaWeb.PageHTML.club(assigns)
+   end
+ 
++  defp refresh_dashboard(socket, club_id) do
++    case MemberDashboardPresentation.load(
++           club_id,
++           socket.assigns.current_identity,
++           socket.assigns.current_identity_clubs
++         ) do
++      {:ok, dashboard_assigns} ->
++        assign(socket, dashboard_assigns)
++
++      {:error, :forbidden} ->
++        forbidden!()
++    end
++  end
++
+   defp current_identity_from_session(session) do
+     session
+     |> Map.get(IdentityAuth.identity_session_key())
+diff --git a/web/lib/memba_web/live/member_message_live/show.ex b/web/lib/memba_web/live/member_message_live/show.ex
+index e48afa1..75c35af 100644
+--- a/web/lib/memba_web/live/member_message_live/show.ex
++++ b/web/lib/memba_web/live/member_message_live/show.ex
+@@ -8,6 +8,7 @@ defmodule MembaWeb.MemberMessageLive.Show do
+   """
+   use MembaWeb, :live_view
+ 
++  alias Memba.ReadModelChanges
+   alias MembaWeb.MemberMessageDetail
+ 
+   @impl Phoenix.LiveView
+@@ -19,6 +20,10 @@ defmodule MembaWeb.MemberMessageLive.Show do
+       %{"club_id" => _club_id, "message_id" => _message_id} ->
+         case MemberMessageDetail.load(params, socket.assigns.current_identity_clubs) do
+           {:ok, detail_assigns} ->
++            if connected?(socket) do
++              Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
++            end
++
+             {:ok,
+              socket
+              |> assign(:route_params, params)
+@@ -41,6 +46,21 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     {:ok, socket |> ensure_identity_assigns() |> assign(:route_params, %{})}
+   end
+ 
++  @impl Phoenix.LiveView
++  def handle_info(
++        {:read_model_changed,
++         %{projector: Memba.Messaging.Projectors.MemberEmailDelivery, source_event: event}},
++        %{assigns: %{message: message}} = socket
++      ) do
++    if Map.get(event, :message_id) == message.message_id do
++      {:noreply, refresh_message_detail(socket)}
++    else
++      {:noreply, socket}
++    end
++  end
++
++  def handle_info(_message, socket), do: {:noreply, socket}
++
+   @impl Phoenix.LiveView
+   def handle_event("toggle_receipt_group", %{"status" => status}, socket) do
+     expanded_receipt_groups = toggle_receipt_group(socket, status)
+@@ -107,6 +127,22 @@ defmodule MembaWeb.MemberMessageLive.Show do
+     end
+   end
+ 
++  defp refresh_message_detail(socket) do
++    case MemberMessageDetail.load(
++           socket.assigns.route_params,
++           socket.assigns.current_identity_clubs
++         ) do
++      {:ok, detail_assigns} ->
++        assign(socket, detail_assigns)
++
++      {:error, :forbidden} ->
++        forbidden!(socket)
++
++      {:error, :not_found} ->
++        not_found!(socket)
++    end
++  end
++
+   defp ensure_identity_assigns(socket) do
+     socket
+     |> assign_new(:current_identity, fn -> nil end)
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 4068dcb..5ea7736 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -49,6 +49,11 @@ defmodule MembaWeb.Router do
+     plug :accepts, ["json"]
+   end
+ 
++  pipeline :test_support_session do
++    plug :accepts, ["json"]
++    plug :fetch_session
++  end
++
+   scope "/", MembaWeb do
+     pipe_through [:browser, :club_member_context]
+ 
+@@ -142,5 +147,11 @@ defmodule MembaWeb.Router do
+ 
+       get "/read-model-changes/events", DevTestSupportController, :read_model_change_events
+     end
++
++    scope "/dev/test-support", MembaWeb do
++      pipe_through :test_support_session
++
++      post "/sign-in", DevTestSupportController, :sign_in
++    end
+   end
+ end
+diff --git a/web/test/memba/messaging/email_delivery_providers/local_test.exs b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+index c5da278..d429661 100644
+--- a/web/test/memba/messaging/email_delivery_providers/local_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+@@ -5,6 +5,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+ 
+   alias Memba.Messaging.EmailDeliveryProviders.Local
+   alias Memba.Messaging.EmailDeliveryRequest
++  alias Memba.Messaging.LocalDeliveryFacts
+ 
+   setup do
+     original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+@@ -19,7 +20,10 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+       reply_to: {"Matt Wynne", "matt@mattwynne.net"}
+     )
+ 
++    LocalDeliveryFacts.reset()
++
+     on_exit(fn ->
++      LocalDeliveryFacts.reset()
+       restore_env(Memba.Mailer, original_mailer_config)
+       restore_env(Memba.Messaging.EmailDeliveryProviders.Postmark, original_provider_config)
+     end)
+@@ -46,6 +50,15 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+                "memba_club_id" => request.club_id
+              }
+     end)
++
++    assert [fact] = LocalDeliveryFacts.list()
++    assert fact.delivery_id == request.delivery_id
++    assert fact.message_id == request.message_id
++    assert fact.recipient_address == "alice@example.test"
++    assert fact.to == ["Alice <alice@example.test>"]
++    assert fact.from == "Bob via Memba <messages@mail.memba.io>"
++    assert fact.subject == "Trip planning night"
++    assert fact.text_body == "Hello <Alice> & Bob\nBring route ideas."
+   end
+ 
+   test "does not hand unsupported delivery channels to Swoosh" do
+@@ -53,6 +66,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+              Local.deliver(email_delivery_request(channel: :sms))
+ 
+     refute_email_sent()
++    assert LocalDeliveryFacts.list() == []
+   end
+ 
+   defp email_delivery_request(overrides) do
+diff --git a/web/test/memba_web/controllers/dev_test_support_controller_test.exs b/web/test/memba_web/controllers/dev_test_support_controller_test.exs
+index 05b3989..acd8113 100644
+--- a/web/test/memba_web/controllers/dev_test_support_controller_test.exs
++++ b/web/test/memba_web/controllers/dev_test_support_controller_test.exs
+@@ -33,6 +33,14 @@ defmodule MembaWeb.DevTestSupportControllerTest do
+     assert Application.get_env(:memba, :messaging_email_delivery_provider) == Local
+   end
+ 
++  test "POST /dev/test-support/sign-in stores the signed-in identity in the browser session",
++       %{conn: conn} do
++    conn = post(conn, ~p"/dev/test-support/sign-in", %{"email" => "Alice@Example.Test"})
++
++    assert response(conn, 204) == ""
++    assert get_session(conn, MembaWeb.IdentityAuth.identity_session_key()) == "alice@example.test"
++  end
++
+   test "POST /dev/test-support/messaging-delivery-provider rejects unknown provider names",
+        %{conn: conn} do
+     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
+diff --git a/web/test/memba_web/live/browser_acceptance_harness_test.exs b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+index 7fd0923..8c1c75b 100644
+--- a/web/test/memba_web/live/browser_acceptance_harness_test.exs
++++ b/web/test/memba_web/live/browser_acceptance_harness_test.exs
+@@ -147,12 +147,13 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+ 
+     delivery_ids_by_name = Map.new(recipients, &{&1.name, &1.delivery_id})
+ 
+-    conn
+-    |> sign_in_staff()
+-    |> visit("/admin/messages/#{message_id}")
+-    |> assert_path("/admin/messages/*")
+-    |> assert_has("#message-show", "Trip planning night")
+-    |> assert_member_email_delivery("Alice", "sent")
++    session =
++      conn
++      |> sign_in_staff()
++      |> visit("/admin/messages/#{message_id}")
++      |> assert_path("/admin/messages/*")
++      |> assert_has("#message-show", "Trip planning night")
++      |> assert_member_email_delivery("Alice", "sent")
+ 
+     assert :ok =
+              report_email_delivery_delivered(%{
+@@ -187,16 +188,15 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
+                delivery_id: delivery_ids_by_name["Frank"]
+              })
+ 
+-    conn
+-    |> sign_in_staff()
+-    |> visit("/admin/messages/#{message_id}")
+-    |> assert_path("/admin/messages/*")
+-    |> assert_member_email_delivery("Alice", "sent")
+-    |> assert_member_email_delivery("Bob", "delivered")
+-    |> assert_member_email_delivery("Carol", "delivery problem")
+-    |> assert_member_email_delivery("Dana", "delivery problem")
+-    |> assert_member_email_delivery("Erin", "delivery problem")
+-    |> assert_member_email_delivery("Frank", "delivered")
++    assert_eventually(fn ->
++      session
++      |> assert_member_email_delivery("Alice", "sent")
++      |> assert_member_email_delivery("Bob", "delivered")
++      |> assert_member_email_delivery("Carol", "delivery problem")
++      |> assert_member_email_delivery("Dana", "delivery problem")
++      |> assert_member_email_delivery("Erin", "delivery problem")
++      |> assert_member_email_delivery("Frank", "delivered")
++    end)
+   end
+ 
+   defp create_club(session, name) do
+diff --git a/web/test/memba_web/live/deliveries_live_test.exs b/web/test/memba_web/live/deliveries_live_test.exs
+index 35c2eff..1572e72 100644
+--- a/web/test/memba_web/live/deliveries_live_test.exs
++++ b/web/test/memba_web/live/deliveries_live_test.exs
+@@ -83,6 +83,52 @@ defmodule MembaWeb.DeliveriesLiveTest do
+     ])
+   end
+ 
++  test "operator deliveries refresh live after status reports", %{conn: conn} do
++    %{
++      subject: subject,
++      recipients: [recipient]
++    } =
++      send_projected_message(
++        subject: "Trail work party",
++        recipients: ["Bob"]
++      )
++
++    session =
++      conn
++      |> sign_in_staff()
++      |> visit("/admin/deliveries")
++      |> assert_path("/admin/deliveries")
++      |> assert_delivery_row(recipient.delivery_id, [
++        subject,
++        recipient.name,
++        recipient.email,
++        "email",
++        "sent",
++        "—"
++      ])
++
++    assert :ok =
++             Messaging.report_email_delivery_bounced(
++               %{
++                 message_id: recipient.message_id,
++                 delivery_id: recipient.delivery_id,
++                 reason: "mailbox does not exist"
++               },
++               consistency: :strong
++             )
++
++    assert_eventually(fn ->
++      assert_delivery_row(session, recipient.delivery_id, [
++        subject,
++        recipient.name,
++        recipient.email,
++        "email",
++        "bounced",
++        "mailbox does not exist"
++      ])
++    end)
++  end
++
+   test "operators see historic opened delivery rows as delivered, never opened", %{
+     conn: conn
+   } do
