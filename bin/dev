@@ -892,7 +892,8 @@ _fabro_pull_todo() {
 _fabro_render_progress() {
   local run_id="$1"
   local todo_file="$2"
-  local total done remaining percent width filled bar next_task i
+  local run_url="$3"
+  local total done remaining percent width filled bar next_task i linked_run
 
   _fabro_require_tool gum
 
@@ -920,7 +921,8 @@ _fabro_render_progress() {
     i=$((i + 1))
   done
 
-  gum style --bold --foreground 212 "Fabro run $run_id"
+  linked_run=$(printf '\033]8;;%s\033\\%s\033]8;;\033\\' "$run_url" "$run_id")
+  gum style --bold --foreground 212 "Fabro run $linked_run"
   gum style --foreground 42 "Progress: [$bar] $done/$total (${percent}%)"
   gum style --foreground 245 "Remaining: $remaining"
   if [ -n "$next_task" ]; then
@@ -980,6 +982,13 @@ _fabro_progress() {
   local iteration_name
   iteration_name=$(basename "${plan_path%/plan.md}" | sed -E 's/^[0-9]+-//' | tr '-' ' ')
 
+  local run_url
+  run_url=$(command fabro inspect "$run_id" --json \
+    | jq -r 'if type == "array" then .[0] else . end | .web_url // .url // empty')
+  if [ -z "$run_url" ]; then
+    run_url="https://fabro.home.wynne.family/runs/$run_id"
+  fi
+
   local tmp status
   tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-progress.XXXXXX.md")
   while true; do
@@ -990,7 +999,7 @@ _fabro_progress() {
       gum style --foreground 245 "Updated: $(date '+%Y-%m-%d %H:%M:%S') — polling every ${interval}s"
     fi
     gum style --bold --foreground 99 "Iteration: $iteration_name"
-    _fabro_render_progress "$run_id" "$tmp"
+    _fabro_render_progress "$run_id" "$tmp" "$run_url"
     status=$?
 
     if [ "$watch" -ne 1 ] || [ "$status" -ne 0 ]; then
