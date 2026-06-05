@@ -347,12 +347,96 @@ local_test_email_env() {
     "$@"
 }
 
+quality_gate_lock_root() {
+  printf '%s\n' "${MEMBA_QUALITY_GATE_LOCK_ROOT:-/tmp}"
+}
+
+quality_gate_lock_dir() {
+  printf '%s/memba-quality-gate-postgres-%s.lock\n' "$(quality_gate_lock_root)" "$MEMBA_POSTGRES_PORT"
+}
+
+acquire_quality_gate_lock() {
+  local lock_root lock_dir pid waited=0
+  lock_root="$(quality_gate_lock_root)"
+  lock_dir="$(quality_gate_lock_dir)"
+  mkdir -p "$lock_root"
+
+  while ! mkdir "$lock_dir" 2>/dev/null; do
+    if [ ! -f "$lock_dir/pid" ]; then
+      sleep 1
+      if [ ! -f "$lock_dir/pid" ]; then
+        echo "Removing incomplete dev quality gate lock with no pid file: $lock_dir" >&2
+        rm -rf "$lock_dir"
+        continue
+      fi
+    fi
+
+    pid="$(cat "$lock_dir/pid" 2>/dev/null || true)"
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      echo "Removing stale dev quality gate lock from pid $pid: $lock_dir" >&2
+      rm -rf "$lock_dir"
+      continue
+    fi
+
+    if [ "$waited" -eq 0 ]; then
+      echo "Another dev quality gate is running; waiting for lock: $lock_dir" >&2
+    elif [ $((waited % 30)) -eq 0 ]; then
+      echo "Still waiting for dev quality gate lock after ${waited}s: $lock_dir" >&2
+    fi
+
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  printf '%s\n' "$$" > "$lock_dir/pid"
+  {
+    printf 'pid=%s\n' "$$"
+    printf 'started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'command=%s\n' "$0 ${*:-}"
+    printf 'repo=%s\n' "$repo_root"
+    printf 'postgres_port=%s\n' "$MEMBA_POSTGRES_PORT"
+  } > "$lock_dir/info"
+}
+
+release_quality_gate_lock() {
+  rm -rf "$(quality_gate_lock_dir)"
+}
+
+with_quality_gate_lock() {
+  local command_name="$1"
+  shift
+
+  if [ "${MEMBA_QUALITY_GATE_LOCK_HELD:-0}" = "1" ]; then
+    "$command_name" "$@"
+    return
+  fi
+
+  acquire_quality_gate_lock "$command_name" "$@"
+
+  local status
+  set +e
+  MEMBA_QUALITY_GATE_LOCK_HELD=1 "$command_name" "$@"
+  status=$?
+  set -e
+
+  release_quality_gate_lock
+  return "$status"
+}
+
 precommit() {
+  with_quality_gate_lock _precommit "$@"
+}
+
+_precommit() {
   (cd "$repo_root/web" && local_test_email_env mix precommit)
 }
 
 # @cmd Run the standard local quality gate with required services
 ci() {
+  with_quality_gate_lock _ci "$@"
+}
+
+_ci() {
   start_postgres
   precommit
   acceptance
@@ -361,6 +445,10 @@ ci() {
 # @cmd Run the standard local quality gate
 # @flag --quick Skip browser acceptance for faster local loops
 check() {
+  with_quality_gate_lock _check "$@"
+}
+
+_check() {
   start_postgres
   precommit
 
@@ -415,6 +503,10 @@ sandbox_check() {
 
 # @cmd Run the acceptance test suite
 acceptance() {
+  with_quality_gate_lock _acceptance "$@"
+}
+
+_acceptance() {
   (
     cd "$repo_root/acceptance-tests"
 
