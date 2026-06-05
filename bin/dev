@@ -934,7 +934,7 @@ _fabro_progress() {
   local run_id="${1:-}"
   local plan_path=""
   local watch=0
-  local interval=10
+  local interval=30
 
   if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ]; then
     echo "Usage: $0 fabro progress <run_id> [plan_path] [--watch] [--interval seconds]" >&2
@@ -967,19 +967,29 @@ _fabro_progress() {
     esac
   done
 
+  if [ -z "$plan_path" ]; then
+    _fabro_require_tool jq
+    plan_path=$(command fabro inspect "$run_id" --json \
+      | jq -r 'if type == "array" then .[0] else . end | .run_spec.settings.run.inputs.plan_path // empty')
+    if [ -z "$plan_path" ]; then
+      echo "Could not infer plan_path from run inputs; pass it explicitly." >&2
+      exit 1
+    fi
+  fi
+
+  local iteration_name
+  iteration_name=$(basename "${plan_path%/plan.md}" | sed -E 's/^[0-9]+-//' | tr '-' ' ')
+
   local tmp status
   tmp=$(mktemp "${TMPDIR:-/tmp}/memba-fabro-progress.XXXXXX.md")
   while true; do
-    if [ -n "$plan_path" ]; then
-      _fabro_pull_todo "$run_id" "$plan_path" "$tmp" >/dev/null
-    else
-      _fabro_pull_todo "$run_id" "$tmp" >/dev/null
-    fi
+    _fabro_pull_todo "$run_id" "$plan_path" "$tmp" >/dev/null
 
     if [ "$watch" -eq 1 ]; then
       clear
-      gum style --foreground 245 "Updated: $(date '+%Y-%m-%d %H:%M:%S')"
+      gum style --foreground 245 "Updated: $(date '+%Y-%m-%d %H:%M:%S') — polling every ${interval}s"
     fi
+    gum style --bold --foreground 99 "Iteration: $iteration_name"
     _fabro_render_progress "$run_id" "$tmp"
     status=$?
 
