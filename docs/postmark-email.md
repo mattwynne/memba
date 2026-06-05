@@ -44,7 +44,6 @@ Set these environment variables for the environment that should send real email:
 Example local Postmark configuration for production-like manual development:
 
 ```sh
-export MEMBA_EMAIL_PROVIDER=postmark
 export MEMBA_POSTMARK_SERVER_TOKEN="postmark-dev-server-token"
 export MEMBA_MESSAGING_FROM_ADDRESS="messages@mail-dev.memba.io"
 export MEMBA_MESSAGING_REPLY_TO_ADDRESS="support@memba.io"
@@ -53,6 +52,10 @@ export MEMBA_AUTH_EMAIL_MESSAGE_STREAM="outbound-authentication"
 export MEMBA_CLUB_INBOUND_EMAIL_DOMAIN="clubs-dev.memba.io"
 ./bin/dev up
 ```
+
+`MEMBA_EMAIL_PROVIDER` is not a secret. Do not put it in `.local/secrets.envrc`;
+`bin/dev up` sets local development to Postmark. Use `MEMBA_DEV_EMAIL_PROVIDER`
+when you need to override that local command default.
 
 Example production Postmark configuration:
 
@@ -328,11 +331,10 @@ without changing DNS.
 For a real local inbound email smoke test, use the dedicated Postmark dev server
 with the receiving-enabled `clubs-dev.memba.io` domain:
 
-1. Add ngrok, Postmark, and inbound-domain settings to `.local/secrets.envrc`:
+1. Add ngrok, Postmark, and inbound-domain secret/config values to `.local/secrets.envrc`:
 
    ```sh
    export NGROK_AUTHTOKEN="..."
-   export MEMBA_EMAIL_PROVIDER=postmark
    export MEMBA_POSTMARK_SERVER_TOKEN="postmark-dev-server-token"
    export MEMBA_MESSAGING_FROM_ADDRESS="messages@mail-dev.memba.io"
    export MEMBA_AUTH_EMAIL_FROM_ADDRESS="auth@mail-dev.memba.io"

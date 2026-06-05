@@ -4,13 +4,15 @@ Date: 2026-06-04
 
 ## Context
 
-While switching local development email from Resend to a dedicated Postmark dev server, `.local/secrets.envrc` was updated to select real Postmark delivery for manual dev use:
+While switching local development email from Resend to a dedicated Postmark dev server, `.local/secrets.envrc` temporarily included both real Postmark secrets/config values and the local provider selection for manual dev use:
 
 - `MEMBA_EMAIL_PROVIDER=postmark`
 - `MEMBA_POSTMARK_SERVER_TOKEN`
 - `MEMBA_MESSAGING_FROM_ADDRESS=messages@mail-dev.memba.io`
 - `MEMBA_AUTH_EMAIL_FROM_ADDRESS=auth@mail-dev.memba.io`
 - `MEMBA_AUTH_EMAIL_MESSAGE_STREAM=outbound-authentication`
+
+We later removed `MEMBA_EMAIL_PROVIDER` from `.local/secrets.envrc`; provider selection is command policy and `bin/dev up` now sets local development to Postmark explicitly.
 
 After the Postmark/DNS changes, we ran the standard project quality gate:
 
@@ -50,12 +52,13 @@ The orphaned Postgres process also made recovery less obvious: `dev down` report
 
 Two workflow guardrails were weak:
 
-1. `dev check` reused the shell environment that is useful for `dev up`, without explicitly clearing real email provider variables before running automated tests.
-2. The dev process lifecycle could leave Postgres orphaned outside the process manager, so `dev down` did not fully restore a clean baseline.
+1. Provider selection was temporarily stored beside secrets, making it ambient state instead of command policy.
+2. `dev check` reused the shell environment that is useful for `dev up`, without explicitly clearing real email provider variables before running automated tests.
+3. The dev process lifecycle could leave Postgres orphaned outside the process manager, so `dev down` did not fully restore a clean baseline.
 
 ## Observations
 
-- `.local/secrets.envrc` is serving two different purposes: manual production-like dev and ambient environment for quality gates.
+- `.local/secrets.envrc` was serving two different purposes: secret/config storage and command policy for manual production-like dev.
 - The project already had intent in `docs/postmark-email.md`: automated tests should use local/fake delivery unless explicitly doing a manual smoke test.
 - The command boundary between `dev up` and `dev check` needs to enforce that intent, not rely on the caller remembering which env vars are present.
 - The direct `dev up`/`dev restart` fast path had also bypassed the new Postmark webhook sync until corrected.
