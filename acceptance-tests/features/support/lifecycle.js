@@ -19,6 +19,8 @@ function acceptanceLog(message) {
 const repoRoot = path.resolve(__dirname, "../../..");
 const binDevPath = path.join(repoRoot, "bin", "dev");
 const binMixPath = path.join(repoRoot, "bin", "mix");
+const defaultAcceptanceServerNode = "memba_acceptance_server";
+const defaultAcceptanceServerCookie = "memba_acceptance_cookie";
 
 const databaseSetupSteps = [
   { label: "drop existing test database", mixArgs: ["ecto.drop", "--quiet"] },
@@ -83,7 +85,7 @@ function buildPostgresReadinessCommand(config) {
     command: "bash",
     args: [
       "-lc",
-      'if ! devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes status postgres >/dev/null 2>&1; then DEVENV_TUI=false devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres; fi; devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes wait --timeout 120'
+      'if devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes status postgres >/dev/null 2>&1; then exit 0; fi; DEVENV_TUI=false devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes up --no-strict-ports -d postgres; devenv -O services.postgres.port:int "$MEMBA_POSTGRES_PORT" processes wait --timeout 120'
     ],
     cwd: config.repoRoot,
     env: buildCommandEnvironment(config)
@@ -119,7 +121,19 @@ function buildMixCommand(config, mixArgs) {
 }
 
 function buildPhoenixCommand(config) {
-  return buildMixCommand(config, ["phx.server"]);
+  const command = buildMixCommand(config, ["phx.server"]);
+  const distributionOptions = `-sname ${config.acceptanceServerNode} -setcookie ${config.acceptanceServerCookie}`;
+
+  command.env = {
+    ...command.env,
+    ACCEPTANCE_SERVER_NODE: config.acceptanceServerNode,
+    ACCEPTANCE_SERVER_COOKIE: config.acceptanceServerCookie,
+    ELIXIR_ERL_OPTIONS: [command.env.ELIXIR_ERL_OPTIONS, distributionOptions]
+      .filter(Boolean)
+      .join(" ")
+  };
+
+  return command;
 }
 
 async function findFreePort() {
@@ -164,7 +178,9 @@ async function buildLifecycleConfig(env = process.env, portFinder = findFreePort
       (parseBoolean(env.ACCEPTANCE_MANAGE_POSTGRES) || env.MEMBA_DEVENV_SHELL !== "1"),
     commandTimeoutMs: Number(env.ACCEPTANCE_COMMAND_TIMEOUT_MS || 300000),
     httpReadyTimeoutMs: Number(env.ACCEPTANCE_HTTP_READY_TIMEOUT_MS || 60000),
-    shutdownTimeoutMs: Number(env.ACCEPTANCE_SHUTDOWN_TIMEOUT_MS || 60000)
+    shutdownTimeoutMs: Number(env.ACCEPTANCE_SHUTDOWN_TIMEOUT_MS || 60000),
+    acceptanceServerNode: env.ACCEPTANCE_SERVER_NODE || defaultAcceptanceServerNode,
+    acceptanceServerCookie: env.ACCEPTANCE_SERVER_COOKIE || defaultAcceptanceServerCookie
   };
 }
 

@@ -1,6 +1,5 @@
 const { Given, When, Then } = require("@cucumber/cucumber");
 const {
-  addMembers,
   assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
@@ -19,10 +18,9 @@ const {
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
-  createClub,
-  createPerson,
-  createPeople,
+  emailFor,
   ensureClubSlugMatchesInboundAddress,
+  ensureState,
   kootenayClubName,
   makeClubMessageSendingUnavailable,
   nelsonClubName,
@@ -39,49 +37,38 @@ const {
   withMemberHarness,
   withStaffHarness
 } = require("../support/member_harness");
+const serverCommands = require("../support/server_commands");
 
 Given("Kootenay Mountaineering Club is a club", async function () {
-  await withStaffHarness(this, (staff) => createClub(staff, kootenayClubName));
+  ensureClubState(this, kootenayClubName);
 });
 
 Given("Nelson Paddling Club is a club", async function () {
-  await withStaffHarness(this, (staff) => createClub(staff, nelsonClubName));
+  ensureClubState(this, nelsonClubName);
 });
 
 Given("Alice, Bob, and Carol are people", async function () {
-  await withStaffHarness(this, (staff) => createPeople(staff, ["Alice", "Bob", "Carol"]));
+  ensurePeopleState(this, ["Alice", "Bob", "Carol"]);
 });
 
 Given("Alice, Bob, Carol, and Dana are people", async function () {
-  await withStaffHarness(this, (staff) => createPeople(staff, ["Alice", "Bob", "Carol", "Dana"]));
+  ensurePeopleState(this, ["Alice", "Bob", "Carol", "Dana"]);
 });
 
 Given("Pat is a person", async function () {
-  await withStaffHarness(this, (staff) => createPeople(staff, ["Pat"]));
+  ensurePeopleState(this, ["Pat"]);
 });
 
 Given("Alice, Bob, and Carol are members of Kootenay Mountaineering Club", async function () {
-  await withStaffHarness(this, (staff) => addMembers(staff, ["Alice", "Bob", "Carol"], kootenayClubName));
+  ensureMembersState(this, ["Alice", "Bob", "Carol"], kootenayClubName);
 });
 
 Given("Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club", async function () {
-  await withStaffHarness(this, (staff) => addMembers(staff, ["Alice", "Bob", "Carol", "Dana"], kootenayClubName));
+  ensureMembersState(this, ["Alice", "Bob", "Carol", "Dana"], kootenayClubName);
 });
 
 Given("Pat is a member of Nelson Paddling Club", async function () {
-  await withStaffHarness(this, async (staff) => {
-    if (!staff.clubs || !staff.clubs[nelsonClubName]) {
-      await createClub(staff, nelsonClubName);
-    }
-
-    if (!staff.people || !staff.people.Pat) {
-      await createPerson(staff, "Pat", nelsonClubName);
-    }
-
-    if (!staff.memberships || !staff.memberships[`${nelsonClubName}:Pat`]) {
-      await addMembers(staff, ["Pat"], nelsonClubName);
-    }
-  });
+  ensureMembersState(this, ["Pat"], nelsonClubName);
 });
 
 When(
@@ -368,6 +355,76 @@ function parsePersonList(text) {
     .filter(Boolean);
 }
 
+function ensureClubState(world, clubName, { slug = clubSlugFor(clubName) } = {}) {
+  ensureState(world);
+
+  if (world.clubs[clubName]) {
+    return world.clubs[clubName];
+  }
+
+  const result = serverCommands.ensureClub({ clubName, clubSlug: slug });
+  const club = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
+  world.clubs[clubName] = club;
+  return club;
+}
+
+function ensurePersonState(world, personName) {
+  ensureState(world);
+
+  if (world.people[personName]) {
+    return world.people[personName];
+  }
+
+  const result = serverCommands.ensurePerson({ personName, email: emailFor(personName) });
+  const person = personStateFromCommand(result);
+  world.people[personName] = person;
+  return person;
+}
+
+function ensurePeopleState(world, personNames) {
+  return personNames.map((personName) => ensurePersonState(world, personName));
+}
+
+function ensureMembersState(world, personNames, clubName) {
+  ensureClubState(world, clubName);
+
+  for (const personName of personNames) {
+    const result = serverCommands.ensureMember({
+      clubName,
+      clubSlug: clubSlugFor(clubName),
+      personName,
+      email: emailFor(personName)
+    });
+
+    world.clubs[clubName] = { clubId: result.clubId, name: result.clubName, slug: result.clubSlug };
+    world.people[personName] = personStateFromCommand(result);
+    world.memberships[`${clubName}:${personName}`] = {
+      clubId: result.clubId,
+      membershipId: result.membershipId,
+      personId: result.personId
+    };
+  }
+}
+
+function personStateFromCommand(result) {
+  return {
+    alternateEmails: [],
+    email: result.email,
+    emailAddresses: [{ email: result.email, isPrimary: true }],
+    name: result.personName,
+    personId: result.personId,
+    primaryEmail: result.email
+  };
+}
+
+function clubSlugFor(clubName) {
+  return clubName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
+}
+
 async function ensureKootenayMember(world, personName) {
   if (
     world.clubs &&
@@ -380,19 +437,7 @@ async function ensureKootenayMember(world, personName) {
     return;
   }
 
-  await withStaffHarness(world, async (staff) => {
-    if (!staff.clubs || !staff.clubs[kootenayClubName]) {
-      await createClub(staff, kootenayClubName);
-    }
-
-    if (!staff.people || !staff.people[personName]) {
-      await createPerson(staff, personName, kootenayClubName);
-    }
-
-    if (!staff.memberships || !staff.memberships[`${kootenayClubName}:${personName}`]) {
-      await addMembers(staff, [personName], kootenayClubName);
-    }
-  });
+  ensureMembersState(world, [personName], kootenayClubName);
 }
 
 async function prepareInboundClubEmailRouting(world, toAddress) {

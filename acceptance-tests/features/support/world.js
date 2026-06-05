@@ -16,9 +16,10 @@ const { restoreClubMessageSending } = require("./member_message");
 
 const lifecycle = createBrowserAcceptanceLifecycle();
 const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
-const progressLoggingEnabled = new Set(["1", "true", "yes"]).has(
+const progressLoggingEnabled = !new Set(["0", "false", "no"]).has(
   String(process.env.ACCEPTANCE_LOG_PROGRESS || "").toLowerCase()
 );
+const slowStepThresholdMs = Number(process.env.ACCEPTANCE_SLOW_STEP_THRESHOLD_MS || 1000);
 
 function acceptanceLog(message) {
   if (!progressLoggingEnabled) {
@@ -62,13 +63,14 @@ AfterAll({ name: "Stop Phoenix browser acceptance lifecycle", timeout: 120000 },
 BeforeStep(function ({ pickleStep } = {}) {
   this.currentStepStartedAt = nowMs();
   this.currentStepText = pickleStep && pickleStep.text;
-  acceptanceLog(`step start: ${this.scenarioName || "(unknown scenario)"} :: ${this.currentStepText || "(unknown step)"}`);
 });
 
 AfterStep(function ({ pickleStep } = {}) {
   const durationMs = this.currentStepStartedAt ? Math.round(nowMs() - this.currentStepStartedAt) : "unknown";
   const stepText = (pickleStep && pickleStep.text) || this.currentStepText || "(unknown step)";
-  acceptanceLog(`step finish: ${this.scenarioName || "(unknown scenario)"} :: ${stepText} :: ${durationMs}ms`);
+  if (durationMs !== "unknown" && durationMs >= slowStepThresholdMs) {
+    acceptanceLog(`slow step: ${this.scenarioName || "(unknown scenario)"} :: ${stepText} :: ${durationMs}ms`);
+  }
 });
 
 Before(async function ({ pickle } = {}) {

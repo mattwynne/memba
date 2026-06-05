@@ -1,0 +1,183 @@
+const os = require("node:os");
+const { spawnSync } = require("node:child_process");
+
+const defaultServerNodeName = "memba_acceptance_server";
+const defaultCookie = "memba_acceptance_cookie";
+
+function ensureClub({ clubName, clubSlug }) {
+  return runCommand(
+    `
+club_name = Map.fetch!(payload, "clubName")
+club_slug = Map.fetch!(payload, "clubSlug")
+
+club =
+  case Memba.Membership.get_club_by_slug(club_slug) do
+    nil ->
+      club_id = Memba.ID.generate(:club)
+      :ok = Memba.Membership.create_club(
+        %{club_id: club_id, name: club_name, slug: club_slug},
+        consistency: :strong
+      )
+      Memba.Membership.get_club_by_slug(club_slug)
+
+    club ->
+      club
+  end
+
+%{clubId: club.club_id, clubName: club.name, clubSlug: club.slug}
+`,
+    { clubName, clubSlug }
+  );
+}
+
+function ensurePerson({ personName, email }) {
+  return runCommand(
+    `
+person_name = Map.fetch!(payload, "personName")
+email = Map.fetch!(payload, "email")
+
+person =
+  case Memba.Membership.get_person_by_email(email) do
+    nil ->
+      person_id = Memba.ID.generate(:person)
+      :ok = Memba.Membership.create_person(
+        %{person_id: person_id, name: person_name, email: email},
+        consistency: :strong
+      )
+      Memba.Membership.get_person_by_email(email)
+
+    person ->
+      person
+  end
+
+%{personId: person.person_id, personName: person.name, email: email}
+`,
+    { personName, email }
+  );
+}
+
+function ensureMember({ clubName, clubSlug, personName, email }) {
+  return runCommand(
+    `
+club_name = Map.fetch!(payload, "clubName")
+club_slug = Map.fetch!(payload, "clubSlug")
+person_name = Map.fetch!(payload, "personName")
+email = Map.fetch!(payload, "email")
+
+club =
+  case Memba.Membership.get_club_by_slug(club_slug) do
+    nil ->
+      club_id = Memba.ID.generate(:club)
+      :ok = Memba.Membership.create_club(
+        %{club_id: club_id, name: club_name, slug: club_slug},
+        consistency: :strong
+      )
+      Memba.Membership.get_club_by_slug(club_slug)
+
+    club ->
+      club
+  end
+
+person =
+  case Memba.Membership.get_person_by_email(email) do
+    nil ->
+      person_id = Memba.ID.generate(:person)
+      :ok = Memba.Membership.create_person(
+        %{person_id: person_id, name: person_name, email: email},
+        consistency: :strong
+      )
+      Memba.Membership.get_person_by_email(email)
+
+    person ->
+      person
+  end
+
+membership =
+  Memba.Repo.get_by(Memba.Membership.Projections.Membership,
+    club_id: club.club_id,
+    person_id: person.person_id,
+    active: true
+  )
+
+membership_id =
+  case membership do
+    nil ->
+      membership_id = Memba.ID.generate(:membership)
+      :ok = Memba.Membership.add_member(
+        %{membership_id: membership_id, club_id: club.club_id, person_id: person.person_id},
+        consistency: :strong
+      )
+      membership_id
+
+    %{membership_id: membership_id} ->
+      membership_id
+  end
+
+%{
+  clubId: club.club_id,
+  clubName: club.name,
+  clubSlug: club.slug,
+  personId: person.person_id,
+  personName: person.name,
+  email: email,
+  membershipId: membership_id
+}
+`,
+    { clubName, clubSlug, personName, email }
+  );
+}
+
+function runCommand(code, payload = {}) {
+  const serverNode = acceptanceServerNode();
+  const cookie = process.env.ACCEPTANCE_SERVER_COOKIE || defaultCookie;
+  const encodedPayload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64");
+  const wrappedCode = `
+payload = ${JSON.stringify(encodedPayload)} |> Base.decode64!() |> Jason.decode!()
+result = (fn payload ->
+${code}
+end).(payload)
+result |> Jason.encode!() |> IO.write()
+`;
+
+  const result = spawnSync(
+    "elixir",
+    ["--hidden", "--sname", "undefined", "--cookie", cookie, "--rpc-eval", serverNode, wrappedCode],
+    { encoding: "utf8", env: process.env }
+  );
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Acceptance server command failed with exit code ${result.status}.\n` +
+        `Server node: ${serverNode}\n` +
+        `STDOUT:\n${result.stdout || ""}\nSTDERR:\n${result.stderr || ""}`
+    );
+  }
+
+  try {
+    return JSON.parse(result.stdout);
+  } catch (error) {
+    throw new Error(`Acceptance server command returned invalid JSON: ${result.stdout}`, { cause: error });
+  }
+}
+
+function acceptanceServerNode() {
+  const configured = process.env.ACCEPTANCE_SERVER_NODE || defaultServerNodeName;
+
+  if (configured.includes("@")) {
+    return configured;
+  }
+
+  return `${configured}@${shortHostname()}`;
+}
+
+function shortHostname() {
+  return os.hostname().split(".")[0];
+}
+
+module.exports = {
+  acceptanceServerNode,
+  ensureClub,
+  ensureMember,
+  ensurePerson,
+  runCommand
+};

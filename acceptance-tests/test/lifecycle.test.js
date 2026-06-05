@@ -6,6 +6,7 @@ const {
   assetBuildStep,
   buildLifecycleConfig,
   buildMixCommand,
+  buildPhoenixCommand,
   buildPostgresReadinessCommand,
   createBrowserAcceptanceLifecycle,
   databaseSetupSteps
@@ -94,6 +95,18 @@ test("non-dev-shell mix commands run through devenv on the selected Postgres por
   assert.equal(command.env.PHX_SERVER, "true");
   assert.equal(command.env.PORT, "4444");
   assert.equal(command.env.MEMBA_POSTGRES_PORT, "15555");
+});
+
+test("Phoenix server command starts a named node for acceptance server commands", async () => {
+  const config = await buildLifecycleConfig(testEnv({ MEMBA_DEVENV_SHELL: "1" }));
+  const command = buildPhoenixCommand(config);
+
+  assert.equal(command.command, path.resolve(__dirname, "../../bin/mix"));
+  assert.deepEqual(command.args, ["phx.server"]);
+  assert.match(command.env.ELIXIR_ERL_OPTIONS, /-sname memba_acceptance_server/);
+  assert.match(command.env.ELIXIR_ERL_OPTIONS, /-setcookie memba_acceptance_cookie/);
+  assert.equal(command.env.ACCEPTANCE_SERVER_NODE, "memba_acceptance_server");
+  assert.equal(command.env.ACCEPTANCE_SERVER_COOKIE, "memba_acceptance_cookie");
 });
 
 test("readiness timeout reports Phoenix startup/readiness diagnostics", async () => {

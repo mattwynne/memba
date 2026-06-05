@@ -1,11 +1,8 @@
 const assert = require("node:assert/strict");
 const { expect: playwrightExpect } = require("@playwright/test");
 const {
-  addMembers,
   appUrl,
   clubSiteUrl,
-  createClub,
-  createPerson,
   cssString,
   emailFor,
   ensureState,
@@ -14,6 +11,7 @@ const {
   testMailboxEmails,
   waitForMailboxEmails
 } = require("./member_message");
+const serverCommands = require("./server_commands");
 
 const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
 const signInSubject = "Sign in to Memba";
@@ -26,59 +24,44 @@ function authEmailFor(name) {
   return emailFor(name);
 }
 
-async function signInStaffForSetup(world) {
-  await requestSignInLinkForEmail(world, staffEmail, "Setup Staff");
-  await assertReceivesSignInLink(world, "Setup Staff");
-  await followSignInLink(world, "Setup Staff");
-  await completeStaffOnboardingIfNeeded(world);
-}
-
-async function withStaffSetupWorld(world, action) {
+async function ensureMember(world, personName, clubName) {
   ensureState(world);
 
-  const context = await world.browser.newContext();
-  const page = await context.newPage();
-  const setupWorld = {
-    ...world,
-    context,
-    page,
-    clubs: world.clubs,
-    people: world.people,
-    memberships: world.memberships,
-    signInRequests: world.signInRequests,
-    signInLinks: world.signInLinks
+  const result = serverCommands.ensureMember({
+    clubName,
+    clubSlug: clubSlugFor(clubName),
+    personName,
+    email: authEmailFor(personName)
+  });
+
+  world.clubs[clubName] = {
+    clubId: result.clubId,
+    name: result.clubName,
+    slug: result.clubSlug
   };
 
-  try {
-    await signInStaffForSetup(setupWorld);
-    await action(setupWorld);
-  } finally {
-    await context.close();
-  }
+  world.people[personName] = {
+    alternateEmails: [],
+    email: result.email,
+    emailAddresses: [{ email: result.email, isPrimary: true }],
+    name: result.personName,
+    personId: result.personId,
+    primaryEmail: result.email
+  };
+
+  world.memberships[`${clubName}:${personName}`] = {
+    clubId: result.clubId,
+    membershipId: result.membershipId,
+    personId: result.personId
+  };
 }
 
-async function ensureClub(world, clubName) {
-  ensureState(world);
-
-  if (!world.clubs[clubName]) {
-    await createClub(world, clubName);
-  }
-}
-
-async function ensurePerson(world, personName, clubName) {
-  ensureState(world);
-
-  if (!world.people[personName]) {
-    await createPerson(world, personName, clubName, { email: authEmailFor(personName) });
-  }
-}
-
-async function ensureMember(world, personName, clubName) {
-  await withStaffSetupWorld(world, async (setupWorld) => {
-    await ensureClub(setupWorld, clubName);
-    await ensurePerson(setupWorld, personName, clubName);
-    await addMembers(setupWorld, [personName], clubName);
-  });
+function clubSlugFor(clubName) {
+  return clubName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 32);
 }
 
 async function recordNonMember(world, personName) {
