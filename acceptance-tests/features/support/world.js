@@ -11,7 +11,6 @@ const { chromium } = require("playwright");
 const { configureBrowserEnvironment } = require("./browser_environment");
 const { createBrowserAcceptanceLifecycle } = require("./lifecycle");
 const { restoreClubMessageSending } = require("./member_message");
-const { assertAcceptanceParallelDisabled } = require("./parallel_guard");
 
 const lifecycle = createBrowserAcceptanceLifecycle();
 const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
@@ -32,7 +31,6 @@ class AcceptanceWorld {
 setWorldConstructor(AcceptanceWorld);
 
 BeforeAll({ name: "Start Phoenix browser acceptance lifecycle", timeout: 360000 }, async function () {
-  assertAcceptanceParallelDisabled();
   await lifecycle.start();
 });
 
