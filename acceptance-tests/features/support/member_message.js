@@ -1809,14 +1809,7 @@ async function reportRecipientEmailStatus(
       recipientEmail: delivery.recipientEmail
     });
 
-    await postPostmarkWebhook(world, deliveredPayload);
-    await waitForProjectedReceiptStatus(
-      world,
-      recipientName,
-      subject,
-      memberReceiptStatusForEventType("delivered"),
-      { expect }
-    );
+    await postPostmarkWebhookAndWaitForDeliveryProjections(world, deliveredPayload, delivery.deliveryId, "delivered");
   }
 
   const payload = postmarkPayloadForStatus({
@@ -1827,14 +1820,7 @@ async function reportRecipientEmailStatus(
     recipientEmail: delivery.recipientEmail
   });
 
-  await postPostmarkWebhook(world, payload);
-  await waitForProjectedReceiptStatus(
-    world,
-    recipientName,
-    subject,
-    memberReceiptStatusForEventType(eventType),
-    { expect }
-  );
+  await postPostmarkWebhookAndWaitForDeliveryProjections(world, payload, delivery.deliveryId, eventType);
 
   world.reportedDeliveryStatuses[key] = {
     eventType,
@@ -1851,6 +1837,62 @@ function hasSuccessfulDeliveryReport(world, key) {
   const report = world.reportedDeliveryStatuses[key];
 
   return report && ["delivered", "opened"].includes(report.eventType);
+}
+
+async function postPostmarkWebhookAndWaitForDeliveryProjections(world, payload, deliveryId, eventType) {
+  const memberStatus = memberReceiptStatusForEventType(eventType);
+  const staffStatus = staffDeliveryStatusForEventType(eventType);
+
+  await waitForReadModelChanges(
+    world,
+    [
+      readModelDeliveryStatusPredicate(
+        "Memba.Messaging.Projectors.MemberEmailDelivery",
+        deliveryId,
+        memberStatus
+      ),
+      readModelDeliveryStatusPredicate(
+        "Memba.Messaging.Projectors.MembaStaffEmailDelivery",
+        deliveryId,
+        staffStatus
+      )
+    ],
+    () => postPostmarkWebhook(world, payload)
+  );
+}
+
+function staffDeliveryStatusForEventType(eventType) {
+  switch (eventType) {
+    case "delivered":
+    case "opened":
+      return "delivered";
+
+    case "delayed":
+      return "delayed";
+
+    case "bounced":
+      return "bounced";
+
+    case "spam_complaint":
+      return "spam complaint";
+
+    default:
+      throw new Error(`Unsupported browser Memba staff email delivery projection status event: ${eventType}`);
+  }
+}
+
+function readModelDeliveryStatusPredicate(projector, deliveryId, status) {
+  return (event) =>
+    event.projector === projector &&
+    readModelChangeValues(event).some(
+      (change) => change && change.delivery_id === deliveryId && change.status === status
+    );
+}
+
+function readModelChangeValues(event) {
+  return Object.values((event && event.changes) || {}).filter(
+    (change) => change && typeof change === "object" && !Array.isArray(change)
+  );
 }
 
 async function deliveryForRecipient(
@@ -2001,6 +2043,136 @@ function mailboxEmailSummary(email) {
     subject: email.subject,
     to: email.to,
     text_body: email.text_body
+  };
+}
+
+async function waitForReadModelChanges(world, predicates, action, { timeoutMs = projectionTimeoutMs(world) } = {}) {
+  if (Array.isArray(world.readModelChanges)) {
+    await action();
+    assertReadModelChangesSeen(predicates, world.readModelChanges);
+    return;
+  }
+
+  const remainingPredicates = [...predicates];
+  const controller = new AbortController();
+  const deadline = Date.now() + timeoutMs;
+  let response;
+  let reader;
+  let buffer = "";
+  const decoder = new TextDecoder();
+
+  async function readNextEvent() {
+    while (Date.now() <= deadline) {
+      const parsedEvent = takeSseEventFromBuffer();
+
+      if (parsedEvent) {
+        return parsedEvent;
+      }
+
+      const remainingMs = deadline - Date.now();
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`timed out after ${timeoutMs}ms waiting for read-model change event`)), remainingMs)
+      );
+      const result = await Promise.race([reader.read(), timeout]);
+
+      if (result.done) {
+        throw new Error("Read-model change event stream ended before expected events arrived");
+      }
+
+      buffer += decoder.decode(result.value, { stream: true });
+    }
+
+    throw new Error(`timed out after ${timeoutMs}ms waiting for read-model change event`);
+  }
+
+  function takeSseEventFromBuffer() {
+    const eventBoundary = buffer.indexOf("\n\n");
+
+    if (eventBoundary === -1) {
+      return null;
+    }
+
+    const rawEvent = buffer.slice(0, eventBoundary);
+    buffer = buffer.slice(eventBoundary + 2);
+
+    return parseSseEvent(rawEvent);
+  }
+
+  try {
+    response = await fetch(appUrl(world.baseUrl, "/dev/test-support/read-model-changes/events"), {
+      signal: controller.signal
+    });
+    assert.equal(response.status, 200, `Expected read-model event stream to return 200, got ${response.status}`);
+    assert.ok(response.body && typeof response.body.getReader === "function", "Expected readable SSE body");
+    reader = response.body.getReader();
+
+    const readyEvent = await readNextEvent();
+    assert.equal(readyEvent.event, "ready", `Expected read-model event stream to be ready, got ${readyEvent.event}`);
+
+    await action();
+
+    while (remainingPredicates.length > 0) {
+      const event = await readNextEvent();
+
+      if (event.event !== "read_model_changed") {
+        continue;
+      }
+
+      const matchedIndex = remainingPredicates.findIndex((predicate) => predicate(event.data));
+
+      if (matchedIndex !== -1) {
+        remainingPredicates.splice(matchedIndex, 1);
+      }
+    }
+  } catch (error) {
+    throw new Error(`Timed out waiting for committed read-model changes. Cause: ${errorMessage(error)}`, {
+      cause: error
+    });
+  } finally {
+    controller.abort();
+    if (reader) {
+      await reader.cancel().catch(() => {});
+    }
+  }
+}
+
+function assertReadModelChangesSeen(predicates, events) {
+  const remainingPredicates = [...predicates];
+
+  for (const event of events) {
+    const matchedIndex = remainingPredicates.findIndex((predicate) => predicate(event));
+
+    if (matchedIndex !== -1) {
+      remainingPredicates.splice(matchedIndex, 1);
+    }
+  }
+
+  assert.equal(remainingPredicates.length, 0, "Expected fake read-model changes to include all expected projection updates");
+}
+
+function parseSseEvent(rawEvent) {
+  const lines = rawEvent.split(/\r?\n/);
+  let event = "message";
+  const dataLines = [];
+
+  for (const line of lines) {
+    if (line.startsWith(":")) {
+      continue;
+    }
+
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim();
+      continue;
+    }
+
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+
+  return {
+    event,
+    data: dataLines.length > 0 ? JSON.parse(dataLines.join("\n")) : null
   };
 }
 

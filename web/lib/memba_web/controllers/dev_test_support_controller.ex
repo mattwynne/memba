@@ -77,6 +77,84 @@ defmodule MembaWeb.DevTestSupportController do
     end
   end
 
+  def read_model_change_events(conn, _params) do
+    Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
+
+    conn =
+      conn
+      |> put_resp_content_type("text/event-stream")
+      |> put_resp_header("cache-control", "no-cache")
+      |> put_resp_header("connection", "keep-alive")
+      |> send_chunked(:ok)
+
+    case write_sse(conn, "ready", %{ready: true}) do
+      {:ok, conn} -> stream_read_model_changes(conn)
+      {:error, _reason} -> conn
+    end
+  end
+
+  defp stream_read_model_changes(conn) do
+    receive do
+      {:read_model_changed, payload} ->
+        case write_sse(conn, "read_model_changed", read_model_change_payload(payload)) do
+          {:ok, conn} -> stream_read_model_changes(conn)
+          {:error, _reason} -> conn
+        end
+    after
+      30_000 ->
+        case Plug.Conn.chunk(conn, ": heartbeat\n\n") do
+          {:ok, conn} -> stream_read_model_changes(conn)
+          {:error, _reason} -> conn
+        end
+    end
+  end
+
+  defp write_sse(conn, event, payload) do
+    Plug.Conn.chunk(conn, "event: #{event}\ndata: #{Jason.encode!(payload)}\n\n")
+  end
+
+  defp read_model_change_payload(%{projector: projector, source_event: event} = payload) do
+    %{
+      projector: inspect(projector),
+      source_event_type: inspect(event.__struct__),
+      source_event: normalize_read_model_change_value(event),
+      metadata: normalize_read_model_change_value(Map.get(payload, :metadata, %{})),
+      changes: normalize_read_model_change_value(Map.get(payload, :changes, %{}))
+    }
+  end
+
+  defp normalize_read_model_change_value(%{__struct__: _struct} = value) do
+    value
+    |> Map.from_struct()
+    |> Map.delete(:__meta__)
+    |> normalize_read_model_change_value()
+  end
+
+  defp normalize_read_model_change_value(value) when is_map(value) do
+    value
+    |> Enum.map(fn {key, value} ->
+      {read_model_change_key(key), normalize_read_model_change_value(value)}
+    end)
+    |> Map.new()
+  end
+
+  defp normalize_read_model_change_value(value) when is_list(value) do
+    Enum.map(value, &normalize_read_model_change_value/1)
+  end
+
+  defp normalize_read_model_change_value(value) when is_tuple(value) do
+    value
+    |> Tuple.to_list()
+    |> normalize_read_model_change_value()
+  end
+
+  defp normalize_read_model_change_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp normalize_read_model_change_value(value), do: value
+
+  defp read_model_change_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp read_model_change_key(key) when is_binary(key), do: key
+  defp read_model_change_key(key), do: inspect(key)
+
   defp stop_event_sourced_projectors! do
     for {child_id, pid, :worker, [module]} <- Supervisor.which_children(Memba.Supervisor),
         module in @projectors do

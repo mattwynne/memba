@@ -137,6 +137,8 @@ defmodule MembaWeb.Router do
       post "/messaging-delivery-provider",
            DevTestSupportController,
            :configure_messaging_email_delivery_provider
+
+      get "/read-model-changes/events", DevTestSupportController, :read_model_change_events
     end
   end
 end

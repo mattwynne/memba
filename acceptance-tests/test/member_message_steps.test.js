@@ -1387,6 +1387,7 @@ test("reporting a recipient email status posts to POST /webhooks/postmark using 
   const expectations = [];
   const world = worldWithPage(page);
   world.request = request;
+  world.readModelChanges = deliveryProjectionEvents("delivery-bob", "delivered");
   world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
   world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
 
@@ -1431,6 +1432,10 @@ test("reporting an opened email first reports delivery when the provider has not
   const request = new FakeRequestContext();
   const world = worldWithPage(page);
   world.request = request;
+  world.readModelChanges = [
+    ...deliveryProjectionEvents("delivery-dana", "delivered"),
+    ...deliveryProjectionEvents("delivery-dana", "opened", "delivered")
+  ];
   world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
   world.people = { Dana: { email: "dana@example.test", personId: "person-dana" } };
 
@@ -1445,7 +1450,7 @@ test("reporting an opened email first reports delivery when the provider has not
   assert.equal(world.reportedDeliveryStatuses["Trip planning night:Dana"].eventType, "opened");
 });
 
-test("reporting a recipient email status polls the browser-visible receipt projection", async () => {
+test("reporting a recipient email status waits for committed read-model delivery projections", async () => {
   const page = new FakePage();
   page.rows.deliveryRecords.push({
     attrs: {
@@ -1465,6 +1470,7 @@ test("reporting a recipient email status polls the browser-visible receipt proje
   world.projectionPollIntervalMs = 0;
   world.projectionTimeoutMs = 1000;
   world.request = request;
+  world.readModelChanges = deliveryProjectionEvents("delivery-bob", "delivered");
   world.messages = { "Trip planning night": { messageId: "message-1", subject: "Trip planning night" } };
   world.people = { Bob: { email: "bob@example.test", personId: "person-bob" } };
 
@@ -1480,10 +1486,7 @@ test("reporting a recipient email status polls the browser-visible receipt proje
   );
 
   assert.equal(request.posts.length, 1);
-  assert.equal(receiptTextAssertions.length, 3);
-  assert.ok(
-    receiptTextAssertions.every((expectation) => expectation[3].timeout > 0 && expectation[3].timeout <= 1000)
-  );
+  assert.equal(receiptTextAssertions.length, 0);
 });
 
 test("Postmark webhook submission failures report the endpoint and response details", async () => {
@@ -1540,6 +1543,19 @@ test("delivery lookup reads the delivery id needed for webhook metadata from the
     }
   );
 });
+
+function deliveryProjectionEvents(deliveryId, memberStatus, staffStatus = memberStatus) {
+  return [
+    {
+      projector: "Memba.Messaging.Projectors.MemberEmailDelivery",
+      changes: { member_email_delivery: { delivery_id: deliveryId, status: memberStatus } }
+    },
+    {
+      projector: "Memba.Messaging.Projectors.MembaStaffEmailDelivery",
+      changes: { memba_staff_email_delivery: { delivery_id: deliveryId, status: staffStatus } }
+    }
+  ];
+}
 
 function redactGeneratedMessageId(payload) {
   return {
