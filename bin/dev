@@ -784,7 +784,7 @@ Commands:
   validate-plan <plan_path>
   deliver <plan_path> [--wait|--no-wait] [--poll-interval seconds]
   review <branch> <plan_path> [base_ref_or_base_sha]
-  pull-todo <run_id> <plan_path> [destination]
+  pull-todo <run_id> [plan_path] [destination]
   clean-branches [--force]
 EOF
       ;;
@@ -826,20 +826,53 @@ _fabro_validate_plan() {
 
 _fabro_pull_todo() {
   local run_id="${1:-}"
-  local plan_path="${2:-}"
-  local destination="${3:-}"
+  local plan_path=""
+  local destination=""
 
-  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ] || [ -z "$plan_path" ] || [ $# -gt 3 ]; then
-    echo "Usage: $0 fabro pull-todo <run_id> <plan_path> [destination]" >&2
+  if [ "$run_id" = "-h" ] || [ "$run_id" = "--help" ] || [ -z "$run_id" ] || [ $# -gt 3 ]; then
+    echo "Usage: $0 fabro pull-todo <run_id> [plan_path] [destination]" >&2
+    echo "If plan_path is omitted, it is inferred from the run inputs." >&2
     echo "If destination is omitted, prints the sandbox todo.md to stdout." >&2
     exit 2
   fi
+
+  if [ $# -ge 2 ]; then
+    case "${2:-}" in
+      */plan.md) plan_path="$2" ;;
+      *) destination="$2" ;;
+    esac
+  fi
+  if [ $# -eq 3 ]; then
+    if [ -z "$plan_path" ]; then
+      echo "A destination cannot be supplied as the third argument unless the second argument is a plan_path ending in /plan.md." >&2
+      exit 2
+    fi
+    destination="$3"
+  fi
+
+  _fabro_require_tool fabro
+
+  if [ -z "$plan_path" ]; then
+    plan_path=$(command fabro inspect "$run_id" --json | python3 -c '
+import json
+import sys
+
+payload = json.load(sys.stdin)
+run = payload[0] if isinstance(payload, list) else payload
+try:
+    plan_path = run["run_spec"]["settings"]["run"]["inputs"]["plan_path"]
+except KeyError:
+    plan_path = None
+if not plan_path:
+    raise SystemExit("Could not infer plan_path from run inputs; pass it explicitly.")
+print(plan_path)
+')
+  fi
+
   case "$plan_path" in
     */plan.md) ;;
     *) echo "plan_path must end with /plan.md: $plan_path" >&2; exit 2 ;;
   esac
-
-  _fabro_require_tool fabro
 
   local todo_path="${plan_path%/plan.md}/todo.md"
   local sandbox_path="/workspace/memba/$todo_path"
