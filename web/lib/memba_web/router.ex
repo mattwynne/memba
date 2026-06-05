@@ -49,6 +49,11 @@ defmodule MembaWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :test_support_session do
+    plug :accepts, ["json"]
+    plug :fetch_session
+  end
+
   scope "/", MembaWeb do
     pipe_through [:browser, :club_member_context]
 
@@ -139,6 +144,12 @@ defmodule MembaWeb.Router do
            :configure_messaging_email_delivery_provider
 
       get "/read-model-changes/events", DevTestSupportController, :read_model_change_events
+    end
+
+    scope "/dev/test-support", MembaWeb do
+      pipe_through :test_support_session
+
+      post "/sign-in", DevTestSupportController, :sign_in
     end
   end
 end

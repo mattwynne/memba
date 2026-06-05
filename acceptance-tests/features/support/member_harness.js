@@ -2,15 +2,11 @@ const assert = require("node:assert/strict");
 const { expect: playwrightExpect } = require("@playwright/test");
 const {
   appUrl,
-  ensureState,
-  testMailboxEmails,
-  waitForMailboxEmails
+  ensureState
 } = require("./member_message");
 const serverCommands = require("./server_commands");
 
 const staffEmail = process.env.ACCEPTANCE_STAFF_EMAIL || "acceptance-staff@memba.io";
-const signInSubject = "Sign in to Memba";
-
 async function withStaffHarness(world, action) {
   await withReusableHarnessWorld(world, "staff", async (harnessWorld) => {
     if (!harnessWorld.signedInStaff) {
@@ -135,7 +131,7 @@ function copyHarnessState(world, harnessWorld) {
 
 async function signInStaff(world) {
   serverCommands.ensurePerson({ personName: "Acceptance Staff", email: staffEmail });
-  await signInDirectly(world, staffEmail);
+  await signInDirectly(world, staffEmail, { returnTo: "/admin/clubs" });
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toBeVisible();
 }
 
@@ -161,38 +157,21 @@ async function signInMember(world, memberName) {
   assertMemberPageIsNotAdmin(world, `signing in ${memberName} as a member`);
 }
 
-async function signInDirectly(world, email) {
+async function signInDirectly(world, email, options = {}) {
   const configuredPath = world.directSignInLinks && world.directSignInLinks[email];
-  const signInPath = configuredPath || serverCommands.createSignInLink({ email }).path;
-  await world.page.goto(browserAppUrl(world, signInPath));
-}
 
-async function signInByMagicLink(world, email, label) {
-  const previousEmails = await testMailboxEmails(world);
+  if (configuredPath) {
+    await world.page.goto(browserAppUrl(world, configuredPath));
+    return;
+  }
 
-  await world.page.goto(appUrl(world.baseUrl, "/auth"));
-  await world.page.getByLabel("Email address").fill(email);
-  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  const response = await world.context.request.post(appUrl(world.baseUrl, "/dev/test-support/sign-in"), {
+    data: { email },
+    headers: { "content-type": "application/json" }
+  });
 
-  const emails = await waitForMailboxEmails(
-    world,
-    previousEmails.length + 1,
-    `sign-in email for ${label} <${email}>`
-  );
-  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
-  const signInEmail = emails
-    .filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)))
-    .find((mailboxEmail) => signInEmailMatches(mailboxEmail, email));
-
-  assert.ok(
-    signInEmail,
-    `Expected ${label} <${email}> to receive a sign-in email; saw ${JSON.stringify(emails.map(emailSummary))}`
-  );
-
-  const signInLink = signInLinkFromTextBody(signInEmail.text_body);
-  assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${signInEmail.text_body}`);
-
-  await world.page.goto(browserAppUrl(world, signInLink));
+  assert.equal(response.status(), 204, `Expected direct sign-in route to return 204, got ${response.status()}`);
+  await world.page.goto(appUrl(world.baseUrl, options.returnTo || "/"));
 }
 
 function guardPageAgainstAdminRoutes(world, memberName) {
@@ -265,19 +244,6 @@ function signInEmailForPerson(person) {
   return person.email || person.primaryEmail;
 }
 
-function signInEmailMatches(email, recipientEmail) {
-  return (
-    email.subject === signInSubject &&
-    Array.isArray(email.to) &&
-    email.to.some((recipient) => String(recipient).includes(recipientEmail))
-  );
-}
-
-function signInLinkFromTextBody(textBody) {
-  const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
-  return match && match[0];
-}
-
 function browserAppUrl(world, url) {
   const parsed = new URL(url, `${world.baseUrl}/`);
   const base = new URL(world.baseUrl);
@@ -289,14 +255,6 @@ function browserAppUrl(world, url) {
   }
 
   return parsed.toString();
-}
-
-function mailboxMessageId(email) {
-  return email && email.headers && email.headers["Message-ID"];
-}
-
-function emailSummary(email) {
-  return { subject: email.subject, to: email.to, text_body: email.text_body };
 }
 
 module.exports = {

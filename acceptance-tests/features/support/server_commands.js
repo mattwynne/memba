@@ -332,23 +332,6 @@ function ensureSmokeTestClub({ clubName, clubSlug, personName, email }) {
   return member;
 }
 
-function createSignInLink({ email }) {
-  return runCommand(
-    `
-email = Map.fetch!(payload, "email")
-
-case Memba.Accounts.create_sign_in_token(email) do
-  {:ok, %{email: normalized_email, token: token}} ->
-    %{email: normalized_email, path: "/auth/sign-in/#{token}"}
-
-  {:error, reason} ->
-    raise "Could not create acceptance sign-in token for #{email}: #{inspect(reason)}"
-end
-`,
-    { email }
-  );
-}
-
 function sendClubMessage({ clubId, senderId, senderName, subject, body, timeoutMs = 1000 }) {
   return runCommand(
     `
@@ -454,7 +437,6 @@ function shortHostname() {
 
 module.exports = {
   acceptanceServerNode,
-  createSignInLink,
   ensureClub,
   ensureClubSlug,
   ensureMember,

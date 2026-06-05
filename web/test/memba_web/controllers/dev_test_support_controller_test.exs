@@ -33,6 +33,14 @@ defmodule MembaWeb.DevTestSupportControllerTest do
     assert Application.get_env(:memba, :messaging_email_delivery_provider) == Local
   end
 
+  test "POST /dev/test-support/sign-in stores the signed-in identity in the browser session",
+       %{conn: conn} do
+    conn = post(conn, ~p"/dev/test-support/sign-in", %{"email" => "Alice@Example.Test"})
+
+    assert response(conn, 204) == ""
+    assert get_session(conn, MembaWeb.IdentityAuth.identity_session_key()) == "alice@example.test"
+  end
+
   test "POST /dev/test-support/messaging-delivery-provider rejects unknown provider names",
        %{conn: conn} do
     original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)

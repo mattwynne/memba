@@ -165,14 +165,26 @@ async function followSignInLinkUrl(world, url) {
 
 async function signInDirectly(world, personNameOrEmail, options = {}) {
   const email = options.email || emailForDirectSignIn(world, personNameOrEmail);
-  const signInLink = serverCommands.createSignInLink({ email });
-  await followSignInLinkUrl(world, signInLink.path);
+  const returnTo = options.returnTo || "/";
+
+  if (world.directSignInLinks && world.directSignInLinks[email]) {
+    await followSignInLinkUrl(world, world.directSignInLinks[email]);
+    return;
+  }
+
+  const response = await world.context.request.post(appUrl(world.baseUrl, "/dev/test-support/sign-in"), {
+    data: { email },
+    headers: { "content-type": "application/json" }
+  });
+
+  assert.equal(response.status(), 204, `Expected direct sign-in route to return 204, got ${response.status()}`);
+  await world.page.goto(appUrl(world.baseUrl, returnTo));
 }
 
 async function signInAsStaffDirectly(world, personName, options = {}) {
   const email = options.email || staffEmailFor(personName);
   serverCommands.ensurePerson({ personName: options.staffName || personName, email });
-  await signInDirectly(world, email, { email });
+  await signInDirectly(world, email, { email, returnTo: options.returnTo || "/admin/clubs" });
 }
 
 function emailForDirectSignIn(world, personNameOrEmail) {

@@ -77,6 +77,12 @@ defmodule MembaWeb.DevTestSupportController do
     end
   end
 
+  def sign_in(conn, %{"email" => email}) do
+    conn
+    |> MembaWeb.IdentityAuth.log_in_identity(email)
+    |> send_resp(:no_content, "")
+  end
+
   def read_model_change_events(conn, _params) do
     Phoenix.PubSub.subscribe(Memba.PubSub, Memba.ReadModelChanges.topic())
 
