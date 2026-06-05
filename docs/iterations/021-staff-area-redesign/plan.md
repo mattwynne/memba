@@ -1,7 +1,7 @@
 # Staff area redesign and read-only operations indexes
 
 Date: 2026-06-05
-Status: validated
+Status: implementing
 
 ## Goal
 
