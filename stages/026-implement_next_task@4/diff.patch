@@ -1,0 +1,273 @@
+diff --git a/docs/iterations/021-staff-area-redesign/todo.md b/docs/iterations/021-staff-area-redesign/todo.md
+index d4c66c4..56e35b5 100644
+--- a/docs/iterations/021-staff-area-redesign/todo.md
++++ b/docs/iterations/021-staff-area-redesign/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the mockup HTML files and extract reusable layout ideas: staff operations shell, page header, navigation grouping, table density, status chips, action placement, and card/table treatment.
+ - [x] 002 Inspect current admin routes, LiveViews, layouts, tests, and acceptance helpers.
+ - [x] 003a Update `Layouts.admin` to the redesigned staff operations shell with the iteration-021 nav entries: Clubs, People, Messages, Deliveries.
+-- [ ] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
++- [x] 004 Add routes and LiveViews for read-only `/admin/people` and `/admin/messages` under the existing staff live session.
+ - [ ] 004a Route-verify the People and Messages staff nav links after `/admin/people` and `/admin/messages` exist so the original task-003 working-link requirement is fully satisfied.
+ - [ ] 005 Add context/read-model queries as needed:
+ - [ ] 006 Keep the new index queries simple and deterministic; avoid implementing filters, pagination, bulk actions, or new statuses in this slice.
+diff --git a/web/lib/memba_web/live/admin/messages_live/index.ex b/web/lib/memba_web/live/admin/messages_live/index.ex
+new file mode 100644
+index 0000000..e9a7b5a
+--- /dev/null
++++ b/web/lib/memba_web/live/admin/messages_live/index.ex
+@@ -0,0 +1,88 @@
++defmodule MembaWeb.Admin.MessagesLive.Index do
++  use MembaWeb, :live_view
++
++  @impl Phoenix.LiveView
++  def mount(_params, _session, socket) do
++    {:ok, stream(socket, :messages, [], dom_id: &"message-row-#{&1.message_id}")}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.admin flash={@flash}>
++      <main id="admin-messages-index" class="mx-auto max-w-7xl space-y-6 p-6">
++        <section class="space-y-2">
++          <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
++            Memba staff operations
++          </p>
++          <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">Messages</h1>
++          <p class="max-w-3xl text-[#4b5a55]">
++            Review projected club messages and open the existing delivery diagnostics for a
++            message.
++          </p>
++        </section>
++
++        <section
++          id="admin-messages-read-only-notice"
++          class="rounded-2xl border border-[#d6d2c8] bg-[#e6ece4] p-4 text-sm text-[#1f4842]"
++        >
++          This index is read-only in this slice. Message composition and delivery actions remain
++          outside the Memba staff operations area.
++        </section>
++
++        <section class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm">
++          <div class="border-b border-[#e6e3dc] p-5">
++            <h2 class="text-lg font-semibold text-[#15201c]">Projected messages</h2>
++            <p class="mt-1 text-sm text-[#7d877f]">
++              Messages will appear once the global message summary read model is wired.
++            </p>
++          </div>
++
++          <div class="overflow-x-auto">
++            <table
++              id="admin-messages-table"
++              aria-label="Messages"
++              class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
++            >
++              <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
++                <tr>
++                  <th scope="col" class="px-4 py-3">Subject</th>
++                  <th scope="col" class="px-4 py-3">Club</th>
++                  <th scope="col" class="px-4 py-3">Sender</th>
++                  <th scope="col" class="px-4 py-3">Projected</th>
++                  <th scope="col" class="px-4 py-3">Diagnostics</th>
++                </tr>
++              </thead>
++              <tbody
++                id="admin-messages-table-body"
++                class="divide-y divide-[#e6e3dc]"
++                phx-update="stream"
++              >
++                <tr id="admin-messages-empty" class="hidden only:table-row">
++                  <td colspan="5" class="px-4 py-6 text-center text-sm text-[#7d877f]">
++                    No projected messages to show yet.
++                  </td>
++                </tr>
++                <tr :for={{dom_id, message} <- @streams.messages} id={dom_id}>
++                  <td class="px-4 py-4 font-medium text-[#15201c]">{message.subject}</td>
++                  <td class="px-4 py-4 text-[#4b5a55]">{message.club_name}</td>
++                  <td class="px-4 py-4 text-[#4b5a55]">{message.sender_name}</td>
++                  <td class="px-4 py-4 text-[#4b5a55]">{message.projected_at}</td>
++                  <td class="px-4 py-4">
++                    <.link
++                      navigate={~p"/admin/messages/#{message.message_id}"}
++                      class="font-semibold text-[#1f4842] hover:text-[#15201c]"
++                    >
++                      Open diagnostics
++                    </.link>
++                  </td>
++                </tr>
++              </tbody>
++            </table>
++          </div>
++        </section>
++      </main>
++    </Layouts.admin>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/live/admin/people_live/index.ex b/web/lib/memba_web/live/admin/people_live/index.ex
+new file mode 100644
+index 0000000..3b3e0cf
+--- /dev/null
++++ b/web/lib/memba_web/live/admin/people_live/index.ex
+@@ -0,0 +1,79 @@
++defmodule MembaWeb.Admin.PeopleLive.Index do
++  use MembaWeb, :live_view
++
++  @impl Phoenix.LiveView
++  def mount(_params, _session, socket) do
++    {:ok, stream(socket, :people, [], dom_id: &"person-row-#{&1.person_id}")}
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.admin flash={@flash}>
++      <main id="admin-people-index" class="mx-auto max-w-7xl space-y-6 p-6">
++        <section class="space-y-2">
++          <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
++            Memba staff operations
++          </p>
++          <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">People</h1>
++          <p class="max-w-3xl text-[#4b5a55]">
++            Review global person records separately from the memberships that connect them to
++            clubs.
++          </p>
++        </section>
++
++        <section
++          id="admin-people-read-only-notice"
++          class="rounded-2xl border border-[#d6d2c8] bg-[#e6ece4] p-4 text-sm text-[#1f4842]"
++        >
++          This index is read-only in this slice. Create and edit person records through the
++          existing club-scoped people workflow.
++        </section>
++
++        <section class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm">
++          <div class="border-b border-[#e6e3dc] p-5">
++            <h2 class="text-lg font-semibold text-[#15201c]">Person records</h2>
++            <p class="mt-1 text-sm text-[#7d877f]">
++              People will appear once the global person summary read model is wired.
++            </p>
++          </div>
++
++          <div class="overflow-x-auto">
++            <table
++              id="admin-people-table"
++              aria-label="People records"
++              class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
++            >
++              <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
++                <tr>
++                  <th scope="col" class="px-4 py-3">Person</th>
++                  <th scope="col" class="px-4 py-3">Primary email</th>
++                  <th scope="col" class="px-4 py-3">Alternate emails</th>
++                  <th scope="col" class="px-4 py-3">Memberships</th>
++                </tr>
++              </thead>
++              <tbody
++                id="admin-people-table-body"
++                class="divide-y divide-[#e6e3dc]"
++                phx-update="stream"
++              >
++                <tr id="admin-people-empty" class="hidden only:table-row">
++                  <td colspan="4" class="px-4 py-6 text-center text-sm text-[#7d877f]">
++                    No person records to show yet.
++                  </td>
++                </tr>
++                <tr :for={{dom_id, person} <- @streams.people} id={dom_id}>
++                  <td class="px-4 py-4 font-medium text-[#15201c]">{person.name}</td>
++                  <td class="px-4 py-4 text-[#4b5a55]">{person.primary_email}</td>
++                  <td class="px-4 py-4 text-[#4b5a55]">{person.alternate_emails}</td>
++                  <td class="px-4 py-4 text-[#4b5a55]">{person.memberships}</td>
++                </tr>
++              </tbody>
++            </table>
++          </div>
++        </section>
++      </main>
++    </Layouts.admin>
++    """
++  end
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 9097e84..4068dcb 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -95,10 +95,12 @@ defmodule MembaWeb.Router do
+ 
+     live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
+       live "/clubs", ClubsLive.Index
++      live "/people", PeopleLive.Index
+       live "/clubs/:club_id", ClubsLive.Show
+       live "/clubs/:club_id/people/new", PeopleLive.New
+       live "/clubs/:club_id/people/:person_id/edit", PeopleLive.Edit
+       live "/deliveries", DeliveriesLive.Index
++      live "/messages", MessagesLive.Index
+       live "/messages/:message_id", MessagesLive.Show
+     end
+   end
+diff --git a/web/test/memba_web/live/admin_operations_index_live_test.exs b/web/test/memba_web/live/admin_operations_index_live_test.exs
+new file mode 100644
+index 0000000..6ed18e1
+--- /dev/null
++++ b/web/test/memba_web/live/admin_operations_index_live_test.exs
+@@ -0,0 +1,58 @@
++defmodule MembaWeb.AdminOperationsIndexLiveTest do
++  use MembaWeb.FeatureCase, async: false
++
++  test "global staff operations indexes require staff sign-in" do
++    for path <- ["/admin/people", "/admin/messages"] do
++      conn =
++        build_conn(:get, path)
++        |> get(path)
++
++      assert redirected_to(conn) == ~p"/auth"
++      assert Plug.Conn.get_session(conn, MembaWeb.IdentityAuth.return_to_session_key()) == path
++    end
++  end
++
++  test "Memba staff can open the read-only global People index", %{conn: conn} do
++    response =
++      conn
++      |> sign_in_staff()
++      |> get(~p"/admin/people")
++      |> html_response(200)
++
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "People"
++    assert_selector_exists(html, "#admin-layout[data-surface='admin']")
++    assert_selector_exists(html, "#admin-people-index")
++    assert_selector_exists(html, "#admin-people-read-only-notice")
++    assert_selector_exists(html, "#admin-people-table[aria-label='People records']")
++    refute_selector_exists(html, "#new-person-form")
++  end
++
++  test "Memba staff can open the read-only global Messages index", %{conn: conn} do
++    response =
++      conn
++      |> sign_in_staff()
++      |> get(~p"/admin/messages")
++      |> html_response(200)
++
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Messages"
++    assert_selector_exists(html, "#admin-layout[data-surface='admin']")
++    assert_selector_exists(html, "#admin-messages-index")
++    assert_selector_exists(html, "#admin-messages-read-only-notice")
++    assert_selector_exists(html, "#admin-messages-table[aria-label='Messages']")
++    refute_selector_exists(html, "#new-message-form")
++    refute_selector_exists(html, "[data-admin-message-action='resend']")
++    refute_selector_exists(html, "[data-admin-message-action='delete']")
++  end
++
++  defp assert_selector_exists(html, selector) do
++    assert html |> LazyHTML.query(selector) |> Enum.any?(), "Expected selector #{selector}"
++  end
++
++  defp refute_selector_exists(html, selector) do
++    refute html |> LazyHTML.query(selector) |> Enum.any?(), "Did not expect selector #{selector}"
++  end
++end
