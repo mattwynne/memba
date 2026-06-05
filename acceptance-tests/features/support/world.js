@@ -5,7 +5,8 @@ const {
   AfterAll,
   Before,
   After,
-  Status
+  Status,
+  setParallelCanAssign
 } = require("@cucumber/cucumber");
 const { chromium } = require("playwright");
 const { configureBrowserEnvironment } = require("./browser_environment");
@@ -14,6 +15,7 @@ const { restoreClubMessageSending } = require("./member_message");
 
 const lifecycle = createBrowserAcceptanceLifecycle();
 const defaultStepTimeoutMs = Number(process.env.ACCEPTANCE_STEP_TIMEOUT_MS || 30000);
+const resetStateBeforeScenario = process.env.ACCEPTANCE_RESET_STATE !== "0";
 
 setDefaultTimeout(defaultStepTimeoutMs);
 configureBrowserEnvironment();
@@ -29,6 +31,15 @@ class AcceptanceWorld {
 }
 
 setWorldConstructor(AcceptanceWorld);
+setParallelCanAssign((pickle, inProgress) => {
+  const isIsolated = hasTag(pickle, "@isolated-app");
+
+  if (isIsolated) {
+    return inProgress.length === 0;
+  }
+
+  return !inProgress.some((activePickle) => hasTag(activePickle, "@isolated-app"));
+});
 
 BeforeAll({ name: "Start Phoenix browser acceptance lifecycle", timeout: 360000 }, async function () {
   await lifecycle.start();
@@ -59,7 +70,11 @@ Before(async function ({ pickle } = {}) {
     );
   });
 
-  await resetAcceptanceState(this);
+  this.scenarioId = scenarioIdFor(pickle);
+
+  if (resetStateBeforeScenario) {
+    await resetAcceptanceState(this);
+  }
 });
 
 After(async function ({ result } = {}) {
@@ -104,6 +119,19 @@ After(async function ({ result } = {}) {
     await this.browser.close();
   }
 });
+
+function hasTag(pickle, tagName) {
+  return Boolean(pickle && pickle.tags && pickle.tags.some((tag) => tag.name === tagName));
+}
+
+function scenarioIdFor(pickle) {
+  const source = (pickle && (pickle.id || pickle.name)) || `${Date.now()}-${Math.random()}`;
+  return String(source)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 10) || "scenario";
+}
 
 async function resetAcceptanceState(world) {
   const response = await world.context.request.post(
