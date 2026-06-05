@@ -101,6 +101,11 @@ defmodule MembaWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :active, :atom,
+    default: nil,
+    values: [nil, :clubs, :people, :messages, :deliveries],
+    doc: "the active staff navigation item"
+
   slot :inner_block, required: true
 
   def admin(assigns) do
@@ -112,100 +117,116 @@ defmodule MembaWeb.Layouts do
     >
       <aside
         id="admin-sidebar"
-        class="border-b border-[#e6e3dc] bg-white/90 px-4 shadow-sm lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-72 lg:flex-col lg:border-r lg:border-b-0 lg:px-5"
+        class="border-b border-[#1b2a24] bg-[#102019] px-4 text-white shadow-sm lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:flex-col lg:border-r lg:border-b-0 lg:px-3"
       >
-        <div class="flex flex-col gap-5 py-5 lg:min-h-full">
+        <div class="flex flex-col gap-6 py-5 lg:min-h-full">
           <a
             href={~p"/admin/clubs"}
-            class="inline-flex w-fit items-center gap-3 transition duration-200 hover:opacity-80"
+            class="inline-flex w-fit items-center gap-2.5 px-1 transition duration-200 hover:opacity-80"
             aria-label="Memba staff home"
           >
-            <.logo />
-            <span class="flex flex-col leading-tight">
-              <span class="text-xs font-semibold uppercase tracking-[0.22em] text-[#7d877f]">
-                Staff
-              </span>
-              <span class="text-sm font-semibold text-[#1f4842]">Operations</span>
+            <span class="flex size-7 items-center justify-center rounded-lg bg-[#24574d] text-white">
+              <.sprig class="size-4 text-white" />
+            </span>
+            <span class="text-base font-bold tracking-tight text-white">Memba</span>
+            <span class="rounded-full bg-[#6b614b] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#eee6cf]">
+              Staff
             </span>
           </a>
 
-          <nav class="space-y-2" aria-label="Memba staff navigation">
-            <p
-              id="admin-navigation-group"
-              class="text-xs font-semibold uppercase tracking-[0.2em] text-[#7d877f]"
-            >
-              Operations
-            </p>
-            <div class="grid gap-1 sm:grid-cols-2 lg:grid-cols-1">
-              <.link
-                navigate={~p"/admin/clubs"}
-                id="admin-nav-clubs"
-                data-admin-nav-item="clubs"
-                class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#d6d2c8] hover:bg-[#f7f6f3] hover:text-[#15201c]"
+          <div
+            id="admin-global-search"
+            class="flex h-9 items-center rounded-lg bg-white/10 px-3 text-sm text-white/75"
+            aria-hidden="true"
+          >
+            Search everything...
+          </div>
+
+          <nav class="space-y-6" aria-label="Memba staff navigation">
+            <div class="space-y-2">
+              <p
+                id="admin-navigation-group"
+                class="px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/45"
               >
-                <span>Clubs</span>
-                <span class="text-xs text-[#7d877f] transition group-hover:text-[#1f4842]">
-                  Manage
-                </span>
-              </.link>
-              <.link
-                navigate={~p"/admin/people"}
-                id="admin-nav-people"
-                data-admin-nav-item="people"
-                class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#d6d2c8] hover:bg-[#f7f6f3] hover:text-[#15201c]"
-              >
-                <span>People</span>
-                <span class="text-xs text-[#7d877f] transition group-hover:text-[#1f4842]">
-                  Records
-                </span>
-              </.link>
-              <.link
-                navigate={~p"/admin/messages"}
-                id="admin-nav-messages"
-                data-admin-nav-item="messages"
-                class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#d6d2c8] hover:bg-[#f7f6f3] hover:text-[#15201c]"
-              >
-                <span>Messages</span>
-                <span class="text-xs text-[#7d877f] transition group-hover:text-[#1f4842]">
-                  Review
-                </span>
-              </.link>
-              <.link
-                navigate={~p"/admin/deliveries"}
-                id="admin-nav-deliveries"
-                data-admin-nav-item="deliveries"
-                class="group flex items-center justify-between rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#d6d2c8] hover:bg-[#f7f6f3] hover:text-[#15201c]"
-              >
-                <span>Deliveries</span>
-                <span class="text-xs text-[#7d877f] transition group-hover:text-[#1f4842]">
-                  Diagnose
-                </span>
-              </.link>
+                Operations
+              </p>
+              <div class="grid gap-1">
+                <.link
+                  navigate={~p"/admin/clubs"}
+                  id="admin-nav-clubs"
+                  data-admin-nav-item="clubs"
+                  class={admin_nav_class(@active == :clubs)}
+                >
+                  <span class="flex items-center gap-3">
+                    <.icon name="hero-building-office-2" class="size-4 bg-current" /> Clubs
+                  </span>
+                </.link>
+                <.link
+                  navigate={~p"/admin/people"}
+                  id="admin-nav-people"
+                  data-admin-nav-item="people"
+                  class={admin_nav_class(@active == :people)}
+                >
+                  <span class="flex items-center gap-3">
+                    <.icon name="hero-users" class="size-4 bg-current" /> People
+                  </span>
+                </.link>
+              </div>
+            </div>
+
+            <div class="space-y-2">
+              <p class="px-2 text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">
+                Messaging
+              </p>
+              <div class="grid gap-1">
+                <.link
+                  navigate={~p"/admin/messages"}
+                  id="admin-nav-messages"
+                  data-admin-nav-item="messages"
+                  class={admin_nav_class(@active == :messages)}
+                >
+                  <span class="flex items-center gap-3">
+                    <.icon name="hero-envelope" class="size-4 bg-current" /> Messages
+                  </span>
+                </.link>
+                <.link
+                  navigate={~p"/admin/deliveries"}
+                  id="admin-nav-deliveries"
+                  data-admin-nav-item="deliveries"
+                  class={admin_nav_class(@active == :deliveries)}
+                >
+                  <span class="flex items-center gap-3">
+                    <.icon name="hero-paper-airplane" class="size-4 bg-current" /> Deliveries
+                  </span>
+                </.link>
+              </div>
             </div>
           </nav>
 
           <div
             id="admin-staff-identity-block"
-            class="mt-auto flex items-center justify-between gap-3 rounded-2xl border border-[#e6e3dc] bg-[#f7f6f3] p-3"
+            class="mt-auto border-t border-white/10 px-2 pt-3"
           >
-            <div class="flex min-w-0 items-center gap-3">
-              <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#1f4842] text-xs font-bold text-white">
-                MS
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex min-w-0 items-center gap-3">
+                <div class="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#2f6257] text-xs font-bold text-white">
+                  MS
+                </div>
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-semibold text-white">Memba staff</p>
+                  <p class="truncate text-xs text-white/50">Memba operations</p>
+                </div>
               </div>
-              <div class="min-w-0">
-                <p class="truncate text-sm font-semibold text-[#15201c]">Memba staff</p>
-                <p class="truncate text-xs text-[#7d877f]">Memba operations</p>
-              </div>
+              <.form for={%{}} action={~p"/auth"} method="delete" id="admin-sign-out-form">
+                <button
+                  id="admin-sign-out-button"
+                  type="submit"
+                  class="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-white/70 transition duration-200 hover:-translate-y-0.5 hover:bg-white/10 hover:text-white"
+                >
+                  Sign out
+                </button>
+              </.form>
             </div>
-            <.form for={%{}} action={~p"/auth"} method="delete" id="admin-sign-out-form">
-              <button
-                id="admin-sign-out-button"
-                type="submit"
-                class="rounded-full border border-[#d6d2c8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
-              >
-                Sign out
-              </button>
-            </.form>
           </div>
         </div>
       </aside>
@@ -217,6 +238,14 @@ defmodule MembaWeb.Layouts do
 
     <.flash_group flash={@flash} />
     """
+  end
+
+  defp admin_nav_class(true) do
+    "flex items-center justify-between rounded-lg bg-[#1f574e] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition duration-200"
+  end
+
+  defp admin_nav_class(false) do
+    "flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium text-white/75 transition duration-200 hover:bg-white/10 hover:text-white"
   end
 
   @club_site_theme_defaults %{

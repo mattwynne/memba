@@ -119,7 +119,7 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash}>
+    <Layouts.admin flash={@flash} active={:clubs}>
       <main id="club-show" data-admin-page="club-detail" class="mx-auto max-w-7xl space-y-6 p-6">
         <%= if @club do %>
           <section class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

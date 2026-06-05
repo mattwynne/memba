@@ -12,10 +12,7 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
       Phoenix.PubSub.subscribe(Memba.PubSub, ReadModelChanges.topic())
     end
 
-    {:ok,
-     socket
-     |> assign(:deliveries_count, length(deliveries))
-     |> stream(:deliveries, deliveries, dom_id: &"delivery-row-#{&1.delivery_id}")}
+    {:ok, assign_deliveries(socket, deliveries)}
   end
 
   @impl Phoenix.LiveView
@@ -31,30 +28,25 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash}>
+    <Layouts.admin flash={@flash} active={:deliveries}>
       <main
         id="deliveries-overview"
         data-admin-page="deliveries"
-        class="mx-auto max-w-7xl space-y-6 p-6"
+        class="space-y-6 p-6"
       >
-        <section class="space-y-2">
-          <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
-            Memba staff operations
-          </p>
-          <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">Deliveries</h1>
-          <p id="deliveries-summary" class="max-w-3xl text-[#4b5a55]">
-            Review detailed email deliveries across messages, including provider reason text for
-            delayed, bounced, and spam complaint reports.
-          </p>
-        </section>
+        <.admin_page_header
+          eyebrow="Deliveries"
+          title="Deliveries"
+          description="Detailed email deliveries across messages, including provider reason text for delayed, bounced, and spam complaint reports."
+        />
 
         <section
           id="deliveries-summary-cards"
           aria-label="Delivery diagnostics summary"
           class="grid gap-4 md:grid-cols-3"
         >
-          <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
               Delivery records
             </p>
             <p
@@ -63,72 +55,64 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
             >
               {@deliveries_count}
             </p>
-            <p class="mt-1 text-sm text-[#4b5a55]">
-              Total projected email delivery diagnostics rows.
-            </p>
+            <p class="mt-1 text-sm text-[#4b5a55]">Projected diagnostics rows.</p>
           </article>
 
-          <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
-              Operator detail
+          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
+              Problem reports
             </p>
-            <p class="mt-3 text-lg font-semibold text-[#15201c]">Raw staff statuses</p>
-            <p class="mt-1 text-sm text-[#4b5a55]">
-              Staff see detailed delivery states, not the simplified member-facing vocabulary.
+            <p class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">
+              {@problem_count}
             </p>
+            <p class="mt-1 text-sm text-[#4b5a55]">Delayed, bounced, or complaint statuses.</p>
           </article>
 
-          <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
               Provider context
             </p>
             <p class="mt-3 text-lg font-semibold text-[#15201c]">Reason text preserved</p>
-            <p class="mt-1 text-sm text-[#4b5a55]">
-              Delays, bounces, and spam complaints keep provider reason text for diagnosis.
-            </p>
+            <p class="mt-1 text-sm text-[#4b5a55]">Raw provider details stay visible for staff.</p>
           </article>
         </section>
 
-        <section
-          id="deliveries-diagnostics-note"
-          class="rounded-2xl border border-[#d6d2c8] bg-[#e6ece4] p-4 text-sm text-[#1f4842]"
-        >
-          This page is a read-only operations view of existing delivery diagnostics. It does not
-          add resend, delete, bulk action, or filtering behaviour in this slice.
+        <section id="deliveries-diagnostics-note" class="sr-only">
+          This page is a read-only operations view of existing delivery diagnostics. It does not add resend, delete, bulk action, or filtering behaviour in this slice.
         </section>
 
-        <section
-          id="deliveries-table-card"
-          class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+        <.admin_toolbar
+          id="deliveries-toolbar"
+          search_placeholder="Search recipient or message-id..."
+          summary_label="All"
+          summary_count={@deliveries_count}
+          meta="Newest events first"
         >
-          <div class="flex flex-col gap-2 border-b border-[#e6e3dc] p-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <h2 class="text-lg font-semibold text-[#15201c]">Email deliveries</h2>
-              <p class="mt-1 text-sm text-[#7d877f]">
-                Showing {@deliveries_count} email delivery{if(@deliveries_count == 1,
-                  do: "",
-                  else: "s"
-                )}.
-              </p>
-            </div>
-            <p class="text-sm font-medium text-[#7d877f]">Newest events first</p>
-          </div>
+          <:chips :for={{status, count} <- @status_counts}>
+            <.admin_pill label={status_label(status)} count={count} />
+          </:chips>
+        </.admin_toolbar>
 
+        <.admin_table_card
+          id="deliveries-table-card"
+          title="Email deliveries"
+          description={"Showing #{@deliveries_count} email delivery#{if(@deliveries_count == 1, do: "", else: "s")}."}
+        >
           <div class="overflow-x-auto">
             <table
               id="deliveries-table"
               aria-label="Email deliveries"
-              class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
+              class="min-w-full text-left text-sm"
             >
-              <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+              <thead class="bg-[#efede8] text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
                 <tr>
-                  <th scope="col" class="px-4 py-3">Message</th>
                   <th scope="col" class="px-4 py-3">Recipient</th>
-                  <th scope="col" class="px-4 py-3">Address</th>
-                  <th scope="col" class="px-4 py-3">Channel</th>
+                  <th scope="col" class="px-4 py-3">Club</th>
+                  <th scope="col" class="px-4 py-3">Message</th>
                   <th scope="col" class="px-4 py-3">Status</th>
-                  <th scope="col" class="px-4 py-3">Event time</th>
-                  <th scope="col" class="px-4 py-3">Reason</th>
+                  <th scope="col" class="px-4 py-3">Provider event</th>
+                  <th scope="col" class="px-4 py-3">Time</th>
+                  <th scope="col" class="px-4 py-3">Message ID</th>
                 </tr>
               </thead>
               <tbody
@@ -153,46 +137,52 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
                   aria-label={"Delivery for #{delivery.recipient_name} on #{message_subject(delivery)}"}
                   class="transition-colors hover:bg-[#fbfaf8]"
                 >
+                  <td data-test-id="delivery-recipient-name" class="px-4 py-3.5">
+                    <.admin_identity_cell
+                      initials={recipient_initials(delivery.recipient_name)}
+                      title={delivery.recipient_name}
+                      subtitle={delivery.recipient_address}
+                      tone="muted"
+                    />
+                  </td>
+                  <td class="px-4 py-3.5 text-[#4b5a55]">{club_name(delivery)}</td>
                   <td
                     data-test-id="delivery-message-subject"
-                    class="max-w-xs px-4 py-4 font-medium text-[#15201c]"
+                    class="max-w-xs px-4 py-3.5 font-medium text-[#15201c]"
                   >
                     {message_subject(delivery)}
                   </td>
-                  <td data-test-id="delivery-recipient-name" class="px-4 py-4 text-[#4b5a55]">
-                    {delivery.recipient_name}
-                  </td>
-                  <td data-test-id="delivery-recipient-address" class="px-4 py-4 text-[#4b5a55]">
-                    {delivery.recipient_address}
-                  </td>
-                  <td data-test-id="delivery-channel" class="px-4 py-4 text-[#4b5a55]">
-                    {delivery.channel}
-                  </td>
-                  <td class="px-4 py-4">
-                    <span
+                  <td class="px-4 py-3.5">
+                    <.admin_status_chip
                       data-test-id="delivery-status"
-                      class={[
-                        "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-                        status_class(delivery.status)
-                      ]}
-                    >
-                      {delivery.status}
-                    </span>
+                      label={delivery.status}
+                      tone={status_tone(delivery.status)}
+                    />
+                  </td>
+                  <td
+                    data-test-id="delivery-reason"
+                    class="max-w-sm px-4 py-3.5 font-mono text-xs text-[#4b5a55]"
+                  >
+                    {reason_text(delivery.reason)}
                   </td>
                   <td
                     data-test-id="delivery-event-at"
-                    class="whitespace-nowrap px-4 py-4 text-[#4b5a55]"
+                    class="whitespace-nowrap px-4 py-3.5 text-[#4b5a55]"
                   >
                     {format_event_at(delivery.event_at)}
                   </td>
-                  <td data-test-id="delivery-reason" class="max-w-sm px-4 py-4 text-[#4b5a55]">
-                    {reason_text(delivery.reason)}
+                  <td class="px-4 py-3.5 font-mono text-xs text-[#7d877f]">
+                    {short_id(delivery.message_id)}
                   </td>
+                  <td data-test-id="delivery-recipient-address" class="hidden">
+                    {delivery.recipient_address}
+                  </td>
+                  <td data-test-id="delivery-channel" class="hidden">{delivery.channel}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </section>
+        </.admin_table_card>
       </main>
     </Layouts.admin>
     """
@@ -203,6 +193,10 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
 
   defp message_subject(_delivery), do: "Untitled message"
 
+  defp club_name(%{club_name: name}) when is_binary(name) and name != "", do: name
+  defp club_name(%{club_id: club_id}) when is_binary(club_id) and club_id != "", do: club_id
+  defp club_name(_delivery), do: "Unknown club"
+
   defp format_event_at(%DateTime{} = event_at) do
     Calendar.strftime(event_at, "%Y-%m-%d %H:%M:%S UTC")
   end
@@ -212,17 +206,50 @@ defmodule MembaWeb.Admin.DeliveriesLive.Index do
   defp reason_text(reason) when is_binary(reason) and reason != "", do: reason
   defp reason_text(_reason), do: "—"
 
-  defp status_class("delayed"), do: "bg-[#f3ecd8] text-[#7a5416]"
-  defp status_class("bounced"), do: "bg-[#f6e0c9] text-[#8a3d21]"
-  defp status_class("spam complaint"), do: "bg-[#f6e0c9] text-[#8a3d21]"
-  defp status_class("delivered"), do: "bg-[#e6ece4] text-[#1f4842]"
-  defp status_class(_status), do: "bg-[#f7f6f3] text-[#4b5a55]"
+  defp status_tone("delayed"), do: "warn"
+  defp status_tone("bounced"), do: "bad"
+  defp status_tone("spam complaint"), do: "bad"
+  defp status_tone("delivered"), do: "info"
+  defp status_tone(_status), do: "neutral"
+
+  defp status_label(status), do: status |> to_string() |> String.capitalize()
 
   defp refresh_deliveries(socket) do
-    deliveries = Messaging.list_operator_deliveries()
+    Messaging.list_operator_deliveries()
+    |> then(&assign_deliveries(socket, &1, reset: true))
+  end
+
+  defp assign_deliveries(socket, deliveries, stream_opts \\ []) do
+    stream_opts = Keyword.merge([dom_id: &"delivery-row-#{&1.delivery_id}"], stream_opts)
+    status_counts = deliveries |> Enum.frequencies_by(& &1.status) |> Enum.sort_by(&elem(&1, 0))
+
+    problem_count =
+      Enum.count(deliveries, fn delivery ->
+        delivery.status in ["delayed", "bounced", "spam complaint"]
+      end)
 
     socket
     |> assign(:deliveries_count, length(deliveries))
-    |> stream(:deliveries, deliveries, reset: true)
+    |> assign(:problem_count, problem_count)
+    |> assign(:status_counts, status_counts)
+    |> stream(:deliveries, deliveries, stream_opts)
   end
+
+  defp recipient_initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "?"
+      initials -> initials
+    end
+  end
+
+  defp recipient_initials(_name), do: "?"
+
+  defp short_id(id) when is_binary(id), do: String.slice(id, 0, 8)
+  defp short_id(_id), do: "—"
 end

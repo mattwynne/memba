@@ -5,53 +5,50 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
+    messages = Messaging.list_operator_messages()
+
     {:ok,
-     stream(socket, :messages, Messaging.list_operator_messages(),
-       dom_id: &"message-row-#{&1.message_id}"
-     )}
+     socket
+     |> assign(:message_count, length(messages))
+     |> stream(:messages, messages, dom_id: &"message-row-#{&1.message_id}")}
   end
 
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash}>
-      <main id="admin-messages-index" class="mx-auto max-w-7xl space-y-6 p-6">
-        <section class="space-y-2">
-          <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
-            Memba staff operations
-          </p>
-          <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">Messages</h1>
-          <p class="max-w-3xl text-[#4b5a55]">
-            Review projected club messages and open the existing delivery diagnostics for a
-            message.
-          </p>
+    <Layouts.admin flash={@flash} active={:messages}>
+      <main id="admin-messages-index" class="space-y-6 p-6">
+        <.admin_page_header
+          eyebrow="Messages"
+          title="Messages"
+          description="Read-only club message diagnostics across clubs. Open a row to inspect delivery details."
+        />
+
+        <section id="admin-messages-read-only-notice" class="sr-only">
+          This index is read-only in this slice. Message composition and delivery actions remain outside the Memba staff operations area.
         </section>
 
-        <section
-          id="admin-messages-read-only-notice"
-          class="rounded-2xl border border-[#d6d2c8] bg-[#e6ece4] p-4 text-sm text-[#1f4842]"
+        <.admin_toolbar
+          id="admin-messages-toolbar"
+          search_placeholder="Search messages..."
+          summary_label="All"
+          summary_count={@message_count}
+        />
+
+        <.admin_table_card
+          id="admin-messages-table-card"
+          title="Projected messages"
+          description="Newest projected messages first, with club and sender context where available."
         >
-          This index is read-only in this slice. Message composition and delivery actions remain
-          outside the Memba staff operations area.
-        </section>
-
-        <section class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm">
-          <div class="border-b border-[#e6e3dc] p-5">
-            <h2 class="text-lg font-semibold text-[#15201c]">Projected messages</h2>
-            <p class="mt-1 text-sm text-[#7d877f]">
-              Newest projected messages first, with club and sender context where available.
-            </p>
-          </div>
-
           <div class="overflow-x-auto">
             <table
               id="admin-messages-table"
               aria-label="Messages"
-              class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
+              class="min-w-full text-left text-sm"
             >
-              <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+              <thead class="bg-[#efede8] text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
                 <tr>
-                  <th scope="col" class="px-4 py-3">Subject</th>
+                  <th scope="col" class="px-4 py-3">Message</th>
                   <th scope="col" class="px-4 py-3">Club</th>
                   <th scope="col" class="px-4 py-3">Sender</th>
                   <th scope="col" class="px-4 py-3">Projected</th>
@@ -74,23 +71,34 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
                   data-testid="admin-message-row"
                   data-message-id={message.message_id}
                   data-message-subject={message.subject}
+                  class="transition-colors hover:bg-[#fbfaf8]"
                 >
-                  <td data-testid="admin-message-subject" class="px-4 py-4 font-medium text-[#15201c]">
-                    {subject_label(message.subject)}
+                  <td class="px-4 py-3.5">
+                    <.admin_identity_cell
+                      initials="✉"
+                      title={subject_label(message.subject)}
+                      subtitle={"From #{sender_label(message)}"}
+                      tone="green"
+                      link={~p"/admin/messages/#{message.message_id}"}
+                      testid="admin-message-subject"
+                    />
                   </td>
-                  <td data-testid="admin-message-club" class="px-4 py-4 text-[#4b5a55]">
+                  <td data-testid="admin-message-club" class="px-4 py-3.5 text-[#4b5a55]">
                     {club_label(message)}
                   </td>
-                  <td data-testid="admin-message-sender" class="px-4 py-4 text-[#4b5a55]">
+                  <td data-testid="admin-message-sender" class="px-4 py-3.5 text-[#4b5a55]">
                     {sender_label(message)}
                   </td>
-                  <td data-testid="admin-message-projected-at" class="px-4 py-4 text-[#4b5a55]">
+                  <td
+                    data-testid="admin-message-projected-at"
+                    class="whitespace-nowrap px-4 py-3.5 text-[#4b5a55]"
+                  >
                     {format_projected_at(message.projected_at)}
                   </td>
-                  <td class="px-4 py-4">
+                  <td class="px-4 py-3.5">
                     <.link
                       navigate={~p"/admin/messages/#{message.message_id}"}
-                      class="font-semibold text-[#1f4842] hover:text-[#15201c]"
+                      class="inline-flex items-center rounded-full border border-[#d6d2c8] px-3 py-1.5 text-xs font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
                     >
                       Open diagnostics
                     </.link>
@@ -99,7 +107,7 @@ defmodule MembaWeb.Admin.MessagesLive.Index do
               </tbody>
             </table>
           </div>
-        </section>
+        </.admin_table_card>
       </main>
     </Layouts.admin>
     """

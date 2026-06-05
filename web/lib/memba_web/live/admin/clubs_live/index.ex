@@ -50,64 +50,64 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash}>
-      <main id="clubs-index" data-admin-page="clubs" class="mx-auto max-w-7xl space-y-6 p-6">
-        <section class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div class="space-y-2">
-            <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
-              Memba staff operations
-            </p>
-            <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">Clubs</h1>
-            <p class="max-w-3xl text-[#4b5a55]">
-              Create club records, keep their public slug clear, and open a club to manage its
-              people and memberships.
-            </p>
-          </div>
-          <a
-            id="clubs-index-new-club-action"
-            href="#new-club-form"
-            class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
-          >
-            New club
-          </a>
-        </section>
+    <Layouts.admin flash={@flash} active={:clubs}>
+      <main id="clubs-index" data-admin-page="clubs" class="space-y-6 p-6">
+        <p class="sr-only">Memba staff operations</p>
+        <.admin_page_header
+          eyebrow="Clubs"
+          title="Clubs"
+          description="Create club records, keep public slugs clear, and open a club to manage people and memberships."
+        >
+          <:actions>
+            <a
+              id="clubs-index-new-club-action"
+              href="#new-club-form"
+              class="inline-flex h-11 items-center justify-center rounded-lg border border-[#1f4842] bg-[#1f4842] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+            >
+              <.icon name="hero-plus" class="mr-2 size-4 bg-current" /> New club
+            </a>
+          </:actions>
+        </.admin_page_header>
 
         <section
           id="clubs-summary"
           aria-label="Club operations summary"
-          class="grid gap-4 md:grid-cols-2"
+          class="grid gap-4 md:grid-cols-3"
         >
-          <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">Club records</p>
+          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">Clubs</p>
             <p id="clubs-summary-total" class="mt-3 text-3xl font-bold tracking-tight text-[#15201c]">
               {@club_count}
             </p>
-            <p class="mt-1 text-sm text-[#4b5a55]">
-              Total projected clubs in the staff directory.
-            </p>
+            <p class="mt-1 text-sm text-[#4b5a55]">Projected club records.</p>
           </article>
 
-          <article class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
-            <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
               Operations model
             </p>
             <p class="mt-3 text-lg font-semibold text-[#15201c]">Clubs stay distinct</p>
-            <p class="mt-1 text-sm text-[#4b5a55]">
-              Open a club record for club facts, person records, and memberships.
-            </p>
+            <p class="mt-1 text-sm text-[#4b5a55]">People can belong to more than one club.</p>
+          </article>
+
+          <article class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">Public slugs</p>
+            <p class="mt-3 text-lg font-semibold text-[#15201c]">Subdomain-ready</p>
+            <p class="mt-1 text-sm text-[#4b5a55]">Each club keeps a unique, readable slug.</p>
           </article>
         </section>
 
-        <section
+        <details
           id="clubs-create-card"
-          class="rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm"
+          class="rounded-xl border border-[#e0ddd4] bg-white p-5 shadow-sm open:ring-2 open:ring-[#e6ece4]"
+          open
         >
-          <div class="flex flex-col gap-1">
-            <h2 class="text-lg font-semibold text-[#15201c]">Create a club</h2>
-            <p class="text-sm text-[#7d877f]">
-              The slug is suggested from the club name and can still be edited before creation.
-            </p>
-          </div>
+          <summary class="cursor-pointer list-none text-base font-semibold text-[#15201c]">
+            Create a club
+            <span class="ml-2 text-sm font-normal text-[#7d877f]">
+              The slug is suggested from the club name.
+            </span>
+          </summary>
 
           <.form
             for={@club_form}
@@ -136,38 +136,35 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
                 required
               />
               <p id="club-slug-help" class="mt-1 text-xs text-[#7d877f]">
-                Suggested from the name. Use lowercase letters, numbers, and hyphens.
+                Use lowercase letters, numbers, and hyphens.
               </p>
             </div>
             <.button
               id="create-club-button"
               type="submit"
               aria-label="Create club"
-              class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+              class="inline-flex h-11 items-center justify-center rounded-lg border border-[#1f4842] bg-[#1f4842] px-4 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
             >
               Create club
             </.button>
           </.form>
-        </section>
+        </details>
 
-        <section
+        <.admin_toolbar
+          id="clubs-toolbar"
+          search_placeholder="Search clubs..."
+          summary_label="All"
+          summary_count={@club_count}
+        />
+
+        <.admin_table_card
           id="clubs-directory-card"
-          class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
+          title="Club directory"
+          description="Sorted by club name for stable staff scanning and browser automation."
         >
-          <div class="border-b border-[#e6e3dc] p-5">
-            <h2 class="text-lg font-semibold text-[#15201c]">Club directory</h2>
-            <p class="mt-1 text-sm text-[#7d877f]">
-              Sorted by club name for stable staff scanning and browser automation.
-            </p>
-          </div>
-
           <div class="overflow-x-auto">
-            <table
-              id="clubs-table"
-              aria-label="Club records"
-              class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
-            >
-              <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+            <table id="clubs-table" aria-label="Club records" class="min-w-full text-left text-sm">
+              <thead class="bg-[#efede8] text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
                 <tr>
                   <th scope="col" class="px-4 py-3">Club</th>
                   <th scope="col" class="px-4 py-3">Slug</th>
@@ -194,33 +191,27 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
                   data-club-name={club.name}
                   data-club-slug={club.slug}
                   aria-label={"Club #{club.name}"}
+                  class="transition-colors hover:bg-[#fbfaf8]"
                 >
-                  <td class="px-4 py-4">
-                    <div class="flex items-center gap-3">
-                      <div class="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#e6ece4] text-xs font-bold text-[#1f4842]">
-                        {club_initials(club.name)}
-                      </div>
-                      <div>
-                        <.link
-                          id={"club-link-#{club.club_id}"}
-                          navigate={~p"/admin/clubs/#{club.club_id}"}
-                          data-testid="club-link"
-                          aria-label={"Open club #{club.name}"}
-                          class="font-semibold text-[#1f4842] transition duration-200 hover:text-[#15201c]"
-                        >
-                          {club.name}
-                        </.link>
-                        <p class="mt-1 text-xs text-[#7d877f]">Club record</p>
-                      </div>
-                    </div>
+                  <td class="px-4 py-3.5">
+                    <.admin_identity_cell
+                      initials={club_initials(club.name)}
+                      title={club.name}
+                      subtitle="Club record"
+                      tone="green"
+                      link={~p"/admin/clubs/#{club.club_id}"}
+                      link_id={"club-link-#{club.club_id}"}
+                      testid="club-link"
+                      aria_label={"Open club #{club.name}"}
+                    />
                   </td>
-                  <td class="px-4 py-4">
+                  <td class="px-4 py-3.5">
                     <span class="rounded-full bg-[#f7f6f3] px-2.5 py-1 font-mono text-xs text-[#4b5a55]">
                       {club.slug}
                     </span>
                   </td>
-                  <td class="px-4 py-4 font-mono text-xs text-[#7d877f]">{club.club_id}</td>
-                  <td class="px-4 py-4">
+                  <td class="px-4 py-3.5 font-mono text-xs text-[#7d877f]">{club.club_id}</td>
+                  <td class="px-4 py-3.5">
                     <.link
                       navigate={~p"/admin/clubs/#{club.club_id}"}
                       class="inline-flex items-center rounded-full border border-[#d6d2c8] px-3 py-1.5 text-xs font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#1f4842] hover:text-[#15201c]"
@@ -232,7 +223,7 @@ defmodule MembaWeb.Admin.ClubsLive.Index do
               </tbody>
             </table>
           </div>
-        </section>
+        </.admin_table_card>
       </main>
     </Layouts.admin>
     """

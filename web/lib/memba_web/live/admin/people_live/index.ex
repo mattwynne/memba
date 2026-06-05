@@ -5,51 +5,48 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
+    people = Membership.list_operator_people()
+
     {:ok,
-     stream(socket, :people, Membership.list_operator_people(),
-       dom_id: &"person-row-#{&1.person_id}"
-     )}
+     socket
+     |> assign(:people_count, length(people))
+     |> stream(:people, people, dom_id: &"person-row-#{&1.person_id}")}
   end
 
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash}>
-      <main id="admin-people-index" class="mx-auto max-w-7xl space-y-6 p-6">
-        <section class="space-y-2">
-          <p class="text-sm font-semibold uppercase tracking-wide text-[#7d877f]">
-            Memba staff operations
-          </p>
-          <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">People</h1>
-          <p class="max-w-3xl text-[#4b5a55]">
-            Review global person records separately from the memberships that connect them to
-            clubs.
-          </p>
+    <Layouts.admin flash={@flash} active={:people}>
+      <main id="admin-people-index" class="space-y-6 p-6">
+        <.admin_page_header
+          eyebrow="People"
+          title="People"
+          description="One row per person, with contact details and club relationships kept separate from club membership records."
+        />
+
+        <section id="admin-people-read-only-notice" class="sr-only">
+          This index is read-only in this slice. Create and edit person records through the existing club-scoped people workflow.
         </section>
 
-        <section
-          id="admin-people-read-only-notice"
-          class="rounded-2xl border border-[#d6d2c8] bg-[#e6ece4] p-4 text-sm text-[#1f4842]"
+        <.admin_toolbar
+          id="admin-people-toolbar"
+          search_placeholder="Search people..."
+          summary_label="All"
+          summary_count={@people_count}
+        />
+
+        <.admin_table_card
+          id="admin-people-table-card"
+          title="Person records"
+          description="Sorted by person name, with active memberships shown as club summaries."
         >
-          This index is read-only in this slice. Create and edit person records through the
-          existing club-scoped people workflow.
-        </section>
-
-        <section class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm">
-          <div class="border-b border-[#e6e3dc] p-5">
-            <h2 class="text-lg font-semibold text-[#15201c]">Person records</h2>
-            <p class="mt-1 text-sm text-[#7d877f]">
-              Sorted by person name, with active memberships shown as club summaries.
-            </p>
-          </div>
-
           <div class="overflow-x-auto">
             <table
               id="admin-people-table"
               aria-label="People records"
-              class="min-w-full divide-y divide-[#e6e3dc] text-left text-sm"
+              class="min-w-full text-left text-sm"
             >
-              <thead class="bg-[#f7f6f3] text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+              <thead class="bg-[#efede8] text-xs font-bold uppercase tracking-[0.08em] text-[#7d877f]">
                 <tr>
                   <th scope="col" class="px-4 py-3">Person</th>
                   <th scope="col" class="px-4 py-3">Primary email</th>
@@ -73,24 +70,37 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
                   data-testid="admin-person-row"
                   data-person-id={person.person_id}
                   data-person-name={person.name}
+                  class="transition-colors hover:bg-[#fbfaf8]"
                 >
-                  <td data-testid="admin-person-name" class="px-4 py-4 font-medium text-[#15201c]">
-                    {person.name}
+                  <td class="px-4 py-3.5">
+                    <.admin_identity_cell
+                      initials={person_initials(person.name)}
+                      title={person.name}
+                      subtitle="Person record"
+                      tone="muted"
+                      testid="admin-person-name"
+                    />
                   </td>
-                  <td data-testid="admin-person-primary-email" class="px-4 py-4 text-[#4b5a55]">
+                  <td
+                    data-testid="admin-person-primary-email"
+                    class="px-4 py-3.5 font-mono text-xs text-[#4b5a55]"
+                  >
                     {email_summary(person.primary_email)}
                   </td>
-                  <td data-testid="admin-person-alternate-emails" class="px-4 py-4 text-[#4b5a55]">
+                  <td
+                    data-testid="admin-person-alternate-emails"
+                    class="px-4 py-3.5 font-mono text-xs text-[#4b5a55]"
+                  >
                     {email_summary(person.alternate_emails)}
                   </td>
-                  <td data-testid="admin-person-memberships" class="px-4 py-4 text-[#4b5a55]">
+                  <td data-testid="admin-person-memberships" class="px-4 py-3.5 text-[#4b5a55]">
                     {membership_summary(person.memberships)}
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-        </section>
+        </.admin_table_card>
       </main>
     </Layouts.admin>
     """
@@ -114,4 +124,19 @@ defmodule MembaWeb.Admin.PeopleLive.Index do
     do: club_id
 
   defp membership_label(_membership), do: "Unknown club"
+
+  defp person_initials(name) when is_binary(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map(&String.first/1)
+    |> Enum.join()
+    |> String.upcase()
+    |> case do
+      "" -> "?"
+      initials -> initials
+    end
+  end
+
+  defp person_initials(_name), do: "?"
 end
