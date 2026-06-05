@@ -1,4 +1,3 @@
-@wip
 Feature: Memba staff operations
   Memba staff need a clear operations area that shows Memba's real data model
   so they can manage clubs and diagnose communication without pretending that people and memberships are the same thing.
