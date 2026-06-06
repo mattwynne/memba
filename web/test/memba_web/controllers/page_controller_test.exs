@@ -1,6 +1,8 @@
 defmodule MembaWeb.PageControllerTest do
   use MembaWeb.ConnCase
 
+  import Swoosh.TestAssertions
+
   alias Memba.Accounts
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
@@ -885,6 +887,7 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "Tell us a little about you and your club."
     assert response =~ "can&#39;t be blank"
     assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
   end
 
   test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
@@ -902,6 +905,7 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "is invalid"
     assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
   end
 
   test "POST /get-started stores a signed-out request and acknowledges staff review", %{conn: conn} do
@@ -928,6 +932,18 @@ defmodule MembaWeb.PageControllerTest do
     assert request.note == "We want a safer way to message members."
     assert request.status == "active"
     assert is_nil(request.requester_person_id)
+
+    assert_received {:email, %Swoosh.Email{} = email}
+    assert email.from == {"Memba", "messages@mail.memba.io"}
+    assert email.to == [{"", "hello@memba.io"}]
+    assert email.reply_to == {"Robin Requester", "Robin@Example.COM"}
+    assert email.subject == "New Memba request: West Coast Paddlers"
+    assert email.text_body =~ "Request ID: #{request.request_id}"
+    assert email.text_body =~ "Club: West Coast Paddlers"
+    assert email.text_body =~ "Robin Requester"
+    assert email.text_body =~ "Robin@Example.COM"
+    assert email.text_body =~ "We want a safer way to message members."
+    assert email.provider_options == %{message_stream: "outbound-onboarding"}
 
     assert Repo.aggregate(Club, :count) == club_count
     assert Repo.aggregate(Membership, :count) == membership_count
@@ -976,6 +992,15 @@ defmodule MembaWeb.PageControllerTest do
     assert request.requested_club_name == "West Coast Paddlers"
     assert request.note == "We want a safer way to message members."
     assert request.status == "active"
+
+    assert_received {:email, %Swoosh.Email{} = email}
+    assert email.to == [{"", "hello@memba.io"}]
+    assert email.reply_to == {"Alice Applicant", "alice@example.com"}
+    assert email.subject == "New Memba request: West Coast Paddlers"
+    assert email.text_body =~ "Alice Applicant"
+    assert email.text_body =~ "alice@example.com"
+    refute email.text_body =~ "Forged Name"
+    refute email.text_body =~ "forged@example.net"
 
     assert Repo.aggregate(Club, :count) == club_count
     assert Repo.aggregate(Membership, :count) == membership_count

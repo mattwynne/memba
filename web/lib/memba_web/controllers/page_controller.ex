@@ -1,8 +1,11 @@
 defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
+  require Logger
+
   alias Memba.Membership
   alias Memba.Onboarding
+  alias Memba.Onboarding.NewRequestEmail
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
@@ -92,7 +95,8 @@ defmodule MembaWeb.PageController do
     {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
 
     case Onboarding.create_request(request_attrs, request_opts) do
-      {:ok, _request} ->
+      {:ok, request} ->
+        deliver_new_request_notification(request)
         redirect(conn, to: ~p"/get-started?submitted=true")
 
       {:error, changeset} ->
@@ -100,6 +104,18 @@ defmodule MembaWeb.PageController do
         |> put_status(:unprocessable_entity)
         |> assign(:request_submitted?, false)
         |> render_get_started(changeset)
+    end
+  end
+
+  defp deliver_new_request_notification(request) do
+    case NewRequestEmail.deliver(request) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning(
+          "Could not deliver onboarding request notification email: #{inspect(reason)}"
+        )
     end
   end
 
