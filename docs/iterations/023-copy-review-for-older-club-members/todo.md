@@ -9,4 +9,4 @@
 - [x] 007 Run targeted Phoenix tests and browser acceptance tests touched by changed labels.
 - [x] 008 Review pages manually at an iPad-like viewport:
 - [x] 009 Run `dev check` and fix any failures.
-- [ ] 010 Record implementation notes and any unresolved copy decisions in the iteration folder.
+- [x] 010 Record implementation notes and any unresolved copy decisions in the iteration folder.
