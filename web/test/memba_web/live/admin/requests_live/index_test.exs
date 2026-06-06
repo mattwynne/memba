@@ -5,8 +5,12 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
+  alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership
+  alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
@@ -109,11 +113,14 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
          conn: conn
        } do
     request = request_fixture("Rejectable Paddlers", requester_name: "Robin Requester")
+    conn = sign_in_staff(conn, "pat@memba.io")
+    club_count = Repo.aggregate(ClubProjection, :count)
+    person_count = Repo.aggregate(PersonProjection, :count)
+    membership_count = Repo.aggregate(MembershipProjection, :count)
+    sign_in_token_count = Repo.aggregate(SignInToken, :count)
 
     {:ok, view, _initial_html} =
-      conn
-      |> sign_in_staff("pat@memba.io")
-      |> live(~p"/admin/requests")
+      live(conn, ~p"/admin/requests")
 
     assert has_element?(view, "#request-row-#{request.request_id}")
     assert has_element?(view, "#admin-requests-active-count", "1")
@@ -155,6 +162,10 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert %DateTime{} = rejected.triaged_at
     assert is_nil(rejected.converted_club_id)
 
+    assert Repo.aggregate(ClubProjection, :count) == club_count
+    assert Repo.aggregate(PersonProjection, :count) == person_count
+    assert Repo.aggregate(MembershipProjection, :count) == membership_count
+    assert Repo.aggregate(SignInToken, :count) == sign_in_token_count
     assert_no_email_sent()
   end
 
@@ -274,6 +285,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   end
 
   test "staff can convert an active request into a club and active first member", %{conn: conn} do
+    configure_auth_email()
     request = request_fixture("Convertible Paddlers", requester_name: "Robin Requester")
 
     {:ok, view, _initial_html} =
@@ -315,6 +327,65 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert membership.club_id == club.club_id
     assert membership.person_id == person.person_id
     assert membership.active
+
+    assert [%SignInToken{email: token_email, consumed_at: nil}] = Repo.all(SignInToken)
+    assert token_email == request.normalized_requester_email
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"Robin Requester", request.normalized_requester_email}]
+      assert email.subject == "Welcome to Convertible Paddlers on Memba"
+      assert email.text_body =~ "http://convertible-paddlers.lvh.me:4002/auth/sign-in/"
+      assert email.text_body =~ "return_to=http%3A%2F%2Fconvertible-paddlers.lvh.me%3A4002%2F"
+    end)
+  end
+
+  test "staff conversion reuses an existing person when the request email already belongs to one",
+       %{conn: conn} do
+    existing_person_id = Memba.ID.generate(:person)
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: existing_person_id,
+                 name: "Existing Robin",
+                 email: "robin@example.com"
+               },
+               consistency: :strong
+             )
+
+    request =
+      request_fixture("Existing Person Paddlers",
+        requester_name: "Robin Requester",
+        requester_email: "Robin@Example.com"
+      )
+
+    conn = sign_in_staff(conn)
+    person_count = Repo.aggregate(PersonProjection, :count)
+
+    {:ok, view, _initial_html} =
+      live(conn, ~p"/admin/requests")
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    view
+    |> form("#convert-request-form-#{request.request_id}",
+      club: %{name: "Existing Person Paddlers", slug: "existing-person-paddlers"}
+    )
+    |> render_submit()
+
+    converted_request = Repo.get!(Request, request.request_id)
+    club = Membership.get_club(converted_request.converted_club_id)
+    membership = Repo.get!(MembershipProjection, converted_request.converted_membership_id)
+
+    assert converted_request.status == "converted"
+    assert converted_request.converted_person_id == existing_person_id
+    assert Repo.aggregate(PersonProjection, :count) == person_count
+    assert Membership.get_person(existing_person_id).name == "Existing Robin"
+    assert membership.club_id == club.club_id
+    assert membership.person_id == existing_person_id
+    assert membership.active
   end
 
   test "conversion preparation refreshes the inbox when the request is no longer active", %{
@@ -349,11 +420,12 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   defp request_fixture(club_name, opts \\ []) do
     unique = System.unique_integer([:positive])
     requester_name = Keyword.get(opts, :requester_name, "Requester #{unique}")
+    requester_email = Keyword.get(opts, :requester_email, "requester-#{unique}@example.com")
 
     {:ok, request} =
       Onboarding.create_request(%{
         requester_name: requester_name,
-        requester_email: "requester-#{unique}@example.com",
+        requester_email: requester_email,
         requested_club_name: club_name,
         note: "Please onboard #{club_name}."
       })
@@ -411,4 +483,27 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   defp refute_selector_exists(html, selector) do
     refute html |> LazyHTML.query(selector) |> Enum.any?(), "Did not expect selector #{selector}"
   end
+
+  defp configure_auth_email do
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_auth_email_config = Application.get_env(:memba, AuthEmail)
+
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Test,
+      api_key: "server-token"
+    )
+
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.io",
+      message_stream: "outbound-authentication"
+    )
+
+    on_exit(fn ->
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(AuthEmail, original_auth_email_config)
+    end)
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end
