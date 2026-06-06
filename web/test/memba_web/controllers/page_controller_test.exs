@@ -7,6 +7,7 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+  alias Memba.Onboarding.Request
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
@@ -785,21 +786,117 @@ defmodule MembaWeb.PageControllerTest do
     assert html_response(conn, 200) =~ "Membership software for clubs that run on trust."
   end
 
-  test "GET /get-started shows invite-only contact page with public navigation", %{conn: conn} do
+  test "GET /get-started shows a signed-out request form with public navigation", %{conn: conn} do
     conn = get(conn, ~p"/get-started")
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Memba is invite-only right now."
     assert response =~ "Want to try Memba with your club?"
+    assert response =~ "Tell us a little about you and your club."
 
     assert html
            |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("a#contact-us-link[href^='mailto:hello@memba.io']")
+           |> LazyHTML.query("form#get-started-request-form[action='/get-started'][method='post']")
            |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("input#get-started-club-name[name='request[requested_club_name]']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("button#get-started-request-submit[type='submit']")
+           |> Enum.any?()
+
+    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+  end
+
+  test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
+    conn =
+      post(conn, ~p"/get-started",
+        request: %{
+          requester_name: "",
+          requester_email: "",
+          requested_club_name: "",
+          note: ""
+        }
+      )
+
+    response = html_response(conn, 422)
+
+    assert response =~ "Tell us a little about you and your club."
+    assert response =~ "can&#39;t be blank"
+    assert Repo.aggregate(Request, :count) == 0
+  end
+
+  test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
+    conn =
+      post(conn, ~p"/get-started",
+        request: %{
+          requester_name: "Robin Requester",
+          requester_email: "not an email address",
+          requested_club_name: "West Coast Paddlers",
+          note: "We want a safer way to message members."
+        }
+      )
+
+    response = html_response(conn, 422)
+
+    assert response =~ "is invalid"
+    assert Repo.aggregate(Request, :count) == 0
+  end
+
+  test "POST /get-started stores a signed-out request and acknowledges staff review", %{conn: conn} do
+    club_count = Repo.aggregate(Club, :count)
+    membership_count = Repo.aggregate(Membership, :count)
+
+    conn =
+      post(conn, ~p"/get-started",
+        request: %{
+          requester_name: " Robin Requester ",
+          requester_email: " Robin@Example.COM ",
+          requested_club_name: " West Coast Paddlers ",
+          note: " We want a safer way to message members. "
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/get-started?submitted=true"
+
+    assert [%Request{} = request] = Repo.all(Request)
+    assert request.requester_name == "Robin Requester"
+    assert request.requester_email == "Robin@Example.COM"
+    assert request.normalized_requester_email == "robin@example.com"
+    assert request.requested_club_name == "West Coast Paddlers"
+    assert request.note == "We want a safer way to message members."
+    assert request.status == "active"
+    assert is_nil(request.requester_person_id)
+
+    assert Repo.aggregate(Club, :count) == club_count
+    assert Repo.aggregate(Membership, :count) == membership_count
+
+    response =
+      conn
+      |> recycle()
+      |> get(~p"/get-started?submitted=true")
+      |> html_response(200)
+
+    assert response =~ "Thanks — we’ll review your request."
+    assert response =~ "We’ll contact you if Memba is a good fit for your club."
   end
 
   test "GET /terms", %{conn: conn} do

@@ -91,6 +91,7 @@ defmodule MembaWeb.Router do
     delete "/auth", AuthController, :delete
     get "/about", PageController, :about
     get "/get-started", PageController, :get_started
+    post "/get-started", PageController, :submit_get_started
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
   end

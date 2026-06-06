@@ -19,6 +19,13 @@ defmodule Memba.Onboarding do
   end
 
   @doc """
+  Build an onboarding request changeset for forms.
+  """
+  def change_request(attrs \\ %{}, opts \\ []) when is_map(attrs) and is_list(opts) do
+    Request.create_changeset(attrs, opts)
+  end
+
+  @doc """
   List active onboarding requests, oldest first.
   """
   def list_active_requests do

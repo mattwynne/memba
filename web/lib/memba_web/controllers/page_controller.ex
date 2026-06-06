@@ -2,6 +2,7 @@ defmodule MembaWeb.PageController do
   use MembaWeb, :controller
 
   alias Memba.Membership
+  alias Memba.Onboarding
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
@@ -79,10 +80,25 @@ defmodule MembaWeb.PageController do
     |> render(:about)
   end
 
-  def get_started(conn, _params) do
+  def get_started(conn, params) do
     conn
-    |> assign(:page_title, "Get started")
-    |> render(:get_started)
+    |> assign(:request_submitted?, Map.get(params, "submitted") == "true")
+    |> render_get_started(Onboarding.change_request(%{}))
+  end
+
+  def submit_get_started(conn, params) do
+    request_params = Map.get(params, "request", %{})
+
+    case Onboarding.create_request(request_params) do
+      {:ok, _request} ->
+        redirect(conn, to: ~p"/get-started?submitted=true")
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> assign(:request_submitted?, false)
+        |> render_get_started(changeset)
+    end
   end
 
   def terms(conn, _params) do
@@ -95,6 +111,13 @@ defmodule MembaWeb.PageController do
     conn
     |> assign(:page_title, "Privacy Policy")
     |> render(:privacy)
+  end
+
+  defp render_get_started(conn, changeset) do
+    conn
+    |> assign(:page_title, "Get started")
+    |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
+    |> render(:get_started)
   end
 
   defp render_member_dashboard(conn, club_id, club_id_source) do
