@@ -1,0 +1,392 @@
+Goal: Implement a validated iteration plan and leave the codebase passing dev check
+Run ID: 01KTFN1JV9V0SGQP4HN8YYKN1P
+Pipeline progress: 6 of 30 stages completed
+
+## Stage: read_plan
+- Status: succeeded
+- Handler: command
+- Script: `PLAN_PATH='docs/iterations/024-email-template-designs/plan.md'
+if [ ! -f "$PLAN_PATH" ]; then
+  echo "Iteration plan not found: $PLAN_PATH" >&2
+  exit 1
+fi
+printf 'PLAN_PATH=%s\n\n' "$PLAN_PATH"
+line_count=0
+while IFS= read -r line && [ "$line_count" -lt 320 ]; do
+  printf '%s\n' "$line"
+  line_count=$((line_count + 1))
+done < "$PLAN_PATH"`
+- Output:
+  ```
+  (139 lines omitted)
+     - converting plaintext message bodies to email-safe HTML;
+     - rendering a primary button plus fallback URL;
+     - rendering group-led and Memba-led headers;
+     - rendering the Memba footer/trust footer without hard-coded unconfirmed support addresses.
+  4. Update `web/lib/memba/accounts/auth_email.ex` to render the new sign-in template while preserving provider options and error handling. Keep `deliver_sign_in_link/2`; add an optional context/options variant for group-led sign-in where callers can provide group name/context.
+  5. Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
+  6. Update `web/lib/memba/onboarding/welcome_email.ex` to use the compatible group-led welcome/sign-in variant and pass the converted club as context.
+  7. Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
+  8. Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
+  9. Update tests, especially:
+     - `web/test/memba/accounts/auth_email_test.exs` for auth email Postmark/Resend/local provider options, HTML/text content, fallback URL, escaping, and context/no-context variants;
+     - `web/test/memba/onboarding_conversion_test.exs` or a focused onboarding email test for welcome email link and group-led content;
+     - existing member-message provider tests, or add focused tests near `web/test/memba/messaging/email_delivery_providers/`, for member-message HTML, unchanged text body, From/Reply-To, subject, metadata, and local delivery facts;
+     - existing inbound email/rejection tests, or add `web/test/memba/messaging/inbound_club_rejection_email_test.exs`, for reason text, HTML, subject fallback, threading, and metadata/tags;
+     - escaping/header-safety tests for group names, sender names, subjects, and message bodies with HTML/script-like text or newlines.
+  10. Run targeted email-related tests while developing.
+  11. Run any affected acceptance tests if mailbox text parsing changes.
+  12. Run `dev check`.
+  13. Record implementation notes and any deliberate deviations from the supplied designs in this iteration folder.
+  
+  ## Open Technical Decisions
+  
+  None known.
+  
+  ## New Capability
+  
+  Memba transactional emails will look and read like a coherent product system: group-led where members are interacting with their group, Memba-led where Memba is the carrier or account/trust actor, and consistently readable on iPads and common email clients.
+  
+  ## Validation Plan
+  
+  - Compare generated emails against the v2 source artifacts for semantic structure and copy hierarchy, not pixel-perfect browser-prototype fidelity.
+  - Confirm sign-in email HTML includes a primary button with `href`, a printed fallback URL, expiry/one-use reassurance, and the Memba trust mark.
+  - Confirm member-message HTML includes group-led header, sender-to-members line, escaped message body, reply guidance, and Memba carrier footer, while the text body remains exactly the sender's body.
+  - Confirm inbound rejection HTML includes Memba-led header, group name if known, one reason line, next steps, and reassurance that nothing was posted.
+  - Unit-test email fields, provider options, text bodies, key HTML content, escaping, header sanitization, fallback links, and reason mappings.
+  - Use local Swoosh mailbox previews during implementation to manually inspect:
+    - sign-in link;
+    - onboarding welcome link;
+    - member message;
+    - inbound rejection notice.
+  - If practical, inspect at desktop and mobile/iPad-like widths in the browser mailbox.
+  - Run `dev check` before completion.
+  
+  ## Risks / Follow-ups
+  
+  - Email-client compatibility is easy to regress if templates use modern web CSS too literally. Implementation should translate the design into conservative email HTML rather than copy every browser-only style from the prototypes.
+  - Exact design fidelity may need a follow-up after real mailbox screenshots from Gmail, Apple Mail, Outlook, and Fastmail.
+  - Some ordinary sign-in requests may remain Memba-led when the current flow has no reliable group context; this is acceptable for this iteration and is covered by the no-context fallback acceptance criteria.
+  - If Matt later wants to publish a support mailbox in email templates, confirm the mailbox/support process first and add it in a small follow-up.
+  - A later i18n iteration can move copy strings behind locale-aware rendering.
+  ```
+
+## Stage: wip_gate
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/024-email-template-designs/plan.md'
+PATH="$PWD/bin:$PATH" dev iteration check-predecessors "$PLAN_PATH"
+PATH="$PWD/bin:$PATH" dev iteration check-clear "$PLAN_PATH" --allow-same-iteration`
+- Output:
+  ```
+  (6 lines omitted)
+  ✓ Evaluating shell in 1.28ms (cached)
+  ✓ Configuring shell in 9.54ms
+  • Loading tasks
+  • Evaluating devenv.config.task.config
+  ✓ Evaluating devenv.config.task.config in 348µs (cached)
+  ✓ Loading tasks in 2.96ms
+  • Running tasks
+  • Running devenv:files:cleanup
+  ✓ Running devenv:files:cleanup in 11.4ms
+  • Running devenv:enterShell
+  ✓ Running devenv:enterShell in 15.3ms
+  • Running devenv:enterTest
+  ✓ Running devenv:enterTest in 71.5µs (no command)
+  ✓ Running tasks in 27.6ms
+  ✨ devenv 2.1.0 is out of date. Please update to 2.1.2: https://devenv.sh/getting-started/#installation
+  Memba dev environment
+  Web app: web/
+  Acceptance tests: acceptance-tests/
+  Erlang/OTP 27 [erts-15.2.7.8] [source] [64-bit] [smp:8:1] [ds:8:1:10] [async-threads:1] [jit:ns]
+  
+  Elixir 1.18.4 (compiled with Erlang/OTP 27)
+  Earlier iterations are merged.
+  • Validating lock
+  ✓ Validating lock in 21.5ms
+  • Configuring shell
+  • Configuring cachix
+  ✓ Configuring cachix in 2.25ms
+  • Evaluating shell
+  ✓ Evaluating shell in 1.11ms (cached)
+  ✓ Configuring shell in 4.99ms
+  • Loading tasks
+  • Evaluating devenv.config.task.config
+  ✓ Evaluating devenv.config.task.config in 409µs (cached)
+  ✓ Loading tasks in 3.28ms
+  • Running tasks
+  • Running devenv:files:cleanup
+  ✓ Running devenv:files:cleanup in 11.9ms
+  • Running devenv:enterShell
+  ✓ Running devenv:enterShell in 12.3ms
+  • Running devenv:enterTest
+  ✓ Running devenv:enterTest in 105µs (no command)
+  ✓ Running tasks in 25.1ms
+  ✨ devenv 2.1.0 is out of date. Please update to 2.1.2: https://devenv.sh/getting-started/#installation
+  Memba dev environment
+  Web app: web/
+  Acceptance tests: acceptance-tests/
+  Erlang/OTP 27 [erts-15.2.7.8] [source] [64-bit] [smp:8:1] [ds:8:1:10] [async-threads:1] [jit:ns]
+  
+  Elixir 1.18.4 (compiled with Erlang/OTP 27)
+  Implementation WIP slot is clear.
+  ```
+
+## Stage: preflight_sandbox
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+for tool in nix python3; do
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    echo "Missing required bare sandbox tool: $tool" >&2
+    echo "The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH." >&2
+    exit 1
+  fi
+done
+if [ ! -x bin/dev ]; then
+  echo "Missing or non-executable bin/dev" >&2
+  exit 1
+fi
+rm -rf .fabro/tmp
+PATH="$PWD/bin:$PATH" dev sandbox-check`
+- Output:
+  ```
+  (192 lines omitted)
+  ==> commanded
+  Compiling 69 files (.ex)
+  Generated commanded app
+  ==> commanded_eventstore_adapter
+  Compiling 2 files (.ex)
+  Generated commanded_eventstore_adapter app
+  ==> commanded_ecto_projections
+  Compiling 1 file (.ex)
+  Generated commanded_ecto_projections app
+  ==> tailwind
+  Compiling 3 files (.ex)
+  Generated tailwind app
+  ==> elixir_make
+  Compiling 8 files (.ex)
+  Generated elixir_make app
+  ==> cc_precompiler
+  Compiling 3 files (.ex)
+  Generated cc_precompiler app
+  ==> lazy_html
+  Downloading precompiled NIF to /tmp/cache/elixir_make/lazy_html-nif-2.16-x86_64-linux-gnu-0.1.11.tar.gz
+  Compiling 3 files (.ex)
+  Generated lazy_html app
+  ==> websock
+  Compiling 1 file (.ex)
+  Generated websock app
+  ==> bandit
+  Compiling 54 files (.ex)
+  Generated bandit app
+  ==> swoosh
+  Compiling 59 files (.ex)
+  Generated swoosh app
+  ==> websock_adapter
+  Compiling 4 files (.ex)
+  Generated websock_adapter app
+  ==> phoenix
+  Compiling 74 files (.ex)
+  Generated phoenix app
+  ==> phoenix_live_view
+  Compiling 49 files (.ex)
+  Generated phoenix_live_view app
+  ==> phoenix_live_dashboard
+  Compiling 36 files (.ex)
+  Generated phoenix_live_dashboard app
+  ==> phoenix_test
+  Compiling 31 files (.ex)
+  Generated phoenix_test app
+  ==> phoenix_ecto
+  Compiling 7 files (.ex)
+  Generated phoenix_ecto app
+  Sandbox runtime check passed.
+  ```
+
+## Stage: resume_gate
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/024-email-template-designs/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+echo '=== Iteration resume gate ==='
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+  printf 'HEAD: ' && git log -1 --format='%h %s'
+else
+  echo 'HEAD: unavailable'
+fi
+if [ -f "$TODO_PATH" ]; then
+  checked=$(grep -E '^[[:space:]]*- \[x\] ' "$TODO_PATH" | wc -l | tr -d ' ')
+  unchecked=$(grep -E '^[[:space:]]*- \[ \] ' "$TODO_PATH" | wc -l | tr -d ' ')
+  printf 'Todo: %s (%s checked, %s unchecked)\n' "$TODO_PATH" "${checked:-0}" "${unchecked:-0}"
+else
+  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\n' "$TODO_PATH"
+fi
+status=$(git status --short)
+if [ -n "$status" ]; then
+  echo 'Uncommitted changes present:'
+  printf '%s\n' "$status"
+  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2
+  exit 1
+fi
+echo 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'`
+- Output:
+  ```
+  === Iteration resume gate ===
+  HEAD: 3ed9a7a fabro(01KTFN1JV9V0SGQP4HN8YYKN1P): preflight_sandbox (succeeded)
+  Todo: docs/iterations/024-email-template-designs/todo.md is absent; sync_task_list will create it from plan.md.
+  Working tree clean; safe to resume from durable Fabro checkpoint commits.
+  ```
+
+## Stage: sync_task_list
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+PLAN_PATH='docs/iterations/024-email-template-designs/plan.md'
+case "$PLAN_PATH" in
+  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;
+  *) echo "plan_path must end with /plan.md: $PLAN_PATH" >&2; exit 1 ;;
+esac
+TODO_PATH="$ITERATION_DIR/todo.md"
+mkdir -p .fabro/tmp
+# Resume contract: once todo.md exists, it is the execution-state source of truth.
+# Preserve existing check-offs, splits, and reorderings across runs. Regenerate
+# from plan.md only when todo.md is absent.
+if [ ! -f "$TODO_PATH" ]; then
+  tmp=.fabro/tmp/generated-todo.md
+  {
+    printf '# Implementation TODO\n\n'
+    in_plan=0
+    count=0
+    while IFS= read -r line; do
+      case "$line" in
+        '## Implementation Plan') in_plan=1; continue ;;
+        '## '*) if [ "$in_plan" -eq 1 ]; then break; fi ;;
+      esac
+      if [ "$in_plan" -eq 1 ]; then
+        case "$line" in
+          [0-9]*'. '*)
+            count=$((count + 1))
+            task=${line#*. }
+            printf -- '- [ ] %03d %s\n' "$count" "$task"
+            ;;
+        esac
+      fi
+    done < "$PLAN_PATH"
+    if [ "${count:-0}" -eq 0 ]; then
+      echo "No numbered tasks found under ## Implementation Plan in $PLAN_PATH" >&2
+      exit 1
+    fi
+  } > "$tmp"
+  mkdir -p "$ITERATION_DIR"
+  mv "$tmp" "$TODO_PATH"
+  echo "Created $TODO_PATH from $PLAN_PATH"
+else
+  echo "Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering."
+fi
+printf 'PLAN_PATH=%s\nTODO_PATH=%s\n' "$PLAN_PATH" "$TODO_PATH"
+sed -n '1,120p' "$TODO_PATH"`
+- Output:
+  ```
+  Created docs/iterations/024-email-template-designs/todo.md from docs/iterations/024-email-template-designs/plan.md
+  PLAN_PATH=docs/iterations/024-email-template-designs/plan.md
+  TODO_PATH=docs/iterations/024-email-template-designs/todo.md
+  # Implementation TODO
+  
+  - [ ] 001 Inspect the v2 source artifacts in `docs/iterations/024-email-template-designs/source/` and current email-building modules/tests.
+  - [ ] 002 Add shared helper module `web/lib/memba/email_templates.ex` (`Memba.EmailTemplates`) for the email HTML shell/components and text-safe helpers. Keep inline styles and avoid external CSS dependencies.
+  - [ ] 003 Implement safe helpers in `Memba.EmailTemplates` for:
+  - [ ] 004 Update `web/lib/memba/accounts/auth_email.ex` to render the new sign-in template while preserving provider options and error handling. Keep `deliver_sign_in_link/2`; add an optional context/options variant for group-led sign-in where callers can provide group name/context.
+  - [ ] 005 Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
+  - [ ] 006 Update `web/lib/memba/onboarding/welcome_email.ex` to use the compatible group-led welcome/sign-in variant and pass the converted club as context.
+  - [ ] 007 Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
+  - [ ] 008 Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
+  - [ ] 009 Update tests, especially:
+  - [ ] 010 Run targeted email-related tests while developing.
+  - [ ] 011 Run any affected acceptance tests if mailbox text parsing changes.
+  - [ ] 012 Run `dev check`.
+  - [ ] 013 Record implementation notes and any deliberate deviations from the supplied designs in this iteration folder.
+  ```
+
+## Stage: all_tasks_done
+- Status: succeeded
+- Handler: prompt
+- Model: gpt-5.5
+- Tokens: 4.7k in / 179 out
+- Response:
+  > {"cmd": "TODO_PATH='docs/iterations/024-email-template-designs/todo.md'\nif [ ! -r \"$TODO_PATH\" ]; then\n  echo \"UNREADABLE_OR_MISSING $TODO_PATH\"\nelif [ ! -s \"$TODO_PATH\" ]; then\n  echo \"EMPTY $TODO_PATH\"\nelse\n  echo \"READABLE $TODO_PATH\"\n  grep -nE '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" || true\nfi"}{"context_updates":{"task_list_complete":false,"task_list_needs_human":false}}
+
+## Current context
+| Key | Value |
+|-----|-------|
+| task_list_complete | false |
+| task_list_needs_human | false |
+
+
+Implement the next unchecked iteration task from `todo.md`.
+
+Plan path: `docs/iterations/024-email-template-designs/plan.md`.
+Todo path is derived from the plan path by replacing `/plan.md` with `/todo.md`.
+
+## Ownership rules
+
+- Read the plan and `todo.md` before editing.
+- Pick the first unchecked Markdown task line in `todo.md` (`- [ ] ...`). That task is yours from selection through check-off.
+- Treat earlier checked todo lines as durable completed work. Do not redo them.
+- Inspect recent Fabro checkpoint commits with `git log --oneline --decorate -20` and use their subjects/bodies/diffs as context for what previous runs already completed.
+- Inspect `git status --short` before editing. The resume gate should normally guarantee a clean tree; if uncommitted changes are present, stop for human input unless they are clearly the selected task's in-progress work and you can safely continue it to completion without overwriting it.
+- Never silently overwrite, discard, or duplicate uncommitted work for an unchecked task.
+- Implement exactly the selected task only. Do not opportunistically implement later tasks unless the selected task cannot be completed without splitting/reordering the todo list first.
+- When the implementation and focused validation are complete, check off the same task line you implemented by changing that one line from `- [ ]` to `- [x]`.
+- Do not check off any other ordinary todo line.
+- Do not commit manually. Fabro will checkpoint your changes automatically after this node; independent validation will inspect that checkpoint evidence.
+
+
+## Local reference docs
+
+- Prefer local project documentation over network lookups. Do not `curl` upstream docs unless the local docs are missing or clearly insufficient.
+- Start with `docs/tools/README.md` for library documentation signposts. Relevant local docs include:
+  - `docs/tools/commanded/README.md` for Commanded.
+  - `docs/tools/commanded-eventstore-adapter/README.md` for the EventStore adapter.
+  - `docs/tools/eventstore/README.md` for EventStore.
+  - `docs/tools/commanded-ecto-projections/README.md` for projections.
+  - `docs/tools/cucumber/README.md` for Elixir Cucumber.
+  - `docs/tools/ecto/README.md` and `docs/tools/ecto-sql/README.md` for Ecto.
+  - `docs/tools/phoenix/README.md` and related Phoenix docs for web framework work.
+- If you need examples, search the local `web/deps/` source tree and `docs/tools/` before using the network.
+
+## Binding rules
+
+- `plan.md` remains the source of truth. `todo.md` is derived execution state.
+- You may split the selected task into smaller unchecked tasks, add required technical subtasks, or reorder pending tasks only to satisfy the approved plan.
+- If the selected task is too large, split it in `todo.md`, leave the parent/current task unchecked or replace it with smaller unchecked tasks, then implement and check off only the first newly available slice.
+- You may not delete, weaken, or silently defer plan-required work.
+- Before editing, read every ADR explicitly referenced by the plan and inspect nearby/current ADRs under `docs/adr/` when relevant.
+- Treat accepted ADRs as binding architecture constraints.
+- Use test-driven development for behaviour changes.
+- Add or update automated tests proving the selected task's behaviour/configuration.
+- Run focused validation appropriate to the selected task and capture the commands/results in your response.
+- For per-task validation, prefer the smallest checks that prove the selected task: relevant focused tests plus formatting for touched files when practical.
+- Use `PATH="$PWD/bin:$PATH" dev check --quick` for broad per-task validation when the selected task does not change browser-facing behaviour, acceptance tests, routing, LiveView/UI, or feature/step files.
+- Run full `PATH="$PWD/bin:$PATH" dev check` during a task only when that task changes browser-facing behaviour, acceptance tests, routing, LiveView/UI, feature/step files, or when the selected task is the final validation task. The workflow's final quality gate will still run the full check before publication.
+- In the Fabro sandbox, avoid wrapping focused commands in `devenv shell -- ...` unless there is a specific reason. The sandbox image and project wrappers are already prepared for the project; prefer `PATH="$PWD/bin:$PATH" bin/mix ...` or `PATH="$PWD/bin:$PATH" dev ...` so command execution stays consistent with the workflow environment.
+- Acceptance feature files (`*.feature`, including files under `acceptance-tests/`) are locked unless the plan has a `## Allowed acceptance feature changes` section naming the exact file and allowed kind of change. If the plan permits a feature edit, make only that explicit edit and preserve/validate the coverage promised by the plan. If a feature file appears wrong, stale, or insufficient without explicit permission, stop and report the issue.
+- Add acceptance step definitions only where the plan explicitly requires executable plumbing for shared feature files.
+- Use Req for HTTP requests; do not introduce HTTPoison, Tesla, or `:httpc`.
+- Follow relevant project guidance for Phoenix, LiveView, HEEx, Tailwind, Ecto, Elixir, Mix, and tests.
+- If you hit a real blocker, stop and report it clearly without checking off the task.
+
+When finished, summarize:
+
+1. Selected todo line and task text.
+2. Code/config/test/doc changes made for this task only.
+3. Focused validation commands run and results.
+4. The exact todo check-off you made.
+5. Any todo splits/additions/reordering and why they still satisfy the plan.
+6. ADR conformance evidence for this task.
