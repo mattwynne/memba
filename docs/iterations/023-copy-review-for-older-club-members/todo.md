@@ -1,0 +1,12 @@
+# Implementation TODO
+
+- [ ] 001 Re-read `copy-audit.md`, the public templates, member-facing LiveViews/templates, and presentation helpers that produce member-visible delivery status text.
+- [ ] 002 Inventory existing tests and acceptance scenarios that assert visible copy, button labels, placeholders, or page headings on public/member pages.
+- [ ] 003 Draft replacement copy for each page using the audit's older-iPad persona principles:
+- [ ] 004 Apply copy edits to the relevant Phoenix templates/LiveViews and presentation helpers.
+- [ ] 005 Keep layout and route structure unchanged unless a label or help-text edit requires a small markup adjustment.
+- [ ] 006 Update tests that assert the old copy while preserving behaviour intent.
+- [ ] 007 Run targeted Phoenix tests and browser acceptance tests touched by changed labels.
+- [ ] 008 Review pages manually at an iPad-like viewport:
+- [ ] 009 Run `dev check` and fix any failures.
+- [ ] 010 Record implementation notes and any unresolved copy decisions in the iteration folder.
