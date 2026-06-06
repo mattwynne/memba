@@ -21,8 +21,8 @@ async function visitHomepage({ baseUrl, page }) {
 async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpect } = {}) {
   await expect(page).toHaveURL(homepageUrlPattern(baseUrl));
   await expect(page).toHaveTitle(/Memba/);
-  await expect(page.getByRole("heading", { name: "Volunteering shouldn’t feel like work." })).toBeVisible();
-  const getStartedLink = page.getByRole("link", { name: "Get started" });
+  await expect(page.getByRole("heading", { name: "A simpler way to keep your group members informed." })).toBeVisible();
+  const getStartedLink = page.getByRole("link", { name: "Request access for your group" });
   await expect(getStartedLink.first ? getStartedLink.first() : getStartedLink).toBeVisible();
 
   const viewportWidth = typeof page.viewportSize === "function" ? page.viewportSize()?.width : undefined;

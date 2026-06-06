@@ -49,7 +49,7 @@ defmodule MembaWeb.PageController do
       if conn.assigns.current_identity do
         "Your clubs"
       else
-        "Volunteering shouldn’t feel like work"
+        "A simpler way to keep your group members informed"
       end
 
     conn
@@ -133,7 +133,7 @@ defmodule MembaWeb.PageController do
 
   defp render_get_started(conn, changeset) do
     conn
-    |> assign(:page_title, "Get started")
+    |> assign(:page_title, "Request access")
     |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
     |> render(:get_started)

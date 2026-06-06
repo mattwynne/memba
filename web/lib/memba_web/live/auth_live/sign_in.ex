@@ -7,7 +7,7 @@ defmodule MembaWeb.AuthLive.SignIn do
   alias Memba.Accounts.AuthEmail
   alias MembaWeb.ClubSite
 
-  @neutral_notice "Thanks. You should have an email in your inbox with a sign-in link."
+  @neutral_notice "If that email address can sign in to Memba, the sign-in email is on its way."
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
@@ -44,7 +44,7 @@ defmodule MembaWeb.AuthLive.SignIn do
             Check your email
           </p>
           <h1 class="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-            We’ve sent your sign-in link
+            Check your email for the sign-in link.
           </h1>
           <p id="sign-in-link-sent-notice" class="text-lg leading-8 text-ink-2">
             {@notice}
@@ -53,7 +53,7 @@ defmodule MembaWeb.AuthLive.SignIn do
 
         <div class="rounded-3xl border border-line bg-paper p-6 shadow-sm">
           <p class="text-sm leading-6 text-ink-3">
-            The link expires soon and can only be used once. If it does not arrive, check your spam folder or try again.
+            Open the email on this iPad and tap the sign-in button. The link works once and expires in 15 minutes. If it does not arrive, check your junk mail or ask for another link.
           </p>
 
           <.link
@@ -61,7 +61,7 @@ defmodule MembaWeb.AuthLive.SignIn do
             patch={~p"/auth"}
             class="mt-6 inline-flex rounded-full border border-line px-4 py-2 text-sm font-semibold text-ink transition hover:border-sage-600 hover:text-sage-700"
           >
-            Request another link
+            Ask for another sign-in link
           </.link>
         </div>
       </section>
@@ -78,10 +78,10 @@ defmodule MembaWeb.AuthLive.SignIn do
             Sign in
           </p>
           <h1 class="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
-            Sign in to your club
+            Sign in with your email.
           </h1>
           <p class="text-lg leading-8 text-ink-2">
-            Enter your email address and we’ll send you a link to sign in.
+            Use the email address your club or group has for you. We’ll email you a private sign-in link.
           </p>
         </div>
 
@@ -112,7 +112,7 @@ defmodule MembaWeb.AuthLive.SignIn do
         </.form>
 
         <p class="text-sm leading-6 text-ink-3">
-          For your privacy, the response is the same whether or not we recognize the email address.
+          To protect member privacy, this page does not say whether that email address is on a club list.
         </p>
       </section>
     </Layouts.app>

@@ -81,7 +81,7 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
     refute has_element?(view, "a#back-to-club-home-link[href*='club_id=']")
   end
 
-  test "routed message detail renders the Who got this summary and polished group headers", %{
+  test "routed message detail renders the delivery summary and polished group headers", %{
     conn: conn
   } do
     alice =
@@ -141,25 +141,25 @@ defmodule MembaWeb.MemberMessageLive.ShowTest do
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/messages/#{message.message_id}?#{[club_id: alice.club_id]}")
 
-    assert has_element?(view, "#member-receipt-summary", "Who got this")
+    assert has_element?(view, "#member-receipt-summary", "Message delivery")
     assert has_element?(view, "#member-receipt-summary-bar")
 
     assert has_element?(
              view,
              "[data-testid='member-receipt-summary-status'][data-receipt-status='delivered'][data-receipt-count='2'][data-receipt-percentage='67']",
-             "delivered to their inbox"
+             "Email delivered"
            )
 
     assert has_element?(
              view,
              "[data-testid='member-receipt-summary-status'][data-receipt-status='sent'][data-receipt-count='1'][data-receipt-percentage='33']",
-             "on its way"
+             "Email still sending"
            )
 
     assert has_element?(
              view,
              "[data-testid='member-receipt-summary-status'][data-receipt-status='delivery problem'][data-receipt-count='0'][data-receipt-percentage='0']",
-             "we couldn't reach them"
+             "Email not delivered"
            )
 
     assert has_element?(

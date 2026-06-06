@@ -106,7 +106,7 @@ defmodule MembaWeb.AuthGatesTest do
       response = html_response(conn, 200)
 
       assert response =~ "Welcome to Alpine Club"
-      assert response =~ "Sign in to continue"
+      assert response =~ "Email me a sign-in link"
       assert response =~ "Powered by"
       assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
     end
@@ -122,7 +122,7 @@ defmodule MembaWeb.AuthGatesTest do
       response = html_response(conn, 200)
 
       assert response =~ "Welcome to Alpine Club"
-      assert response =~ "Sign in to continue"
+      assert response =~ "Email me a sign-in link"
     end
 
     test "forbid signed-in browsers without active membership in the requested club", %{
@@ -161,7 +161,9 @@ defmodule MembaWeb.AuthGatesTest do
 
       response = html_response(conn, 200)
 
-      assert response =~ "What the club's been saying, and who's around right now."
+      assert response =~
+               "Read recent club messages, send a note to all current members, and see who is on the member list."
+
       assert response =~ club.name
     end
   end
