@@ -31,7 +31,7 @@ green than before.
 | 019 | 2026-06-02 | merged | Inbound club messages by email | [plan](019-inbound-club-messages-by-email/plan.md) |
 | 020 | 2026-06-02 | merged | Migrate production email to Postmark | [plan](020-migrate-production-email-to-postmark/plan.md) |
 | 021 | 2026-06-05 | merged | Staff area redesign and read-only operations indexes | [plan](021-staff-area-redesign/plan.md) |
-| 022 | 2026-06-05 | implementing | Staff-approved request-to-club onboarding | [plan](022-request-to-club-onboarding/plan.md) |
+| 022 | 2026-06-05 | merged | Staff-approved request-to-club onboarding | [plan](022-request-to-club-onboarding/plan.md) |
 | 023 | 2026-06-06 | validated | Public copy pass for older community members | [plan](023-copy-review-for-older-club-members/plan.md) |
 | 024 | 2026-06-06 | ready | Transactional email template redesign | [plan](024-email-template-designs/plan.md) |
 
