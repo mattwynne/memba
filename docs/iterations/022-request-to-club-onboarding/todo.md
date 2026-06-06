@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect current public `/get-started`, homepage links, layouts, auth/current identity assigns, staff navigation, staff club creation LiveView, slug helper modules, membership/person creation APIs, and auth email/token APIs.
-- [ ] 002 Extract reusable club creation/slug form logic if needed so request conversion and `/admin/clubs` share the same slug generation, validation, and availability behaviour. Prefer reuse over duplication.
+- [x] 002 Extract reusable club creation/slug form logic if needed so request conversion and `/admin/clubs` share the same slug generation, validation, and availability behaviour. Prefer reuse over duplication.
 - [ ] 003 Design the request persistence model:
 - [ ] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
 - [ ] 005 Implement signed-out `/get-started` form with required-field and email validation.
