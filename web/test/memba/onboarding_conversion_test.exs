@@ -1,11 +1,25 @@
 defmodule Memba.OnboardingConversionTest do
   use Memba.EventSourcedCase, async: false
 
+  alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
+
+  setup do
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_auth_email_config = Application.get_env(:memba, AuthEmail)
+
+    on_exit(fn ->
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(AuthEmail, original_auth_email_config)
+    end)
+
+    :ok
+  end
 
   describe "convert_request_to_club/3" do
     test "creates a club, new person, active membership, converted request, and wraps welcome email delivery" do
@@ -138,6 +152,27 @@ defmodule Memba.OnboardingConversionTest do
                request.requester_email
              )
     end
+
+    test "delivers the default welcome email with a member-home sign-in link" do
+      configure_auth_email()
+      request = request_fixture("Welcome Email Paddlers", requester_email: "Robin@Example.COM")
+
+      assert {:ok, conversion} =
+               Onboarding.convert_request_to_club(
+                 request.request_id,
+                 %{"name" => "Welcome Email Paddlers", "slug" => "welcome-email-paddlers"}
+               )
+
+      assert conversion.welcome_email == :ok
+      assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] = Repo.all(SignInToken)
+      assert_received {:email, %Swoosh.Email{} = email}
+
+      assert email.to == [{"Robin Requester", "robin@example.com"}]
+      assert email.subject == "Welcome to Welcome Email Paddlers on Memba"
+      assert email.text_body =~ "Welcome to Welcome Email Paddlers on Memba."
+      assert email.text_body =~ "http://welcome-email-paddlers.lvh.me:4002/auth/sign-in/"
+      assert email.text_body =~ "return_to=http%3A%2F%2Fwelcome-email-paddlers.lvh.me%3A4002%2F"
+    end
   end
 
   defp request_fixture(club_name, opts \\ []) do
@@ -153,4 +188,19 @@ defmodule Memba.OnboardingConversionTest do
 
     request
   end
+
+  defp configure_auth_email do
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Test,
+      api_key: "server-token"
+    )
+
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.io",
+      message_stream: "outbound-authentication"
+    )
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end

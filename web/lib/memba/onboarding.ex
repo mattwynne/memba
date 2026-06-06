@@ -8,6 +8,7 @@ defmodule Memba.Onboarding do
   alias Memba.ID
   alias Memba.Membership
   alias Memba.Onboarding.Request
+  alias Memba.Onboarding.WelcomeEmail
   alias Memba.Repo
 
   @doc """
@@ -298,5 +299,5 @@ defmodule Memba.Onboarding do
         Exception.message(exception)}}
   end
 
-  defp default_welcome_email(_conversion), do: :ok
+  defp default_welcome_email(conversion), do: WelcomeEmail.deliver(conversion)
 end
