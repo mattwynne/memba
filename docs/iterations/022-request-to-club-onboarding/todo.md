@@ -3,7 +3,7 @@
 - [x] 001 Inspect current public `/get-started`, homepage links, layouts, auth/current identity assigns, staff navigation, staff club creation LiveView, slug helper modules, membership/person creation APIs, and auth email/token APIs.
 - [x] 002 Extract reusable club creation/slug form logic if needed so request conversion and `/admin/clubs` share the same slug generation, validation, and availability behaviour. Prefer reuse over duplication.
 - [x] 003 Design the request persistence model:
-- [ ] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
+- [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
 - [ ] 005 Implement signed-out `/get-started` form with required-field and email validation.
 - [ ] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
 - [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
