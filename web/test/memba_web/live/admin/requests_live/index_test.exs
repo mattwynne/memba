@@ -13,6 +13,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
     assert_selector_exists(html, "#admin-requests-index[data-admin-page='requests']")
     assert_selector_exists(html, "#admin-requests-route-ready")
+    assert_selector_exists(html, "#admin-nav-requests[href='/admin/requests']")
     refute initial_html =~ "Browser acceptance harness"
   end
 

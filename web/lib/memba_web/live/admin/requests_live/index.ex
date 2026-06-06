@@ -4,7 +4,7 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <Layouts.admin flash={@flash}>
+    <Layouts.admin flash={@flash} active={:requests}>
       <main id="admin-requests-index" data-admin-page="requests" class="space-y-6 p-6">
         <.admin_page_header
           eyebrow="Requests"

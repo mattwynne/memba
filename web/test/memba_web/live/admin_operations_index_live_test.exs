@@ -27,6 +27,7 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
     nav_selector = "nav[aria-label='Memba staff navigation']"
 
     assert_selector_exists(html, "#{nav_selector} #admin-nav-clubs[href='/admin/clubs']")
+    assert_selector_exists(html, "#{nav_selector} #admin-nav-requests[href='/admin/requests']")
     assert_selector_exists(html, "#{nav_selector} #admin-nav-people[href='/admin/people']")
     assert_selector_exists(html, "#{nav_selector} #admin-nav-messages[href='/admin/messages']")
 
@@ -35,10 +36,11 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
       "#{nav_selector} #admin-nav-deliveries[href='/admin/deliveries']"
     )
 
-    assert_selector_count(html, "#{nav_selector} a", 4)
+    assert_selector_count(html, "#{nav_selector} a", 5)
 
     nav_text = text_for(html, nav_selector)
     assert nav_text =~ "Clubs"
+    assert nav_text =~ "Requests"
     assert nav_text =~ "People"
     assert nav_text =~ "Messages"
     assert nav_text =~ "Deliveries"

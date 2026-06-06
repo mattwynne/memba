@@ -69,6 +69,16 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-requests[data-admin-nav-item='requests'][href='/admin/requests']"
+    )
+
+    assert_selector(
+      html,
+      "nav[aria-label='Memba staff navigation'] a#admin-nav-requests[data-phx-link='redirect'][data-phx-link-state='push']"
+    )
+
+    assert_selector(
+      html,
       "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-phx-link='redirect'][data-phx-link-state='push']"
     )
 
@@ -87,8 +97,9 @@ defmodule MembaWeb.LayoutsTest do
       "nav[aria-label='Memba staff navigation'] a#admin-nav-deliveries[data-admin-nav-item='deliveries'][href='/admin/deliveries']"
     )
 
-    assert_selector_count(html, "nav[aria-label='Memba staff navigation'] a", 4)
+    assert_selector_count(html, "nav[aria-label='Memba staff navigation'] a", 5)
     assert_text(html, "nav[aria-label='Memba staff navigation']", "Clubs")
+    assert_text(html, "nav[aria-label='Memba staff navigation']", "Requests")
     assert_text(html, "nav[aria-label='Memba staff navigation']", "People")
     assert_text(html, "nav[aria-label='Memba staff navigation']", "Messages")
     assert_text(html, "nav[aria-label='Memba staff navigation']", "Deliveries")

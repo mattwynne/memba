@@ -10,6 +10,7 @@ const {
 
 const staffPages = {
   Clubs: { navItem: "clubs", path: "/admin/clubs", pageSelector: "#clubs-index" },
+  Requests: { navItem: "requests", path: "/admin/requests", pageSelector: "#admin-requests-index" },
   People: { navItem: "people", path: "/admin/people", pageSelector: "#admin-people-index" },
   Messages: { navItem: "messages", path: "/admin/messages", pageSelector: "#admin-messages-index" },
   Deliveries: { navItem: "deliveries", path: "/admin/deliveries", pageSelector: "#deliveries-overview" }
@@ -69,7 +70,7 @@ Then(
 
     await playwrightExpect(nav.getByText("Incoming")).toHaveCount(0);
     await playwrightExpect(nav.getByText("Roles")).toHaveCount(0);
-    await playwrightExpect(nav.locator("[data-admin-nav-item]")).toHaveCount(4);
+    await playwrightExpect(nav.locator("[data-admin-nav-item]")).toHaveCount(Object.keys(staffPages).length);
   }
 );
 

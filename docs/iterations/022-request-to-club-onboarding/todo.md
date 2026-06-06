@@ -8,7 +8,7 @@
 - [x] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
 - [x] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
 - [x] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
-- [ ] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
+- [x] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
 - [ ] 010 Build the active requests inbox with clear request details and actions for reject/convert.
 - [ ] 011 Implement rejection with required internal notes and no requester email.
 - [ ] 012 Implement conversion preparation with generated/editable slug using the same rules as staff club creation.

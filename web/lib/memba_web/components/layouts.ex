@@ -103,7 +103,7 @@ defmodule MembaWeb.Layouts do
 
   attr :active, :atom,
     default: nil,
-    values: [nil, :clubs, :people, :messages, :deliveries],
+    values: [nil, :clubs, :requests, :people, :messages, :deliveries],
     doc: "the active staff navigation item"
 
   slot :inner_block, required: true
@@ -159,6 +159,16 @@ defmodule MembaWeb.Layouts do
                 >
                   <span class="flex items-center gap-3">
                     <.icon name="hero-building-office-2" class="size-4 bg-current" /> Clubs
+                  </span>
+                </.link>
+                <.link
+                  navigate={~p"/admin/requests"}
+                  id="admin-nav-requests"
+                  data-admin-nav-item="requests"
+                  class={admin_nav_class(@active == :requests)}
+                >
+                  <span class="flex items-center gap-3">
+                    <.icon name="hero-inbox-tray" class="size-4 bg-current" /> Requests
                   </span>
                 </.link>
                 <.link
