@@ -1,7 +1,7 @@
 # Staff-approved request-to-club onboarding
 
 Date: 2026-06-05
-Status: validated
+Status: implementing
 
 ## Goal
 
