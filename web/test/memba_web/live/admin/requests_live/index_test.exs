@@ -5,6 +5,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
+  alias Memba.Membership
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
@@ -156,6 +157,150 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert_no_email_sent()
   end
 
+  test "staff can prepare conversion with a generated editable slug using shared club rules", %{
+    conn: conn
+  } do
+    request = request_fixture("West Coast Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    assert has_element?(view, "#convert-request-panel-#{request.request_id}")
+    assert has_element?(view, "#convert-request-form-#{request.request_id}")
+
+    html = render(view)
+
+    assert input_value(html, "#convert-request-club-name-#{request.request_id}") ==
+             "West Coast Paddlers"
+
+    assert input_value(html, "#convert-request-club-slug-#{request.request_id}") ==
+             "west-coast-paddlers"
+
+    assert feedback_status(html, "#convert-request-club-slug-feedback-#{request.request_id}") ==
+             "available"
+
+    override_html =
+      view
+      |> form("#convert-request-form-#{request.request_id}",
+        club: %{name: "West Coast Paddlers", slug: "wcp"}
+      )
+      |> render_change()
+
+    assert input_value(override_html, "#convert-request-club-slug-#{request.request_id}") == "wcp"
+
+    preserved_override_html =
+      view
+      |> form("#convert-request-form-#{request.request_id}",
+        club: %{name: "West Coast Paddle Collective", slug: "wcp"}
+      )
+      |> render_change()
+
+    assert input_value(
+             preserved_override_html,
+             "#convert-request-club-slug-#{request.request_id}"
+           ) ==
+             "wcp"
+
+    invalid_html =
+      view
+      |> form("#convert-request-form-#{request.request_id}",
+        club: %{name: "West Coast Paddle Collective", slug: "West-Coast"}
+      )
+      |> render_change()
+
+    assert feedback_status(
+             invalid_html,
+             "#convert-request-club-slug-feedback-#{request.request_id}"
+           ) ==
+             "invalid"
+
+    assert attribute_value(
+             invalid_html,
+             "#confirm-convert-request-#{request.request_id}",
+             "disabled"
+           ) ==
+             ""
+
+    assert input_value(invalid_html, "#convert-request-club-slug-#{request.request_id}") ==
+             "West-Coast"
+
+    view
+    |> element("#cancel-convert-request-#{request.request_id}")
+    |> render_click()
+
+    refute has_element?(view, "#convert-request-panel-#{request.request_id}")
+  end
+
+  test "conversion preparation reports taken slugs with the same availability rule as club creation",
+       %{conn: conn} do
+    assert :ok =
+             Membership.create_club(
+               %{
+                 club_id: Memba.ID.generate(:club),
+                 name: "Existing West Coast Paddlers",
+                 slug: "west-coast-paddlers"
+               },
+               consistency: :strong
+             )
+
+    request = request_fixture("West Coast Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    html = render(view)
+
+    assert input_value(html, "#convert-request-club-slug-#{request.request_id}") ==
+             "west-coast-paddlers"
+
+    assert feedback_status(html, "#convert-request-club-slug-feedback-#{request.request_id}") ==
+             "taken"
+
+    assert attribute_value(html, "#confirm-convert-request-#{request.request_id}", "disabled") ==
+             ""
+  end
+
+  test "conversion preparation refreshes the inbox when the request is no longer active", %{
+    conn: conn
+  } do
+    request = request_fixture("Already Converted Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    assert has_element?(view, "#request-row-#{request.request_id}")
+
+    assert {:ok, %Request{status: "converted"}} =
+             Onboarding.convert_request(request.request_id, %{
+               converted_club_id: Memba.ID.generate(:club),
+               converted_person_id: Memba.ID.generate(:person),
+               converted_membership_id: Memba.ID.generate(:membership)
+             })
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    refute has_element?(view, "#convert-request-panel-#{request.request_id}")
+    refute has_element?(view, "#request-row-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "0")
+    assert has_element?(view, "#flash-error", "That request is no longer active.")
+  end
+
   defp request_fixture(club_name, opts \\ []) do
     unique = System.unique_integer([:positive])
     requester_name = Keyword.get(opts, :requester_name, "Requester #{unique}")
@@ -190,6 +335,28 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     html
     |> LazyHTML.query(selector)
     |> LazyHTML.text()
+  end
+
+  defp input_value(html, selector) do
+    assert [value] = attributes(html, selector, "value")
+    value
+  end
+
+  defp feedback_status(html, selector) do
+    assert [status] = attributes(html, selector, "data-status")
+    status
+  end
+
+  defp attribute_value(html, selector, attribute) do
+    assert [value] = attributes(html, selector, attribute)
+    value
+  end
+
+  defp attributes(html, selector, attribute) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(selector)
+    |> LazyHTML.attribute(attribute)
   end
 
   defp assert_selector_exists(html, selector) do
