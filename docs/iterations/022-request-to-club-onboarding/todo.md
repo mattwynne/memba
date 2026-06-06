@@ -16,4 +16,4 @@
 - [x] 014 Implement welcome email generation with a magic sign-in token and post-auth destination for the new club member home.
 - [x] 015 Add or update tests for public form validation/submission, signed-in prepopulation, notification email, staff authorization, active inbox, rejection, conversion, existing-person reuse, slug validation, welcome email, and preservation of existing club creation/slug behaviour.
 - [x] 016 Add acceptance step support for `request_account.feature` and remove `@wip` once the scenarios pass.
-- [ ] 017 Run targeted tests while developing, then run `dev check`.
+- [x] 017 Run targeted tests while developing, then run `dev check`.
