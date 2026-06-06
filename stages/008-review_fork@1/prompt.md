@@ -1,0 +1,493 @@
+Goal: Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals
+Run ID: 01KTFGRSG6HPB359NFJZYFEKS3
+Pipeline progress: 6 of 28 stages completed
+
+## Stage: read_plan
+- Status: succeeded
+- Handler: command
+- Script: `PLAN_PATH='docs/iterations/023-copy-review-for-older-club-members/plan.md'
+if [ ! -f "$PLAN_PATH" ]; then
+  echo "Iteration plan not found: $PLAN_PATH" >&2
+  exit 1
+fi
+printf 'PLAN_PATH=%s\n\n' "$PLAN_PATH"
+line_count=0
+while IFS= read -r line && [ "$line_count" -lt 320 ]; do
+  printf '%s\n' "$line"
+  line_count=$((line_count + 1))
+done < "$PLAN_PATH"`
+- Output:
+  ```
+  (115 lines omitted)
+  
+  ## Implementation Plan
+  
+  1. Re-read `copy-audit.md`, the public templates, member-facing LiveViews/templates, and presentation helpers that produce member-visible delivery status text.
+  2. Inventory existing tests and acceptance scenarios that assert visible copy, button labels, placeholders, or page headings on public/member pages.
+  3. Draft replacement copy for each page using the audit's older-iPad persona principles:
+     - Canadian English;
+     - plain words;
+     - concrete next steps;
+     - clear consequences before sending;
+     - inclusive language for small community groups, societies, associations, and clubs;
+     - no unsupported claims;
+     - no internal technical terms in member-facing UI.
+  4. Apply copy edits to the relevant Phoenix templates/LiveViews and presentation helpers.
+  5. Keep layout and route structure unchanged unless a label or help-text edit requires a small markup adjustment.
+  6. Update tests that assert the old copy while preserving behaviour intent.
+  7. Run targeted Phoenix tests and browser acceptance tests touched by changed labels.
+  8. Review pages manually at an iPad-like viewport:
+     - logged-out homepage;
+     - get-started request form and acknowledgement;
+     - sign-in/check-email;
+     - public club page;
+     - member dashboard;
+     - compose message and success/error states if practical;
+     - message detail delivery view.
+  9. Run `dev check` and fix any failures.
+  10. Record implementation notes and any unresolved copy decisions in the iteration folder.
+  
+  ## Open Technical Decisions
+  
+  None expected. Implementation should inspect whether visible delivery status descriptions live in templates or presentation modules and edit the right source of truth.
+  
+  ## New Capability
+  
+  Memba will speak more clearly to older community members and volunteer organizers: users can understand the current product, sign in with less uncertainty, request access with clearer expectations, and send group-wide messages with clearer confidence about who will receive them.
+  
+  ## Validation Plan
+  
+  - Code review focused on the `copy-audit.md` findings and acceptance criteria above.
+  - Test review for changed labels/copy so tests continue asserting behaviour rather than brittle prose where possible.
+  - Manual iPad-width review of the public/member pages listed in the implementation plan.
+  - `dev check` before completion.
+  
+  ## Risks / Follow-ups
+  
+  - Copy changes can accidentally desynchronise with acceptance tests that use visible labels. Update tests deliberately and preserve behaviour coverage.
+  - Without real customer interviews, the 80-year-old mountaineer persona is an informed design lens rather than validated voice-of-customer data.
+  - If homepage copy names the broader vision too vaguely, it may feel generic; if it names too many future workflows, it may overpromise. Keep the vision broad but the examples grounded.
+  - Legal/privacy improvements may need separate review before publishing stronger policy language.
+  - A later accessibility iteration should review font size, contrast, hit targets, and iPad ergonomics beyond copy alone.
+  ```
+
+## Stage: preflight_sandbox
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+if [ ! -x bin/dev ]; then
+  echo "Missing or non-executable bin/dev" >&2
+  exit 1
+fi
+status=$(git status --short)
+if [ -n "$status" ]; then
+  echo 'Iteration review requires a clean working tree before review starts.' >&2
+  printf '%s\n' "$status" >&2
+  exit 1
+fi
+rm -rf .fabro/tmp
+mkdir -p .fabro/tmp
+git rev-parse HEAD > .fabro/tmp/review-start-sha.txt
+echo "Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)"
+PATH="$PWD/bin:$PATH" dev sandbox-check`
+- Output:
+  ```
+  (193 lines omitted)
+  ==> commanded
+  Compiling 69 files (.ex)
+  Generated commanded app
+  ==> commanded_eventstore_adapter
+  Compiling 2 files (.ex)
+  Generated commanded_eventstore_adapter app
+  ==> commanded_ecto_projections
+  Compiling 1 file (.ex)
+  Generated commanded_ecto_projections app
+  ==> tailwind
+  Compiling 3 files (.ex)
+  Generated tailwind app
+  ==> elixir_make
+  Compiling 8 files (.ex)
+  Generated elixir_make app
+  ==> cc_precompiler
+  Compiling 3 files (.ex)
+  Generated cc_precompiler app
+  ==> lazy_html
+  Downloading precompiled NIF to /tmp/cache/elixir_make/lazy_html-nif-2.16-x86_64-linux-gnu-0.1.11.tar.gz
+  Compiling 3 files (.ex)
+  Generated lazy_html app
+  ==> websock
+  Compiling 1 file (.ex)
+  Generated websock app
+  ==> bandit
+  Compiling 54 files (.ex)
+  Generated bandit app
+  ==> swoosh
+  Compiling 59 files (.ex)
+  Generated swoosh app
+  ==> websock_adapter
+  Compiling 4 files (.ex)
+  Generated websock_adapter app
+  ==> phoenix
+  Compiling 74 files (.ex)
+  Generated phoenix app
+  ==> phoenix_live_view
+  Compiling 49 files (.ex)
+  Generated phoenix_live_view app
+  ==> phoenix_live_dashboard
+  Compiling 36 files (.ex)
+  Generated phoenix_live_dashboard app
+  ==> phoenix_test
+  Compiling 31 files (.ex)
+  Generated phoenix_test app
+  ==> phoenix_ecto
+  Compiling 7 files (.ex)
+  Generated phoenix_ecto app
+  Sandbox runtime check passed.
+  ```
+
+## Stage: dev_check
+- Status: succeeded
+- Handler: command
+- Script: `PATH="$PWD/bin:$PATH" dev ci`
+- Output:
+  ```
+  (670 lines omitted)
+  [acceptance 2026-06-06T22:39:54.716Z] scenario reset app state: Pat converts a request from an existing person
+        Given Alice is a person in Memba
+        And Alice has requested Memba access for Nelson Trail Society
+        And Pat is signed in as Memba staff
+  [acceptance 2026-06-06T22:39:56.771Z] slow step: Pat converts a request from an existing person :: Pat is signed in as Memba staff :: 1166ms
+        When Pat converts Alice's Nelson Trail Society request
+        Then Nelson Trail Society should exist as a club
+        And Alice should be an active member of Nelson Trail Society
+        And Memba should not create a duplicate person for Alice
+  [acceptance 2026-06-06T22:39:58.856Z] scenario teardown start: Pat converts a request from an existing person status=PASSED
+  [acceptance 2026-06-06T22:39:58.885Z] scenario finish: Pat converts a request from an existing person status=PASSED duration=4249ms
+  
+      Scenario: Pat rejects a request without notifying the requester # features/request_account.feature:45
+  [acceptance 2026-06-06T22:39:58.892Z] scenario start: Pat rejects a request without notifying the requester
+  [acceptance 2026-06-06T22:39:58.989Z] scenario reset app state: Pat rejects a request without notifying the requester
+        Given Robin has requested Memba access for Suspicious Sender Club
+        And Pat is signed in as Memba staff
+  [acceptance 2026-06-06T22:40:00.635Z] slow step: Pat rejects a request without notifying the requester :: Pat is signed in as Memba staff :: 1178ms
+        When Pat rejects Robin's Suspicious Sender Club request with the internal note "Looks like spam"
+        Then Robin's request should leave the active requests inbox
+        And Robin should not receive an email about the rejected request
+  [acceptance 2026-06-06T22:40:02.221Z] slow step: Pat rejects a request without notifying the requester :: Robin should not receive an email about the rejected request :: 1063ms
+        And Suspicious Sender Club should not exist as a club
+        And Robin should not be able to sign in to Suspicious Sender Club
+  [acceptance 2026-06-06T22:40:04.336Z] slow step: Pat rejects a request without notifying the requester :: Robin should not be able to sign in to Suspicious Sender Club :: 1699ms
+  [acceptance 2026-06-06T22:40:04.336Z] scenario teardown start: Pat rejects a request without notifying the requester status=PASSED
+  [acceptance 2026-06-06T22:40:04.347Z] scenario finish: Pat rejects a request without notifying the requester status=PASSED duration=5454ms
+  
+    Rule: Converted requesters receive direct club access
+  
+      Scenario: Robin receives a welcome sign-in link for the new club # features/request_account.feature:56
+  [acceptance 2026-06-06T22:40:04.349Z] scenario start: Robin receives a welcome sign-in link for the new club
+  [acceptance 2026-06-06T22:40:04.407Z] scenario reset app state: Robin receives a welcome sign-in link for the new club
+        Given Robin has requested Memba access for West Coast Paddlers
+        And Pat is signed in as Memba staff
+  [acceptance 2026-06-06T22:40:06.028Z] slow step: Robin receives a welcome sign-in link for the new club :: Pat is signed in as Memba staff :: 1160ms
+        When Pat converts Robin's West Coast Paddlers request
+        Then Robin should receive a welcome email for West Coast Paddlers
+        When Robin follows the welcome sign-in link
+        Then Robin should be signed in to West Coast Paddlers
+  [acceptance 2026-06-06T22:40:07.030Z] scenario teardown start: Robin receives a welcome sign-in link for the new club status=PASSED
+  [acceptance 2026-06-06T22:40:07.037Z] scenario finish: Robin receives a welcome sign-in link for the new club status=PASSED duration=2688ms
+  
+  [acceptance 2026-06-06T22:40:07.040Z] AfterAll: closing shared browser
+  [acceptance 2026-06-06T22:40:07.081Z] AfterAll: closed shared browser
+  [acceptance 2026-06-06T22:40:07.081Z] AfterAll: stopping Phoenix browser acceptance lifecycle
+  [acceptance 2026-06-06T22:40:07.083Z] AfterAll: stopped Phoenix browser acceptance lifecycle
+  44 scenarios (44 passed)
+  291 steps (291 passed)
+  1m54.462s (executing steps: 1m42.834s)
+  ```
+
+## Stage: fix_dev_check
+- Status: succeeded
+- Handler: agent
+- Model: gpt-5.5
+- Tokens: 219.4k in / 4.8k out
+- Response:
+  > Summary:
+  > 
+  > 1. **Preceding `dev_check` failure**
+  >    - Failure: `npm test` in `acceptance-tests/` could not find `cucumber-js`.
+  >    - Cause: acceptance-test npm dependencies were not installed in the sandbox (`acceptance-tests/node_modules/` was missing), not a product-code or test assertion failure.
+  > 
+  > 2. **Changes made**
+  >    - **No tracked code/config/test changes were needed.**
+  >    - I did not edit product code, `bin/dev`, dependency manifests, or acceptance `.feature` files.
+  >    - I installed the locked acceptance dependencies locally with:
+  >      - `env HOME=/tmp/home XDG_CACHE_HOME=/tmp/cache npm_config_cache=/tmp/cache/npm bash -lc 'cd acceptance-tests && npm ci'`
+  >    - Note: a direct `npm ci` initially exposed a sandbox/toolchain signal: the outer shell had `HOME=/env`, causing npm to use `/env/.npm` and fail with `EACCES`. Using a writable HOME/cache resolved the install.
+  > 
+  > 3. **Files changed**
+  >    - **None tracked.**
+  >    - Generated/ignored validation artifacts now present:
+  >      - `acceptance-tests/node_modules/`
+  >      - existing ignored build/dependency dirs under `web/`
+  >    - Existing untracked Fabro runtime state remains:
+  >      - `.fabro/tmp/`
+  > 
+  > 4. **Tests/checks run**
+  >    - `npm ci` directly:
+  >      - Failed due sandbox cache path: `EACCES: permission denied, mkdir '/env'`.
+  >    - `npm ci` with writable HOME/cache:
+  >      - Passed, installed 119 packages, 0 vulnerabilities.
+  >    - `PATH="$PWD/bin:$PATH" dev ci`
+  >      - Passed.
+  >      - ExUnit: `566 tests, 0 failures`.
+  >      - Acceptance: `44 scenarios (44 passed)`, `291 steps (291 passed)`.
+  > 
+  > 5. **Remaining failures or questions**
+  >    - No remaining automated-suite failures after installing acceptance dependencies.
+  >    - No human questions.
+  >    - Codebase does show a sandbox/toolchain-health signal: outside the devenv-wrapped command, npm inherits `HOME=/env`, which is unwritable. I did not patch repo scripts because the implementation itself is sound and the full gate passes once locked npm dependencies are present.
+  > 
+  > Failure-to-fix mapping:
+  > 
+  > | Dev check failure | Resolution | Files/modules changed |
+  > |---|---|---|
+  > | `sh: line 1: cucumber-js: command not found` during `acceptance-tests npm test` | Installed acceptance-test dependencies from existing `acceptance-tests/package-lock.json`; reran full `dev ci` successfully | None |
+
+## Stage: dev_check
+- Status: succeeded
+- Handler: command
+- Script: `PATH="$PWD/bin:$PATH" dev ci`
+- Output:
+  ```
+  (670 lines omitted)
+  [acceptance 2026-06-06T22:39:54.716Z] scenario reset app state: Pat converts a request from an existing person
+        Given Alice is a person in Memba
+        And Alice has requested Memba access for Nelson Trail Society
+        And Pat is signed in as Memba staff
+  [acceptance 2026-06-06T22:39:56.771Z] slow step: Pat converts a request from an existing person :: Pat is signed in as Memba staff :: 1166ms
+        When Pat converts Alice's Nelson Trail Society request
+        Then Nelson Trail Society should exist as a club
+        And Alice should be an active member of Nelson Trail Society
+        And Memba should not create a duplicate person for Alice
+  [acceptance 2026-06-06T22:39:58.856Z] scenario teardown start: Pat converts a request from an existing person status=PASSED
+  [acceptance 2026-06-06T22:39:58.885Z] scenario finish: Pat converts a request from an existing person status=PASSED duration=4249ms
+  
+      Scenario: Pat rejects a request without notifying the requester # features/request_account.feature:45
+  [acceptance 2026-06-06T22:39:58.892Z] scenario start: Pat rejects a request without notifying the requester
+  [acceptance 2026-06-06T22:39:58.989Z] scenario reset app state: Pat rejects a request without notifying the requester
+        Given Robin has requested Memba access for Suspicious Sender Club
+        And Pat is signed in as Memba staff
+  [acceptance 2026-06-06T22:40:00.635Z] slow step: Pat rejects a request without notifying the requester :: Pat is signed in as Memba staff :: 1178ms
+        When Pat rejects Robin's Suspicious Sender Club request with the internal note "Looks like spam"
+        Then Robin's request should leave the active requests inbox
+        And Robin should not receive an email about the rejected request
+  [acceptance 2026-06-06T22:40:02.221Z] slow step: Pat rejects a request without notifying the requester :: Robin should not receive an email about the rejected request :: 1063ms
+        And Suspicious Sender Club should not exist as a club
+        And Robin should not be able to sign in to Suspicious Sender Club
+  [acceptance 2026-06-06T22:40:04.336Z] slow step: Pat rejects a request without notifying the requester :: Robin should not be able to sign in to Suspicious Sender Club :: 1699ms
+  [acceptance 2026-06-06T22:40:04.336Z] scenario teardown start: Pat rejects a request without notifying the requester status=PASSED
+  [acceptance 2026-06-06T22:40:04.347Z] scenario finish: Pat rejects a request without notifying the requester status=PASSED duration=5454ms
+  
+    Rule: Converted requesters receive direct club access
+  
+      Scenario: Robin receives a welcome sign-in link for the new club # features/request_account.feature:56
+  [acceptance 2026-06-06T22:40:04.349Z] scenario start: Robin receives a welcome sign-in link for the new club
+  [acceptance 2026-06-06T22:40:04.407Z] scenario reset app state: Robin receives a welcome sign-in link for the new club
+        Given Robin has requested Memba access for West Coast Paddlers
+        And Pat is signed in as Memba staff
+  [acceptance 2026-06-06T22:40:06.028Z] slow step: Robin receives a welcome sign-in link for the new club :: Pat is signed in as Memba staff :: 1160ms
+        When Pat converts Robin's West Coast Paddlers request
+        Then Robin should receive a welcome email for West Coast Paddlers
+        When Robin follows the welcome sign-in link
+        Then Robin should be signed in to West Coast Paddlers
+  [acceptance 2026-06-06T22:40:07.030Z] scenario teardown start: Robin receives a welcome sign-in link for the new club status=PASSED
+  [acceptance 2026-06-06T22:40:07.037Z] scenario finish: Robin receives a welcome sign-in link for the new club status=PASSED duration=2688ms
+  
+  [acceptance 2026-06-06T22:40:07.040Z] AfterAll: closing shared browser
+  [acceptance 2026-06-06T22:40:07.081Z] AfterAll: closed shared browser
+  [acceptance 2026-06-06T22:40:07.081Z] AfterAll: stopping Phoenix browser acceptance lifecycle
+  [acceptance 2026-06-06T22:40:07.083Z] AfterAll: stopped Phoenix browser acceptance lifecycle
+  44 scenarios (44 passed)
+  291 steps (291 passed)
+  1m54.462s (executing steps: 1m42.834s)
+  ```
+
+## Stage: collect_implementation_evidence
+- Status: succeeded
+- Handler: command
+- Script: `set -eu
+base_sha='eed48d7d35b8bc7446fc35e888159bb80438bf5b'
+echo '=== Implementation Evidence Debug ==='
+echo "PWD: $PWD"
+echo "Branch: $(git branch --show-current || true)"
+echo "HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)"
+echo "Base sha input: ${base_sha:-<empty>}"
+echo ''
+if [ -z "$base_sha" ]; then
+  echo 'Missing required input: base_sha' >&2
+  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2
+  exit 1
+fi
+if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)
+  echo "Base sha is not present locally: $base_sha" >&2
+  echo "Repository shallow: $shallow" >&2
+  if [ "$shallow" = true ]; then
+    echo 'Trying to unshallow repository before failing...' >&2
+    git fetch --quiet --unshallow origin || true
+  fi
+fi
+if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+  echo "Base sha still does not resolve after fallback: $base_sha" >&2
+  echo '--- available refs ---' >&2
+  git show-ref >&2 || true
+  echo '--- recent commits ---' >&2
+  git log --oneline --decorate --max-count=40 --all >&2 || true
+  exit 1
+fi
+echo '=== Implementation Evidence ==='
+echo "Branch: $(git branch --show-current || true)"
+echo "HEAD: $(git rev-parse HEAD)"
+echo "Base sha: $base_sha"
+echo ''
+echo '--- git status --short ---'
+git status --short
+echo ''
+echo '--- git diff --stat ---'
+if ! git diff --stat "$base_sha"..HEAD; then
+  echo "Could not compute diff stat from $base_sha to HEAD." >&2
+  exit 1
+fi
+echo ''
+echo '--- git diff --name-status ---'
+if ! git diff --name-status "$base_sha"..HEAD; then
+  echo "Could not compute diff name-status from $base_sha to HEAD." >&2
+  exit 1
+fi
+echo ''
+echo '--- changed source/config/test file excerpts ---'
+if ! changed_files=$(git diff --name-only "$base_sha"..HEAD); then
+  echo "Could not compute changed files from $base_sha to HEAD." >&2
+  exit 1
+fi
+if [ -z "$changed_files" ]; then
+  echo 'No files differ between base sha and HEAD.'
+else
+  excerpt_files=$(printf '%s
+' "$changed_files" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\.exs|mix\.lock)|bin/|docs/iterations/|docs/adr/)' || true)
+  if [ -z "$excerpt_files" ]; then
+    echo 'No changed files matched the excerpt filter.'
+  else
+    printf '%s
+' "$excerpt_files" | while IFS= read -r file; do
+      if [ -f "$file" ]; then
+        echo "=== $file ==="
+        sed -n '1,220p' "$file"
+        echo ''
+      fi
+    done
+  fi
+fi`
+- Output:
+  ```
+  (4382 lines omitted)
+        model = MemberEmailDeliveryPresentation.present_receipts(receipts)
+  
+        assert Enum.map(model.summary, &{&1.status, &1.percentage}) == [
+                 {"delivered", 33},
+                 {"sent", 67},
+                 {"delivery problem", 0}
+               ]
+      end
+  
+      test "shows zero counts and percentages for every summary status when there are no receipts" do
+        assert %{
+                 total_count: 0,
+                 receipts: [],
+                 groups: [],
+                 summary: [
+                   %{status: "delivered", count: 0, percentage: 0},
+                   %{status: "sent", count: 0, percentage: 0},
+                   %{status: "delivery problem", count: 0, percentage: 0}
+                 ]
+               } = MemberEmailDeliveryPresentation.present_receipts([])
+      end
+    end
+  end
+  
+  === web/test/memba_web/plugs/canonical_host_redirect_test.exs ===
+  defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
+    use MembaWeb.ConnCase, async: true
+  
+    test "redirects the Fly hostname to the canonical domain and preserves path and query", %{
+      conn: conn
+    } do
+      conn =
+        conn
+        |> Map.put(:host, "memba.fly.dev")
+        |> get("/admin/clubs?sort=name")
+  
+      assert response(conn, 301) == ""
+      assert get_resp_header(conn, "location") == ["https://memba.io/admin/clubs?sort=name"]
+    end
+  
+    test "does not redirect the canonical hostname", %{conn: conn} do
+      conn =
+        conn
+        |> Map.put(:host, "memba.io")
+        |> get("/")
+  
+      assert html_response(conn, 200) =~ "A simpler way to keep your group members informed."
+      assert get_resp_header(conn, "location") == []
+    end
+  end
+  ```
+
+
+You are independently reviewing the completed, plan-conforming implementation of the iteration plan at docs/iterations/023-copy-review-for-older-club-members/plan.md.
+
+Use the prior context: the plan text, collected implementation evidence, current working tree state, commit range from `eed48d7d35b8bc7446fc35e888159bb80438bf5b..HEAD`, and the successful dev check output. Be strict, practical, and specific. Do not edit files.
+
+This workflow reviews an already-committed implementation after the implementation workflow has proved plan conformance. The review job is code polish plus smell radar: refactoring, maintainability, project conventions, ADR conformance, and surfacing judgement-worthy non-blocking smells. Do not emit shell-command/tool-call JSON; return the Markdown review report only.
+
+Automated tests are the behavioural feedback loop in this workflow. If you find a likely behavioural gap, missing acceptance criterion, or inadequate automated coverage despite green dev check, flag it as a blocking issue requiring a new implementation/test pass or human decision; do not disguise it as refactoring feedback. Do not ask for feature-file edits.
+
+Review against these questions:
+
+0. ADR conformance
+   - Read every ADR cited by the plan and any nearby/current ADRs under `docs/adr/` that govern touched architecture.
+   - Does the implementation obey accepted ADR decisions and consequences as binding constraints?
+   - Does it avoid replacing ADR-mandated infrastructure or architecture with simpler local substitutes, unless the plan explicitly deferred that decision?
+   - Do tests and implementation evidence prove the ADR-relevant behaviour, wiring, or structure?
+   - Reject if the implementation conflicts with accepted ADRs or omits a cited ADR's central decision without an explicit plan deferral or human decision.
+
+1. Light plan-fidelity sanity check
+   - Does the implementation appear consistent with the stated goal and capability, given the plan-conformance gate has already passed?
+   - Did it avoid obvious out-of-scope work?
+   - If you find a substantial plan gap, classify it as blocking and requiring human input or a new implementation pass.
+
+2. Behaviour and automated coverage
+   - Did dev check pass before review?
+   - Are important happy paths, edge cases, permissions, error states, and data/state changes covered by automated tests where appropriate?
+   - Were acceptance feature files left unchanged as domain acceptance criteria?
+
+3. Technical quality / refactoring
+   - Are Phoenix, LiveView, HEEx, Ecto, Tailwind, and Elixir conventions followed where relevant?
+   - Are migrations, schemas, contexts, tests, routes, UI, background jobs, and integrations coherent?
+   - Is the implementation maintainable, minimal, and well factored?
+
+4. Code-health classification
+   - Blocking: ADR violations, behavioural gaps, missing or unsafe coverage, repeated blockers, or anything needing product/architecture judgement before merge.
+   - Bounded-safe: concrete, low-risk refactoring, maintainability, convention, or test-quality fixes an agent can apply without changing product behaviour or feature files.
+   - Judgement-worthy non-blocking: design smells, coupling, duplication, naming, dependency, or architecture drift that might merit human judgement later but should not block this merge.
+
+Return a Markdown report with:
+
+- Decision: ACCEPT or REJECT
+- Confidence: High, Medium, or Low
+- ADR conformance: PASS or FAIL
+- ADR violations: numbered list with ADR number/file and implementation evidence
+- Blocking issues: numbered list
+- Bounded-safe fixes: numbered list
+- Judgement-worthy non-blocking code-health findings: numbered list; for each include file(s), smell, and why it may need human judgement
+- Suggested fixes: concrete changes if rejected or bounded-safe fixes exist
+- Validation notes: tests/checks/manual checks relevant to the decision
