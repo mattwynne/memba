@@ -25,8 +25,8 @@ defmodule MembaWeb.PageHTML do
 
   defp first_name(_member), do: "member"
 
-  defp active_member_count_label(1), do: "1 active member"
-  defp active_member_count_label(count), do: "#{count} active members"
+  defp active_member_count_label(1), do: "1 current member"
+  defp active_member_count_label(count), do: "#{count} current members"
 
   defp status_slug(status) when is_binary(status), do: String.replace(status, " ", "-")
   defp status_slug(_status), do: "unknown"

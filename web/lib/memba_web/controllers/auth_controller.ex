@@ -8,7 +8,7 @@ defmodule MembaWeb.AuthController do
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
 
-  @invalid_link_notice "That sign-in link is invalid or has expired."
+  @invalid_link_notice "That sign-in link is no longer valid. Please ask for a new sign-in link."
 
   def callback(conn, %{"token" => token} = params) do
     return_to =

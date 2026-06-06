@@ -17,9 +17,9 @@ defmodule MembaWeb.MemberEmailDeliveryPresentation do
   }
 
   @descriptions %{
-    "delivered" => "delivered to their inbox",
-    "sent" => "on its way",
-    "delivery problem" => "we couldn't reach them"
+    "delivered" => "Email delivered",
+    "sent" => "Email still sending",
+    "delivery problem" => "Email not delivered"
   }
 
   @doc """

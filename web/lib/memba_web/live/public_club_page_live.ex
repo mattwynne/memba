@@ -21,7 +21,7 @@ defmodule MembaWeb.PublicClubPageLive do
       <div id="public-club-page-page" data-club-id={@club.club_id} class="space-y-8">
         <section class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-8 shadow-sm">
           <p class="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--club-site-accent)]">
-            Club member space
+            Member space
           </p>
           <div class="mt-3 grid gap-8 lg:grid-cols-[1fr_0.75fr] lg:items-center">
             <div>
@@ -29,7 +29,7 @@ defmodule MembaWeb.PublicClubPageLive do
                 Welcome to {@club.name}
               </h1>
               <p class="mt-5 max-w-2xl text-lg leading-8 text-[var(--club-site-muted)]">
-                Members can sign in to see club updates, send messages, and keep track of who belongs.
+                Sign in with the email address {@club.name} has for you to read member messages and see the current member list. Member-only details stay private.
               </p>
               <div class="mt-8 flex flex-col gap-3 sm:flex-row">
                 <a
@@ -37,7 +37,7 @@ defmodule MembaWeb.PublicClubPageLive do
                   href={~p"/auth"}
                   class="inline-flex items-center justify-center rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  Sign in to continue
+                  Email me a sign-in link
                 </a>
                 <a
                   href={~p"/"}
@@ -56,14 +56,14 @@ defmodule MembaWeb.PublicClubPageLive do
                     name="hero-envelope"
                     class="mt-0.5 h-5 w-5 shrink-0 text-[var(--club-site-accent)]"
                   />
-                  <span>Read and send club messages from one shared place.</span>
+                  <span>Read messages from your group in one shared place.</span>
                 </li>
                 <li class="flex gap-3">
                   <.icon
                     name="hero-users"
                     class="mt-0.5 h-5 w-5 shrink-0 text-[var(--club-site-accent)]"
                   />
-                  <span>See the current active member list.</span>
+                  <span>See the current member list.</span>
                 </li>
                 <li class="flex gap-3">
                   <.icon

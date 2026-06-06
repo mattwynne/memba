@@ -122,7 +122,7 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
-            Message sent.
+            Your message is being sent.
           </h1>
 
           <p
@@ -130,7 +130,7 @@ defmodule MembaWeb.MemberMessageLive.New do
             data-active-member-count={@active_member_count}
             class="mx-auto mt-4 max-w-xl text-base leading-7 text-[var(--club-site-muted)]"
           >
-            Your note is on its way to {active_member_count_summary(@active_member_count)}. You can watch it land on the message page.
+            Memba is sending your message to {active_member_count_summary(@active_member_count)}. You can check delivery on the message page.
           </p>
 
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
@@ -139,7 +139,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               href={message_detail_path(@sent_message_id, @selected_club, @route_params)}
               class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
             >
-              <.icon name="hero-eye" class="size-4" /> See who got it
+              <.icon name="hero-eye" class="size-4" /> Check delivery
             </.link>
             <.link
               id="member-compose-send-another-link"
@@ -153,7 +153,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               href={club_home_path(@selected_club, @route_params)}
               class="inline-flex min-h-12 items-center justify-center rounded-full border border-transparent px-6 py-3 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
             >
-              Back to home
+              Back to club home
             </.link>
           </div>
         </section>
@@ -172,14 +172,14 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
-            That didn’t send.
+            Your message was not sent.
           </h1>
 
           <p
             id="member-compose-error-summary"
             class="mx-auto mt-4 max-w-xl text-base leading-7 text-[var(--club-site-muted)]"
           >
-            Your message was not sent to anyone. Please contact support so we can investigate before you try again.
+            No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.
           </p>
 
           <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
@@ -221,7 +221,7 @@ defmodule MembaWeb.MemberMessageLive.New do
           </p>
 
           <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
-            Send a club message
+            Send a message to all current members
           </h1>
 
           <p
@@ -241,11 +241,11 @@ defmodule MembaWeb.MemberMessageLive.New do
               <.icon name="hero-users" class="size-4" />
             </span>
             <p>
-              This goes to
+              Before you send: this message will be emailed to
               <strong class="font-semibold text-sky-950">
                 {active_member_count_summary(@active_member_count)}
               </strong>
-              of {selected_club_name(@selected_club)}. There’s no list to pick — everyone with a current membership gets it.
+              of {selected_club_name(@selected_club)}. There is no list to pick.
             </p>
           </div>
 
@@ -259,7 +259,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               <.icon name="hero-envelope" class="size-4" />
             </span>
             <p>
-              Prefer email? Send a club-wide message to
+              Prefer email? You can also send a club-wide message to
               <a
                 id="member-compose-inbound-email-link"
                 href={"mailto:#{inbound_email_address}"}
@@ -300,7 +300,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               field={@message_form[:subject]}
               id="member-message-subject-input"
               label="Subject"
-              placeholder="What's this about?"
+              placeholder="Example: Saturday trail day"
               class="w-full rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
             />
             <.input
@@ -308,7 +308,7 @@ defmodule MembaWeb.MemberMessageLive.New do
               id="member-message-body-input"
               label="Message"
               type="textarea"
-              placeholder="Write your note to the club…"
+              placeholder="Write the message members should receive."
               rows="8"
               class="min-h-40 w-full resize-y rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
             />
@@ -319,7 +319,7 @@ defmodule MembaWeb.MemberMessageLive.New do
                 type="submit"
                 class="inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-[var(--club-site-accent)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
               >
-                <.icon name="hero-paper-airplane" class="size-4" /> Send to all members
+                <.icon name="hero-paper-airplane" class="size-4" /> Send to all current members
               </button>
               <.link
                 id="member-message-cancel-link"
@@ -484,9 +484,9 @@ defmodule MembaWeb.MemberMessageLive.New do
     ~p"/messages/#{message_id}?club_id=#{selected_club_id(selected_club, route_params)}"
   end
 
-  defp active_member_count_summary(nil), do: "all active members"
-  defp active_member_count_summary(1), do: "the active member"
-  defp active_member_count_summary(count), do: "all #{count} active members"
+  defp active_member_count_summary(nil), do: "all current members"
+  defp active_member_count_summary(1), do: "the current member"
+  defp active_member_count_summary(count), do: "all #{count} current members"
 
   defp member_initials(nil), do: "ME"
 
