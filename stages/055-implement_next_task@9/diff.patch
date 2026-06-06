@@ -1,0 +1,146 @@
+diff --git a/acceptance-tests/features/step_definitions/staff_operations_steps.js b/acceptance-tests/features/step_definitions/staff_operations_steps.js
+index 4a6710f..74d0704 100644
+--- a/acceptance-tests/features/step_definitions/staff_operations_steps.js
++++ b/acceptance-tests/features/step_definitions/staff_operations_steps.js
+@@ -10,6 +10,7 @@ const {
+ 
+ const staffPages = {
+   Clubs: { navItem: "clubs", path: "/admin/clubs", pageSelector: "#clubs-index" },
++  Requests: { navItem: "requests", path: "/admin/requests", pageSelector: "#admin-requests-index" },
+   People: { navItem: "people", path: "/admin/people", pageSelector: "#admin-people-index" },
+   Messages: { navItem: "messages", path: "/admin/messages", pageSelector: "#admin-messages-index" },
+   Deliveries: { navItem: "deliveries", path: "/admin/deliveries", pageSelector: "#deliveries-overview" }
+@@ -69,7 +70,7 @@ Then(
+ 
+     await playwrightExpect(nav.getByText("Incoming")).toHaveCount(0);
+     await playwrightExpect(nav.getByText("Roles")).toHaveCount(0);
+-    await playwrightExpect(nav.locator("[data-admin-nav-item]")).toHaveCount(4);
++    await playwrightExpect(nav.locator("[data-admin-nav-item]")).toHaveCount(Object.keys(staffPages).length);
+   }
+ );
+ 
+diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md
+index a45cd5c..a79938c 100644
+--- a/docs/iterations/022-request-to-club-onboarding/todo.md
++++ b/docs/iterations/022-request-to-club-onboarding/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
+ - [x] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
+ - [x] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
+-- [ ] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
++- [x] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
+ - [ ] 010 Build the active requests inbox with clear request details and actions for reject/convert.
+ - [ ] 011 Implement rejection with required internal notes and no requester email.
+ - [ ] 012 Implement conversion preparation with generated/editable slug using the same rules as staff club creation.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index a49f075..d22ce2b 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -103,7 +103,7 @@ defmodule MembaWeb.Layouts do
+ 
+   attr :active, :atom,
+     default: nil,
+-    values: [nil, :clubs, :people, :messages, :deliveries],
++    values: [nil, :clubs, :requests, :people, :messages, :deliveries],
+     doc: "the active staff navigation item"
+ 
+   slot :inner_block, required: true
+@@ -161,6 +161,16 @@ defmodule MembaWeb.Layouts do
+                     <.icon name="hero-building-office-2" class="size-4 bg-current" /> Clubs
+                   </span>
+                 </.link>
++                <.link
++                  navigate={~p"/admin/requests"}
++                  id="admin-nav-requests"
++                  data-admin-nav-item="requests"
++                  class={admin_nav_class(@active == :requests)}
++                >
++                  <span class="flex items-center gap-3">
++                    <.icon name="hero-inbox-tray" class="size-4 bg-current" /> Requests
++                  </span>
++                </.link>
+                 <.link
+                   navigate={~p"/admin/people"}
+                   id="admin-nav-people"
+diff --git a/web/lib/memba_web/live/admin/requests_live/index.ex b/web/lib/memba_web/live/admin/requests_live/index.ex
+index 262bda9..6e3ebbe 100644
+--- a/web/lib/memba_web/live/admin/requests_live/index.ex
++++ b/web/lib/memba_web/live/admin/requests_live/index.ex
+@@ -4,7 +4,7 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
+   @impl Phoenix.LiveView
+   def render(assigns) do
+     ~H"""
+-    <Layouts.admin flash={@flash}>
++    <Layouts.admin flash={@flash} active={:requests}>
+       <main id="admin-requests-index" data-admin-page="requests" class="space-y-6 p-6">
+         <.admin_page_header
+           eyebrow="Requests"
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 8320a65..b6f6a12 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -67,6 +67,16 @@ defmodule MembaWeb.LayoutsTest do
+       "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-admin-nav-item='people'][href='/admin/people']"
+     )
+ 
++    assert_selector(
++      html,
++      "nav[aria-label='Memba staff navigation'] a#admin-nav-requests[data-admin-nav-item='requests'][href='/admin/requests']"
++    )
++
++    assert_selector(
++      html,
++      "nav[aria-label='Memba staff navigation'] a#admin-nav-requests[data-phx-link='redirect'][data-phx-link-state='push']"
++    )
++
+     assert_selector(
+       html,
+       "nav[aria-label='Memba staff navigation'] a#admin-nav-people[data-phx-link='redirect'][data-phx-link-state='push']"
+@@ -87,8 +97,9 @@ defmodule MembaWeb.LayoutsTest do
+       "nav[aria-label='Memba staff navigation'] a#admin-nav-deliveries[data-admin-nav-item='deliveries'][href='/admin/deliveries']"
+     )
+ 
+-    assert_selector_count(html, "nav[aria-label='Memba staff navigation'] a", 4)
++    assert_selector_count(html, "nav[aria-label='Memba staff navigation'] a", 5)
+     assert_text(html, "nav[aria-label='Memba staff navigation']", "Clubs")
++    assert_text(html, "nav[aria-label='Memba staff navigation']", "Requests")
+     assert_text(html, "nav[aria-label='Memba staff navigation']", "People")
+     assert_text(html, "nav[aria-label='Memba staff navigation']", "Messages")
+     assert_text(html, "nav[aria-label='Memba staff navigation']", "Deliveries")
+diff --git a/web/test/memba_web/live/admin/requests_live/index_test.exs b/web/test/memba_web/live/admin/requests_live/index_test.exs
+index 62f6c21..4931424 100644
+--- a/web/test/memba_web/live/admin/requests_live/index_test.exs
++++ b/web/test/memba_web/live/admin/requests_live/index_test.exs
+@@ -13,6 +13,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
+ 
+     assert_selector_exists(html, "#admin-requests-index[data-admin-page='requests']")
+     assert_selector_exists(html, "#admin-requests-route-ready")
++    assert_selector_exists(html, "#admin-nav-requests[href='/admin/requests']")
+     refute initial_html =~ "Browser acceptance harness"
+   end
+ 
+diff --git a/web/test/memba_web/live/admin_operations_index_live_test.exs b/web/test/memba_web/live/admin_operations_index_live_test.exs
+index bdbe604..cb670bc 100644
+--- a/web/test/memba_web/live/admin_operations_index_live_test.exs
++++ b/web/test/memba_web/live/admin_operations_index_live_test.exs
+@@ -27,6 +27,7 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
+     nav_selector = "nav[aria-label='Memba staff navigation']"
+ 
+     assert_selector_exists(html, "#{nav_selector} #admin-nav-clubs[href='/admin/clubs']")
++    assert_selector_exists(html, "#{nav_selector} #admin-nav-requests[href='/admin/requests']")
+     assert_selector_exists(html, "#{nav_selector} #admin-nav-people[href='/admin/people']")
+     assert_selector_exists(html, "#{nav_selector} #admin-nav-messages[href='/admin/messages']")
+ 
+@@ -35,10 +36,11 @@ defmodule MembaWeb.AdminOperationsIndexLiveTest do
+       "#{nav_selector} #admin-nav-deliveries[href='/admin/deliveries']"
+     )
+ 
+-    assert_selector_count(html, "#{nav_selector} a", 4)
++    assert_selector_count(html, "#{nav_selector} a", 5)
+ 
+     nav_text = text_for(html, nav_selector)
+     assert nav_text =~ "Clubs"
++    assert nav_text =~ "Requests"
+     assert nav_text =~ "People"
+     assert nav_text =~ "Messages"
+     assert nav_text =~ "Deliveries"
