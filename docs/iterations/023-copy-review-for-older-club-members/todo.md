@@ -8,5 +8,5 @@
 - [x] 006 Update tests that assert the old copy while preserving behaviour intent.
 - [x] 007 Run targeted Phoenix tests and browser acceptance tests touched by changed labels.
 - [x] 008 Review pages manually at an iPad-like viewport:
-- [ ] 009 Run `dev check` and fix any failures.
+- [x] 009 Run `dev check` and fix any failures.
 - [ ] 010 Record implementation notes and any unresolved copy decisions in the iteration folder.
