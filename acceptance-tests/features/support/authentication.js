@@ -290,7 +290,12 @@ async function assertSignedOut(world) {
   await playwrightExpect(world.page).toHaveURL(/\/$/);
   await playwrightExpect(world.page.locator("#admin-layout[data-surface='admin']")).toHaveCount(0);
   await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
-  await playwrightExpect(world.page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+
+  if ((await world.page.locator("#public-club-page-page").count()) > 0) {
+    await playwrightExpect(world.page.getByRole("link", { name: "Email me a sign-in link" })).toBeVisible();
+  } else {
+    await playwrightExpect(world.page.getByRole("link", { name: "Sign in" }).first()).toBeVisible();
+  }
 }
 
 async function assertOnStaffOnlyHomepage(world) {

@@ -6,7 +6,7 @@
 - [x] 004 Apply copy edits to the relevant Phoenix templates/LiveViews and presentation helpers.
 - [x] 005 Keep layout and route structure unchanged unless a label or help-text edit requires a small markup adjustment.
 - [x] 006 Update tests that assert the old copy while preserving behaviour intent.
-- [ ] 007 Run targeted Phoenix tests and browser acceptance tests touched by changed labels.
+- [x] 007 Run targeted Phoenix tests and browser acceptance tests touched by changed labels.
 - [ ] 008 Review pages manually at an iPad-like viewport:
 - [ ] 009 Run `dev check` and fix any failures.
 - [ ] 010 Record implementation notes and any unresolved copy decisions in the iteration folder.
