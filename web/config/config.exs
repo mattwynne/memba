@@ -53,6 +53,10 @@ config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
   message_stream: "outbound-member-broadcasts",
   track_links: "None"
 
+config :memba, Memba.Onboarding.NewRequestEmail,
+  to: "hello@memba.io",
+  message_stream: "outbound-onboarding"
+
 config :commanded_ecto_projections, schema_prefix: nil
 
 # Configure the endpoint

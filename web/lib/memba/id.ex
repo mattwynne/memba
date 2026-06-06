@@ -13,13 +13,21 @@ defmodule Memba.ID do
     message: "msg",
     delivery: "del",
     inbound_email: "inb",
-    email_address: "ead"
+    email_address: "ead",
+    onboarding_request: "req"
   }
 
   @types Map.keys(@prefixes)
 
   @type type ::
-          :club | :person | :membership | :message | :delivery | :inbound_email | :email_address
+          :club
+          | :person
+          | :membership
+          | :message
+          | :delivery
+          | :inbound_email
+          | :email_address
+          | :onboarding_request
   @type t :: String.t()
 
   @doc "Generate a new typed ID."

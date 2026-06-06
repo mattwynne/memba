@@ -10,8 +10,9 @@ defmodule MembaWeb.AuthController do
 
   @invalid_link_notice "That sign-in link is invalid or has expired."
 
-  def callback(conn, %{"token" => token}) do
-    return_to = get_session(conn, IdentityAuth.return_to_session_key())
+  def callback(conn, %{"token" => token} = params) do
+    return_to =
+      Map.get(params, "return_to") || get_session(conn, IdentityAuth.return_to_session_key())
 
     case Accounts.consume_sign_in_token(token) do
       {:ok, %{email: email}} ->

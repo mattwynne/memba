@@ -244,6 +244,28 @@ defmodule MembaWeb.AuthControllerTest do
       assert get_session(conn, IdentityAuth.identity_session_key()) == "alice@example.com"
     end
 
+    test "magic links can carry a safe post-auth destination without a stored session", %{
+      conn: conn
+    } do
+      create_active_member(
+        email: "alice@example.com",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("alice@example.com")
+
+      conn =
+        get(
+          conn,
+          "/auth/sign-in/#{token}?return_to=#{URI.encode_www_form("http://kmc.lvh.me/")}"
+        )
+
+      assert redirected_to(conn) == "http://kmc.lvh.me/"
+      assert get_session(conn, IdentityAuth.identity_session_key()) == "alice@example.com"
+      assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
+    end
+
     test "rejects unknown tokens without signing in", %{conn: conn} do
       conn = get(conn, ~p"/auth/sign-in/unknown-token")
 

@@ -20,7 +20,7 @@ defmodule MembaWeb.DevTestSupportController do
     Memba.Messaging.Projectors.MembaStaffEmailDelivery,
     Memba.Messaging.Projectors.InboundEmailSource
   ]
-  @public_reset_tables [:auth_sign_in_tokens]
+  @public_reset_tables [:auth_sign_in_tokens, :onboarding_requests]
 
   @messaging_email_delivery_providers %{
     "fake" => Memba.Messaging.EmailDeliveryProviders.Fake,

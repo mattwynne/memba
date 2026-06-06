@@ -91,6 +91,7 @@ defmodule MembaWeb.Router do
     delete "/auth", AuthController, :delete
     get "/about", PageController, :about
     get "/get-started", PageController, :get_started
+    post "/get-started", PageController, :submit_get_started
     get "/terms", PageController, :terms
     get "/privacy", PageController, :privacy
   end
@@ -100,6 +101,7 @@ defmodule MembaWeb.Router do
 
     live_session :memba_staff, on_mount: [{MembaWeb.IdentityAuth, :require_staff_identity}] do
       live "/clubs", ClubsLive.Index
+      live "/requests", RequestsLive.Index
       live "/people", PeopleLive.Index
       live "/clubs/:club_id", ClubsLive.Show
       live "/clubs/:club_id/people/new", PeopleLive.New
