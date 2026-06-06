@@ -1,0 +1,394 @@
+diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md
+index 85f1928..6bef49a 100644
+--- a/docs/iterations/022-request-to-club-onboarding/todo.md
++++ b/docs/iterations/022-request-to-club-onboarding/todo.md
+@@ -13,7 +13,7 @@
+ - [x] 011 Implement rejection with required internal notes and no requester email.
+ - [x] 012 Implement conversion preparation with generated/editable slug using the same rules as staff club creation.
+ - [x] 013 Implement conversion transactionally where practical: create club, create/reuse person, create active membership, mark request converted, and send/wrap welcome email behaviour consistently.
+-- [ ] 014 Implement welcome email generation with a magic sign-in token and post-auth destination for the new club member home.
++- [x] 014 Implement welcome email generation with a magic sign-in token and post-auth destination for the new club member home.
+ - [ ] 015 Add or update tests for public form validation/submission, signed-in prepopulation, notification email, staff authorization, active inbox, rejection, conversion, existing-person reuse, slug validation, welcome email, and preservation of existing club creation/slug behaviour.
+ - [ ] 016 Add acceptance step support for `request_account.feature` and remove `@wip` once the scenarios pass.
+ - [ ] 017 Run targeted tests while developing, then run `dev check`.
+diff --git a/web/lib/memba/onboarding.ex b/web/lib/memba/onboarding.ex
+index 5151da8..030b4a7 100644
+--- a/web/lib/memba/onboarding.ex
++++ b/web/lib/memba/onboarding.ex
+@@ -8,6 +8,7 @@ defmodule Memba.Onboarding do
+   alias Memba.ID
+   alias Memba.Membership
+   alias Memba.Onboarding.Request
++  alias Memba.Onboarding.WelcomeEmail
+   alias Memba.Repo
+ 
+   @doc """
+@@ -298,5 +299,5 @@ defmodule Memba.Onboarding do
+         Exception.message(exception)}}
+   end
+ 
+-  defp default_welcome_email(_conversion), do: :ok
++  defp default_welcome_email(conversion), do: WelcomeEmail.deliver(conversion)
+ end
+diff --git a/web/lib/memba/onboarding/welcome_email.ex b/web/lib/memba/onboarding/welcome_email.ex
+new file mode 100644
+index 0000000..1dfe4c8
+--- /dev/null
++++ b/web/lib/memba/onboarding/welcome_email.ex
+@@ -0,0 +1,140 @@
++defmodule Memba.Onboarding.WelcomeEmail do
++  @moduledoc """
++  Builds and delivers welcome emails for converted onboarding requesters.
++
++  The welcome link uses the shared sign-in-link token store and lands on the
++  converted club's member home after authentication.
++  """
++
++  import Swoosh.Email
++
++  alias Memba.Accounts
++  alias Memba.Accounts.AuthEmailConfig
++  alias Memba.Onboarding.Request
++  alias MembaWeb.ClubSite
++
++  @sender_name "Memba"
++
++  @doc """
++  Deliver a welcome email for a completed request-to-club conversion.
++  """
++  def deliver(%{request: %Request{} = request, club: club}) do
++    with {:ok, %AuthEmailConfig{} = config} <- auth_email_config(),
++         {:ok, %{email: recipient_email, token: token}} <-
++           Accounts.create_sign_in_token(request.requester_email) do
++      callback_url = welcome_callback_url(club, token)
++
++      request
++      |> welcome_email(recipient_email, club, callback_url, config)
++      |> deliver_email()
++    end
++  rescue
++    exception ->
++      {:error,
++       {:onboarding_welcome_email_delivery_exception, exception.__struct__,
++        Exception.message(exception)}}
++  end
++
++  defp auth_email_config do
++    case AuthEmailConfig.from_application_env() do
++      {:ok, config} -> {:ok, config}
++      {:error, message} -> {:error, {:onboarding_welcome_email_configuration_error, message}}
++    end
++  end
++
++  defp welcome_callback_url(club, token) do
++    club
++    |> ClubSite.url("/auth/sign-in/#{token}")
++    |> put_query(%{"return_to" => ClubSite.url(club, "/")})
++  end
++
++  defp put_query(url, params) do
++    url
++    |> URI.parse()
++    |> Map.put(:query, URI.encode_query(params))
++    |> URI.to_string()
++  end
++
++  defp welcome_email(
++         %Request{} = request,
++         recipient_email,
++         club,
++         callback_url,
++         %AuthEmailConfig{} = config
++       ) do
++    new()
++    |> from({@sender_name, config.from})
++    |> to({request.requester_name, recipient_email})
++    |> subject("Welcome to #{club.name} on Memba")
++    |> text_body(text_body(request, club, callback_url))
++    |> html_body(html_body(request, club, callback_url))
++    |> put_provider_options(config, request)
++  end
++
++  defp put_provider_options(
++         email,
++         %AuthEmailConfig{provider: :resend} = config,
++         %Request{} = request
++       ) do
++    put_provider_option(email, :tags, [
++      %{name: "memba_email_kind", value: "onboarding_welcome"},
++      %{name: "memba_onboarding_request_id", value: request.request_id},
++      %{name: "memba_auth_email_stream", value: config.message_stream}
++    ])
++  end
++
++  defp put_provider_options(email, %AuthEmailConfig{} = config, %Request{} = _request) do
++    put_provider_option(email, :message_stream, config.message_stream)
++  end
++
++  defp text_body(%Request{} = request, club, callback_url) do
++    """
++    Hi #{request.requester_name},
++
++    Welcome to #{club.name} on Memba.
++
++    Use this secure link to sign in and open your new club member home:
++
++    #{callback_url}
++
++    This link expires in 15 minutes. If you were not expecting this email, you can ignore it.
++    """
++  end
++
++  defp html_body(%Request{} = request, club, callback_url) do
++    escaped_name = html_escape_to_string(request.requester_name)
++    escaped_club_name = html_escape_to_string(club.name)
++    escaped_url = html_escape_to_string(callback_url)
++
++    """
++    <html><body>
++    <p>Hi #{escaped_name},</p>
++    <p>Welcome to #{escaped_club_name} on Memba.</p>
++    <p>Use this secure link to sign in and open your new club member home:</p>
++    <p><a href="#{escaped_url}">Open #{escaped_club_name} on Memba</a></p>
++    <p>This link expires in 15 minutes. If you were not expecting this email, you can ignore it.</p>
++    </body></html>
++    """
++  end
++
++  defp html_escape_to_string(text) do
++    text
++    |> Phoenix.HTML.html_escape()
++    |> Phoenix.HTML.safe_to_string()
++  end
++
++  defp deliver_email(email) do
++    email
++    |> Memba.Mailer.deliver()
++    |> normalize_delivery_result()
++  end
++
++  defp normalize_delivery_result({:ok, _result}), do: :ok
++
++  defp normalize_delivery_result({:error, reason}),
++    do: {:error, {:onboarding_welcome_email_delivery_error, reason}}
++
++  defp normalize_delivery_result(result),
++    do:
++      {:error, {:onboarding_welcome_email_delivery_error, {:unexpected_delivery_result, result}}}
++end
+diff --git a/web/lib/memba_web/controllers/auth_controller.ex b/web/lib/memba_web/controllers/auth_controller.ex
+index eca0f6c..e0d7ae7 100644
+--- a/web/lib/memba_web/controllers/auth_controller.ex
++++ b/web/lib/memba_web/controllers/auth_controller.ex
+@@ -10,8 +10,9 @@ defmodule MembaWeb.AuthController do
+ 
+   @invalid_link_notice "That sign-in link is invalid or has expired."
+ 
+-  def callback(conn, %{"token" => token}) do
+-    return_to = get_session(conn, IdentityAuth.return_to_session_key())
++  def callback(conn, %{"token" => token} = params) do
++    return_to =
++      Map.get(params, "return_to") || get_session(conn, IdentityAuth.return_to_session_key())
+ 
+     case Accounts.consume_sign_in_token(token) do
+       {:ok, %{email: email}} ->
+diff --git a/web/test/memba/onboarding/welcome_email_test.exs b/web/test/memba/onboarding/welcome_email_test.exs
+new file mode 100644
+index 0000000..f92fe68
+--- /dev/null
++++ b/web/test/memba/onboarding/welcome_email_test.exs
+@@ -0,0 +1,82 @@
++defmodule Memba.Onboarding.WelcomeEmailTest do
++  use Memba.DataCase, async: false
++
++  alias Memba.Accounts
++  alias Memba.Accounts.AuthEmail
++  alias Memba.Accounts.SignInToken
++  alias Memba.Membership.Projections.Club
++  alias Memba.Onboarding.Request
++  alias Memba.Onboarding.WelcomeEmail
++
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_auth_email_config = Application.get_env(:memba, AuthEmail)
++
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    Application.put_env(:memba, AuthEmail,
++      provider: :postmark,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(AuthEmail, original_auth_email_config)
++    end)
++
++    :ok
++  end
++
++  test "generates a sign-in token and sends a welcome link to the club member home" do
++    request = %Request{
++      request_id: Memba.ID.generate(:onboarding_request),
++      requester_name: "Robin Requester",
++      requester_email: " Robin@Example.COM ",
++      requested_club_name: "West Coast Paddlers"
++    }
++
++    club = %Club{
++      club_id: Memba.ID.generate(:club),
++      name: "West Coast Paddlers",
++      slug: "west-coast-paddlers"
++    }
++
++    assert :ok = WelcomeEmail.deliver(%{request: request, club: club})
++
++    assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] =
++             Repo.all(SignInToken)
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Memba", "auth@mail.memba.io"}
++    assert email.to == [{"Robin Requester", "robin@example.com"}]
++    assert email.subject == "Welcome to West Coast Paddlers on Memba"
++    assert email.provider_options == %{message_stream: "outbound-authentication"}
++
++    assert email.text_body =~ "Welcome to West Coast Paddlers on Memba."
++    assert email.text_body =~ "http://west-coast-paddlers.lvh.me:4002/auth/sign-in/"
++
++    assert [_, callback_url] =
++             Regex.run(
++               ~r{(http://west-coast-paddlers\.lvh\.me:4002/auth/sign-in/[^\s]+)},
++               email.text_body
++             )
++
++    callback_uri = URI.parse(callback_url)
++    assert callback_uri.host == "west-coast-paddlers.lvh.me"
++    assert callback_uri.port == 4002
++
++    assert %{"return_to" => "http://west-coast-paddlers.lvh.me:4002/"} =
++             URI.decode_query(callback_uri.query)
++
++    token = callback_uri.path |> Path.basename()
++    assert {:ok, %{email: "robin@example.com"}} = Accounts.consume_sign_in_token(token)
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
+diff --git a/web/test/memba/onboarding_conversion_test.exs b/web/test/memba/onboarding_conversion_test.exs
+index f09e156..db4c2f8 100644
+--- a/web/test/memba/onboarding_conversion_test.exs
++++ b/web/test/memba/onboarding_conversion_test.exs
+@@ -1,12 +1,26 @@
+ defmodule Memba.OnboardingConversionTest do
+   use Memba.EventSourcedCase, async: false
+ 
++  alias Memba.Accounts.AuthEmail
++  alias Memba.Accounts.SignInToken
+   alias Memba.Membership
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Onboarding
+   alias Memba.Onboarding.Request
+   alias Memba.Repo
+ 
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_auth_email_config = Application.get_env(:memba, AuthEmail)
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(AuthEmail, original_auth_email_config)
++    end)
++
++    :ok
++  end
++
+   describe "convert_request_to_club/3" do
+     test "creates a club, new person, active membership, converted request, and wraps welcome email delivery" do
+       request = request_fixture("West Coast Paddlers", requester_email: "robin@example.com")
+@@ -138,6 +152,27 @@ defmodule Memba.OnboardingConversionTest do
+                request.requester_email
+              )
+     end
++
++    test "delivers the default welcome email with a member-home sign-in link" do
++      configure_auth_email()
++      request = request_fixture("Welcome Email Paddlers", requester_email: "Robin@Example.COM")
++
++      assert {:ok, conversion} =
++               Onboarding.convert_request_to_club(
++                 request.request_id,
++                 %{"name" => "Welcome Email Paddlers", "slug" => "welcome-email-paddlers"}
++               )
++
++      assert conversion.welcome_email == :ok
++      assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] = Repo.all(SignInToken)
++      assert_received {:email, %Swoosh.Email{} = email}
++
++      assert email.to == [{"Robin Requester", "robin@example.com"}]
++      assert email.subject == "Welcome to Welcome Email Paddlers on Memba"
++      assert email.text_body =~ "Welcome to Welcome Email Paddlers on Memba."
++      assert email.text_body =~ "http://welcome-email-paddlers.lvh.me:4002/auth/sign-in/"
++      assert email.text_body =~ "return_to=http%3A%2F%2Fwelcome-email-paddlers.lvh.me%3A4002%2F"
++    end
+   end
+ 
+   defp request_fixture(club_name, opts \\ []) do
+@@ -153,4 +188,19 @@ defmodule Memba.OnboardingConversionTest do
+ 
+     request
+   end
++
++  defp configure_auth_email do
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index e34b94a..ef790c5 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -244,6 +244,28 @@ defmodule MembaWeb.AuthControllerTest do
+       assert get_session(conn, IdentityAuth.identity_session_key()) == "alice@example.com"
+     end
+ 
++    test "magic links can carry a safe post-auth destination without a stored session", %{
++      conn: conn
++    } do
++      create_active_member(
++        email: "alice@example.com",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++      assert {:ok, %{token: token}} = Accounts.request_sign_in_link("alice@example.com")
++
++      conn =
++        get(
++          conn,
++          "/auth/sign-in/#{token}?return_to=#{URI.encode_www_form("http://kmc.lvh.me/")}"
++        )
++
++      assert redirected_to(conn) == "http://kmc.lvh.me/"
++      assert get_session(conn, IdentityAuth.identity_session_key()) == "alice@example.com"
++      assert get_session(conn, IdentityAuth.return_to_session_key()) == nil
++    end
++
+     test "rejects unknown tokens without signing in", %{conn: conn} do
+       conn = get(conn, ~p"/auth/sign-in/unknown-token")
+ 
