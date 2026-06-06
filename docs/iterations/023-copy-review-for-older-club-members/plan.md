@@ -1,7 +1,7 @@
 # Public copy pass for older community members
 
 Date: 2026-06-06
-Status: implementing
+Status: merged
 
 ## Goal
 
