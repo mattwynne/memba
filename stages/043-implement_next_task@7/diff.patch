@@ -1,0 +1,300 @@
+diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md
+index 874e475..994b490 100644
+--- a/docs/iterations/022-request-to-club-onboarding/todo.md
++++ b/docs/iterations/022-request-to-club-onboarding/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
+ - [x] 005 Implement signed-out `/get-started` form with required-field and email validation.
+ - [x] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
+-- [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
++- [x] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
+ - [ ] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
+ - [ ] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
+ - [ ] 010 Build the active requests inbox with clear request details and actions for reject/convert.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 9f501b4..653266a 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -53,6 +53,10 @@ config :memba, Memba.Messaging.EmailDeliveryProviders.Postmark,
+   message_stream: "outbound-member-broadcasts",
+   track_links: "None"
+ 
++config :memba, Memba.Onboarding.NewRequestEmail,
++  to: "hello@memba.io",
++  message_stream: "outbound-onboarding"
++
+ config :commanded_ecto_projections, schema_prefix: nil
+ 
+ # Configure the endpoint
+diff --git a/web/lib/memba/onboarding/new_request_email.ex b/web/lib/memba/onboarding/new_request_email.ex
+new file mode 100644
+index 0000000..900c303
+--- /dev/null
++++ b/web/lib/memba/onboarding/new_request_email.ex
+@@ -0,0 +1,157 @@
++defmodule Memba.Onboarding.NewRequestEmail do
++  @moduledoc """
++  Builds and delivers Memba-staff notifications for new onboarding requests.
++  """
++
++  import Swoosh.Email
++
++  alias Memba.Onboarding.Request
++
++  @default_recipient "hello@memba.io"
++  @default_from {"Memba", "hello@memba.io"}
++  @default_message_stream "outbound-onboarding"
++
++  @doc """
++  Deliver a new-request notification email to Memba staff.
++  """
++  def deliver(%Request{} = request) do
++    request
++    |> email()
++    |> Memba.Mailer.deliver()
++    |> normalize_delivery_result()
++  rescue
++    exception ->
++      {:error,
++       {:onboarding_new_request_email_delivery_exception, exception.__struct__,
++        Exception.message(exception)}}
++  end
++
++  defp email(%Request{} = request) do
++    body = text_body(request)
++
++    new()
++    |> from(from_address())
++    |> to(to_address())
++    |> reply_to({request.requester_name, request.requester_email})
++    |> subject("New Memba request: #{request.requested_club_name}")
++    |> text_body(body)
++    |> html_body(html_body(body))
++    |> put_provider_options(request)
++  end
++
++  defp from_address do
++    config_value(:from) ||
++      selected_provider_from_address() ||
++      @default_from
++  end
++
++  defp to_address do
++    config_value(:to) || @default_recipient
++  end
++
++  defp selected_provider_from_address do
++    case selected_provider() do
++      Memba.Messaging.EmailDeliveryProviders.Resend ->
++        provider_from_address(Memba.Messaging.EmailDeliveryProviders.Resend)
++
++      Memba.Messaging.EmailDeliveryProviders.Postmark ->
++        provider_from_address(Memba.Messaging.EmailDeliveryProviders.Postmark)
++
++      Memba.Messaging.EmailDeliveryProviders.Local ->
++        provider_from_address(Memba.Messaging.EmailDeliveryProviders.Postmark)
++
++      _provider ->
++        provider_from_address(Memba.Messaging.EmailDeliveryProviders.Postmark) ||
++          provider_from_address(Memba.Messaging.EmailDeliveryProviders.Resend)
++    end
++  end
++
++  defp provider_from_address(provider_module) do
++    :memba
++    |> Application.get_env(provider_module, [])
++    |> Keyword.get(:from)
++    |> normalize_address()
++  end
++
++  defp normalize_address({_name, address} = named_address) when is_binary(address) do
++    named_address
++  end
++
++  defp normalize_address(address) when is_binary(address) do
++    case String.trim(address) do
++      "" -> nil
++      address -> {"Memba", address}
++    end
++  end
++
++  defp normalize_address(_address), do: nil
++
++  defp put_provider_options(email, %Request{} = request) do
++    case selected_provider() do
++      Memba.Messaging.EmailDeliveryProviders.Resend ->
++        put_provider_option(email, :tags, [
++          %{name: "memba_email_kind", value: "onboarding_new_request"},
++          %{name: "memba_onboarding_request_id", value: request.request_id}
++        ])
++
++      _provider ->
++        put_provider_option(email, :message_stream, message_stream())
++    end
++  end
++
++  defp selected_provider do
++    Application.get_env(:memba, :messaging_email_delivery_provider)
++  end
++
++  defp message_stream do
++    config_value(:message_stream) || @default_message_stream
++  end
++
++  defp config_value(key) do
++    :memba
++    |> Application.get_env(__MODULE__, [])
++    |> Keyword.get(key)
++  end
++
++  defp text_body(%Request{} = request) do
++    """
++    New Memba access request
++
++    Request ID: #{request.request_id}
++    Club: #{request.requested_club_name}
++
++    Requester:
++    #{request.requester_name}
++    #{request.requester_email}
++
++    Note:
++    #{request.note}
++    """
++  end
++
++  defp html_body(text) do
++    escaped_body =
++      text
++      |> String.split(~r/\r\n|\n|\r/, trim: false)
++      |> Enum.map(&html_escape_to_string/1)
++      |> Enum.join("<br>\n")
++
++    "<html><body><p>#{escaped_body}</p></body></html>"
++  end
++
++  defp html_escape_to_string(text) do
++    text
++    |> Phoenix.HTML.html_escape()
++    |> Phoenix.HTML.safe_to_string()
++  end
++
++  defp normalize_delivery_result({:ok, _result}), do: :ok
++
++  defp normalize_delivery_result({:error, reason}),
++    do: {:error, {:onboarding_new_request_email_delivery_error, reason}}
++
++  defp normalize_delivery_result(result),
++    do:
++      {:error,
++       {:onboarding_new_request_email_delivery_error, {:unexpected_delivery_result, result}}}
++end
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index 021f4a3..ee1204f 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -1,8 +1,11 @@
+ defmodule MembaWeb.PageController do
+   use MembaWeb, :controller
+ 
++  require Logger
++
+   alias Memba.Membership
+   alias Memba.Onboarding
++  alias Memba.Onboarding.NewRequestEmail
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+ 
+@@ -92,7 +95,8 @@ defmodule MembaWeb.PageController do
+     {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
+ 
+     case Onboarding.create_request(request_attrs, request_opts) do
+-      {:ok, _request} ->
++      {:ok, request} ->
++        deliver_new_request_notification(request)
+         redirect(conn, to: ~p"/get-started?submitted=true")
+ 
+       {:error, changeset} ->
+@@ -103,6 +107,18 @@ defmodule MembaWeb.PageController do
+     end
+   end
+ 
++  defp deliver_new_request_notification(request) do
++    case NewRequestEmail.deliver(request) do
++      :ok ->
++        :ok
++
++      {:error, reason} ->
++        Logger.warning(
++          "Could not deliver onboarding request notification email: #{inspect(reason)}"
++        )
++    end
++  end
++
+   def terms(conn, _params) do
+     conn
+     |> assign(:page_title, "Terms of Service")
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 85c4408..74acd48 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -1,6 +1,8 @@
+ defmodule MembaWeb.PageControllerTest do
+   use MembaWeb.ConnCase
+ 
++  import Swoosh.TestAssertions
++
+   alias Memba.Accounts
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+@@ -885,6 +887,7 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "Tell us a little about you and your club."
+     assert response =~ "can&#39;t be blank"
+     assert Repo.aggregate(Request, :count) == 0
++    assert_no_email_sent()
+   end
+ 
+   test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
+@@ -902,6 +905,7 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     assert response =~ "is invalid"
+     assert Repo.aggregate(Request, :count) == 0
++    assert_no_email_sent()
+   end
+ 
+   test "POST /get-started stores a signed-out request and acknowledges staff review", %{conn: conn} do
+@@ -929,6 +933,18 @@ defmodule MembaWeb.PageControllerTest do
+     assert request.status == "active"
+     assert is_nil(request.requester_person_id)
+ 
++    assert_received {:email, %Swoosh.Email{} = email}
++    assert email.from == {"Memba", "messages@mail.memba.io"}
++    assert email.to == [{"", "hello@memba.io"}]
++    assert email.reply_to == {"Robin Requester", "Robin@Example.COM"}
++    assert email.subject == "New Memba request: West Coast Paddlers"
++    assert email.text_body =~ "Request ID: #{request.request_id}"
++    assert email.text_body =~ "Club: West Coast Paddlers"
++    assert email.text_body =~ "Robin Requester"
++    assert email.text_body =~ "Robin@Example.COM"
++    assert email.text_body =~ "We want a safer way to message members."
++    assert email.provider_options == %{message_stream: "outbound-onboarding"}
++
+     assert Repo.aggregate(Club, :count) == club_count
+     assert Repo.aggregate(Membership, :count) == membership_count
+ 
+@@ -977,6 +993,15 @@ defmodule MembaWeb.PageControllerTest do
+     assert request.note == "We want a safer way to message members."
+     assert request.status == "active"
+ 
++    assert_received {:email, %Swoosh.Email{} = email}
++    assert email.to == [{"", "hello@memba.io"}]
++    assert email.reply_to == {"Alice Applicant", "alice@example.com"}
++    assert email.subject == "New Memba request: West Coast Paddlers"
++    assert email.text_body =~ "Alice Applicant"
++    assert email.text_body =~ "alice@example.com"
++    refute email.text_body =~ "Forged Name"
++    refute email.text_body =~ "forged@example.net"
++
+     assert Repo.aggregate(Club, :count) == club_count
+     assert Repo.aggregate(Membership, :count) == membership_count
+   end
