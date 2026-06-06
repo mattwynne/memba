@@ -826,6 +826,49 @@ defmodule MembaWeb.PageControllerTest do
     refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
   end
 
+  test "GET /get-started shows signed-in requester identity as read-only details", %{conn: conn} do
+    person =
+      insert_membership_person!(
+        name: "Alice Applicant",
+        email: "alice@example.com"
+      )
+
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/get-started")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert html
+           |> LazyHTML.query(
+             "[data-testid='get-started-signed-in-requester'][data-person-id='#{person.person_id}']"
+           )
+           |> LazyHTML.text()
+           |> String.contains?("Alice Applicant")
+
+    assert response =~ "alice@example.com"
+    assert response =~ "You’re signed in, so we’ll use these details for your request."
+    assert response =~ "Tell us which club you want to bring onto Memba."
+
+    refute html
+           |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("input#get-started-club-name[name='request[requested_club_name]']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
+           |> Enum.any?()
+  end
+
   test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
     conn =
       post(conn, ~p"/get-started",
@@ -897,6 +940,45 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "Thanks — we’ll review your request."
     assert response =~ "We’ll contact you if Memba is a good fit for your club."
+  end
+
+  test "POST /get-started stores signed-in identity details from the current person", %{
+    conn: conn
+  } do
+    club_count = Repo.aggregate(Club, :count)
+    membership_count = Repo.aggregate(Membership, :count)
+
+    person =
+      insert_membership_person!(
+        name: "Alice Applicant",
+        email: "alice@example.com"
+      )
+
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: "Forged Name",
+          requester_email: "forged@example.net",
+          requested_club_name: " West Coast Paddlers ",
+          note: " We want a safer way to message members. "
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/get-started?submitted=true"
+
+    assert [%Request{} = request] = Repo.all(Request)
+    assert request.requester_name == "Alice Applicant"
+    assert request.requester_email == "alice@example.com"
+    assert request.normalized_requester_email == "alice@example.com"
+    assert request.requester_person_id == person.person_id
+    assert request.requested_club_name == "West Coast Paddlers"
+    assert request.note == "We want a safer way to message members."
+    assert request.status == "active"
+
+    assert Repo.aggregate(Club, :count) == club_count
+    assert Repo.aggregate(Membership, :count) == membership_count
   end
 
   test "GET /terms", %{conn: conn} do

@@ -89,7 +89,9 @@ defmodule MembaWeb.PageController do
   def submit_get_started(conn, params) do
     request_params = Map.get(params, "request", %{})
 
-    case Onboarding.create_request(request_params) do
+    {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
+
+    case Onboarding.create_request(request_attrs, request_opts) do
       {:ok, _request} ->
         redirect(conn, to: ~p"/get-started?submitted=true")
 
@@ -116,8 +118,60 @@ defmodule MembaWeb.PageController do
   defp render_get_started(conn, changeset) do
     conn
     |> assign(:page_title, "Get started")
+    |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
     |> render(:get_started)
+  end
+
+  defp get_started_request_attrs(conn, request_params) do
+    case signed_in_get_started_requester(conn) do
+      nil ->
+        {request_params, []}
+
+      requester ->
+        attrs =
+          request_params
+          |> club_request_details()
+          |> Map.merge(%{
+            "requester_name" => requester.name,
+            "requester_email" => requester.email
+          })
+
+        {attrs, [requester_person_id: requester.person_id]}
+    end
+  end
+
+  defp signed_in_get_started_requester(%{assigns: %{current_identity: %{email: email}}}) do
+    case Membership.get_person_by_email(email) do
+      nil ->
+        nil
+
+      person ->
+        %{
+          name: person.name,
+          email: email,
+          person_id: person.person_id
+        }
+    end
+  end
+
+  defp signed_in_get_started_requester(_conn), do: nil
+
+  defp club_request_details(request_params) do
+    %{
+      "requested_club_name" => request_param(request_params, "requested_club_name"),
+      "note" => request_param(request_params, "note")
+    }
+  end
+
+  defp request_param(request_params, key) do
+    atom_key =
+      case key do
+        "requested_club_name" -> :requested_club_name
+        "note" -> :note
+      end
+
+    Map.get(request_params, key) || Map.get(request_params, atom_key)
   end
 
   defp render_member_dashboard(conn, club_id, club_id_source) do

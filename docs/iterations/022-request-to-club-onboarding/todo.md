@@ -5,7 +5,7 @@
 - [x] 003 Design the request persistence model:
 - [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
 - [x] 005 Implement signed-out `/get-started` form with required-field and email validation.
-- [ ] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
+- [x] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
 - [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
 - [ ] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
 - [ ] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
