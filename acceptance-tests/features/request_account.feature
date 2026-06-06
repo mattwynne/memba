@@ -1,4 +1,3 @@
-@wip
 Feature: Request account
   Memba protects its email reputation by keeping onboarding staff-approved.
   Interested club organisers can request access, but only Memba staff can turn a request into a club with an active first member.
