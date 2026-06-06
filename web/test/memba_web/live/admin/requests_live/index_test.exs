@@ -3,10 +3,15 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
   import Ecto.Query
   import Phoenix.LiveViewTest
+  import Swoosh.TestAssertions
 
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
+
+  setup context do
+    set_swoosh_global(context)
+  end
 
   test "staff requests index uses the operations page treatment", %{conn: conn} do
     {:ok, _view, initial_html} =
@@ -95,6 +100,60 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
     refute_selector_exists(html, "#request-row-#{rejected.request_id}")
     refute_selector_exists(html, "#request-row-#{converted.request_id}")
+  end
+
+  test "staff can reject an active request with required internal notes and no requester email",
+       %{
+         conn: conn
+       } do
+    request = request_fixture("Rejectable Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff("pat@memba.io")
+      |> live(~p"/admin/requests")
+
+    assert has_element?(view, "#request-row-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "1")
+    refute has_element?(view, "#reject-request-panel-#{request.request_id}")
+
+    view
+    |> element("#reject-request-#{request.request_id}")
+    |> render_click()
+
+    assert has_element?(view, "#reject-request-panel-#{request.request_id}")
+    assert has_element?(view, "#reject-request-form-#{request.request_id}")
+
+    blank_notes_html =
+      view
+      |> form("#reject-request-form-#{request.request_id}",
+        rejection: %{internal_rejection_notes: " "}
+      )
+      |> render_submit()
+
+    assert blank_notes_html =~ "can&#39;t be blank"
+    assert has_element?(view, "#request-row-#{request.request_id}")
+    assert Repo.get!(Request, request.request_id).status == "active"
+
+    view
+    |> form("#reject-request-form-#{request.request_id}",
+      rejection: %{internal_rejection_notes: " Not a real club. "}
+    )
+    |> render_submit()
+
+    refute has_element?(view, "#request-row-#{request.request_id}")
+    refute has_element?(view, "#reject-request-panel-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "0")
+
+    rejected = Repo.get!(Request, request.request_id)
+
+    assert rejected.status == "rejected"
+    assert rejected.internal_rejection_notes == "Not a real club."
+    assert rejected.triaged_by_staff_email == "pat@memba.io"
+    assert %DateTime{} = rejected.triaged_at
+    assert is_nil(rejected.converted_club_id)
+
+    assert_no_email_sent()
   end
 
   defp request_fixture(club_name, opts \\ []) do

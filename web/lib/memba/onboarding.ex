@@ -26,6 +26,14 @@ defmodule Memba.Onboarding do
   end
 
   @doc """
+  Build a rejection changeset for staff triage forms.
+  """
+  def change_rejection(%Request{} = request, attrs \\ %{})
+      when is_map(attrs) do
+    Request.rejection_changeset(request, attrs)
+  end
+
+  @doc """
   List active onboarding requests, oldest first.
   """
   def list_active_requests do

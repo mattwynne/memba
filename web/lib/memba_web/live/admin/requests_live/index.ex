@@ -2,12 +2,67 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
   use MembaWeb, :live_view
 
   alias Memba.Onboarding
+  alias Memba.Onboarding.Request
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     requests = Onboarding.list_active_requests()
 
-    {:ok, assign_active_requests(socket, requests)}
+    socket =
+      socket
+      |> assign(:rejecting_request, nil)
+      |> assign(:rejection_form, nil)
+      |> assign_active_requests(requests)
+
+    {:ok, socket}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("start_rejection", %{"request-id" => request_id}, socket) do
+    case active_request(request_id) do
+      %Request{} = request ->
+        {:noreply,
+         socket
+         |> assign(:rejecting_request, request)
+         |> assign_rejection_form(Onboarding.change_rejection(request))}
+
+      nil ->
+        {:noreply, request_no_longer_active(socket)}
+    end
+  end
+
+  def handle_event("cancel_rejection", _params, socket) do
+    {:noreply, clear_rejection(socket)}
+  end
+
+  def handle_event(
+        "reject_request",
+        params,
+        %{assigns: %{rejecting_request: %Request{} = request}} = socket
+      ) do
+    attrs = Map.get(params, "rejection", %{})
+
+    case Onboarding.reject_request(request.request_id, attrs,
+           staff_email: current_staff_email(socket)
+         ) do
+      {:ok, %Request{} = rejected_request} ->
+        {:noreply,
+         socket
+         |> clear_rejection()
+         |> decrement_active_request_count()
+         |> stream_delete(:active_requests, rejected_request)
+         |> put_flash(:info, "Rejected request for #{rejected_request.requested_club_name}.")}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign_rejection_form(socket, changeset)}
+
+      {:error, _reason} ->
+        {:noreply, request_no_longer_active(socket)}
+    end
+  end
+
+  def handle_event("reject_request", _params, socket) do
+    {:noreply, request_no_longer_active(socket)}
   end
 
   @impl Phoenix.LiveView
@@ -66,6 +121,80 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
           summary_label="Active"
           summary_count={@active_request_count}
         />
+
+        <section
+          :if={@rejecting_request}
+          id={"reject-request-panel-#{@rejecting_request.request_id}"}
+          data-testid="reject-request-panel"
+          class="rounded-xl border border-[#d6d2c8] bg-white p-5 shadow-sm"
+        >
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div class="space-y-2">
+              <p class="text-xs font-bold uppercase tracking-[0.08em] text-[#7a5416]">
+                Reject request
+              </p>
+              <h2 class="text-xl font-semibold text-[#15201c]">
+                {@rejecting_request.requested_club_name}
+              </h2>
+              <p class="text-sm leading-6 text-[#4b5a55]">
+                Capture internal notes before removing this request from the active inbox. The
+                requester will not receive an email.
+              </p>
+              <dl class="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt class="font-medium text-[#7d877f]">Requester</dt>
+                  <dd class="mt-1 text-[#15201c]">
+                    {@rejecting_request.requester_name}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="font-medium text-[#7d877f]">Email</dt>
+                  <dd class="mt-1 text-[#15201c]">
+                    {@rejecting_request.requester_email}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <.form
+              for={@rejection_form}
+              id={"reject-request-form-#{@rejecting_request.request_id}"}
+              phx-submit="reject_request"
+              aria-label={"Reject request for #{@rejecting_request.requested_club_name}"}
+              class="w-full max-w-xl space-y-4"
+            >
+              <.input
+                field={@rejection_form[:internal_rejection_notes]}
+                id={"reject-request-notes-#{@rejecting_request.request_id}"}
+                label="Internal rejection notes"
+                type="textarea"
+                rows="4"
+                placeholder="Why is Memba not a fit for this request?"
+                required
+              />
+              <p class="text-xs leading-5 text-[#7d877f]">
+                Internal notes are stored for staff audit only and are not sent to the requester.
+              </p>
+              <div class="flex flex-wrap justify-end gap-2">
+                <button
+                  id={"cancel-reject-request-#{@rejecting_request.request_id}"}
+                  type="button"
+                  phx-click="cancel_rejection"
+                  class="inline-flex items-center rounded-full border border-[#d6d2c8] px-4 py-2 text-sm font-semibold text-[#4b5a55] transition duration-200 hover:-translate-y-0.5 hover:border-[#4b5a55] hover:bg-[#f8f5ee]"
+                >
+                  Cancel
+                </button>
+                <button
+                  id={"confirm-reject-request-#{@rejecting_request.request_id}"}
+                  type="submit"
+                  class="inline-flex items-center rounded-full border border-[#7a5416] bg-[#7a5416] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-[#5f3f10]"
+                >
+                  Reject request
+                </button>
+              </div>
+            </.form>
+          </div>
+        </section>
 
         <.admin_table_card
           id="admin-requests-inbox-card"
@@ -145,6 +274,8 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                       <button
                         id={"reject-request-#{request.request_id}"}
                         type="button"
+                        phx-click="start_rejection"
+                        phx-value-request-id={request.request_id}
                         data-admin-request-action="reject"
                         data-request-id={request.request_id}
                         aria-label={"Reject request for #{request.requested_club_name}"}
@@ -174,10 +305,53 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
     """
   end
 
-  defp assign_active_requests(socket, requests) do
+  defp assign_active_requests(socket, requests, opts \\ []) do
+    stream_opts =
+      [dom_id: &"request-row-#{&1.request_id}"]
+      |> Keyword.merge(Keyword.take(opts, [:reset]))
+
     socket
     |> assign(:active_request_count, length(requests))
-    |> stream(:active_requests, requests, dom_id: &"request-row-#{&1.request_id}")
+    |> stream(:active_requests, requests, stream_opts)
+  end
+
+  defp active_request(request_id) do
+    case Onboarding.get_request(request_id) do
+      %Request{} = request ->
+        if request.status == Request.status_active(), do: request
+
+      _request ->
+        nil
+    end
+  end
+
+  defp assign_rejection_form(socket, %Ecto.Changeset{} = changeset) do
+    assign(socket, :rejection_form, to_form(changeset, as: :rejection))
+  end
+
+  defp clear_rejection(socket) do
+    socket
+    |> assign(:rejecting_request, nil)
+    |> assign(:rejection_form, nil)
+  end
+
+  defp request_no_longer_active(socket) do
+    socket
+    |> clear_rejection()
+    |> refresh_active_requests()
+    |> put_flash(:error, "That request is no longer active.")
+  end
+
+  defp refresh_active_requests(socket) do
+    assign_active_requests(socket, Onboarding.list_active_requests(), reset: true)
+  end
+
+  defp decrement_active_request_count(socket) do
+    assign(socket, :active_request_count, max(socket.assigns.active_request_count - 1, 0))
+  end
+
+  defp current_staff_email(socket) do
+    socket.assigns.current_identity_email
   end
 
   defp requester_initials(name) when is_binary(name) do

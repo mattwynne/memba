@@ -10,7 +10,7 @@
 - [x] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
 - [x] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
 - [x] 010 Build the active requests inbox with clear request details and actions for reject/convert.
-- [ ] 011 Implement rejection with required internal notes and no requester email.
+- [x] 011 Implement rejection with required internal notes and no requester email.
 - [ ] 012 Implement conversion preparation with generated/editable slug using the same rules as staff club creation.
 - [ ] 013 Implement conversion transactionally where practical: create club, create/reuse person, create active membership, mark request converted, and send/wrap welcome email behaviour consistently.
 - [ ] 014 Implement welcome email generation with a magic sign-in token and post-auth destination for the new club member home.
