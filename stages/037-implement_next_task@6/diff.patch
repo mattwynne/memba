@@ -1,0 +1,257 @@
+diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md
+index 5de72ca..874e475 100644
+--- a/docs/iterations/022-request-to-club-onboarding/todo.md
++++ b/docs/iterations/022-request-to-club-onboarding/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Design the request persistence model:
+ - [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
+ - [x] 005 Implement signed-out `/get-started` form with required-field and email validation.
+-- [ ] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
++- [x] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
+ - [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
+ - [ ] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
+ - [ ] 009 Add Requests to the staff navigation without regressing existing Clubs, People, Messages, and Deliveries navigation.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index 6f01bf8..021f4a3 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -89,7 +89,9 @@ defmodule MembaWeb.PageController do
+   def submit_get_started(conn, params) do
+     request_params = Map.get(params, "request", %{})
+ 
+-    case Onboarding.create_request(request_params) do
++    {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
++
++    case Onboarding.create_request(request_attrs, request_opts) do
+       {:ok, _request} ->
+         redirect(conn, to: ~p"/get-started?submitted=true")
+ 
+@@ -116,10 +118,62 @@ defmodule MembaWeb.PageController do
+   defp render_get_started(conn, changeset) do
+     conn
+     |> assign(:page_title, "Get started")
++    |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
+     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
+     |> render(:get_started)
+   end
+ 
++  defp get_started_request_attrs(conn, request_params) do
++    case signed_in_get_started_requester(conn) do
++      nil ->
++        {request_params, []}
++
++      requester ->
++        attrs =
++          request_params
++          |> club_request_details()
++          |> Map.merge(%{
++            "requester_name" => requester.name,
++            "requester_email" => requester.email
++          })
++
++        {attrs, [requester_person_id: requester.person_id]}
++    end
++  end
++
++  defp signed_in_get_started_requester(%{assigns: %{current_identity: %{email: email}}}) do
++    case Membership.get_person_by_email(email) do
++      nil ->
++        nil
++
++      person ->
++        %{
++          name: person.name,
++          email: email,
++          person_id: person.person_id
++        }
++    end
++  end
++
++  defp signed_in_get_started_requester(_conn), do: nil
++
++  defp club_request_details(request_params) do
++    %{
++      "requested_club_name" => request_param(request_params, "requested_club_name"),
++      "note" => request_param(request_params, "note")
++    }
++  end
++
++  defp request_param(request_params, key) do
++    atom_key =
++      case key do
++        "requested_club_name" -> :requested_club_name
++        "note" -> :note
++      end
++
++    Map.get(request_params, key) || Map.get(request_params, atom_key)
++  end
++
+   defp render_member_dashboard(conn, club_id, club_id_source) do
+     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
+       session: %{
+diff --git a/web/lib/memba_web/controllers/page_html/get_started.html.heex b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+index 14b447a..3f0dbf2 100644
+--- a/web/lib/memba_web/controllers/page_html/get_started.html.heex
++++ b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+@@ -61,21 +61,46 @@
+         class="rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8"
+       >
+         <div class="space-y-5">
+-          <.input
+-            field={@request_form[:requester_name]}
+-            id="get-started-requester-name"
+-            label="Your name"
+-            autocomplete="name"
+-            required
+-          />
+-          <.input
+-            field={@request_form[:requester_email]}
+-            id="get-started-requester-email"
+-            label="Email address"
+-            type="email"
+-            autocomplete="email"
+-            required
+-          />
++          <div
++            :if={@signed_in_requester}
++            id="get-started-signed-in-requester"
++            data-testid="get-started-signed-in-requester"
++            data-person-id={@signed_in_requester.person_id}
++            class="rounded-2xl border border-sage-200 bg-sage-50 p-4"
++          >
++            <p class="text-sm font-semibold text-sage-800">
++              You’re signed in, so we’ll use these details for your request.
++            </p>
++            <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
++              <div>
++                <dt class="font-medium text-ink-3">Name</dt>
++                <dd class="mt-1 text-ink">{@signed_in_requester.name}</dd>
++              </div>
++              <div>
++                <dt class="font-medium text-ink-3">Email</dt>
++                <dd class="mt-1 text-ink">{@signed_in_requester.email}</dd>
++              </div>
++            </dl>
++          </div>
++
++          <%= unless @signed_in_requester do %>
++            <.input
++              field={@request_form[:requester_name]}
++              id="get-started-requester-name"
++              label="Your name"
++              autocomplete="name"
++              required
++            />
++            <.input
++              field={@request_form[:requester_email]}
++              id="get-started-requester-email"
++              label="Email address"
++              type="email"
++              autocomplete="email"
++              required
++            />
++          <% end %>
++
+           <.input
+             field={@request_form[:requested_club_name]}
+             id="get-started-club-name"
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index fef4479..85c4408 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -826,6 +826,49 @@ defmodule MembaWeb.PageControllerTest do
+     refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+   end
+ 
++  test "GET /get-started shows signed-in requester identity as read-only details", %{conn: conn} do
++    person =
++      insert_membership_person!(
++        name: "Alice Applicant",
++        email: "alice@example.com"
++      )
++
++    conn =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> get(~p"/get-started")
++
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert html
++           |> LazyHTML.query(
++             "[data-testid='get-started-signed-in-requester'][data-person-id='#{person.person_id}']"
++           )
++           |> LazyHTML.text()
++           |> String.contains?("Alice Applicant")
++
++    assert response =~ "alice@example.com"
++    assert response =~ "You’re signed in, so we’ll use these details for your request."
++    assert response =~ "Tell us which club you want to bring onto Memba."
++
++    refute html
++           |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
++           |> Enum.any?()
++
++    refute html
++           |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("input#get-started-club-name[name='request[requested_club_name]']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
++           |> Enum.any?()
++  end
++
+   test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
+     conn =
+       post(conn, ~p"/get-started",
+@@ -899,6 +942,45 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "We’ll contact you if Memba is a good fit for your club."
+   end
+ 
++  test "POST /get-started stores signed-in identity details from the current person", %{
++    conn: conn
++  } do
++    club_count = Repo.aggregate(Club, :count)
++    membership_count = Repo.aggregate(Membership, :count)
++
++    person =
++      insert_membership_person!(
++        name: "Alice Applicant",
++        email: "alice@example.com"
++      )
++
++    conn =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> post(~p"/get-started",
++        request: %{
++          requester_name: "Forged Name",
++          requester_email: "forged@example.net",
++          requested_club_name: " West Coast Paddlers ",
++          note: " We want a safer way to message members. "
++        }
++      )
++
++    assert redirected_to(conn) == ~p"/get-started?submitted=true"
++
++    assert [%Request{} = request] = Repo.all(Request)
++    assert request.requester_name == "Alice Applicant"
++    assert request.requester_email == "alice@example.com"
++    assert request.normalized_requester_email == "alice@example.com"
++    assert request.requester_person_id == person.person_id
++    assert request.requested_club_name == "West Coast Paddlers"
++    assert request.note == "We want a safer way to message members."
++    assert request.status == "active"
++
++    assert Repo.aggregate(Club, :count) == club_count
++    assert Repo.aggregate(Membership, :count) == membership_count
++  end
++
+   test "GET /terms", %{conn: conn} do
+     conn = get(conn, ~p"/terms")
+     assert html_response(conn, 200) =~ "Terms of Service"
