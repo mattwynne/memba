@@ -889,7 +889,7 @@ async function sendMemberMessageToKootenayMembers(
   await browserInteraction(`submit member compose form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Subject").fill(subject);
     await world.page.getByLabel("Message").fill(body);
-    await world.page.getByRole("button", { name: "Send to all members" }).click();
+    await world.page.getByRole("button", { name: "Send to all current members" }).click();
   });
 
   const sentState = world.page.locator("#member-message-compose[data-compose-state=\"sent\"]");
@@ -997,7 +997,7 @@ async function trySendMemberMessageToKootenayMembers(
   await browserInteraction(`submit unavailable member compose form for ${JSON.stringify(subject)}`, async () => {
     await world.page.getByLabel("Subject").fill(subject);
     await world.page.getByLabel("Message").fill(body);
-    await world.page.getByRole("button", { name: "Send to all members" }).click();
+    await world.page.getByRole("button", { name: "Send to all current members" }).click();
   });
 
   await waitForProjectedVisible(
@@ -1073,7 +1073,7 @@ async function assertMemberWasToldMessageWasNotSent(world, { expect = playwright
   await waitForProjectedText(
     world,
     world.page.locator("#member-compose-error-summary"),
-    "Your message was not sent to anyone. Please contact support so we can investigate before you try again.",
+    "No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.",
     "member compose failure not-sent copy",
     { expect }
   );
@@ -1085,7 +1085,7 @@ async function assertMemberWasToldToContactSupport(world, { expect = playwrightE
   await waitForProjectedText(
     world,
     world.page.locator("#member-compose-error-summary"),
-    "Your message was not sent to anyone. Please contact support so we can investigate before you try again.",
+    "No one received this message. Please try again. If it still fails, ask a group organizer to contact Memba.",
     "member compose failure support copy",
     { expect }
   );

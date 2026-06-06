@@ -93,7 +93,7 @@ async function requestSignInLinkForEmail(world, email, personName = email) {
   await world.page.getByLabel("Email address").fill(email);
   await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
   await playwrightExpect(
-    world.page.getByText("Thanks. You should have an email in your inbox with a sign-in link.")
+    world.page.getByText("If that email address can sign in to Memba, the sign-in email is on its way.")
   ).toBeVisible();
 
   world.signInRequests[personName] = { email, previousEmails };
@@ -270,7 +270,7 @@ async function assertClubMarketingPage(world, clubName) {
   await playwrightExpect(world.page.locator("#public-club-page-page")).toBeVisible();
   await playwrightExpect(world.page.locator("#public-club-page-page")).toHaveAttribute("data-club-id", club.clubId);
   await playwrightExpect(world.page.getByRole("heading", { name: `Welcome to ${clubName}` })).toBeVisible();
-  await playwrightExpect(world.page.getByRole("link", { name: "Sign in to continue" })).toBeVisible();
+  await playwrightExpect(world.page.getByRole("link", { name: "Email me a sign-in link" })).toBeVisible();
   await playwrightExpect(world.page.locator("body")).not.toContainText("Signed in as");
 }
 
@@ -281,7 +281,9 @@ async function assertPoweredByMembaInClubFooter(world) {
 
 async function assertNotSignedIn(world) {
   await playwrightExpect(world.page).toHaveURL(/\/auth$/);
-  await playwrightExpect(world.page.getByText("That sign-in link is invalid or has expired.")).toBeVisible();
+  await playwrightExpect(
+    world.page.getByText("That sign-in link is no longer valid. Please ask for a new sign-in link.")
+  ).toBeVisible();
 }
 
 async function assertSignedOut(world) {

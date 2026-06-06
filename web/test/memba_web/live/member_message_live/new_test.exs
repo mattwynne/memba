@@ -163,13 +163,13 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
     assert has_element?(
              view,
              "#member-compose-recipient-summary[data-active-member-count='2']",
-             "all 2 active members"
+             "all 2 current members"
            )
 
     assert has_element?(
              view,
              "#member-compose-recipient-summary",
-             "There’s no list to pick"
+             "There is no list to pick"
            )
 
     assert has_element?(
@@ -180,18 +180,18 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
 
     assert has_element?(
              view,
-             "input#member-message-subject-input[placeholder=\"What's this about?\"]"
+             "input#member-message-subject-input[placeholder='Example: Saturday trail day']"
            )
 
     assert has_element?(
              view,
-             "textarea#member-message-body-input[placeholder='Write your note to the club…'][rows='8']"
+             "textarea#member-message-body-input[placeholder='Write the message members should receive.'][rows='8']"
            )
 
     assert has_element?(
              view,
              "button#member-message-send-button[type='submit']",
-             "Send to all members"
+             "Send to all current members"
            )
 
     assert has_element?(
@@ -224,7 +224,12 @@ defmodule MembaWeb.MemberMessageLive.NewTest do
            )
 
     assert has_element?(view, "#member-compose-inbound-email", "Prefer email?")
-    assert has_element?(view, "#member-compose-inbound-email", "Send a club-wide message to")
+
+    assert has_element?(
+             view,
+             "#member-compose-inbound-email",
+             "You can also send a club-wide message to"
+           )
 
     assert has_element?(
              view,

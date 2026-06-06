@@ -146,7 +146,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     assert has_element?(view, "#active-members-card[data-active-member-count='2']")
     assert has_element?(view, "#active-members-card[data-active-members-state='active-members']")
-    refute has_element?(view, "#active-members-empty-state", "You're the first one here")
+    refute has_element?(view, "#active-members-empty-state", "You’re the first member listed")
 
     assert has_element?(
              view,
@@ -424,7 +424,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
 
     assert has_element?(view, "#member-dashboard-inbound-email", "Prefer email?")
-    assert has_element?(view, "#member-dashboard-inbound-email", "Send a club-wide message to")
+
+    assert has_element?(
+             view,
+             "#member-dashboard-inbound-email",
+             "You can also send a club-wide message to"
+           )
 
     assert has_element?(
              view,
@@ -446,12 +451,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
       |> live(~p"/?club_id=#{alice.club_id}")
 
-    assert has_element?(view, "#member-message-list-empty", "No messages yet")
+    assert has_element?(view, "#member-message-list-empty", "No club messages yet")
 
     assert has_element?(
              view,
              "#member-message-empty-send-link[href='/messages/new?club_id=#{alice.club_id}']",
-             "Send the first one"
+             "Send the first message"
            )
   end
 
@@ -474,12 +479,12 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#active-members-card[data-active-member-count='1'][data-active-members-state='first-member']"
            )
 
-    assert has_element?(view, "#active-members-empty-state", "You're the first one here")
+    assert has_element?(view, "#active-members-empty-state", "You’re the first member listed")
 
     assert has_element?(
              view,
              "#active-members-empty-state",
-             "As members join and renew, you'll see them listed here."
+             "As members are added, you’ll see them here."
            )
 
     assert has_element?(
@@ -491,7 +496,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(
              view,
              "#active-members-card-copy",
-             "Everyone with a current membership. They'll all receive your messages."
+             "Memba sends club-wide messages to everyone with a current membership."
            )
   end
 

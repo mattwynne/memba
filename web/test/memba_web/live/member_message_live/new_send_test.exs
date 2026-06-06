@@ -73,18 +73,18 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              "#member-message-compose[data-compose-state='sent'][data-sent-message-id='#{message.message_id}']"
            )
 
-    assert has_element?(view, "#member-compose-success-state", "Message sent.")
+    assert has_element?(view, "#member-compose-success-state", "Your message is being sent.")
 
     assert has_element?(
              view,
              "#member-compose-success-summary[data-active-member-count='2']",
-             "all 2 active members"
+             "all 2 current members"
            )
 
     assert has_element?(
              view,
              "#member-compose-see-receipts-link[href='/messages/#{message.message_id}?club_id=#{club_id}']",
-             "See who got it"
+             "Check delivery"
            )
 
     assert has_element?(
@@ -96,7 +96,7 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     assert has_element?(
              view,
              "#member-compose-back-home-link[href='/?club_id=#{club_id}']",
-             "Back to home"
+             "Back to club home"
            )
 
     refute has_element?(view, "#member-message-compose-form")
@@ -135,15 +135,19 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
              "#member-message-compose[data-compose-state='send_failed']"
            )
 
-    assert has_element?(view, "#member-compose-error-state", "That didn’t send.")
+    assert has_element?(view, "#member-compose-error-state", "Your message was not sent.")
 
     assert has_element?(
              view,
              "#member-compose-error-summary",
-             "Your message was not sent to anyone."
+             "No one received this message."
            )
 
-    assert has_element?(view, "#member-compose-error-summary", "contact support")
+    assert has_element?(
+             view,
+             "#member-compose-error-summary",
+             "ask a group organizer to contact Memba"
+           )
 
     assert has_element?(
              view,

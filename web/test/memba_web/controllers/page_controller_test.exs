@@ -20,10 +20,10 @@ defmodule MembaWeb.PageControllerTest do
 
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "Volunteering shouldn’t feel like work."
+    assert response =~ "A simpler way to keep your group members informed."
     assert response =~ "Kootenay Mountaineering Club"
-    assert response =~ "Built with"
-    assert response =~ "in Nelson, BC."
+    assert response =~ "Request access for your group"
+    assert response =~ "See what members can do"
     refute response =~ "❤️"
     refute response =~ "rehearsal-room door"
     refute response =~ "One price, paid yearly."
@@ -66,7 +66,7 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "You’re a member of 2 clubs"
     assert response =~ "Alpine Club"
     assert response =~ "Bridge Club"
-    refute response =~ "Volunteering shouldn’t feel like work."
+    refute response =~ "A simpler way to keep your group members informed."
 
     for club <- [first_club, second_club] do
       assert html
@@ -107,7 +107,11 @@ defmodule MembaWeb.PageControllerTest do
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Welcome to Alpine Club"
-    assert response =~ "Members can sign in to see club updates"
+
+    assert response =~
+             "Sign in with the email address Alpine Club has for you to read member messages"
+
+    assert response =~ "Email me a sign-in link"
 
     assert html
            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
@@ -133,7 +137,11 @@ defmodule MembaWeb.PageControllerTest do
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Welcome to Alpine Club"
-    assert response =~ "Members can sign in to see club updates"
+
+    assert response =~
+             "Sign in with the email address Alpine Club has for you to read member messages"
+
+    assert response =~ "Email me a sign-in link"
 
     assert html
            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
@@ -187,7 +195,7 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 404)
 
     refute response =~ "Welcome to Smoke Test Club"
-    refute response =~ "Members can sign in to see club updates"
+    refute response =~ "Email me a sign-in link"
   end
 
   test "GET / with the smoke-test club_id returns not found for public visitors", %{conn: conn} do
@@ -260,16 +268,19 @@ defmodule MembaWeb.PageControllerTest do
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Alpine Club"
-    assert response =~ "What the club's been saying, and who's around right now."
+
+    assert response =~
+             "Read recent club messages, send a note to all current members, and see who is on the member list."
+
     assert response =~ "Send club message"
     assert response =~ "Recent club messages"
-    assert response =~ "Active members"
-    assert response =~ "2 active members"
+    assert response =~ "Current members"
+    assert response =~ "2 current members"
 
     assert html
            |> LazyHTML.text()
            |> String.contains?(
-             "Everyone with a current membership. They'll all receive your messages."
+             "Memba sends club-wide messages to everyone with a current membership."
            )
 
     assert html |> LazyHTML.query("#club-site-layout[data-surface='club-site']") |> Enum.any?()
@@ -785,7 +796,7 @@ defmodule MembaWeb.PageControllerTest do
 
   test "GET /about", %{conn: conn} do
     conn = get(conn, ~p"/about")
-    assert html_response(conn, 200) =~ "Membership software for clubs that run on trust."
+    assert html_response(conn, 200) =~ "Simple software for volunteer-run groups."
   end
 
   test "GET /get-started shows a signed-out request form with public navigation", %{conn: conn} do
@@ -793,16 +804,18 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "Memba is invite-only right now."
-    assert response =~ "Want to try Memba with your club?"
-    assert response =~ "Tell us a little about you and your club."
+    assert response =~ "Ask us to set up Memba for your group."
+    assert response =~ "Want to use Memba with your club or group?"
+    assert response =~ "Memba staff will review your request"
 
     assert html
            |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("form#get-started-request-form[action='/get-started'][method='post']")
+           |> LazyHTML.query(
+             "form#get-started-request-form[action='/get-started'][method='post']"
+           )
            |> Enum.any?()
 
     assert html
@@ -852,7 +865,7 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "alice@example.com"
     assert response =~ "You’re signed in, so we’ll use these details for your request."
-    assert response =~ "Tell us which club you want to bring onto Memba."
+    assert response =~ "What would you like Memba to help with?"
 
     refute html
            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
@@ -884,7 +897,7 @@ defmodule MembaWeb.PageControllerTest do
 
     response = html_response(conn, 422)
 
-    assert response =~ "Tell us a little about you and your club."
+    assert response =~ "Want to use Memba with your club or group?"
     assert response =~ "can&#39;t be blank"
     assert Repo.aggregate(Request, :count) == 0
     assert_no_email_sent()
@@ -908,7 +921,9 @@ defmodule MembaWeb.PageControllerTest do
     assert_no_email_sent()
   end
 
-  test "POST /get-started stores a signed-out request and acknowledges staff review", %{conn: conn} do
+  test "POST /get-started stores a signed-out request and acknowledges staff review", %{
+    conn: conn
+  } do
     club_count = Repo.aggregate(Club, :count)
     membership_count = Repo.aggregate(Membership, :count)
 
@@ -954,8 +969,8 @@ defmodule MembaWeb.PageControllerTest do
       |> get(~p"/get-started?submitted=true")
       |> html_response(200)
 
-    assert response =~ "Thanks — we’ll review your request."
-    assert response =~ "We’ll contact you if Memba is a good fit for your club."
+    assert response =~ "Thanks — we’ll read your request."
+    assert response =~ "We’ll email you if Memba looks like a good fit for your group."
   end
 
   test "POST /get-started stores signed-in identity details from the current person", %{

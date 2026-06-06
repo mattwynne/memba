@@ -65,8 +65,8 @@ async function submitRequestThroughBrowser(world, personName, clubName) {
     await world.page.getByLabel("Email address").fill(person.email);
   }
 
-  await world.page.getByLabel("Club name").fill(clubName);
-  await world.page.getByLabel("Short note").fill(defaultRequestNote);
+  await world.page.getByLabel("Group or club name").fill(clubName);
+  await world.page.getByLabel("What would you like Memba to help with?").fill(defaultRequestNote);
   await world.page.getByRole("button", { name: "Request access" }).click();
 
   world.onboardingRequests[clubName] = {
@@ -156,10 +156,10 @@ async function assertReviewAcknowledgement(world) {
     timeout: projectionTimeoutMs(world)
   });
   await playwrightExpect(world.page.locator("#get-started-request-acknowledgement")).toContainText(
-    "we’ll review your request"
+    "we’ll read your request"
   );
   await playwrightExpect(world.page.locator("#get-started-request-acknowledgement")).toContainText(
-    "does not create a club, membership, or sign-in access"
+    "no group space, membership, or sign-in access"
   );
 }
 

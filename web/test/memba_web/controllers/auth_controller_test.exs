@@ -29,8 +29,11 @@ defmodule MembaWeb.AuthControllerTest do
       response = html_response(conn, 200)
       html = LazyHTML.from_fragment(response)
 
-      assert response =~ "Sign in to your club"
-      assert response =~ "Enter your email address and we’ll send you a link to sign in."
+      assert response =~ "Sign in with your email."
+
+      assert response =~
+               "Use the email address your club or group has for you. We’ll email you a private sign-in link."
+
       refute response =~ "magic link"
       refute response =~ "signs up anyone with a memba.io email as Memba staff"
 
@@ -54,19 +57,19 @@ defmodule MembaWeb.AuthControllerTest do
       create_active_member(email: "alice@example.com")
 
       assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
 
       assert conn
              |> Phoenix.ConnTest.recycle()
              |> submit_sign_in_link_request("unknown@example.com") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
     end
 
     test "shows the sign-in link request acknowledgement page", %{conn: conn} do
       {:ok, _view, response} = live(conn, ~p"/auth/check-email")
       html = LazyHTML.from_fragment(response)
 
-      assert response =~ "We’ve sent your sign-in link"
+      assert response =~ "Check your email for the sign-in link."
       assert response =~ neutral_notice()
       assert html |> LazyHTML.query("section#auth-sign-in-sent") |> Enum.any?()
       assert html |> LazyHTML.query("a#request-another-sign-in-link[href='/auth']") |> Enum.any?()
@@ -79,7 +82,7 @@ defmodule MembaWeb.AuthControllerTest do
       create_active_member(email: "alice@example.com")
 
       assert submit_sign_in_link_request(conn, " ALICE@EXAMPLE.COM ") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
 
       assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
@@ -98,7 +101,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert conn
              |> Map.put(:host, "kmc.lvh.me")
              |> submit_sign_in_link_request(" ALICE@EXAMPLE.COM ") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
 
       assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
@@ -121,7 +124,7 @@ defmodule MembaWeb.AuthControllerTest do
       )
 
       assert submit_sign_in_link_request(conn, " ALICE.WORK@example.com ") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
 
       assert [%SignInToken{email: "alice.work@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
@@ -138,7 +141,7 @@ defmodule MembaWeb.AuthControllerTest do
       configure_auth_email()
 
       assert submit_sign_in_link_request(conn, " New.Staff@Memba.IO ") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
 
       assert [%SignInToken{email: "new.staff@memba.io"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
@@ -152,7 +155,7 @@ defmodule MembaWeb.AuthControllerTest do
       configure_auth_email()
 
       assert submit_sign_in_link_request(conn, "unknown@example.com") =~
-               "We’ve sent your sign-in link"
+               "Check your email for the sign-in link."
 
       assert Repo.all(SignInToken) == []
       assert_no_email_sent()
@@ -270,7 +273,10 @@ defmodule MembaWeb.AuthControllerTest do
       conn = get(conn, ~p"/auth/sign-in/unknown-token")
 
       assert redirected_to(conn) == ~p"/auth"
-      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
+
+      assert flash(conn, :error) ==
+               "That sign-in link is no longer valid. Please ask for a new sign-in link."
+
       assert get_session(conn, IdentityAuth.identity_session_key()) == nil
     end
 
@@ -284,7 +290,10 @@ defmodule MembaWeb.AuthControllerTest do
       conn = get(conn, ~p"/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == ~p"/auth"
-      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
+
+      assert flash(conn, :error) ==
+               "That sign-in link is no longer valid. Please ask for a new sign-in link."
+
       assert get_session(conn, IdentityAuth.identity_session_key()) == nil
       assert [%SignInToken{consumed_at: nil}] = Repo.all(SignInToken)
       assert {:error, :expired} = Accounts.consume_sign_in_token(token, now: expired_at)
@@ -297,7 +306,10 @@ defmodule MembaWeb.AuthControllerTest do
       conn = get(conn, ~p"/auth/sign-in/#{token}")
 
       assert redirected_to(conn) == ~p"/auth"
-      assert flash(conn, :error) == "That sign-in link is invalid or has expired."
+
+      assert flash(conn, :error) ==
+               "That sign-in link is no longer valid. Please ask for a new sign-in link."
+
       assert get_session(conn, IdentityAuth.identity_session_key()) == nil
       assert [%SignInToken{consumed_at: %DateTime{}}] = Repo.all(SignInToken)
     end
@@ -413,7 +425,7 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   defp neutral_notice do
-    "Thanks. You should have an email in your inbox with a sign-in link."
+    "If that email address can sign in to Memba, the sign-in email is on its way."
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

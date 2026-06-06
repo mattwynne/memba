@@ -115,7 +115,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status: "delivered",
                  status_label: "Delivered",
                  status_icon: "hero-check-circle",
-                 description: "delivered to their inbox",
+                 description: "Email delivered",
                  count: 3,
                  percentage: 75
                },
@@ -123,7 +123,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status: "sent",
                  status_label: "Sending",
                  status_icon: "hero-clock",
-                 description: "on its way",
+                 description: "Email still sending",
                  count: 1,
                  percentage: 25
                },
@@ -131,7 +131,7 @@ defmodule MembaWeb.MemberEmailDeliveryPresentationTest do
                  status: "delivery problem",
                  status_label: "Delivery problem",
                  status_icon: "hero-exclamation-triangle",
-                 description: "we couldn't reach them",
+                 description: "Email not delivered",
                  count: 0,
                  percentage: 0
                }
