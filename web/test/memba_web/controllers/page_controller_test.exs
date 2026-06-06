@@ -802,7 +802,9 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("form#get-started-request-form[action='/get-started'][method='post']")
+           |> LazyHTML.query(
+             "form#get-started-request-form[action='/get-started'][method='post']"
+           )
            |> Enum.any?()
 
     assert html
@@ -908,7 +910,9 @@ defmodule MembaWeb.PageControllerTest do
     assert_no_email_sent()
   end
 
-  test "POST /get-started stores a signed-out request and acknowledges staff review", %{conn: conn} do
+  test "POST /get-started stores a signed-out request and acknowledges staff review", %{
+    conn: conn
+  } do
     club_count = Repo.aggregate(Club, :count)
     membership_count = Repo.aggregate(Membership, :count)
 
