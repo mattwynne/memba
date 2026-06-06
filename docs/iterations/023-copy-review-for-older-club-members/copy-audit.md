@@ -1,15 +1,18 @@
-# Copy audit: public-facing pages for an 80-year-old mountaineer with an iPad
+# Copy audit: public-facing pages for an 80-year-old community member with an iPad
 
 Date: 2026-06-06
 
 ## Persona lens
 
-Core reader: an 80-year-old mountaineer using an iPad. They may be competent, experienced, and impatient with fuss, but they may also have reduced eyesight, finger accuracy, memory for unfamiliar UI terms, and tolerance for ambiguous digital workflows. They want to know: "Is this for my club? Can I trust it? What happens if I tap this? Will I accidentally email everyone?"
+Core reader: an 80-year-old mountaineer using an iPad. They may be competent, experienced, and impatient with fuss, but they may also have reduced eyesight, finger accuracy, memory for unfamiliar UI terms, and tolerance for ambiguous digital workflows. They want to know: "Is this for my group? Can I trust it? What happens if I tap this? Will I accidentally email everyone?"
+
+Broader audience: Memba should feel applicable to any small non-profit community organizing group, including incorporated societies and less formal groups such as a school parents association. Copy can use clubs as a concrete example, but should not make Memba feel only for outdoor clubs.
 
 Copy principles for this iteration:
 
+- Use Canadian English: Canadian spellings where relevant, with common Canadian `-ize` forms such as "organize", "organizer", "organization", and "organizing".
 - Use plain, concrete words.
-- Prefer "club members" and "club committee" over software terms.
+- Prefer human group terms such as "members", "committee", "organizers", and "your group" over software terms.
 - Explain consequences before action, especially before sending messages.
 - Use reassuring microcopy near forms and buttons.
 - Avoid vague or cute lines when a user is trying to complete a task.
@@ -45,7 +48,7 @@ What works:
 
 What needs work:
 
-- The homepage promises future capabilities (events and renewals) that may not be live yet. This risks a trust break.
+- The homepage is too club-specific in places and promises future capabilities (events and renewals) that may not be live yet. This risks a trust break.
 - Several CTAs are generic: "Get started", "See it in action", "Sign in to continue".
 - Some lines are clever but not concrete enough for a task-focused older reader: "Three things, done quietly", "What the club's been saying, and who's around right now".
 - Message delivery language uses terms such as "receipt", "delivery problems", "addressed members", and "projected" that may not match the reader's vocabulary.
@@ -70,16 +73,17 @@ Findings:
 
 Recommended direction:
 
-- Lead with the current job: help a volunteer-run club keep members informed without messy email lists.
-- Replace generic CTA with "Ask about using Memba" or "Request access for your club".
+- Lead with the vision: help volunteer-run community groups keep members informed and organized without heavy administration.
+- Use examples that are true today, such as private member messages and member-only spaces, rather than presenting future renewals/events as already available.
+- Replace generic CTA with "Ask about using Memba" or "Request access for your group".
 - Use a secondary CTA such as "See what members can do".
 - Make feature cards concrete: private club page, send one message to all current members, see who received it.
 
 Example hero alternatives:
 
-1. "A simpler way to keep your club members informed" — clear, current, member-message focused.
-2. "Club messages without the mailing-list mess" — stronger pain-led version.
-3. "A private member website for volunteer-run clubs" — broad, concrete category.
+1. "A simpler way to keep your group members informed" — clear, current, member-message focused.
+2. "Member messages without the mailing-list mess" — stronger pain-led version.
+3. "A private member website for volunteer-run groups" — broad, concrete category.
 
 ### Signed-in memberships homepage `/`
 
@@ -87,20 +91,20 @@ Findings:
 
 - "Your memberships" and "Your clubs" are clear.
 - "We did not find any active club memberships for this email address" is accurate but stiff.
-- Empty state should explain what to do: check a different email, ask a club organiser, or contact Memba/support.
+- Empty state should explain what to do: check a different email, ask a club organizer, or contact Memba/support.
 - Staff access card repeats "Memba staff" three times.
 
 Recommended direction:
 
-- Rewrite the empty state as: "We can't find any current club memberships for this email address. If you expected to see a club here, try the email address your club uses for you, or ask your club organiser to check your membership."
+- Rewrite the empty state as: "We can't find any current club memberships for this email address. If you expected to see a group here, try the email address your group uses for you, or ask an organizer to check your membership."
 
 ### About `/about`
 
 Findings:
 
 - Clear and trustworthy.
-- "small organisations" should be "small organizations" only if the product voice chooses Canadian/US spelling consistently; current copy mixes likely Commonwealth style with "organizer" elsewhere.
-- The page would be stronger if it connected the mission to older volunteer committees: less admin, fewer missed notices, member data treated carefully.
+- Use Canadian English consistently: prefer "small organizations", "organizers", and "organizing" for this product copy.
+- The page would be stronger if it connected the mission to older volunteer committees and community groups: less admin, fewer missed notices, member data treated carefully.
 
 Recommended direction:
 
@@ -117,8 +121,8 @@ Findings:
 
 Recommended direction:
 
-- Headline: "Ask us to set up Memba for your club"
-- Subheadline: "We review each request before creating a club, so Memba stays safe for members."
+- Headline: "Ask us to set up Memba for your group"
+- Subheadline: "We review each request before creating a group space, so Memba stays safe for members."
 - Field label: "What would you like Memba to help with?"
 - Acknowledgement: "We’ll read your request and email you if Memba looks like a good fit. Nothing has been created yet."
 
@@ -183,7 +187,7 @@ Recommended direction:
 - Subject placeholder: "Example: Saturday trail day"
 - Message placeholder: "Write the message members should receive."
 - Success: "Memba is sending your message to all current members. You can check delivery on the message page."
-- Error: "Your message was not sent. Please try again. If it still fails, contact your club organiser or Memba support." Add an actual support route/email if available.
+- Error: "Your message was not sent. Please try again. If it still fails, contact one of your group's organizers."
 
 ### Member message detail `/messages/:message_id`
 
@@ -211,15 +215,14 @@ Findings:
 
 Recommended direction:
 
-- Add a plain-language "Member data" privacy paragraph: clubs own/control their member records; Memba does not sell data.
-- Add an "Email messages" paragraph: Memba uses email providers to deliver club messages.
-- Use a direct Memba contact address if policy allows.
+- Leave privacy/terms policy wording substantively unchanged for this iteration.
+- Do not add a broadly published public Memba email address as part of this copy pass; keep `/get-started` as the primary request/contact path.
 
 ## Prioritised iteration scope
 
 High priority for one focused iteration:
 
-1. Align homepage claims with what Memba can do today.
+1. Align homepage claims with the broader vision for small non-profit community organizing groups while keeping examples honest about what Memba can do today.
 2. Rewrite primary public CTAs around the next concrete action.
 3. Make get-started request copy warmer and clearer.
 4. Add older-reader reassurance to sign-in/check-email.
