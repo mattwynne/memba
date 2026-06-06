@@ -12,7 +12,7 @@
 - [x] 010 Build the active requests inbox with clear request details and actions for reject/convert.
 - [x] 011 Implement rejection with required internal notes and no requester email.
 - [x] 012 Implement conversion preparation with generated/editable slug using the same rules as staff club creation.
-- [ ] 013 Implement conversion transactionally where practical: create club, create/reuse person, create active membership, mark request converted, and send/wrap welcome email behaviour consistently.
+- [x] 013 Implement conversion transactionally where practical: create club, create/reuse person, create active membership, mark request converted, and send/wrap welcome email behaviour consistently.
 - [ ] 014 Implement welcome email generation with a magic sign-in token and post-auth destination for the new club member home.
 - [ ] 015 Add or update tests for public form validation/submission, signed-in prepopulation, notification email, staff authorization, active inbox, rejection, conversion, existing-person reuse, slug validation, welcome email, and preservation of existing club creation/slug behaviour.
 - [ ] 016 Add acceptance step support for `request_account.feature` and remove `@wip` once the scenarios pass.

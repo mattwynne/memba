@@ -6,6 +6,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   import Swoosh.TestAssertions
 
   alias Memba.Membership
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
@@ -270,6 +271,50 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
     assert attribute_value(html, "#confirm-convert-request-#{request.request_id}", "disabled") ==
              ""
+  end
+
+  test "staff can convert an active request into a club and active first member", %{conn: conn} do
+    request = request_fixture("Convertible Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff("pat@memba.io")
+      |> live(~p"/admin/requests")
+
+    assert has_element?(view, "#request-row-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "1")
+
+    view
+    |> element("#convert-request-#{request.request_id}")
+    |> render_click()
+
+    view
+    |> form("#convert-request-form-#{request.request_id}",
+      club: %{name: "Convertible Paddlers", slug: "convertible-paddlers"}
+    )
+    |> render_submit()
+
+    refute has_element?(view, "#request-row-#{request.request_id}")
+    refute has_element?(view, "#convert-request-panel-#{request.request_id}")
+    assert has_element?(view, "#admin-requests-active-count", "0")
+    assert has_element?(view, "#flash-info", "Converted request for Convertible Paddlers.")
+
+    converted_request = Repo.get!(Request, request.request_id)
+    assert converted_request.status == "converted"
+    assert converted_request.triaged_by_staff_email == "pat@memba.io"
+    assert %DateTime{} = converted_request.triaged_at
+
+    club = Membership.get_club(converted_request.converted_club_id)
+    person = Membership.get_person(converted_request.converted_person_id)
+    membership = Repo.get!(MembershipProjection, converted_request.converted_membership_id)
+
+    assert club.name == "Convertible Paddlers"
+    assert club.slug == "convertible-paddlers"
+    assert person.name == "Robin Requester"
+    assert person.email == request.requester_email
+    assert membership.club_id == club.club_id
+    assert membership.person_id == person.person_id
+    assert membership.active
   end
 
   test "conversion preparation refreshes the inbox when the request is no longer active", %{

@@ -98,6 +98,47 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
     {:noreply, clear_conversion(socket)}
   end
 
+  def handle_event(
+        "convert_request",
+        %{"club" => club_params},
+        %{assigns: %{converting_request: %Request{} = request}} = socket
+      ) do
+    feedback = ClubSlugForm.feedback(nil, Map.get(club_params, "slug"))
+
+    if feedback.valid do
+      case Onboarding.convert_request_to_club(request.request_id, club_params,
+             staff_email: current_staff_email(socket)
+           ) do
+        {:ok, conversion} ->
+          {:noreply, assign_request_converted(socket, conversion)}
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Could not convert request: #{format_reason(changeset)}")
+           |> assign_conversion_form(club_params, ["club", "slug"])}
+
+        {:error, reason} when reason in [:not_active, :not_found] ->
+          {:noreply, request_no_longer_active(socket)}
+
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> put_flash(:error, "Could not convert request: #{format_reason(reason)}")
+           |> assign_conversion_form(club_params, ["club", "slug"])}
+      end
+    else
+      {:noreply,
+       socket
+       |> put_flash(:error, "Choose a valid and available slug before converting this request.")
+       |> assign_conversion_form(club_params, ["club", "slug"])}
+    end
+  end
+
+  def handle_event("convert_request", _params, socket) do
+    {:noreply, request_no_longer_active(socket)}
+  end
+
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
@@ -267,6 +308,7 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
               for={@conversion_form}
               id={"convert-request-form-#{@converting_request.request_id}"}
               phx-change="suggest_conversion_slug"
+              phx-submit="convert_request"
               aria-label={"Prepare conversion for #{@converting_request.requested_club_name}"}
               class="w-full max-w-2xl space-y-4"
             >
@@ -316,11 +358,11 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
                 </button>
                 <button
                   id={"confirm-convert-request-#{@converting_request.request_id}"}
-                  type="button"
+                  type="submit"
                   disabled={not @conversion_slug_feedback.valid}
                   class="inline-flex items-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Continue conversion
+                  Convert request
                 </button>
               </div>
             </.form>
@@ -506,6 +548,26 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
     assign(socket, :active_request_count, max(socket.assigns.active_request_count - 1, 0))
   end
 
+  defp assign_request_converted(socket, %{request: %Request{} = converted_request} = conversion) do
+    socket
+    |> clear_conversion()
+    |> decrement_active_request_count()
+    |> stream_delete(:active_requests, converted_request)
+    |> put_flash(
+      :info,
+      "Converted request for #{converted_request.requested_club_name}."
+    )
+    |> maybe_put_welcome_email_flash(conversion)
+  end
+
+  defp maybe_put_welcome_email_flash(socket, %{welcome_email: :ok}), do: socket
+
+  defp maybe_put_welcome_email_flash(socket, %{welcome_email: {:error, reason}}) do
+    put_flash(socket, :error, "Welcome email could not be delivered: #{format_reason(reason)}")
+  end
+
+  defp maybe_put_welcome_email_flash(socket, _conversion), do: socket
+
   defp current_staff_email(socket) do
     socket.assigns.current_identity_email
   end
@@ -513,6 +575,18 @@ defmodule MembaWeb.Admin.RequestsLive.Index do
   defp conversion_params_from_request(%Request{} = request) do
     %{"name" => request.requested_club_name, "slug" => ""}
   end
+
+  defp format_reason(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {message, opts} ->
+      Regex.replace(~r"%{(\w+)}", message, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
+    |> inspect()
+  end
+
+  defp format_reason(reason), do: reason |> inspect() |> String.replace("_", " ")
 
   defp requester_initials(name) when is_binary(name) do
     name
