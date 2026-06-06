@@ -12,6 +12,15 @@ defmodule MembaWeb.RouterTest do
       assert_live_route("/admin/clubs", "/admin/clubs", MembaWeb.Admin.ClubsLive.Index, %{})
     end
 
+    test "routes /admin/requests through the staff browser pipeline to the requests index LiveView" do
+      assert_live_route(
+        "/admin/requests",
+        "/admin/requests",
+        MembaWeb.Admin.RequestsLive.Index,
+        %{}
+      )
+    end
+
     test "routes /admin/clubs/:club_id through the staff browser pipeline to the club show LiveView" do
       assert_live_route(
         "/admin/clubs/club-123",

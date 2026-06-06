@@ -50,6 +50,51 @@ defmodule MembaWeb.AuthGatesTest do
     end
   end
 
+  describe "Memba staff request routes" do
+    test "redirect unauthenticated browsers to sign in and preserve the return path" do
+      conn =
+        build_conn(:get, "/admin/requests?filter=active")
+        |> get("/admin/requests?filter=active")
+
+      assert redirected_to(conn) == ~p"/auth"
+
+      assert get_session(conn, IdentityAuth.return_to_session_key()) ==
+               "/admin/requests?filter=active"
+    end
+
+    test "forbid signed-in non-staff browsers", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+        |> get(~p"/admin/requests")
+
+      assert response(conn, 403) == "Forbidden"
+    end
+
+    test "redirect first-time signed-in Memba staff browsers to onboarding", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get(~p"/admin/requests")
+
+      assert redirected_to(conn) == ~p"/auth/onboard"
+
+      assert get_session(conn, IdentityAuth.staff_onboarding_return_to_session_key()) ==
+               ~p"/admin/requests"
+    end
+
+    test "allow onboarded signed-in Memba staff browsers", %{conn: conn} do
+      insert_membership_person!(name: "Pat Staff", email: "pat@memba.io")
+
+      conn =
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "pat@memba.io"})
+        |> get(~p"/admin/requests")
+
+      assert html_response(conn, 200) =~ ~s(id="admin-requests-index")
+    end
+  end
+
   describe "club_id member routes" do
     test "allow unauthenticated browsers to see the public public club page" do
       club = create_club(name: "Alpine Club")
