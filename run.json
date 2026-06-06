@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-05T23:57:46.058246197Z",
-  "last_event_at": "2026-06-06T00:00:09.858184664Z",
+  "last_event_at": "2026-06-06T00:00:24.197392193Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,14 +1069,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-06T00:00:22.862249032Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-06T00:00:25.832666547Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1101,6 +1102,7 @@
           "internal.retry_count.codex_review": 0,
           "graph.rankdir": "LR",
           "plan_needs_fix": false,
+          "internal.retry_count.synthesis_gate": 0,
           "internal.retry_count.start": 0,
           "internal.retry_count.gemini_review": 0,
           "internal.work_dir": "/workspace/memba",
@@ -1116,7 +1118,7 @@
           "codex_review_required_edits": "None",
           "plan_needs_human": false,
           "failure_signature": "",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "response.claude_review": "I've read the complete plan. Let me review it against the readiness criteria.\n\n---\n\n# Iteration Plan Review: 022 Request-to-Club Onboarding\n\n**Decision: READY**  \n**Confidence: High**\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The implementation plan could name the specific auth email helper/module that generates magic links (e.g., `Auth.Token`, `Accounts.deliver_user_confirmation_instructions`), but the plan is clear enough to proceed and implementation can discover the exact helper.\n\n2. The plan mentions \"open technical decisions\" about transaction boundaries around emails—this is appropriate to defer to implementation, but noting the current pattern in the codebase (e.g., if similar flows like password reset already handle this) would accelerate implementation slightly.\n\n3. Acceptance scenarios mention \"Robin receives a welcome sign-in link\" but the criteria don't specify the email sender name or reply-to address for the welcome email. This is minor because `hello@memba.io` is already established for notifications and the same pattern likely applies.\n\n## Smallest viable iteration\n\nThe plan already represents a minimal useful slice. The only smaller version would exclude rejection (keeping only conversion), but:\n- Staff explicitly need both accept and reject actions to manage real vs. spam/unsuitable requests.\n- Without rejection, unconvertible requests would clutter the inbox indefinitely.\n- The rejection implementation is straightforward (status update + notes, skip emails).\n\nTherefore, the current scope is already minimal and appropriately focused.\n\n## Required plan edits\n\nNone. The plan is ready for implementation as written.\n\n## Validation plan\n\nThe plan includes comprehensive validation across multiple dimensions:\n\n**Acceptance coverage:**\n- Six BDD scenarios explicitly cover the anti-abuse boundary, signed-in prepopulation, conversion, person reuse, rejection, and welcome links.\n- Feature file is tagged `@wip` during planning to keep checks green.\n- Matt reviews domain language before `@wip` removal.\n\n**Test coverage:**\n- LiveView/controller/context tests for request creation, validation, inbox, rejection, conversion, slug reuse, welcome email, authorization.\n- Regression tests for existing staff club creation and authentication flows.\n- Configuration test recognises the new `@wip` feature.\n\n**Manual validation:**\n- Nine-step demo covers signed-out request, staff triage, rejection without notification, conversion with slug editing, welcome email, and magic-link sign-in.\n\n**Process validation:**\n- `dev check` required before completion.\n- Existing staff club/slug behaviour must remain working (explicit regression testing).\n\n## Detailed assessment\n\n### 1. Goal clarity ✅\n\n**Clear:** The goal articulates a business/user outcome—letting club organisers request access through Memba while preventing public self-serve email abuse, with staff mediating the onboarding lifecycle.\n\n**Beneficiary clear:** Interested club organisers can request access; Memba staff control who gains sending capability; public visitors cannot exploit open signups.\n\n**Not just tasks:** The goal states the protection outcome (\"Public visitors still cannot self-serve into email-sending capability\") and the business model (staff-approved onboarding), not merely implementation tasks.\n\n### 2. Scope focus ✅\n\n**Coherent outcome:** The scope delivers a complete staff-mediated onboarding loop—request capture, triage, rejection, conversion, and welcome—without fragmenting into partial flows that would leave staff or requesters unable to complete the cycle.\n\n**Could not be smaller:** Removing any major piece (request form, staff inbox, rejection, conversion, or welcome email) would break the onboarding loop or leave staff unable to manage spam/unsuitable requests.\n\n**Boundaries clear:** The 15-item \"out of scope\" list explicitly excludes public self-serve, CAPTCHA, bulk actions, multi-person onboarding, billing, branding setup, and history UI that would expand the iteration without completing the core loop.\n\n### 3. Acceptance criteria, BDD scenarios, and business decisions ✅\n\n**Criteria concrete and testable:** All 39 acceptance criteria use objective, verifiable language:\n- \"Submitting a request does not create a club\" (falsifiable).\n- \"Conversion suggests a default club slug from the requested club name\" (observable).\n- \"Rejection does not send an email to the requester\" (testable via mailbox inspection).\n- \"Invalid requester email addresses are not accepted\" (validation testable).\n\n**Coverage complete:** The criteria address:\n- Happy paths: signed-out request, signed-in request, conversion with slug editing, existing-person reuse.\n- Edge cases: invalid email, duplicate person, already-taken slug, signed-in vs. signed-out identity handling.\n- Permissions: staff authorization for `/admin/requests`, non-staff blocked from conversion/rejection.\n- Error states: required field validation, slug validation/availability.\n- Data/state changes: request status transitions (active → converted/rejected), club creation, membership creation, email delivery.\n\n**Iteration type explicit:** \"Behaviour-facing\" with clear rationale—the plan changes public onboarding, staff triage, and anti-abuse boundaries.\n\n**BDD decision clear:** \"Required\" with strong justification—stakeholder-readable examples keep the anti-abuse boundary explicit (\"a public request must not itself create email-sending access\").\n\n**Cucumber feature planned:** `acceptance-tests/features/request_account.feature` with six scenario summaries covering request without immediate access, signed-in prepopulation, conversion with slug editing, person reuse, rejection without notification, and welcome sign-in link. The `@wip` tag prevents breaking planning-time checks. Matt reviews before implementation removes `@wip`.\n\n**Business decisions resolved:** The \"Open Business Decisions: None known\" section explicitly lists all planning-time decisions made:\n- Notification address: `hello@memba.io`.\n- Staff need both conversion and rejection.\n- Rejection captures internal notes, no requester notification.\n- Converted/rejected requests leave inbox, history out of scope.\n- Staff approval sufficient for active membership.\n- Existing-person email reuse policy.\n- Signed-in users don't re-enter identity.\n- Conversion sends direct magic-link welcome.\n\n### 4. Implementation plan and technical decisions ✅\n\n**Steps clear and ordered:** The 17-step plan sequences:\n1. Inspection of current behaviour (club creation, slug helpers, auth emails).\n2. Extraction/reuse of slug logic (avoid duplication).\n3. Data model design (request schema with status, notes, audit fields).\n4. Context functions for create/list/reject/convert.\n5. Public request form (signed-out validation, signed-in prepopulation).\n6. Notification email to `hello@memba.io`.\n7. Staff routes, navigation, and authorization.\n8. Active inbox with reject/convert actions.\n9. Rejection implementation (notes, no email).\n10. Conversion preparation (slug generation/editing).\n11. Transactional conversion (club/person/membership/email).\n12. Welcome email with magic link to club member home.\n13. Test additions (validation, authorization, regression, acceptance).\n14. Remove `@wip` when scenarios pass.\n15. `dev check`.\n\n**Specific enough:** The plan names:\n- **Files/modules:** Staff club creation LiveView, slug helper modules, membership/person creation APIs, auth email/token APIs.\n- **Data model fields:** Requester name/email, club name, note, status, rejection notes, converted club/person IDs, timestamps.\n- **Routes/UI:** `/get-started`, `/admin/requests`, staff navigation.\n- **Tests:** Form validation, authorization, slug validation, email delivery, existing-person reuse, regression for club creation/auth.\n- **Integration points:** Existing staff authentication, current person identity assigns, magic-link auth flow.\n\n**Changes clear:** Data model (request persistence), API (context functions for create/list/reject/convert), UI (public form, staff inbox), workflow (request → triage → reject/convert), email (notification, welcome with magic link).\n\n**Technical decisions appropriate:** The \"Open Technical Decisions\" section defers five implementation-time choices to implementation:\n- Request context placement (existing vs. new).\n- Slug reuse mechanism (extracted helpers vs. shared component vs. routing).\n- Post-auth return URL for club subdomains.\n- Email module configuration (reuse auth email vs. new onboarding module).\n- Transaction boundaries around external email delivery.\n\nThese are genuine implementation details that cannot be resolved without reading the existing codebase. The plan provides enough context (\"reuse staff club creation slug behaviour\", \"magic sign-in token with post-auth destination\", \"keep conversion transactional where practical\") for implementation to proceed.\n\n### 5. Expected capability and validation ✅\n\n**Capability clear:** \"Memba has a staff-approved onboarding path: people can ask to try Memba, staff can reject unsuitable requests, and staff can convert genuine requests into clubs with active first members and direct sign-in links, without exposing public self-serve email-sending access.\"\n\n**Before/after contrast:** Before: mailto-only contact. After: Memba-hosted request form, staff triage inbox, conversion creates real club/member/access, welcome magic link, anti-abuse boundary enforced.\n\n**Proof of success:**\n- BDD scenarios pass after `@wip` removal.\n- `dev check` passes.\n- Nine-step manual demo confirms request → inbox → rejection (no email) → conversion → club exists → requester is active member → request removed from inbox → welcome email → magic link works.\n- Regression tests confirm existing staff club creation and authentication still work.\n\n**Stop condition clear:** `dev check` passes, acceptance scenarios pass without `@wip`, manual demo succeeds.\n\n---\n\n## Summary\n\nThis plan is **READY** with **high confidence**. It meets all readiness criteria:\n\n- **Goal:** Clear beneficiary (club organisers + staff + anti-abuse protection), business outcome stated.\n- **Scope:** Minimal complete onboarding loop, explicit boundaries, cannot be smaller without breaking the cycle.\n- **Acceptance:** 39 concrete testable criteria covering happy/edge/error/permission/state, BDD scenarios planned with rationale, business decisions resolved.\n- **Implementation:** 17 ordered steps naming files/modules/tests/integration points, data model specified, technical decisions appropriately deferred.\n- **Capability:** Clear before/after, proof via automated + manual validation, explicit stop condition.\n\nThe plan balances detail with flexibility—specific enough to guide implementation, open enough to let implementation discover optimal reuse patterns in the existing codebase.\n\n---\n\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
           "gemini_review_confidence": "High",
@@ -1124,8 +1126,9 @@
           "internal.retry_count.synthesize": 0,
           "gemini_review_blocking_gaps": "None",
           "gemini_review_required_edits": "None",
-          "current_node": "synthesize",
-          "claude_review_decision": "READY"
+          "current_node": "synthesis_gate",
+          "claude_review_decision": "READY",
+          "thread.synthesize.current_node": "synthesis_gate"
         },
         "node_outcomes": {
           "gemini_review": {
@@ -1256,6 +1259,11 @@
               "active_time_ms": 72975
             }
           },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1298,8 +1306,9 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
+          "synthesis_gate": 1,
           "codex_review": 1,
           "synthesize": 1,
           "start": 1,
@@ -2031,7 +2040,12 @@
       "first_event_seq": 87,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-06T00:00:22.862134074Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2045,15 +2059,26 @@
       "output": null,
       "started_at": "2026-06-06T00:00:09.844446937Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 13017,
+        "inference_time_ms": 12949,
+        "tool_time_ms": 0,
+        "active_time_ms": 12949
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 5774,
+        "output_tokens": 33,
+        "total_tokens": 6436,
+        "reasoning_tokens": 629,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 48730
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     }
   }
 }
