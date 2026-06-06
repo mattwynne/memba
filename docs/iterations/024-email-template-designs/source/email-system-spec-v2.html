@@ -1,0 +1,606 @@
+<!-- @screen-label "Email system — spec & guidance (v2)" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memba — transactional email system (v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  --canvas:#f7f6f3; --paper:#fff; --paper-sunk:#f0eee9; --line:#e6e3dc; --line-strong:#d6d2c8;
+  --ink:#15201c; --ink-2:#4b5a55; --ink-3:#7d877f; --ink-4:#b3b9b4;
+  --forest-50:#ecf2ee; --forest-100:#d2e0d7; --forest-200:#a6c0b1; --forest-500:#1f4842; --forest-600:#173a35; --forest-700:#102b27;
+  --terracotta-500:#c46d3a;
+  --info:#4f6b78; --info-bg:#e3e9ec; --warning:#a37621; --warning-bg:#f3ecd8; --danger:#a64a36; --danger-bg:#f1ddd3; --success:#4f7a5c; --success-bg:#e6ece4;
+  --emailbg:#ece9e0;
+  --shadow:0 12px 28px -10px rgba(21,32,28,.14),0 3px 8px -4px rgba(21,32,28,.06);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--canvas);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;font-feature-settings:"cv11","ss01";}
+h1,h2,h3,h4{margin:0;font-weight:600;letter-spacing:-0.022em;line-height:1.15;color:var(--ink);}
+p{margin:0;color:var(--ink-2);}
+a{color:var(--forest-500);}
+code{font-family:'JetBrains Mono',monospace;font-size:0.86em;background:var(--paper-sunk);border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--forest-700);}
+.wrap{max-width:1120px;margin:0 auto;padding:0 32px;}
+
+/* ---- top ---- */
+.top{border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:10;}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;padding-top:16px;padding-bottom:16px;}
+.brand{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:600;letter-spacing:-0.02em;}
+.brand .v{font-size:11px;font-weight:600;color:var(--forest-600);background:var(--forest-50);border:1px solid var(--forest-100);border-radius:999px;padding:2px 8px;letter-spacing:0.02em;white-space:nowrap;}
+.brand svg{display:block}
+.top nav{display:flex;gap:22px;font-size:13.5px;}
+.top nav a{color:var(--ink-2);text-decoration:none;}
+.top nav a:hover{color:var(--forest-600);}
+
+/* ---- hero ---- */
+.hero{padding:60px 0 44px;border-bottom:1px solid var(--line);}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;}
+.hero h1{font-size:44px;letter-spacing:-0.03em;max-width:20ch;}
+.hero p{font-size:18px;line-height:1.5;color:var(--ink-2);max-width:64ch;margin-top:18px;}
+.facts{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px;}
+.fact{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:7px 15px;font-size:13px;color:var(--ink-2);}
+.fact b{color:var(--ink);font-weight:600;}
+
+/* pull quote */
+.principle{margin-top:34px;border-left:3px solid var(--forest-500);padding:4px 0 4px 22px;}
+.principle p{font-size:22px;line-height:1.35;letter-spacing:-0.02em;color:var(--ink);max-width:30ch;font-weight:500;}
+.principle p b{color:var(--forest-600);font-weight:600;}
+
+/* ---- section ---- */
+section{padding:56px 0;border-bottom:1px solid var(--line);}
+.sec-head{margin-bottom:32px;}
+.sec-head .k{font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--forest-500);margin-bottom:10px;}
+.sec-head h2{font-size:30px;letter-spacing:-0.03em;}
+.sec-head p{font-size:16px;margin-top:12px;max-width:66ch;}
+
+/* ---- DIAL ---- */
+.dial-axis{position:relative;margin:8px 0 30px;padding:0 4px;}
+.dial-ends{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:16px;}
+.dial-ends .l b,.dial-ends .r b{display:block;color:var(--ink);font-weight:600;font-size:13px;letter-spacing:-0.01em;}
+.dial-ends .l{color:var(--ink-3);}
+.dial-ends .r{color:var(--ink-3);text-align:right;}
+.track{position:relative;height:6px;border-radius:999px;background:linear-gradient(90deg,var(--paper-sunk),var(--forest-100) 55%,var(--forest-500));border:1px solid var(--line);}
+.nodes{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-top:-10px;gap:8px;}
+.node{text-align:center;min-width:0;}
+.node .dot{width:13px;height:13px;border-radius:999px;margin:0 auto 9px;background:var(--paper);border:2px solid var(--line-strong);}
+.node.is-email .dot{background:var(--forest-500);border-color:var(--forest-500);box-shadow:0 0 0 4px var(--forest-50);}
+.node .nm{font-size:11.5px;line-height:1.3;color:var(--ink-2);overflow-wrap:break-word;}
+.node.is-email .nm{color:var(--ink);font-weight:600;}
+.dial-legend{display:flex;gap:18px;font-size:12px;color:var(--ink-3);margin-top:8px;flex-wrap:wrap;}
+.dial-legend span{display:inline-flex;align-items:center;gap:7px;}
+.dial-legend i{width:11px;height:11px;border-radius:999px;display:inline-block;}
+
+/* surface table */
+table.surf{width:100%;border-collapse:collapse;font-size:13.5px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--paper);margin-top:8px;}
+table.surf th,table.surf td{text-align:left;padding:13px 16px;border-top:1px solid var(--line);vertical-align:middle;}
+table.surf thead th{background:var(--paper-sunk);border-top:0;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--ink-3);font-weight:600;}
+table.surf td .sname{font-weight:600;color:var(--ink);}
+table.surf tr.is-email td{background:var(--forest-50);}
+table.surf tr.is-email td .sname::after{content:"email";font-size:10px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:var(--forest-600);background:var(--forest-100);border-radius:999px;padding:2px 7px;margin-left:9px;vertical-align:middle;}
+.meter{display:flex;align-items:center;gap:10px;min-width:150px;}
+.meter .bar{flex:1;height:7px;border-radius:999px;background:var(--paper-sunk);border:1px solid var(--line);overflow:hidden;}
+.meter .fill{height:100%;background:var(--forest-500);border-radius:999px;}
+.meter .pct{font-size:11px;color:var(--ink-3);white-space:nowrap;}
+.who{font-size:11px;font-weight:600;letter-spacing:0.02em;border-radius:999px;padding:3px 9px;white-space:nowrap;display:inline-block;}
+.who.club{background:var(--paper-sunk);color:var(--ink-2);border:1px solid var(--line);}
+.who.both{background:var(--info-bg);color:var(--info);}
+.who.memba{background:var(--forest-500);color:#eaf1ec;}
+
+/* ---- VIA pattern ---- */
+.via-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:start;}
+.inbox{background:var(--paper);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);}
+.inbox .ihead{font-size:11px;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:11px 18px;border-bottom:1px solid var(--line);background:var(--paper-sunk);}
+.inbox .irow{display:flex;gap:13px;padding:16px 18px;align-items:flex-start;}
+.inbox .mono{width:40px;height:40px;border-radius:8px;background:var(--ink);color:#f7f6f3;font-size:14px;font-weight:600;display:grid;place-items:center;flex:none;letter-spacing:0.01em;}
+.inbox .from{font-size:14.5px;color:var(--ink);}
+.inbox .from b{font-weight:600;}
+.inbox .from .viab{color:var(--forest-600);}
+.inbox .addr{font-size:12.5px;color:var(--ink-3);font-family:'JetBrains Mono',monospace;margin-top:3px;}
+.inbox .subj{font-size:14px;color:var(--ink-2);margin-top:9px;}
+.inbox .subj b{color:var(--ink);font-weight:600;}
+.inbox .time{font-size:12px;color:var(--ink-4);margin-left:auto;flex:none;}
+
+.via-call{display:flex;flex-direction:column;gap:12px;}
+.vcard{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:15px 18px;}
+.vcard h4{font-size:14px;margin-bottom:5px;display:flex;align-items:center;gap:9px;}
+.vcard h4 .pin{font-size:10px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-radius:999px;padding:2px 8px;}
+.vcard h4 .pin.club{background:var(--paper-sunk);color:var(--ink-2);border:1px solid var(--line);}
+.vcard h4 .pin.memba{background:var(--forest-500);color:#eaf1ec;}
+.vcard p{font-size:13px;line-height:1.55;color:var(--ink-2);}
+.vcard p code{font-size:11.5px;}
+.premium{margin-top:20px;background:var(--forest-50);border:1px solid var(--forest-100);border-radius:14px;padding:18px 20px;display:flex;gap:14px;}
+.premium svg{flex:none;color:var(--forest-600);margin-top:1px;}
+.premium h4{font-size:14px;color:var(--forest-700);margin-bottom:5px;}
+.premium p{font-size:13px;color:var(--forest-700);opacity:.85;line-height:1.55;}
+
+/* ---- email block ---- */
+.email{display:grid;grid-template-columns:1fr 360px;gap:40px;align-items:start;}
+.email + .email{margin-top:56px;padding-top:56px;border-top:1px solid var(--line);}
+.previews{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;}
+.device .lab{font-size:11px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.frame-d{width:560px;max-width:100%;border:1px solid var(--line-strong);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);background:var(--emailbg);}
+.frame-m{width:300px;border:8px solid #15201c;border-radius:30px;overflow:hidden;background:var(--emailbg);box-shadow:0 18px 40px -12px rgba(21,32,28,.28);}
+iframe{border:0;display:block;background:var(--emailbg);width:100%;}
+
+/* meta side */
+.meta-side h3{font-size:21px;letter-spacing:-0.025em;}
+.meta-side .dialchip{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;border-radius:999px;padding:5px 12px;margin:12px 0 4px;}
+.meta-side .dialchip.club{background:var(--paper-sunk);color:var(--ink-2);border:1px solid var(--line);}
+.meta-side .dialchip.both{background:var(--info-bg);color:var(--info);}
+.meta-side .dialchip.memba{background:var(--forest-500);color:#eaf1ec;}
+.meta-side > p{margin-top:10px;font-size:14.5px;}
+.kv{margin-top:18px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--paper);}
+.kv .row{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:11px 16px;font-size:13px;border-top:1px solid var(--line);}
+.kv .row:first-child{border-top:0;}
+.kv .row .k{color:var(--ink-3);}
+.kv .row .v{color:var(--ink);font-weight:500;}
+.kv .row .v code{font-size:11.5px;}
+.kv .row .v .viab{color:var(--forest-600);font-weight:600;}
+
+.subhead{font-size:12px;font-weight:600;letter-spacing:0.05em;text-transform:uppercase;color:var(--ink-3);margin:24px 0 10px;}
+.changes{list-style:none;margin:0;padding:0;}
+.changes li{position:relative;padding:0 0 9px 24px;font-size:13.5px;color:var(--ink-2);line-height:1.5;}
+.changes li::before{content:"";position:absolute;left:2px;top:6px;width:9px;height:9px;border-radius:999px;background:var(--forest-100);border:2px solid var(--forest-500);}
+.changes li b{color:var(--ink);font-weight:600;}
+
+/* anatomy */
+.anatomy{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;}
+.acard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px;}
+.acard .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:999px;background:var(--forest-50);color:var(--forest-600);font-size:12px;font-weight:600;margin-bottom:12px;}
+.acard h4{font-size:15px;margin-bottom:6px;}
+.acard p{font-size:13.5px;color:var(--ink-2);line-height:1.5;}
+.acard .tagline{display:inline-block;font-size:10.5px;font-weight:600;letter-spacing:0.03em;text-transform:uppercase;border-radius:999px;padding:2px 8px;margin-top:10px;}
+.acard .tagline.const{background:var(--forest-50);color:var(--forest-600);border:1px solid var(--forest-100);}
+.acard .tagline.dial{background:var(--info-bg);color:var(--info);}
+
+/* guidance cards */
+.guide{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;}
+.gcard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:22px;}
+.gcard .gi{width:34px;height:34px;border-radius:8px;background:var(--forest-50);color:var(--forest-600);display:grid;place-items:center;margin-bottom:14px;}
+.gcard h4{font-size:15px;margin-bottom:8px;}
+.gcard ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:13.5px;line-height:1.6;}
+.gcard ul li{margin-bottom:5px;}
+.gcard ul li::marker{color:var(--ink-4);}
+.swrow{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.sw{display:flex;flex-direction:column;gap:5px;font-size:10.5px;color:var(--ink-3);align-items:center;}
+.sw i{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);display:block;}
+
+/* reasons table */
+table.reasons{width:100%;border-collapse:collapse;font-size:13.5px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--paper);}
+table.reasons th,table.reasons td{text-align:left;padding:13px 16px;border-top:1px solid var(--line);vertical-align:top;}
+table.reasons thead th{background:var(--paper-sunk);border-top:0;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:var(--ink-3);font-weight:600;}
+table.reasons td:first-child{white-space:nowrap;}
+table.reasons td code{font-size:11.5px;white-space:nowrap;}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--info-bg);color:var(--info);}
+
+.note{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 20px;font-size:13.5px;color:var(--ink-2);margin-top:24px;display:flex;gap:12px;}
+.note svg{flex:none;color:var(--ink-3);margin-top:1px;}
+
+footer.foot{padding:40px 0 64px;}
+footer.foot p{font-size:13px;color:var(--ink-3);}
+
+@media (max-width:920px){
+  .email,.via-grid{grid-template-columns:1fr;}
+  .top nav{display:none;}
+  .hero h1{font-size:34px;}
+  .nodes .nm{font-size:10px;}
+}
+@media (max-width:640px){
+  .wrap{padding:0 20px;}
+  .frame-d{width:100%;}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#1f4842"></rect><path d="M 18 34 L 28 44 L 46 24" fill="none" stroke="#f7f6f3" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      Memba <span class="v">Email&nbsp;v2</span>
+    </div>
+    <nav>
+      <a href="#dial">The dial</a>
+      <a href="#via">The "via" pattern</a>
+      <a href="#emails">The emails</a>
+      <a href="#anatomy">Layout</a>
+      <a href="#guidance">Email-safe rules</a>
+    </nav>
+  </div>
+</div>
+
+<div class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Transactional email system · second version</div>
+    <h1>Whose name is on the envelope?</h1>
+    <p>Same three emails, re-tuned around one question: how much should a member see <i>Memba</i> versus just <i>their club</i>? The build is unchanged — 560px single column, table layout, plain-text twins. What changed is the branding: which name leads, where Memba steps back, and the one place it deliberately steps forward.</p>
+    <div class="principle">
+      <p>Memba is <b>ambient inside a club</b>, and steps forward <b>only between clubs</b>.</p>
+    </div>
+    <div class="facts">
+      <div class="fact"><b>memba.io</b> in every address</div>
+      <div class="fact"><b>"via Memba"</b> From pattern</div>
+      <div class="fact"><b>Club-led</b> sign-in &amp; messages</div>
+      <div class="fact"><b>Memba</b> as the trust mark</div>
+      <div class="fact"><b>Footer</b> = the ambient baseline</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DIAL ============ -->
+<section id="dial">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">The branding dial</div>
+      <h2>One baseline, dialled per surface</h2>
+      <p>Memba is never hidden — the <code>memba.io</code> domain, the footer line and the sign-in trust mark are present everywhere, asking for no attention. The "dial" is how far Memba moves <i>forward</i> of that baseline on a given surface. The rule of thumb: is this experience about being in <i>one</i> club, or about belonging <i>across</i> clubs? Within → club leads. Across → Memba leads.</p>
+    </div>
+
+    <div class="dial-axis">
+      <div class="dial-ends">
+        <div class="l"><b>Most club</b>least Memba — within one club</div>
+        <div class="r"><b>Most Memba</b>the cross-club identity layer</div>
+      </div>
+      <div class="track"></div>
+      <div class="nodes">
+        <div class="node"><div class="dot"></div><div class="nm">Public club page</div></div>
+        <div class="node"><div class="dot"></div><div class="nm">Member club home</div></div>
+        <div class="node is-email"><div class="dot"></div><div class="nm">Onboarding email</div></div>
+        <div class="node is-email"><div class="dot"></div><div class="nm">Member message</div></div>
+        <div class="node is-email"><div class="dot"></div><div class="nm">Sign-in link</div></div>
+        <div class="node is-email"><div class="dot"></div><div class="nm">Rejection notice</div></div>
+        <div class="node"><div class="dot"></div><div class="nm">Account / my clubs</div></div>
+      </div>
+      <div class="dial-legend">
+        <span><i style="background:var(--forest-500)"></i> Email surface (this system)</span>
+        <span><i style="background:var(--paper);border:2px solid var(--line-strong)"></i> Other surface (for context)</span>
+      </div>
+    </div>
+
+    <table class="surf">
+      <thead><tr><th style="width:24%">Surface</th><th style="width:14%">Who leads</th><th style="width:26%">Dial</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sname">Public club page</span></td><td><span class="who club">Club</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:10%"></div></div><span class="pct">ambient</span></div></td><td>The club's shop window. Someone googling the club must feel they found the club.</td></tr>
+        <tr><td><span class="sname">Member club home</span></td><td><span class="who club">Club</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:18%"></div></div><span class="pct">footer</span></div></td><td>Their day-to-day homepage. Should feel like the club; Memba in the account corner.</td></tr>
+        <tr class="is-email"><td><span class="sname">Onboarding / approval</span></td><td><span class="who club">Club</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:25%"></div></div><span class="pct">footer</span></div></td><td>They're welcomed <i>to the club</i>, not to Memba. Warm, club-dominant.</td></tr>
+        <tr class="is-email"><td><span class="sname">Member message</span></td><td><span class="who club">Club</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:30%"></div></div><span class="pct">via + footer</span></div></td><td>Club is unmistakably the author; Memba is unmistakably just the postal service.</td></tr>
+        <tr class="is-email"><td><span class="sname">Sign-in link</span></td><td><span class="who both">Club + trust mark</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:46%"></div></div><span class="pct">trust footer</span></div></td><td>From the club, but "is this phishing?" matters most here — a consistent Memba trust mark reassures.</td></tr>
+        <tr class="is-email"><td><span class="sname">Rejection notice</span></td><td><span class="who both">Memba (for club)</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:60%"></div></div><span class="pct">Memba-led</span></div></td><td>A bounce comes from the carrier, so Memba speaks — but names the club up front.</td></tr>
+        <tr><td><span class="sname">Account / "my clubs"</span></td><td><span class="who memba">Memba</span></td><td><div class="meter"><div class="bar"><div class="fill" style="width:95%"></div></div><span class="pct">foreground</span></div></td><td>The only place a cross-club identity can live. Memba <i>should</i> lead here.</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+      <div>It mirrors Substack: every newsletter carries a quiet footer and a <code>.substack.com</code> domain, but you read <i>the newsletter</i> — until you open your account and find you're subscribed to six newsletters <i>on</i> Substack. The four email rows above are what this system covers; this version designs the middle four and leans hardest on the two transactional ones.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VIA PATTERN ============ -->
+<section id="via">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">The "via" pattern</div>
+      <h2>The club is the sender. Memba is the carrier.</h2>
+      <p>Every club email uses the standard mailing-list dual-brand. The member's eye lands on the club; Memba is named quietly as the postal service. This <i>reduces</i> confusion and spam-flagging rather than causing it — it's exactly what Google Groups, Mailman and Substack do.</p>
+    </div>
+    <div class="via-grid">
+      <div>
+        <div class="inbox">
+          <div class="ihead">How it lands in the inbox</div>
+          <div class="irow">
+            <div class="mono">WC</div>
+            <div style="flex:1">
+              <div class="from"><b>Wessex Chamber Choir</b> <span class="viab">via Memba</span></div>
+              <div class="addr">wessexchoir@memba.io</div>
+              <div class="subj"><b>July trips schedule</b></div>
+            </div>
+            <div class="time">9:14 AM</div>
+          </div>
+        </div>
+        <div class="premium">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.4 7.6 8 10 4.6-2.4 8-5 8-10V6z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          <div>
+            <h4>A club's own domain is a premium upgrade — never the default</h4>
+            <p>The moment <code>news@theclub.org</code> goes in the From address, Memba inherits that club's DNS and DMARC problems — the exact deliverability pain we avoid. Per-club DKIM setup is offered as a paid upgrade.</p>
+          </div>
+        </div>
+      </div>
+      <div class="via-call">
+        <div class="vcard">
+          <h4>Display name <span class="pin club">Club</span></h4>
+          <p>Carries the club: <code>Kootenay Mountaineering Club via Memba</code>. For a personal note, the sender's name leads instead: <code>Aoife Brennan via Memba</code>.</p>
+        </div>
+        <div class="vcard">
+          <h4>Address domain <span class="pin memba">Memba</span></h4>
+          <p>Always <code>@memba.io</code> — a domain Memba controls, so it can DKIM-sign and DMARC-align cleanly. The local part is the club's slug: <code>wessexchoir@memba.io</code>.</p>
+        </div>
+        <div class="vcard">
+          <h4>Reply-To <span class="pin club">Routed</span></h4>
+          <p>Set to the real human — the sender on a member message, <code>help@memba.io</code> on system mail — so replies land where they should, never on the whole list.</p>
+        </div>
+        <div class="vcard">
+          <h4>Why not the club's domain? <span class="pin memba">Deliverability</span></h4>
+          <p>Same name on the login screen, the footer and the URL builds quiet trust. One controlled sending domain keeps every club out of the spam folder.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ EMAILS ============ -->
+<section id="emails">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">The emails</div>
+      <h2>The dial, applied</h2>
+      <p>Each template is a real, copy-paste HTML file in <code>Memba Emails/</code> (the <code>… v2.html</code> set). Samples use Wessex Chamber Choir content; the "what changed" notes call out exactly how the branding moved from v1.</p>
+    </div>
+
+    <!-- 1. MEMBER MESSAGE (most club) -->
+    <div class="email">
+      <div class="previews-col">
+        <div class="previews">
+          <div class="device">
+            <div class="lab">Desktop · 560px</div>
+            <div class="frame-d"><iframe src="member-message v2.html" title="Member message — desktop" onload="sizeFrame(this)" style="height:760px"></iframe></div>
+          </div>
+          <div class="device">
+            <div class="lab">Mobile · 320px</div>
+            <div class="frame-m"><iframe src="member-message v2.html" title="Member message — mobile" onload="sizeFrame(this)" style="height:1060px"></iframe></div>
+          </div>
+        </div>
+      </div>
+      <div class="meta-side">
+        <h3>Member message</h3>
+        <div class="dialchip club"><span style="width:7px;height:7px;border-radius:999px;background:var(--ink-3);display:inline-block"></span> Club leads · Memba ambient</div>
+        <p>A note from one member to the whole club. The club is the author; Memba is just the post.</p>
+        <div class="kv">
+          <div class="row"><span class="k">From</span><span class="v">Aoife Brennan <span class="viab">via Memba</span></span></div>
+          <div class="row"><span class="k">Address</span><span class="v"><code>wessexchoir@memba.io</code></span></div>
+          <div class="row"><span class="k">Reply-to</span><span class="v">The original sender</span></div>
+          <div class="row"><span class="k">Memba sits</span><span class="v">Footer baseline only</span></div>
+        </div>
+        <div class="subhead">What changed from v1</div>
+        <ul class="changes">
+          <li>Added a <b>club lockup</b> (monogram + name) to the header, so the club's mark — not Memba's — opens the email.</li>
+          <li>Footer now carries the small <b>Memba mark</b> + "Delivered for Wessex Chamber Choir by Memba" — the ambient baseline, consistent across all three.</li>
+          <li>Sending address moved to <code>wessexchoir@memba.io</code> (was <code>post@memba.app</code>).</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 2. SIGN IN (trust mark) -->
+    <div class="email">
+      <div class="previews-col">
+        <div class="previews">
+          <div class="device">
+            <div class="lab">Desktop · 560px</div>
+            <div class="frame-d"><iframe src="sign-in-link v2.html" title="Sign-in link — desktop" onload="sizeFrame(this)" style="height:740px"></iframe></div>
+          </div>
+          <div class="device">
+            <div class="lab">Mobile · 320px</div>
+            <div class="frame-m"><iframe src="sign-in-link v2.html" title="Sign-in link — mobile" onload="sizeFrame(this)" style="height:980px"></iframe></div>
+          </div>
+        </div>
+      </div>
+      <div class="meta-side">
+        <h3>Sign-in link</h3>
+        <div class="dialchip both"><span style="width:7px;height:7px;border-radius:999px;background:var(--info);display:inline-block"></span> Club leads · Memba as trust mark</div>
+        <p>The member requested this from the club's page, so it reads as the club. Memba steps forward in one place only: a dedicated trust footer — because "is this real?" matters most here.</p>
+        <div class="kv">
+          <div class="row"><span class="k">Subject</span><span class="v">Sign in to Wessex Chamber Choir</span></div>
+          <div class="row"><span class="k">From</span><span class="v">Wessex Chamber Choir <span class="viab">via Memba</span></span></div>
+          <div class="row"><span class="k">Address</span><span class="v"><code>no-reply@memba.io</code></span></div>
+          <div class="row"><span class="k">Memba sits</span><span class="v">"Secured by Memba" trust footer</span></div>
+        </div>
+        <div class="subhead">What changed from v1</div>
+        <ul class="changes">
+          <li>Re-led by the <b>club</b>: header is the club lockup, headline is "Sign in to Wessex Chamber Choir" (was the Memba mark and "Sign in to Memba").</li>
+          <li>Added the <b>"Secured by Memba" trust footer</b> — a quiet forest-tinted panel with the security promise. This is the one surface where Memba is meant to be seen.</li>
+          <li>Links and fallback URL now on <code>memba.io</code>; button copy shortened to "Sign in".</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 3. REJECTION (memba-led) -->
+    <div class="email">
+      <div class="previews-col">
+        <div class="previews">
+          <div class="device">
+            <div class="lab">Desktop · 560px</div>
+            <div class="frame-d"><iframe src="inbound-rejection v2.html" title="Inbound rejection — desktop" onload="sizeFrame(this)" style="height:860px"></iframe></div>
+          </div>
+          <div class="device">
+            <div class="lab">Mobile · 320px</div>
+            <div class="frame-m"><iframe src="inbound-rejection v2.html" title="Inbound rejection — mobile" onload="sizeFrame(this)" style="height:1200px"></iframe></div>
+          </div>
+        </div>
+      </div>
+      <div class="meta-side">
+        <h3>Inbound rejection</h3>
+        <div class="dialchip memba"><span style="width:7px;height:7px;border-radius:999px;background:#eaf1ec;display:inline-block"></span> Memba leads · names the club</div>
+        <p>A bounce genuinely comes from the carrier, so Memba speaks here. But the club is named up front and a clarifier heads off "what is Memba?" worry.</p>
+        <div class="kv">
+          <div class="row"><span class="k">Subject</span><span class="v">Your email to WCC wasn't posted</span></div>
+          <div class="row"><span class="k">From</span><span class="v">Memba</span></div>
+          <div class="row"><span class="k">Address</span><span class="v"><code>post@memba.io</code></span></div>
+          <div class="row"><span class="k">Reply-to</span><span class="v"><code>help@memba.io</code></span></div>
+        </div>
+        <div class="subhead">What changed from v1</div>
+        <ul class="changes">
+          <li>Kept <b>Memba-led</b> (it's a delivery notice) but added a <b>"Delivery notice"</b> label and a footer clarifier: "Memba delivers email for Wessex Chamber Choir."</li>
+          <li>Footer gains the consistent <b>Memba mark</b>; all addresses moved to <code>memba.io</code>.</li>
+          <li>Subject now leads with the club: "Your email to Wessex Chamber Choir wasn't posted."</li>
+        </ul>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============ ANATOMY ============ -->
+<section id="anatomy">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">Layout system</div>
+      <h2>The footer is the constant. The header is the dial.</h2>
+      <p>Every Memba email is still a 560px white card on a warm <code>#ece9e0</code> field, in the same five regions. v2 makes the split explicit: the footer is the <i>ambient Memba baseline</i> on every email; the header is what moves between club and Memba.</p>
+    </div>
+    <div class="anatomy">
+      <div class="acard"><div class="n">1</div><h4>Header</h4><p>The dial. A <b>club lockup</b> (neutral monogram + name) for club-led mail; the <b>forest Memba mark</b> only when Memba is the speaker, as on the rejection notice.</p><span class="tagline dial">Dialled</span></div>
+      <div class="acard"><div class="n">2</div><h4>Body</h4><p>26px semibold headline, then 15px ink-2 prose at 1.55. One idea per line. Optional avatar (member message) or calm status mark (rejection) above the headline.</p></div>
+      <div class="acard"><div class="n">3</div><h4>Primary action</h4><p>At most one. Bulletproof forest button (table + VML). Forest stays Memba's system colour for actions — the infrastructure, not the brand in front.</p></div>
+      <div class="acard"><div class="n">4</div><h4>Trust / support</h4><p>On sign-in this becomes the <b>"Secured by Memba"</b> panel — the deliberate step-forward. Elsewhere it's a quiet sunk-canvas reply or "what to do next" note.</p><span class="tagline const">Trust mark</span></div>
+      <div class="acard"><div class="n">5</div><h4>Footer</h4><p>The constant. Small Memba mark, "delivered for {club} by Memba", who/why, <code>memba.io</code>. Unsubscribe only on club mail, never on account mail.</p><span class="tagline const">Always present</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GUIDANCE ============ -->
+<section id="guidance">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">Email-safe rules</div>
+      <h2>Built to survive any client</h2>
+      <p>Unchanged from v1 — clarity and compatibility over visual complexity. These hold the look together in Gmail, Apple Mail, Outlook and the rest, and degrade gracefully when CSS is stripped.</p>
+    </div>
+    <div class="guide">
+
+      <div class="gcard">
+        <div class="gi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg></div>
+        <h4>Type</h4>
+        <ul>
+          <li>Inter via web font, with <code>-apple-system, Segoe UI, system-ui, sans-serif</code> fallback so stripped clients still look intentional.</li>
+          <li>One family, weight for hierarchy: 600 headlines, 400/500 body.</li>
+          <li>Body 15px / line-height 1.55; never below 13px.</li>
+          <li>JetBrains Mono only for the raw sign-in URL.</li>
+        </ul>
+      </div>
+
+      <div class="gcard">
+        <div class="gi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"></circle><circle cx="6.5" cy="11.5" r="2.5"></circle><circle cx="17" cy="14" r="2.5"></circle><path d="M3 21h18"></path></svg></div>
+        <h4>Colour</h4>
+        <div class="swrow">
+          <div class="sw"><i style="background:#1f4842"></i>forest</div>
+          <div class="sw"><i style="background:#15201c"></i>club mark</div>
+          <div class="sw"><i style="background:#ecf2ee"></i>trust</div>
+          <div class="sw"><i style="background:#ece9e0"></i>field</div>
+          <div class="sw"><i style="background:#e3e9ec"></i>info</div>
+        </div>
+        <ul>
+          <li>Forest <code>#1f4842</code> is Memba's only brand colour — used for actions and the Memba marks.</li>
+          <li>The <b>club mark</b> is a neutral ink tile (<code>#15201c</code>), deliberately not forest, so club ≠ Memba at a glance.</li>
+          <li>Hex values inlined; no <code>var()</code> in email.</li>
+        </ul>
+      </div>
+
+      <div class="gcard">
+        <div class="gi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M9 3v18"></path></svg></div>
+        <h4>Spacing &amp; width</h4>
+        <ul>
+          <li>560px card; full-width on screens under 600px (radius drops to 0, gutters tighten to 22px).</li>
+          <li>28px horizontal gutter on desktop. 4px spacing scale throughout.</li>
+          <li>Single column only — never two-column inside an email.</li>
+        </ul>
+      </div>
+
+      <div class="gcard">
+        <div class="gi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="8" width="20" height="8" rx="4"></rect></svg></div>
+        <h4>Buttons</h4>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:6px 0 14px;"><a href="#" style="display:inline-block;background:#1f4842;color:#f7f6f3;text-decoration:none;padding:13px 30px;border-radius:8px;font-weight:600;font-size:15px;" onclick="return false">Sign in</a></div>
+        <ul>
+          <li>"Bulletproof" build: a <code>&lt;table&gt;</code> cell with <code>bgcolor</code> + an <code>&lt;a&gt;</code>, plus a VML <code>roundrect</code> for Outlook desktop.</li>
+          <li>Flat forest, 8px radius. No gradient, no shadow.</li>
+          <li>Goes full-width on mobile for an easy tap target.</li>
+        </ul>
+      </div>
+
+      <div class="gcard">
+        <div class="gi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg></div>
+        <h4>Fallback links</h4>
+        <div style="margin:6px 0 14px;"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#1f4842;background:#f7f6f3;border:1px solid #e6e3dc;border-radius:8px;padding:9px 12px;display:inline-block;">https://memba.io/signin?t=…</span></div>
+        <ul>
+          <li>The sign-in link is always printed as raw, tappable text below the button — for clients that block or mangle buttons.</li>
+          <li>Mono, <code>word-break:break-all</code> so long tokens wrap instead of overflowing.</li>
+          <li>Every link is also a plain <code>&lt;a href&gt;</code>, never JS-driven.</li>
+        </ul>
+      </div>
+
+      <div class="gcard">
+        <div class="gi"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 0 0 18z"></path></svg></div>
+        <h4>Dark mode &amp; accessibility</h4>
+        <ul>
+          <li>Light-only declared via <code>color-scheme</code> meta + tags, so clients don't auto-invert and break the forest button.</li>
+          <li>Colours stay legible if a client inverts anyway — no pure white-on-pure-black flips.</li>
+          <li>Forest on off-white clears WCAG AA. Real text, not images. Hidden preheader sets the inbox preview line.</li>
+        </ul>
+      </div>
+
+    </div>
+    <div class="note">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+      <div>Both marks (the forest Memba check and the neutral club monogram) render as inline SVG in most modern clients; for Outlook and older webmail, swap each for a hosted 2× PNG with descriptive <code>alt</code> text. Everything else is table + inline CSS that needs no fallback.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REASONS ============ -->
+<section id="reasons">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="k">Rejection reasons</div>
+      <h2>Reason strings for the bounce email</h2>
+      <p>Drop any of these into <code>{{rejection_reason}}</code>. Keep them to a single, plain sentence. The optional <code>{{club_hint}}</code> line is only used for the unknown-sender case.</p>
+    </div>
+    <table class="reasons">
+      <thead><tr><th>Key</th><th>Reason shown</th><th>Hint</th></tr></thead>
+      <tbody>
+        <tr><td><code>attachments_unsupported</code></td><td>Attachments aren't supported yet. Send your note as plain text and it'll go through.</td><td>—</td></tr>
+        <tr><td><code>plain_text_required</code></td><td>A plain text message is required, and we couldn't find one in your email.</td><td>—</td></tr>
+        <tr><td><code>unknown_sender</code></td><td>We couldn't find a member account for this email address, so your message hasn't been posted.</td><td><span class="tag">+ club hint</span></td></tr>
+        <tr><td><code>not_active_member</code></td><td>Your address isn't an active member of that club, so your message hasn't been posted.</td><td>—</td></tr>
+        <tr><td><code>club_not_recognised</code></td><td>That club address wasn't recognised.</td><td>—</td></tr>
+        <tr><td><code>recipient_unsupported</code></td><td>That recipient address isn't supported.</td><td>—</td></tr>
+        <tr><td><code>post_failed</code></td><td>Your email couldn't be posted. Reply and we'll look into it.</td><td>—</td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+      <div>The unknown-sender hint reads: <i>"Is it possible you signed up for membership of {{club_name}} with a different email address?"</i> — shown only when we have a club name to suggest.</div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>Memba — transactional email system, v2 · Templates in <code>Memba Emails/</code> · sign-in-link v2.html · member-message v2.html · inbound-rejection v2.html</p>
+  </div>
+</footer>
+
+<script>
+  function sizeFrame(f){
+    try{
+      var doc = f.contentDocument || f.contentWindow.document;
+      var h = Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight);
+      if(h){ f.style.height = (h + 16) + 'px'; }
+    }catch(e){}
+  }
+  window.addEventListener('load', function(){
+    var frames = document.querySelectorAll('.previews iframe');
+    setTimeout(function(){ frames.forEach(sizeFrame); }, 350);
+  });
+  var rT;
+  window.addEventListener('resize', function(){
+    clearTimeout(rT);
+    rT = setTimeout(function(){ document.querySelectorAll('.previews iframe').forEach(sizeFrame); }, 200);
+  });
+</script>
+
+</body>
+</html>
