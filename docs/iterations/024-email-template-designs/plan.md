@@ -81,7 +81,7 @@ BDD decision: Useful but not required.
 
 Existing acceptance scenarios already exercise sign-in links, member-message delivery, inbound-message handling, and onboarding welcome links. New Gherkin would mostly assert email presentation details and would be brittle.
 
-No shared Cucumber feature files are expected to change. If existing scenarios or step support assert old email text, update them to preserve behaviour coverage while reflecting the new user-visible copy.
+No shared Cucumber feature files are expected to change. Existing coverage that may observe email content includes `acceptance-tests/features/authentication.feature`, `acceptance-tests/features/member_message_deliverability.feature`, `acceptance-tests/features/request_account.feature`, and `acceptance-tests/features/member_club_subdomains.feature`. If those scenarios or step support assert old email text, update only the assertions/step support needed to preserve the same behaviour coverage while reflecting the new user-visible copy.
 
 ## Acceptance Criteria
 
@@ -92,11 +92,11 @@ No shared Cucumber feature files are expected to change. If existing scenarios o
   - club/member context leads with the group name where available;
   - global/staff/cross-club context remains clearly Memba-led.
 - Member-message HTML email uses the v2 member-message pattern: group-led header, sender-to-members line, readable message body, reply guidance, and Memba-as-carrier footer.
-- Member-message text body remains the sender's original message body, or otherwise remains safe for plain-text email clients without adding confusing markup.
+- Member-message text body remains exactly the sender's original message body. Reply guidance and Memba footer are added only to the HTML part in this iteration.
 - Member-message From, Reply-To, subject, provider metadata, and local-delivery fact recording continue to work.
 - Inbound rejection HTML email uses the v2 delivery-notice pattern: Memba-led, names the group when known, gives one plain reason, gives next steps, and says nothing was sent to the group.
 - Inbound rejection text email remains readable and includes the same reason and next-step information.
-- Inbound rejection subjects lead with the group when known, e.g. "Your email to {group} wasn't posted", while preserving reply threading where needed.
+- Inbound rejection subjects lead with the group when known, e.g. "Your email to {group} wasn't posted", and fall back to a Memba-led subject such as "Your email wasn't posted" when group context is unavailable, while preserving reply threading where needed.
 - Existing rejection reasons map to plain-language copy from the design spec or a close equivalent:
   - attachments unsupported;
   - plain text required;
@@ -106,7 +106,9 @@ No shared Cucumber feature files are expected to change. If existing scenarios o
   - unsupported recipient;
   - fallback unknown failure.
 - Onboarding welcome email uses a compatible v2 sign-in/welcome pattern and no longer has bare HTML.
-- HTML escapes all user-provided/group-provided content safely.
+- HTML escapes all user-, sender-, message-, and group-provided content safely, including message bodies containing HTML or script-like text.
+- Email header values built from user-, sender-, or group-provided content are sanitized so newlines/control characters cannot break headers.
+- Sign-in links without group context use a Memba-led subject and heading such as "Sign in to Memba"; sign-in links with group context use a group-led subject/heading.
 - Tests cover generated HTML enough to catch regressions in the key structural/copy promises without snapshotting the entire template.
 - `dev check` passes.
 
@@ -114,36 +116,40 @@ No shared Cucumber feature files are expected to change. If existing scenarios o
 
 None known.
 
-Design decisions already captured by the packet and this plan:
+Design and implementation decisions already captured by the packet and this plan:
 
-- Default email sending remains from Memba-controlled domains; per-group custom domains are not part of this iteration.
+- Default email sending remains from the currently configured Memba-controlled sender addresses/domains. This iteration may change display names and email body copy, but must not change provider configuration, DNS, or configured `from` address values.
+- Per-group custom domains are not part of this iteration.
 - Memba is the carrier inside a group and leads only where it is the cross-group account or delivery-notice actor.
+- Implement shared rendering helpers in a new module under `web/lib/memba/email_templates.ex` (module name `Memba.EmailTemplates`) unless implementation discovers a Phoenix naming constraint; keep the public email-delivery APIs in the existing modules.
+- Member-message plain-text bodies remain exactly the sender's original body. HTML may add reply guidance and the Memba footer.
+- `Memba.Accounts.AuthEmail.deliver_sign_in_link/2` keeps working. Add an optional context/options variant such as `deliver_sign_in_link/3` for group-led sign-in emails where the caller can supply group name/context. Existing callers with no context remain Memba-led.
+- `Memba.Onboarding.WelcomeEmail` uses the group-led sign-in/welcome variant because it already has club context.
+- Do not hard-code `help@memba.io`. Support/next-step copy should say "reply to this email" when a reply-to address is configured, or use generic support wording that does not publish an unconfirmed mailbox.
 - The implementation should use group/community language where possible, while preserving existing domain/module names such as `club` in code unless a later product-domain iteration changes them.
 
 ## Implementation Plan
 
 1. Inspect the v2 source artifacts in `docs/iterations/024-email-template-designs/source/` and current email-building modules/tests.
-2. Decide the maintainable implementation shape:
-   - shared helper module for email HTML shell/components;
-   - per-email modules/functions for sign-in, member-message, inbound-rejection, and onboarding-welcome content;
-   - keep inline styles and avoid external CSS dependencies.
-3. Implement safe HTML helpers for:
+2. Add shared helper module `web/lib/memba/email_templates.ex` (`Memba.EmailTemplates`) for the email HTML shell/components and text-safe helpers. Keep inline styles and avoid external CSS dependencies.
+3. Implement safe helpers in `Memba.EmailTemplates` for:
    - escaping user/group/sender/message content;
+   - sanitizing header text derived from user/group/sender content;
    - converting plaintext message bodies to email-safe HTML;
    - rendering a primary button plus fallback URL;
    - rendering group-led and Memba-led headers;
-   - rendering the Memba footer/trust footer.
-4. Update `Memba.Accounts.AuthEmail` to render the new sign-in template while preserving provider options and error handling.
-5. Add or adapt AuthEmail APIs if club/group context is available or needed; preserve global sign-in behaviour when no context is available.
-6. Update `Memba.Onboarding.WelcomeEmail` to use the compatible welcome/sign-in variant and pass group context into the renderer.
-7. Update member-message delivery HTML in both Postmark and Local providers, extracting shared rendering so both paths stay aligned.
-8. Update `Memba.Messaging.InboundClubRejectionEmail` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
-9. Update tests for:
-   - auth email Postmark/Resend/local provider options;
-   - auth email HTML/text content;
-   - onboarding welcome email link and group-led content;
-   - member-message HTML, From/Reply-To, subject, metadata, and local delivery facts;
-   - inbound rejection reason text, HTML, subject, threading, and metadata/tags.
+   - rendering the Memba footer/trust footer without hard-coded unconfirmed support addresses.
+4. Update `web/lib/memba/accounts/auth_email.ex` to render the new sign-in template while preserving provider options and error handling. Keep `deliver_sign_in_link/2`; add an optional context/options variant for group-led sign-in where callers can provide group name/context.
+5. Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
+6. Update `web/lib/memba/onboarding/welcome_email.ex` to use the compatible group-led welcome/sign-in variant and pass the converted club as context.
+7. Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
+8. Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
+9. Update tests, especially:
+   - `web/test/memba/accounts/auth_email_test.exs` for auth email Postmark/Resend/local provider options, HTML/text content, fallback URL, escaping, and context/no-context variants;
+   - `web/test/memba/onboarding_conversion_test.exs` or a focused onboarding email test for welcome email link and group-led content;
+   - existing member-message provider tests, or add focused tests near `web/test/memba/messaging/email_delivery_providers/`, for member-message HTML, unchanged text body, From/Reply-To, subject, metadata, and local delivery facts;
+   - existing inbound email/rejection tests, or add `web/test/memba/messaging/inbound_club_rejection_email_test.exs`, for reason text, HTML, subject fallback, threading, and metadata/tags;
+   - escaping/header-safety tests for group names, sender names, subjects, and message bodies with HTML/script-like text or newlines.
 10. Run targeted email-related tests while developing.
 11. Run any affected acceptance tests if mailbox text parsing changes.
 12. Run `dev check`.
@@ -151,10 +157,7 @@ Design decisions already captured by the packet and this plan:
 
 ## Open Technical Decisions
 
-- Whether to introduce a dedicated `Memba.EmailTemplates` module or keep helpers beside each email module.
-- Whether to keep `text_body(request.body)` exactly unchanged for member messages, or add a short plain-text footer explaining replies, if tests and deliverability expectations allow it.
-- How much club/group context can be passed into shared sign-in emails for ordinary member sign-in without changing authentication flow shape.
-- Whether the current configured `from` addresses already match the spec's desired `@memba.io` address shape, or whether the template should only change display/copy while leaving configured addresses untouched.
+None known.
 
 ## New Capability
 
@@ -162,8 +165,11 @@ Memba transactional emails will look and read like a coherent product system: gr
 
 ## Validation Plan
 
-- Compare generated emails against the v2 source artifacts for the intended structure and copy hierarchy.
-- Unit-test email fields, provider options, text bodies, key HTML content, escaping, fallback links, and reason mappings.
+- Compare generated emails against the v2 source artifacts for semantic structure and copy hierarchy, not pixel-perfect browser-prototype fidelity.
+- Confirm sign-in email HTML includes a primary button with `href`, a printed fallback URL, expiry/one-use reassurance, and the Memba trust mark.
+- Confirm member-message HTML includes group-led header, sender-to-members line, escaped message body, reply guidance, and Memba carrier footer, while the text body remains exactly the sender's body.
+- Confirm inbound rejection HTML includes Memba-led header, group name if known, one reason line, next steps, and reassurance that nothing was posted.
+- Unit-test email fields, provider options, text bodies, key HTML content, escaping, header sanitization, fallback links, and reason mappings.
 - Use local Swoosh mailbox previews during implementation to manually inspect:
   - sign-in link;
   - onboarding welcome link;
@@ -176,6 +182,6 @@ Memba transactional emails will look and read like a coherent product system: gr
 
 - Email-client compatibility is easy to regress if templates use modern web CSS too literally. Implementation should translate the design into conservative email HTML rather than copy every browser-only style from the prototypes.
 - Exact design fidelity may need a follow-up after real mailbox screenshots from Gmail, Apple Mail, Outlook, and Fastmail.
-- If sign-in emails do not currently know the intended group, some club-led sign-in variants may need to wait for a later auth-context iteration.
-- Publishing `help@memba.io` in template copy may require confirming that mailbox/support process exists before implementation uses it literally.
+- Some ordinary sign-in requests may remain Memba-led when the current flow has no reliable group context; this is acceptable for this iteration and is covered by the no-context fallback acceptance criteria.
+- If Matt later wants to publish a support mailbox in email templates, confirm the mailbox/support process first and add it in a small follow-up.
 - A later i18n iteration can move copy strings behind locale-aware rendering.
