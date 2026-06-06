@@ -1,0 +1,590 @@
+diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md
+index 45649e8..ee9838b 100644
+--- a/docs/iterations/022-request-to-club-onboarding/todo.md
++++ b/docs/iterations/022-request-to-club-onboarding/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect current public `/get-started`, homepage links, layouts, auth/current identity assigns, staff navigation, staff club creation LiveView, slug helper modules, membership/person creation APIs, and auth email/token APIs.
+ - [x] 002 Extract reusable club creation/slug form logic if needed so request conversion and `/admin/clubs` share the same slug generation, validation, and availability behaviour. Prefer reuse over duplication.
+ - [x] 003 Design the request persistence model:
+-- [ ] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
++- [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
+ - [ ] 005 Implement signed-out `/get-started` form with required-field and email validation.
+ - [ ] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
+ - [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
+diff --git a/web/lib/memba/id.ex b/web/lib/memba/id.ex
+index b96fc80..9b45e13 100644
+--- a/web/lib/memba/id.ex
++++ b/web/lib/memba/id.ex
+@@ -13,13 +13,21 @@ defmodule Memba.ID do
+     message: "msg",
+     delivery: "del",
+     inbound_email: "inb",
+-    email_address: "ead"
++    email_address: "ead",
++    onboarding_request: "req"
+   }
+ 
+   @types Map.keys(@prefixes)
+ 
+   @type type ::
+-          :club | :person | :membership | :message | :delivery | :inbound_email | :email_address
++          :club
++          | :person
++          | :membership
++          | :message
++          | :delivery
++          | :inbound_email
++          | :email_address
++          | :onboarding_request
+   @type t :: String.t()
+ 
+   @doc "Generate a new typed ID."
+diff --git a/web/lib/memba/onboarding.ex b/web/lib/memba/onboarding.ex
+new file mode 100644
+index 0000000..fe46a42
+--- /dev/null
++++ b/web/lib/memba/onboarding.ex
+@@ -0,0 +1,103 @@
++defmodule Memba.Onboarding do
++  @moduledoc """
++  Public API for staff-approved request-to-club onboarding.
++  """
++
++  import Ecto.Query
++
++  alias Memba.ID
++  alias Memba.Onboarding.Request
++  alias Memba.Repo
++
++  @doc """
++  Create a new active onboarding request.
++  """
++  def create_request(attrs, opts \\ []) when is_map(attrs) and is_list(opts) do
++    attrs
++    |> Request.create_changeset(opts)
++    |> Repo.insert()
++  end
++
++  @doc """
++  List active onboarding requests, oldest first.
++  """
++  def list_active_requests do
++    Request
++    |> where([request], request.status == ^Request.status_active())
++    |> order_by([request], asc: request.inserted_at, asc: request.request_id)
++    |> Repo.all()
++  end
++
++  @doc """
++  Fetch an onboarding request by typed request ID.
++  """
++  def get_request(request_id) do
++    with {:ok, request_id} <- ID.cast(:onboarding_request, request_id) do
++      Repo.get(Request, request_id)
++    else
++      :error -> nil
++    end
++  end
++
++  @doc """
++  Reject an active onboarding request with internal notes.
++  """
++  def reject_request(request_id, attrs, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    update_active_request(request_id, fn request ->
++      request
++      |> Request.rejection_changeset(attrs, opts)
++      |> Repo.update()
++    end)
++  end
++
++  @doc """
++  Mark an active onboarding request as converted after the conversion records exist.
++  """
++  def convert_request(request_id, attrs, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    update_active_request(request_id, fn request ->
++      request
++      |> Request.conversion_changeset(attrs, opts)
++      |> Repo.update()
++    end)
++  end
++
++  defp update_active_request(request_id, update_fun) when is_function(update_fun, 1) do
++    with {:ok, request_id} <- ID.cast(:onboarding_request, request_id) do
++      request_id
++      |> transact_active_update(update_fun)
++      |> unwrap_transaction()
++    else
++      :error -> {:error, :not_found}
++    end
++  end
++
++  defp transact_active_update(request_id, update_fun) do
++    Repo.transaction(fn ->
++      case lock_request(request_id) do
++        nil ->
++          Repo.rollback(:not_found)
++
++        %Request{status: status} when status != "active" ->
++          Repo.rollback(:not_active)
++
++        %Request{} = request ->
++          case update_fun.(request) do
++            {:ok, request} -> request
++            {:error, changeset} -> Repo.rollback(changeset)
++          end
++      end
++    end)
++  end
++
++  defp lock_request(request_id) do
++    Request
++    |> where([request], request.request_id == ^request_id)
++    |> lock("FOR UPDATE")
++    |> Repo.one()
++  end
++
++  defp unwrap_transaction({:ok, %Request{} = request}), do: {:ok, request}
++  defp unwrap_transaction({:error, reason}), do: {:error, reason}
++end
+diff --git a/web/lib/memba/onboarding/request.ex b/web/lib/memba/onboarding/request.ex
+new file mode 100644
+index 0000000..21626a1
+--- /dev/null
++++ b/web/lib/memba/onboarding/request.ex
+@@ -0,0 +1,160 @@
++defmodule Memba.Onboarding.Request do
++  @moduledoc """
++  Ecto source-of-truth record for staff-approved onboarding requests.
++  """
++
++  use Ecto.Schema
++
++  import Ecto.Changeset
++
++  alias Memba.ID
++  alias Memba.Membership.EmailAddresses
++
++  @status_active "active"
++  @status_converted "converted"
++  @status_rejected "rejected"
++
++  @primary_key {:request_id, :string, autogenerate: false}
++  schema "onboarding_requests" do
++    field :requester_name, :string
++    field :requester_email, :string
++    field :normalized_requester_email, :string
++    field :requester_person_id, :string
++    field :requested_club_name, :string
++    field :note, :string
++
++    field :status, :string
++    field :internal_rejection_notes, :string
++    field :triaged_by_staff_email, :string
++    field :triaged_at, :utc_datetime_usec
++    field :converted_club_id, :string
++    field :converted_person_id, :string
++    field :converted_membership_id, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++
++  @doc false
++  def create_changeset(attrs, opts \\ []) when is_map(attrs) and is_list(opts) do
++    %__MODULE__{request_id: ID.generate(:onboarding_request), status: @status_active}
++    |> cast(attrs, [:requester_name, :requester_email, :requested_club_name, :note])
++    |> trim_changes([:requester_name, :requester_email, :requested_club_name, :note])
++    |> validate_required([:requester_name, :requester_email, :requested_club_name, :note])
++    |> put_normalized_requester_email()
++    |> put_optional_typed_id(
++      :requester_person_id,
++      Keyword.get(opts, :requester_person_id),
++      :person
++    )
++    |> check_constraint(:status, name: :onboarding_requests_status_check)
++  end
++
++  @doc false
++  def rejection_changeset(%__MODULE__{} = request, attrs, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    request
++    |> cast(attrs, [:internal_rejection_notes])
++    |> trim_changes([:internal_rejection_notes])
++    |> validate_required([:internal_rejection_notes])
++    |> put_change(:status, @status_rejected)
++    |> put_change(:triaged_at, triaged_at(opts))
++    |> put_optional_staff_email(opts)
++    |> check_constraint(:status, name: :onboarding_requests_status_check)
++  end
++
++  @doc false
++  def conversion_changeset(%__MODULE__{} = request, attrs, opts \\ [])
++      when is_map(attrs) and is_list(opts) do
++    request
++    |> cast(attrs, [:converted_club_id, :converted_person_id, :converted_membership_id])
++    |> trim_changes([:converted_club_id, :converted_person_id, :converted_membership_id])
++    |> validate_required([:converted_club_id, :converted_person_id, :converted_membership_id])
++    |> validate_typed_id(:converted_club_id, :club)
++    |> validate_typed_id(:converted_person_id, :person)
++    |> validate_typed_id(:converted_membership_id, :membership)
++    |> put_change(:status, @status_converted)
++    |> put_change(:triaged_at, triaged_at(opts))
++    |> put_optional_staff_email(opts)
++    |> check_constraint(:status, name: :onboarding_requests_status_check)
++  end
++
++  def status_active, do: @status_active
++
++  defp trim_changes(changeset, fields) do
++    Enum.reduce(fields, changeset, fn field, changeset ->
++      update_change(changeset, field, fn
++        value when is_binary(value) -> String.trim(value)
++        value -> value
++      end)
++    end)
++  end
++
++  defp put_normalized_requester_email(changeset) do
++    case get_field(changeset, :requester_email) do
++      email when is_binary(email) and email != "" ->
++        case EmailAddresses.normalize_email(email) do
++          {:ok, %{email: email, normalized_email: normalized_email}} ->
++            changeset
++            |> put_change(:requester_email, email)
++            |> put_change(:normalized_requester_email, normalized_email)
++
++          {:error, :invalid_email} ->
++            add_error(changeset, :requester_email, "is invalid")
++        end
++
++      _email ->
++        changeset
++    end
++  end
++
++  defp put_optional_typed_id(changeset, _field, nil, _type), do: changeset
++
++  defp put_optional_typed_id(changeset, field, value, type) do
++    case ID.cast(type, value) do
++      {:ok, ^value} -> put_change(changeset, field, value)
++      :error -> add_error(changeset, field, "is invalid")
++    end
++  end
++
++  defp validate_typed_id(changeset, field, type) do
++    case get_field(changeset, field) do
++      nil ->
++        changeset
++
++      value ->
++        case ID.cast(type, value) do
++          {:ok, ^value} -> changeset
++          :error -> add_error(changeset, field, "is invalid")
++        end
++    end
++  end
++
++  defp put_optional_staff_email(changeset, opts) do
++    case Keyword.fetch(opts, :staff_email) do
++      :error ->
++        changeset
++
++      {:ok, nil} ->
++        changeset
++
++      {:ok, email} ->
++        case EmailAddresses.normalize_email(email) do
++          {:ok, %{normalized_email: normalized_email}} ->
++            put_change(changeset, :triaged_by_staff_email, normalized_email)
++
++          {:error, :invalid_email} ->
++            add_error(changeset, :triaged_by_staff_email, "is invalid")
++        end
++    end
++  end
++
++  defp triaged_at(opts) do
++    opts
++    |> Keyword.get_lazy(:triaged_at, &DateTime.utc_now/0)
++    |> ensure_microsecond_precision()
++  end
++
++  defp ensure_microsecond_precision(%DateTime{microsecond: {microsecond, _precision}} = datetime) do
++    %DateTime{datetime | microsecond: {microsecond, 6}}
++  end
++end
+diff --git a/web/priv/repo/migrations/20260606003551_create_onboarding_requests.exs b/web/priv/repo/migrations/20260606003551_create_onboarding_requests.exs
+new file mode 100644
+index 0000000..5b1847c
+--- /dev/null
++++ b/web/priv/repo/migrations/20260606003551_create_onboarding_requests.exs
+@@ -0,0 +1,32 @@
++defmodule Memba.Repo.Migrations.CreateOnboardingRequests do
++  use Ecto.Migration
++
++  def change do
++    create table(:onboarding_requests, primary_key: false) do
++      add :request_id, :text, primary_key: true
++      add :requester_name, :text, null: false
++      add :requester_email, :text, null: false
++      add :normalized_requester_email, :text, null: false
++      add :requester_person_id, :text
++      add :requested_club_name, :text, null: false
++      add :note, :text, null: false
++
++      add :status, :text, null: false, default: "active"
++      add :internal_rejection_notes, :text
++      add :triaged_by_staff_email, :text
++      add :triaged_at, :utc_datetime_usec
++      add :converted_club_id, :text
++      add :converted_person_id, :text
++      add :converted_membership_id, :text
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:onboarding_requests, [:status, :inserted_at])
++    create index(:onboarding_requests, [:normalized_requester_email])
++
++    create constraint(:onboarding_requests, :onboarding_requests_status_check,
++             check: "status IN ('active', 'converted', 'rejected')"
++           )
++  end
++end
+diff --git a/web/test/memba/onboarding_test.exs b/web/test/memba/onboarding_test.exs
+new file mode 100644
+index 0000000..12fed96
+--- /dev/null
++++ b/web/test/memba/onboarding_test.exs
+@@ -0,0 +1,230 @@
++defmodule Memba.OnboardingTest do
++  use Memba.DataCase, async: true
++
++  alias Memba.Onboarding
++  alias Memba.Onboarding.Request
++
++  describe "create_request/2" do
++    test "creates an active request with trimmed details and a normalized email" do
++      assert {:ok, %Request{} = request} =
++               Onboarding.create_request(%{
++                 "requester_name" => " Robin Rider ",
++                 "requester_email" => " Robin@Example.COM ",
++                 "requested_club_name" => " West Coast Paddlers ",
++                 "note" => " We want to try Memba. "
++               })
++
++      assert "req_" <> _uuid = request.request_id
++      assert request.status == "active"
++      assert request.requester_name == "Robin Rider"
++      assert request.requester_email == "Robin@Example.COM"
++      assert request.normalized_requester_email == "robin@example.com"
++      assert request.requested_club_name == "West Coast Paddlers"
++      assert request.note == "We want to try Memba."
++      assert is_nil(request.requester_person_id)
++      assert is_nil(request.triaged_at)
++    end
++
++    test "stores a signed-in requester person ID when provided by the caller" do
++      person_id = Memba.ID.generate(:person)
++
++      assert {:ok, %Request{requester_person_id: ^person_id}} =
++               Onboarding.create_request(
++                 %{
++                   requester_name: "Alice Admin",
++                   requester_email: "alice@example.com",
++                   requested_club_name: "Alice Paddling Club",
++                   note: "Please onboard my club."
++                 },
++                 requester_person_id: person_id
++               )
++    end
++
++    test "rejects missing details, invalid emails, and invalid signed-in person IDs" do
++      assert {:error, changeset} =
++               Onboarding.create_request(
++                 %{
++                   requester_name: " ",
++                   requester_email: "not an email",
++                   requested_club_name: "",
++                   note: nil
++                 },
++                 requester_person_id: "not-a-person-id"
++               )
++
++      assert %{
++               requester_name: ["can't be blank"],
++               requester_email: ["is invalid"],
++               requester_person_id: ["is invalid"],
++               requested_club_name: ["can't be blank"],
++               note: ["can't be blank"]
++             } = errors_on(changeset)
++    end
++  end
++
++  describe "list_active_requests/0 and get_request/1" do
++    test "lists only active requests ordered by submission time and request ID" do
++      newest = request_fixture("Newest Paddlers")
++      oldest = request_fixture("Oldest Paddlers")
++      first_tie = request_fixture("Tie A")
++      second_tie = request_fixture("Tie B")
++      rejected = request_fixture("Rejected Paddlers")
++
++      update_inserted_at(newest, ~U[2026-06-01 12:00:00Z])
++      update_inserted_at(oldest, ~U[2026-06-01 10:00:00Z])
++      update_inserted_at(first_tie, ~U[2026-06-01 11:00:00Z])
++      update_inserted_at(second_tie, ~U[2026-06-01 11:00:00Z])
++
++      assert {:ok, %Request{status: "rejected"}} =
++               Onboarding.reject_request(rejected.request_id, %{internal_rejection_notes: "Spam"})
++
++      tie_ids = Enum.sort([first_tie.request_id, second_tie.request_id])
++
++      assert [
++               %Request{request_id: oldest_id},
++               %Request{request_id: first_tie_id},
++               %Request{request_id: second_tie_id},
++               %Request{request_id: newest_id}
++             ] = Onboarding.list_active_requests()
++
++      assert oldest_id == oldest.request_id
++      assert [first_tie_id, second_tie_id] == tie_ids
++      assert newest_id == newest.request_id
++    end
++
++    test "gets requests by typed ID and returns nil for invalid or missing IDs" do
++      request = request_fixture("Findable Paddlers")
++
++      assert %Request{request_id: request_id} = Onboarding.get_request(request.request_id)
++      assert request_id == request.request_id
++      assert is_nil(Onboarding.get_request("not-a-request-id"))
++      assert is_nil(Onboarding.get_request(Memba.ID.generate(:onboarding_request)))
++    end
++  end
++
++  describe "reject_request/3" do
++    test "rejects an active request with required internal notes and staff audit details" do
++      request = request_fixture("Rejected Club")
++      triaged_at = ~U[2026-06-02 09:30:00.000000Z]
++
++      assert {:ok, %Request{} = rejected} =
++               Onboarding.reject_request(
++                 request.request_id,
++                 %{internal_rejection_notes: " Not a real club. "},
++                 staff_email: " Pat@Memba.IO ",
++                 triaged_at: triaged_at
++               )
++
++      assert rejected.status == "rejected"
++      assert rejected.internal_rejection_notes == "Not a real club."
++      assert rejected.triaged_by_staff_email == "pat@memba.io"
++      assert rejected.triaged_at == triaged_at
++      assert is_nil(rejected.converted_club_id)
++    end
++
++    test "requires internal rejection notes and only transitions active requests" do
++      request = request_fixture("Needs Notes Club")
++
++      assert {:error, changeset} =
++               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: " "})
++
++      assert %{internal_rejection_notes: ["can't be blank"]} = errors_on(changeset)
++
++      assert {:ok, %Request{status: "rejected"}} =
++               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: "Spam"})
++
++      assert {:error, :not_active} =
++               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: "Again"})
++
++      assert {:error, :not_found} =
++               Onboarding.reject_request("not-a-request-id", %{internal_rejection_notes: "Nope"})
++    end
++  end
++
++  describe "convert_request/3" do
++    test "marks an active request converted with converted IDs and staff audit details" do
++      request = request_fixture("Converted Club")
++      club_id = Memba.ID.generate(:club)
++      person_id = Memba.ID.generate(:person)
++      membership_id = Memba.ID.generate(:membership)
++      triaged_at = ~U[2026-06-02 10:30:00.000000Z]
++
++      assert {:ok, %Request{} = converted} =
++               Onboarding.convert_request(
++                 request.request_id,
++                 %{
++                   converted_club_id: club_id,
++                   converted_person_id: person_id,
++                   converted_membership_id: membership_id
++                 },
++                 staff_email: " Pat@Memba.IO ",
++                 triaged_at: triaged_at
++               )
++
++      assert converted.status == "converted"
++      assert converted.converted_club_id == club_id
++      assert converted.converted_person_id == person_id
++      assert converted.converted_membership_id == membership_id
++      assert converted.triaged_by_staff_email == "pat@memba.io"
++      assert converted.triaged_at == triaged_at
++      assert is_nil(converted.internal_rejection_notes)
++    end
++
++    test "validates converted IDs and only transitions active requests" do
++      request = request_fixture("Invalid Conversion Club")
++
++      assert {:error, changeset} =
++               Onboarding.convert_request(request.request_id, %{
++                 converted_club_id: "not-a-club-id",
++                 converted_person_id: nil,
++                 converted_membership_id: "not-a-membership-id"
++               })
++
++      assert %{
++               converted_club_id: ["is invalid"],
++               converted_person_id: ["can't be blank"],
++               converted_membership_id: ["is invalid"]
++             } = errors_on(changeset)
++
++      assert {:ok, %Request{status: "rejected"}} =
++               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: "Spam"})
++
++      assert {:error, :not_active} =
++               Onboarding.convert_request(request.request_id, %{
++                 converted_club_id: Memba.ID.generate(:club),
++                 converted_person_id: Memba.ID.generate(:person),
++                 converted_membership_id: Memba.ID.generate(:membership)
++               })
++
++      assert {:error, :not_found} =
++               Onboarding.convert_request("not-a-request-id", %{
++                 converted_club_id: Memba.ID.generate(:club),
++                 converted_person_id: Memba.ID.generate(:person),
++                 converted_membership_id: Memba.ID.generate(:membership)
++               })
++    end
++  end
++
++  defp request_fixture(club_name) do
++    unique = System.unique_integer([:positive])
++
++    {:ok, request} =
++      Onboarding.create_request(%{
++        requester_name: "Requester #{unique}",
++        requester_email: "requester-#{unique}@example.com",
++        requested_club_name: club_name,
++        note: "Please onboard #{club_name}."
++      })
++
++    request
++  end
++
++  defp update_inserted_at(%Request{} = request, inserted_at) do
++    Repo.update_all(
++      from(onboarding_request in Request,
++        where: onboarding_request.request_id == ^request.request_id
++      ),
++      set: [inserted_at: inserted_at]
++    )
++  end
++end

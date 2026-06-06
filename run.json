@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-06T00:04:06.850477404Z",
-  "last_event_at": "2026-06-06T00:46:41.728088559Z",
+  "last_event_at": "2026-06-06T00:46:44.996218180Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -7336,9 +7336,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1331,
       "checkpoint": {
-        "timestamp": "2026-06-06T00:46:41.738912300Z",
+        "timestamp": "2026-06-06T00:46:44.963630711Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -7369,8 +7369,339 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.task_gate": 0,
+          "task_valid": true,
+          "failure_class": "",
+          "thread.validate_task.current_node": "task_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "internal.retry_count.start": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.sync_task_list": 0,
+          "task_retry_available": false,
+          "internal.node_visit_count": 4,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "last_stage": "implement_next_task",
+          "internal.retry_count.implement_next_task": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.all_tasks_done": 0,
+          "internal.retry_count.read_plan": 0,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.start.current_node": "read_plan",
+          "internal.run_id": "01KTD3TRN7HAXJPZM7STW1E393",
+          "failure_signature": "",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean except untracked `.fabro/tmp/`.\n  - Just-completed implementation is in recent checkpoint `81bea91 fabro(...): implement_next_task (succeeded)`; current HEAD is the following pre-validation checkpoint.\n  - `81bea91` changed exactly one ordinary todo line:\n    - `003 Design the request persistence model:`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state shows tasks `001` and `002` checked, with `003` as the first unchecked task.\n- Implementation artifacts found:\n  - Added `docs/iterations/022-request-to-club-onboarding/request-persistence-model.md`.\n  - The design covers the planned persistence fields and decisions: requester name/email, requested club name, note, active/converted/rejected status, rejection notes, converted club/person/membership IDs, submitted/triaged timestamps, indexes/constraints, schema/changeset rules, and context API shape.\n  - No acceptance feature files were edited in the implement checkpoint.\n- Tests run/results found:\n  - Re-ran reported validation checks:\n    - `git diff --check` — passed.\n    - no-index whitespace check for the new doc — passed.\n  - No automated app tests were necessary for this docs-only design task; skipping `dev check` is consistent with project guidance for docs-only changes.\n- ADR/plan conformance notes:\n  - Work stays within task `003` and does not delete, weaken, split, or reorder plan-required work.\n  - ADR 0002 respected by explicitly documenting an Ecto source-of-truth exception for this operational request/triage model.\n  - ADR 0009 respected by avoiding foreign keys to membership projection tables.\n  - ADR 0011 respected by specifying generated typed request IDs.\n  - The task is small and independently checkpointable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.validate_task": 0,
+          "response.implement_next_task": "1. **Selected todo line**\n   - `004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n\n2. **Changes made**\n   - Added `onboarding_requests` migration with:\n     - typed `request_id` primary key;\n     - requester details, normalized email, optional signed-in person ID;\n     - active/converted/rejected status and check constraint;\n     - rejection/conversion audit fields;\n     - active inbox and normalized email indexes.\n   - Added `Memba.Onboarding.Request` Ecto schema and changesets.\n   - Added `Memba.Onboarding` context API:\n     - `create_request/2`\n     - `list_active_requests/0`\n     - `get_request/1`\n     - `reject_request/3`\n     - `convert_request/3`\n   - Added `:onboarding_request` typed IDs with `req_` prefix.\n   - Added context tests for creation, validation, listing active requests, fetching, rejection, conversion, typed ID validation, and not-active transitions.\n\n3. **Focused validation commands run and results**\n   - `env -u PGHOST -u PGPORT PATH=\"$PWD/bin:$PATH\" bin/mix format ...` — passed.\n   - `env -u PGHOST -u PGPORT PATH=\"$PWD/bin:$PATH\" bin/mix compile --warnings-as-errors` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed: `541 tests, 0 failures`.\n   - `git diff --check` — passed.\n   - `git diff --no-index --check` for newly added files — passed.\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n   - To:\n     - `- [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: uses Phoenix/Ecto/PostgreSQL for the application persistence slice.\n   - ADR 0002: follows the prior documented exception by using an Ecto source-of-truth table only for operational onboarding triage, not for membership lifecycle.\n   - ADR 0009: does not foreign-key to Membership projection tables; conversion IDs are audit references.\n   - ADR 0011: uses caller/generated typed IDs, adding `req_` onboarding request IDs through `Memba.ID`.\n   - ADR 0021/0022: no read-model publication or projection barrier behavior changed.",
           "command.output": "blob://sha256/967cb45b1b0b99746132de19ba5fb8f670ff8272cc24153b2824f2d3b04cf6b4",
+          "graph.rankdir": "LR",
+          "internal.work_dir": "/workspace/memba",
+          "last_response": "1. **Selected todo line**\n   - `004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n\n2. **Changes made**\n   - Added `onboarding_requests` migr",
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.thread_id": "all_tasks_done",
+          "graph.default_fidelity": "summary:high",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.reset_task_attempt": 0,
+          "task_list_needs_human": false,
+          "internal.fidelity": "summary:high",
+          "current_node": "implement_next_task",
+          "internal.retry_count.wip_gate": 0,
+          "graph.max_node_visits": "80",
+          "task_list_complete": false,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.reset_task_attempt.current_node": "implement_next_task"
+        },
+        "node_outcomes": {
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/440292d9d25f2ccd50c23097c4541b4a9af69e334cf499eef8651c3b03801d27"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 188,
+              "active_time_ms": 188
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/967cb45b1b0b99746132de19ba5fb8f670ff8272cc24153b2824f2d3b04cf6b4"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/fa1a94534668f2d8f6b9fdacd7e9de176f9039d8d217c3a8925be6a24659bd01"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2235,
+              "active_time_ms": 2235
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_list_needs_human": false,
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 12857,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 113,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 68515
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 5240,
+              "tool_time_ms": 0,
+              "active_time_ms": 5240
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/dc5736f9a85e1febe02af49dc495ff4520c50155e94d1711255eecfa05ad2e6e"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 271,
+              "active_time_ms": 271
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/ade6b586184ccfe2f6ebe3ab76b10c0c2bef1ef95c4cca91685d49475f99134c"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 172,
+              "active_time_ms": 172
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n\n2. **Changes made**\n   - Added `onboarding_requests` migration with:\n     - typed `request_id` primary key;\n     - requester details, normalized email, optional signed-in person ID;\n     - active/converted/rejected status and check constraint;\n     - rejection/conversion audit fields;\n     - active inbox and normalized email indexes.\n   - Added `Memba.Onboarding.Request` Ecto schema and changesets.\n   - Added `Memba.Onboarding` context API:\n     - `create_request/2`\n     - `list_active_requests/0`\n     - `get_request/1`\n     - `reject_request/3`\n     - `convert_request/3`\n   - Added `:onboarding_request` typed IDs with `req_` prefix.\n   - Added context tests for creation, validation, listing active requests, fetching, rejection, conversion, typed ID validation, and not-active transitions.\n\n3. **Focused validation commands run and results**\n   - `env -u PGHOST -u PGPORT PATH=\"$PWD/bin:$PATH\" bin/mix format ...` — passed.\n   - `env -u PGHOST -u PGPORT PATH=\"$PWD/bin:$PATH\" bin/mix compile --warnings-as-errors` — passed.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick` — passed: `541 tests, 0 failures`.\n   - `git diff --check` — passed.\n   - `git diff --no-index --check` for newly added files — passed.\n\n4. **Exact todo check-off made**\n   - Changed:\n     - `- [ ] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n   - To:\n     - `- [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0001: uses Phoenix/Ecto/PostgreSQL for the application persistence slice.\n   - ADR 0002: follows the prior documented exception by using an Ecto source-of-truth table only for operational onboarding triage, not for membership lifecycle.\n   - ADR 0009: does not foreign-key to Membership projection tables; conversion IDs are audit references.\n   - ADR 0011: uses caller/generated typed IDs, adding `req_` onboarding request IDs through `Memba.ID`.\n   - ADR 0021/0022: no read-model publication or projection barrier behavior changed.",
+              "last_response": "1. **Selected todo line**\n   - `004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.`\n\n2. **Changes made**\n   - Added `onboarding_requests` migr"
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 814111,
+                    "output_tokens": 11396,
+                    "reasoning_tokens": 7260,
+                    "cache_read_tokens": 3454464,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6357467
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 514694,
+              "tool_time_ms": 248236,
+              "active_time_ms": 762930
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/09e478904a62294ee03fa1a8acd38b9f7328fe52ca8b618f510e64d62785584c"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 138486,
+              "active_time_ms": 138486
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean except untracked `.fabro/tmp/`.\n  - Just-completed implementation is in recent checkpoint `81bea91 fabro(...): implement_next_task (succeeded)`; current HEAD is the following pre-validation checkpoint.\n  - `81bea91` changed exactly one ordinary todo line:\n    - `003 Design the request persistence model:`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state shows tasks `001` and `002` checked, with `003` as the first unchecked task.\n- Implementation artifacts found:\n  - Added `docs/iterations/022-request-to-club-onboarding/request-persistence-model.md`.\n  - The design covers the planned persistence fields and decisions: requester name/email, requested club name, note, active/converted/rejected status, rejection notes, converted club/person/membership IDs, submitted/triaged timestamps, indexes/constraints, schema/changeset rules, and context API shape.\n  - No acceptance feature files were edited in the implement checkpoint.\n- Tests run/results found:\n  - Re-ran reported validation checks:\n    - `git diff --check` — passed.\n    - no-index whitespace check for the new doc — passed.\n  - No automated app tests were necessary for this docs-only design task; skipping `dev check` is consistent with project guidance for docs-only changes.\n- ADR/plan conformance notes:\n  - Work stays within task `003` and does not delete, weaken, split, or reorder plan-required work.\n  - ADR 0002 respected by explicitly documenting an Ecto source-of-truth exception for this operational request/triage model.\n  - ADR 0009 respected by avoiding foreign keys to membership projection tables.\n  - ADR 0011 respected by specifying generated typed request IDs.\n  - The task is small and independently checkpointable.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_stage": "validate_task",
+              "task_retry_available": false,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean except untracked `.fabro/tmp/`.\n  - Just-completed implementation is in recent checkpoint",
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 155492,
+                    "output_tokens": 1619,
+                    "reasoning_tokens": 880,
+                    "cache_read_tokens": 86528,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 895694
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 70418,
+              "tool_time_ms": 1493,
+              "active_time_ms": 71911
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "reset_task_attempt": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f97562ede8b01402fae15b3c4d5a5da54e413c63c3fd48d1a95bd2b239ba061a"
+            },
+            "notes": "Script completed: set -eu\nattempt_dir=.fabro/tmp/discarded-attempts/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)\nmkdir -p \"$attempt_dir/files\"\necho \"Snapshotting failed task attempt before reset: $attempt_dir\"\ngit status --short > \"$attempt_dir/status-short.txt\" || true\ngit diff > \"$attempt_dir/working-tree.diff\" || true\ngit diff --cached > \"$attempt_dir/staged.diff\" || true\ngit status --short\ngit ls-files --modified --others --exclude-standard | grep -v '^.fabro/tmp/' | while IFS= read -r path; do\n  if [ -f \"$path\" ]; then\n    mkdir -p \"$attempt_dir/files/$(dirname \"$path\")\"\n    cp \"$path\" \"$attempt_dir/files/$path\"\n  fi\ndone\necho \"Discarding failed task attempt and resetting to last successful checkpoint: $(git rev-parse --short HEAD)\"\ngit reset --hard HEAD\ngit clean -fd -e .fabro/tmp/ -e web/deps/ -e web/_build/ -e node_modules/ -e acceptance-tests/node_modules/ -e .devenv/ -e .direnv/\necho \"Discarded attempt snapshot preserved at $attempt_dir\"\ngit status --short",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 285,
+              "active_time_ms": 285
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "0893beeb1e3bbbf80be755e36282866a950445f3",
+        "node_visits": {
+          "validate_task": 3,
+          "all_tasks_done": 3,
+          "pre_validate_snapshot": 3,
+          "start": 1,
+          "reset_task_attempt": 1,
+          "sync_task_list": 3,
+          "task_gate": 3,
+          "wip_gate": 1,
+          "implement_next_task": 4,
+          "preflight_sandbox": 1,
+          "read_plan": 1,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md\nindex 45649e8..ee9838b 100644\n--- a/docs/iterations/022-request-to-club-onboarding/todo.md\n+++ b/docs/iterations/022-request-to-club-onboarding/todo.md\n@@ -3,7 +3,7 @@\n - [x] 001 Inspect current public `/get-started`, homepage links, layouts, auth/current identity assigns, staff navigation, staff club creation LiveView, slug helper modules, membership/person creation APIs, and auth email/token APIs.\n - [x] 002 Extract reusable club creation/slug form logic if needed so request conversion and `/admin/clubs` share the same slug generation, validation, and availability behaviour. Prefer reuse over duplication.\n - [x] 003 Design the request persistence model:\n-- [ ] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.\n+- [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.\n - [ ] 005 Implement signed-out `/get-started` form with required-field and email validation.\n - [ ] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.\n - [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.\ndiff --git a/web/lib/memba/id.ex b/web/lib/memba/id.ex\nindex b96fc80..9b45e13 100644\n--- a/web/lib/memba/id.ex\n+++ b/web/lib/memba/id.ex\n@@ -13,13 +13,21 @@ defmodule Memba.ID do\n     message: \"msg\",\n     delivery: \"del\",\n     inbound_email: \"inb\",\n-    email_address: \"ead\"\n+    email_address: \"ead\",\n+    onboarding_request: \"req\"\n   }\n \n   @types Map.keys(@prefixes)\n \n   @type type ::\n-          :club | :person | :membership | :message | :delivery | :inbound_email | :email_address\n+          :club\n+          | :person\n+          | :membership\n+          | :message\n+          | :delivery\n+          | :inbound_email\n+          | :email_address\n+          | :onboarding_request\n   @type t :: String.t()\n \n   @doc \"Generate a new typed ID.\"\ndiff --git a/web/lib/memba/onboarding.ex b/web/lib/memba/onboarding.ex\nnew file mode 100644\nindex 0000000..fe46a42\n--- /dev/null\n+++ b/web/lib/memba/onboarding.ex\n@@ -0,0 +1,103 @@\n+defmodule Memba.Onboarding do\n+  @moduledoc \"\"\"\n+  Public API for staff-approved request-to-club onboarding.\n+  \"\"\"\n+\n+  import Ecto.Query\n+\n+  alias Memba.ID\n+  alias Memba.Onboarding.Request\n+  alias Memba.Repo\n+\n+  @doc \"\"\"\n+  Create a new active onboarding request.\n+  \"\"\"\n+  def create_request(attrs, opts \\\\ []) when is_map(attrs) and is_list(opts) do\n+    attrs\n+    |> Request.create_changeset(opts)\n+    |> Repo.insert()\n+  end\n+\n+  @doc \"\"\"\n+  List active onboarding requests, oldest first.\n+  \"\"\"\n+  def list_active_requests do\n+    Request\n+    |> where([request], request.status == ^Request.status_active())\n+    |> order_by([request], asc: request.inserted_at, asc: request.request_id)\n+    |> Repo.all()\n+  end\n+\n+  @doc \"\"\"\n+  Fetch an onboarding request by typed request ID.\n+  \"\"\"\n+  def get_request(request_id) do\n+    with {:ok, request_id} <- ID.cast(:onboarding_request, request_id) do\n+      Repo.get(Request, request_id)\n+    else\n+      :error -> nil\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Reject an active onboarding request with internal notes.\n+  \"\"\"\n+  def reject_request(request_id, attrs, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    update_active_request(request_id, fn request ->\n+      request\n+      |> Request.rejection_changeset(attrs, opts)\n+      |> Repo.update()\n+    end)\n+  end\n+\n+  @doc \"\"\"\n+  Mark an active onboarding request as converted after the conversion records exist.\n+  \"\"\"\n+  def convert_request(request_id, attrs, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    update_active_request(request_id, fn request ->\n+      request\n+      |> Request.conversion_changeset(attrs, opts)\n+      |> Repo.update()\n+    end)\n+  end\n+\n+  defp update_active_request(request_id, update_fun) when is_function(update_fun, 1) do\n+    with {:ok, request_id} <- ID.cast(:onboarding_request, request_id) do\n+      request_id\n+      |> transact_active_update(update_fun)\n+      |> unwrap_transaction()\n+    else\n+      :error -> {:error, :not_found}\n+    end\n+  end\n+\n+  defp transact_active_update(request_id, update_fun) do\n+    Repo.transaction(fn ->\n+      case lock_request(request_id) do\n+        nil ->\n+          Repo.rollback(:not_found)\n+\n+        %Request{status: status} when status != \"active\" ->\n+          Repo.rollback(:not_active)\n+\n+        %Request{} = request ->\n+          case update_fun.(request) do\n+            {:ok, request} -> request\n+            {:error, changeset} -> Repo.rollback(changeset)\n+          end\n+      end\n+    end)\n+  end\n+\n+  defp lock_request(request_id) do\n+    Request\n+    |> where([request], request.request_id == ^request_id)\n+    |> lock(\"FOR UPDATE\")\n+    |> Repo.one()\n+  end\n+\n+  defp unwrap_transaction({:ok, %Request{} = request}), do: {:ok, request}\n+  defp unwrap_transaction({:error, reason}), do: {:error, reason}\n+end\ndiff --git a/web/lib/memba/onboarding/request.ex b/web/lib/memba/onboarding/request.ex\nnew file mode 100644\nindex 0000000..21626a1\n--- /dev/null\n+++ b/web/lib/memba/onboarding/request.ex\n@@ -0,0 +1,160 @@\n+defmodule Memba.Onboarding.Request do\n+  @moduledoc \"\"\"\n+  Ecto source-of-truth record for staff-approved onboarding requests.\n+  \"\"\"\n+\n+  use Ecto.Schema\n+\n+  import Ecto.Changeset\n+\n+  alias Memba.ID\n+  alias Memba.Membership.EmailAddresses\n+\n+  @status_active \"active\"\n+  @status_converted \"converted\"\n+  @status_rejected \"rejected\"\n+\n+  @primary_key {:request_id, :string, autogenerate: false}\n+  schema \"onboarding_requests\" do\n+    field :requester_name, :string\n+    field :requester_email, :string\n+    field :normalized_requester_email, :string\n+    field :requester_person_id, :string\n+    field :requested_club_name, :string\n+    field :note, :string\n+\n+    field :status, :string\n+    field :internal_rejection_notes, :string\n+    field :triaged_by_staff_email, :string\n+    field :triaged_at, :utc_datetime_usec\n+    field :converted_club_id, :string\n+    field :converted_person_id, :string\n+    field :converted_membership_id, :string\n+\n+    timestamps(type: :utc_datetime_usec)\n+  end\n+\n+  @doc false\n+  def create_changeset(attrs, opts \\\\ []) when is_map(attrs) and is_list(opts) do\n+    %__MODULE__{request_id: ID.generate(:onboarding_request), status: @status_active}\n+    |> cast(attrs, [:requester_name, :requester_email, :requested_club_name, :note])\n+    |> trim_changes([:requester_name, :requester_email, :requested_club_name, :note])\n+    |> validate_required([:requester_name, :requester_email, :requested_club_name, :note])\n+    |> put_normalized_requester_email()\n+    |> put_optional_typed_id(\n+      :requester_person_id,\n+      Keyword.get(opts, :requester_person_id),\n+      :person\n+    )\n+    |> check_constraint(:status, name: :onboarding_requests_status_check)\n+  end\n+\n+  @doc false\n+  def rejection_changeset(%__MODULE__{} = request, attrs, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    request\n+    |> cast(attrs, [:internal_rejection_notes])\n+    |> trim_changes([:internal_rejection_notes])\n+    |> validate_required([:internal_rejection_notes])\n+    |> put_change(:status, @status_rejected)\n+    |> put_change(:triaged_at, triaged_at(opts))\n+    |> put_optional_staff_email(opts)\n+    |> check_constraint(:status, name: :onboarding_requests_status_check)\n+  end\n+\n+  @doc false\n+  def conversion_changeset(%__MODULE__{} = request, attrs, opts \\\\ [])\n+      when is_map(attrs) and is_list(opts) do\n+    request\n+    |> cast(attrs, [:converted_club_id, :converted_person_id, :converted_membership_id])\n+    |> trim_changes([:converted_club_id, :converted_person_id, :converted_membership_id])\n+    |> validate_required([:converted_club_id, :converted_person_id, :converted_membership_id])\n+    |> validate_typed_id(:converted_club_id, :club)\n+    |> validate_typed_id(:converted_person_id, :person)\n+    |> validate_typed_id(:converted_membership_id, :membership)\n+    |> put_change(:status, @status_converted)\n+    |> put_change(:triaged_at, triaged_at(opts))\n+    |> put_optional_staff_email(opts)\n+    |> check_constraint(:status, name: :onboarding_requests_status_check)\n+  end\n+\n+  def status_active, do: @status_active\n+\n+  defp trim_changes(changeset, fields) do\n+    Enum.reduce(fields, changeset, fn field, changeset ->\n+      update_change(changeset, field, fn\n+        value when is_binary(value) -> String.trim(value)\n+        value -> value\n+      end)\n+    end)\n+  end\n+\n+  defp put_normalized_requester_email(changeset) do\n+    case get_field(changeset, :requester_email) do\n+      email when is_binary(email) and email != \"\" ->\n+        case EmailAddresses.normalize_email(email) do\n+          {:ok, %{email: email, normalized_email: normalized_email}} ->\n+            changeset\n+            |> put_change(:requester_email, email)\n+            |> put_change(:normalized_requester_email, normalized_email)\n+\n+          {:error, :invalid_email} ->\n+            add_error(changeset, :requester_email, \"is invalid\")\n+        end\n+\n+      _email ->\n+        changeset\n+    end\n+  end\n+\n+  defp put_optional_typed_id(changeset, _field, nil, _type), do: changeset\n+\n+  defp put_optional_typed_id(changeset, field, value, type) do\n+    case ID.cast(type, value) do\n+      {:ok, ^value} -> put_change(changeset, field, value)\n+      :error -> add_error(changeset, field, \"is invalid\")\n+    end\n+  end\n+\n+  defp validate_typed_id(changeset, field, type) do\n+    case get_field(changeset, field) do\n+      nil ->\n+        changeset\n+\n+      value ->\n+        case ID.cast(type, value) do\n+          {:ok, ^value} -> changeset\n+          :error -> add_error(changeset, field, \"is invalid\")\n+        end\n+    end\n+  end\n+\n+  defp put_optional_staff_email(changeset, opts) do\n+    case Keyword.fetch(opts, :staff_email) do\n+      :error ->\n+        changeset\n+\n+      {:ok, nil} ->\n+        changeset\n+\n+      {:ok, email} ->\n+        case EmailAddresses.normalize_email(email) do\n+          {:ok, %{normalized_email: normalized_email}} ->\n+            put_change(changeset, :triaged_by_staff_email, normalized_email)\n+\n+          {:error, :invalid_email} ->\n+            add_error(changeset, :triaged_by_staff_email, \"is invalid\")\n+        end\n+    end\n+  end\n+\n+  defp triaged_at(opts) do\n+    opts\n+    |> Keyword.get_lazy(:triaged_at, &DateTime.utc_now/0)\n+    |> ensure_microsecond_precision()\n+  end\n+\n+  defp ensure_microsecond_precision(%DateTime{microsecond: {microsecond, _precision}} = datetime) do\n+    %DateTime{datetime | microsecond: {microsecond, 6}}\n+  end\n+end\ndiff --git a/web/priv/repo/migrations/20260606003551_create_onboarding_requests.exs b/web/priv/repo/migrations/20260606003551_create_onboarding_requests.exs\nnew file mode 100644\nindex 0000000..5b1847c\n--- /dev/null\n+++ b/web/priv/repo/migrations/20260606003551_create_onboarding_requests.exs\n@@ -0,0 +1,32 @@\n+defmodule Memba.Repo.Migrations.CreateOnboardingRequests do\n+  use Ecto.Migration\n+\n+  def change do\n+    create table(:onboarding_requests, primary_key: false) do\n+      add :request_id, :text, primary_key: true\n+      add :requester_name, :text, null: false\n+      add :requester_email, :text, null: false\n+      add :normalized_requester_email, :text, null: false\n+      add :requester_person_id, :text\n+      add :requested_club_name, :text, null: false\n+      add :note, :text, null: false\n+\n+      add :status, :text, null: false, default: \"active\"\n+      add :internal_rejection_notes, :text\n+      add :triaged_by_staff_email, :text\n+      add :triaged_at, :utc_datetime_usec\n+      add :converted_club_id, :text\n+      add :converted_person_id, :text\n+      add :converted_membership_id, :text\n+\n+      timestamps(type: :utc_datetime_usec)\n+    end\n+\n+    create index(:onboarding_requests, [:status, :inserted_at])\n+    create index(:onboarding_requests, [:normalized_requester_email])\n+\n+    create constraint(:onboarding_requests, :onboarding_requests_status_check,\n+             check: \"status IN ('active', 'converted', 'rejected')\"\n+           )\n+  end\n+end\ndiff --git a/web/test/memba/onboarding_test.exs b/web/test/memba/onboarding_test.exs\nnew file mode 100644\nindex 0000000..12fed96\n--- /dev/null\n+++ b/web/test/memba/onboarding_test.exs\n@@ -0,0 +1,230 @@\n+defmodule Memba.OnboardingTest do\n+  use Memba.DataCase, async: true\n+\n+  alias Memba.Onboarding\n+  alias Memba.Onboarding.Request\n+\n+  describe \"create_request/2\" do\n+    test \"creates an active request with trimmed details and a normalized email\" do\n+      assert {:ok, %Request{} = request} =\n+               Onboarding.create_request(%{\n+                 \"requester_name\" => \" Robin Rider \",\n+                 \"requester_email\" => \" Robin@Example.COM \",\n+                 \"requested_club_name\" => \" West Coast Paddlers \",\n+                 \"note\" => \" We want to try Memba. \"\n+               })\n+\n+      assert \"req_\" <> _uuid = request.request_id\n+      assert request.status == \"active\"\n+      assert request.requester_name == \"Robin Rider\"\n+      assert request.requester_email == \"Robin@Example.COM\"\n+      assert request.normalized_requester_email == \"robin@example.com\"\n+      assert request.requested_club_name == \"West Coast Paddlers\"\n+      assert request.note == \"We want to try Memba.\"\n+      assert is_nil(request.requester_person_id)\n+      assert is_nil(request.triaged_at)\n+    end\n+\n+    test \"stores a signed-in requester person ID when provided by the caller\" do\n+      person_id = Memba.ID.generate(:person)\n+\n+      assert {:ok, %Request{requester_person_id: ^person_id}} =\n+               Onboarding.create_request(\n+                 %{\n+                   requester_name: \"Alice Admin\",\n+                   requester_email: \"alice@example.com\",\n+                   requested_club_name: \"Alice Paddling Club\",\n+                   note: \"Please onboard my club.\"\n+                 },\n+                 requester_person_id: person_id\n+               )\n+    end\n+\n+    test \"rejects missing details, invalid emails, and invalid signed-in person IDs\" do\n+      assert {:error, changeset} =\n+               Onboarding.create_request(\n+                 %{\n+                   requester_name: \" \",\n+                   requester_email: \"not an email\",\n+                   requested_club_name: \"\",\n+                   note: nil\n+                 },\n+                 requester_person_id: \"not-a-person-id\"\n+               )\n+\n+      assert %{\n+               requester_name: [\"can't be blank\"],\n+               requester_email: [\"is invalid\"],\n+               requester_person_id: [\"is invalid\"],\n+               requested_club_name: [\"can't be blank\"],\n+               note: [\"can't be blank\"]\n+             } = errors_on(changeset)\n+    end\n+  end\n+\n+  describe \"list_active_requests/0 and get_request/1\" do\n+    test \"lists only active requests ordered by submission time and request ID\" do\n+      newest = request_fixture(\"Newest Paddlers\")\n+      oldest = request_fixture(\"Oldest Paddlers\")\n+      first_tie = request_fixture(\"Tie A\")\n+      second_tie = request_fixture(\"Tie B\")\n+      rejected = request_fixture(\"Rejected Paddlers\")\n+\n+      update_inserted_at(newest, ~U[2026-06-01 12:00:00Z])\n+      update_inserted_at(oldest, ~U[2026-06-01 10:00:00Z])\n+      update_inserted_at(first_tie, ~U[2026-06-01 11:00:00Z])\n+      update_inserted_at(second_tie, ~U[2026-06-01 11:00:00Z])\n+\n+      assert {:ok, %Request{status: \"rejected\"}} =\n+               Onboarding.reject_request(rejected.request_id, %{internal_rejection_notes: \"Spam\"})\n+\n+      tie_ids = Enum.sort([first_tie.request_id, second_tie.request_id])\n+\n+      assert [\n+               %Request{request_id: oldest_id},\n+               %Request{request_id: first_tie_id},\n+               %Request{request_id: second_tie_id},\n+               %Request{request_id: newest_id}\n+             ] = Onboarding.list_active_requests()\n+\n+      assert oldest_id == oldest.request_id\n+      assert [first_tie_id, second_tie_id] == tie_ids\n+      assert newest_id == newest.request_id\n+    end\n+\n+    test \"gets requests by typed ID and returns nil for invalid or missing IDs\" do\n+      request = request_fixture(\"Findable Paddlers\")\n+\n+      assert %Request{request_id: request_id} = Onboarding.get_request(request.request_id)\n+      assert request_id == request.request_id\n+      assert is_nil(Onboarding.get_request(\"not-a-request-id\"))\n+      assert is_nil(Onboarding.get_request(Memba.ID.generate(:onboarding_request)))\n+    end\n+  end\n+\n+  describe \"reject_request/3\" do\n+    test \"rejects an active request with required internal notes and staff audit details\" do\n+      request = request_fixture(\"Rejected Club\")\n+      triaged_at = ~U[2026-06-02 09:30:00.000000Z]\n+\n+      assert {:ok, %Request{} = rejected} =\n+               Onboarding.reject_request(\n+                 request.request_id,\n+                 %{internal_rejection_notes: \" Not a real club. \"},\n+                 staff_email: \" Pat@Memba.IO \",\n+                 triaged_at: triaged_at\n+               )\n+\n+      assert rejected.status == \"rejected\"\n+      assert rejected.internal_rejection_notes == \"Not a real club.\"\n+      assert rejected.triaged_by_staff_email == \"pat@memba.io\"\n+      assert rejected.triaged_at == triaged_at\n+      assert is_nil(rejected.converted_club_id)\n+    end\n+\n+    test \"requires internal rejection notes and only transitions active requests\" do\n+      request = request_fixture(\"Needs Notes Club\")\n+\n+      assert {:error, changeset} =\n+               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: \" \"})\n+\n+      assert %{internal_rejection_notes: [\"can't be blank\"]} = errors_on(changeset)\n+\n+      assert {:ok, %Request{status: \"rejected\"}} =\n+               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: \"Spam\"})\n+\n+      assert {:error, :not_active} =\n+               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: \"Again\"})\n+\n+      assert {:error, :not_found} =\n+               Onboarding.reject_request(\"not-a-request-id\", %{internal_rejection_notes: \"Nope\"})\n+    end\n+  end\n+\n+  describe \"convert_request/3\" do\n+    test \"marks an active request converted with converted IDs and staff audit details\" do\n+      request = request_fixture(\"Converted Club\")\n+      club_id = Memba.ID.generate(:club)\n+      person_id = Memba.ID.generate(:person)\n+      membership_id = Memba.ID.generate(:membership)\n+      triaged_at = ~U[2026-06-02 10:30:00.000000Z]\n+\n+      assert {:ok, %Request{} = converted} =\n+               Onboarding.convert_request(\n+                 request.request_id,\n+                 %{\n+                   converted_club_id: club_id,\n+                   converted_person_id: person_id,\n+                   converted_membership_id: membership_id\n+                 },\n+                 staff_email: \" Pat@Memba.IO \",\n+                 triaged_at: triaged_at\n+               )\n+\n+      assert converted.status == \"converted\"\n+      assert converted.converted_club_id == club_id\n+      assert converted.converted_person_id == person_id\n+      assert converted.converted_membership_id == membership_id\n+      assert converted.triaged_by_staff_email == \"pat@memba.io\"\n+      assert converted.triaged_at == triaged_at\n+      assert is_nil(converted.internal_rejection_notes)\n+    end\n+\n+    test \"validates converted IDs and only transitions active requests\" do\n+      request = request_fixture(\"Invalid Conversion Club\")\n+\n+      assert {:error, changeset} =\n+               Onboarding.convert_request(request.request_id, %{\n+                 converted_club_id: \"not-a-club-id\",\n+                 converted_person_id: nil,\n+                 converted_membership_id: \"not-a-membership-id\"\n+               })\n+\n+      assert %{\n+               converted_club_id: [\"is invalid\"],\n+               converted_person_id: [\"can't be blank\"],\n+               converted_membership_id: [\"is invalid\"]\n+             } = errors_on(changeset)\n+\n+      assert {:ok, %Request{status: \"rejected\"}} =\n+               Onboarding.reject_request(request.request_id, %{internal_rejection_notes: \"Spam\"})\n+\n+      assert {:error, :not_active} =\n+               Onboarding.convert_request(request.request_id, %{\n+                 converted_club_id: Memba.ID.generate(:club),\n+                 converted_person_id: Memba.ID.generate(:person),\n+                 converted_membership_id: Memba.ID.generate(:membership)\n+               })\n+\n+      assert {:error, :not_found} =\n+               Onboarding.convert_request(\"not-a-request-id\", %{\n+                 converted_club_id: Memba.ID.generate(:club),\n+                 converted_person_id: Memba.ID.generate(:person),\n+                 converted_membership_id: Memba.ID.generate(:membership)\n+               })\n+    end\n+  end\n+\n+  defp request_fixture(club_name) do\n+    unique = System.unique_integer([:positive])\n+\n+    {:ok, request} =\n+      Onboarding.create_request(%{\n+        requester_name: \"Requester #{unique}\",\n+        requester_email: \"requester-#{unique}@example.com\",\n+        requested_club_name: club_name,\n+        note: \"Please onboard #{club_name}.\"\n+      })\n+\n+    request\n+  end\n+\n+  defp update_inserted_at(%Request{} = request, inserted_at) do\n+    Repo.update_all(\n+      from(onboarding_request in Request,\n+        where: onboarding_request.request_id == ^request.request_id\n+      ),\n+      set: [inserted_at: inserted_at]\n+    )\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 11,
+          "additions": 947,
+          "deletions": 98
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-06T00:46:45.172481684Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "reset_task_attempt",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "command.output": "blob://sha256/4862636b2a2109156885a82989b9a753554a5ecab7811185b2071e084026c9aa",
           "graph.rankdir": "LR",
           "failure_signature": "",
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
@@ -7391,7 +7722,7 @@
           "last_stage": "implement_next_task",
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "thread.validate_task.current_node": "task_gate",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.start": 0,
           "internal.retry_count.preflight_sandbox": 0,
           "graph.default_fidelity": "summary:high",
@@ -7415,7 +7746,7 @@
           "internal.retry_count.validate_task": 0,
           "thread.all_tasks_done.current_node": "implement_next_task",
           "internal.node_visit_count": 4,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "thread.reset_task_attempt.current_node": "implement_next_task"
         },
         "node_outcomes": {
@@ -7627,19 +7958,19 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/ade6b586184ccfe2f6ebe3ab76b10c0c2bef1ef95c4cca91685d49475f99134c"
+              "command.output": "blob://sha256/4862636b2a2109156885a82989b9a753554a5ecab7811185b2071e084026c9aa"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 172,
-              "active_time_ms": 172
+              "tool_time_ms": 167,
+              "active_time_ms": 167
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "sync_task_list": 3,
           "wip_gate": 1,
@@ -7647,7 +7978,7 @@
           "implement_next_task": 4,
           "validate_task": 3,
           "task_gate": 3,
-          "pre_validate_snapshot": 3,
+          "pre_validate_snapshot": 4,
           "start": 1,
           "preflight_sandbox": 1,
           "resume_gate": 1,
@@ -8138,6 +8469,34 @@
         "cache_write_tokens": 0
       },
       "state": "succeeded"
+    },
+    "pre_validate_snapshot@4": {
+      "first_event_seq": 1334,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/022-request-to-club-onboarding/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-06T00:46:44.990637467Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "preflight_sandbox@1": {
       "first_event_seq": 45,
@@ -9306,7 +9665,12 @@
       "first_event_seq": 1048,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-06T00:46:41.737477883Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -9320,13 +9684,20 @@
       "output": null,
       "started_at": "2026-06-06T00:33:58.216400766Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 763521,
+        "inference_time_ms": 514694,
+        "tool_time_ms": 248236,
+        "active_time_ms": 762930
+      },
       "usage": {
-        "input_tokens": 807022,
-        "output_tokens": 10835,
-        "total_tokens": 4188025,
-        "reasoning_tokens": 6840,
-        "cache_read_tokens": 3363328,
-        "cache_write_tokens": 0
+        "input_tokens": 814111,
+        "output_tokens": 11396,
+        "total_tokens": 4287231,
+        "reasoning_tokens": 7260,
+        "cache_read_tokens": 3454464,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6357467
       },
       "model": {
         "provider": "openai",
@@ -9495,32 +9866,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 98077,
-        "usage_percent": 36.05772058823529,
+        "input_tokens": 98225,
+        "usage_percent": 36.112132352941174,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-06T00:46:20.714703877Z",
-        "event_seq": 1320,
+        "generated_at": "2026-06-06T00:46:41.728056085Z",
+        "event_seq": 1326,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 950,
-            "usage_percent": 0.3492647058823529
+            "tokens": 948,
+            "usage_percent": 0.34852941176470587
           },
           {
             "category": "tools",
-            "tokens": 1349,
-            "usage_percent": 0.4959558823529412
+            "tokens": 1346,
+            "usage_percent": 0.4948529411764706
           },
           {
             "category": "memory",
-            "tokens": 335,
-            "usage_percent": 0.12316176470588236
+            "tokens": 334,
+            "usage_percent": 0.12279411764705882
           },
           {
             "category": "conversation",
-            "tokens": 95437,
-            "usage_percent": 35.087132352941175
+            "tokens": 95591,
+            "usage_percent": 35.14375
           },
           {
             "category": "other",
@@ -9530,7 +9901,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@3": {
       "first_event_seq": 944,
