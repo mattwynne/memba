@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-06T19:56:15.351376341Z",
-  "last_event_at": "2026-06-06T19:58:43.154182553Z",
+  "last_event_at": "2026-06-06T19:58:59.730753849Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,14 +1069,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-06T19:58:58.393065218Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-06T19:59:02.325627771Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1091,9 +1092,11 @@
           "graph.default_fidelity": "summary:high",
           "internal.fidelity": "summary:high",
           "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\nI read the complete plan file directly from `docs/iterations/024-email-template-designs/plan.md` through line 187. The plan is ready for implementation review routing. It should not require implementation to start yet.\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The acceptance criteria could name a few exact visual/content tokens from the v2 artifacts, such as specific footer/trust wording or button labels, to make “uses the v2 design system” slightly easier to verify without subjective judgment.\n2. The implementation plan could explicitly say whether the new `Memba.EmailTemplates` helpers should be pure string builders, HEEx components, or another rendering shape. The current plan is still implementable because it names the module, responsibilities, and constraints.\n3. Manual validation could include checking at least one real email-client preview if available, but the current local mailbox/browser-width validation is acceptable for this iteration.\n\n## Smallest viable iteration\n\nThe current slice is the smallest coherent useful iteration for the stated business outcome: applying the v2 transactional email design system across the existing user-facing transactional emails without changing provider configuration, policy, permissions, token lifetime, or new email types.\n\nIf forced smaller, the first useful sub-slice would be sign-in and onboarding welcome emails only, because they are authentication-critical and prominent. However, that would leave member-message and rejection notices visually inconsistent, so the plan’s broader slice better matches the goal.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Unit tests confirming sign-in emails include the v2 HTML structure, primary button, printed fallback URL, expiry/one-use reassurance, trust copy, text fallback, and context-aware group-led or Memba-led subject/heading.\n2. Unit tests confirming member-message HTML uses the group-led pattern, escapes sender/group/message content, preserves From/Reply-To/provider metadata, and keeps the text body exactly equal to the sender’s original body.\n3. Unit tests confirming inbound rejection emails include the correct reason mapping, group-aware/fallback subjects, next-step copy, “nothing was posted” reassurance, threading headers, and metadata/tags.\n4. Tests for onboarding welcome emails confirming they use the compatible v2 sign-in/welcome pattern.\n5. Explicit escaping and header-sanitization tests for user-, group-, sender-, subject-, and message-provided content, including HTML/script-like text and newline/control characters.\n6. Local mailbox/manual preview of sign-in, onboarding welcome, member-message, and inbound rejection emails against the supplied v2 design artifacts for semantic structure and hierarchy.\n7. `dev check` passes before completion.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "current_node": "synthesize",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "current_node": "synthesis_gate",
+          "internal.retry_count.synthesis_gate": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
           "codex_review_blocking_gaps": "None",
           "internal.retry_count.claude_review": 0,
@@ -1212,6 +1215,11 @@
               "active_time_ms": 71717
             }
           },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "gemini_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1298,12 +1306,13 @@
             "usage": null
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
           "claude_review": 1,
           "start": 1,
           "gemini_review": 1,
           "codex_review": 1,
+          "synthesis_gate": 1,
           "synthesize": 1
         }
       },
@@ -1334,7 +1343,12 @@
       "first_event_seq": 87,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-06T19:58:58.392936904Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1348,15 +1362,26 @@
       "output": null,
       "started_at": "2026-06-06T19:58:43.134799316Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 15258,
+        "inference_time_ms": 15114,
+        "tool_time_ms": 0,
+        "active_time_ms": 15114
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 5478,
+        "output_tokens": 33,
+        "total_tokens": 6260,
+        "reasoning_tokens": 749,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 50850
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     },
     "codex_review@1": {
       "first_event_seq": 65,
