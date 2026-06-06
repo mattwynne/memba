@@ -1,0 +1,349 @@
+diff --git a/docs/iterations/022-request-to-club-onboarding/todo.md b/docs/iterations/022-request-to-club-onboarding/todo.md
+index ee9838b..5de72ca 100644
+--- a/docs/iterations/022-request-to-club-onboarding/todo.md
++++ b/docs/iterations/022-request-to-club-onboarding/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Extract reusable club creation/slug form logic if needed so request conversion and `/admin/clubs` share the same slug generation, validation, and availability behaviour. Prefer reuse over duplication.
+ - [x] 003 Design the request persistence model:
+ - [x] 004 Add migration/schema/context functions for creating, listing active, rejecting, and converting requests.
+-- [ ] 005 Implement signed-out `/get-started` form with required-field and email validation.
++- [x] 005 Implement signed-out `/get-started` form with required-field and email validation.
+ - [ ] 006 Implement signed-in `/get-started` behaviour using the current person’s known name/email as read-only request details.
+ - [ ] 007 Send a new-request notification email to `hello@memba.io` after successful request creation.
+ - [ ] 008 Add staff `/admin/requests` route and LiveView under existing staff authentication.
+diff --git a/web/lib/memba/onboarding.ex b/web/lib/memba/onboarding.ex
+index fe46a42..76de1d6 100644
+--- a/web/lib/memba/onboarding.ex
++++ b/web/lib/memba/onboarding.ex
+@@ -18,6 +18,13 @@ defmodule Memba.Onboarding do
+     |> Repo.insert()
+   end
+ 
++  @doc """
++  Build an onboarding request changeset for forms.
++  """
++  def change_request(attrs \\ %{}, opts \\ []) when is_map(attrs) and is_list(opts) do
++    Request.create_changeset(attrs, opts)
++  end
++
+   @doc """
+   List active onboarding requests, oldest first.
+   """
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index a95ac89..6f01bf8 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -2,6 +2,7 @@ defmodule MembaWeb.PageController do
+   use MembaWeb, :controller
+ 
+   alias Memba.Membership
++  alias Memba.Onboarding
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+ 
+@@ -79,10 +80,25 @@ defmodule MembaWeb.PageController do
+     |> render(:about)
+   end
+ 
+-  def get_started(conn, _params) do
++  def get_started(conn, params) do
+     conn
+-    |> assign(:page_title, "Get started")
+-    |> render(:get_started)
++    |> assign(:request_submitted?, Map.get(params, "submitted") == "true")
++    |> render_get_started(Onboarding.change_request(%{}))
++  end
++
++  def submit_get_started(conn, params) do
++    request_params = Map.get(params, "request", %{})
++
++    case Onboarding.create_request(request_params) do
++      {:ok, _request} ->
++        redirect(conn, to: ~p"/get-started?submitted=true")
++
++      {:error, changeset} ->
++        conn
++        |> put_status(:unprocessable_entity)
++        |> assign(:request_submitted?, false)
++        |> render_get_started(changeset)
++    end
+   end
+ 
+   def terms(conn, _params) do
+@@ -97,6 +113,13 @@ defmodule MembaWeb.PageController do
+     |> render(:privacy)
+   end
+ 
++  defp render_get_started(conn, changeset) do
++    conn
++    |> assign(:page_title, "Get started")
++    |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
++    |> render(:get_started)
++  end
++
+   defp render_member_dashboard(conn, club_id, club_id_source) do
+     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
+       session: %{
+diff --git a/web/lib/memba_web/controllers/page_html/get_started.html.heex b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+index dbf424a..14b447a 100644
+--- a/web/lib/memba_web/controllers/page_html/get_started.html.heex
++++ b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+@@ -12,22 +12,101 @@
+       </p>
+     </div>
+ 
+-    <div class="rounded-3xl border border-line bg-paper p-6 shadow-sm sm:p-8">
+-      <h2 class="text-2xl font-semibold text-ink">Want to try Memba with your club?</h2>
++    <div
++      :if={@request_submitted?}
++      id="get-started-request-acknowledgement"
++      class="rounded-3xl border border-sage-200 bg-sage-50 p-6 shadow-sm sm:p-8"
++    >
++      <p class="text-sm font-semibold uppercase tracking-[0.18em] text-sage-700">
++        Request received
++      </p>
++      <h2 class="mt-3 text-2xl font-semibold text-ink">
++        Thanks — we’ll review your request.
++      </h2>
+       <p class="mt-4 leading-7 text-ink-2">
+-        Send us a short note with your name, your club, and what you’re hoping to improve.
++        We’ll contact you if Memba is a good fit for your club. Submitting this request does not
++        create a club, membership, or sign-in access.
+       </p>
+-      <a
+-        id="contact-us-link"
+-        href="mailto:hello@memba.io?subject=Trying%20Memba%20with%20my%20club"
+-        class="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-sage-600 px-6 py-3 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+-      >
+-        Contact us
+-      </a>
+     </div>
+ 
+-    <p class="text-sm leading-6 text-ink-3">
+-      We use an email link for now instead of an open web form to keep spam down.
+-    </p>
++    <div class="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
++      <div class="rounded-3xl border border-line bg-paper p-6 shadow-sm sm:p-8">
++        <h2 class="text-2xl font-semibold text-ink">Want to try Memba with your club?</h2>
++        <p class="mt-4 leading-7 text-ink-2">
++          Tell us a little about you and your club. Memba staff will review your request before any
++          club or member access is created.
++        </p>
++        <ul class="mt-6 space-y-3 text-sm leading-6 text-ink-2">
++          <li class="flex gap-3">
++            <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
++            <span>Share who should be the first club organiser.</span>
++          </li>
++          <li class="flex gap-3">
++            <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
++            <span>Tell us which club you want to bring onto Memba.</span>
++          </li>
++          <li class="flex gap-3">
++            <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
++            <span>Include a short note about what you’re hoping to improve.</span>
++          </li>
++        </ul>
++      </div>
++
++      <.form
++        for={@request_form}
++        action={~p"/get-started"}
++        method="post"
++        id="get-started-request-form"
++        aria-label="Request Memba access"
++        class="rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8"
++      >
++        <div class="space-y-5">
++          <.input
++            field={@request_form[:requester_name]}
++            id="get-started-requester-name"
++            label="Your name"
++            autocomplete="name"
++            required
++          />
++          <.input
++            field={@request_form[:requester_email]}
++            id="get-started-requester-email"
++            label="Email address"
++            type="email"
++            autocomplete="email"
++            required
++          />
++          <.input
++            field={@request_form[:requested_club_name]}
++            id="get-started-club-name"
++            label="Club name"
++            autocomplete="organization"
++            required
++          />
++          <.input
++            field={@request_form[:note]}
++            id="get-started-note"
++            label="Short note"
++            type="textarea"
++            rows="5"
++            placeholder="What is your club hoping to improve with Memba?"
++            required
++          />
++        </div>
++
++        <.button
++          id="get-started-request-submit"
++          type="submit"
++          variant="primary"
++          class="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-sage-600 px-6 py-3 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
++        >
++          Request access
++        </.button>
++
++        <p class="mt-4 text-sm leading-6 text-ink-3">
++          We’ll only use these details to review your Memba request.
++        </p>
++      </.form>
++    </div>
+   </section>
+ </Layouts.app>
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 5ea7736..5a3b759 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -91,6 +91,7 @@ defmodule MembaWeb.Router do
+     delete "/auth", AuthController, :delete
+     get "/about", PageController, :about
+     get "/get-started", PageController, :get_started
++    post "/get-started", PageController, :submit_get_started
+     get "/terms", PageController, :terms
+     get "/privacy", PageController, :privacy
+   end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 9802d5d..fef4479 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -7,6 +7,7 @@ defmodule MembaWeb.PageControllerTest do
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
++  alias Memba.Onboarding.Request
+   alias Memba.Repo
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+@@ -785,21 +786,117 @@ defmodule MembaWeb.PageControllerTest do
+     assert html_response(conn, 200) =~ "Membership software for clubs that run on trust."
+   end
+ 
+-  test "GET /get-started shows invite-only contact page with public navigation", %{conn: conn} do
++  test "GET /get-started shows a signed-out request form with public navigation", %{conn: conn} do
+     conn = get(conn, ~p"/get-started")
+     response = html_response(conn, 200)
+     html = LazyHTML.from_fragment(response)
+ 
+     assert response =~ "Memba is invite-only right now."
+     assert response =~ "Want to try Memba with your club?"
++    assert response =~ "Tell us a little about you and your club."
+ 
+     assert html
+            |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
+            |> Enum.any?()
+ 
+     assert html
+-           |> LazyHTML.query("a#contact-us-link[href^='mailto:hello@memba.io']")
++           |> LazyHTML.query("form#get-started-request-form[action='/get-started'][method='post']")
+            |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("input#get-started-club-name[name='request[requested_club_name]']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("button#get-started-request-submit[type='submit']")
++           |> Enum.any?()
++
++    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
++  end
++
++  test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
++    conn =
++      post(conn, ~p"/get-started",
++        request: %{
++          requester_name: "",
++          requester_email: "",
++          requested_club_name: "",
++          note: ""
++        }
++      )
++
++    response = html_response(conn, 422)
++
++    assert response =~ "Tell us a little about you and your club."
++    assert response =~ "can&#39;t be blank"
++    assert Repo.aggregate(Request, :count) == 0
++  end
++
++  test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
++    conn =
++      post(conn, ~p"/get-started",
++        request: %{
++          requester_name: "Robin Requester",
++          requester_email: "not an email address",
++          requested_club_name: "West Coast Paddlers",
++          note: "We want a safer way to message members."
++        }
++      )
++
++    response = html_response(conn, 422)
++
++    assert response =~ "is invalid"
++    assert Repo.aggregate(Request, :count) == 0
++  end
++
++  test "POST /get-started stores a signed-out request and acknowledges staff review", %{conn: conn} do
++    club_count = Repo.aggregate(Club, :count)
++    membership_count = Repo.aggregate(Membership, :count)
++
++    conn =
++      post(conn, ~p"/get-started",
++        request: %{
++          requester_name: " Robin Requester ",
++          requester_email: " Robin@Example.COM ",
++          requested_club_name: " West Coast Paddlers ",
++          note: " We want a safer way to message members. "
++        }
++      )
++
++    assert redirected_to(conn) == ~p"/get-started?submitted=true"
++
++    assert [%Request{} = request] = Repo.all(Request)
++    assert request.requester_name == "Robin Requester"
++    assert request.requester_email == "Robin@Example.COM"
++    assert request.normalized_requester_email == "robin@example.com"
++    assert request.requested_club_name == "West Coast Paddlers"
++    assert request.note == "We want a safer way to message members."
++    assert request.status == "active"
++    assert is_nil(request.requester_person_id)
++
++    assert Repo.aggregate(Club, :count) == club_count
++    assert Repo.aggregate(Membership, :count) == membership_count
++
++    response =
++      conn
++      |> recycle()
++      |> get(~p"/get-started?submitted=true")
++      |> html_response(200)
++
++    assert response =~ "Thanks — we’ll review your request."
++    assert response =~ "We’ll contact you if Memba is a good fit for your club."
+   end
+ 
+   test "GET /terms", %{conn: conn} do
