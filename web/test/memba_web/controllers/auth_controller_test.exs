@@ -88,15 +88,21 @@ defmodule MembaWeb.AuthControllerTest do
       assert_received {:email, %Swoosh.Email{} = email}
 
       assert email.to == [{"", "alice@example.com"}]
+      assert email.from == {"Memba", "auth@mail.memba.io"}
+      assert email.subject == "Sign in to Memba"
       assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
     end
 
-    test "creates club-subdomain callback URL emails when sign-in is requested on a club host", %{
-      conn: conn
-    } do
+    test "creates group-led club-subdomain callback URL emails when sign-in is requested on a known club host",
+         %{conn: conn} do
       configure_auth_email()
-      create_active_member(email: "alice@example.com")
+
+      create_active_member(
+        email: "alice@example.com",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
 
       assert conn
              |> Map.put(:host, "kmc.lvh.me")
@@ -107,6 +113,10 @@ defmodule MembaWeb.AuthControllerTest do
       assert_received {:email, %Swoosh.Email{} = email}
 
       assert email.to == [{"", "alice@example.com"}]
+      assert email.from == {"Kootenay Mountaineering Club via Memba", "auth@mail.memba.io"}
+      assert email.subject == "Sign in to Kootenay Mountaineering Club"
+      assert email.text_body =~ "Use this link to sign in to Kootenay Mountaineering Club:"
+      assert email.html_body =~ "Kootenay Mountaineering Club"
       assert email.text_body =~ "http://kmc.lvh.me/auth/sign-in/"
       assert email.html_body =~ "http://kmc.lvh.me/auth/sign-in/"
       refute email.text_body =~ "http://localhost:4000/auth/sign-in/"
@@ -239,6 +249,7 @@ defmodule MembaWeb.AuthControllerTest do
       assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
       assert_received {:email, %Swoosh.Email{} = email}
       assert [_, token] = Regex.run(~r{/auth/sign-in/([^\s"<]+)}, email.text_body)
+      assert email.subject == "Sign in to Kootenay Mountaineering Club"
       assert email.text_body =~ "http://kmc.lvh.me/auth/sign-in/#{token}"
 
       conn = get(conn, ~p"/auth/sign-in/#{token}")
