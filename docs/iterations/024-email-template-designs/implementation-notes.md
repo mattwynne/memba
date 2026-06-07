@@ -1,0 +1,55 @@
+# Implementation notes
+
+Date: 2026-06-07
+
+## Summary
+
+Iteration 024 implemented the v2 transactional email design system for the existing auth sign-in, onboarding welcome, member-message, and inbound rejection email paths. The implementation favours semantic/copy parity with the supplied v2 artifacts over pixel-perfect prototype fidelity, using conservative single-column, table-oriented HTML with inline styles for email-client compatibility.
+
+## What changed
+
+- Added `Memba.EmailTemplates` as the shared rendering layer for transactional email HTML:
+  - single-column shell/card sections;
+  - group-led and Memba-led headers;
+  - primary action buttons with printed fallback URLs;
+  - Memba footer/trust footer components;
+  - escaping, plaintext-to-HTML conversion, and header-text sanitization helpers.
+- Updated sign-in-link email delivery:
+  - kept `Memba.Accounts.AuthEmail.deliver_sign_in_link/2` for existing Memba-led callers;
+  - added `deliver_sign_in_link/3` for optional group/club context;
+  - preserved configured sender addresses and Postmark/Resend/local provider options;
+  - rendered the v2-style button, fallback URL, expiry/one-use reassurance, ignore-if-unrequested copy, and trust footer.
+- Passed group context into club-subdomain sign-in when the club is cheaply derivable from the host. Global sign-in remains Memba-led.
+- Updated onboarding welcome email to use the same compatible group-led sign-in/welcome pattern, including the converted club context and a return-to-club callback URL.
+- Extracted `Memba.Messaging.MemberMessageEmail` so member-message HTML, From/Reply-To/To display names, and subject sanitization are shared across providers.
+- Updated member-message provider paths to use the shared member-message renderer while keeping the plain-text body exactly as the sender wrote it.
+- Updated inbound rejection notices to use the v2 delivery-notice structure:
+  - Memba-led header;
+  - group-aware subject fallback;
+  - plain-language reason mappings;
+  - next-step copy and "nothing was sent" reassurance;
+  - preserved threading headers and provider metadata/tags.
+- Expanded test coverage for email fields, provider options, text bodies, HTML structure/copy, fallback URLs, escaping, header sanitization, local delivery facts, rejection reason mappings, and provider-specific metadata/tags.
+
+## Deliberate deviations and implementation choices
+
+- The supplied browser prototypes were translated into conservative email HTML rather than copied directly. The code uses table-oriented layout and inline CSS to better support common email clients and older iPads.
+- Member-message plain text intentionally remains only the sender's original body. Reply guidance and the Memba carrier footer appear in HTML only, matching the iteration acceptance criteria.
+- Ordinary sign-in flows without reliable group context intentionally remain Memba-led. Only the club-subdomain sign-in flow passes group context in this iteration.
+- Support copy does not publish `help@memba.io` or any other unconfirmed support mailbox. Templates use generic Memba support wording, or "reply to this email" when a configured reply-to address is available.
+- The implementation also updated the existing Resend member-message and inbound-rejection paths to keep switchable email provider behaviour aligned with Postmark/local. This preserves the provider-selection boundary rather than changing provider configuration.
+- Manual mailbox preview inspection was not recorded in the implementation checkpoints. Automated unit, acceptance, and full `dev check` validation were used for this iteration.
+
+## Validation recorded during implementation
+
+- Targeted email-related tests were run while developing the individual email paths.
+- Affected acceptance coverage was run after mailbox/email text changes.
+- Final full validation passed via `PATH="$PWD/bin:$PATH" dev check`:
+  - ExUnit: `585 tests, 0 failures`.
+  - Acceptance: `44 scenarios (44 passed)`, `291 steps (291 passed)`.
+
+## Follow-up candidates
+
+- Capture real mailbox screenshots in Gmail, Apple Mail, Outlook, and Fastmail before tightening visual fidelity further.
+- Confirm any public support mailbox/process before adding a concrete support address to templates.
+- Move transactional email copy behind locale-aware rendering in a later i18n iteration if needed.

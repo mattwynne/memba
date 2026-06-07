@@ -12,4 +12,4 @@
 - [x] 010 Run targeted email-related tests while developing.
 - [x] 011 Run any affected acceptance tests if mailbox text parsing changes.
 - [x] 012 Run `dev check`.
-- [ ] 013 Record implementation notes and any deliberate deviations from the supplied designs in this iteration folder.
+- [x] 013 Record implementation notes and any deliberate deviations from the supplied designs in this iteration folder.
