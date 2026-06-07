@@ -14,9 +14,9 @@ defmodule Memba.DomainCucumberRunnerTest do
     assert "Staff creates a person with primary and alternate email addresses" in selected_names
     assert "Staff changes a person's primary email address" in selected_names
     assert "Robin requests access without gaining immediate club access" in selected_names
+    assert "Alice belongs to two clubs" in selected_names
 
     refute "Visiting the homepage" in selected_names
-    refute "Alice belongs to two clubs" in selected_names
     refute "Alice emails the KMC everyone address" in selected_names
   end
 
