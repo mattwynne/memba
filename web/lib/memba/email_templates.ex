@@ -9,9 +9,17 @@ defmodule Memba.EmailTemplates do
 
   @canvas "#ece9e0"
   @paper "#ffffff"
+  @paper_sunk "#f7f6f3"
   @line "#e6e3dc"
   @ink "#15201c"
   @ink_2 "#4b5a55"
+  @ink_3 "#7d877f"
+  @ink_4 "#b3b9b4"
+  @forest "#1f4842"
+  @forest_50 "#ecf2ee"
+  @forest_100 "#d2e0d7"
+  @forest_600 "#173a35"
+  @forest_700 "#102b27"
 
   @doc """
   Render a complete v2-compatible email document around already-rendered card
@@ -138,4 +146,326 @@ defmodule Memba.EmailTemplates do
   end
 
   def escaped_text(text), do: text |> to_string() |> escaped_text()
+
+  @doc """
+  Sanitize dynamic text before using it in email header values.
+
+  This removes control characters (including CR/LF) and collapses whitespace so
+  user-, group-, or sender-provided values cannot inject additional headers.
+  """
+  def sanitize_header_text(nil), do: ""
+
+  def sanitize_header_text(text) when is_binary(text) do
+    text
+    |> String.replace(~r/[[:cntrl:]]+/u, " ")
+    |> String.replace(~r/[[:space:]]+/u, " ")
+    |> String.trim()
+  end
+
+  def sanitize_header_text(text), do: text |> to_string() |> sanitize_header_text()
+
+  @doc """
+  Convert a plain-text message body into escaped, email-safe HTML paragraphs.
+
+  Single newlines inside a paragraph become `<br>` tags; blank lines split
+  paragraphs. The result is component HTML for use inside an email card, not a
+  complete document.
+  """
+  def plaintext_to_html(text, opts \\ [])
+
+  def plaintext_to_html(nil, _opts), do: ""
+
+  def plaintext_to_html(text, opts) do
+    margin = Keyword.get(opts, :margin, "0 0 15px")
+    color = Keyword.get(opts, :color, @ink)
+    font_size = Keyword.get(opts, :font_size, "15px")
+
+    text
+    |> to_string()
+    |> normalize_line_endings()
+    |> String.split(~r/\n[ \t]*\n+/u, trim: true)
+    |> Enum.reject(&(String.trim(&1) == ""))
+    |> Enum.map(fn paragraph ->
+      paragraph_html =
+        paragraph
+        |> String.split("\n", trim: false)
+        |> Enum.map(&escaped_text/1)
+        |> Enum.join("<br>\n")
+
+      """
+      <p style="margin:#{margin}; font-size:#{font_size}; line-height:1.6; color:#{color};">#{paragraph_html}</p>
+      """
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  @doc """
+  Render the primary email action and the printed fallback URL.
+
+  Both the button label and URL are escaped. The markup uses a table-backed
+  button plus an Outlook VML fallback, and prints the raw URL in a mono block so
+  clients that block buttons still expose the link.
+  """
+  def primary_action(label, url, opts \\ []) do
+    escaped_label = escaped_text(label)
+    escaped_url = escaped_text(url)
+
+    fallback_label =
+      opts
+      |> Keyword.get(
+        :fallback_label,
+        "Button not working? Copy and paste this link into your browser:"
+      )
+      |> escaped_text()
+
+    margin = Keyword.get(opts, :margin, "2px 0 16px")
+    width = Keyword.get(opts, :width, "160px")
+
+    """
+    <table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" style="margin:#{margin};"><tr>
+      <td align="center" bgcolor="#{@forest}" style="border-radius:8px;">
+        <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="#{escaped_url}" style="height:44px;v-text-anchor:middle;width:#{width};" arcsize="18%" fillcolor="#{@forest}" stroke="f"><w:anchorlock/><center style="color:#f7f6f3;font-family:sans-serif;font-size:15px;font-weight:600;">#{escaped_label}</center></v:roundrect><![endif]-->
+        <!--[if !mso]><!-- -->
+        <a href="#{escaped_url}" style="display:inline-block; padding:13px 30px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size:15px; font-weight:600; line-height:1; color:#f7f6f3; text-decoration:none; border-radius:8px;">#{escaped_label}</a>
+        <!--<![endif]-->
+      </td>
+    </tr></table>
+
+    <p style="margin:0 0 8px; font-size:13px; color:#{@ink_3};">#{fallback_label}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;"><tr>
+      <td style="background:#{@paper_sunk}; border:1px solid #{@line}; border-radius:8px; padding:11px 14px; font-family:ui-monospace, Menlo, Consolas, monospace; font-size:12.5px; line-height:1.5; color:#{@forest}; word-break:break-all;">
+        <a href="#{escaped_url}" style="color:#{@forest}; text-decoration:none; word-break:break-all;">#{escaped_url}</a>
+      </td>
+    </tr></table>
+    """
+  end
+
+  @doc """
+  Render a group-led card header with a neutral monogram and escaped group name.
+  """
+  def group_header(group_name, opts \\ []) do
+    display_name =
+      group_name
+      |> sanitize_header_text()
+      |> default_text("Your group")
+
+    initials =
+      opts
+      |> Keyword.get(:initials)
+      |> normalize_initials(derive_initials(display_name))
+
+    label = opts |> Keyword.get(:label) |> sanitize_header_text()
+    padding = Keyword.get(opts, :padding, "24px 28px 16px")
+
+    border_bottom =
+      if Keyword.get(opts, :border_bottom, false),
+        do: " border-bottom:1px solid #{@line};",
+        else: ""
+
+    label_cell = label_cell(label)
+
+    """
+        <tr>
+          <td class="gutter" style="padding:#{padding};#{border_bottom}">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td style="vertical-align:middle;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="padding-right:11px; vertical-align:middle;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                      <td width="30" height="30" align="center" valign="middle" style="width:30px; height:30px; background:#{@ink}; border-radius:8px; font-size:12px; font-weight:600; color:#f7f6f3; text-align:center; line-height:30px; letter-spacing:0.01em;">#{escaped_text(initials)}</td>
+                    </tr></table>
+                  </td>
+                  <td style="vertical-align:middle; font-size:16px; font-weight:600; color:#{@ink}; letter-spacing:-0.018em;">#{escaped_text(display_name)}</td>
+                </tr></table>
+              </td>
+              #{label_cell}
+            </tr></table>
+          </td>
+        </tr>
+    """
+  end
+
+  @doc """
+  Render a Memba-led card header for account/trust or delivery-notice emails.
+  """
+  def memba_header(opts \\ []) do
+    label = opts |> Keyword.get(:label) |> sanitize_header_text()
+    padding = Keyword.get(opts, :padding, "24px 28px 16px")
+    label_cell = label_cell(label)
+
+    """
+        <tr>
+          <td class="gutter" style="padding:#{padding};">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+              <td style="vertical-align:middle;">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+                  <td style="padding-right:9px; vertical-align:middle;">
+                    #{memba_mark_svg(22, "#f7f6f3", "3.4")}
+                  </td>
+                  <td style="vertical-align:middle; font-size:16px; font-weight:600; color:#{@ink}; letter-spacing:-0.018em;">Memba</td>
+                </tr></table>
+              </td>
+              #{label_cell}
+            </tr></table>
+          </td>
+        </tr>
+    """
+  end
+
+  @doc """
+  Render the ambient Memba footer used by non-auth transactional emails.
+
+  Optional `:reply_to_email` may be supplied from a configured reply-to address.
+  No support mailbox is hard-coded when that option is absent.
+  """
+  def memba_footer(opts \\ []) when is_list(opts) do
+    group_name = opts |> Keyword.get(:group_name) |> sanitize_header_text()
+    recipient_email = opts |> Keyword.get(:recipient_email) |> sanitize_header_text()
+    reply_to_email = opts |> Keyword.get(:reply_to_email) |> sanitize_header_text()
+    reason = opts |> Keyword.get(:reason) |> sanitize_header_text()
+
+    delivered_line =
+      if group_name == "" do
+        ~s|Delivered by <a href="https://memba.io" style="color:#{@ink_2}; text-decoration:none; font-weight:600;">Memba</a>|
+      else
+        ~s|Delivered for #{escaped_text(group_name)} by <a href="https://memba.io" style="color:#{@ink_2}; text-decoration:none; font-weight:600;">Memba</a>|
+      end
+
+    detail_lines =
+      [
+        footer_sentence("Sent to", recipient_email),
+        if(reason == "", do: nil, else: escaped_text(reason)),
+        support_sentence(reply_to_email)
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join("<br>\n")
+
+    """
+        <tr>
+          <td class="gutter" style="padding:16px 28px 24px; border-top:1px solid #{@line};">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:9px;"><tr>
+              <td style="padding-right:7px; vertical-align:middle;">
+                #{memba_mark_svg(15, "#ffffff", "4")}
+              </td>
+              <td style="vertical-align:middle; font-size:11.5px; color:#{@ink_3};">#{delivered_line}</td>
+            </tr></table>
+            <div style="font-size:12px; line-height:1.6; color:#{@ink_3};">
+              #{detail_lines}
+            </div>
+          </td>
+        </tr>
+    """
+  end
+
+  @doc """
+  Render the sign-in trust footer where Memba intentionally steps forward.
+  """
+  def trust_footer(opts \\ []) when is_list(opts) do
+    group_name = opts |> Keyword.get(:group_name) |> sanitize_header_text()
+
+    trust_copy =
+      if group_name == "" do
+        "This sign-in link is secured by Memba. It expires in 15&nbsp;minutes, works only once, and only for you. We&rsquo;ll never ask for a password or payment by email."
+      else
+        "#{escaped_text(group_name)} runs on Memba. This is a genuine sign-in link &mdash; it expires in 15&nbsp;minutes, works only once, and only for you. We&rsquo;ll never ask for a password or payment by email."
+      end
+
+    """
+        <tr>
+          <td class="gutter" style="padding:18px 28px 22px; background:#{@forest_50}; border-top:1px solid #{@forest_100};">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;"><tr>
+              <td style="padding-right:8px; vertical-align:middle;">
+                #{memba_mark_svg(18, @forest_50, "4")}
+              </td>
+              <td style="vertical-align:middle; font-size:13px; font-weight:600; color:#{@forest_600}; letter-spacing:-0.01em;">Secured by Memba</td>
+            </tr></table>
+            <p style="margin:0; font-size:12.5px; line-height:1.55; color:#{@forest_700};">#{trust_copy}</p>
+          </td>
+        </tr>
+    """
+  end
+
+  defp normalize_line_endings(text) do
+    String.replace(text, ~r/\r\n|\r|\n/u, "\n")
+  end
+
+  defp default_text("", fallback), do: fallback
+  defp default_text(text, _fallback), do: text
+
+  defp derive_initials(text) do
+    words =
+      ~r/[\p{L}\p{N}]+/u
+      |> Regex.scan(text)
+      |> List.flatten()
+
+    initials =
+      case words do
+        [] ->
+          []
+
+        [word] ->
+          word
+          |> String.graphemes()
+          |> Enum.take(2)
+
+        words ->
+          words
+          |> Enum.take(2)
+          |> Enum.map(&first_grapheme/1)
+      end
+
+    initials
+    |> Enum.join()
+    |> String.upcase()
+    |> default_text("M")
+  end
+
+  defp first_grapheme(text) do
+    text
+    |> String.graphemes()
+    |> List.first("")
+  end
+
+  defp normalize_initials(nil, fallback), do: fallback
+
+  defp normalize_initials(initials, fallback) do
+    initials =
+      initials
+      |> sanitize_header_text()
+      |> String.replace(~r/[[:space:]]+/u, "")
+      |> String.graphemes()
+      |> Enum.take(3)
+      |> Enum.join()
+      |> String.upcase()
+
+    default_text(initials, fallback)
+  end
+
+  defp label_cell(""), do: ""
+
+  defp label_cell(label) do
+    """
+    <td align="right" style="vertical-align:middle; font-size:11px; color:#{@ink_4}; letter-spacing:0.04em; text-transform:uppercase;">#{escaped_text(label)}</td>
+    """
+  end
+
+  defp footer_sentence(_prefix, ""), do: nil
+
+  defp footer_sentence(prefix, text) do
+    "#{escaped_text(prefix)} #{escaped_text(text)}."
+  end
+
+  defp support_sentence(""), do: "Need a hand? Contact Memba support."
+
+  defp support_sentence(reply_to_email) do
+    escaped_reply_to_email = escaped_text(reply_to_email)
+
+    ~s|Need a hand? Reply to this email or write to <a href="mailto:#{escaped_reply_to_email}" style="color:#{@ink_3}; text-decoration:underline;">#{escaped_reply_to_email}</a>.|
+  end
+
+  defp memba_mark_svg(size, stroke, stroke_width) do
+    """
+    <svg width="#{size}" height="#{size}" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#{@forest}"></rect><path d="M 18 34 L 28 44 L 46 24" fill="none" stroke="#{stroke}" stroke-width="#{stroke_width}" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    """
+  end
 end
