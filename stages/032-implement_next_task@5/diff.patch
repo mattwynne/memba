@@ -1,0 +1,133 @@
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index 899148f..d7a5a71 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Design a minimal role/permission model that supports future custom roles:
+ - [x] 003 Add commands/events for creating the default Membership Administrator role, granting `club.manage_members`, and assigning/removing the role from active members. Prefer events that preserve future role customisation rather than baking all logic into one opaque flag.
+ - [x] 004 Ensure club creation initializes the default Membership Administrator role and permission bundle. If the creator/first member is not known at `CreateClub` time, assign the role when the first member is added through onboarding conversion or an explicit assignment command.
+-- [ ] 005 Update onboarding conversion so the requester/first member receives the Membership Administrator assignment after membership creation.
++- [x] 005 Update onboarding conversion so the requester/first member receives the Membership Administrator assignment after membership creation.
+ - [ ] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.
+ - [ ] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.
+ - [ ] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index 4a62182..18c0d7b 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -13,6 +13,7 @@ defmodule Memba.Membership.Projectors.Club do
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
++  alias Memba.Membership.Events.MemberRoleAssigned
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Slug
+ 
+@@ -41,6 +42,8 @@ defmodule Memba.Membership.Projectors.Club do
+ 
+   project(%ClubRolePermissionGranted{}, fn multi -> multi end)
+ 
++  project(%MemberRoleAssigned{}, fn multi -> multi end)
++
+   defp projected_slug(%ClubCreated{} = event) do
+     case Slug.validate(event.slug) do
+       {:ok, slug} -> {:ok, slug}
+diff --git a/web/lib/memba/onboarding.ex b/web/lib/memba/onboarding.ex
+index 030b4a7..8db9b56 100644
+--- a/web/lib/memba/onboarding.ex
++++ b/web/lib/memba/onboarding.ex
+@@ -7,6 +7,9 @@ defmodule Memba.Onboarding do
+ 
+   alias Memba.ID
+   alias Memba.Membership
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Roles
+   alias Memba.Onboarding.Request
+   alias Memba.Onboarding.WelcomeEmail
+   alias Memba.Repo
+@@ -181,7 +184,13 @@ defmodule Memba.Onboarding do
+     with :ok <- validate_request_conversion(request, request_conversion_attrs, opts),
+          :ok <- create_conversion_club(club_id, club_attrs),
+          :ok <- create_conversion_person(person),
+-         :ok <- create_conversion_membership(membership_id, club_id, person.person_id) do
++         :ok <- create_conversion_membership(membership_id, club_id, person.person_id),
++         :ok <-
++           assign_conversion_membership_administrator(
++             club_id,
++             membership_id,
++             person.person_id
++           ) do
+       %{
+         request: request,
+         request_conversion_attrs: request_conversion_attrs,
+@@ -254,6 +263,17 @@ defmodule Memba.Onboarding do
+     |> normalize_command_result()
+   end
+ 
++  defp assign_conversion_membership_administrator(club_id, membership_id, person_id) do
++    %AssignMemberRole{
++      club_id: club_id,
++      membership_id: membership_id,
++      person_id: person_id,
++      role_id: Roles.membership_administrator_role_id(club_id)
++    }
++    |> MembershipApp.dispatch(consistency: :strong)
++    |> normalize_command_result()
++  end
++
+   defp normalize_command_result(:ok), do: :ok
+   defp normalize_command_result({:ok, _result}), do: :ok
+   defp normalize_command_result({:error, reason}), do: {:error, reason}
+diff --git a/web/test/memba/onboarding_conversion_test.exs b/web/test/memba/onboarding_conversion_test.exs
+index db4c2f8..f8c5186 100644
+--- a/web/test/memba/onboarding_conversion_test.exs
++++ b/web/test/memba/onboarding_conversion_test.exs
+@@ -4,7 +4,10 @@ defmodule Memba.OnboardingConversionTest do
+   alias Memba.Accounts.AuthEmail
+   alias Memba.Accounts.SignInToken
+   alias Memba.Membership
++  alias Memba.Membership.App, as: MembershipApp
++  alias Memba.Membership.Club
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Roles
+   alias Memba.Onboarding
+   alias Memba.Onboarding.Request
+   alias Memba.Repo
+@@ -60,6 +63,8 @@ defmodule Memba.OnboardingConversionTest do
+                request.requester_email
+              )
+ 
++      assert_membership_administrator_assignment(conversion)
++
+       assert_receive {:welcome_email, delivered_conversion}
+       assert delivered_conversion.request.request_id == request.request_id
+       assert delivered_conversion.club.club_id == conversion.club.club_id
+@@ -98,6 +103,8 @@ defmodule Memba.OnboardingConversionTest do
+                conversion.club.club_id,
+                "robin@example.com"
+              )
++
++      assert_membership_administrator_assignment(conversion)
+     end
+ 
+     test "does not mark the request converted or deliver welcome email when club creation fails" do
+@@ -189,6 +196,18 @@ defmodule Memba.OnboardingConversionTest do
+     request
+   end
+ 
++  defp assert_membership_administrator_assignment(conversion) do
++    club_id = conversion.club.club_id
++    membership_id = conversion.membership_id
++    person_id = conversion.person.person_id
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    assert %Club{role_assignments: role_assignments} =
++             MembershipApp.aggregate_state(Club, club_id)
++
++    assert %{{^membership_id, ^role_id} => %{person_id: ^person_id}} = role_assignments
++  end
++
+   defp configure_auth_email do
+     Application.put_env(:memba, Memba.Mailer,
+       adapter: Swoosh.Adapters.Test,
