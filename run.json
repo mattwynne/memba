@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-07T02:07:37.166545344Z",
-  "last_event_at": "2026-06-07T02:09:36.196134442Z",
+  "last_event_at": "2026-06-07T02:09:46.503243492Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,18 +1069,21 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-07T02:09:45.159544847Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-07T02:09:48.156071684Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
           "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The iteration combines three independent quick wins. It is still small enough and coherently framed around clearing high-friction messaging/onboarding issues, but each item could be split if implementation risk from iteration 024 becomes higher than expected.\n2. The acceptance scenario section names the feature files and scenario purposes, but exact scenario titles would make implementation and review tracking slightly clearer.\n3. The subject-prefix rule could explicitly state what happens if a member-entered subject already starts with `[kmc]`; the current “always prefix” rule is testable, but spelling out the duplicate-prefix behavior would avoid later discussion.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be the blank/whitespace-only member compose body validation, because it is self-contained, member-visible, objectively testable, and avoids cross-provider email/template dependencies.  \n\nThat said, the current three-item quick-wins iteration is still acceptably scoped because each item is small, has clear boundaries, and shares the theme of reducing messaging/onboarding workflow friction.\n\n## Required plan edits\n\nNone required.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Adding the planned acceptance scenarios in:\n   - `acceptance-tests/features/member_message_deliverability.feature`\n   - `acceptance-tests/features/request_account.feature`\n2. Proving club-message outbound email subjects are prefixed as `[slug] Subject` across Postmark, Resend, Local/Swoosh, and local delivery facts/mailbox evidence.\n3. Proving stored/projected/in-app message subjects remain unchanged.\n4. Proving blank and whitespace-only compose bodies:\n   - keep the form in compose mode,\n   - show a body-specific validation message,\n   - preserve the entered subject,\n   - do not call `Messaging.send_club_message/2`,\n   - do not create a message,\n   - do not call the delivery provider.\n5. Proving real provider/delivery failures still use the existing generic send-failure path.\n6. Proving `/admin/requests/:request_id`:\n   - is protected by staff authorization,\n   - opens the existing conversion panel for active requests,\n   - handles converted/rejected/missing/invalid requests with a clear inactive/not-found state,\n   - navigates back to `/admin/requests` on cancel or successful conversion.\n7. Proving the staff onboarding-request notification email contains an absolute direct link to the request-specific conversion URL.\n8. Removing the planned `@wip` tags after implementation and running the new acceptance scenarios green.\n9. Running `dev check` successfully.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.retry_count.synthesis_gate": 0,
           "internal.retry_count.claude_review": 0,
           "graph.default_fidelity": "summary:high",
           "graph.rankdir": "LR",
@@ -1093,14 +1096,14 @@
           "thread.claude_review.current_node": "codex_review",
           "codex_review_blocking_gap_count": 0,
           "internal.retry_count.codex_review": 0,
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "gemini_review_blocking_gap_count": 0,
           "last_stage": "synthesize",
           "thread.gemini_review.current_node": "claude_review",
           "failure_signature": "",
           "codex_review_confidence": "High",
           "claude_review_confidence": "High",
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "failure_class": "",
           "claude_review_blocking_gaps": "None",
           "thread.codex_review.current_node": "synthesize",
@@ -1210,6 +1213,11 @@
               "active_time_ms": 8884
             }
           },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "gemini_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1298,11 +1306,12 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
           "synthesize": 1,
           "codex_review": 1,
           "claude_review": 1,
+          "synthesis_gate": 1,
           "gemini_review": 1,
           "start": 1
         }
@@ -2031,7 +2040,12 @@
       "first_event_seq": 89,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-07T02:09:45.159400078Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2045,15 +2059,26 @@
       "output": null,
       "started_at": "2026-06-07T02:09:36.177901341Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 8981,
+        "inference_time_ms": 8884,
+        "tool_time_ms": 0,
+        "active_time_ms": 8884
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 4729,
+        "output_tokens": 45,
+        "total_tokens": 5167,
+        "reasoning_tokens": 393,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 36785
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     }
   }
 }
