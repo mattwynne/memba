@@ -1,0 +1,7 @@
+{
+  "context_updates": {
+    "plan_ready": false,
+    "plan_needs_fix": true,
+    "plan_needs_human": false
+  }
+}

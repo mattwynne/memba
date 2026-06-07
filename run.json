@@ -573,7 +573,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-07T00:40:26.467195018Z",
-  "last_event_at": "2026-06-07T00:42:22.750950127Z",
+  "last_event_at": "2026-06-07T00:42:53.731487489Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1071,14 +1071,15 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-07T00:42:52.458627878Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-07T00:42:55.360761096Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -1094,7 +1095,7 @@
           "internal.node_visit_count": 1,
           "failure_class": "",
           "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "internal.retry_count.start": 0,
           "codex_review_required_edits": "None",
           "claude_review_confidence": "High",
@@ -1106,12 +1107,14 @@
           "outcome": "succeeded",
           "internal.retry_count.synthesize": 0,
           "gemini_review_decision": "READY",
+          "internal.retry_count.synthesis_gate": 0,
           "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. The plan combines three separate quick wins rather than one tightly unified product outcome. This is acceptable because each item is small, independently testable, and bounded, but the author could acknowledge that the smallest slices are separable.\n2. The `## Open Technical Decisions` section lists low-level implementation choices. They do not appear blocking, but the plan would read cleaner if these were reframed as “implementation details to confirm” rather than open decisions.\n3. The absolute URL source for staff notification links is worth clarifying before coding if the app has multiple existing URL-generation conventions.\n4. The acceptance criteria could explicitly state that existing staff authorization for `/admin/requests` applies to the new request-specific route, though this is strongly implied by placing it under the existing staff LiveView/session.\n\n## Smallest viable iteration\n\nThe smallest useful slice would be **one of the three quick wins**, preferably:\n\n- Add blank/whitespace-only member compose body validation that preserves the subject, shows a body-specific error, and prevents message creation/email delivery.\n\nThat said, the current three-part quick-wins iteration is still reasonably small and ready because each change is bounded, testable, and avoids larger adjacent product areas.\n\n## Required plan edits\n\nNone required for readiness.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. Adding the planned Gherkin scenarios in:\n   - `acceptance-tests/features/member_message_deliverability.feature`\n   - `acceptance-tests/features/request_account.feature`\n2. Running focused provider/email tests proving member-message outbound subjects are prefixed as `[slug] Subject` while stored/in-app message subjects remain unchanged.\n3. Running member compose LiveView tests proving blank and whitespace-only bodies show a body-specific validation error, preserve subject input, and do not call `Messaging.send_club_message/2` or the delivery provider.\n4. Running onboarding requests LiveView tests proving:\n   - `/admin/requests` still lists active requests.\n   - Convert uses LiveView patch navigation.\n   - `/admin/requests/:request_id` opens the existing conversion panel for active requests.\n   - inactive, converted, rejected, missing, or invalid request IDs show the no-longer-active/not-found state.\n   - cancel and successful conversion return to `/admin/requests`.\n5. Running onboarding notification email tests proving the staff email includes an absolute request-specific conversion URL.\n6. Running affected acceptance tests or feature parsing/tag checks while new scenarios remain `@wip`.\n7. Running `dev check` before delivery is considered complete.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
           "gemini_review_required_edits": "None",
           "plan_ready": false,
           "response.synthesize": "{\n  \"context_updates\": {\n    \"plan_ready\": false,\n    \"plan_needs_fix\": true,\n    \"plan_needs_human\": false\n  }\n}",
+          "thread.synthesize.current_node": "synthesis_gate",
           "failure_signature": "",
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "thread.start.current_node": "gemini_review",
           "internal.run_id": "01KTFRC2D56DMMAD7RPSR2G2E4",
           "response.gemini_review": "{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}",
@@ -1130,6 +1133,11 @@
           "plan_needs_fix": true
         },
         "node_outcomes": {
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1300,8 +1308,9 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "codex_update",
         "node_visits": {
+          "synthesis_gate": 1,
           "claude_review": 1,
           "codex_review": 1,
           "synthesize": 1,
@@ -1794,7 +1803,12 @@
       "first_event_seq": 89,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-07T00:42:52.458539386Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -1808,15 +1822,26 @@
       "output": null,
       "started_at": "2026-06-07T00:42:22.738298478Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 29720,
+        "inference_time_ms": 29659,
+        "tool_time_ms": 0,
+        "active_time_ms": 29659
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 4843,
+        "output_tokens": 45,
+        "total_tokens": 6440,
+        "reasoning_tokens": 1552,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 72125
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     },
     "claude_review@1": {
       "first_event_seq": 45,
