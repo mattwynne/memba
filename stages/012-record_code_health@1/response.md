@@ -1,0 +1,3 @@
+{"cmd": "git status --short && find .fabro -maxdepth 5 -type f | sort | sed -n '1,200p'", "timeout_ms": 10000}{"cmd": "ls -la .fabro || true\nfind .fabro -maxdepth 5 -type f | sort | sed -n '1,200p'\ngit status --short", "timeout_ms": 10000}No `docs/code-health.md` update was made.
+
+Reason: the review synthesis accepted the implementation (`implementation_accepted: true`) and reported no available review fixes or judgement-worthy findings (`review_fixes_available: false`). Since there were no factual/actionable issues requiring human judgement, no code-health entry is needed for `docs/iterations/024-email-template-designs/plan.md`.
