@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect current Membership event-sourced aggregate boundaries for club creation, membership creation/removal, onboarding conversion, and test-support creation paths.
-- [ ] 002 Design a minimal role/permission model that supports future custom roles:
+- [x] 002 Design a minimal role/permission model that supports future custom roles:
 - [ ] 003 Add commands/events for creating the default Membership Administrator role, granting `club.manage_members`, and assigning/removing the role from active members. Prefer events that preserve future role customisation rather than baking all logic into one opaque flag.
 - [ ] 004 Ensure club creation initializes the default Membership Administrator role and permission bundle. If the creator/first member is not known at `CreateClub` time, assign the role when the first member is added through onboarding conversion or an explicit assignment command.
 - [ ] 005 Update onboarding conversion so the requester/first member receives the Membership Administrator assignment after membership creation.
