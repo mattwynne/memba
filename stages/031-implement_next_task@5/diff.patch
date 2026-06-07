@@ -1,0 +1,140 @@
+diff --git a/docs/iterations/024-email-template-designs/todo.md b/docs/iterations/024-email-template-designs/todo.md
+index b807e99..5bb4ae4 100644
+--- a/docs/iterations/024-email-template-designs/todo.md
++++ b/docs/iterations/024-email-template-designs/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Add shared helper module `web/lib/memba/email_templates.ex` (`Memba.EmailTemplates`) for the email HTML shell/components and text-safe helpers. Keep inline styles and avoid external CSS dependencies.
+ - [x] 003 Implement safe helpers in `Memba.EmailTemplates` for:
+ - [x] 004 Update `web/lib/memba/accounts/auth_email.ex` to render the new sign-in template while preserving provider options and error handling. Keep `deliver_sign_in_link/2`; add an optional context/options variant for group-led sign-in where callers can provide group name/context.
+-- [ ] 005 Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
++- [x] 005 Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
+ - [ ] 006 Update `web/lib/memba/onboarding/welcome_email.ex` to use the compatible group-led welcome/sign-in variant and pass the converted club as context.
+ - [ ] 007 Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
+ - [ ] 008 Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
+diff --git a/web/lib/memba_web/live/auth_live/sign_in.ex b/web/lib/memba_web/live/auth_live/sign_in.ex
+index eb1eb82..a70e1be 100644
+--- a/web/lib/memba_web/live/auth_live/sign_in.ex
++++ b/web/lib/memba_web/live/auth_live/sign_in.ex
+@@ -5,6 +5,7 @@ defmodule MembaWeb.AuthLive.SignIn do
+ 
+   alias Memba.Accounts
+   alias Memba.Accounts.AuthEmail
++  alias Memba.Membership
+   alias MembaWeb.ClubSite
+ 
+   @neutral_notice "If that email address can sign in to Memba, the sign-in email is on its way."
+@@ -22,14 +23,18 @@ defmodule MembaWeb.AuthLive.SignIn do
+     {:noreply,
+      socket
+      |> assign(:page_title, page_title(socket.assigns.live_action))
+-     |> assign(:auth_callback_base_url, auth_callback_base_url(uri))}
++     |> assign(:auth_callback_base_url, auth_callback_base_url(uri))
++     |> assign(:sign_in_email_context, sign_in_email_context(uri))}
+   end
+ 
+   @impl Phoenix.LiveView
+   def handle_event("request_sign_in_link", params, socket) do
+     params
+     |> email_param()
+-    |> request_and_deliver_sign_in_link(socket.assigns.auth_callback_base_url)
++    |> request_and_deliver_sign_in_link(
++      socket.assigns.auth_callback_base_url,
++      Map.get(socket.assigns, :sign_in_email_context, %{})
++    )
+ 
+     {:noreply, push_patch(socket, to: ~p"/auth/check-email")}
+   end
+@@ -125,10 +130,10 @@ defmodule MembaWeb.AuthLive.SignIn do
+   defp email_param(%{"auth" => %{"email" => email}}), do: email
+   defp email_param(_params), do: nil
+ 
+-  defp request_and_deliver_sign_in_link(email, callback_base_url) do
++  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
+     case Accounts.request_sign_in_link(email) do
+       {:ok, %{email: recipient_email, token: token}} ->
+-        deliver_sign_in_link(recipient_email, token, callback_base_url)
++        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context)
+ 
+       {:ok, nil} ->
+         :ok
+@@ -138,10 +143,10 @@ defmodule MembaWeb.AuthLive.SignIn do
+     end
+   end
+ 
+-  defp deliver_sign_in_link(recipient_email, token, callback_base_url) do
++  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context) do
+     callback_url = callback_base_url <> ~p"/auth/sign-in/#{token}"
+ 
+-    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
++    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url, email_context) do
+       :ok ->
+         :ok
+ 
+@@ -167,6 +172,18 @@ defmodule MembaWeb.AuthLive.SignIn do
+ 
+   defp auth_callback_base_url(_uri), do: MembaWeb.Endpoint.url()
+ 
++  defp sign_in_email_context(uri) when is_binary(uri) do
++    with %URI{host: host} when is_binary(host) <- URI.parse(uri),
++         {:ok, slug} <- ClubSite.slug_from_host(host),
++         %{name: _name} = club <- Membership.get_club_by_slug(slug) do
++      %{club: club}
++    else
++      _no_club_context -> %{}
++    end
++  end
++
++  defp sign_in_email_context(_uri), do: %{}
++
+   defp port_suffix("http", port) when port in [nil, 80], do: ""
+   defp port_suffix("https", port) when port in [nil, 443], do: ""
+   defp port_suffix(_scheme, nil), do: ""
+diff --git a/web/test/memba_web/controllers/auth_controller_test.exs b/web/test/memba_web/controllers/auth_controller_test.exs
+index 64cd170..21ce036 100644
+--- a/web/test/memba_web/controllers/auth_controller_test.exs
++++ b/web/test/memba_web/controllers/auth_controller_test.exs
+@@ -88,15 +88,21 @@ defmodule MembaWeb.AuthControllerTest do
+       assert_received {:email, %Swoosh.Email{} = email}
+ 
+       assert email.to == [{"", "alice@example.com"}]
++      assert email.from == {"Memba", "auth@mail.memba.io"}
++      assert email.subject == "Sign in to Memba"
+       assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
+       assert email.html_body =~ "http://localhost:4000/auth/sign-in/"
+     end
+ 
+-    test "creates club-subdomain callback URL emails when sign-in is requested on a club host", %{
+-      conn: conn
+-    } do
++    test "creates group-led club-subdomain callback URL emails when sign-in is requested on a known club host",
++         %{conn: conn} do
+       configure_auth_email()
+-      create_active_member(email: "alice@example.com")
++
++      create_active_member(
++        email: "alice@example.com",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
+ 
+       assert conn
+              |> Map.put(:host, "kmc.lvh.me")
+@@ -107,6 +113,10 @@ defmodule MembaWeb.AuthControllerTest do
+       assert_received {:email, %Swoosh.Email{} = email}
+ 
+       assert email.to == [{"", "alice@example.com"}]
++      assert email.from == {"Kootenay Mountaineering Club via Memba", "auth@mail.memba.io"}
++      assert email.subject == "Sign in to Kootenay Mountaineering Club"
++      assert email.text_body =~ "Use this link to sign in to Kootenay Mountaineering Club:"
++      assert email.html_body =~ "Kootenay Mountaineering Club"
+       assert email.text_body =~ "http://kmc.lvh.me/auth/sign-in/"
+       assert email.html_body =~ "http://kmc.lvh.me/auth/sign-in/"
+       refute email.text_body =~ "http://localhost:4000/auth/sign-in/"
+@@ -239,6 +249,7 @@ defmodule MembaWeb.AuthControllerTest do
+       assert [%SignInToken{email: "alice@example.com"}] = Repo.all(SignInToken)
+       assert_received {:email, %Swoosh.Email{} = email}
+       assert [_, token] = Regex.run(~r{/auth/sign-in/([^\s"<]+)}, email.text_body)
++      assert email.subject == "Sign in to Kootenay Mountaineering Club"
+       assert email.text_body =~ "http://kmc.lvh.me/auth/sign-in/#{token}"
+ 
+       conn = get(conn, ~p"/auth/sign-in/#{token}")
