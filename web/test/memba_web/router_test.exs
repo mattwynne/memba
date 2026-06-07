@@ -17,7 +17,18 @@ defmodule MembaWeb.RouterTest do
         "/admin/requests",
         "/admin/requests",
         MembaWeb.Admin.RequestsLive.Index,
-        %{}
+        %{},
+        :index
+      )
+    end
+
+    test "routes /admin/requests/:request_id through the staff browser pipeline to the requests conversion LiveView" do
+      assert_live_route(
+        "/admin/requests/req_123",
+        "/admin/requests/:request_id",
+        MembaWeb.Admin.RequestsLive.Index,
+        %{"request_id" => "req_123"},
+        :convert
       )
     end
 
@@ -139,12 +150,12 @@ defmodule MembaWeb.RouterTest do
     end
   end
 
-  defp assert_live_route(path, route_pattern, live_view, path_params) do
+  defp assert_live_route(path, route_pattern, live_view, path_params, live_action \\ nil) do
     assert %{
              pipe_through: [:staff_browser],
-             phoenix_live_view: {^live_view, nil, _opts, _live_session},
+             phoenix_live_view: {^live_view, ^live_action, _opts, _live_session},
              plug: Phoenix.LiveView.Plug,
-             plug_opts: nil,
+             plug_opts: ^live_action,
              path_params: ^path_params,
              route: ^route_pattern
            } = Phoenix.Router.route_info(MembaWeb.Router, "GET", path, "localhost")

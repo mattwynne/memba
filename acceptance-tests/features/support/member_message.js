@@ -982,6 +982,38 @@ async function sendInboundClubEmail(
   return world;
 }
 
+async function trySendBlankMemberMessageToKootenayMembers(
+  world,
+  _senderName,
+  subject,
+  { expect = playwrightExpect } = {}
+) {
+  ensureState(world);
+
+  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
+
+  await openMemberComposeFromClubHome(world, kootenayClubName, { expect });
+
+  await browserInteraction(`submit blank member compose form for ${JSON.stringify(subject)}`, async () => {
+    await world.page.getByLabel("Subject").fill(subject);
+    await world.page.getByLabel("Message").fill("   \n\t  ");
+    await world.page.getByRole("button", { name: "Send to all current members" }).click();
+  });
+
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-message-compose[data-compose-state=\"composing\"]"),
+    `member compose remains editable for ${JSON.stringify(subject)}`,
+    { expect }
+  );
+
+  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
+  world.failedMessageSubject = subject;
+  world.lastMessageSubject = subject;
+
+  return world;
+}
+
 async function trySendMemberMessageToKootenayMembers(
   world,
   _senderName,
@@ -1416,6 +1448,14 @@ async function assertEachDeliverySentThroughEmailProvider(
   return world;
 }
 
+function memberMessageEmailSubjectFor(world, subject) {
+  const message = world.messages[subject];
+  assert.ok(message, "Expected a message to have been sent before checking the mailbox");
+  const club = clubById(world, message.clubId);
+  const slug = message.clubSlug || (club && club.slug);
+  return slug ? `[${slug}] ${subject}` : subject;
+}
+
 async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { senderName } = {}) {
   ensureState(world);
 
@@ -1448,9 +1488,11 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
       assert.ok(sender, `Expected ${senderName} to have been created`);
     }
 
+    const expectedSubject = memberMessageEmailSubjectFor(world, subject);
+
     const matchingEmail = newEmails.find(
       (email) =>
-        email.subject === subject &&
+        email.subject === expectedSubject &&
         email.text_body === message.body &&
         email.to.some((recipient) => recipient.includes(person.email)) &&
         (!sender || mailboxEmailFrom(email).includes(`${senderName} via Memba`))
@@ -1460,13 +1502,75 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
       assert.ok(
         matchingEmail,
         `Expected a mailbox email for ${recipientName} <${person.email}> with subject ${JSON.stringify(
-          subject
+          expectedSubject
         )}${sender ? ` from ${senderName} via Memba` : ""}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
       )
     );
   }
 
   return world;
+}
+
+async function assertEachAddressedMemberReceivedEmailSubject(world, expectedSubject) {
+  ensureState(world);
+
+  const subject = world.lastMessageSubject;
+  const message = world.messages[subject];
+  assert.ok(message, "Expected a message to have been sent before checking the mailbox");
+
+  const addressedMemberNames = world.addressedMemberNames || memberNamesForClub(world, kootenayClubName);
+  assert.ok(addressedMemberNames.length > 0, "Expected addressed members before checking email subjects");
+
+  const previousEmails = world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [];
+  const emails = await waitForLocalDeliveryFacts(
+    world,
+    previousEmails.length + addressedMemberNames.length,
+    `local provider delivery facts for ${JSON.stringify(subject)}`
+  );
+  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+
+  for (const recipientName of addressedMemberNames) {
+    const person = world.people[recipientName];
+    const matchingEmail = newEmails.find(
+      (email) =>
+        email.subject === expectedSubject &&
+        email.text_body === message.body &&
+        email.to.some((recipient) => recipient.includes(person.email))
+    );
+
+    assert.ok(
+      matchingEmail,
+      `Expected ${recipientName} to receive ${JSON.stringify(expectedSubject)}; saw ${JSON.stringify(
+        newEmails.map(mailboxEmailSummary)
+      )}`
+    );
+  }
+}
+
+async function assertNoAddressedMemberReceivedEmail(world, subject) {
+  ensureState(world);
+
+  const previousEmails = world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [];
+  const emails = await testLocalDeliveryFacts(world);
+  const previousMessageIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((email) => !previousMessageIds.includes(mailboxMessageId(email)));
+  const matchingEmail = newEmails.find((email) => email.subject === subject || email.subject.endsWith(`] ${subject}`));
+
+  assert.equal(
+    matchingEmail,
+    undefined,
+    `Expected no email for ${JSON.stringify(subject)}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+  );
+}
+
+async function assertMemberWasToldMessageBodyCannotBeBlank(world, { expect = playwrightExpect } = {}) {
+  await waitForProjectedVisible(
+    world,
+    world.page.locator("#member-message-body-error", { hasText: "Message body can’t be blank." }),
+    "blank message body validation",
+    { expect }
+  );
 }
 
 async function assertInboundRejectionEmail(world, senderName, expectedText) {
@@ -2374,6 +2478,7 @@ module.exports = {
   assertEveryAddressedMemberReceiptStatus: assertEveryAddressedMemberEmailDeliveryStatus,
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
+  assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailSupportGuidance,
@@ -2385,8 +2490,10 @@ module.exports = {
   assertMemberEmailDeliveryStatus,
   assertMemberReceiptStatus: assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
+  assertMemberWasToldMessageBodyCannotBeBlank,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
+  assertNoAddressedMemberReceivedEmail,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
@@ -2424,6 +2531,7 @@ module.exports = {
   sendMessageToKootenayMembers,
   testLocalDeliveryFacts,
   testMailboxEmails,
+  trySendBlankMemberMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers,
   updateClubSlug,
   updatePersonEmailAddresses,

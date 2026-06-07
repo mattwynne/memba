@@ -4,6 +4,7 @@ const {
   assertEachAddressedMemberHasSeparateDeliveryRecord,
   assertEachDeliverySentThroughEmailProvider,
   assertEachAddressedMemberReceivedEmailInTestMailbox,
+  assertEachAddressedMemberReceivedEmailSubject,
   assertInboundRejectionEmail,
   assertInboundRejectionEmailSupportGuidance,
   assertLastMessageAddressedTo,
@@ -13,8 +14,10 @@ const {
   assertMemberMessageNotAddressedTo,
   assertMemberEmailDeliveryStatus,
   assertMemberSeesMessageInClub,
+  assertMemberWasToldMessageBodyCannotBeBlank,
   assertMemberWasToldMessageWasNotSent,
   assertMemberWasToldToContactSupport,
+  assertNoAddressedMemberReceivedEmail,
   assertNoMemberMessageCreated,
   assertOperatorDeliveryReason,
   assertOperatorDeliveryStatus,
@@ -28,6 +31,7 @@ const {
   reportRecipientEmailStatus,
   sendInboundClubEmail,
   sendMemberMessageToKootenayMembers,
+  trySendBlankMemberMessageToKootenayMembers,
   trySendMemberMessageToKootenayMembers
 } = require("../support/member_message");
 const {
@@ -130,6 +134,16 @@ Given("club message sending is unavailable", async function () {
 });
 
 When(
+  "{word} tries to send a message to Kootenay Mountaineering Club members with subject {string} and no body",
+  async function (senderName, subject) {
+    await signInMember(this, senderName);
+    await memberBrowserAction(this, `blank member message send for ${senderName}`, () =>
+      trySendBlankMemberMessageToKootenayMembers(this, senderName, subject)
+    );
+  }
+);
+
+When(
   "{word} tries to send the message {string} to Kootenay Mountaineering Club members",
   async function (senderName, subject) {
     await signInMember(this, senderName);
@@ -145,6 +159,12 @@ Given(
     await sendMessageToKootenayMembersDirectly(this, senderName, subject);
   }
 );
+
+Then("{word} should be told the message body cannot be blank", async function (viewerName) {
+  await memberBrowserAction(this, `blank-body validation notice for ${viewerName}`, () =>
+    assertMemberWasToldMessageBodyCannotBeBlank(this)
+  );
+});
 
 Then("{word} should be told the message was not sent", async function (viewerName) {
   await memberBrowserAction(this, `not-sent failure notice for ${viewerName}`, () =>
@@ -163,6 +183,15 @@ Then(
   async function (viewerName, subject) {
     await withMemberHarness(this, viewerName, (member) =>
       assertMemberSeesMessageInClub(member, subject, kootenayClubName)
+    );
+  }
+);
+
+Then(
+  "no club message named {string} should be created",
+  async function (subject) {
+    await withMemberHarness(this, "Alice", (member) =>
+      assertNoMemberMessageCreated(member, kootenayClubName, subject)
     );
   }
 );
@@ -251,6 +280,14 @@ Then("each addressed member should receive the email in the test mailbox", async
 
 Then("each addressed member should receive an email from {word} via Memba", async function (senderName) {
   await withStaffHarness(this, (staff) => assertEachAddressedMemberReceivedEmailInTestMailbox(staff, { senderName }));
+});
+
+Then("each addressed member should receive an email with the subject {string}", async function (subject) {
+  await withStaffHarness(this, (staff) => assertEachAddressedMemberReceivedEmailSubject(staff, subject));
+});
+
+Then("no addressed member should receive an email for {string}", async function (subject) {
+  await withStaffHarness(this, (staff) => assertNoAddressedMemberReceivedEmail(staff, subject));
 });
 
 Then(
@@ -467,6 +504,10 @@ function personStateFromCommand(result) {
 }
 
 function clubSlugFor(clubName) {
+  if (clubName === kootenayClubName) {
+    return "kmc";
+  }
+
   return clubName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

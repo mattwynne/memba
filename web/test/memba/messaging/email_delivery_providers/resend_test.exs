@@ -32,6 +32,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
     request =
       email_delivery_request(
         club_name: "Kootenay <Mountaineers>",
+        club_slug: "kmc",
         body: "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
       )
 
@@ -42,7 +43,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
     assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
     assert email.reply_to == {"Bob Barker", "bob@example.com"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
-    assert email.subject == "Trip planning night"
+    assert email.subject == "[kmc] Trip planning night"
 
     assert email.text_body ==
              "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
@@ -177,6 +178,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.ResendTest do
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
+      club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
       channel: Keyword.get(overrides, :channel, :email),

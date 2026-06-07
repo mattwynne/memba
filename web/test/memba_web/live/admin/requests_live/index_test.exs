@@ -169,6 +169,24 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert_no_email_sent()
   end
 
+  test "staff can open an active request conversion URL directly", %{conn: conn} do
+    request = request_fixture("West Coast Paddlers", requester_name: "Robin Requester")
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests/#{request.request_id}")
+
+    assert has_element?(view, "#convert-request-panel-#{request.request_id}")
+    assert has_element?(view, "#convert-request-form-#{request.request_id}")
+
+    assert has_element?(
+             view,
+             "#convert-request-panel-#{request.request_id}",
+             "West Coast Paddlers"
+           )
+  end
+
   test "staff can prepare conversion with a generated editable slug using shared club rules", %{
     conn: conn
   } do

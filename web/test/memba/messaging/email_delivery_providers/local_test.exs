@@ -35,6 +35,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     request =
       email_delivery_request(
         club_name: "Kootenay <Mountaineers>",
+        club_slug: "kmc",
         body: "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
       )
 
@@ -44,7 +45,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       assert email.from == {"Bob via Memba", "messages@mail.memba.io"}
       assert email.reply_to == {"Bob", "bob@example.test"}
       assert email.to == [{"Alice", "alice@example.test"}]
-      assert email.subject == "Trip planning night"
+      assert email.subject == "[kmc] Trip planning night"
 
       assert email.text_body ==
                "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
@@ -78,7 +79,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     assert fact.recipient_address == "alice@example.test"
     assert fact.to == ["Alice <alice@example.test>"]
     assert fact.from == "Bob via Memba <messages@mail.memba.io>"
-    assert fact.subject == "Trip planning night"
+    assert fact.subject == "[kmc] Trip planning night"
 
     assert fact.text_body ==
              "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
@@ -124,6 +125,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.test"),
       club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
+      club_slug: Keyword.get(overrides, :club_slug),
       sender_name: Keyword.get(overrides, :sender_name, "Bob"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.test"),
       channel: Keyword.get(overrides, :channel, :email),

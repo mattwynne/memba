@@ -10,6 +10,7 @@ defmodule Memba.Messaging.LocalDeliveryFacts do
   use Agent
 
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.MemberMessageEmail
 
   @name __MODULE__
 
@@ -31,7 +32,7 @@ defmodule Memba.Messaging.LocalDeliveryFacts do
       sender_address: request.sender_address,
       from: "#{request.sender_name} via Memba <#{from_address()}>",
       to: ["#{request.recipient_name} <#{request.recipient_address}>"],
-      subject: request.subject,
+      subject: MemberMessageEmail.subject(request),
       text_body: request.body,
       metadata: %{
         "memba_message_id" => request.message_id,

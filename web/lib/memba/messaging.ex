@@ -877,6 +877,7 @@ defmodule Memba.Messaging do
       recipient_name: recipient.name,
       recipient_address: recipient.email,
       club_name: club_name(club),
+      club_slug: club_slug(club),
       sender_name: sender.name,
       sender_address: sender_address,
       channel: :email,
@@ -887,4 +888,7 @@ defmodule Memba.Messaging do
 
   defp club_name(%{name: name}), do: name
   defp club_name(_club), do: nil
+
+  defp club_slug(%{slug: slug}), do: slug
+  defp club_slug(_club), do: nil
 end

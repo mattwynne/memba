@@ -126,7 +126,14 @@ defmodule Memba.Onboarding.NewRequestEmail do
 
     Note:
     #{request.note}
+
+    Open this request:
+    #{staff_request_url(request)}
     """
+  end
+
+  defp staff_request_url(%Request{} = request) do
+    MembaWeb.Endpoint.url() <> "/admin/requests/" <> request.request_id
   end
 
   defp html_body(text) do
