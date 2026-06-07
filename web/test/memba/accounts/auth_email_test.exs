@@ -29,7 +29,8 @@ defmodule Memba.Accounts.AuthEmailTest do
       message_stream: "outbound-authentication"
     )
 
-    callback_url = "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin"
+    callback_url =
+      "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin&client=ipad"
 
     assert :ok = AuthEmail.deliver_sign_in_link(" ALICE@EXAMPLE.COM ", callback_url)
 
@@ -41,11 +42,19 @@ defmodule Memba.Accounts.AuthEmailTest do
 
     assert email.text_body =~ "Use this link to sign in to Memba:"
     assert email.text_body =~ callback_url
-    assert email.text_body =~ "This link expires in 15 minutes."
+    assert email.text_body =~ "This link expires in 15 minutes and can be used once."
+    assert email.text_body =~ "you can safely ignore this email"
 
     assert email.html_body =~ "Sign in to Memba"
-    assert email.html_body =~ "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin"
-    assert email.html_body =~ "This link expires in 15 minutes."
+
+    assert email.html_body =~
+             "https://app.memba.io/auth/sign-in/token-123?return_to=%2Fadmin&amp;client=ipad"
+
+    assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
+    assert email.html_body =~ "This link expires in 15 minutes and can be used once."
+    assert email.html_body =~ "Secured by Memba"
+    assert email.html_body =~ "Sent to alice@example.com."
+    refute email.html_body =~ "help@memba.io"
 
     assert email.provider_options == %{
              message_stream: "outbound-authentication"
@@ -76,6 +85,64 @@ defmodule Memba.Accounts.AuthEmailTest do
                %{name: "memba_auth_email_stream", value: "auth"}
              ]
            }
+  end
+
+  test "builds a group-led sign-in-link email when group context is supplied" do
+    Application.put_env(:memba, AuthEmail,
+      provider: :postmark,
+      from: "auth@mail.memba.io",
+      message_stream: "outbound-authentication"
+    )
+
+    callback_url = "https://choir.memba.test/auth/sign-in/token-123"
+    group_name = "Wessex <Choir>\r\nBcc: attacker@example.com"
+
+    assert :ok =
+             AuthEmail.deliver_sign_in_link("member@example.com", callback_url,
+               group_name: group_name
+             )
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.from ==
+             {"Wessex <Choir> Bcc: attacker@example.com via Memba", "auth@mail.memba.io"}
+
+    assert email.subject == "Sign in to Wessex <Choir> Bcc: attacker@example.com"
+    refute email.subject =~ "\n"
+    refute elem(email.from, 0) =~ "\n"
+
+    assert email.text_body =~
+             "Use this link to sign in to Wessex <Choir> Bcc: attacker@example.com:"
+
+    assert email.text_body =~ "This link expires in 15 minutes and can be used once."
+
+    assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com"
+    assert email.html_body =~ "Sign in to Wessex &lt;Choir&gt; Bcc: attacker@example.com"
+    assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com runs on Memba"
+    refute email.html_body =~ "\r\nBcc"
+    refute email.html_body =~ "<Choir>"
+  end
+
+  test "accepts nested club context for group-led sign-in-link email" do
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.local",
+      message_stream: "development-auth"
+    )
+
+    club = %{name: "Kootenay Mountaineering Club", slug: "kmc"}
+
+    assert :ok =
+             AuthEmail.deliver_sign_in_link(
+               "member@example.com",
+               "http://kmc.lvh.me:4000/auth/sign-in/token",
+               club: club
+             )
+
+    assert_received {:email, %Swoosh.Email{} = email}
+    assert email.from == {"Kootenay Mountaineering Club via Memba", "auth@mail.memba.local"}
+    assert email.subject == "Sign in to Kootenay Mountaineering Club"
+    assert email.html_body =~ "Kootenay Mountaineering Club"
+    assert email.provider_options == %{message_stream: "development-auth"}
   end
 
   test "sends local auth email without requiring a Postmark server token" do
