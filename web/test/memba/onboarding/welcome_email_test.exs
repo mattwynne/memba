@@ -52,13 +52,26 @@ defmodule Memba.Onboarding.WelcomeEmailTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"Memba", "auth@mail.memba.io"}
+    assert email.from == {"West Coast Paddlers via Memba", "auth@mail.memba.io"}
     assert email.to == [{"Robin Requester", "robin@example.com"}]
     assert email.subject == "Welcome to West Coast Paddlers on Memba"
     assert email.provider_options == %{message_stream: "outbound-authentication"}
 
     assert email.text_body =~ "Welcome to West Coast Paddlers on Memba."
     assert email.text_body =~ "http://west-coast-paddlers.lvh.me:4002/auth/sign-in/"
+    assert email.text_body =~ "This link expires in 15 minutes and can be used once."
+
+    assert email.html_body =~ "<!doctype html>"
+    assert email.html_body =~ "West Coast Paddlers"
+    assert email.html_body =~ "Welcome to West Coast Paddlers on Memba"
+    assert email.html_body =~ "Open West Coast Paddlers"
+    assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
+    assert email.html_body =~ "This link expires in 15 minutes and can be used once."
+    assert email.html_body =~ "Secured by Memba"
+    assert email.html_body =~ "West Coast Paddlers runs on Memba"
+    assert email.html_body =~ "Sent to robin@example.com."
+    refute email.html_body =~ "<html><body>"
+    refute email.html_body =~ "help@memba.io"
 
     assert [_, callback_url] =
              Regex.run(
@@ -75,6 +88,50 @@ defmodule Memba.Onboarding.WelcomeEmailTest do
 
     token = callback_uri.path |> Path.basename()
     assert {:ok, %{email: "robin@example.com"}} = Accounts.consume_sign_in_token(token)
+
+    escaped_callback_url =
+      callback_url
+      |> Phoenix.HTML.html_escape()
+      |> Phoenix.HTML.safe_to_string()
+
+    assert email.html_body =~ escaped_callback_url
+  end
+
+  test "escapes welcome email content and sanitizes header values from request and club context" do
+    request = %Request{
+      request_id: Memba.ID.generate(:onboarding_request),
+      requester_name: "Robin <Requester>\r\nFrom: forged@example.com",
+      requester_email: "robin@example.com",
+      requested_club_name: "West <Coast>"
+    }
+
+    club = %Club{
+      club_id: Memba.ID.generate(:club),
+      name: "West <Coast>\r\nBcc: attacker@example.com",
+      slug: "west-coast"
+    }
+
+    assert :ok = WelcomeEmail.deliver(%{request: request, club: club})
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.from ==
+             {"West <Coast> Bcc: attacker@example.com via Memba", "auth@mail.memba.io"}
+
+    assert email.to == [{"Robin <Requester> From: forged@example.com", "robin@example.com"}]
+    assert email.subject == "Welcome to West <Coast> Bcc: attacker@example.com on Memba"
+
+    refute email.subject =~ "\n"
+    refute elem(email.from, 0) =~ "\n"
+
+    {recipient_name, _recipient_email} = List.first(email.to)
+    refute recipient_name =~ "\n"
+
+    assert email.html_body =~ "West &lt;Coast&gt; Bcc: attacker@example.com"
+    assert email.html_body =~ "Robin &lt;Requester&gt; From: forged@example.com"
+    refute email.html_body =~ "<Coast>"
+    refute email.html_body =~ "<Requester>"
+    refute email.html_body =~ "\r\nBcc"
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
