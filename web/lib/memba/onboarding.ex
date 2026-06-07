@@ -7,6 +7,9 @@ defmodule Memba.Onboarding do
 
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Roles
   alias Memba.Onboarding.Request
   alias Memba.Onboarding.WelcomeEmail
   alias Memba.Repo
@@ -181,7 +184,13 @@ defmodule Memba.Onboarding do
     with :ok <- validate_request_conversion(request, request_conversion_attrs, opts),
          :ok <- create_conversion_club(club_id, club_attrs),
          :ok <- create_conversion_person(person),
-         :ok <- create_conversion_membership(membership_id, club_id, person.person_id) do
+         :ok <- create_conversion_membership(membership_id, club_id, person.person_id),
+         :ok <-
+           assign_conversion_membership_administrator(
+             club_id,
+             membership_id,
+             person.person_id
+           ) do
       %{
         request: request,
         request_conversion_attrs: request_conversion_attrs,
@@ -251,6 +260,17 @@ defmodule Memba.Onboarding do
       person_id: person_id
     }
     |> Membership.add_member(consistency: :strong)
+    |> normalize_command_result()
+  end
+
+  defp assign_conversion_membership_administrator(club_id, membership_id, person_id) do
+    %AssignMemberRole{
+      club_id: club_id,
+      membership_id: membership_id,
+      person_id: person_id,
+      role_id: Roles.membership_administrator_role_id(club_id)
+    }
+    |> MembershipApp.dispatch(consistency: :strong)
     |> normalize_command_result()
   end
 

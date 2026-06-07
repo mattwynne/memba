@@ -4,7 +4,10 @@ defmodule Memba.OnboardingConversionTest do
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.SignInToken
   alias Memba.Membership
+  alias Memba.Membership.App, as: MembershipApp
+  alias Memba.Membership.Club
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+  alias Memba.Membership.Roles
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
@@ -60,6 +63,8 @@ defmodule Memba.OnboardingConversionTest do
                request.requester_email
              )
 
+      assert_membership_administrator_assignment(conversion)
+
       assert_receive {:welcome_email, delivered_conversion}
       assert delivered_conversion.request.request_id == request.request_id
       assert delivered_conversion.club.club_id == conversion.club.club_id
@@ -98,6 +103,8 @@ defmodule Memba.OnboardingConversionTest do
                conversion.club.club_id,
                "robin@example.com"
              )
+
+      assert_membership_administrator_assignment(conversion)
     end
 
     test "does not mark the request converted or deliver welcome email when club creation fails" do
@@ -187,6 +194,18 @@ defmodule Memba.OnboardingConversionTest do
       })
 
     request
+  end
+
+  defp assert_membership_administrator_assignment(conversion) do
+    club_id = conversion.club.club_id
+    membership_id = conversion.membership_id
+    person_id = conversion.person.person_id
+    role_id = Roles.membership_administrator_role_id(club_id)
+
+    assert %Club{role_assignments: role_assignments} =
+             MembershipApp.aggregate_state(Club, club_id)
+
+    assert %{{^membership_id, ^role_id} => %{person_id: ^person_id}} = role_assignments
   end
 
   defp configure_auth_email do
