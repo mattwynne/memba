@@ -78,6 +78,18 @@ defmodule Memba.Accounts.AuthEmailTest do
 
     assert email.from == {"Memba", "auth@mail.memba.io"}
     assert email.to == [{"", "alice@example.com"}]
+    assert email.subject == "Sign in to Memba"
+
+    assert email.text_body =~ "Use this link to sign in to Memba:"
+    assert email.text_body =~ "https://app.memba.io/auth/sign-in/token-123"
+    assert email.text_body =~ "This link expires in 15 minutes and can be used once."
+
+    assert email.html_body =~ "Sign in to Memba"
+    assert email.html_body =~ ~s|href="https://app.memba.io/auth/sign-in/token-123"|
+    assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
+    assert email.html_body =~ "Secured by Memba"
+    assert email.html_body =~ "Sent to alice@example.com."
+    refute email.html_body =~ "help@memba.io"
 
     assert email.provider_options == %{
              tags: [
@@ -162,6 +174,11 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert_received {:email, %Swoosh.Email{} = email}
     assert email.from == {"Memba", "auth@mail.memba.local"}
     assert email.to == [{"", "matt@memba.io"}]
+    assert email.subject == "Sign in to Memba"
+    assert email.text_body =~ "http://localhost:4000/auth/sign-in/token"
+    assert email.html_body =~ "Sign in to Memba"
+    assert email.html_body =~ ~s|href="http://localhost:4000/auth/sign-in/token"|
+    assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
     assert email.provider_options == %{message_stream: "development-auth"}
   end
 

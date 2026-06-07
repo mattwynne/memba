@@ -154,6 +154,52 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert email.headers["X-Memba-Rejection-Delivery-Reference"] == "del-ref-456"
   end
 
+  test "falls back to Memba-led subject and generic next steps without group context or reply-to" do
+    Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
+
+    Application.put_env(:memba, Postmark, from: {"Memba", "messages@mail.memba.test"})
+
+    inbound_email =
+      inbound_email(%{
+        provider: "postmark",
+        provider_message_id: "fallback-rejection-template",
+        from_address: "sender@example.com",
+        recipient_addresses: ["unknown@clubs.memba.io"],
+        subject: "Plain text?\r\nBcc: attacker@example.com",
+        text_body: "<script>alert('x')</script>"
+      })
+
+    assert :ok =
+             InboundClubRejectionEmail.deliver(
+               inbound_email,
+               "unknown@clubs.memba.io",
+               "plain_text_required",
+               "fallback-reference"
+             )
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.subject == "Your email wasn't posted"
+    refute email.reply_to
+
+    assert email.text_body =~ "Your email wasn't posted."
+    assert email.text_body =~ "We couldn't read a plain-text message body"
+    assert email.text_body =~ "If you need a hand, contact Memba support."
+    assert email.text_body =~ "Nothing was sent to a group"
+    assert email.text_body =~ "Subject: Plain text? Bcc: attacker@example.com"
+    refute email.text_body =~ "\r\nBcc"
+
+    assert email.html_body =~ "Delivery notice"
+    assert email.html_body =~ "Your email wasn&#39;t posted"
+    assert email.html_body =~ "If you need a hand, contact Memba support."
+    assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+    refute email.html_body =~ "<script>"
+    refute email.html_body =~ "help@memba.io"
+
+    assert email.provider_options[:metadata]["memba_reject_reason"] == "plain_text_required"
+    assert email.provider_options[:metadata]["memba_reject_ref"] == "fallback-reference"
+  end
+
   test "maps each known rejection reason to plain-language text and HTML copy" do
     Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
 
