@@ -81,22 +81,91 @@ defmodule Memba.Cucumber.MembershipSteps do
     assert_person_membership(context, "Alice", "Nelson Paddling Club")
   end
 
+  step "Kootenay Mountaineering Club has the slug {string}", %{args: [slug]} = context do
+    create_club(context, "Kootenay Mountaineering Club", slug)
+  end
+
+  step "Pat starts creating the club {string}", %{args: [club_name]} = context do
+    Map.put(context, :pending_club, %{name: club_name, slug: Slug.default_from_name(club_name)})
+  end
+
+  step "Memba should suggest the slug {string}", %{args: [expected_slug]} = context do
+    assert %{slug: ^expected_slug} = Map.fetch!(context, :pending_club)
+    context
+  end
+
+  step "Pat saves the club", context do
+    %{name: club_name, slug: slug} = Map.fetch!(context, :pending_club)
+    create_club(context, club_name, slug)
+  end
+
+  step "Kootenay Mountaineering Club should have the slug {string}", %{args: [slug]} = context do
+    assert_club_slug(context, "Kootenay Mountaineering Club", slug)
+  end
+
+  step "Pat tries to change Kootenay Mountaineering Club's slug to {string}",
+       %{args: [slug]} = context do
+    try_change_club_slug(context, "Kootenay Mountaineering Club", slug)
+  end
+
+  step "Pat tries to change Nelson Paddling Club's slug to {string}", %{args: [slug]} = context do
+    try_change_club_slug(context, "Nelson Paddling Club", slug)
+  end
+
+  step "Memba should reject the club slug as invalid", context do
+    assert {:error, :invalid_format} = Map.fetch!(context, :club_slug_change_result)
+    context
+  end
+
+  step "Memba should reject the club slug as already taken", context do
+    assert {:error, :slug_taken} = Map.fetch!(context, :club_slug_change_result)
+    context
+  end
+
+  step "Kootenay Mountaineering Club should keep its previous slug", context do
+    assert_club_kept_previous_slug(context, "Kootenay Mountaineering Club")
+  end
+
+  step "Nelson Paddling Club should keep its previous slug", context do
+    assert_club_kept_previous_slug(context, "Nelson Paddling Club")
+  end
+
   defp create_club(context, club_name) do
-    club_id = Memba.ID.generate(:club)
+    create_club(context, club_name, scenario_slug(context, club_name))
+  end
 
-    assert :ok =
-             App.dispatch(
-               %CreateClub{
-                 club_id: club_id,
-                 name: club_name,
-                 slug: scenario_slug(context, club_name)
-               },
-               consistency: :strong
-             )
+  defp create_club(context, club_name, slug) do
+    case get_in(context, [:clubs, club_name]) do
+      nil ->
+        club_id = Memba.ID.generate(:club)
 
-    assert %ClubProjection{club_id: ^club_id, name: ^club_name} = Membership.get_club(club_id)
+        assert :ok =
+                 App.dispatch(
+                   %CreateClub{
+                     club_id: club_id,
+                     name: club_name,
+                     slug: slug
+                   },
+                   consistency: :strong
+                 )
 
-    update_context_map(context, :clubs, club_name, club_id)
+        assert %ClubProjection{club_id: ^club_id, name: ^club_name, slug: ^slug} =
+                 Membership.get_club(club_id)
+
+        update_context_map(context, :clubs, club_name, club_id)
+
+      club_id ->
+        assert :ok =
+                 Membership.update_club(
+                   %{club_id: club_id, name: club_name, slug: slug},
+                   consistency: :strong
+                 )
+
+        assert %ClubProjection{club_id: ^club_id, name: ^club_name, slug: ^slug} =
+                 Membership.get_club(club_id)
+
+        context
+    end
   end
 
   defp create_people(context, names) do
@@ -190,6 +259,32 @@ defmodule Memba.Cucumber.MembershipSteps do
              Enum.find(Membership.list_active_members_of_club(club_id), &(&1.id == person_id))
 
     update_context_map(context, :memberships, {club_name, person_name}, membership_id)
+  end
+
+  defp try_change_club_slug(context, club_name, slug) do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    previous_slug = Membership.get_club(club_id).slug
+
+    result =
+      Membership.update_club(
+        %{club_id: club_id, name: club_name, slug: slug},
+        consistency: :strong
+      )
+
+    context
+    |> Map.put(:club_slug_change_result, result)
+    |> update_context_map(:previous_club_slugs, club_name, previous_slug)
+  end
+
+  defp assert_club_slug(context, club_name, expected_slug) do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+    assert %{slug: ^expected_slug} = Membership.get_club(club_id)
+    context
+  end
+
+  defp assert_club_kept_previous_slug(context, club_name) do
+    previous_slug = fetch_from_context!(context, :previous_club_slugs, club_name)
+    assert_club_slug(context, club_name, previous_slug)
   end
 
   defp person_id_from_context!(context, person_name) do

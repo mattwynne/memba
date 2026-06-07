@@ -6,31 +6,28 @@ Feature: Staff club slugs
 
 # Rule: A club gets an address-safe default slug from its name
 
-    @todo
     Scenario: Staff create a club with the suggested slug
       When Pat starts creating the club "Kootenay Mountaineering Club"
-      Then Pat should see the suggested slug "kootenay-mountaineering-club"
+      Then Memba should suggest the slug "kootenay-mountaineering-club"
       When Pat saves the club
       Then Kootenay Mountaineering Club should have the slug "kootenay-mountaineering-club"
 
 # Rule: Staff-edited slugs must already be address-safe
 
-    @todo
     Scenario: Staff enter an invalid slug
       Given Kootenay Mountaineering Club is a club
-      When Pat changes Kootenay Mountaineering Club's slug to "kmc club!"
-      Then Pat should be told the slug is invalid
-      And Pat should not be able to save the club slug
+      When Pat tries to change Kootenay Mountaineering Club's slug to "kmc club!"
+      Then Memba should reject the club slug as invalid
+      And Kootenay Mountaineering Club should keep its previous slug
 
 # Rule: A slug can belong to only one club
 
-    @todo
     Scenario: Staff enter a slug that another club already uses
       Given Kootenay Mountaineering Club has the slug "kmc"
       And Nelson Paddling Club is a club
-      When Pat changes Nelson Paddling Club's slug to "kmc"
-      Then Pat should be told the slug is already taken
-      And Pat should not be able to save the club slug
+      When Pat tries to change Nelson Paddling Club's slug to "kmc"
+      Then Memba should reject the club slug as already taken
+      And Nelson Paddling Club should keep its previous slug
 
 # Rule: A club slug routes public visitors to that club's public page
 
