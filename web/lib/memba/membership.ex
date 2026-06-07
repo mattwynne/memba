@@ -9,9 +9,11 @@ defmodule Memba.Membership do
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.RemoveMember
+  alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.EmailAddresses
@@ -101,6 +103,60 @@ defmodule Memba.Membership do
   """
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Assign a club role to an active member as a club member actor.
+
+  Unlike staff/system setup paths, this entry point requires `:actor_person_id`
+  (or `"actor_person_id"`) and authorizes the actor through the projected
+  `club.manage_members` permission before dispatching the role-assignment
+  command. The target membership must be active and must match the submitted
+  club/person IDs.
+  """
+  def assign_member_role_as_club_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- assign_member_role_command(attrs),
+         :ok <-
+           Authorization.authorize_manage_members(
+             command.club_id,
+             command.assigned_by_person_id
+           ),
+         :ok <-
+           ensure_active_membership(
+             command.club_id,
+             command.person_id,
+             command.membership_id
+           ) do
+      dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Remove a club role from an active member as a club member actor.
+
+  Staff/system setup paths remain separate. This entry point requires
+  `:actor_person_id` (or `"actor_person_id"`) and authorizes the actor through
+  the projected `club.manage_members` permission before dispatching the
+  role-removal command. The target membership must be active and must match the
+  submitted club/person IDs.
+  """
+  def remove_member_role_as_club_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command} <- remove_member_role_command(attrs),
+         :ok <-
+           Authorization.authorize_manage_members(
+             command.club_id,
+             command.removed_by_person_id
+           ),
+         :ok <-
+           ensure_active_membership(
+             command.club_id,
+             command.person_id,
+             command.membership_id
+           ) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -594,11 +650,67 @@ defmodule Memba.Membership do
     end
   end
 
+  defp assign_member_role_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, role_id} <- fetch_required(attrs, :role_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
+      {:ok,
+       %AssignMemberRole{
+         club_id: club_id,
+         membership_id: membership_id,
+         person_id: person_id,
+         role_id: role_id,
+         assigned_by_person_id: actor_person_id
+       }}
+    end
+  end
+
+  defp remove_member_role_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, role_id} <- fetch_required(attrs, :role_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do
+      {:ok,
+       %RemoveMemberRole{
+         club_id: club_id,
+         membership_id: membership_id,
+         person_id: person_id,
+         role_id: role_id,
+         removed_by_person_id: actor_person_id
+       }}
+    end
+  end
+
   defp prevent_duplicate_active_membership(%AddMember{} = command) do
     if active_member_of_club?(command.club_id, command.person_id) do
       {:error, :already_active_member}
     else
       :ok
+    end
+  end
+
+  defp ensure_active_membership(club_id, person_id, membership_id) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, person_id} <- ID.cast(:person, person_id),
+         {:ok, membership_id} <- ID.cast(:membership, membership_id) do
+      active? =
+        MembershipProjection
+        |> where([membership], membership.membership_id == ^membership_id)
+        |> where([membership], membership.club_id == ^club_id)
+        |> where([membership], membership.person_id == ^person_id)
+        |> where([membership], membership.active == true)
+        |> Repo.exists?()
+
+      if active? do
+        :ok
+      else
+        {:error, :member_not_active}
+      end
+    else
+      :error -> {:error, :member_not_active}
     end
   end
 
