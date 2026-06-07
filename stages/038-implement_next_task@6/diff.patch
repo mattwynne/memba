@@ -1,0 +1,835 @@
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index d7a5a71..a1ceb00 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Add commands/events for creating the default Membership Administrator role, granting `club.manage_members`, and assigning/removing the role from active members. Prefer events that preserve future role customisation rather than baking all logic into one opaque flag.
+ - [x] 004 Ensure club creation initializes the default Membership Administrator role and permission bundle. If the creator/first member is not known at `CreateClub` time, assign the role when the first member is added through onboarding conversion or an explicit assignment command.
+ - [x] 005 Update onboarding conversion so the requester/first member receives the Membership Administrator assignment after membership creation.
+-- [ ] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.
++- [x] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.
+ - [ ] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.
+ - [ ] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.
+ - [ ] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
+diff --git a/web/config/config.exs b/web/config/config.exs
+index 653266a..8d1b49d 100644
+--- a/web/config/config.exs
++++ b/web/config/config.exs
+@@ -14,6 +14,10 @@ config :memba,
+     :projection_versions,
+     :membership_clubs,
+     :membership_memberships,
++    :membership_member_permissions,
++    :membership_role_assignments,
++    :membership_role_permissions,
++    :membership_roles,
+     :membership_person_email_addresses,
+     :membership_people,
+     :messaging_messages,
+diff --git a/web/lib/memba/application.ex b/web/lib/memba/application.ex
+index a838aaf..e03b1f4 100644
+--- a/web/lib/memba/application.ex
++++ b/web/lib/memba/application.ex
+@@ -22,6 +22,7 @@ defmodule Memba.Application do
+       Memba.Messaging.Projectors.InboundEmailSource,
+       Memba.Membership.Projectors.Club,
+       Memba.Membership.Projectors.Membership,
++      Memba.Membership.Projectors.Role,
+       Memba.Membership.Projectors.Person,
+       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
+       # Start a worker by calling: Memba.Worker.start_link(arg)
+diff --git a/web/lib/memba/membership/projections/member_permission.ex b/web/lib/memba/membership/projections/member_permission.ex
+new file mode 100644
+index 0000000..c4f9eec
+--- /dev/null
++++ b/web/lib/memba/membership/projections/member_permission.ex
+@@ -0,0 +1,18 @@
++defmodule Memba.Membership.Projections.MemberPermission do
++  @moduledoc """
++  Flattened read model projection for currently active permissions held by members.
++  """
++
++  use Ecto.Schema
++
++  @primary_key false
++  schema "membership_member_permissions" do
++    field :club_id, :string
++    field :membership_id, :string
++    field :person_id, :string
++    field :permission, :string
++    field :grant_count, :integer
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projections/role.ex b/web/lib/memba/membership/projections/role.ex
+new file mode 100644
+index 0000000..d89ec17
+--- /dev/null
++++ b/web/lib/memba/membership/projections/role.ex
+@@ -0,0 +1,16 @@
++defmodule Memba.Membership.Projections.Role do
++  @moduledoc """
++  Read model projection for a club-scoped role in the Membership context.
++  """
++
++  use Ecto.Schema
++
++  @primary_key {:role_id, :string, autogenerate: false}
++  schema "membership_roles" do
++    field :club_id, :string
++    field :role_key, :string
++    field :name, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projections/role_assignment.ex b/web/lib/memba/membership/projections/role_assignment.ex
+new file mode 100644
+index 0000000..f5bf844
+--- /dev/null
++++ b/web/lib/memba/membership/projections/role_assignment.ex
+@@ -0,0 +1,18 @@
++defmodule Memba.Membership.Projections.RoleAssignment do
++  @moduledoc """
++  Read model projection for a role assignment to a club membership.
++  """
++
++  use Ecto.Schema
++
++  @primary_key false
++  schema "membership_role_assignments" do
++    field :club_id, :string
++    field :membership_id, :string
++    field :person_id, :string
++    field :role_id, :string
++    field :active, :boolean
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projections/role_permission.ex b/web/lib/memba/membership/projections/role_permission.ex
+new file mode 100644
+index 0000000..67a4465
+--- /dev/null
++++ b/web/lib/memba/membership/projections/role_permission.ex
+@@ -0,0 +1,16 @@
++defmodule Memba.Membership.Projections.RolePermission do
++  @moduledoc """
++  Read model projection for an app-defined permission granted to a club role.
++  """
++
++  use Ecto.Schema
++
++  @primary_key false
++  schema "membership_role_permissions" do
++    field :club_id, :string
++    field :role_id, :string
++    field :permission, :string
++
++    timestamps(type: :utc_datetime_usec)
++  end
++end
+diff --git a/web/lib/memba/membership/projectors/club.ex b/web/lib/memba/membership/projectors/club.ex
+index 18c0d7b..6ae65ee 100644
+--- a/web/lib/memba/membership/projectors/club.ex
++++ b/web/lib/memba/membership/projectors/club.ex
+@@ -14,6 +14,7 @@ defmodule Memba.Membership.Projectors.Club do
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+   alias Memba.Membership.Events.ClubUpdated
+   alias Memba.Membership.Events.MemberRoleAssigned
++  alias Memba.Membership.Events.MemberRoleRemoved
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Slug
+ 
+@@ -44,6 +45,8 @@ defmodule Memba.Membership.Projectors.Club do
+ 
+   project(%MemberRoleAssigned{}, fn multi -> multi end)
+ 
++  project(%MemberRoleRemoved{}, fn multi -> multi end)
++
+   defp projected_slug(%ClubCreated{} = event) do
+     case Slug.validate(event.slug) do
+       {:ok, slug} -> {:ok, slug}
+diff --git a/web/lib/memba/membership/projectors/role.ex b/web/lib/memba/membership/projectors/role.ex
+new file mode 100644
+index 0000000..11f5805
+--- /dev/null
++++ b/web/lib/memba/membership/projectors/role.ex
+@@ -0,0 +1,246 @@
++defmodule Memba.Membership.Projectors.Role do
++  @moduledoc """
++  Projects club role, role permission, role assignment, and flattened member permission read models.
++  """
++
++  use Commanded.Projections.Ecto,
++    application: Memba.Membership.App,
++    repo: Memba.Repo,
++    name: "Memba.Membership.Projectors.Role",
++    consistency: :strong
++
++  import Ecto.Query
++
++  alias Memba.Membership.Events.ClubRoleDefined
++  alias Memba.Membership.Events.ClubRolePermissionGranted
++  alias Memba.Membership.Events.MemberRemoved
++  alias Memba.Membership.Events.MemberRoleAssigned
++  alias Memba.Membership.Events.MemberRoleRemoved
++  alias Memba.Membership.Projections.MemberPermission, as: MemberPermissionProjection
++  alias Memba.Membership.Projections.Role, as: RoleProjection
++  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
++  alias Memba.Membership.Projections.RolePermission, as: RolePermissionProjection
++
++  project(%ClubRoleDefined{} = event, fn multi ->
++    now = DateTime.utc_now(:microsecond)
++
++    Ecto.Multi.insert(
++      multi,
++      :membership_role,
++      %RoleProjection{
++        club_id: event.club_id,
++        role_id: event.role_id,
++        role_key: event.role_key,
++        name: event.name,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: [
++        set: [
++          club_id: event.club_id,
++          role_key: event.role_key,
++          name: event.name,
++          updated_at: now
++        ]
++      ],
++      conflict_target: :role_id
++    )
++  end)
++
++  project(%ClubRolePermissionGranted{} = event, fn multi ->
++    now = DateTime.utc_now(:microsecond)
++
++    multi
++    |> Ecto.Multi.insert(
++      :membership_role_permission,
++      %RolePermissionProjection{
++        club_id: event.club_id,
++        role_id: event.role_id,
++        permission: event.permission,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: :nothing,
++      conflict_target: [:role_id, :permission]
++    )
++    |> Ecto.Multi.run(:membership_member_permissions_from_role_permission, fn repo, _changes ->
++      active_assignments =
++        repo.all(
++          from(assignment in RoleAssignmentProjection,
++            where: assignment.role_id == ^event.role_id,
++            where: assignment.active == true
++          )
++        )
++
++      Enum.each(active_assignments, fn assignment ->
++        increment_member_permission(repo, assignment, event.permission)
++      end)
++
++      {:ok, length(active_assignments)}
++    end)
++  end)
++
++  project(%MemberRoleAssigned{} = event, fn multi ->
++    now = DateTime.utc_now(:microsecond)
++
++    multi
++    |> Ecto.Multi.insert(
++      :membership_role_assignment,
++      %RoleAssignmentProjection{
++        club_id: event.club_id,
++        membership_id: event.membership_id,
++        person_id: event.person_id,
++        role_id: event.role_id,
++        active: true,
++        inserted_at: now,
++        updated_at: now
++      },
++      on_conflict: [
++        set: [
++          club_id: event.club_id,
++          person_id: event.person_id,
++          active: true,
++          updated_at: now
++        ]
++      ],
++      conflict_target: [:membership_id, :role_id]
++    )
++    |> Ecto.Multi.run(:membership_member_permissions_from_role_assignment, fn repo, _changes ->
++      permissions = role_permissions(repo, event.role_id)
++
++      assignment = %RoleAssignmentProjection{
++        club_id: event.club_id,
++        membership_id: event.membership_id,
++        person_id: event.person_id,
++        role_id: event.role_id,
++        active: true
++      }
++
++      Enum.each(permissions, fn permission ->
++        increment_member_permission(repo, assignment, permission)
++      end)
++
++      {:ok, permissions}
++    end)
++  end)
++
++  project(%MemberRoleRemoved{} = event, fn multi ->
++    now = DateTime.utc_now(:microsecond)
++
++    multi
++    |> Ecto.Multi.update_all(
++      :membership_role_assignment,
++      role_assignment_query(event.membership_id, event.role_id),
++      set: [active: false, updated_at: now]
++    )
++    |> Ecto.Multi.run(:membership_member_permissions_from_removed_role_assignment, fn repo,
++                                                                                      _changes ->
++      permissions = role_permissions(repo, event.role_id)
++
++      Enum.each(permissions, fn permission ->
++        decrement_member_permission(repo, event, permission)
++      end)
++
++      {:ok, permissions}
++    end)
++  end)
++
++  project(%MemberRemoved{} = event, fn multi ->
++    now = DateTime.utc_now(:microsecond)
++
++    multi
++    |> Ecto.Multi.update_all(
++      :membership_role_assignments,
++      membership_role_assignments_query(event.membership_id),
++      set: [active: false, updated_at: now]
++    )
++    |> Ecto.Multi.delete_all(
++      :membership_member_permissions,
++      member_permissions_by_membership_query(event.membership_id)
++    )
++  end)
++
++  defp role_permissions(repo, role_id) do
++    repo.all(
++      from(permission in RolePermissionProjection,
++        where: permission.role_id == ^role_id,
++        order_by: [asc: permission.permission],
++        select: permission.permission
++      )
++    )
++  end
++
++  defp increment_member_permission(repo, assignment, permission) do
++    now = DateTime.utc_now(:microsecond)
++
++    repo.insert_all(
++      MemberPermissionProjection,
++      [
++        %{
++          club_id: assignment.club_id,
++          membership_id: assignment.membership_id,
++          person_id: assignment.person_id,
++          permission: permission,
++          grant_count: 1,
++          inserted_at: now,
++          updated_at: now
++        }
++      ],
++      on_conflict: [inc: [grant_count: 1], set: [updated_at: now]],
++      conflict_target: [:club_id, :person_id, :membership_id, :permission]
++    )
++  end
++
++  defp decrement_member_permission(repo, event, permission) do
++    now = DateTime.utc_now(:microsecond)
++
++    repo.update_all(
++      member_permission_query(event.club_id, event.person_id, event.membership_id, permission),
++      inc: [grant_count: -1],
++      set: [updated_at: now]
++    )
++
++    repo.delete_all(
++      from(member_permission in MemberPermissionProjection,
++        where: member_permission.club_id == ^event.club_id,
++        where: member_permission.person_id == ^event.person_id,
++        where: member_permission.membership_id == ^event.membership_id,
++        where: member_permission.permission == ^permission,
++        where: member_permission.grant_count <= 0
++      )
++    )
++  end
++
++  defp role_assignment_query(membership_id, role_id) do
++    from(assignment in RoleAssignmentProjection,
++      where: assignment.membership_id == ^membership_id,
++      where: assignment.role_id == ^role_id
++    )
++  end
++
++  defp membership_role_assignments_query(membership_id) do
++    from(assignment in RoleAssignmentProjection,
++      where: assignment.membership_id == ^membership_id
++    )
++  end
++
++  defp member_permissions_by_membership_query(membership_id) do
++    from(member_permission in MemberPermissionProjection,
++      where: member_permission.membership_id == ^membership_id
++    )
++  end
++
++  defp member_permission_query(club_id, person_id, membership_id, permission) do
++    from(member_permission in MemberPermissionProjection,
++      where: member_permission.club_id == ^club_id,
++      where: member_permission.person_id == ^person_id,
++      where: member_permission.membership_id == ^membership_id,
++      where: member_permission.permission == ^permission
++    )
++  end
++
++  @impl Commanded.Projections.Ecto
++  def after_update(event, metadata, changes) do
++    Memba.ReadModelChanges.publish(__MODULE__, event, metadata, changes)
++  end
++end
+diff --git a/web/lib/memba/release.ex b/web/lib/memba/release.ex
+index 9018cf9..0d4f532 100644
+--- a/web/lib/memba/release.ex
++++ b/web/lib/memba/release.ex
+@@ -55,8 +55,12 @@ defmodule Memba.Release do
+   @required_schema_modules [
+     Memba.Accounts.SignInToken,
+     Memba.Membership.Projections.Club,
++    Memba.Membership.Projections.MemberPermission,
+     Memba.Membership.Projections.Membership,
+     Memba.Membership.Projections.Person,
++    Memba.Membership.Projections.Role,
++    Memba.Membership.Projections.RoleAssignment,
++    Memba.Membership.Projections.RolePermission,
+     Memba.Messaging.Projections.EmailDelivery,
+     Memba.Messaging.Projections.InboundEmailSource,
+     Memba.Messaging.Projections.MemberEmailDelivery,
+diff --git a/web/lib/memba_web/controllers/dev_test_support_controller.ex b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+index 22bcf1f..f1c0482 100644
+--- a/web/lib/memba_web/controllers/dev_test_support_controller.ex
++++ b/web/lib/memba_web/controllers/dev_test_support_controller.ex
+@@ -13,6 +13,7 @@ defmodule MembaWeb.DevTestSupportController do
+   @projectors [
+     Memba.Membership.Projectors.Club,
+     Memba.Membership.Projectors.Membership,
++    Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
+     Memba.Messaging.Projectors.EmailDelivery,
+diff --git a/web/priv/repo/migrations/20260607223552_create_membership_role_projections.exs b/web/priv/repo/migrations/20260607223552_create_membership_role_projections.exs
+new file mode 100644
+index 0000000..94cac4d
+--- /dev/null
++++ b/web/priv/repo/migrations/20260607223552_create_membership_role_projections.exs
+@@ -0,0 +1,65 @@
++defmodule Memba.Repo.Migrations.CreateMembershipRoleProjections do
++  use Ecto.Migration
++
++  def change do
++    create table(:membership_roles, primary_key: false) do
++      add :role_id, :text, primary_key: true
++      add :club_id, :text, null: false
++      add :role_key, :text
++      add :name, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_roles, [:club_id])
++    create unique_index(:membership_roles, [:club_id, :role_key], where: "role_key IS NOT NULL")
++
++    create table(:membership_role_permissions, primary_key: false) do
++      add :club_id, :text, null: false
++      add :role_id, :text, null: false
++      add :permission, :text, null: false
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_role_permissions, [:club_id])
++    create index(:membership_role_permissions, [:permission])
++    create unique_index(:membership_role_permissions, [:role_id, :permission])
++
++    create table(:membership_role_assignments, primary_key: false) do
++      add :club_id, :text, null: false
++      add :membership_id, :text, null: false
++      add :person_id, :text, null: false
++      add :role_id, :text, null: false
++      add :active, :boolean, null: false, default: true
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_role_assignments, [:club_id, :role_id])
++    create index(:membership_role_assignments, [:club_id, :person_id])
++    create index(:membership_role_assignments, [:membership_id])
++    create unique_index(:membership_role_assignments, [:membership_id, :role_id])
++
++    create table(:membership_member_permissions, primary_key: false) do
++      add :club_id, :text, null: false
++      add :membership_id, :text, null: false
++      add :person_id, :text, null: false
++      add :permission, :text, null: false
++      add :grant_count, :integer, null: false, default: 0
++
++      timestamps(type: :utc_datetime_usec)
++    end
++
++    create index(:membership_member_permissions, [:club_id, :person_id])
++    create index(:membership_member_permissions, [:club_id, :membership_id])
++    create index(:membership_member_permissions, [:club_id, :permission])
++
++    create unique_index(:membership_member_permissions, [
++             :club_id,
++             :person_id,
++             :membership_id,
++             :permission
++           ])
++  end
++end
+diff --git a/web/test/memba/membership/app_test.exs b/web/test/memba/membership/app_test.exs
+index 172b1c5..d80b0df 100644
+--- a/web/test/memba/membership/app_test.exs
++++ b/web/test/memba/membership/app_test.exs
+@@ -17,6 +17,7 @@ defmodule Memba.Membership.AppTest do
+   alias Memba.Membership.Projectors.Club, as: ClubProjector
+   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
+   alias Memba.Membership.Projectors.Person, as: PersonProjector
++  alias Memba.Membership.Projectors.Role, as: RoleProjector
+   alias Memba.Membership.Router
+ 
+   test "Membership Commanded app is supervised by the Phoenix application" do
+@@ -42,6 +43,14 @@ defmodule Memba.Membership.AppTest do
+                false
+            end)
+ 
++    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
++             {{RoleProjector, _opts}, pid, :worker, [RoleProjector]} when is_pid(pid) ->
++               true
++
++             _child ->
++               false
++           end)
++
+     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+              {{PersonProjector, _opts}, pid, :worker, [PersonProjector]} when is_pid(pid) ->
+                true
+diff --git a/web/test/memba/membership/role_projection_test.exs b/web/test/memba/membership/role_projection_test.exs
+new file mode 100644
+index 0000000..cc66a78
+--- /dev/null
++++ b/web/test/memba/membership/role_projection_test.exs
+@@ -0,0 +1,285 @@
++defmodule Memba.Membership.RoleProjectionTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Commands.CreateClub
++  alias Memba.Membership.Commands.DefineClubRole
++  alias Memba.Membership.Commands.GrantClubRolePermission
++  alias Memba.Membership.Commands.RemoveMember
++  alias Memba.Membership.Commands.RemoveMemberRole
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.MemberPermission, as: MemberPermissionProjection
++  alias Memba.Membership.Projections.Role, as: RoleProjection
++  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
++  alias Memba.Membership.Projections.RolePermission, as: RolePermissionProjection
++  alias Memba.Membership.Roles
++
++  test "CreateClub projects the default Membership Administrator role and permission grant" do
++    club_id = Memba.ID.generate(:club)
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++
++    assert %RoleProjection{
++             role_id: ^role_id,
++             club_id: ^club_id,
++             role_key: "membership_administrator",
++             name: "Membership Administrator"
++           } = Repo.get(RoleProjection, role_id)
++
++    assert %RolePermissionProjection{
++             club_id: ^club_id,
++             role_id: ^role_id,
++             permission: "club.manage_members"
++           } = role_permission(role_id, Permissions.club_manage_members())
++
++    assert [] = Repo.all(MemberPermissionProjection)
++  end
++
++  test "role assignment projects active assignments and flattened member permissions" do
++    club_id = Memba.ID.generate(:club)
++    role_id = Roles.membership_administrator_role_id(club_id)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++    add_member!(membership_id, club_id, person_id)
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++
++    assert %RoleAssignmentProjection{
++             club_id: ^club_id,
++             membership_id: ^membership_id,
++             person_id: ^person_id,
++             role_id: ^role_id,
++             active: true
++           } = role_assignment(membership_id, role_id)
++
++    assert %MemberPermissionProjection{
++             club_id: ^club_id,
++             membership_id: ^membership_id,
++             person_id: ^person_id,
++             permission: "club.manage_members",
++             grant_count: 1
++           } =
++             member_permission(
++               club_id,
++               person_id,
++               membership_id,
++               Permissions.club_manage_members()
++             )
++  end
++
++  test "removing a role assignment deactivates it and removes its flattened permission" do
++    club_id = Memba.ID.generate(:club)
++    role_id = Roles.membership_administrator_role_id(club_id)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++    add_member!(membership_id, club_id, person_id)
++    assign_role!(club_id, membership_id, person_id, role_id)
++
++    assert :ok =
++             App.dispatch(
++               %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++
++    assert %RoleAssignmentProjection{active: false} = role_assignment(membership_id, role_id)
++
++    assert is_nil(
++             member_permission(
++               club_id,
++               person_id,
++               membership_id,
++               Permissions.club_manage_members()
++             )
++           )
++  end
++
++  test "flattened member permissions keep a grant count across multiple assigned roles" do
++    club_id = Memba.ID.generate(:club)
++    default_role_id = Roles.membership_administrator_role_id(club_id)
++    custom_role_id = Memba.ID.generate(:role)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++    add_member!(membership_id, club_id, person_id)
++    define_role!(club_id, custom_role_id)
++    grant_manage_members!(club_id, custom_role_id)
++
++    assign_role!(club_id, membership_id, person_id, default_role_id)
++    assign_role!(club_id, membership_id, person_id, custom_role_id)
++
++    assert %MemberPermissionProjection{grant_count: 2} =
++             member_permission(
++               club_id,
++               person_id,
++               membership_id,
++               Permissions.club_manage_members()
++             )
++
++    assert :ok =
++             App.dispatch(
++               %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: custom_role_id
++               },
++               consistency: :strong
++             )
++
++    assert %RoleAssignmentProjection{active: false} =
++             role_assignment(membership_id, custom_role_id)
++
++    assert %MemberPermissionProjection{grant_count: 1} =
++             member_permission(
++               club_id,
++               person_id,
++               membership_id,
++               Permissions.club_manage_members()
++             )
++  end
++
++  test "removing a member deactivates role assignments and removes flattened permissions" do
++    club_id = Memba.ID.generate(:club)
++    role_id = Roles.membership_administrator_role_id(club_id)
++    membership_id = Memba.ID.generate(:membership)
++    person_id = Memba.ID.generate(:person)
++
++    create_club!(club_id)
++    add_member!(membership_id, club_id, person_id)
++    assign_role!(club_id, membership_id, person_id, role_id)
++
++    assert :ok = App.dispatch(%RemoveMember{membership_id: membership_id}, consistency: :strong)
++
++    assert %RoleAssignmentProjection{active: false} = role_assignment(membership_id, role_id)
++
++    assert is_nil(
++             member_permission(
++               club_id,
++               person_id,
++               membership_id,
++               Permissions.club_manage_members()
++             )
++           )
++  end
++
++  defp create_club!(club_id) do
++    assert :ok =
++             App.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: "Kootenay Mountaineering Club",
++                 slug: "kmc"
++               },
++               consistency: :strong
++             )
++  end
++
++  defp add_member!(membership_id, club_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AddMember{
++                 membership_id: membership_id,
++                 club_id: club_id,
++                 person_id: person_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp define_role!(club_id, role_id) do
++    assert :ok =
++             App.dispatch(
++               %DefineClubRole{
++                 club_id: club_id,
++                 role_id: role_id,
++                 role_key: "custom_membership_manager",
++                 name: "Custom Membership Manager"
++               },
++               consistency: :strong
++             )
++  end
++
++  defp grant_manage_members!(club_id, role_id) do
++    assert :ok =
++             App.dispatch(
++               %GrantClubRolePermission{
++                 club_id: club_id,
++                 role_id: role_id,
++                 permission: Permissions.club_manage_members()
++               },
++               consistency: :strong
++             )
++  end
++
++  defp assign_role!(club_id, membership_id, person_id, role_id) do
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++  end
++
++  defp role_permission(role_id, permission) do
++    Repo.one(
++      from(role_permission in RolePermissionProjection,
++        where: role_permission.role_id == ^role_id,
++        where: role_permission.permission == ^permission
++      )
++    )
++  end
++
++  defp role_assignment(membership_id, role_id) do
++    Repo.one(
++      from(assignment in RoleAssignmentProjection,
++        where: assignment.membership_id == ^membership_id,
++        where: assignment.role_id == ^role_id
++      )
++    )
++  end
++
++  defp member_permission(club_id, person_id, membership_id, permission) do
++    Repo.one(
++      from(member_permission in MemberPermissionProjection,
++        where: member_permission.club_id == ^club_id,
++        where: member_permission.person_id == ^person_id,
++        where: member_permission.membership_id == ^membership_id,
++        where: member_permission.permission == ^permission
++      )
++    )
++  end
++end
+diff --git a/web/test/support/event_sourced_case.ex b/web/test/support/event_sourced_case.ex
+index 9d10463..b912931 100644
+--- a/web/test/support/event_sourced_case.ex
++++ b/web/test/support/event_sourced_case.ex
+@@ -13,6 +13,7 @@ defmodule Memba.EventSourcedCase do
+   @projectors [
+     Memba.Membership.Projectors.Club,
+     Memba.Membership.Projectors.Membership,
++    Memba.Membership.Projectors.Role,
+     Memba.Membership.Projectors.Person,
+     Memba.Messaging.Projectors.Message,
+     Memba.Messaging.Projectors.EmailDelivery,
