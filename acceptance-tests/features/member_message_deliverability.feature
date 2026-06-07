@@ -20,6 +20,14 @@ Feature: Member message deliverability
       And Alice should see every addressed member's status as "Sending"
       And each addressed member should receive an email from Alice via Memba
 
+  Rule: Club-message emails identify the club in the subject
+
+    @wip
+    Scenario: Alice's club-message email subject includes the club slug
+      When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
+      Then each addressed member should receive an email with the subject "[kmc] Trip planning night"
+      And Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
+
   Rule: Members see simple statuses for everyone addressed
 
     Scenario: Alice sees different statuses for different members
@@ -48,6 +56,13 @@ Feature: Member message deliverability
       When Alice tries to send the message "Trip planning night" to Kootenay Mountaineering Club members
       Then Alice should be told the message was not sent
       And Alice should be told to contact support
+
+    @wip
+    Scenario: Alice leaves the message body blank
+      When Alice tries to send a message to Kootenay Mountaineering Club members with subject "Trip planning night" and no body
+      Then Alice should be told the message body cannot be blank
+      And no club message named "Trip planning night" should be created
+      And no addressed member should receive an email for "Trip planning night"
 
   Rule: Active members can send new club messages by email
 

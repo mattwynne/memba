@@ -51,6 +51,15 @@ Feature: Request account
       And Suspicious Sender Club should not exist as a club
       And Robin should not be able to sign in to Suspicious Sender Club
 
+  Rule: Memba staff can act from request notification emails
+
+    @wip
+    Scenario: Pat opens a request from the notification email
+      Given Robin has requested Memba access for West Coast Paddlers
+      And Pat is signed in as Memba staff
+      When Pat follows the staff notification link for Robin's request
+      Then Pat should be preparing to convert Robin's West Coast Paddlers request
+
   Rule: Converted requesters receive direct club access
 
     Scenario: Robin receives a welcome sign-in link for the new club

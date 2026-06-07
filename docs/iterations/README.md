@@ -34,6 +34,7 @@ green than before.
 | 022 | 2026-06-05 | merged | Staff-approved request-to-club onboarding | [plan](022-request-to-club-onboarding/plan.md) |
 | 023 | 2026-06-06 | merged | Public copy pass for older community members | [plan](023-copy-review-for-older-club-members/plan.md) |
 | 024 | 2026-06-06 | implementing | Transactional email template redesign | [plan](024-email-template-designs/plan.md) |
+| 025 | 2026-06-06 | ready | Messaging and onboarding quick wins | [plan](025-messaging-and-onboarding-quick-wins/plan.md) |
 
 Status notes:
 
@@ -44,10 +45,10 @@ Status notes:
 
 Shared acceptance feature files used across these iterations:
 
-- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@wip` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes)
+- [`member_message_deliverability.feature`](../../acceptance-tests/features/member_message_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 019 adds `@wip` inbound club-message email scenarios until delivery implements Resend inbound handling; iteration 020 reuses these scenarios for Postmark migration without feature changes; iteration 025 adds `@wip` scenarios for slugged email subjects and blank-body compose validation)
 - [`memba_staff_email_deliverability.feature`](../../acceptance-tests/features/memba_staff_email_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
 - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@wip` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
 - [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@wip` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
 - [`member_club_subdomains.feature`](../../acceptance-tests/features/member_club_subdomains.feature) (`@wip` planning scenarios for iteration 018 until member-facing club subdomain routing and navigation are implemented)
 - [`memba_staff_operations.feature`](../../acceptance-tests/features/memba_staff_operations.feature) (`@wip` planning scenarios for iteration 021 until the redesigned staff operations pages, global People page, and global Messages page are implemented)
-- [`request_account.feature`](../../acceptance-tests/features/request_account.feature) (`@wip` planning scenarios for iteration 022 until staff-approved request-to-club onboarding is implemented)
+- [`request_account.feature`](../../acceptance-tests/features/request_account.feature) (`@wip` planning scenarios for iteration 022 until staff-approved request-to-club onboarding is implemented; iteration 025 adds an `@wip` scenario for opening request conversion from the staff notification email)
