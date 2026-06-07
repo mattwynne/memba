@@ -1,0 +1,1 @@
+{"cmd": "sed -n '1,240p' docs/iterations/024-email-template-designs/plan.md && printf '\\n---TODO---\\n' && sed -n '1,200p' docs/iterations/024-email-template-designs/todo.md && printf '\\n---STATUS---\\n' && git status --short"}{"context_updates":{"plan_conformant":true,"plan_rework_available":false}}
