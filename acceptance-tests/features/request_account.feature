@@ -2,8 +2,9 @@ Feature: Request account
   Memba protects its email reputation by keeping onboarding staff-approved.
   Interested club organisers can request access, but only Memba staff can turn a request into a club with an active first member.
 
-  Rule: A public request does not grant access
+# Rule: A public request does not grant access
 
+    @todo-domain
     Scenario: Robin requests access without gaining immediate club access
       When Robin requests Memba access for West Coast Paddlers with a short note
       Then Robin should see that Memba will review the request
@@ -11,8 +12,9 @@ Feature: Request account
       And West Coast Paddlers should not exist as a club yet
       And Robin should not be able to sign in to West Coast Paddlers yet
 
-  Rule: Signed-in people do not re-enter their known identity details
+# Rule: Signed-in people do not re-enter their known identity details
 
+    @todo-domain
     Scenario: Alice requests a new club while signed in
       Given Alice is signed in
       When Alice opens the get-started page
@@ -20,8 +22,9 @@ Feature: Request account
       When Alice requests Memba access for Nelson Trail Society with a short note
       Then Memba should record Alice's request with Alice's known name and email address
 
-  Rule: Memba staff triage active requests
+# Rule: Memba staff triage active requests
 
+    @todo-domain
     Scenario: Pat converts a request into a club and first active member
       Given Robin has requested Memba access for West Coast Paddlers
       And Pat is signed in as Memba staff
@@ -33,6 +36,7 @@ Feature: Request account
       And Robin should be an active member of West Coast Paddlers
       And Robin's request should leave the active requests inbox
 
+    @todo-domain
     Scenario: Pat converts a request from an existing person
       Given Alice is a person in Memba
       And Alice has requested Memba access for Nelson Trail Society
@@ -42,6 +46,7 @@ Feature: Request account
       And Alice should be an active member of Nelson Trail Society
       And Memba should not create a duplicate person for Alice
 
+    @todo-domain
     Scenario: Pat rejects a request without notifying the requester
       Given Robin has requested Memba access for Suspicious Sender Club
       And Pat is signed in as Memba staff
@@ -51,16 +56,18 @@ Feature: Request account
       And Suspicious Sender Club should not exist as a club
       And Robin should not be able to sign in to Suspicious Sender Club
 
-  Rule: Memba staff can act from request notification emails
+# Rule: Memba staff can act from request notification emails
 
+    @todo-domain
     Scenario: Pat opens a request from the notification email
       Given Robin has requested Memba access for West Coast Paddlers
       And Pat is signed in as Memba staff
       When Pat follows the staff notification link for Robin's request
       Then Pat should be preparing to convert Robin's West Coast Paddlers request
 
-  Rule: Converted requesters receive direct club access
+# Rule: Converted requesters receive direct club access
 
+    @todo-domain
     Scenario: Robin receives a welcome sign-in link for the new club
       Given Robin has requested Memba access for West Coast Paddlers
       And Pat is signed in as Memba staff

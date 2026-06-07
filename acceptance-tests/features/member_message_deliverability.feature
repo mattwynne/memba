@@ -10,8 +10,9 @@ Feature: Member message deliverability
     And Alice, Bob, Carol, and Dana are members of Kootenay Mountaineering Club
     And Pat is a member of Nelson Paddling Club
 
-  Rule: Any member can send a message to every active member of their club
+# Rule: Any member can send a message to every active member of their club
 
+    @todo-domain
     Scenario: Alice sends a club message
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
@@ -20,14 +21,15 @@ Feature: Member message deliverability
       And Alice should see every addressed member's status as "Sending"
       And each addressed member should receive an email from Alice via Memba
 
-  Rule: Club-message emails identify the club in the subject
+# Rule: Club-message emails identify the club in the subject
 
+    @todo-domain
     Scenario: Alice's club-message email subject includes the club slug
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then each addressed member should receive an email with the subject "[kmc] Trip planning night"
       And Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
 
-  Rule: Members see simple statuses for everyone addressed
+# Rule: Members see simple statuses for everyone addressed
 
     Scenario: Alice sees different statuses for different members
       Given Alice has sent the message "Trip planning night" to Kootenay Mountaineering Club members
@@ -48,7 +50,7 @@ Feature: Member message deliverability
       And Bob should see Bob's status for "Trip planning night" as "Delivered"
       And Bob should see Carol's status for "Trip planning night" as "Delivery problem"
 
-  Rule: Members are told when a club message is not sent
+# Rule: Members are told when a club message is not sent
 
     Scenario: Alice is told a failed message was not sent
       Given club message sending is unavailable
@@ -56,15 +58,16 @@ Feature: Member message deliverability
       Then Alice should be told the message was not sent
       And Alice should be told to contact support
 
+    @todo-domain
     Scenario: Alice leaves the message body blank
       When Alice tries to send a message to Kootenay Mountaineering Club members with subject "Trip planning night" and no body
       Then Alice should be told the message body cannot be blank
       And no club message named "Trip planning night" should be created
       And no addressed member should receive an email for "Trip planning night"
 
-  Rule: Active members can send new club messages by email
+# Rule: Active members can send new club messages by email
 
-    @wip
+    @todo
     Scenario: Alice emails the KMC everyone address
       When Alice emails "Trip planning night" to kmc@clubs.memba.io
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
@@ -72,46 +75,46 @@ Feature: Member message deliverability
       And Alice should not see Pat in the addressed members
       And each addressed member should receive an email from Alice via Memba
 
-    @wip
+    @todo
     Scenario: Alice emails from an alternate address
       Given Alice's alternate email address is "alice.outdoors@example.test"
       When Alice emails "Trip planning night" to kmc@clubs.memba.io from "alice.outdoors@example.test"
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
       And each addressed member should receive an email from Alice via Memba
 
-  Rule: Inbound club email is rejected when it cannot be posted safely
+# Rule: Inbound club email is rejected when it cannot be posted safely
 
-    @wip
+    @todo
     Scenario: An unknown sender emails the KMC everyone address
       When Robin emails "Trip planning night" to kmc@clubs.memba.io from "robin@example.test"
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Robin should receive a rejection email explaining the message was not posted
       And Robin should be told how to contact support
 
-    @wip
+    @todo
     Scenario: A member of another club emails the KMC everyone address
       When Pat emails "Trip planning night" to kmc@clubs.memba.io
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Pat should receive a rejection email explaining the message was not posted
       And Pat should be told how to contact support
 
-    @wip
+    @todo
     Scenario: Alice emails an attachment to the KMC everyone address
       When Alice emails "Trip planning night" to kmc@clubs.memba.io with an attachment
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Alice should receive a rejection email explaining attachments are not supported
       And Alice should be told how to contact support
 
-    @wip
+    @todo
     Scenario: Alice emails without a plain-text message body
       When Alice emails "Trip planning night" to kmc@clubs.memba.io with only an HTML body
       Then no Kootenay Mountaineering Club message named "Trip planning night" should be created
       And Alice should receive a rejection email explaining a plain-text message body is required
       And Alice should be told how to contact support
 
-  Rule: Inbound club email body keeps only the sender's new plain-text message
+# Rule: Inbound club email body keeps only the sender's new plain-text message
 
-    @wip
+    @todo
     Scenario: Alice emails new text above a signature and quoted message
       When Alice emails "Trip planning night" to kmc@clubs.memba.io with the body:
         """

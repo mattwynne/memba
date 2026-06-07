@@ -5,6 +5,8 @@ const test = require("node:test");
 
 const cucumberConfig = require("../cucumber");
 
+const defaultBrowserTagExpression = "not @not-ui and not @todo-ui and not @todo and not @wip";
+
 const inboundClubEmailScenarioNames = [
   "Alice emails the KMC everyone address",
   "Alice emails from an alternate address",
@@ -15,15 +17,15 @@ const inboundClubEmailScenarioNames = [
   "Alice emails new text above a signature and quoted message"
 ];
 
-test("default browser Cucumber profile excludes deferred scenarios", () => {
-  assert.equal(cucumberConfig.default.tags, "not @todo-web and not @wip");
+test("default browser Cucumber profile excludes scenarios not ready or not intended for UI", () => {
+  assert.equal(cucumberConfig.default.tags, defaultBrowserTagExpression);
 });
 
 test("default browser Cucumber profile still loads the shared feature suite", () => {
   assert.deepEqual(cucumberConfig.default.paths, ["features/**/*.feature"]);
 });
 
-test("default browser Cucumber profile selects all non-deferred web-backed shared features", () => {
+test("default browser Cucumber profile selects all web-backed shared features", () => {
   const selectedFeatureNames = browserSelectedFeatureNames();
 
   assert.deepEqual(selectedFeatureNames, [
@@ -44,7 +46,7 @@ test("only explicitly deferred features are skipped from the browser run", () =>
   assert.deepEqual(skippedFeatures.map((feature) => feature.name), ["staff_club_slugs.feature"]);
 });
 
-test("inbound club email scenarios remain tagged wip until enabled", () => {
+test("inbound club email scenarios remain parked as todo until enabled", () => {
   const featurePath = browserFeaturePathNamed("member_message_deliverability.feature");
   const scenarios = featureScenarios(featurePath);
 
@@ -57,8 +59,8 @@ test("inbound club email scenarios remain tagged wip until enabled", () => {
     const scenario = scenarios.get(scenarioName);
 
     assert.ok(
-      scenario.tags.includes("@wip"),
-      `Expected "${scenarioName}" to remain tagged @wip`
+      scenario.tags.includes("@todo"),
+      `Expected "${scenarioName}" to remain tagged @todo`
     );
     assert.equal(
       matchesDefaultBrowserTags(scenario.tags),
@@ -68,16 +70,28 @@ test("inbound club email scenarios remain tagged wip until enabled", () => {
   }
 });
 
+test("shared feature suite has no resting wip scenarios", () => {
+  for (const feature of browserFeatures()) {
+    for (const scenario of feature.scenarios) {
+      assert.equal(
+        scenario.tags.includes("@wip"),
+        false,
+        `Expected ${feature.name} / ${scenario.name} not to be tagged @wip at rest`
+      );
+    }
+  }
+});
+
 function browserSelectedFeatureNames() {
   return browserFeatures()
-    .filter((feature) => matchesDefaultBrowserTags(feature.tags))
+    .filter((feature) => feature.scenarios.some((scenario) => matchesDefaultBrowserTags(scenario.tags)))
     .map((feature) => feature.name)
     .sort();
 }
 
 function browserSkippedFeatures() {
   return browserFeatures()
-    .filter((feature) => !matchesDefaultBrowserTags(feature.tags))
+    .filter((feature) => feature.scenarios.every((scenario) => !matchesDefaultBrowserTags(scenario.tags)))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -88,7 +102,8 @@ function browserFeatures() {
 
   return listFeatureFiles(featuresRoot).map((filePath) => ({
     name: path.basename(filePath),
-    tags: featureTags(filePath)
+    tags: featureTags(filePath),
+    scenarios: [...featureScenarios(filePath).values()]
   }));
 }
 
@@ -143,6 +158,7 @@ function featureTags(filePath) {
 
 function featureScenarios(filePath) {
   const scenarios = new Map();
+  const featureLevelTags = featureTags(filePath);
   let pendingTags = [];
 
   for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
@@ -160,7 +176,7 @@ function featureScenarios(filePath) {
 
     if (scenarioMatch) {
       const name = scenarioMatch[1];
-      scenarios.set(name, { name, tags: pendingTags });
+      scenarios.set(name, { name, tags: [...featureLevelTags, ...pendingTags] });
       pendingTags = [];
       continue;
     }
@@ -172,7 +188,12 @@ function featureScenarios(filePath) {
 }
 
 function matchesDefaultBrowserTags(tags) {
-  assert.equal(cucumberConfig.default.tags, "not @todo-web and not @wip");
+  assert.equal(cucumberConfig.default.tags, defaultBrowserTagExpression);
 
-  return !tags.includes("@todo-web") && !tags.includes("@wip");
+  return (
+    !tags.includes("@not-ui") &&
+    !tags.includes("@todo-ui") &&
+    !tags.includes("@todo") &&
+    !tags.includes("@wip")
+  );
 }

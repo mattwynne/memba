@@ -7,9 +7,13 @@ The shared Cucumber feature files in `features/` are used by two runners:
 
 ## Tags
 
-Use tags to make temporary deferrals explicit:
+Use tags to make scenario intent and temporary coverage gaps explicit:
 
-- `@wip` means the scenario is future-facing planning language and is not expected to pass yet. Both runners exclude `@wip` by default. Remove the tag in the implementation iteration that makes the scenario pass.
-- `@todo-web` means the scenario has domain/application coverage but is not yet backed by browser automation. The browser runner excludes it; the Elixir/domain runner does not.
+- `@not-domain` means the scenario is intentionally not meaningful at the domain/application layer. The domain runner excludes it; the browser runner still runs it unless another tag excludes it.
+- `@not-ui` means the scenario is intentionally not meaningful through browser automation. The browser runner excludes it; the domain runner still runs it unless another tag excludes it.
+- `@todo-domain` means the scenario should become domain/application acceptance coverage, but the domain runner cannot execute it yet. The domain runner excludes it temporarily; the browser runner still runs it unless another tag excludes it.
+- `@todo-ui` means the scenario should become browser acceptance coverage, but the browser runner cannot execute it yet. The browser runner excludes it temporarily; the domain runner still runs it unless another tag excludes it.
+- `@todo` means the scenario is parked and is not ready for either runner yet. Both runners exclude it.
+- `@wip` is only for scenarios written between planning and implementation of an active iteration. At rest, the shared feature suite should have no `@wip` scenarios.
 
-Do not use `@wip` to hide broken current behaviour. Only use it for scenarios deliberately written ahead of implementation as part of an approved iteration plan.
+Do not use tags to hide broken current behaviour. Use `@todo-*` tags for explicit, temporary coverage gaps and remove them as the relevant runner becomes able to execute the scenario.

@@ -354,14 +354,14 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
-  test "domain Cucumber configuration excludes only wip planning scenarios" do
-    assert Application.fetch_env!(:cucumber, :tags) == "not @wip"
+  test "domain Cucumber configuration excludes scenarios not ready or not intended for domain" do
+    assert Application.fetch_env!(:cucumber, :tags) ==
+             "not @not-domain and not @todo-domain and not @todo and not @wip"
 
-    memba_staff_feature_file =
-      configured_feature_paths()
-      |> feature_file_named!("memba_staff_email_deliverability.feature")
-
-    refute File.read!(memba_staff_feature_file) =~ ~r/^\s*@todo-web\s*\n\s*Feature:/m
+    configured_feature_paths()
+    |> Enum.each(fn feature_file ->
+      refute File.read!(feature_file) =~ ~r/^\s*@wip\b/m
+    end)
   end
 
   test "shared deliverability features do not describe opened receipts" do
