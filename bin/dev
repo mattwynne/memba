@@ -692,6 +692,102 @@ _acceptance() {
   )
 }
 
+# @cmd Count scenarios visible to the UI and domain Cucumber runners
+acceptance_tests_count() {
+  _setup
+
+  local js_selected_summary js_all_summary js_selected_count js_all_count
+  local js_all_config=".cucumber-all-count.cjs"
+
+  echo "== cucumber-js (UI) =="
+  (
+    cd "$repo_root/acceptance-tests"
+
+    js_selected_summary=$(local_test_email_env npx cucumber-js --dry-run --format summary 2>&1 || true)
+    js_selected_count=$(printf '%s\n' "$js_selected_summary" | awk '/scenarios/ {print $1; exit}')
+
+    cat > "$js_all_config" <<'EOF'
+module.exports = {
+  default: {
+    paths: ["features/**/*.feature"],
+    require: ["features/support/**/*.js", "features/step_definitions/**/*.js"],
+    format: ["summary"],
+    publishQuiet: true
+  }
+};
+EOF
+    js_all_summary=$(local_test_email_env npx cucumber-js --config "$js_all_config" --dry-run --format summary 2>&1 || true)
+    rm -f "$js_all_config"
+    js_all_count=$(printf '%s\n' "$js_all_summary" | awk '/scenarios/ {print $1; exit}')
+
+    if [ -z "$js_selected_count" ]; then
+      echo "Could not count selected cucumber-js scenarios." >&2
+      printf '%s\n' "$js_selected_summary" >&2
+      exit 1
+    fi
+
+    if [ -z "$js_all_count" ]; then
+      echo "Could not count all cucumber-js-visible scenarios." >&2
+      printf '%s\n' "$js_all_summary" >&2
+      exit 1
+    fi
+
+    printf 'selected by acceptance-tests/cucumber.js: %s scenarios\n' "$js_selected_count"
+    printf 'visible with the same paths and no tag filter: %s scenarios\n' "$js_all_count"
+  )
+
+  echo
+  echo "== cucumber-elixir (domain) =="
+  (
+    cd "$repo_root/web"
+
+    local elixir_count_script
+    elixir_count_script=$(mktemp "${TMPDIR:-/tmp}/memba-cucumber-count.XXXXXX.exs")
+    cat > "$elixir_count_script" <<'ELIXIR'
+discovery = Cucumber.Discovery.discover()
+tag_expression = Application.get_env(:cucumber, :tags, "")
+
+excluded_tags =
+  ~r/not\s+@?([A-Za-z0-9_-]+)/
+  |> Regex.scan(tag_expression)
+  |> Enum.map(fn [_match, tag] -> tag end)
+
+feature_count = length(discovery.features)
+visible_count = Enum.sum(Enum.map(discovery.features, &length(&1.scenarios)))
+
+selected_count =
+  discovery.features
+  |> Enum.flat_map(fn feature ->
+    Enum.map(feature.scenarios, fn scenario ->
+      scenario_tags = Enum.uniq(feature.tags ++ scenario.tags)
+      {feature, scenario, scenario_tags}
+    end)
+  end)
+  |> Enum.count(fn {_feature, _scenario, scenario_tags} ->
+    Enum.all?(excluded_tags, fn excluded_tag ->
+      excluded_tag not in scenario_tags and "@#{excluded_tag}" not in scenario_tags
+    end)
+  end)
+
+IO.puts("configured feature files: #{feature_count}")
+IO.puts("visible with configured feature paths and parser: #{visible_count} scenarios")
+IO.puts("selected by config/test.exs tag filter: #{selected_count} scenarios")
+
+IO.puts("")
+IO.puts("configured tag filter: #{tag_expression}")
+
+IO.puts("")
+IO.puts("visible scenarios by feature:")
+
+Enum.each(discovery.features, fn feature ->
+  IO.puts("  #{feature.file}: #{length(feature.scenarios)}")
+end)
+ELIXIR
+    MIX_ENV=test mix run --no-start "$elixir_count_script"
+    rm -f "$elixir_count_script"
+  )
+}
+
 # @cmd Save/fetch local secrets in 1Password
 # @arg command![set|save|fetch] Helper command
 # @arg args~ Arguments for the helper command
