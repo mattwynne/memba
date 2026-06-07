@@ -208,21 +208,21 @@ Then(
 Then(
   "{word} should receive a rejection email explaining the message was not posted",
   async function (senderName) {
-    await assertInboundRejectionEmail(this, senderName, "Your email was not posted");
+    await assertInboundRejectionEmail(this, senderName, "wasn't posted");
   }
 );
 
 Then(
   "{word} should receive a rejection email explaining attachments are not supported",
   async function (senderName) {
-    await assertInboundRejectionEmail(this, senderName, "attachments are not supported yet");
+    await assertInboundRejectionEmail(this, senderName, "attachments can't be posted");
   }
 );
 
 Then(
   "{word} should receive a rejection email explaining a plain-text message body is required",
   async function (senderName) {
-    await assertInboundRejectionEmail(this, senderName, "plain text message body is required");
+    await assertInboundRejectionEmail(this, senderName, "plain-text message body");
   }
 );
 

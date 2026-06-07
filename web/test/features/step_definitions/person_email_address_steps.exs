@@ -166,7 +166,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   end
 
   defp ensure_person_email_addresses(context, person_name, email_addresses) do
-    case get_in(context, [:people, person_name, :person_id]) do
+    case context_person_id(context, person_name) do
       nil ->
         person_id = Memba.ID.generate(:person)
         primary_email = primary_email!(email_addresses)
@@ -202,7 +202,7 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   end
 
   defp person_email_addresses_for(context, person_name) do
-    case get_in(context, [:people, person_name, :person_id]) do
+    case context_person_id(context, person_name) do
       nil ->
         []
 
@@ -216,11 +216,17 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
   end
 
   defp persisted_person_email_addresses(context, person_name) do
-    context
-    |> get_in([:people, person_name, :person_id])
-    |> case do
+    case context_person_id(context, person_name) do
       nil -> flunk("Expected #{person_name} to be known in the scenario")
       person_id -> Membership.list_person_email_addresses(person_id)
+    end
+  end
+
+  defp context_person_id(context, person_name) do
+    case Map.get(context, :people, %{}) |> Map.get(person_name) do
+      %{person_id: person_id} -> person_id
+      person_id when is_binary(person_id) -> person_id
+      _missing -> nil
     end
   end
 
@@ -251,7 +257,10 @@ defmodule Memba.Cucumber.PersonEmailAddressSteps do
     collection =
       context
       |> Map.get(collection_key, %{})
-      |> Map.update(item_key, value, &Map.merge(&1, value))
+      |> Map.update(item_key, value, fn
+        existing when is_map(existing) -> Map.merge(existing, value)
+        _existing -> value
+      end)
 
     Map.put(context, collection_key, collection)
   end

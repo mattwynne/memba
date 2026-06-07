@@ -110,6 +110,42 @@ defmodule Memba.Cucumber.MessagingSteps do
     report_email_delivery_status(context, recipient_name, subject, :opened)
   end
 
+  step "{word} emails {string} to kmc@clubs.memba.io",
+       %{args: [sender_name, subject]} = context do
+    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io")
+  end
+
+  step "{word} emails {string} to kmc@clubs.memba.io from {string}",
+       %{args: [sender_name, subject, from_address]} = context do
+    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+      from_address: from_address
+    )
+  end
+
+  step "{word} emails {string} to kmc@clubs.memba.io with an attachment",
+       %{args: [sender_name, subject]} = context do
+    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+      attachments: [
+        %{filename: "route.gpx", content_type: "application/gpx+xml", size: 1234}
+      ]
+    )
+  end
+
+  step "{word} emails {string} to kmc@clubs.memba.io with only an HTML body",
+       %{args: [sender_name, subject]} = context do
+    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+      text_body: nil,
+      html_body: "<p>#{subject} details.</p>"
+    )
+  end
+
+  step "{word} emails {string} to kmc@clubs.memba.io with the body:",
+       %{args: [sender_name, subject]} = context do
+    receive_inbound_club_email(context, sender_name, subject, "kmc@clubs.memba.io",
+      text_body: Map.fetch!(context, :docstring)
+    )
+  end
+
   step "{word} status for {string} should be {string}",
        %{args: [recipient_name, subject, expected_status]} = context do
     receipt = member_email_delivery_for!(context, recipient_name, subject)
@@ -275,16 +311,44 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step "no club message named {string} should be created", %{args: [subject]} = context do
-    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+    assert_no_club_message(context, "Kootenay Mountaineering Club", subject)
+  end
 
-    refute Enum.any?(Messaging.list_messages_for_club(club_id), &(&1.subject == subject))
-
-    context
+  step "no Kootenay Mountaineering Club message named {string} should be created",
+       %{args: [subject]} = context do
+    assert_no_club_message(context, "Kootenay Mountaineering Club", subject)
   end
 
   step "no addressed member should receive an email for {string}", %{args: [subject]} = context do
     refute Enum.any?(Fake.deliveries(), &(&1.subject == subject))
 
+    context
+  end
+
+  step "{word} should receive a rejection email explaining the message was not posted",
+       %{args: [sender_name]} = context do
+    assert_rejection_email(context, sender_name, "wasn't posted")
+  end
+
+  step "{word} should receive a rejection email explaining attachments are not supported",
+       %{args: [sender_name]} = context do
+    assert_rejection_email(context, sender_name, "attachments can't be posted")
+  end
+
+  step "{word} should receive a rejection email explaining a plain-text message body is required",
+       %{args: [sender_name]} = context do
+    assert_rejection_email(context, sender_name, "plain-text message body")
+  end
+
+  step "{word} should be told how to contact support", %{args: [sender_name]} = context do
+    email = fetch_from_context!(context, :rejection_emails, sender_name)
+    assert email.text_body =~ ~r/contact Memba support|reply to this email/i
+    context
+  end
+
+  step "the message body should be:", context do
+    message = fetch_from_context!(context, :messages, Map.fetch!(context, :last_message_subject))
+    assert message.body == String.trim(Map.fetch!(context, :docstring))
     context
   end
 
@@ -359,6 +423,94 @@ defmodule Memba.Cucumber.MessagingSteps do
       subject: subject,
       body: body
     })
+  end
+
+  defp receive_inbound_club_email(context, sender_name, subject, to_address, opts \\ []) do
+    Fake.reset()
+
+    from_address =
+      Keyword.get_lazy(opts, :from_address, fn -> email_address_for(context, sender_name) end)
+
+    text_body = Keyword.get(opts, :text_body, "#{subject} details.")
+    html_body = Keyword.get(opts, :html_body)
+    attachments = Keyword.get(opts, :attachments, [])
+
+    result =
+      Messaging.receive_inbound_club_email(
+        %{
+          provider: "domain-cucumber",
+          provider_message_id: provider_message_id(context, sender_name, subject, from_address),
+          from_address: from_address,
+          recipient_addresses: [to_address],
+          subject: subject,
+          text_body: text_body,
+          html_body: html_body,
+          attachments: attachments
+        },
+        consistency: :strong
+      )
+
+    context =
+      context
+      |> Map.put(:last_inbound_email_result, result)
+      |> Map.put(:last_message_subject, subject)
+      |> update_context_map(:inbound_from_addresses, sender_name, from_address)
+
+    case result do
+      {:ok, %{status: :rejected, rejection_reason: reason}} ->
+        Map.put(context, :last_rejection_reason, reason)
+
+      {:ok, %{message_id: message_id, club_id: club_id, sender_id: sender_id}} ->
+        message = Messaging.get_message(message_id)
+
+        context
+        |> Map.put(:sent_message, %{
+          message_id: message_id,
+          club_id: club_id,
+          sender_id: sender_id,
+          subject: message.subject,
+          body: message.body
+        })
+        |> Map.put(:last_message_id, message_id)
+        |> update_context_map(:messages, subject, %{
+          message_id: message_id,
+          club_id: club_id,
+          sender_id: sender_id,
+          subject: message.subject,
+          body: message.body
+        })
+
+      {:error, reason} ->
+        flunk("Expected inbound email not to error; got #{inspect(reason)}")
+    end
+  end
+
+  defp assert_no_club_message(context, club_name, subject) do
+    club_id = fetch_from_context!(context, :clubs, club_name)
+
+    refute Enum.any?(Messaging.list_messages_for_club(club_id), &(&1.subject == subject))
+
+    context
+  end
+
+  defp assert_rejection_email(context, sender_name, expected_text) do
+    assert {:ok, %{status: :rejected}} = Map.fetch!(context, :last_inbound_email_result)
+
+    expected_address =
+      context
+      |> Map.get(:inbound_from_addresses, %{})
+      |> Map.get(sender_name, email_address_for(context, sender_name))
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert Enum.any?(email.to, fn
+             {_name, address} -> address == expected_address
+             address when is_binary(address) -> address == expected_address
+           end)
+
+    assert email.text_body =~ expected_text
+
+    update_context_map(context, :rejection_emails, sender_name, email)
   end
 
   defp assert_each_delivery_sent_through_provider(context, opts \\ []) do
@@ -531,6 +683,39 @@ defmodule Memba.Cucumber.MessagingSteps do
     context
     |> person_id_from_context!(person_name)
     |> Membership.get_person_primary_email()
+  end
+
+  defp email_address_for(context, person_name) do
+    case Map.get(context, :people, %{}) |> Map.get(person_name) do
+      %{email: email} -> email
+      person_id when is_binary(person_id) -> Membership.get_person_primary_email(person_id)
+      nil -> default_email_for(context, person_name)
+    end
+  end
+
+  defp default_email_for(context, person_name) do
+    normalized_name =
+      person_name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, ".")
+      |> String.trim(".")
+
+    "#{normalized_name}-#{scenario_email_suffix(context)}@example.test"
+  end
+
+  defp provider_message_id(context, sender_name, subject, from_address) do
+    [Map.get(context, :scenario_name), sender_name, subject, from_address]
+    |> Enum.join(":")
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+  end
+
+  defp scenario_email_suffix(context) do
+    context
+    |> Map.get(:scenario_name, "scenario")
+    |> :erlang.phash2(1_000_000)
+    |> Integer.to_string(36)
+    |> String.downcase()
   end
 
   defp fetch_from_context!(context, collection_key, item_key) do

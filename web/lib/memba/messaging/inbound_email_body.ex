@@ -50,6 +50,7 @@ defmodule Memba.Messaging.InboundEmailBody do
     |> Enum.join("\n")
   end
 
+  defp reply_or_signature_marker?("--"), do: true
   defp reply_or_signature_marker?("-- "), do: true
 
   defp reply_or_signature_marker?(line) do

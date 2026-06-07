@@ -7,16 +7,6 @@ const cucumberConfig = require("../cucumber");
 
 const defaultBrowserTagExpression = "not @not-ui and not @todo-ui and not @todo and not @wip";
 
-const inboundClubEmailScenarioNames = [
-  "Alice emails the KMC everyone address",
-  "Alice emails from an alternate address",
-  "An unknown sender emails the KMC everyone address",
-  "A member of another club emails the KMC everyone address",
-  "Alice emails an attachment to the KMC everyone address",
-  "Alice emails without a plain-text message body",
-  "Alice emails new text above a signature and quoted message"
-];
-
 test("default browser Cucumber profile excludes scenarios not ready or not intended for UI", () => {
   assert.equal(cucumberConfig.default.tags, defaultBrowserTagExpression);
 });
@@ -36,38 +26,19 @@ test("default browser Cucumber profile selects all web-backed shared features", 
     "member_club_subdomains.feature",
     "member_message_deliverability.feature",
     "person_email_addresses.feature",
-    "request_account.feature"
+    "request_account.feature",
+    "staff_club_slugs.feature"
   ]);
 });
 
-test("staff club slugs remains deferred from the browser run", () => {
-  const skippedFeatureNames = browserSkippedFeatures().map((feature) => feature.name);
-
-  assert.ok(skippedFeatureNames.includes("staff_club_slugs.feature"));
-});
-
-test("inbound club email scenarios remain parked as todo until enabled", () => {
-  const featurePath = browserFeaturePathNamed("member_message_deliverability.feature");
-  const scenarios = featureScenarios(featurePath);
-
-  assert.deepEqual(
-    inboundClubEmailScenarioNames.map((scenarioName) => scenarios.get(scenarioName)?.name),
-    inboundClubEmailScenarioNames
+test("shared feature suite has no parked todo scenarios", () => {
+  const parkedScenarios = browserFeatures().flatMap((feature) =>
+    feature.scenarios
+      .filter((scenario) => scenario.tags.some((tag) => tag.startsWith("@todo")))
+      .map((scenario) => `${feature.name}: ${scenario.name}`)
   );
 
-  for (const scenarioName of inboundClubEmailScenarioNames) {
-    const scenario = scenarios.get(scenarioName);
-
-    assert.ok(
-      scenario.tags.includes("@todo"),
-      `Expected "${scenarioName}" to remain tagged @todo`
-    );
-    assert.equal(
-      matchesDefaultBrowserTags(scenario.tags),
-      false,
-      `Expected "${scenarioName}" to be excluded by the default browser profile`
-    );
-  }
+  assert.deepEqual(parkedScenarios, []);
 });
 
 function browserSelectedFeatureNames() {

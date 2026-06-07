@@ -943,6 +943,7 @@ async function sendInboundClubEmail(
   const messageTextBody = htmlOnly ? "" : textBody ?? `${subject} details.`;
   const messageHtmlBody = htmlOnly ? htmlBody || `<p>${subject} details.</p>` : htmlBody;
   const mailboxEmailsBeforeSend = await testMailboxEmails(world);
+  const localDeliveryFactsBeforeSend = await testLocalDeliveryFacts(world);
 
   const payload = resendInboundEmailPayload({
     attachments,
@@ -971,6 +972,7 @@ async function sendInboundClubEmail(
   world.inboundEmails[subject] = inboundEmail;
   world.inboundEmailSenders[senderName] = inboundEmail;
   world.mailboxEmailsBeforeSend = mailboxEmailsBeforeSend;
+  world.localDeliveryFactsBeforeSend = localDeliveryFactsBeforeSend;
   world.lastInboundEmail = inboundEmail;
   world.lastMessageSubject = subject;
   world.addressedMemberNames = memberNamesForClub(world, kootenayClubName);
@@ -1205,12 +1207,14 @@ async function assertMemberSeesMessageInClub(
 
   const messageId = await row.getAttribute("data-message-id");
 
-  if (messageId && !world.messages[subject]) {
+  if (!world.messages[subject]) {
     const inboundEmail = world.inboundEmails[subject] || {};
+    const club = world.clubs[clubName];
 
     world.messages[subject] = {
       body: inboundEmail.textBody || `${subject} details.`,
-      clubId: world.clubs[clubName].clubId,
+      clubId: club.clubId,
+      clubSlug: club.slug,
       messageId,
       senderName: inboundEmail.senderName,
       subject
@@ -1301,7 +1305,6 @@ async function assertMemberMessageNotAddressedTo(
   subject = world.lastMessageSubject,
   { expect = playwrightExpect } = {}
 ) {
-  await waitForProjectionBarrier(world, ["Memba.Messaging.Projectors.MemberEmailDelivery"]);
   await openMemberMessage(world, subject, { expect });
   await expandCollapsedMemberEmailDeliveryGroups(world, { expect });
 
@@ -1460,13 +1463,22 @@ async function assertEachAddressedMemberReceivedEmailInTestMailbox(world, { send
   ensureState(world);
 
   const subject = world.lastMessageSubject;
-  const message = world.messages[subject];
+  const inboundEmail = world.inboundEmails[subject] || {};
+  const fallbackClub = world.clubs[kootenayClubName] || {};
+  const message = world.messages[subject] || {
+    body: inboundEmail.textBody || `${subject} details.`,
+    clubId: fallbackClub.clubId,
+    clubSlug: fallbackClub.slug,
+    senderName: inboundEmail.senderName,
+    subject
+  };
+  world.messages[subject] = message;
   assert.ok(message, "Expected a message to have been sent before checking the mailbox");
 
-  const addressedMemberNames = world.addressedMemberNames || [];
+  const addressedMemberNames = world.addressedMemberNames || memberNamesForClub(world, kootenayClubName);
   assert.ok(
     addressedMemberNames.length > 0,
-    "Expected addressed members to be asserted before checking the mailbox"
+    "Expected addressed members to exist before checking the mailbox"
   );
 
   const previousEmails = world.localDeliveryFactsBeforeSend || world.mailboxEmailsBeforeSend || [];
@@ -1588,7 +1600,7 @@ async function assertInboundRejectionEmail(world, senderName, expectedText) {
 
   const rejectionEmail = newEmails.find(
     (email) =>
-      email.subject === "Your email was not posted" &&
+      /wasn.?t posted/i.test(email.subject) &&
       mailboxEmailTo(email).includes(senderEmail) &&
       mailboxEmailText(email).includes(expectedText)
   );

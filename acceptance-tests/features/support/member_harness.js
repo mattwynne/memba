@@ -96,6 +96,13 @@ function syncHarnessState(world, harnessWorld, options = {}) {
     people: world.people,
     memberships: world.memberships,
     messages: world.messages,
+    inboundEmails: world.inboundEmails,
+    inboundEmailSenders: world.inboundEmailSenders,
+    lastMessageSubject: world.lastMessageSubject,
+    localDeliveryFactsBeforeSend: world.localDeliveryFactsBeforeSend,
+    mailboxEmailsBeforeSend: world.mailboxEmailsBeforeSend,
+    addressedMemberNames: world.addressedMemberNames,
+    addressedMemberIds: world.addressedMemberIds,
     deliveries: world.deliveries,
     reportedDeliveryStatuses: world.reportedDeliveryStatuses,
     signInRequests: world.signInRequests,
@@ -122,7 +129,10 @@ function copyHarnessState(world, harnessWorld) {
     "currentOperatorDelivery",
     "lastMessageSubject",
     "localDeliveryFactsBeforeSend",
-    "mailboxEmailsBeforeSend"
+    "mailboxEmailsBeforeSend",
+    "messages",
+    "inboundEmails",
+    "inboundEmailSenders"
   ]) {
     if (Object.prototype.hasOwnProperty.call(harnessWorld, key)) {
       world[key] = harnessWorld[key];
