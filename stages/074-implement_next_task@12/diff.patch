@@ -1,0 +1,436 @@
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index 7c09f7a..e44e96b 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
+ - [x] 010 Add command/API support for revoking Membership Administrator while enforcing that at least one remains.
+ - [x] 011 Prevent ordinary members without `club.manage_members` from granting or revoking Membership Administrator.
+-- [ ] 012 Preserve or migrate existing test data/seeds so current acceptance tests still have valid clubs and memberships. Existing clubs in test/dev may need default role setup in seeds or migration/backfill.
++- [x] 012 Preserve or migrate existing test data/seeds so current acceptance tests still have valid clubs and memberships. Existing clubs in test/dev may need default role setup in seeds or migration/backfill.
+ - [ ] 013 Implement step definitions only as needed during delivery to exercise the new Cucumber scenarios through domain/application behaviour. Do not create a polished member-facing admin UI in this iteration.
+ - [ ] 014 Add ExUnit tests for events, projections, permission checks, authorization failures, and the last-administrator invariant.
+ - [ ] 015 Remove `@todo-domain`/`@todo-ui` from `club_membership_administration.feature` once implementation passes the scenarios.
+diff --git a/web/priv/repo/migrations/20260607233402_backfill_membership_administrator_roles.exs b/web/priv/repo/migrations/20260607233402_backfill_membership_administrator_roles.exs
+new file mode 100644
+index 0000000..27ff34e
+--- /dev/null
++++ b/web/priv/repo/migrations/20260607233402_backfill_membership_administrator_roles.exs
+@@ -0,0 +1,184 @@
++defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
++  use Ecto.Migration
++
++  def up do
++    now = DateTime.utc_now(:microsecond)
++
++    roles =
++      "SELECT club_id FROM membership_clubs"
++      |> query_rows()
++      |> Enum.map(fn [club_id] ->
++        %{
++          role_id: membership_administrator_role_id(club_id),
++          club_id: club_id,
++          role_key: "membership_administrator",
++          name: "Membership Administrator",
++          inserted_at: now,
++          updated_at: now
++        }
++      end)
++
++    insert_all("membership_roles", roles,
++      on_conflict: {:replace, [:club_id, :role_key, :name, :updated_at]},
++      conflict_target: [:role_id]
++    )
++
++    role_permissions =
++      Enum.map(roles, fn role ->
++        %{
++          club_id: role.club_id,
++          role_id: role.role_id,
++          permission: "club.manage_members",
++          inserted_at: now,
++          updated_at: now
++        }
++      end)
++
++    insert_all("membership_role_permissions", role_permissions,
++      on_conflict: :nothing,
++      conflict_target: [:role_id, :permission]
++    )
++
++    role_by_club_id = Map.new(roles, fn role -> {role.club_id, role} end)
++
++    assignments =
++      """
++      SELECT DISTINCT ON (club_id)
++        club_id,
++        membership_id,
++        person_id
++      FROM membership_memberships
++      WHERE active = TRUE
++      ORDER BY club_id, inserted_at, membership_id
++      """
++      |> query_rows()
++      |> Enum.map(fn [club_id, membership_id, person_id] ->
++        role = Map.fetch!(role_by_club_id, club_id)
++
++        %{
++          club_id: club_id,
++          membership_id: membership_id,
++          person_id: person_id,
++          role_id: role.role_id,
++          active: true,
++          inserted_at: now,
++          updated_at: now
++        }
++      end)
++
++    insert_all("membership_role_assignments", assignments,
++      on_conflict: {:replace, [:club_id, :person_id, :active, :updated_at]},
++      conflict_target: [:membership_id, :role_id]
++    )
++
++    member_permissions =
++      Enum.map(assignments, fn assignment ->
++        %{
++          club_id: assignment.club_id,
++          membership_id: assignment.membership_id,
++          person_id: assignment.person_id,
++          permission: "club.manage_members",
++          grant_count: 1,
++          inserted_at: now,
++          updated_at: now
++        }
++      end)
++
++    insert_all("membership_member_permissions", member_permissions,
++      on_conflict: [set: [grant_count: 1, updated_at: now]],
++      conflict_target: [:club_id, :person_id, :membership_id, :permission]
++    )
++  end
++
++  def down do
++    execute("""
++    WITH default_roles AS (
++      SELECT
++        role_id,
++        club_id
++      FROM membership_roles
++      WHERE role_key = 'membership_administrator'
++    ),
++    active_default_assignments AS (
++      SELECT
++        assignment.club_id,
++        assignment.membership_id,
++        assignment.person_id
++      FROM membership_role_assignments AS assignment
++      JOIN default_roles AS role ON role.role_id = assignment.role_id
++      WHERE assignment.active = TRUE
++    )
++    UPDATE membership_member_permissions AS member_permission
++    SET
++      grant_count = member_permission.grant_count - 1,
++      updated_at = CURRENT_TIMESTAMP
++    FROM active_default_assignments AS assignment
++    WHERE member_permission.club_id = assignment.club_id
++      AND member_permission.membership_id = assignment.membership_id
++      AND member_permission.person_id = assignment.person_id
++      AND member_permission.permission = 'club.manage_members';
++    """)
++
++    execute("""
++    DELETE FROM membership_member_permissions
++    WHERE permission = 'club.manage_members'
++      AND grant_count <= 0;
++    """)
++
++    execute("""
++    WITH default_roles AS (
++      SELECT role_id
++      FROM membership_roles
++      WHERE role_key = 'membership_administrator'
++    )
++    DELETE FROM membership_role_assignments AS assignment
++    USING default_roles AS role
++    WHERE assignment.role_id = role.role_id;
++    """)
++
++    execute("""
++    WITH default_roles AS (
++      SELECT role_id
++      FROM membership_roles
++      WHERE role_key = 'membership_administrator'
++    )
++    DELETE FROM membership_role_permissions AS permission
++    USING default_roles AS role
++    WHERE permission.role_id = role.role_id
++      AND permission.permission = 'club.manage_members';
++    """)
++
++    execute("""
++    DELETE FROM membership_roles
++    WHERE role_key = 'membership_administrator';
++    """)
++  end
++
++  defp query_rows(sql) do
++    repo().query!(sql, []).rows
++  end
++
++  defp insert_all(_table, [], _opts), do: {0, nil}
++
++  defp insert_all(table, rows, opts) do
++    repo().insert_all(table, rows, opts)
++  end
++
++  defp membership_administrator_role_id(club_id) when is_binary(club_id) do
++    uuid =
++      ["membership_administrator", club_id]
++      |> Enum.join(<<0>>)
++      |> then(&:crypto.hash(:md5, &1))
++      |> Base.encode16(case: :lower)
++      |> format_uuid()
++
++    "rol_#{uuid}"
++  end
++
++  defp format_uuid(
++         <<a::binary-size(8), b::binary-size(4), c::binary-size(4), d::binary-size(4),
++           e::binary-size(12)>>
++       ) do
++    Enum.join([a, b, c, d, e], "-")
++  end
++end
+diff --git a/web/priv/repo/seeds.exs b/web/priv/repo/seeds.exs
+index b5b16fe..38c5611 100644
+--- a/web/priv/repo/seeds.exs
++++ b/web/priv/repo/seeds.exs
+@@ -7,9 +7,15 @@
+ # The data is idempotent: running this file again refreshes the same records.
+ 
+ alias Memba.Membership.Projections.Club
++alias Memba.Membership.Projections.MemberPermission
+ alias Memba.Membership.Projections.Membership
+ alias Memba.Membership.Projections.Person
+ alias Memba.Membership.Projections.PersonEmailAddress
++alias Memba.Membership.Projections.Role
++alias Memba.Membership.Projections.RoleAssignment
++alias Memba.Membership.Projections.RolePermission
++alias Memba.Membership.Permissions
++alias Memba.Membership.Roles
+ alias Memba.Messaging.Projections.EmailDelivery
+ alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+ alias Memba.Messaging.Projections.MemberEmailDelivery
+@@ -214,6 +220,68 @@ memberships = [
+   }
+ ]
+ 
++membership_administrator_roles =
++  Enum.map(clubs, fn club ->
++    %{
++      role_id: Roles.membership_administrator_role_id(club.club_id),
++      club_id: club.club_id,
++      role_key: Roles.membership_administrator_key(),
++      name: Roles.membership_administrator_name(),
++      inserted_at: club.inserted_at,
++      updated_at: now
++    }
++  end)
++
++membership_administrator_role_by_club_id =
++  Map.new(membership_administrator_roles, fn role -> {role.club_id, role} end)
++
++membership_administrator_role_permissions =
++  Enum.map(membership_administrator_roles, fn role ->
++    %{
++      club_id: role.club_id,
++      role_id: role.role_id,
++      permission: Permissions.club_manage_members(),
++      inserted_at: two_days_ago,
++      updated_at: now
++    }
++  end)
++
++membership_administrator_memberships =
++  memberships
++  |> Enum.filter(& &1.active)
++  |> Enum.reduce(%{}, fn membership, memberships_by_club_id ->
++    Map.put_new(memberships_by_club_id, membership.club_id, membership)
++  end)
++  |> Map.values()
++
++membership_administrator_role_assignments =
++  Enum.map(membership_administrator_memberships, fn membership ->
++    role = Map.fetch!(membership_administrator_role_by_club_id, membership.club_id)
++
++    %{
++      club_id: membership.club_id,
++      membership_id: membership.membership_id,
++      person_id: membership.person_id,
++      role_id: role.role_id,
++      active: true,
++      inserted_at: membership.inserted_at,
++      updated_at: now
++    }
++  end)
++
++membership_administrator_member_permissions =
++  Enum.map(membership_administrator_role_assignments, fn assignment ->
++    %{
++      club_id: assignment.club_id,
++      membership_id: assignment.membership_id,
++      person_id: assignment.person_id,
++      permission: Permissions.club_manage_members(),
++      grant_count: 1,
++      inserted_at: assignment.inserted_at,
++      updated_at: now
++    }
++  end)
++
+ messages = [
+   %{
+     message_id: "30000000-0000-0000-0000-000000000001",
+@@ -360,6 +428,47 @@ Repo.insert_all(Membership, memberships,
+   conflict_target: :membership_id
+ )
+ 
++seed_membership_ids = Enum.map(memberships, & &1.membership_id)
++seed_role_ids = Enum.map(membership_administrator_roles, & &1.role_id)
++
++Repo.delete_all(
++  from(member_permission in MemberPermission,
++    where:
++      member_permission.membership_id in ^seed_membership_ids and
++        member_permission.permission == ^Permissions.club_manage_members()
++  )
++)
++
++Repo.delete_all(
++  from(role_assignment in RoleAssignment, where: role_assignment.role_id in ^seed_role_ids)
++)
++
++Repo.delete_all(
++  from(role_permission in RolePermission, where: role_permission.role_id in ^seed_role_ids)
++)
++
++Repo.delete_all(from(role in Role, where: role.role_id in ^seed_role_ids))
++
++Repo.insert_all(Role, membership_administrator_roles,
++  on_conflict: {:replace_all_except, [:role_id]},
++  conflict_target: :role_id
++)
++
++Repo.insert_all(RolePermission, membership_administrator_role_permissions,
++  on_conflict: :nothing,
++  conflict_target: [:role_id, :permission]
++)
++
++Repo.insert_all(RoleAssignment, membership_administrator_role_assignments,
++  on_conflict: :nothing,
++  conflict_target: [:membership_id, :role_id]
++)
++
++Repo.insert_all(MemberPermission, membership_administrator_member_permissions,
++  on_conflict: :nothing,
++  conflict_target: [:club_id, :person_id, :membership_id, :permission]
++)
++
+ Repo.insert_all(Message, messages,
+   on_conflict: {:replace_all_except, [:message_id]},
+   conflict_target: :message_id
+diff --git a/web/test/memba/seed_data_test.exs b/web/test/memba/seed_data_test.exs
+new file mode 100644
+index 0000000..b72c8c3
+--- /dev/null
++++ b/web/test/memba/seed_data_test.exs
+@@ -0,0 +1,90 @@
++defmodule Memba.SeedDataTest do
++  use Memba.DataCase, async: false
++
++  import ExUnit.CaptureIO
++
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.MemberPermission
++  alias Memba.Membership.Projections.Role
++  alias Memba.Membership.Projections.RoleAssignment
++  alias Memba.Membership.Projections.RolePermission
++  alias Memba.Membership.Roles
++
++  test "seeded clubs have a Membership Administrator role and active administrator permission" do
++    capture_io(fn ->
++      Code.eval_file(Path.expand("../../priv/repo/seeds.exs", __DIR__))
++    end)
++
++    kootenay_club_id = "11111111-1111-1111-1111-111111111111"
++    alice_person_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
++    alice_kootenay_membership_id = "10000000-0000-0000-0000-000000000001"
++    role_id = Roles.membership_administrator_role_id(kootenay_club_id)
++    permission = Permissions.club_manage_members()
++
++    assert %Role{
++             club_id: ^kootenay_club_id,
++             role_key: "membership_administrator",
++             name: "Membership Administrator"
++           } = Repo.get(Role, role_id)
++
++    assert %RolePermission{
++             club_id: ^kootenay_club_id,
++             role_id: ^role_id,
++             permission: ^permission
++           } = role_permission(role_id, permission)
++
++    assert %RoleAssignment{
++             club_id: ^kootenay_club_id,
++             membership_id: ^alice_kootenay_membership_id,
++             person_id: ^alice_person_id,
++             role_id: ^role_id,
++             active: true
++           } = role_assignment(alice_kootenay_membership_id, role_id)
++
++    assert %MemberPermission{
++             club_id: ^kootenay_club_id,
++             membership_id: ^alice_kootenay_membership_id,
++             person_id: ^alice_person_id,
++             permission: ^permission,
++             grant_count: 1
++           } =
++             member_permission(
++               kootenay_club_id,
++               alice_person_id,
++               alice_kootenay_membership_id,
++               permission
++             )
++
++    assert Repo.aggregate(Role, :count) == 3
++    assert Repo.aggregate(RoleAssignment, :count) == 3
++  end
++
++  defp role_permission(role_id, permission) do
++    Repo.one(
++      from(role_permission in RolePermission,
++        where: role_permission.role_id == ^role_id,
++        where: role_permission.permission == ^permission
++      )
++    )
++  end
++
++  defp role_assignment(membership_id, role_id) do
++    Repo.one(
++      from(assignment in RoleAssignment,
++        where: assignment.membership_id == ^membership_id,
++        where: assignment.role_id == ^role_id
++      )
++    )
++  end
++
++  defp member_permission(club_id, person_id, membership_id, permission) do
++    Repo.one(
++      from(member_permission in MemberPermission,
++        where: member_permission.club_id == ^club_id,
++        where: member_permission.person_id == ^person_id,
++        where: member_permission.membership_id == ^membership_id,
++        where: member_permission.permission == ^permission
++      )
++    )
++  end
++end
