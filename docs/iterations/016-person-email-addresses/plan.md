@@ -76,18 +76,18 @@ BDD decision: Required.
 
 This iteration changes identity, staff data-management, and message-delivery business rules. Add the following shared Cucumber feature file as stakeholder-readable acceptance criteria:
 
-- `acceptance-tests/features/person_email_addresses.feature` (`@wip` until this iteration is implemented)
+- `acceptance-tests/features/person_email_addresses.feature` (`@todo-domain`/`@todo-ui` until this iteration is implemented)
   - `Alice signs in with her work email address`
   - `Alice receives a club message at her primary email address`
   - `Staff creates a person with primary and alternate email addresses`
   - `Staff changes a person's primary email address`
 
-The feature is tagged `@wip` during planning so default browser Cucumber excludes it until Fabro implements the behaviour and removes or narrows the tag.
+The feature is tagged `@todo-domain`/`@todo-ui` during planning so default browser Cucumber excludes it until Fabro implements the behaviour and removes or narrows the tag.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/person_email_addresses.feature`: add the new `@wip` feature and scenarios listed above. Reason: these scenarios document the new identity, primary-email, and staff-management rules before implementation. Coverage is intentionally future-facing and excluded from default Cucumber while tagged `@wip`.
-- `acceptance-tests/test/cucumber_config.test.js`: update the configuration expectation so the new `@wip` feature is known to be skipped by the default browser Cucumber profile. Reason: planning-time `@wip` scenarios must not make the main check red before implementation.
+- `acceptance-tests/features/person_email_addresses.feature`: add the new `@todo-domain`/`@todo-ui` feature and scenarios listed above. Reason: these scenarios document the new identity, primary-email, and staff-management rules before implementation. Coverage is intentionally future-facing and excluded from default Cucumber while tagged `@todo-domain`/`@todo-ui`.
+- `acceptance-tests/test/cucumber_config.test.js`: update the configuration expectation so the new `@todo-domain`/`@todo-ui` feature is known to be skipped by the default browser Cucumber profile. Reason: planning-time `@todo-domain`/`@todo-ui` scenarios must not make the main check red before implementation.
 
 ## Acceptance Criteria
 
@@ -162,7 +162,7 @@ Deferred decisions:
 15. Build the staff forms as repeated email rows with one primary radio button. Default the first entered address as primary for the common one-email case, reject blank/malformed addresses, reject no-primary and multiple-primary submissions, and show duplicate-email errors from validation/constraints.
 16. Update staff/operator person displays to show primary and alternate addresses distinctly.
 17. Update seeds, fixtures, browser acceptance support, and tests that create people to supply or derive the new email-address shape.
-18. Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@wip` once implemented.
+18. Add/enable the planned Cucumber scenarios in `acceptance-tests/features/person_email_addresses.feature`; remove or narrow `@todo-domain`/`@todo-ui` once implemented.
 19. Run targeted Membership, Accounts, Messaging, LiveView, migration, and Cucumber checks, then `dev check`.
 
 ## Resolved Technical Decisions
@@ -196,7 +196,7 @@ Memba can distinguish addresses that identify a person from the address Memba se
 - Run targeted Messaging tests proving club-message recipient resolution uses the primary address and sends once per person.
 - Run migration/persistence tests for email-address rows, uniqueness, and one-primary constraints.
 - Run staff LiveView/controller tests for person create/edit forms, primary selection defaults, validation errors, and display of primary/alternate addresses.
-- Run browser Cucumber with the new `person_email_addresses.feature` once the `@wip` tag is removed or narrowed during implementation.
+- Run browser Cucumber with the new `person_email_addresses.feature` once the `@todo-domain`/`@todo-ui` tag is removed or narrowed during implementation.
 - Manual demo:
   1. Staff creates Alice with primary `alice@example.com` and alternate `alice@work.example`.
   2. Alice requests a sign-in link for `alice@work.example` and receives it there.

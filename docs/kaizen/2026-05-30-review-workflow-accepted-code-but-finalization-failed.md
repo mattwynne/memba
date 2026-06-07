@@ -43,7 +43,7 @@ Manual follow-up was needed to push the status changes to `main`.
 
 - The review workflow reached a clear semantic decision: the implementation was accepted and no fixes were required.
 - A later artifact/finalization gate converted that accepted review into an overall failed Fabro run.
-- The same broad `.feature` guard that blocked implementation publish also blocked review finalization, even though iteration 006 intentionally changed `operator_email_deliverability.feature` by adding the temporary `@todo-web` browser-partition tag.
+- The same broad `.feature` guard that blocked implementation publish also blocked review finalization, even though iteration 006 intentionally changed `operator_email_deliverability.feature` by adding the temporary `@todo-ui` browser-partition tag.
 - The finalization script depends on `python3`, but the review sandbox environment did not provide it on `PATH` for that step.
 - The final user-facing status was therefore ambiguous: the code review was successful, but the workflow result was `FAILED`.
 - This required manual interpretation of run logs and manual status publication.

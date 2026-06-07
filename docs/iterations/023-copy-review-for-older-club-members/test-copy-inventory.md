@@ -192,7 +192,7 @@ Feature files are locked by the iteration plan unless an existing visible label 
   - Step definitions and member harness support assert:
     - delivery status text via member detail selectors;
     - failed send state copy through `assertMemberWasToldMessageWasNotSent` and `assertMemberWasToldToContactSupport`;
-    - inbound rejection email phrases for WIP scenarios (`Your email was not posted`, `attachments are not supported yet`, `plain text message body is required`) are email/inbound scope, not the public/member web copy pass unless touched incidentally.
+    - inbound rejection email phrases for future-facing acceptance scenarios (`Your email was not posted`, `attachments are not supported yet`, `plain text message body is required`) are email/inbound scope, not the public/member web copy pass unless touched incidentally.
 
 - `acceptance-tests/features/staff_club_slugs.feature`, `memba_staff_operations.feature`, `person_email_addresses.feature`, and `memba_staff_email_deliverability.feature`
   - Mostly staff/admin or operational coverage and therefore out of this iteration’s public/member copy scope.

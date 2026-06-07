@@ -22,8 +22,8 @@ The shared member-facing acceptance scenarios run reliably through Playwright/Cu
 ## Scope to plan
 
 1. Keep shared feature files as the acceptance source.
-2. Configure the browser Cucumber command to exclude `@todo-web` by default.
-3. Keep the Elixir/domain acceptance path unfiltered so `@todo-web` only means “not web-backed yet”.
+2. Configure the browser Cucumber command to exclude `@todo-ui` by default.
+3. Keep the Elixir/domain acceptance path unfiltered so `@todo-ui` only means “not web-backed yet”.
 4. Implement JS step definitions for:
    - `homepage.feature`;
    - `member_message_deliverability.feature`.
@@ -46,7 +46,7 @@ The shared member-facing acceptance scenarios run reliably through Playwright/Cu
 
 - `homepage.feature` passes through Playwright/Cucumber.
 - Every scenario in `member_message_deliverability.feature` passes through Playwright/Cucumber.
-- `operator_email_deliverability.feature` remains excluded by `@todo-web` until the operator browser slice is implemented.
+- `operator_email_deliverability.feature` remains excluded by `@todo-ui` until the operator browser slice is implemented.
 - Browser acceptance failures clearly identify startup, DB readiness, webhook, LiveView timing, or assertion failures.
 - `dev check` passes.
 

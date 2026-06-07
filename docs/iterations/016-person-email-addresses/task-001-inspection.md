@@ -114,10 +114,10 @@
 ## Browser acceptance support single-email assumptions
 
 - `acceptance-tests/features/person_email_addresses.feature`
-  - Already exists and is tagged `@wip`, matching the plan's allowed acceptance feature change.
+  - Already exists and is tagged `@todo-domain`/`@todo-ui`, matching the plan's allowed acceptance feature change.
   - Scenarios mention primary and alternate emails, but step definitions are not implemented yet.
 - `acceptance-tests/test/cucumber_config.test.js`
-  - Expects `person_email_addresses.feature` to be skipped by the default browser Cucumber profile while `@wip`.
+  - Expects `person_email_addresses.feature` to be skipped by the default browser Cucumber profile while `@todo-domain`/`@todo-ui`.
 - `acceptance-tests/features/support/member_message.js`
   - `createPerson` and `createPersonOnCurrentClubPage` fill `"Person email"` and store `world.people[name] = {email, name, personId}`.
   - Message mailbox assertions check delivery to `person.email`.

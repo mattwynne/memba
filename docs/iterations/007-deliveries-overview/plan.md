@@ -9,7 +9,7 @@ Operators can visit a deliveries overview and see detailed delivery records acro
 
 ## Background / Context
 
-Iterations 001–004 implemented the domain/application behaviour for member message deliverability, including the operator deliverability read model. Iteration 005 creates the minimal browser substrate for member-facing behaviour and deliberately defers operator deliverability browser coverage behind `@todo-web` tags.
+Iterations 001–004 implemented the domain/application behaviour for member message deliverability, including the operator deliverability read model. Iteration 005 creates the minimal browser substrate for member-facing behaviour and deliberately defers operator deliverability browser coverage behind `@todo-ui` tags.
 
 The current operator deliverability language and query shape are message-scoped. Product direction for the operator surface is broader: a `/deliveries` route that lists deliveries across all messages and can later grow filtering, slicing, pagination, and infinite scrolling.
 
@@ -25,7 +25,7 @@ Relevant context:
 ### In scope
 
 - Update `operator_email_deliverability.feature` so its model is an operator deliveries overview across messages, not a message-scoped operator view.
-- Remove `@todo-web` deferral from the operator scenarios when the browser acceptance path supports them.
+- Remove `@todo-ui` deferral from the operator scenarios when the browser acceptance path supports them.
 - Add a browser route at `/deliveries` using a LiveView such as `MembaWeb.DeliveriesLive.Index`.
 - Show a read-only table of operator delivery records across all messages.
 - Include enough columns for diagnosis: message subject/title, recipient name, recipient email/address, channel, detailed status, event timestamp, and reason.
@@ -52,7 +52,7 @@ Relevant context:
 - Delayed, bounced, and spam complaint rows preserve the provider/channel reason text.
 - Opened deliveries are visible as `opened` after a delivered email is opened.
 - Delivered/opened rows do not show stale problem reasons.
-- `operator_email_deliverability.feature` uses deliveries-overview language and passes through the browser acceptance harness without `@todo-web` deferral.
+- `operator_email_deliverability.feature` uses deliveries-overview language and passes through the browser acceptance harness without `@todo-ui` deferral.
 - `homepage.feature` and `member_message_deliverability.feature` continue to pass through the browser acceptance harness.
 - The Elixir/domain acceptance path used by `dev check` still runs the shared scenarios.
 - `dev check` passes.
@@ -63,7 +63,7 @@ None known.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/operator_email_deliverability.feature`: update the operator scenarios from message-scoped operator-view language to deliveries-overview language, and remove `@todo-web` tags when the browser acceptance path supports them. Coverage is preserved because the browser acceptance suite must now run and pass these scenarios, and the Elixir/domain acceptance path used by `dev check` still runs the shared scenarios.
+- `acceptance-tests/features/operator_email_deliverability.feature`: update the operator scenarios from message-scoped operator-view language to deliveries-overview language, and remove `@todo-ui` tags when the browser acceptance path supports them. Coverage is preserved because the browser acceptance suite must now run and pass these scenarios, and the Elixir/domain acceptance path used by `dev check` still runs the shared scenarios.
 
 ## Implementation Plan
 
@@ -73,8 +73,8 @@ None known.
 4. Add the `/deliveries` LiveView route under the browser pipeline.
 5. Build the deliveries LiveView as a simple read-only table with stable accessible labels or IDs for browser acceptance.
 6. Update browser Cucumber step definitions for `operator_email_deliverability.feature` so operator assertions inspect `/deliveries`.
-7. Remove `@todo-web` tags from operator scenarios once they are browser-backed.
-8. Verify browser Cucumber still defaults to excluding `@todo-web`, while now including the operator scenarios because they are no longer tagged.
+7. Remove `@todo-ui` tags from operator scenarios once they are browser-backed.
+8. Verify browser Cucumber still defaults to excluding `@todo-ui`, while now including the operator scenarios because they are no longer tagged.
 9. Run the browser acceptance suite and `dev check`, fixing any issues.
 
 ## Open Technical Decisions

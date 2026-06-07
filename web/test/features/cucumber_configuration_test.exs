@@ -12,7 +12,7 @@ defmodule Memba.CucumberConfigurationTest do
 
   test "domain Cucumber configuration excludes scenarios not ready or not intended for domain" do
     assert Application.fetch_env!(:cucumber, :tags) ==
-             "not @not-domain and not @todo-domain and not @todo and not @wip"
+             "not @not-domain and not @todo-domain"
   end
 
   test "shared deliverability features do not describe opened receipts" do

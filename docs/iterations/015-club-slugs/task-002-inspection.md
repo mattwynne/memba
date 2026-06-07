@@ -162,7 +162,7 @@ Other raw SQL:
 
 ## Acceptance feature state
 
-- `acceptance-tests/features/staff_club_slugs.feature` already exists and remains tagged `@wip`.
+- `acceptance-tests/features/staff_club_slugs.feature` already exists and remains tagged `@todo-domain`/`@todo-ui`.
 - No acceptance feature files were edited for this inspection task.
 
 ## Validation commands used for this inspection

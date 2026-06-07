@@ -5,7 +5,7 @@ const test = require("node:test");
 
 const cucumberConfig = require("../cucumber");
 
-const defaultBrowserTagExpression = "not @not-ui and not @todo-ui and not @todo and not @wip";
+const defaultBrowserTagExpression = "not @not-ui and not @todo-ui";
 
 test("default browser Cucumber profile excludes scenarios not ready or not intended for UI", () => {
   assert.equal(cucumberConfig.default.tags, defaultBrowserTagExpression);
@@ -31,14 +31,16 @@ test("default browser Cucumber profile selects all web-backed shared features", 
   ]);
 });
 
-test("shared feature suite has no parked todo scenarios", () => {
-  const parkedScenarios = browserFeatures().flatMap((feature) =>
-    feature.scenarios
-      .filter((scenario) => scenario.tags.some((tag) => tag.startsWith("@todo")))
-      .map((scenario) => `${feature.name}: ${scenario.name}`)
+test("shared feature suite uses only runner-intent and runner-debt tags", () => {
+  const unsupportedTags = browserFeatures().flatMap((feature) =>
+    feature.scenarios.flatMap((scenario) =>
+      scenario.tags
+        .filter((tag) => !supportedFeatureTag(tag))
+        .map((tag) => `${feature.name}: ${scenario.name}: ${tag}`)
+    )
   );
 
-  assert.deepEqual(parkedScenarios, []);
+  assert.deepEqual(unsupportedTags, []);
 });
 
 function browserSelectedFeatureNames() {
@@ -146,13 +148,15 @@ function featureScenarios(filePath) {
   return scenarios;
 }
 
+function supportedFeatureTag(tag) {
+  return ["@not-domain", "@not-ui", "@todo-domain", "@todo-ui"].includes(tag) || /^@iteration-\d+$/.test(tag);
+}
+
 function matchesDefaultBrowserTags(tags) {
   assert.equal(cucumberConfig.default.tags, defaultBrowserTagExpression);
 
   return (
     !tags.includes("@not-ui") &&
-    !tags.includes("@todo-ui") &&
-    !tags.includes("@todo") &&
-    !tags.includes("@wip")
+    !tags.includes("@todo-ui")
   );
 }

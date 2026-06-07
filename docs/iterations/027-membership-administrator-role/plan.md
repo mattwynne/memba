@@ -73,7 +73,7 @@ This iteration changes who can do what in a club, introduces a new role name, an
 New feature file:
 
 - `acceptance-tests/features/club_membership_administration.feature`
-  - `@wip` Feature: Club membership administration
+  - `@todo-domain`/`@todo-ui` Feature: Club membership administration
   - Rule: New clubs start with a Membership Administrator
     - Scenario: A converted requester can administer membership for their new club
   - Rule: Membership administration is authorized by permission
@@ -82,11 +82,11 @@ New feature file:
   - Rule: A club always has at least one Membership Administrator
     - Scenario: Robin cannot remove the last Membership Administrator
 
-The feature is tagged `@wip` during planning because the step definitions and implementation do not exist yet. The implementation should remove the `@wip` tag once the scenarios pass.
+The feature is tagged `@todo-domain`/`@todo-ui` during planning because the step definitions and implementation do not exist yet. The implementation should remove the `@todo-domain`/`@todo-ui` tag once the scenarios pass.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/club_membership_administration.feature`: implement the planned scenarios and remove `@wip` once the role/permission behaviour is implemented.
+- `acceptance-tests/features/club_membership_administration.feature`: implement the planned scenarios and remove `@todo-domain`/`@todo-ui` once the role/permission behaviour is implemented.
 - Existing feature files may be updated only where necessary to keep current onboarding scenarios consistent with the new default role creation side effects. Do not rewrite existing onboarding language unless the behaviour changes.
 
 ## Acceptance Criteria
@@ -102,7 +102,7 @@ The feature is tagged `@wip` during planning because the step definitions and im
 - Authorization checks for granting/revoking membership-administration authority use permission projection, not direct checks against a hard-coded role name.
 - Existing staff onboarding conversion behaviour still works: club created, requester/first member created or reused, membership created, request marked converted, welcome email sent.
 - Existing member sign-in and club membership behaviours continue to work.
-- The new Cucumber scenarios pass after implementation with `@wip` removed.
+- The new Cucumber scenarios pass after implementation with `@todo-domain`/`@todo-ui` removed.
 - `dev check` passes.
 
 ## Open Business Decisions
@@ -138,7 +138,7 @@ Confirmed decisions:
 12. Preserve or migrate existing test data/seeds so current acceptance tests still have valid clubs and memberships. Existing clubs in test/dev may need default role setup in seeds or migration/backfill.
 13. Implement step definitions only as needed during delivery to exercise the new Cucumber scenarios through domain/application behaviour. Do not create a polished member-facing admin UI in this iteration.
 14. Add ExUnit tests for events, projections, permission checks, authorization failures, and the last-administrator invariant.
-15. Remove `@wip` from `club_membership_administration.feature` once implementation passes the scenarios.
+15. Remove `@todo-domain`/`@todo-ui` from `club_membership_administration.feature` once implementation passes the scenarios.
 16. Run `dev check`.
 
 ## Open Technical Decisions
@@ -159,7 +159,7 @@ Memba can represent and enforce a club-scoped Membership Administrator role buil
 - Add tests proving Robin receives Membership Administrator during request conversion, including the existing-person conversion path.
 - Add tests proving Robin can make Alice a Membership Administrator and Alice cannot make Bob one while Alice is ordinary.
 - Add tests proving the last Membership Administrator cannot be removed/revoked.
-- Run the new Cucumber scenarios after removing `@wip`.
+- Run the new Cucumber scenarios after removing `@todo-domain`/`@todo-ui`.
 - Run the existing request-account scenarios to protect onboarding conversion behaviour.
 - Run `dev check`.
 

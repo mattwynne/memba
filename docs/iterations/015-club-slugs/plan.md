@@ -79,7 +79,7 @@ BDD decision: Required.
 
 This iteration changes staff-visible club setup behaviour and public visitor routing, so stakeholder-readable examples are useful. Add the following shared Cucumber feature file:
 
-- `acceptance-tests/features/staff_club_slugs.feature` (`@wip` for planning until implementation catches up)
+- `acceptance-tests/features/staff_club_slugs.feature` (`@todo-domain`/`@todo-ui` for planning until implementation catches up)
 
 The feature covers these scenarios:
 
@@ -91,7 +91,7 @@ The feature covers these scenarios:
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/staff_club_slugs.feature`: new feature file, tagged `@wip`, to document the staff slug-management and public host-routing rules for this iteration. The tag keeps planning-time checks green until the delivery implementation adds the supporting steps and application behaviour.
+- `acceptance-tests/features/staff_club_slugs.feature`: new feature file, tagged `@todo-domain`/`@todo-ui`, to document the staff slug-management and public host-routing rules for this iteration. The tag keeps planning-time checks green until the delivery implementation adds the supporting steps and application behaviour.
 
 ## Acceptance Criteria
 
@@ -186,7 +186,7 @@ Memba can identify a club by a stable public slug, staff can manage that slug sa
   - `kmc.clubs.memba.io` renders Kootenay Mountaineering Club's public page;
   - `unknown.clubs.memba.io` returns 404;
   - existing `club_id` public/member links still work.
-- Confirm the new Cucumber feature file remains tagged `@wip` until implemented.
+- Confirm the new Cucumber feature file remains tagged `@todo-domain`/`@todo-ui` until implemented.
 - Manual production validation after deploy:
   - confirm wildcard DNS for `*.clubs.memba.io` resolves to the production app;
   - confirm `https://kmc.clubs.memba.io` shows KMC's public page;

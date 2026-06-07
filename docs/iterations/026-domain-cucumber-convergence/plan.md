@@ -20,10 +20,10 @@ The domain path previously relied on hard-coded scenario lists in `web/test/feat
 
 A project-local domain runner now exists in `web/test/support/domain_cucumber_runner.ex`. It discovers shared feature files, applies the domain tag filter, and generates ExUnit tests for every domain-eligible scenario. The remaining work is to work down the explicit `@todo-domain` debt carefully, with Matt reviewing wording and step intent feature by feature.
 
-Current todo-tagged scenario debt at the start of this plan:
+Current runner-debt scenario tags at the start of this plan:
 
 - `@todo-domain`: 11 scenarios
-- `@todo`: 10 scenarios
+- both `@todo-domain` and `@todo-ui`: 10 scenarios
 - `@todo-ui`: 2 scenarios
 
 ## Related Problems
@@ -45,8 +45,7 @@ Related kaizen note:
   - `@not-ui`
   - `@todo-domain`
   - `@todo-ui`
-  - `@todo`
-  - `@wip` only during active planning-to-implementation gaps
+  - both `@todo-domain` and `@todo-ui` for future-facing scenarios that neither runner can execute yet
 - Work through `@todo-domain` scenarios in small batches, starting with scenarios whose domain rules are already implemented.
 - For each batch, review the Gherkin wording/preconditions with Matt before or during step-definition work.
 - Add or refine Elixir/domain step definitions so they assert the domain rule rather than mimic browser mechanics.
@@ -59,7 +58,7 @@ Related kaizen note:
 - Adding new product behaviour.
 - Replacing the Elixir Cucumber dependency.
 - Teaching the current Elixir Cucumber parser to support real `Rule:` syntax.
-- Converging all `@todo` and `@todo-ui` scenarios unless they are trivial follow-ons from `@todo-domain` work.
+- Converging all scenarios tagged `@todo-ui` unless they are trivial follow-ons from `@todo-domain` work.
 - Rewriting all existing Gherkin at once.
 
 ## Iteration Type
@@ -79,7 +78,7 @@ The work is acceptance infrastructure and coverage convergence. Existing feature
 Implementation may edit existing files under `acceptance-tests/features/` only for these purposes:
 
 - remove `@todo-domain` from a scenario once domain coverage is implemented;
-- add, remove, or adjust `@not-domain`, `@not-ui`, `@todo-domain`, `@todo-ui`, or `@todo` when Matt agrees the classification is wrong;
+- add, remove, or adjust `@not-domain`, `@not-ui`, `@todo-domain`, or `@todo-ui` when Matt agrees the classification is wrong;
 - replace remaining real `Rule:` lines with `# Rule:` while the Elixir parser cannot handle `Rule:`;
 - clarify scenario preconditions or wording when the current Gherkin hides an important domain fact, as with making Bob's membership explicit before Bob sends a club message.
 
@@ -115,12 +114,12 @@ None known. Matt should remain involved when Gherkin wording reveals a domain-la
    - add domain step definitions;
    - remove `@todo-domain` from passing scenarios;
    - run targeted domain tests and browser dry-run/full acceptance as appropriate.
-5. Leave `@todo` and `@todo-ui` scenarios parked unless this iteration naturally resolves them.
+5. Leave scenarios tagged `@todo-ui` parked unless this iteration naturally resolves them.
 
 ## Open Technical Decisions
 
 - Whether the project-local domain runner should later be upstreamed into `huddlz-hq/cucumber` or replaced by a patched dependency with tag filtering and `Rule:` support.
-- Whether `@todo` remains distinct from `@wip` after the suite converges.
+- Whether any additional guardrail is needed now that temporary acceptance debt is expressed only with `@todo-domain` and `@todo-ui`.
 
 ## New Capability
 

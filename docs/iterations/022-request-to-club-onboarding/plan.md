@@ -91,7 +91,7 @@ Create this shared Cucumber feature file:
 
 - `acceptance-tests/features/request_account.feature`
 
-The feature is tagged `@wip` during planning because all scenarios are future-facing and the request model, routes, UI, emails, and step support do not exist yet.
+The feature is tagged `@todo-domain`/`@todo-ui` during planning because all scenarios are future-facing and the request model, routes, UI, emails, and step support do not exist yet.
 
 Scenario summaries:
 
@@ -102,13 +102,13 @@ Scenario summaries:
 - Pat rejects a request with an internal note and does not notify the requester.
 - Robin receives a welcome sign-in link for the new club after conversion.
 
-Matt should review the feature language before implementation removes the `@wip` tag.
+Matt should review the feature language before implementation removes the `@todo-domain`/`@todo-ui` tag.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/request_account.feature`: create a new feature-level `@wip` feature documenting staff-approved request-to-club onboarding. The `@wip` tag keeps planning-time checks green until delivery implements the routes, UI, emails, request model, and step support.
-- `acceptance-tests/test/cucumber_config.test.js`: update the planning-time browser Cucumber configuration test so it recognises `request_account.feature` as an explicitly deferred `@wip` planning feature.
-- During implementation, acceptance support and step definitions may be added for public request submission, signed-in request submission, staff request triage, conversion/rejection, mailbox inspection, and welcome-link sign-in. Remove the `@wip` tag only when the scenarios pass.
+- `acceptance-tests/features/request_account.feature`: create a new feature-level `@todo-domain`/`@todo-ui` feature documenting staff-approved request-to-club onboarding. The `@todo-domain`/`@todo-ui` tag keeps planning-time checks green until delivery implements the routes, UI, emails, request model, and step support.
+- `acceptance-tests/test/cucumber_config.test.js`: update the planning-time browser Cucumber configuration test so it recognises `request_account.feature` as an explicitly deferred `@todo-domain`/`@todo-ui` planning feature.
+- During implementation, acceptance support and step definitions may be added for public request submission, signed-in request submission, staff request triage, conversion/rejection, mailbox inspection, and welcome-link sign-in. Remove the `@todo-domain`/`@todo-ui` tag only when the scenarios pass.
 
 ## Acceptance Criteria
 
@@ -189,7 +189,7 @@ Decisions made during planning:
 13. Implement conversion transactionally where practical: create club, create/reuse person, create active membership, mark request converted, and send/wrap welcome email behaviour consistently.
 14. Implement welcome email generation with a magic sign-in token and post-auth destination for the new club member home.
 15. Add or update tests for public form validation/submission, signed-in prepopulation, notification email, staff authorization, active inbox, rejection, conversion, existing-person reuse, slug validation, welcome email, and preservation of existing club creation/slug behaviour.
-16. Add acceptance step support for `request_account.feature` and remove `@wip` once the scenarios pass.
+16. Add acceptance step support for `request_account.feature` and remove `@todo-domain`/`@todo-ui` once the scenarios pass.
 17. Run targeted tests while developing, then run `dev check`.
 
 ## Open Technical Decisions
@@ -209,12 +209,12 @@ Memba has a staff-approved onboarding path: people can ask to try Memba, staff c
 
 ## Validation Plan
 
-- Review `acceptance-tests/features/request_account.feature` with Matt for domain language and examples before removing `@wip`.
-- Run browser Cucumber configuration checks to ensure the new feature is excluded while `@wip`.
+- Review `acceptance-tests/features/request_account.feature` with Matt for domain language and examples before removing `@todo-domain`/`@todo-ui`.
+- Run browser Cucumber configuration checks to ensure the new feature is excluded while `@todo-domain`/`@todo-ui`.
 - During implementation, add LiveView/controller/context tests for request creation, validation, staff inbox, rejection, conversion, slug reuse, welcome email, and authorization.
 - Run existing staff club slug tests to prove the shared slug behaviour still works.
 - Run existing authentication tests to prove magic-link sign-in behaviour still works.
-- Run the new acceptance scenarios after removing `@wip`.
+- Run the new acceptance scenarios after removing `@todo-domain`/`@todo-ui`.
 - Run `dev check` before delivery is complete.
 
 Manual demo after implementation:

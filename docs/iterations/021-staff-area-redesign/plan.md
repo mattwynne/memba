@@ -106,7 +106,7 @@ Add this shared Cucumber feature file:
 
 - `acceptance-tests/features/memba_staff_operations.feature`
 
-The new feature file is tagged `@wip` during planning because all of its scenarios are future-facing and the new routes and step support do not exist yet:
+The new feature file is tagged `@todo-domain`/`@todo-ui` during planning because all of its scenarios are future-facing and the new routes and step support do not exist yet:
 
 - Staff navigation offers only working operations pages: Clubs, People, Messages, and Deliveries; it does not offer unavailable pages such as Incoming or Roles.
 - Staff can see one person with memberships in multiple clubs on the global People page.
@@ -117,7 +117,7 @@ Matt approved the scenario direction during planning: the staff UI should follow
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/memba_staff_operations.feature`: create a new feature-level `@wip` feature documenting staff operations navigation, global People, global Messages, and removal of staff-side club-message composition. The `@wip` tag keeps planning-time checks green until delivery implements the routes, UI, and step support.
+- `acceptance-tests/features/memba_staff_operations.feature`: create a new feature-level `@todo-domain`/`@todo-ui` feature documenting staff operations navigation, global People, global Messages, and removal of staff-side club-message composition. The `@todo-domain`/`@todo-ui` tag keeps planning-time checks green until delivery implements the routes, UI, and step support.
 - Acceptance support and step definitions may be updated during implementation to sign in as Memba staff, create multi-club membership examples, open the staff People and Messages pages, and assert the absence of the staff-side send-message affordance.
 
 ## Acceptance Criteria
@@ -189,7 +189,7 @@ Decisions made during planning:
     - `/admin/messages` read-only list and diagnostics links;
     - absence of staff-side send-message affordance;
     - preservation of existing club/person/membership workflows.
-15. Update acceptance step support and remove the feature-level `@wip` tag from `memba_staff_operations.feature` once its scenarios pass.
+15. Update acceptance step support and remove the feature-level `@todo-domain`/`@todo-ui` tag from `memba_staff_operations.feature` once its scenarios pass.
 16. Run targeted tests for admin LiveViews and acceptance configuration.
 17. Run `dev check`.
 
@@ -211,8 +211,8 @@ Memba staff have a clearer operations area that shows the real domain model: clu
 
 - Review the implemented pages against the mockups for staff-operations feel, while checking that domain language remains honest.
 - Run LiveView tests for the new People and Messages pages and updated admin pages.
-- Run affected acceptance scenarios after implementation removes `@wip` tags.
-- Run acceptance configuration checks while scenarios are still `@wip` during planning.
+- Run affected acceptance scenarios after implementation removes `@todo-domain`/`@todo-ui` tags.
+- Run acceptance configuration checks while scenarios are still `@todo-domain`/`@todo-ui` during planning.
 - Run `dev check` before delivery is complete.
 - Manual demo:
   1. Sign in as Memba staff.

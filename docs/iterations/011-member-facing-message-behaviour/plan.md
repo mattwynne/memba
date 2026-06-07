@@ -17,7 +17,7 @@ Foundations already in place:
 
 - Iteration 009 split public, staff-admin, and club-site surfaces.
 - Iteration 010 added shared magic-link authentication and temporary `?club_id=` club-member access.
-- A pre-iteration change excludes `@wip` scenarios from both browser and domain Cucumber runners by default and documents this in `acceptance-tests/README.md`.
+- A pre-iteration change excludes `@todo-domain`/`@todo-ui` scenarios from both browser and domain Cucumber runners by default and documents this in `acceptance-tests/README.md`.
 
 Design references are included in this iteration folder under `designs/`. Use these files first:
 
@@ -71,7 +71,7 @@ User-observable rule changed: member-message acceptance is proved through the me
 
 BDD decision: Required.
 
-`acceptance-tests/features/member_message_deliverability.feature` has been rewritten as `@wip` planning language for this slice. The `@wip` tag is intentional and must be removed during implementation once the scenarios pass through the browser runner as authenticated members.
+`acceptance-tests/features/member_message_deliverability.feature` has been rewritten as `@todo-domain`/`@todo-ui` planning language for this slice. The `@todo-domain`/`@todo-ui` tag is intentional and must be removed during implementation once the scenarios pass through the browser runner as authenticated members.
 
 Scenarios:
 
@@ -81,7 +81,7 @@ Scenarios:
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/member_message_deliverability.feature`: replace staff/admin-detail assertions with member-facing scenarios. Remove the `@wip` tag once browser implementation passes.
+- `acceptance-tests/features/member_message_deliverability.feature`: replace staff/admin-detail assertions with member-facing scenarios. Remove the `@todo-domain`/`@todo-ui` tag once browser implementation passes.
 - Implementation may make small wording adjustments to keep Gherkin business-readable, but must preserve the rules above.
 - Operator/staff feature files may be changed only to preserve staff/operator coverage intentionally removed from the member feature.
 
@@ -136,7 +136,7 @@ Deferred: whether senders should receive their own messages long-term; whether s
 6. Add a presentation mapping for member receipt labels and Heroicons without changing internal projection values.
 7. Keep staff/admin diagnostics unchanged on `/admin/messages/:message_id` and `/admin/deliveries`.
 8. Add focused tests for member route authorization, message-club ownership checks, status label/icon mapping, and no operator-only fields on member pages.
-9. Remove `@wip` from `member_message_deliverability.feature` when browser scenarios pass.
+9. Remove `@todo-domain`/`@todo-ui` from `member_message_deliverability.feature` when browser scenarios pass.
 10. Run `dev check`.
 
 ## Open Technical Decisions

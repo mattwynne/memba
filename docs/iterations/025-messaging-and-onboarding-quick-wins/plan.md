@@ -80,12 +80,12 @@ These are small but user-visible rules involving messaging, validation, and staf
 - `acceptance-tests/features/request_account.feature`
   - Add a scenario for staff opening the request conversion workflow from the notification email link.
 
-The new scenarios should be marked `@wip` while this plan is ahead of implementation.
+The new scenarios should be marked `@todo-domain`/`@todo-ui` while this plan is ahead of implementation.
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/member_message_deliverability.feature`: remove `@wip` from the slugged club-message email subject scenario once it is implemented; remove `@wip` from the blank-body compose validation scenario once it is implemented.
-- `acceptance-tests/features/request_account.feature`: remove `@wip` from the staff notification request-conversion link scenario once it is implemented.
+- `acceptance-tests/features/member_message_deliverability.feature`: remove `@todo-domain`/`@todo-ui` from the slugged club-message email subject scenario once it is implemented; remove `@todo-domain`/`@todo-ui` from the blank-body compose validation scenario once it is implemented.
+- `acceptance-tests/features/request_account.feature`: remove `@todo-domain`/`@todo-ui` from the staff notification request-conversion link scenario once it is implemented.
 
 ## Acceptance Criteria
 
@@ -105,8 +105,8 @@ The new scenarios should be marked `@wip` while this plan is ahead of implementa
 - Successfully converting the request still creates the club, first active member, converted request record, and welcome email as before, then returns staff to the active requests inbox.
 - Opening a request-specific route for a converted, rejected, missing, or invalid request shows a clear no-longer-active/not-found message and a link back to `/admin/requests`.
 - The new-request staff notification email includes the request ID/details and a direct browser link to the request-specific conversion URL.
-- Existing request-account acceptance scenarios continue to pass, aside from the newly planned `@wip` scenario while this plan is ahead of implementation.
-- The iteration is complete when the three new acceptance scenarios pass without `@wip` tags and `dev check` passes.
+- Existing request-account acceptance scenarios continue to pass, aside from the newly planned `@todo-domain`/`@todo-ui` scenario while this plan is ahead of implementation.
+- The iteration is complete when the three new acceptance scenarios pass without `@todo-domain`/`@todo-ui` tags and `dev check` passes.
 
 ## Open Business Decisions
 
@@ -141,7 +141,7 @@ Confirmed decisions:
 15. After successful conversion, return staff to `/admin/requests` with the existing success flash and refreshed stream.
 16. Update `Memba.Onboarding.NewRequestEmail` to include an absolute request-specific staff URL. Reuse the app's existing URL generation/configuration approach for absolute links.
 17. Add tests for direct request URL, list Convert patch behaviour, inactive/missing request state, notification email link, and unchanged conversion outcomes.
-18. Update acceptance feature files with the planned `@wip` scenarios.
+18. Update acceptance feature files with the planned `@todo-domain`/`@todo-ui` scenarios.
 19. Run targeted tests for messaging email providers, member compose LiveView, onboarding request LiveView, onboarding email, and acceptance feature parsing.
 20. Run `dev check`.
 
@@ -164,8 +164,8 @@ Memba clears three small workflow and trust gaps: club-message emails are easier
 - Run member compose LiveView tests proving blank-body validation and no send side effect.
 - Run onboarding request LiveView tests proving patch navigation, direct route mounting, inactive/missing state, and unchanged conversion behaviour.
 - Run onboarding notification email tests proving the request-specific action link is present.
-- Run affected acceptance tests or at least feature parsing/tag checks while scenarios remain `@wip`.
-- Remove the `@wip` tags from the three new acceptance scenarios once implemented and run them green.
+- Run affected acceptance tests or at least feature parsing/tag checks while scenarios remain `@todo-domain`/`@todo-ui`.
+- Remove the `@todo-domain`/`@todo-ui` tags from the three new acceptance scenarios once implemented and run them green.
 - Run full `dev check` before delivery is considered complete.
 
 ## Risks / Follow-ups

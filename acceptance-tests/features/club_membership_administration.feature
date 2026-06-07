@@ -1,4 +1,4 @@
-@iteration-027 @wip
+@iteration-027 @todo-domain @todo-ui
 Feature: Club membership administration
   Clubs need trusted members who can manage membership without Memba staff doing every change.
   Memba grants each new club a default Membership Administrator role built from permission primitives.

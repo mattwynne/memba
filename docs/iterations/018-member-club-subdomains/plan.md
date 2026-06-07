@@ -73,7 +73,7 @@ This iteration changes member-visible URLs, club selection, authentication conti
 
 Add the following shared Cucumber feature file:
 
-- `acceptance-tests/features/member_club_subdomains.feature` (`@wip` for planning until implementation catches up)
+- `acceptance-tests/features/member_club_subdomains.feature` (`@todo-domain`/`@todo-ui` for planning until implementation catches up)
 
 The feature covers these scenarios:
 
@@ -86,7 +86,7 @@ The feature covers these scenarios:
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/member_club_subdomains.feature`: new feature file, tagged `@wip`, to document the member subdomain navigation, host-selected club, auth return-to, private authorization, and public-root rules for this iteration. The tag keeps planning-time checks green until delivery implements the supporting steps and application behaviour.
+- `acceptance-tests/features/member_club_subdomains.feature`: new feature file, tagged `@todo-domain`/`@todo-ui`, to document the member subdomain navigation, host-selected club, auth return-to, private authorization, and public-root rules for this iteration. The tag keeps planning-time checks green until delivery implements the supporting steps and application behaviour.
 - Acceptance support and Cucumber configuration may be updated during implementation to generate and open local club subdomain URLs using the configured local base domain, defaulting to `lvh.me`.
 
 ## Acceptance Criteria
@@ -159,7 +159,7 @@ Deferred decisions:
     - signed-in non-member forbidden private URL;
     - legacy `club_id` fallback still works and remains protected;
     - main-host public and admin routes still work.
-13. Keep the new Cucumber feature tagged `@wip` until the delivery implementation adds matching step support and behaviour.
+13. Keep the new Cucumber feature tagged `@todo-domain`/`@todo-ui` until the delivery implementation adds matching step support and behaviour.
 14. Run `dev check`.
 
 ## Open Technical Decisions
@@ -182,7 +182,7 @@ Members can use a stable, human-readable club subdomain as their normal club-sit
 
 - Run `dev check`.
 - Run targeted web tests for club-site host detection, URL generation, root routing, private member routing, auth return-to, forbidden access, and legacy fallback routes.
-- Run targeted acceptance-test configuration checks proving `@wip` scenarios are excluded from the default browser Cucumber run.
+- Run targeted acceptance-test configuration checks proving `@todo-domain`/`@todo-ui` scenarios are excluded from the default browser Cucumber run.
 - Run browser acceptance support tests that verify local club URLs use `lvh.me` rather than `club_id` query strings.
 - Manual demo:
   1. Start the app locally.

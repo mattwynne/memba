@@ -24,7 +24,7 @@ defmodule Memba.DomainCucumberRunnerTest do
   test "selected scenarios do not carry excluded domain tags" do
     selected = DomainCucumberRunner.selected_scenarios()
 
-    excluded_tags = ["not-domain", "todo-domain", "todo", "wip"]
+    excluded_tags = ["not-domain", "todo-domain"]
 
     Enum.each(selected, fn %{feature: feature, scenario: scenario} ->
       tags = Enum.map(feature.tags ++ scenario.tags, &String.trim_leading(&1, "@"))

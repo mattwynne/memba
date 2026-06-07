@@ -62,7 +62,7 @@ This iteration changes stakeholder-visible delivery-status vocabulary and privac
 - `acceptance-tests/features/memba_staff_email_deliverability.feature`
   - Remove the `Opens are visible after delivery` scenario because opens are no longer a supported staff-visible delivery state.
 
-No new `@wip` scenarios are needed. These edits remove obsolete expected behaviour. The Cucumber configuration/runtime expectation test should be updated alongside the feature edits so planning-time validation reflects the revised shared feature files without changing step definitions.
+No new `@todo-domain`/`@todo-ui` scenarios are needed. These edits remove obsolete expected behaviour. The Cucumber configuration/runtime expectation test should be updated alongside the feature edits so planning-time validation reflects the revised shared feature files without changing step definitions.
 
 ## Allowed acceptance feature changes
 

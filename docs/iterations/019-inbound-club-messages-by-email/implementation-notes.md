@@ -87,11 +87,11 @@ Task 001 inspected the current extension points for inbound club messages by ema
 ### Acceptance support
 
 - Shared feature: `acceptance-tests/features/member_message_deliverability.feature`.
-  - Inbound-email scenarios are already present and tagged `@wip`.
+  - Inbound-email scenarios are already present and tagged `@todo-domain`/`@todo-ui`.
 - Browser Cucumber config: `acceptance-tests/cucumber.js`.
-  - Excludes `@wip`.
+  - Excludes `@todo-domain`/`@todo-ui`.
 - Domain Cucumber config: `web/config/test.exs`.
-  - Excludes `@wip`.
+  - Excludes `@todo-domain`/`@todo-ui`.
 - Existing browser support:
   - `acceptance-tests/features/step_definitions/member_message_steps.js`.
   - `acceptance-tests/features/support/member_message.js`.

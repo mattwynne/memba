@@ -61,7 +61,7 @@ Relevant current implementation:
   - offer “Try again” and “Back to club home”;
   - no need to promise draft preservation in business copy;
   - log/capture enough detail for operators/developers to investigate.
-- Update acceptance feature language with a small `@wip` scenario for failed send incident handling, keeping it navigation-agnostic.
+- Update acceptance feature language with a small `@todo-domain`/`@todo-ui` scenario for failed send incident handling, keeping it navigation-agnostic.
 - Add LiveView tests for compose route/auth, logged-in sender derivation, form submit success, success actions, send failure state, and removal of the sender dropdown.
 - Keep existing member-message browser scenarios green.
 - Keep `dev check` green.
@@ -92,11 +92,11 @@ User-observable rules changed:
 
 BDD decision: Required for the send-failure rule; existing scenarios remain suitable for the normal send flow.
 
-`acceptance-tests/features/member_message_deliverability.feature` gains one `@wip` scenario under a new rule:
+`acceptance-tests/features/member_message_deliverability.feature` gains one `@todo-domain`/`@todo-ui` scenario under a new rule:
 
 - `Alice is told a failed message was not sent`: when sending is unavailable and Alice tries to send a club message, she is told the message was not sent and to contact support.
 
-The scenario is intentionally navigation-agnostic: it does not mention the compose route, buttons, pages, or LiveView implementation. The `@wip` tag must be removed during implementation once the scenario passes or if the implementation chooses to cover the same rule through an existing executable scenario.
+The scenario is intentionally navigation-agnostic: it does not mention the compose route, buttons, pages, or LiveView implementation. The `@todo-domain`/`@todo-ui` tag must be removed during implementation once the scenario passes or if the implementation chooses to cover the same rule through an existing executable scenario.
 
 Normal compose navigation, success actions, and the removal of the sender dropdown should be covered by LiveView tests because they are UI workflow/presentation details around the already-documented “Alice sends a club message” rule.
 
@@ -126,7 +126,7 @@ Normal compose navigation, success actions, and the removal of the sender dropdo
 - On send failure, the state offers “Try again” and “Back to club home”.
 - Send failures are logged or captured with enough context for operators/developers to investigate without exposing technical internals to the member.
 - Existing normal-send browser scenarios continue to pass with business wording unchanged.
-- The new send-failure scenario is untagged and passing by the end of implementation, or remains `@wip` only if Matt explicitly accepts deferring executable coverage.
+- The new send-failure scenario is untagged and passing by the end of implementation, or remains `@todo-domain`/`@todo-ui` only if Matt explicitly accepts deferring executable coverage.
 - `dev check` passes.
 
 ## Open Business Decisions
@@ -174,7 +174,7 @@ Decisions made during planning:
    - club home CTA replacing inline compose.
 10. Update acceptance step support only as needed for the new send-failure scenario and for existing normal-send steps to use the new compose flow without changing scenario wording.
     - Simulate send unavailability through test support rather than Gherkin wording. Prefer a test-only configuration seam around the existing message sending/delivery boundary (for example an application-env flag or fake-provider failure mode set by step support) so the feature can say only that sending is unavailable.
-11. Remove `@wip` from the new failure scenario once implemented and passing.
+11. Remove `@todo-domain`/`@todo-ui` from the new failure scenario once implemented and passing.
 12. Remove the legacy `POST /?club_id=<club_id>` send route and controller action in this slice once the LiveView submit path is covered. Do not keep a parallel member send endpoint unless a test reveals an existing non-UI caller that must be preserved.
 13. Run the targeted browser Cucumber feature and `dev check`.
 

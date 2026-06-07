@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.
-- [x] 002 Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
+- [x] 002 Configure the browser Cucumber default command to exclude `@todo-ui`, while leaving the Elixir/domain Cucumber runner unfiltered.
 - [x] 003 Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
 - [x] 004 Implement homepage browser steps against the real homepage route.
 - [x] 005 Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.

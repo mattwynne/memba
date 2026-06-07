@@ -1,6 +1,6 @@
 # Manual demo script: member-facing message behaviour
 
-Use this after implementation removes `@wip` from `acceptance-tests/features/member_message_deliverability.feature`.
+Use this after implementation removes `@todo-domain`/`@todo-ui` from `acceptance-tests/features/member_message_deliverability.feature`.
 
 1. Sign in as Alice, an active member of Kootenay Mountaineering Club.
 2. Open Kootenay Mountaineering Club from Alice's clubs.

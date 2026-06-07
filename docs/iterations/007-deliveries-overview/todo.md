@@ -6,6 +6,6 @@
 - [x] 004 Add the `/deliveries` LiveView route under the browser pipeline.
 - [x] 005 Build the deliveries LiveView as a simple read-only table with stable accessible labels or IDs for browser acceptance.
 - [x] 006 Update browser Cucumber step definitions for `operator_email_deliverability.feature` so operator assertions inspect `/deliveries`.
-- [x] 007 Remove `@todo-web` tags from operator scenarios once they are browser-backed.
-- [x] 008 Verify browser Cucumber still defaults to excluding `@todo-web`, while now including the operator scenarios because they are no longer tagged.
+- [x] 007 Remove `@todo-ui` tags from operator scenarios once they are browser-backed.
+- [x] 008 Verify browser Cucumber still defaults to excluding `@todo-ui`, while now including the operator scenarios because they are no longer tagged.
 - [x] 009 Run the browser acceptance suite and `dev check`, fixing any issues.

@@ -30,7 +30,7 @@ File acceptance-tests/core is 252.54 MB; this exceeds GitHub's file size limit o
 GH001: Large files detected.
 ```
 
-Manual rescue was needed. The rescue recovered the implementation patch, restored the necessary `@todo-web` feature tag, fixed local harness drift around `bin/dev up`, aligned Playwright with the Nix browser revision, re-ran validation, merged a clean commit to `main`, and pushed with HTTPS after SSH push failed.
+Manual rescue was needed. The rescue recovered the implementation patch, restored the necessary `@todo-ui` feature tag, fixed local harness drift around `bin/dev up`, aligned Playwright with the Nix browser revision, re-ran validation, merged a clean commit to `main`, and pushed with HTTPS after SSH push failed.
 
 ## Observations
 

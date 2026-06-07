@@ -326,7 +326,7 @@ Potential test additions later in the plan:
 
 ## Current acceptance plumbing
 
-`acceptance-tests/features/memba_staff_operations.feature` already exists and is feature-level `@wip`. It covers:
+`acceptance-tests/features/memba_staff_operations.feature` already exists and is feature-level `@todo-domain`/`@todo-ui`. It covers:
 
 - staff operations nav links;
 - absence of Incoming/Roles;

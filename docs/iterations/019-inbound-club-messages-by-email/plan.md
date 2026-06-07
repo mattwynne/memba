@@ -75,7 +75,7 @@ Update this shared Cucumber feature file:
 
 - `acceptance-tests/features/member_message_deliverability.feature`
 
-Add `@wip` scenarios under new inbound-email rules until implementation catches up:
+Add `@todo-domain`/`@todo-ui` scenarios under new inbound-email rules until implementation catches up:
 
 - Alice emails `kmc@clubs.memba.io` and the email becomes a KMC club message sent to KMC members only.
 - Alice sends from an alternate email address on her person record and Memba still posts the message as Alice.
@@ -89,7 +89,7 @@ Matt reviewed the scenario language during planning and approved it as domain la
 
 ## Allowed acceptance feature changes
 
-- `acceptance-tests/features/member_message_deliverability.feature`: add `@wip` inbound-email scenarios documenting accepted inbound posting, alternate sender addresses, rejection for unknown/non-member senders, unsupported attachments, quote/signature stripping, and HTML-only rejection. The `@wip` tags keep planning-time checks green until delivery implements the supporting steps and application behaviour.
+- `acceptance-tests/features/member_message_deliverability.feature`: add `@todo-domain`/`@todo-ui` inbound-email scenarios documenting accepted inbound posting, alternate sender addresses, rejection for unknown/non-member senders, unsupported attachments, quote/signature stripping, and HTML-only rejection. The `@todo-domain`/`@todo-ui` tags keep planning-time checks green until delivery implements the supporting steps and application behaviour.
 - Acceptance support and step definitions may be updated during implementation to simulate Resend inbound webhook payloads, inspect rejection emails in the test mailbox, and assert that no club message was created for rejected inbound email.
 
 ## Acceptance Criteria
@@ -180,8 +180,8 @@ Deferred decisions:
     - quote/signature stripping;
     - unknown club slug rejection.
 21. Add Resend webhook parser/controller tests for realistic inbound payloads, malformed payloads, signature-required behaviour, duplicate provider message id behaviour, and rejection paths.
-22. Update browser acceptance step support only as needed to express the new `@wip` scenarios after implementation begins.
-23. Keep all new acceptance scenarios tagged `@wip` until delivery implements the required step support and application behaviour.
+22. Update browser acceptance step support only as needed to express the new `@todo-domain`/`@todo-ui` scenarios after implementation begins.
+23. Keep all new acceptance scenarios tagged `@todo-domain`/`@todo-ui` until delivery implements the required step support and application behaviour.
 24. Run `dev check`.
 
 ## Open Technical Decisions
@@ -207,8 +207,8 @@ A member can see the club's inbound email address on the member dashboard and co
 - Run targeted messaging context tests for the provider-neutral inbound email command/API.
 - Run targeted Resend inbound webhook controller/parser tests.
 - Run targeted mailer tests for rejection emails.
-- Run Cucumber configuration tests to confirm `@wip` scenarios are excluded from the default acceptance run until implemented.
-- After implementation removes or narrows `@wip` tags, run the affected Cucumber feature file.
+- Run Cucumber configuration tests to confirm `@todo-domain`/`@todo-ui` scenarios are excluded from the default acceptance run until implemented.
+- After implementation removes or narrows `@todo-domain`/`@todo-ui` tags, run the affected Cucumber feature file.
 - Manual demo:
   1. Start the app locally with the local/test mailer.
   2. Ensure Kootenay Mountaineering Club has slug `kmc` and Alice is an active member with primary and alternate email addresses.

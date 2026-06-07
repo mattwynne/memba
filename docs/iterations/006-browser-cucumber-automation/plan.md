@@ -13,7 +13,7 @@ Iteration 005 plans the minimal browser substrate for member-facing behaviour: `
 
 The shared `.feature` files remain the acceptance source. The Elixir/domain Cucumber path proves the application behaviour directly, while the Playwright/Cucumber path proves that browser-visible flows can exercise the same member-facing behaviour through the running Phoenix app.
 
-Iteration 007 separately plans the operator deliveries overview. This iteration does not implement the operator browser slice; it preserves the `@todo-web` partition so operator scenarios can remain domain-tested until their browser surface is implemented.
+Iteration 007 separately plans the operator deliveries overview. This iteration does not implement the operator browser slice; it preserves the `@todo-ui` partition so operator scenarios can remain domain-tested until their browser surface is implemented.
 
 Prerequisite: the iteration 005 browser routes and webhook endpoint are available on `main` or on a stable implementation branch before this automation slice starts.
 
@@ -22,8 +22,8 @@ Prerequisite: the iteration 005 browser routes and webhook endpoint are availabl
 ### In scope
 
 - Keep the shared feature files as the source of acceptance truth.
-- Configure the browser Cucumber default command to exclude `@todo-web` scenarios.
-- Preserve the Elixir/domain acceptance path so it remains unfiltered by `@todo-web` and continues to run all shared scenarios.
+- Configure the browser Cucumber default command to exclude `@todo-ui` scenarios.
+- Preserve the Elixir/domain acceptance path so it remains unfiltered by `@todo-ui` and continues to run all shared scenarios.
 - Implement or complete Playwright/Cucumber JavaScript step definitions for:
   - `homepage.feature`;
   - every scenario in `member_message_deliverability.feature`.
@@ -48,12 +48,12 @@ Prerequisite: the iteration 005 browser routes and webhook endpoint are availabl
 
 ## Acceptance Criteria
 
-- `npm test` from `acceptance-tests/` runs the Playwright/Cucumber browser acceptance suite with a default tag expression equivalent to `not @todo-web`.
+- `npm test` from `acceptance-tests/` runs the Playwright/Cucumber browser acceptance suite with a default tag expression equivalent to `not @todo-ui`.
 - `homepage.feature` passes through Playwright/Cucumber against the running Phoenix app.
 - Every scenario in `member_message_deliverability.feature` passes through Playwright/Cucumber against the real routes and `POST /webhooks/postmark`.
 - Browser status-change steps wait for the projected receipt/status UI to become observable instead of assuming the webhook response means all projections are already visible.
-- `operator_email_deliverability.feature` remains excluded from the default browser run while its scenarios are tagged `@todo-web`.
-- The Elixir/domain acceptance path used by `dev check` still runs all shared scenarios, including any tagged `@todo-web`.
+- `operator_email_deliverability.feature` remains excluded from the default browser run while its scenarios are tagged `@todo-ui`.
+- The Elixir/domain acceptance path used by `dev check` still runs all shared scenarios, including any tagged `@todo-ui`.
 - Browser acceptance failures clearly identify whether the failure is from database readiness, Phoenix startup/readiness, webhook submission, LiveView/projection timing, browser interaction, or an assertion mismatch.
 - `dev check` passes.
 
@@ -64,7 +64,7 @@ None known.
 ## Implementation Plan
 
 1. Inspect the current `acceptance-tests/` Playwright/Cucumber setup and the shared feature files to identify existing step coverage and gaps.
-2. Configure the browser Cucumber default command to exclude `@todo-web`, while leaving the Elixir/domain Cucumber runner unfiltered.
+2. Configure the browser Cucumber default command to exclude `@todo-ui`, while leaving the Elixir/domain Cucumber runner unfiltered.
 3. Build or refine the browser test lifecycle wrapper so it prepares the test database, starts Phoenix, waits for HTTP readiness, captures useful logs, and tears down reliably.
 4. Implement homepage browser steps against the real homepage route.
 5. Implement member-message browser steps by driving `/clubs`, `/clubs/:club_id`, and `/messages/:message_id` through accessible labels, roles, and stable identifiers supplied by the existing UI.
@@ -84,18 +84,18 @@ This iteration should not make production status projections strongly consistent
 
 ## New Capability
 
-Developers can run the shared member-facing acceptance scenarios through a real browser and a running Phoenix app, with reliable startup/teardown, clear diagnostics, and projection-aware waiting. The browser suite can distinguish web-backed scenarios from domain-only scenarios using `@todo-web` without weakening the domain acceptance coverage.
+Developers can run the shared member-facing acceptance scenarios through a real browser and a running Phoenix app, with reliable startup/teardown, clear diagnostics, and projection-aware waiting. The browser suite can distinguish web-backed scenarios from domain-only scenarios using `@todo-ui` without weakening the domain acceptance coverage.
 
 ## Validation Plan
 
-- Run `npm test` from `acceptance-tests/` and confirm it passes with `not @todo-web` as the default browser tag expression.
+- Run `npm test` from `acceptance-tests/` and confirm it passes with `not @todo-ui` as the default browser tag expression.
 - Confirm the browser run includes `homepage.feature` and `member_message_deliverability.feature`.
-- Confirm `operator_email_deliverability.feature` remains excluded from the browser run while tagged `@todo-web`.
-- Run the Elixir/domain acceptance path used by `dev check` and confirm it still runs all shared scenarios regardless of `@todo-web`.
+- Confirm `operator_email_deliverability.feature` remains excluded from the browser run while tagged `@todo-ui`.
+- Run the Elixir/domain acceptance path used by `dev check` and confirm it still runs all shared scenarios regardless of `@todo-ui`.
 - Run `dev check` and fix any failures.
 
 ## Risks / Follow-ups
 
 - This plan depends on the iteration 005 routes and webhook endpoint being present before automation starts; if they are not merged, implementation should stop rather than creating duplicate app surfaces in this slice.
 - LiveView and projection timing may reveal race conditions in the harness. Prefer bounded, observable waits with good diagnostics over fixed sleeps.
-- Iteration 007 should remove the operator `@todo-web` deferral and add browser automation for `/deliveries` when that operator slice is implemented.
+- Iteration 007 should remove the operator `@todo-ui` deferral and add browser automation for `/deliveries` when that operator slice is implemented.
