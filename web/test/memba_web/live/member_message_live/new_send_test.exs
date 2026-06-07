@@ -102,6 +102,32 @@ defmodule MembaWeb.MemberMessageLive.NewSendTest do
     refute has_element?(view, "#member-message-compose-form")
   end
 
+  test "blank body validation keeps the compose form and does not send", %{conn: conn} do
+    club_id = Memba.ID.generate(:club)
+    _alice = create_active_member(club_id, name: "Alice Adams", email: "alice@example.com")
+    _bob = create_active_member(club_id, name: "Bob Builder", email: "bob@example.com")
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/messages/new?club_id=#{club_id}")
+
+    view
+    |> element("#member-message-compose-form")
+    |> render_submit(%{
+      "message" => %{
+        "subject" => "Trip planning night",
+        "body" => "  \n\t "
+      }
+    })
+
+    assert has_element?(view, "#member-message-compose[data-compose-state='composing']")
+    assert has_element?(view, "#member-message-body-error", "Message body can’t be blank.")
+    assert render(view) =~ "Trip planning night"
+    assert Messaging.list_messages_for_club(club_id) == []
+    assert Fake.deliveries() == []
+  end
+
   test "send failure renders an incident state with support guidance and retry actions", %{
     conn: conn
   } do

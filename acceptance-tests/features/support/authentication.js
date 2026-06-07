@@ -57,6 +57,10 @@ async function ensureMember(world, personName, clubName) {
 }
 
 function clubSlugFor(clubName) {
+  if (clubName === kootenayClubName) {
+    return "kmc";
+  }
+
   return clubName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")

@@ -82,6 +82,11 @@ These are small but user-visible rules involving messaging, validation, and staf
 
 The new scenarios should be marked `@wip` while this plan is ahead of implementation.
 
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/member_message_deliverability.feature`: remove `@wip` from the slugged club-message email subject scenario once it is implemented; remove `@wip` from the blank-body compose validation scenario once it is implemented.
+- `acceptance-tests/features/request_account.feature`: remove `@wip` from the staff notification request-conversion link scenario once it is implemented.
+
 ## Acceptance Criteria
 
 - When Alice sends a Kootenay Mountaineering Club message with subject `Trip planning night`, every outgoing member-message email subject is `[kmc] Trip planning night`.

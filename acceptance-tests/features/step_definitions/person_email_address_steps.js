@@ -188,6 +188,10 @@ function defaultPrimaryEmailFor(personName) {
 }
 
 function defaultClubSlugFor(clubName) {
+  if (clubName === kootenayClubName) {
+    return "kmc";
+  }
+
   return String(clubName)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -273,7 +277,7 @@ function newMessageEmails(world, emails) {
 function messageEmailMatches(email, subject, recipientEmail) {
   return (
     email &&
-    email.subject === subject &&
+    (email.subject === subject || email.subject.endsWith(`] ${subject}`)) &&
     Array.isArray(email.to) &&
     email.to.some((recipient) => String(recipient).includes(recipientEmail))
   );

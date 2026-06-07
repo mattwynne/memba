@@ -53,7 +53,6 @@ Feature: Request account
 
   Rule: Memba staff can act from request notification emails
 
-    @wip
     Scenario: Pat opens a request from the notification email
       Given Robin has requested Memba access for West Coast Paddlers
       And Pat is signed in as Memba staff

@@ -22,7 +22,6 @@ Feature: Member message deliverability
 
   Rule: Club-message emails identify the club in the subject
 
-    @wip
     Scenario: Alice's club-message email subject includes the club slug
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then each addressed member should receive an email with the subject "[kmc] Trip planning night"
@@ -57,7 +56,6 @@ Feature: Member message deliverability
       Then Alice should be told the message was not sent
       And Alice should be told to contact support
 
-    @wip
     Scenario: Alice leaves the message body blank
       When Alice tries to send a message to Kootenay Mountaineering Club members with subject "Trip planning night" and no body
       Then Alice should be told the message body cannot be blank

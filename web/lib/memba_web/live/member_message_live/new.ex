@@ -57,23 +57,35 @@ defmodule MembaWeb.MemberMessageLive.New do
 
   @impl Phoenix.LiveView
   def handle_event("send_message", %{"message" => message_params}, socket) do
-    case send_current_member_message(socket, message_params) do
-      {:ok, message_id} ->
-        {:noreply,
-         socket
-         |> assign(:compose_state, :sent)
-         |> assign(:sent_message_id, message_id)
-         |> assign(:send_error, nil)}
+    if blank_body?(message_params) do
+      {:noreply,
+       socket
+       |> assign(:compose_state, :composing)
+       |> assign(:sent_message_id, nil)
+       |> assign(:send_error, nil)
+       |> assign(:body_error, "Message body can’t be blank.")
+       |> assign(:message_form, message_form(message_params))}
+    else
+      case send_current_member_message(socket, message_params) do
+        {:ok, message_id} ->
+          {:noreply,
+           socket
+           |> assign(:compose_state, :sent)
+           |> assign(:sent_message_id, message_id)
+           |> assign(:send_error, nil)
+           |> assign(:body_error, nil)}
 
-      {:error, reason} ->
-        log_send_failure(socket, reason)
+        {:error, reason} ->
+          log_send_failure(socket, reason)
 
-        {:noreply,
-         socket
-         |> assign(:compose_state, :send_failed)
-         |> assign(:sent_message_id, nil)
-         |> assign(:send_error, reason)
-         |> assign(:message_form, message_form(message_params))}
+          {:noreply,
+           socket
+           |> assign(:compose_state, :send_failed)
+           |> assign(:sent_message_id, nil)
+           |> assign(:send_error, reason)
+           |> assign(:body_error, nil)
+           |> assign(:message_form, message_form(message_params))}
+      end
     end
   end
 
@@ -86,7 +98,8 @@ defmodule MembaWeb.MemberMessageLive.New do
      socket
      |> assign(:compose_state, :composing)
      |> assign(:sent_message_id, nil)
-     |> assign(:send_error, nil)}
+     |> assign(:send_error, nil)
+     |> assign(:body_error, nil)}
   end
 
   @impl Phoenix.LiveView
@@ -312,6 +325,13 @@ defmodule MembaWeb.MemberMessageLive.New do
               rows="8"
               class="min-h-40 w-full resize-y rounded-lg border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-3 text-[var(--club-site-ink)] placeholder:text-[var(--club-site-muted)] focus:border-[var(--club-site-accent)] focus:outline-none focus:ring-2 focus:ring-[var(--club-site-accent)]/15"
             />
+            <p
+              :if={@body_error}
+              id="member-message-body-error"
+              class="text-sm font-semibold text-rose-700"
+            >
+              {@body_error}
+            </p>
 
             <div class="mt-2 flex flex-col gap-3 sm:flex-row">
               <button
@@ -415,6 +435,15 @@ defmodule MembaWeb.MemberMessageLive.New do
     |> assign(:compose_state, :composing)
     |> assign(:sent_message_id, nil)
     |> assign(:send_error, nil)
+    |> assign(:body_error, nil)
+  end
+
+  defp blank_body?(message_params) do
+    message_params
+    |> Map.get("body", "")
+    |> to_string()
+    |> String.trim()
+    |> Kernel.==("")
   end
 
   defp message_form do

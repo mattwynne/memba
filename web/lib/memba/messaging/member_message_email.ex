@@ -26,9 +26,15 @@ defmodule Memba.Messaging.MemberMessageEmail do
 
   @doc "Return the sanitized subject for a member-message email header."
   def subject(%EmailDeliveryRequest{} = request) do
-    request.subject
-    |> EmailTemplates.sanitize_header_text()
-    |> default_text("Message from #{group_name(request)}")
+    subject =
+      request.subject
+      |> EmailTemplates.sanitize_header_text()
+      |> default_text("Message from #{group_name(request)}")
+
+    case club_slug(request) do
+      "" -> subject
+      slug -> "[#{slug}] #{subject}"
+    end
   end
 
   @doc "Render the v2-compatible HTML body for a member-message email."
@@ -123,6 +129,12 @@ defmodule Memba.Messaging.MemberMessageEmail do
     request.club_name
     |> EmailTemplates.sanitize_header_text()
     |> default_text("Your group")
+  end
+
+  defp club_slug(%EmailDeliveryRequest{} = request) do
+    request.club_slug
+    |> EmailTemplates.sanitize_header_text()
+    |> default_text("")
   end
 
   defp membership_reason(club_name, display_name) do

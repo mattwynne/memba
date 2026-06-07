@@ -187,6 +187,8 @@ async function assertStaffNotified(world, personName) {
       newEmails.map(mailboxEmailSummary)
     )}`
   );
+
+  request.staffNotificationLink = staffRequestLinkFromText(mailboxEmailText(notification));
 }
 
 async function assertKnownReadOnlyDetails(world, personName) {
@@ -208,6 +210,25 @@ function assertRequestRecordedWithKnownDetails(world, personName, clubName) {
   assert.equal(request.requesterEmail, person.email);
   assert.equal(request.requestedClubName, clubName);
   assert.equal(request.requesterPersonId, person.personId);
+}
+
+async function followStaffNotificationLink(world, personName) {
+  const request = lastRequestByPerson(world, personName);
+  const link = request.staffNotificationLink || appUrl(world.baseUrl, `/admin/requests/${request.requestId}`);
+
+  await world.page.goto(browserReachableUrl(world, link));
+  await playwrightExpect(world.page.locator('[data-testid="convert-request-panel"]')).toBeVisible({
+    timeout: projectionTimeoutMs(world)
+  });
+}
+
+async function assertPreparingToConvertRequest(world, personName, clubName) {
+  const request = lastRequestByPerson(world, personName);
+  const panel = world.page.locator(`[data-testid="convert-request-panel"]#convert-request-panel-${request.requestId}`);
+
+  await playwrightExpect(panel).toBeVisible({ timeout: projectionTimeoutMs(world) });
+  await playwrightExpect(panel).toContainText(clubName);
+  await playwrightExpect(panel).toContainText(request.email);
 }
 
 async function openRequestsInbox(world) {
@@ -587,6 +608,11 @@ function mailboxEmailSummary(email) {
   };
 }
 
+function staffRequestLinkFromText(textBody) {
+  const match = String(textBody || "").match(/https?:\/\/\S+\/admin\/requests\/req_[^\s<]+/);
+  return match && match[0];
+}
+
 function signInLinkFromTextBody(textBody) {
   const match = String(textBody || "").match(/https?:\/\/\S+\/auth\/(?:sign-in|magic)\/\S+/);
   return match && match[0];
@@ -612,6 +638,7 @@ module.exports = {
   assertClubExists,
   assertKnownReadOnlyDetails,
   assertNoDuplicatePerson,
+  assertPreparingToConvertRequest,
   assertRequestLeavesInbox,
   assertRequestRecordedWithKnownDetails,
   assertRequestVisible,
@@ -624,6 +651,7 @@ module.exports = {
   convertRequest,
   createRequestDirectly,
   ensurePerson,
+  followStaffNotificationLink,
   followWelcomeLink,
   openGetStartedPage,
   openRequestsInbox,

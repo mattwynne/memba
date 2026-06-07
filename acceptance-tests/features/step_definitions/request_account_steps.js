@@ -6,6 +6,7 @@ const {
   assertClubExists,
   assertKnownReadOnlyDetails,
   assertNoDuplicatePerson,
+  assertPreparingToConvertRequest,
   assertRequestLeavesInbox,
   assertRequestRecordedWithKnownDetails,
   assertRequestVisible,
@@ -18,6 +19,7 @@ const {
   convertRequest,
   createRequestDirectly,
   ensurePerson,
+  followStaffNotificationLink,
   followWelcomeLink,
   openGetStartedPage,
   openRequestsInbox,
@@ -68,6 +70,10 @@ When(
   }
 );
 
+When("{word} follows the staff notification link for {word}'s request", async function (_staffName, personName) {
+  await followStaffNotificationLink(this, personName);
+});
+
 When("{word} follows the welcome sign-in link", async function (personName) {
   await followWelcomeLink(this, personName);
 });
@@ -110,6 +116,13 @@ Then(/^(\w+) should see (\w+)'s (.+) request$/, async function (_staffName, requ
 Then("{word} should see the suggested club slug {string}", async function (_staffName, expectedSlug) {
   await assertSuggestedSlug(this, "West Coast Paddlers", expectedSlug);
 });
+
+Then(
+  /^(\w+) should be preparing to convert (\w+)'s (.+) request$/,
+  async function (_staffName, personName, clubName) {
+    await assertPreparingToConvertRequest(this, personName, clubName);
+  }
+);
 
 Then(/^(.+) should exist with the slug "([^"]+)"$/, function (clubName, slug) {
   assertClubExists(clubName, slug);
