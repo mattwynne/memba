@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
   alias Memba.Messaging.EmailDeliveryProvider
   alias Memba.Messaging.EmailDeliveryRequest
   alias Memba.Messaging.LocalDeliveryFacts
+  alias Memba.Messaging.MemberMessageEmail
 
   @behaviour EmailDeliveryProvider
 
@@ -28,12 +29,12 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
 
   defp email(%EmailDeliveryRequest{} = request) do
     new()
-    |> from({sender_display_name(request), from_address()})
-    |> reply_to({request.sender_name, request.sender_address})
-    |> to({request.recipient_name, request.recipient_address})
-    |> subject(request.subject)
+    |> from({MemberMessageEmail.from_display_name(request), from_address()})
+    |> reply_to(MemberMessageEmail.reply_to(request))
+    |> to(MemberMessageEmail.to(request))
+    |> subject(MemberMessageEmail.subject(request))
     |> text_body(request.body)
-    |> html_body(html_body(request.body))
+    |> html_body(MemberMessageEmail.html_body(request))
     |> put_provider_option(:metadata, metadata(request))
   end
 
@@ -41,10 +42,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
     provider_config()
     |> Keyword.get(:from, "messages@mail.memba.local")
     |> normalize_address()
-  end
-
-  defp sender_display_name(%EmailDeliveryRequest{} = request) do
-    "#{request.sender_name} via Memba"
   end
 
   defp provider_config do
@@ -60,22 +57,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
       "memba_delivery_id" => request.delivery_id,
       "memba_club_id" => request.club_id
     }
-  end
-
-  defp html_body(text) do
-    escaped_body =
-      text
-      |> String.split(~r/\r\n|\n|\r/, trim: false)
-      |> Enum.map(&html_escape_to_string/1)
-      |> Enum.join("<br>\n")
-
-    "<html><body><p>#{escaped_body}</p></body></html>"
-  end
-
-  defp html_escape_to_string(text) do
-    text
-    |> Phoenix.HTML.html_escape()
-    |> Phoenix.HTML.safe_to_string()
   end
 
   defp deliver_email(email) do

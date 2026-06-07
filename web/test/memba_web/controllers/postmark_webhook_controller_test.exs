@@ -45,8 +45,14 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
     assert email.subject == "Trip planning night"
     assert email.text_body == body
 
-    assert email.html_body ==
-             "<html><body><p>Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas.</p></body></html>"
+    assert email.html_body =~ "<!doctype html>"
+    assert email.html_body =~ "Members message"
+    assert email.html_body =~ "Bob Barker"
+    assert email.html_body =~ "Trip planning night"
+    assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas."
+    assert email.html_body =~ "Reply to this email and it goes straight to"
+    assert email.html_body =~ "Delivered for Your group by"
+    refute email.html_body =~ "<Alice>"
 
     assert metadata = email.provider_options[:metadata]
 

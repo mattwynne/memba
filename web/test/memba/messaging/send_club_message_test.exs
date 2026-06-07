@@ -4,6 +4,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership.App, as: MembershipApp
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Messaging
   alias Memba.Messaging.EmailDeliveryProviders.Fake
@@ -237,6 +238,36 @@ defmodule Memba.Messaging.SendClubMessageTest do
     refute "bob@example.com" in delivered_addresses
   end
 
+  test "includes the club name in each member-message delivery request when it is available" do
+    club_id = Memba.ID.generate(:club)
+    create_club(club_id, "Kootenay Mountaineering Club")
+
+    alice = create_person(name: "Alice", email: "alice@example.com")
+    add_member(club_id, alice.person_id)
+
+    message_id = Memba.ID.generate(:message)
+
+    assert {:ok, %ExecutionResult{}} =
+             Messaging.send_club_message(
+               %{
+                 message_id: message_id,
+                 club_id: club_id,
+                 sender_id: alice.person_id,
+                 subject: "Trip planning night",
+                 body: "Bring route ideas."
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert [
+             %EmailDeliveryRequest{
+               club_id: ^club_id,
+               club_name: "Kootenay Mountaineering Club"
+             }
+           ] = Fake.deliveries()
+  end
+
   test "does not call the provider when the send command is rejected" do
     club_id = Memba.ID.generate(:club)
     alice = create_person(name: "Alice", email: "alice@example.com")
@@ -289,6 +320,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
 
     assert Messaging.get_member_email_delivery(message_id, alice.person_id).status == "sent"
     assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status == "sent"
+  end
+
+  defp create_club(club_id, name) do
+    assert :ok =
+             MembershipApp.dispatch(
+               %CreateClub{
+                 club_id: club_id,
+                 name: name,
+                 slug: "kootenay-mountaineering-club"
+               },
+               consistency: :strong
+             )
   end
 
   defp create_person(attrs) do
