@@ -89,3 +89,24 @@ Iteration review is supposed to be a reliable post-merge quality signal. If the 
 - Extend `bin/dev sandbox-check` or the Fabro review setup to verify `acceptance-tests/node_modules/.bin/cucumber-js` is available before `Run Dev Check`.
 - Make the review preflight run a cheap acceptance dependency smoke check, such as `cd acceptance-tests && npm exec -- cucumber-js --version`.
 - Teach the workflow to classify `command not found` from quality-gate tooling as an environment/preflight failure rather than sending it through product-code repair.
+
+## Resolution
+
+Date: 2026-06-06
+
+Root cause: `devenv test` installed project dependencies before running `bin/dev check`, but the ordinary dev commands used by Fabro review (`dev ci`, `dev acceptance`, and `dev sandbox-check`) assumed those dependencies were already installed. A fresh review sandbox could therefore pass coarse tool preflight while missing `acceptance-tests/node_modules/.bin/cucumber-js`.
+
+Fix applied:
+
+- `bin/dev`: added `dev setup` to install Hex/Rebar, fetch web dependencies, and install acceptance-test npm dependencies when missing or stale.
+- `bin/dev`: made `dev ci`, `dev check`, `dev acceptance`, and `dev sandbox-check` run setup before their quality-gate work.
+- `devenv.nix`: moved the setup commands out of `enterTest` and into `./bin/dev setup`, so CI/devenv and Fabro use the same setup path.
+
+Validation:
+
+- `./bin/dev setup` — passed; acceptance-test npm dependencies were present.
+- `./bin/dev check` — passed; 47 browser acceptance scenarios passed.
+
+Remaining follow-up:
+
+- If a fresh Fabro sandbox later fails on missing Playwright browser binaries rather than missing `cucumber-js`, extend `dev setup` with an explicit Playwright browser install/check.

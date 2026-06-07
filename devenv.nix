@@ -268,14 +268,8 @@ in
   enterTest = ''
     set -euo pipefail
 
-    echo "[devenv test] installing Hex"
-    ${pkgs.elixir}/bin/mix local.hex --force
-    echo "[devenv test] installing Rebar"
-    ${pkgs.elixir}/bin/mix local.rebar --force
-    echo "[devenv test] fetching web dependencies"
-    (cd web && ${pkgs.elixir}/bin/mix deps.get)
-    echo "[devenv test] installing acceptance-test dependencies"
-    (cd acceptance-tests && npm ci)
+    echo "[devenv test] running ./bin/dev setup"
+    MEMBA_DEVENV_SHELL=1 MEMBA_POSTGRES_PORT=15432 ./bin/dev setup
 
     echo "[devenv test] running ./bin/dev check"
     MEMBA_DEVENV_SHELL=1 MEMBA_POSTGRES_PORT=15432 ./bin/dev check

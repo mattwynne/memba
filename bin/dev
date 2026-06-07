@@ -437,6 +437,42 @@ _precommit() {
   (cd "$repo_root/web" && local_test_email_env mix precommit)
 }
 
+# @cmd Install local development and test dependencies
+setup() {
+  with_quality_gate_lock _setup "$@"
+}
+
+_setup() {
+  if [ "${MEMBA_DEV_SETUP_DONE:-0}" = "1" ]; then
+    return
+  fi
+
+  echo "Installing Hex..."
+  mix local.hex --force
+
+  echo "Installing Rebar..."
+  mix local.rebar --force
+
+  echo "Fetching web dependencies..."
+  (cd "$repo_root/web" && mix deps.get)
+
+  echo "Checking acceptance-test dependencies..."
+  (
+    cd "$repo_root/acceptance-tests"
+
+    if [ ! -x node_modules/.bin/cucumber-js ] \
+      || [ ! -x node_modules/.bin/playwright ] \
+      || [ ! -f node_modules/.package-lock.json ] \
+      || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+      npm ci
+    else
+      echo "Acceptance-test npm dependencies already installed."
+    fi
+  )
+
+  export MEMBA_DEV_SETUP_DONE=1
+}
+
 # @cmd Run the standard local quality gate with required services
 ci() {
   with_quality_gate_lock _ci "$@"
@@ -444,6 +480,7 @@ ci() {
 
 _ci() {
   start_postgres
+  _setup
   precommit
   acceptance
 }
@@ -456,6 +493,7 @@ check() {
 
 _check() {
   start_postgres
+  _setup
   precommit
 
   if [ "${argc_quick:-0}" != "1" ]; then
@@ -499,6 +537,7 @@ sandbox_check() {
     rm -f "$probe"
   done
 
+  _setup
   start_postgres
 
   echo "Starting test dependency compile smoke test..."
@@ -513,6 +552,8 @@ acceptance() {
 }
 
 _acceptance() {
+  _setup
+
   (
     cd "$repo_root/acceptance-tests"
 
