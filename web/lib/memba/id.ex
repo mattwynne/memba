@@ -9,6 +9,7 @@ defmodule Memba.ID do
   @prefixes %{
     club: "clb",
     person: "per",
+    role: "rol",
     membership: "mem",
     message: "msg",
     delivery: "del",
@@ -22,6 +23,7 @@ defmodule Memba.ID do
   @type type ::
           :club
           | :person
+          | :role
           | :membership
           | :message
           | :delivery

@@ -5,9 +5,13 @@ defmodule Memba.Membership.AppTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveMember
+  alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projectors.Club, as: ClubProjector
@@ -51,9 +55,13 @@ defmodule Memba.Membership.AppTest do
     expected_commands =
       MapSet.new([
         AddMember,
+        AssignMemberRole,
         CreateClub,
         CreatePerson,
+        DefineClubRole,
+        GrantClubRolePermission,
         RemoveMember,
+        RemoveMemberRole,
         ReplacePersonEmailAddresses,
         UpdateClub
       ])
