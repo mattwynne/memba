@@ -7,6 +7,7 @@ defmodule Memba.Membership do
 
   alias Memba.ID
   alias Memba.Membership.App
+  alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
@@ -462,6 +463,18 @@ defmodule Memba.Membership do
     else
       _invalid -> false
     end
+  end
+
+  @doc """
+  Return whether a person currently has an app-defined club-scoped permission.
+
+  Permission checks are answered from Membership's projected permission state so
+  callers do not need to know which role granted the permission. Invalid club
+  IDs, person IDs, unsupported permission identifiers, and missing projected
+  grants return `false`.
+  """
+  def person_has_club_permission?(club_id, person_id, permission) do
+    Authorization.has_permission?(club_id, person_id, permission)
   end
 
   defp cast_ids(type, ids) do
