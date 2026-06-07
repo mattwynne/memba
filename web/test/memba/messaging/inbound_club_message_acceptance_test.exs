@@ -374,7 +374,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "a plain text message body is required"
+      reason: "We couldn't read a plain-text message body"
     )
   end
 
@@ -421,7 +421,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "a plain text message body is required"
+      reason: "We couldn't read a plain-text message body"
     )
   end
 
@@ -468,7 +468,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "a plain text message body is required"
+      reason: "We couldn't read a plain-text message body"
     )
   end
 
@@ -527,7 +527,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "attachments are not supported yet"
+      reason: "Emails with attachments can't be posted yet"
     )
   end
 
@@ -578,18 +578,19 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     rejection_email =
       assert_rejection_email_received(
         to: "unknown@example.com",
-        reason:
-          "we weren't able to find a member account for this email address so your message has not been posted",
+        reason: "We couldn't find a member account for this email address",
         subject: "Re: Trip planning night",
-        from: {"Memba support for Kootenay Mountaineering Club", "messages@mail.memba.test"},
-        support_copy: "For help, reply to this email to contact our support team."
+        from: {"Memba", "messages@mail.memba.test"},
+        support_copy: "Just reply to this email and a person will help."
       )
 
-    assert rejection_email.text_body =~ "Hi, sorry about this"
+    assert rejection_email.text_body =~
+             "Your email to Kootenay Mountaineering Club wasn't posted."
+
     assert rejection_email.text_body =~ "membership of Kootenay Mountaineering Club"
 
     assert rejection_email.text_body =~
-             "For help, reply to this email to contact our support team."
+             "Just reply to this email and a person will help."
 
     assert rejection_email.headers["In-Reply-To"] == "<original-trip-planning@example.com>"
     assert rejection_email.headers["References"] == "<original-trip-planning@example.com>"
@@ -642,8 +643,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     rejection_email =
       assert_rejection_email_received(
         to: "unknown@example.com",
-        reason:
-          "we weren't able to find a member account for this email address so your message has not been posted"
+        reason: "We couldn't find a member account for this email address"
       )
 
     assert rejection_email.provider_options[:metadata] == %{
@@ -688,8 +688,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     rejection_email =
       assert_rejection_email_received(
         to: "unknown@example.com",
-        reason:
-          "we weren't able to find a member account for this email address so your message has not been posted",
+        reason: "We couldn't find a member account for this email address",
         metadata?: false
       )
 
@@ -763,7 +762,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "pat@example.com",
-      reason: "your sender address is not an active member of that club"
+      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
     )
   end
 
@@ -810,7 +809,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "your sender address is not an active member of that club"
+      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
     )
   end
 
@@ -859,7 +858,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "the club address was not recognized"
+      reason: "We couldn't match the address you used to a Memba group"
     )
   end
 
@@ -888,7 +887,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "attachments are not supported yet"
+      reason: "Emails with attachments can't be posted yet"
     )
 
     assert {:ok,
@@ -989,7 +988,18 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
 
     assert email.reply_to == {"Memba support", "support@memba.test"}
     assert email.to == [{"", to_address}]
-    assert email.subject == Keyword.get(opts, :subject, "Your email was not posted")
+
+    case Keyword.fetch(opts, :subject) do
+      {:ok, subject} ->
+        assert email.subject == subject
+
+      :error ->
+        assert email.subject in [
+                 "Your email wasn't posted",
+                 "Your email to Kootenay Mountaineering Club wasn't posted"
+               ]
+    end
+
     assert email.text_body =~ reason
 
     assert email.text_body =~
@@ -1005,11 +1015,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
     email
   end
 
-  defp support_copy_for("we weren't able to find a member account" <> _rest) do
-    "For help, reply to this email to contact our support team."
-  end
-
-  defp support_copy_for(_reason), do: "For help, reply to this email or contact Memba support."
+  defp support_copy_for(_reason), do: "Just reply to this email and a person will help."
 
   defp count_events(event_module) when is_atom(event_module) do
     event_type = Atom.to_string(event_module)

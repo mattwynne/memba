@@ -32,7 +32,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
   end
 
   test "hands a rendered member message email to Swoosh" do
-    request = email_delivery_request(body: "Hello <Alice> & Bob\nBring route ideas.")
+    request =
+      email_delivery_request(
+        club_name: "Kootenay <Mountaineers>",
+        body: "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
+      )
 
     assert :ok = Local.deliver(request)
 
@@ -41,8 +45,25 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
       assert email.reply_to == {"Bob", "bob@example.test"}
       assert email.to == [{"Alice", "alice@example.test"}]
       assert email.subject == "Trip planning night"
-      assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."
-      assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas."
+
+      assert email.text_body ==
+               "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
+
+      assert email.html_body =~ "<!doctype html>"
+      assert email.html_body =~ "Kootenay &lt;Mountaineers&gt;"
+      assert email.html_body =~ "Members message"
+      assert email.html_body =~ "Bob"
+      assert email.html_body =~ "to all members of Kootenay &lt;Mountaineers&gt;"
+      assert email.html_body =~ "Trip planning night"
+      assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob"
+      assert email.html_body =~ "Bring route ideas.<br>\n&lt;script&gt;alert(1)&lt;/script&gt;"
+      assert email.html_body =~ "Reply to this email and it goes straight to"
+      assert email.html_body =~ "not to the whole group"
+      assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
+      assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
+
+      refute email.html_body =~ "<Alice>"
+      refute email.html_body =~ "<script>"
 
       assert email.provider_options[:metadata] == %{
                "memba_message_id" => request.message_id,
@@ -58,7 +79,30 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
     assert fact.to == ["Alice <alice@example.test>"]
     assert fact.from == "Bob via Memba <messages@mail.memba.io>"
     assert fact.subject == "Trip planning night"
-    assert fact.text_body == "Hello <Alice> & Bob\nBring route ideas."
+
+    assert fact.text_body ==
+             "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
+  end
+
+  test "sanitizes local member-message header display values while preserving the text body" do
+    request =
+      email_delivery_request(
+        recipient_name: "Alice\nAdams",
+        sender_name: "Bob\nBarker",
+        subject: "Trip planning\nnight",
+        body: "Hello exactly as written.\nDo not add guidance here."
+      )
+
+    assert :ok = Local.deliver(request)
+
+    assert_email_sent(fn email ->
+      assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+      assert email.reply_to == {"Bob Barker", "bob@example.test"}
+      assert email.to == [{"Alice Adams", "alice@example.test"}]
+      assert email.subject == "Trip planning night"
+      refute email.text_body =~ "Reply to this email"
+      assert email.text_body == "Hello exactly as written.\nDo not add guidance here."
+    end)
   end
 
   test "does not hand unsupported delivery channels to Swoosh" do
@@ -79,6 +123,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.test"),
+      club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
       sender_name: Keyword.get(overrides, :sender_name, "Bob"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.test"),
       channel: Keyword.get(overrides, :channel, :email),

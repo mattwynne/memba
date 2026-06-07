@@ -855,15 +855,17 @@ defmodule Memba.Messaging do
   end
 
   defp deliver_to_provider(%SendMessage{} = command) do
+    club = Membership.get_club(command.club_id)
+
     Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->
-      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient)) do
+      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient, club)) do
         :ok -> {:cont, :ok}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
   end
 
-  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
+  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient, club) do
     sender = Membership.get_person(command.sender_id)
     sender_address = Membership.get_person_primary_email(command.sender_id)
 
@@ -874,6 +876,7 @@ defmodule Memba.Messaging do
       recipient_id: recipient.person_id,
       recipient_name: recipient.name,
       recipient_address: recipient.email,
+      club_name: club_name(club),
       sender_name: sender.name,
       sender_address: sender_address,
       channel: :email,
@@ -881,4 +884,7 @@ defmodule Memba.Messaging do
       body: command.body
     }
   end
+
+  defp club_name(%{name: name}), do: name
+  defp club_name(_club), do: nil
 end

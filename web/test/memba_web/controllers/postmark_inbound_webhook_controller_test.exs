@@ -191,8 +191,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_rejection_email_received(
       to: "mystery@example.com",
-      reason:
-        "we weren't able to find a member account for this email address so your message has not been posted"
+      reason: "We couldn't find a member account for this email address"
     )
   end
 
@@ -247,7 +246,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "attachments are not supported yet"
+      reason: "Emails with attachments can't be posted yet"
     )
 
     retry_payload =
@@ -322,7 +321,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "a plain text message body is required"
+      reason: "We couldn't read a plain-text message body"
     )
   end
 
@@ -366,7 +365,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_rejection_email_received(
       to: "alice@example.com",
-      reason: "a plain text message body is required"
+      reason: "We couldn't read a plain-text message body"
     )
   end
 
@@ -520,7 +519,13 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
 
     assert_received {:email, %Swoosh.Email{} = rejection_email}
     assert rejection_email.to == [{"", to_address}]
-    assert rejection_email.subject in ["Your email was not posted", "Re: Trip planning night"]
+
+    assert rejection_email.subject in [
+             "Your email wasn't posted",
+             "Your email to Kootenay Mountaineering Club wasn't posted",
+             "Re: Trip planning night"
+           ]
+
     assert rejection_email.text_body =~ reason
 
     rejection_email

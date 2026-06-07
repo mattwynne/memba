@@ -23,13 +23,17 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     :ok
   end
 
-  test "builds and sends a multipart email with Postmark correlation metadata and no open tracking" do
+  test "builds and sends a multipart member-message email with Postmark correlation metadata and no open tracking" do
     Application.put_env(:memba, Postmark,
       from: "messages@mail.memba.io",
       reply_to: "help@memba.io"
     )
 
-    request = email_delivery_request(body: "Hello <Alice> & Bob\nBring route ideas.")
+    request =
+      email_delivery_request(
+        club_name: "Kootenay <Mountaineers>",
+        body: "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
+      )
 
     assert :ok = Postmark.deliver(request)
 
@@ -39,12 +43,25 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
     assert email.reply_to == {"Bob Barker", "bob@example.com"}
     assert email.to == [{"Alice Adams", "alice@example.com"}]
     assert email.subject == "Trip planning night"
-    assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."
 
-    assert email.html_body ==
-             "<html><body><p>Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas.</p></body></html>"
+    assert email.text_body ==
+             "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
+
+    assert email.html_body =~ "<!doctype html>"
+    assert email.html_body =~ "Kootenay &lt;Mountaineers&gt;"
+    assert email.html_body =~ "Members message"
+    assert email.html_body =~ "Bob Barker"
+    assert email.html_body =~ "to all members of Kootenay &lt;Mountaineers&gt;"
+    assert email.html_body =~ "Trip planning night"
+    assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob"
+    assert email.html_body =~ "Bring route ideas.<br>\n&lt;script&gt;alert(1)&lt;/script&gt;"
+    assert email.html_body =~ "Reply to this email and it goes straight to"
+    assert email.html_body =~ "not to the whole group"
+    assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
+    assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
 
     refute email.html_body =~ "<Alice>"
+    refute email.html_body =~ "<script>"
 
     assert email.provider_options == %{
              metadata: %{
@@ -55,6 +72,29 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
            }
 
     refute Map.has_key?(email.provider_options, :track_opens)
+  end
+
+  test "sanitizes member-message header display values while preserving the text body" do
+    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+
+    request =
+      email_delivery_request(
+        recipient_name: "Alice\nAdams",
+        sender_name: "Bob\nBarker",
+        subject: "Trip planning\nnight",
+        body: "Hello exactly as written.\nDo not add guidance here."
+      )
+
+    assert :ok = Postmark.deliver(request)
+
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
+    assert email.reply_to == {"Bob Barker", "bob@example.com"}
+    assert email.to == [{"Alice Adams", "alice@example.com"}]
+    assert email.subject == "Trip planning night"
+    assert email.text_body == "Hello exactly as written.\nDo not add guidance here."
+    refute email.text_body =~ "Reply to this email"
   end
 
   test "uses the verified Memba sender address even when no provider reply-to is configured" do
@@ -133,6 +173,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
+      club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
       sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
       channel: Keyword.get(overrides, :channel, :email),

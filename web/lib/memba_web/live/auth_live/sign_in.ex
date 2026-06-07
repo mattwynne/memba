@@ -5,6 +5,7 @@ defmodule MembaWeb.AuthLive.SignIn do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmail
+  alias Memba.Membership
   alias MembaWeb.ClubSite
 
   @neutral_notice "If that email address can sign in to Memba, the sign-in email is on its way."
@@ -22,14 +23,18 @@ defmodule MembaWeb.AuthLive.SignIn do
     {:noreply,
      socket
      |> assign(:page_title, page_title(socket.assigns.live_action))
-     |> assign(:auth_callback_base_url, auth_callback_base_url(uri))}
+     |> assign(:auth_callback_base_url, auth_callback_base_url(uri))
+     |> assign(:sign_in_email_context, sign_in_email_context(uri))}
   end
 
   @impl Phoenix.LiveView
   def handle_event("request_sign_in_link", params, socket) do
     params
     |> email_param()
-    |> request_and_deliver_sign_in_link(socket.assigns.auth_callback_base_url)
+    |> request_and_deliver_sign_in_link(
+      socket.assigns.auth_callback_base_url,
+      Map.get(socket.assigns, :sign_in_email_context, %{})
+    )
 
     {:noreply, push_patch(socket, to: ~p"/auth/check-email")}
   end
@@ -125,10 +130,10 @@ defmodule MembaWeb.AuthLive.SignIn do
   defp email_param(%{"auth" => %{"email" => email}}), do: email
   defp email_param(_params), do: nil
 
-  defp request_and_deliver_sign_in_link(email, callback_base_url) do
+  defp request_and_deliver_sign_in_link(email, callback_base_url, email_context) do
     case Accounts.request_sign_in_link(email) do
       {:ok, %{email: recipient_email, token: token}} ->
-        deliver_sign_in_link(recipient_email, token, callback_base_url)
+        deliver_sign_in_link(recipient_email, token, callback_base_url, email_context)
 
       {:ok, nil} ->
         :ok
@@ -138,10 +143,10 @@ defmodule MembaWeb.AuthLive.SignIn do
     end
   end
 
-  defp deliver_sign_in_link(recipient_email, token, callback_base_url) do
+  defp deliver_sign_in_link(recipient_email, token, callback_base_url, email_context) do
     callback_url = callback_base_url <> ~p"/auth/sign-in/#{token}"
 
-    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
+    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url, email_context) do
       :ok ->
         :ok
 
@@ -166,6 +171,18 @@ defmodule MembaWeb.AuthLive.SignIn do
   end
 
   defp auth_callback_base_url(_uri), do: MembaWeb.Endpoint.url()
+
+  defp sign_in_email_context(uri) when is_binary(uri) do
+    with %URI{host: host} when is_binary(host) <- URI.parse(uri),
+         {:ok, slug} <- ClubSite.slug_from_host(host),
+         %{name: _name} = club <- Membership.get_club_by_slug(slug) do
+      %{club: club}
+    else
+      _no_club_context -> %{}
+    end
+  end
+
+  defp sign_in_email_context(_uri), do: %{}
 
   defp port_suffix("http", port) when port in [nil, 80], do: ""
   defp port_suffix("https", port) when port in [nil, 443], do: ""

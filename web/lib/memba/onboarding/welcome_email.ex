@@ -10,10 +10,9 @@ defmodule Memba.Onboarding.WelcomeEmail do
 
   alias Memba.Accounts
   alias Memba.Accounts.AuthEmailConfig
+  alias Memba.EmailTemplates
   alias Memba.Onboarding.Request
   alias MembaWeb.ClubSite
-
-  @sender_name "Memba"
 
   @doc """
   Deliver a welcome email for a completed request-to-club conversion.
@@ -62,12 +61,14 @@ defmodule Memba.Onboarding.WelcomeEmail do
          callback_url,
          %AuthEmailConfig{} = config
        ) do
+    context = welcome_context(request, club)
+
     new()
-    |> from({@sender_name, config.from})
-    |> to({request.requester_name, recipient_email})
-    |> subject("Welcome to #{club.name} on Memba")
-    |> text_body(text_body(request, club, callback_url))
-    |> html_body(html_body(request, club, callback_url))
+    |> from({context.sender_name, config.from})
+    |> to({context.requester_name, recipient_email})
+    |> subject(context.subject)
+    |> text_body(welcome_text_body(context, callback_url))
+    |> html_body(welcome_html_body(context, recipient_email, callback_url))
     |> put_provider_options(config, request)
   end
 
@@ -87,40 +88,102 @@ defmodule Memba.Onboarding.WelcomeEmail do
     put_provider_option(email, :message_stream, config.message_stream)
   end
 
-  defp text_body(%Request{} = request, club, callback_url) do
-    """
-    Hi #{request.requester_name},
+  defp welcome_context(%Request{} = request, club) do
+    group_name =
+      club
+      |> Map.get(:name)
+      |> present_header_text("your group")
 
-    Welcome to #{club.name} on Memba.
+    requester_name = present_header_text(request.requester_name, "")
+
+    %{
+      group_name: group_name,
+      requester_name: requester_name,
+      sender_name: "#{group_name} via Memba",
+      subject: "Welcome to #{group_name} on Memba"
+    }
+  end
+
+  defp present_header_text(value, fallback) do
+    value
+    |> EmailTemplates.sanitize_header_text()
+    |> case do
+      "" -> fallback
+      text -> text
+    end
+  end
+
+  defp welcome_text_body(context, callback_url) do
+    """
+    Hi #{context.requester_name},
+
+    Welcome to #{context.group_name} on Memba.
 
     Use this secure link to sign in and open your new club member home:
 
     #{callback_url}
 
-    This link expires in 15 minutes. If you were not expecting this email, you can ignore it.
+    This link expires in 15 minutes and can be used once. If you were not expecting this email, you can ignore it.
     """
   end
 
-  defp html_body(%Request{} = request, club, callback_url) do
-    escaped_name = html_escape_to_string(request.requester_name)
-    escaped_club_name = html_escape_to_string(club.name)
-    escaped_url = html_escape_to_string(callback_url)
+  defp welcome_html_body(context, recipient_email, callback_url) do
+    title = context.subject
 
+    content = [
+      EmailTemplates.group_header(context.group_name, label: "Welcome"),
+      EmailTemplates.card_section([
+        EmailTemplates.heading(title),
+        EmailTemplates.paragraph("Hi #{context.requester_name},", margin: "0 0 12px"),
+        EmailTemplates.paragraph(
+          "You're now set up with #{context.group_name} on Memba. Use the secure link below to sign in and open your new club member home.",
+          margin: "0 0 18px"
+        ),
+        EmailTemplates.primary_action("Open #{context.group_name}", callback_url,
+          width: "220px",
+          fallback_label: "Button not working? Copy and paste this link into your browser:"
+        ),
+        EmailTemplates.paragraph(
+          "This link expires in 15 minutes and can be used once.",
+          margin: "0 0 20px",
+          color: "#7d877f",
+          font_size: "13px"
+        ),
+        welcome_reassurance()
+      ])
+    ]
+
+    footer = [
+      EmailTemplates.trust_footer(group_name: context.group_name),
+      welcome_footer(recipient_email)
+    ]
+
+    EmailTemplates.render_shell(
+      title: title,
+      preheader: "Welcome to #{context.group_name} — your sign-in link expires in 15 minutes.",
+      content: content,
+      footer: footer
+    )
+  end
+
+  defp welcome_reassurance do
     """
-    <html><body>
-    <p>Hi #{escaped_name},</p>
-    <p>Welcome to #{escaped_club_name} on Memba.</p>
-    <p>Use this secure link to sign in and open your new club member home:</p>
-    <p><a href="#{escaped_url}">Open #{escaped_club_name} on Memba</a></p>
-    <p>This link expires in 15 minutes. If you were not expecting this email, you can ignore it.</p>
-    </body></html>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td style="border-top:1px solid #e6e3dc; padding-top:16px;">
+        #{EmailTemplates.paragraph("If you were not expecting this welcome email, you can safely ignore it — no one can get into your account without the link above.", margin: "0", color: "#7d877f", font_size: "13px")}
+      </td>
+    </tr></table>
     """
   end
 
-  defp html_escape_to_string(text) do
-    text
-    |> Phoenix.HTML.html_escape()
-    |> Phoenix.HTML.safe_to_string()
+  defp welcome_footer(recipient_email) do
+    """
+        <tr>
+          <td class="gutter" style="padding:14px 28px 24px; font-size:12px; line-height:1.6; color:#7d877f;">
+            Sent to #{EmailTemplates.escaped_text(recipient_email)}. Need a hand? Contact Memba support.
+          </td>
+        </tr>
+    """
   end
 
   defp deliver_email(email) do
