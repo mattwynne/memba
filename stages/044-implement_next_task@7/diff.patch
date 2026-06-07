@@ -1,0 +1,248 @@
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index a1ceb00..9c7bb65 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Ensure club creation initializes the default Membership Administrator role and permission bundle. If the creator/first member is not known at `CreateClub` time, assign the role when the first member is added through onboarding conversion or an explicit assignment command.
+ - [x] 005 Update onboarding conversion so the requester/first member receives the Membership Administrator assignment after membership creation.
+ - [x] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.
+-- [ ] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.
++- [x] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.
+ - [ ] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.
+ - [ ] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
+ - [ ] 010 Add command/API support for revoking Membership Administrator while enforcing that at least one remains.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 8780425..48f5d74 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -7,6 +7,7 @@ defmodule Memba.Membership do
+ 
+   alias Memba.ID
+   alias Memba.Membership.App
++  alias Memba.Membership.Authorization
+   alias Memba.Membership.Commands.AddMember
+   alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+@@ -464,6 +465,18 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Return whether a person currently has an app-defined club-scoped permission.
++
++  Permission checks are answered from Membership's projected permission state so
++  callers do not need to know which role granted the permission. Invalid club
++  IDs, person IDs, unsupported permission identifiers, and missing projected
++  grants return `false`.
++  """
++  def person_has_club_permission?(club_id, person_id, permission) do
++    Authorization.has_permission?(club_id, person_id, permission)
++  end
++
+   defp cast_ids(type, ids) do
+     ids
+     |> Enum.reduce([], fn id, valid_ids ->
+diff --git a/web/lib/memba/membership/authorization.ex b/web/lib/memba/membership/authorization.ex
+new file mode 100644
+index 0000000..3367212
+--- /dev/null
++++ b/web/lib/memba/membership/authorization.ex
+@@ -0,0 +1,26 @@
++defmodule Memba.Membership.Authorization do
++  @moduledoc false
++
++  import Ecto.Query
++
++  alias Memba.ID
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.MemberPermission
++  alias Memba.Repo
++
++  @spec has_permission?(term(), term(), term()) :: boolean()
++  def has_permission?(club_id, person_id, permission) do
++    with {:ok, club_id} <- ID.cast(:club, club_id),
++         {:ok, person_id} <- ID.cast(:person, person_id),
++         true <- Permissions.valid?(permission) do
++      MemberPermission
++      |> where([member_permission], member_permission.club_id == ^club_id)
++      |> where([member_permission], member_permission.person_id == ^person_id)
++      |> where([member_permission], member_permission.permission == ^permission)
++      |> where([member_permission], member_permission.grant_count > 0)
++      |> Repo.exists?()
++    else
++      _invalid -> false
++    end
++  end
++end
+diff --git a/web/test/memba/membership/authorization_test.exs b/web/test/memba/membership/authorization_test.exs
+new file mode 100644
+index 0000000..bf7ff6e
+--- /dev/null
++++ b/web/test/memba/membership/authorization_test.exs
+@@ -0,0 +1,78 @@
++defmodule Memba.Membership.AuthorizationTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Authorization
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Commands.RemoveMemberRole
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Roles
++
++  test "has_permission?/3 reads the internal flattened member-permission projection" do
++    club_id = Memba.ID.generate(:club)
++    person_id = Memba.ID.generate(:person)
++    membership_id = Memba.ID.generate(:membership)
++    role_id = Roles.membership_administrator_role_id(club_id)
++    permission = Permissions.club_manage_members()
++
++    create_club!(club_id)
++    create_person!(person_id)
++    add_member!(membership_id, club_id, person_id)
++
++    refute Authorization.has_permission?(club_id, person_id, permission)
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++
++    assert Authorization.has_permission?(club_id, person_id, permission)
++    refute Authorization.has_permission?("not-a-club-id", person_id, permission)
++    refute Authorization.has_permission?(club_id, "not-a-person-id", permission)
++    refute Authorization.has_permission?(club_id, person_id, "club.manage_trips")
++
++    assert :ok =
++             App.dispatch(
++               %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++
++    refute Authorization.has_permission?(club_id, person_id, permission)
++  end
++
++  defp create_club!(club_id) do
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++               consistency: :strong
++             )
++  end
++
++  defp create_person!(person_id) do
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++  end
++
++  defp add_member!(membership_id, club_id, person_id) do
++    assert :ok =
++             Membership.add_member(
++               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
++               consistency: :strong
++             )
++  end
++end
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 06ca9b0..8edba78 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -3,6 +3,9 @@ defmodule Memba.Membership.PublicApiTest do
+ 
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Commands.RemoveMemberRole
+   alias Memba.Membership.Events.ClubCreated
+   alias Memba.Membership.Events.ClubRoleDefined
+   alias Memba.Membership.Events.ClubRolePermissionGranted
+@@ -11,9 +14,10 @@ defmodule Memba.Membership.PublicApiTest do
+   alias Memba.Membership.Events.MemberRemoved
+   alias Memba.Membership.Events.PersonEmailAddressesReplaced
+   alias Memba.Membership.Events.PersonCreated
+-  alias Memba.Membership.Roles
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Roles
+ 
+   test "create_club/2 dispatches CreateClub through the Membership context" do
+     club_id = Memba.ID.generate(:club)
+@@ -445,4 +449,61 @@ defmodule Memba.Membership.PublicApiTest do
+     refute Membership.active_member_of_club?(club_id, person_id)
+     assert [] = Membership.list_active_members_of_club(club_id)
+   end
++
++  test "person_has_club_permission?/3 checks backend projected member permissions" do
++    club_id = Memba.ID.generate(:club)
++    person_id = Memba.ID.generate(:person)
++    membership_id = Memba.ID.generate(:membership)
++    role_id = Roles.membership_administrator_role_id(club_id)
++    permission = Permissions.club_manage_members()
++
++    assert :ok =
++             Membership.create_club(
++               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.create_person(
++               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_member(
++               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
++               consistency: :strong
++             )
++
++    refute Membership.person_has_club_permission?(club_id, person_id, permission)
++
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++
++    assert Membership.person_has_club_permission?(club_id, person_id, permission)
++    refute Membership.person_has_club_permission?("not-a-club-id", person_id, permission)
++    refute Membership.person_has_club_permission?(club_id, "not-a-person-id", permission)
++    refute Membership.person_has_club_permission?(club_id, person_id, "club.manage_trips")
++
++    assert :ok =
++             App.dispatch(
++               %RemoveMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: role_id
++               },
++               consistency: :strong
++             )
++
++    refute Membership.person_has_club_permission?(club_id, person_id, permission)
++  end
+ end
