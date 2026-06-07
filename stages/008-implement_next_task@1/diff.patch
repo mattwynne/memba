@@ -1,0 +1,165 @@
+diff --git a/docs/iterations/027-membership-administrator-role/boundary-inspection.md b/docs/iterations/027-membership-administrator-role/boundary-inspection.md
+new file mode 100644
+index 0000000..a935df3
+--- /dev/null
++++ b/docs/iterations/027-membership-administrator-role/boundary-inspection.md
+@@ -0,0 +1,147 @@
++# Boundary inspection: Membership Administrator role
++
++This note captures the existing aggregate, projection, onboarding conversion, and
++test-support boundaries inspected for task 001 of the iteration plan. It is
++intended to guide the later role/permission design without changing behaviour.
++
++## Binding architecture constraints
++
++- ADR 0002 says new domain behaviour should use Commanded commands,
++  aggregates, events, and read-model projections by default.
++- ADR 0007 keeps club, person, and membership lifecycle behaviour inside the
++  Membership Commanded context (`Memba.Membership.App` and
++  `Memba.Membership.Router`). Other contexts should depend on Membership's
++  public query API rather than its projection tables.
++- ADR 0008 uses the persistent PostgreSQL EventStore adapter in development and
++  test, so new role/permission events need EventStore-backed tests rather than
++  an in-memory shortcut.
++- ADR 0009 uses `commanded_ecto_projections`; role/permission read models should
++  follow the existing projector pattern rather than custom event handlers.
++- ADR 0011 uses caller-generated UUID aggregate identities. Any new role,
++  assignment, or permission-grant aggregate identities should be supplied by the
++  application service/test before dispatch.
++- ADR 0022 uses projection barriers/read-your-writes synchronization. Acceptance
++  steps that assert role/permission projection state should use existing
++  strong-consistency dispatches or projection barriers.
++
++## Current Membership write-side boundaries
++
++Membership has one Commanded application and router:
++
++- `Memba.Membership.App` is the Commanded application.
++- `Memba.Membership.Router` identifies three aggregate roots:
++  - `Memba.Membership.Club`, routed by `:club_id`;
++  - `Memba.Membership.Person`, routed by `:person_id`;
++  - `Memba.Membership.Membership`, routed by `:membership_id`.
++
++Current commands and events are intentionally narrow:
++
++- Club creation/update:
++  - commands: `CreateClub`, `UpdateClub`;
++  - events: `ClubCreated`, `ClubUpdated`;
++  - aggregate state: `club_id`, `name`, `slug`.
++- Person creation/email replacement:
++  - commands: `CreatePerson`, `ReplacePersonEmailAddresses`;
++  - events: `PersonCreated`, `PersonEmailAddressesReplaced`;
++  - aggregate state: `person_id`, name, legacy primary email, and email set.
++- Membership add/remove:
++  - commands: `AddMember`, `RemoveMember`;
++  - events: `MemberAdded`, `MemberRemoved`;
++  - aggregate state: `membership_id`, `club_id`, `person_id`, `active`.
++
++Duplicate active memberships for a `{club_id, person_id}` pair are enforced in
++the public `Memba.Membership.add_member/2` application service by querying the
++membership projection before dispatch. The `Membership` aggregate only protects
++its own `membership_id` stream. Slug and email uniqueness are enforced in the
++same public API layer before dispatch.
++
++## Current Membership read-side boundaries
++
++Existing projected tables/schemas:
++
++- `membership_clubs` / `Memba.Membership.Projections.Club`;
++- `membership_people` / `Memba.Membership.Projections.Person`;
++- `membership_person_email_addresses` /
++  `Memba.Membership.Projections.PersonEmailAddress`;
++- `membership_memberships` / `Memba.Membership.Projections.Membership`.
++
++Existing projectors:
++
++- `Memba.Membership.Projectors.Club` projects `ClubCreated` and `ClubUpdated`;
++- `Memba.Membership.Projectors.Person` projects `PersonCreated` and
++  `PersonEmailAddressesReplaced`;
++- `Memba.Membership.Projectors.Membership` projects `MemberAdded` and
++  `MemberRemoved`.
++
++All Membership projectors use `Commanded.Projections.Ecto` with
++`consistency: :strong` and publish read-model changes through
++`Memba.ReadModelChanges`. New role/permission projectors should be added to:
++
++- the application supervisor;
++- `:event_sourced_projection_tables` config;
++- `Memba.EventSourcedCase` projector/table reset lists;
++- `MembaWeb.DevTestSupportController` acceptance reset/projector lists.
++
++## Onboarding conversion boundary
++
++`Memba.Onboarding` is not event-sourced. It owns the Ecto-backed onboarding
++request record and orchestrates Membership commands during conversion:
++
++1. lock/fetch an active `onboarding_requests` row;
++2. generate `club_id` and `membership_id`;
++3. choose a requester `person_id`, reusing an existing Membership person by
++   normalized requester email when possible;
++4. dispatch `Membership.create_club/2` with `consistency: :strong`;
++5. dispatch `Membership.create_person/2` only when the requester person is new;
++6. dispatch `Membership.add_member/2` with `consistency: :strong`;
++7. mark the onboarding request converted with the generated IDs;
++8. load projected club/person read models;
++9. deliver the welcome email after conversion is persisted.
++
++The approved requester/first-member role assignment should therefore happen
++after club and membership creation have succeeded, and before returning a
++successful conversion if callers need read-your-writes behaviour. The conversion
++path already has a clear place to add a follow-up Membership role-assignment
++command with strong consistency.
++
++## Staff/admin and member-management entry points
++
++Current staff-only screens call the Membership public API directly:
++
++- staff club creation: `MembaWeb.Admin.ClubsLive.Index`;
++- staff club update/member add/member remove:
++  `MembaWeb.Admin.ClubsLive.Show`;
++- staff person creation: `MembaWeb.Admin.PeopleLive.New`.
++
++These are platform/staff operations today. Later authorization work should keep
++staff access separate from club-scoped Membership Administrator permission
++checks, as required by the plan.
++
++Current member-facing flows use Membership projections for access and recipient
++resolution:
++
++- member sign-in/club list queries active memberships by email;
++- club site routing checks `Membership.active_member_of_club_by_email?/2`;
++- Messaging resolves recipients through `Membership.list_active_members_of_club/1`
++  per ADR 0007.
++
++## Test-support and seed creation paths
++
++Automated test and acceptance setup currently creates club/person/membership
++state through a mix of public API, raw command dispatch, and direct projection
++inserts:
++
++- Cucumber Membership steps use direct `Memba.Membership.App.dispatch/2` for
++  some `CreateClub`, `CreatePerson`, and `AddMember` setup.
++- Request-account/authentication Cucumber steps use the public
++  `Memba.Membership` API.
++- `Memba.MembershipFixtures` inserts projection rows directly for projection and
++  query tests.
++- `priv/repo/seeds.exs` inserts representative projection rows directly.
++- Controller/LiveView/unit tests mostly use the public Membership API, with some
++  lower-level aggregate/dispatch tests intentionally exercising commands/events.
++
++Later tasks that introduce default roles and flattened permission projections
++will need to update both event-sourced setup paths and direct-projection setup
++paths so tests, seeds, and acceptance resets have coherent role/permission read
++models.
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index f7a33a3..c7fe9b8 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect current Membership event-sourced aggregate boundaries for club creation, membership creation/removal, onboarding conversion, and test-support creation paths.
++- [x] 001 Inspect current Membership event-sourced aggregate boundaries for club creation, membership creation/removal, onboarding conversion, and test-support creation paths.
+ - [ ] 002 Design a minimal role/permission model that supports future custom roles:
+ - [ ] 003 Add commands/events for creating the default Membership Administrator role, granting `club.manage_members`, and assigning/removing the role from active members. Prefer events that preserve future role customisation rather than baking all logic into one opaque flag.
+ - [ ] 004 Ensure club creation initializes the default Membership Administrator role and permission bundle. If the creator/first member is not known at `CreateClub` time, assign the role when the first member is added through onboarding conversion or an explicit assignment command.
