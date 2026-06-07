@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-07T21:46:22.330484782Z",
-  "last_event_at": "2026-06-07T23:07:24.628785363Z",
+  "last_event_at": "2026-06-07T23:07:43.019966436Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -15244,9 +15244,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2962,
       "checkpoint": {
-        "timestamp": "2026-06-07T23:07:39.620044965Z",
+        "timestamp": "2026-06-07T23:07:42.978197215Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -15302,6 +15302,345 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.fidelity": "summary:high",
+          "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Live working tree is clean; `/tmp/fabro-pre-validate-snapshot.md` confirms the implementation was checkpointed.\n  - Recent checkpoint `c945f75 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `- [ ] 007 Add a public Membership query/API for permission checks...`\n    - to `- [x] 007 Add a public Membership query/API for permission checks...`\n  - Immediately before that checkpoint, `007` was the first unchecked task in `todo.md`.\n  - No todo deletion, weakening, split, or reorder was found.\n\n- **Implementation artifacts found**\n  - Added `web/lib/memba/membership/authorization.ex`, an internal Membership authorization helper querying the flattened `membership_member_permissions` projection.\n  - Added public Membership context API:\n    - `Memba.Membership.person_has_club_permission?/3`\n  - The implementation validates/casts club/person IDs and only accepts app-defined permissions via `Memba.Membership.Permissions.valid?/1`.\n  - No acceptance `*.feature` files were edited.\n\n- **Tests run/results found**\n  - Added `web/test/memba/membership/authorization_test.exs`.\n  - Updated `web/test/memba/membership/public_api_test.exs`.\n  - Validator reran focused tests successfully:\n    - `13 tests, 0 failures`\n  - `git diff --check c945f75^ c945f75` passed.\n  - Implementation summary also reports formatting passed and `dev check --quick` passed with `648 tests, 0 failures`.\n\n- **ADR/plan conformance notes**\n  - Matches plan task `007`: exposes a public Membership permission-check API answering whether a person has `club.manage_members` in a club.\n  - Respects ADR 0002 and ADR 0009 by querying CQRS/Ecto projection state rather than aggregate internals or ad hoc mutable state.\n  - Respects ADR 0007 by keeping projection-table access encapsulated inside the Membership bounded context and exposing a Membership query API.\n  - Respects ADR 0008 by testing through persistent EventStore-backed domain paths.\n  - Respects ADR 0022 patterns by using strong consistency in tests before reading projected permission state.\n  - Scope is appropriately small and independently checkpointable; later authorization/grant/revoke work remains unchecked.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "thread.validate_task.current_node": "task_gate",
+          "last_stage": "implement_next_task",
+          "current_node": "implement_next_task",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.thread_id": "all_tasks_done",
+          "task_list_complete": false,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "internal.retry_count.all_tasks_done": 0,
+          "task_retry_available": false,
+          "task_list_needs_human": false,
+          "internal.retry_count.task_gate": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.node_visit_count": 8,
+          "graph.default_fidelity": "summary:high",
+          "failure_class": "",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.validate_task": 0,
+          "internal.work_dir": "/workspace/memba",
+          "task_valid": true,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01KTJ0QRN92KF05BYWDBR6VDGR",
+          "command.output": "blob://sha256/c63c42c19b87414bf4c32a4a2a8bf5ae3bdef405e09655d1c3aa840d15f682d2",
+          "internal.retry_count.implement_next_task": 0,
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.max_node_visits": "80",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.`\n\n2. **Changes made**\n   - Added permission-gated club-member role operation APIs:\n     - `Memba.Membership.assign_member_role_as_club_member/2`\n     - `Memba.Membership.remove_member_role_as_club_member/2`\n   - These require `actor_person_id`, check projected `club.manage_members`, validate the target membership is active, then dispatch the existing role assignment/removal commands.\n   - Left existing staff/system-oriented paths (`add_member/2`, `remove_member/2`, onboarding/system dispatch) separate and unchanged.\n   - Added `Memba.Membership.Authorization.authorize_manage_members/2`.\n   - Added focused tests in:\n     - `web/test/memba/membership/member_role_authorization_test.exs`\n\n3. **Focused validation**\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/membership.ex lib/memba/membership/authorization.ex test/memba/membership/member_role_authorization_test.exs`\n     - Passed.\n   - Focused tests:\n     - Direct `bin/mix test ...` hit the known PGHOST readiness mismatch.\n     - Reran with devenv shell due that mismatch:\n       - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/membership/member_role_authorization_test.exs test/memba/membership/authorization_test.exs test/memba/membership/public_api_test.exs'`\n       - Passed: `16 tests, 0 failures`.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `651 tests, 0 failures`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 008 Add authorization handling to membership-management operations...`\n   - To:\n     - `- [x] 008 Add authorization handling to membership-management operations...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002: keeps behavior in Membership command/application-service flow over Commanded commands/events.\n   - ADR 0007: authorization remains encapsulated in Membership’s public API; callers do not query projection tables directly.\n   - ADR 0008/0009: validation uses persistent EventStore-backed tests and projected permission read models.\n   - ADR 0022: tests use strong consistency before reading projected permission state.",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.rankdir": "LR",
+          "internal.retry_count.resume_gate": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.wip_gate": 0,
+          "failure_signature": "",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through st",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.all_tasks_done.current_node": "implement_next_task"
+        },
+        "node_outcomes": {
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d98ca4e8b8f8c8b6a0c1fe5a544c9794a838d6f9fdbe01434d21444cdd1d06e2"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 270,
+              "active_time_ms": 270
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/09d8cf1549a81d3b4d19faf6c3aadfe2c7926532414d606d84f870d931db6464"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2371,
+              "active_time_ms": 2371
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/1543deba7a04f7209a8cd55c1ab5bad93293f2357a27aa6b11f9add4e9b12df6"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 139107,
+              "active_time_ms": 139107
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false,
+              "task_list_complete": false,
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 27480,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 106,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 141420
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3528,
+              "tool_time_ms": 0,
+              "active_time_ms": 3528
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/475a01a10d800927c55b8325579512e0caa5378ddc4e2475cfaae5668e0ccb04"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 183,
+              "active_time_ms": 183
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/c63c42c19b87414bf4c32a4a2a8bf5ae3bdef405e09655d1c3aa840d15f682d2"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 198,
+              "active_time_ms": 198
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Live working tree is clean; `/tmp/fabro-pre-validate-snapshot.md` confirms the implementation was checkpointed.\n  - Recent checkpoint `c945f75 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `- [ ] 007 Add a public Membership query/API for permission checks...`\n    - to `- [x] 007 Add a public Membership query/API for permission checks...`\n  - Immediately before that checkpoint, `007` was the first unchecked task in `todo.md`.\n  - No todo deletion, weakening, split, or reorder was found.\n\n- **Implementation artifacts found**\n  - Added `web/lib/memba/membership/authorization.ex`, an internal Membership authorization helper querying the flattened `membership_member_permissions` projection.\n  - Added public Membership context API:\n    - `Memba.Membership.person_has_club_permission?/3`\n  - The implementation validates/casts club/person IDs and only accepts app-defined permissions via `Memba.Membership.Permissions.valid?/1`.\n  - No acceptance `*.feature` files were edited.\n\n- **Tests run/results found**\n  - Added `web/test/memba/membership/authorization_test.exs`.\n  - Updated `web/test/memba/membership/public_api_test.exs`.\n  - Validator reran focused tests successfully:\n    - `13 tests, 0 failures`\n  - `git diff --check c945f75^ c945f75` passed.\n  - Implementation summary also reports formatting passed and `dev check --quick` passed with `648 tests, 0 failures`.\n\n- **ADR/plan conformance notes**\n  - Matches plan task `007`: exposes a public Membership permission-check API answering whether a person has `club.manage_members` in a club.\n  - Respects ADR 0002 and ADR 0009 by querying CQRS/Ecto projection state rather than aggregate internals or ad hoc mutable state.\n  - Respects ADR 0007 by keeping projection-table access encapsulated inside the Membership bounded context and exposing a Membership query API.\n  - Respects ADR 0008 by testing through persistent EventStore-backed domain paths.\n  - Respects ADR 0022 patterns by using strong consistency in tests before reading projected permission state.\n  - Scope is appropriately small and independently checkpointable; later authorization/grant/revoke work remains unchecked.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "task_retry_available": false,
+              "last_response": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Live working tree is clean; `/tmp/fabro-pre-validate-snapshot.md` confirms the implementation was checkpointed."
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 320874,
+                    "output_tokens": 2181,
+                    "reasoning_tokens": 1089,
+                    "cache_read_tokens": 219136,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1812038
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 83101,
+              "tool_time_ms": 7146,
+              "active_time_ms": 90247
+            }
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through st",
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.`\n\n2. **Changes made**\n   - Added permission-gated club-member role operation APIs:\n     - `Memba.Membership.assign_member_role_as_club_member/2`\n     - `Memba.Membership.remove_member_role_as_club_member/2`\n   - These require `actor_person_id`, check projected `club.manage_members`, validate the target membership is active, then dispatch the existing role assignment/removal commands.\n   - Left existing staff/system-oriented paths (`add_member/2`, `remove_member/2`, onboarding/system dispatch) separate and unchanged.\n   - Added `Memba.Membership.Authorization.authorize_manage_members/2`.\n   - Added focused tests in:\n     - `web/test/memba/membership/member_role_authorization_test.exs`\n\n3. **Focused validation**\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba/membership.ex lib/memba/membership/authorization.ex test/memba/membership/member_role_authorization_test.exs`\n     - Passed.\n   - Focused tests:\n     - Direct `bin/mix test ...` hit the known PGHOST readiness mismatch.\n     - Reran with devenv shell due that mismatch:\n       - `devenv shell -- bash -lc 'PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba/membership/member_role_authorization_test.exs test/memba/membership/authorization_test.exs test/memba/membership/public_api_test.exs'`\n       - Passed: `16 tests, 0 failures`.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `651 tests, 0 failures`.\n   - Whitespace:\n     - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 008 Add authorization handling to membership-management operations...`\n   - To:\n     - `- [x] 008 Add authorization handling to membership-management operations...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002: keeps behavior in Membership command/application-service flow over Commanded commands/events.\n   - ADR 0007: authorization remains encapsulated in Membership’s public API; callers do not query projection tables directly.\n   - ADR 0008/0009: validation uses persistent EventStore-backed tests and projected permission read models.\n   - ADR 0022: tests use strong consistency before reading projected permission state."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 1094492,
+                    "output_tokens": 8557,
+                    "reasoning_tokens": 6139,
+                    "cache_read_tokens": 3020800,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 7423740
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 403940,
+              "tool_time_ms": 72123,
+              "active_time_ms": 476063
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4419b5af6611145dc4cd3ed9bdbbed631b71e31cfb6e73c1f11f7337e414e03e"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 311,
+              "active_time_ms": 311
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "1f256d808076459bcd626ceeb1edef62ea3e3840",
+        "node_visits": {
+          "all_tasks_done": 8,
+          "implement_next_task": 8,
+          "start": 1,
+          "validate_task": 7,
+          "sync_task_list": 8,
+          "preflight_sandbox": 1,
+          "pre_validate_snapshot": 7,
+          "read_plan": 1,
+          "wip_gate": 1,
+          "task_gate": 7,
+          "resume_gate": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md\nindex 9c7bb65..0fa9767 100644\n--- a/docs/iterations/027-membership-administrator-role/todo.md\n+++ b/docs/iterations/027-membership-administrator-role/todo.md\n@@ -7,7 +7,7 @@\n - [x] 005 Update onboarding conversion so the requester/first member receives the Membership Administrator assignment after membership creation.\n - [x] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.\n - [x] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.\n-- [ ] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.\n+- [x] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.\n - [ ] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.\n - [ ] 010 Add command/API support for revoking Membership Administrator while enforcing that at least one remains.\n - [ ] 011 Prevent ordinary members without `club.manage_members` from granting or revoking Membership Administrator.\ndiff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex\nindex 48f5d74..21bf535 100644\n--- a/web/lib/memba/membership.ex\n+++ b/web/lib/memba/membership.ex\n@@ -9,9 +9,11 @@ defmodule Memba.Membership do\n   alias Memba.Membership.App\n   alias Memba.Membership.Authorization\n   alias Memba.Membership.Commands.AddMember\n+  alias Memba.Membership.Commands.AssignMemberRole\n   alias Memba.Membership.Commands.CreateClub\n   alias Memba.Membership.Commands.CreatePerson\n   alias Memba.Membership.Commands.RemoveMember\n+  alias Memba.Membership.Commands.RemoveMemberRole\n   alias Memba.Membership.Commands.ReplacePersonEmailAddresses\n   alias Memba.Membership.Commands.UpdateClub\n   alias Memba.Membership.EmailAddresses\n@@ -105,6 +107,60 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  @doc \"\"\"\n+  Assign a club role to an active member as a club member actor.\n+\n+  Unlike staff/system setup paths, this entry point requires `:actor_person_id`\n+  (or `\"actor_person_id\"`) and authorizes the actor through the projected\n+  `club.manage_members` permission before dispatching the role-assignment\n+  command. The target membership must be active and must match the submitted\n+  club/person IDs.\n+  \"\"\"\n+  def assign_member_role_as_club_member(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <- assign_member_role_command(attrs),\n+         :ok <-\n+           Authorization.authorize_manage_members(\n+             command.club_id,\n+             command.assigned_by_person_id\n+           ),\n+         :ok <-\n+           ensure_active_membership(\n+             command.club_id,\n+             command.person_id,\n+             command.membership_id\n+           ) do\n+      dispatch(command, dispatch_opts)\n+    end\n+  end\n+\n+  @doc \"\"\"\n+  Remove a club role from an active member as a club member actor.\n+\n+  Staff/system setup paths remain separate. This entry point requires\n+  `:actor_person_id` (or `\"actor_person_id\"`) and authorizes the actor through\n+  the projected `club.manage_members` permission before dispatching the\n+  role-removal command. The target membership must be active and must match the\n+  submitted club/person IDs.\n+  \"\"\"\n+  def remove_member_role_as_club_member(attrs, dispatch_opts \\\\ [])\n+      when is_map(attrs) and is_list(dispatch_opts) do\n+    with {:ok, command} <- remove_member_role_command(attrs),\n+         :ok <-\n+           Authorization.authorize_manage_members(\n+             command.club_id,\n+             command.removed_by_person_id\n+           ),\n+         :ok <-\n+           ensure_active_membership(\n+             command.club_id,\n+             command.person_id,\n+             command.membership_id\n+           ) do\n+      dispatch(command, dispatch_opts)\n+    end\n+  end\n+\n   @doc \"\"\"\n   Fetch a projected club read model by typed club ID.\n \n@@ -594,6 +650,40 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  defp assign_member_role_command(attrs) do\n+    with {:ok, club_id} <- fetch_required(attrs, :club_id),\n+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),\n+         {:ok, person_id} <- fetch_required(attrs, :person_id),\n+         {:ok, role_id} <- fetch_required(attrs, :role_id),\n+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do\n+      {:ok,\n+       %AssignMemberRole{\n+         club_id: club_id,\n+         membership_id: membership_id,\n+         person_id: person_id,\n+         role_id: role_id,\n+         assigned_by_person_id: actor_person_id\n+       }}\n+    end\n+  end\n+\n+  defp remove_member_role_command(attrs) do\n+    with {:ok, club_id} <- fetch_required(attrs, :club_id),\n+         {:ok, membership_id} <- fetch_required(attrs, :membership_id),\n+         {:ok, person_id} <- fetch_required(attrs, :person_id),\n+         {:ok, role_id} <- fetch_required(attrs, :role_id),\n+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id) do\n+      {:ok,\n+       %RemoveMemberRole{\n+         club_id: club_id,\n+         membership_id: membership_id,\n+         person_id: person_id,\n+         role_id: role_id,\n+         removed_by_person_id: actor_person_id\n+       }}\n+    end\n+  end\n+\n   defp prevent_duplicate_active_membership(%AddMember{} = command) do\n     if active_member_of_club?(command.club_id, command.person_id) do\n       {:error, :already_active_member}\n@@ -602,6 +692,28 @@ defmodule Memba.Membership do\n     end\n   end\n \n+  defp ensure_active_membership(club_id, person_id, membership_id) do\n+    with {:ok, club_id} <- ID.cast(:club, club_id),\n+         {:ok, person_id} <- ID.cast(:person, person_id),\n+         {:ok, membership_id} <- ID.cast(:membership, membership_id) do\n+      active? =\n+        MembershipProjection\n+        |> where([membership], membership.membership_id == ^membership_id)\n+        |> where([membership], membership.club_id == ^club_id)\n+        |> where([membership], membership.person_id == ^person_id)\n+        |> where([membership], membership.active == true)\n+        |> Repo.exists?()\n+\n+      if active? do\n+        :ok\n+      else\n+        {:error, :member_not_active}\n+      end\n+    else\n+      :error -> {:error, :member_not_active}\n+    end\n+  end\n+\n   defp prevent_duplicate_club_slug(%CreateClub{} = command) do\n     case Repo.get_by(Club, slug: command.slug) do\n       nil -> :ok\ndiff --git a/web/lib/memba/membership/authorization.ex b/web/lib/memba/membership/authorization.ex\nindex 3367212..fd7c6fa 100644\n--- a/web/lib/memba/membership/authorization.ex\n+++ b/web/lib/memba/membership/authorization.ex\n@@ -8,6 +8,15 @@ defmodule Memba.Membership.Authorization do\n   alias Memba.Membership.Projections.MemberPermission\n   alias Memba.Repo\n \n+  @spec authorize_manage_members(term(), term()) :: :ok | {:error, :unauthorized}\n+  def authorize_manage_members(club_id, person_id) do\n+    if has_permission?(club_id, person_id, Permissions.club_manage_members()) do\n+      :ok\n+    else\n+      {:error, :unauthorized}\n+    end\n+  end\n+\n   @spec has_permission?(term(), term(), term()) :: boolean()\n   def has_permission?(club_id, person_id, permission) do\n     with {:ok, club_id} <- ID.cast(:club, club_id),\ndiff --git a/web/test/memba/membership/member_role_authorization_test.exs b/web/test/memba/membership/member_role_authorization_test.exs\nnew file mode 100644\nindex 0000000..c71aeab\n--- /dev/null\n+++ b/web/test/memba/membership/member_role_authorization_test.exs\n@@ -0,0 +1,201 @@\n+defmodule Memba.Membership.MemberRoleAuthorizationTest do\n+  use Memba.EventSourcedCase, async: false\n+\n+  alias Commanded.Commands.ExecutionResult\n+  alias Memba.Membership\n+  alias Memba.Membership.App\n+  alias Memba.Membership.Commands.AssignMemberRole\n+  alias Memba.Membership.Commands.DefineClubRole\n+  alias Memba.Membership.Events.MemberRoleAssigned\n+  alias Memba.Membership.Events.MemberRoleRemoved\n+  alias Memba.Membership.Permissions\n+  alias Memba.Membership.Roles\n+\n+  test \"assign_member_role_as_club_member/2 requires club.manage_members\" do\n+    club_id = Memba.ID.generate(:club)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    target_membership_id = Memba.ID.generate(:membership)\n+    role_id = Memba.ID.generate(:role)\n+\n+    create_club!(club_id)\n+    create_person!(actor_person_id, \"Robin\", \"robin@example.com\")\n+    add_member!(actor_membership_id, club_id, actor_person_id)\n+    create_person!(target_person_id, \"Alice\", \"alice@example.com\")\n+    add_member!(target_membership_id, club_id, target_person_id)\n+    define_role!(club_id, role_id)\n+\n+    attrs = %{\n+      club_id: club_id,\n+      membership_id: target_membership_id,\n+      person_id: target_person_id,\n+      role_id: role_id,\n+      actor_person_id: actor_person_id\n+    }\n+\n+    assert {:error, :unauthorized} =\n+             Membership.assign_member_role_as_club_member(attrs, consistency: :strong)\n+\n+    assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              events: [\n+                %MemberRoleAssigned{\n+                  club_id: ^club_id,\n+                  membership_id: ^target_membership_id,\n+                  person_id: ^target_person_id,\n+                  role_id: ^role_id,\n+                  assigned_by_person_id: ^actor_person_id\n+                }\n+              ]\n+            }} =\n+             Membership.assign_member_role_as_club_member(\n+               attrs,\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+  end\n+\n+  test \"remove_member_role_as_club_member/2 requires club.manage_members\" do\n+    club_id = Memba.ID.generate(:club)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    target_membership_id = Memba.ID.generate(:membership)\n+    role_id = Memba.ID.generate(:role)\n+\n+    create_club!(club_id)\n+    create_person!(actor_person_id, \"Robin\", \"robin@example.com\")\n+    add_member!(actor_membership_id, club_id, actor_person_id)\n+    create_person!(target_person_id, \"Alice\", \"alice@example.com\")\n+    add_member!(target_membership_id, club_id, target_person_id)\n+    define_role!(club_id, role_id)\n+    assign_role_by_system!(club_id, target_membership_id, target_person_id, role_id)\n+\n+    attrs = %{\n+      club_id: club_id,\n+      membership_id: target_membership_id,\n+      person_id: target_person_id,\n+      role_id: role_id,\n+      actor_person_id: actor_person_id\n+    }\n+\n+    assert {:error, :unauthorized} =\n+             Membership.remove_member_role_as_club_member(attrs, consistency: :strong)\n+\n+    assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)\n+\n+    assert {:ok,\n+            %ExecutionResult{\n+              events: [\n+                %MemberRoleRemoved{\n+                  club_id: ^club_id,\n+                  membership_id: ^target_membership_id,\n+                  person_id: ^target_person_id,\n+                  role_id: ^role_id,\n+                  removed_by_person_id: ^actor_person_id\n+                }\n+              ]\n+            }} =\n+             Membership.remove_member_role_as_club_member(\n+               attrs,\n+               returning: :execution_result,\n+               consistency: :strong\n+             )\n+  end\n+\n+  test \"club-member role assignment requires the target to be an active member\" do\n+    club_id = Memba.ID.generate(:club)\n+    actor_person_id = Memba.ID.generate(:person)\n+    actor_membership_id = Memba.ID.generate(:membership)\n+    target_person_id = Memba.ID.generate(:person)\n+    missing_membership_id = Memba.ID.generate(:membership)\n+    role_id = Memba.ID.generate(:role)\n+\n+    create_club!(club_id)\n+    create_person!(actor_person_id, \"Robin\", \"robin@example.com\")\n+    add_member!(actor_membership_id, club_id, actor_person_id)\n+    assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)\n+    create_person!(target_person_id, \"Alice\", \"alice@example.com\")\n+    define_role!(club_id, role_id)\n+\n+    assert {:error, :member_not_active} =\n+             Membership.assign_member_role_as_club_member(\n+               %{\n+                 club_id: club_id,\n+                 membership_id: missing_membership_id,\n+                 person_id: target_person_id,\n+                 role_id: role_id,\n+                 actor_person_id: actor_person_id\n+               },\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp create_club!(club_id) do\n+    assert :ok =\n+             Membership.create_club(\n+               membership_club_attrs(club_id: club_id, name: \"Kootenay Mountaineering Club\"),\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp create_person!(person_id, name, email) do\n+    assert :ok =\n+             Membership.create_person(\n+               %{person_id: person_id, name: name, email: email},\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp add_member!(membership_id, club_id, person_id) do\n+    assert :ok =\n+             Membership.add_member(\n+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp define_role!(club_id, role_id) do\n+    assert :ok =\n+             App.dispatch(\n+               %DefineClubRole{\n+                 club_id: club_id,\n+                 role_id: role_id,\n+                 role_key: nil,\n+                 name: \"Roster Helper\"\n+               },\n+               consistency: :strong\n+             )\n+  end\n+\n+  defp assign_membership_administrator!(club_id, membership_id, person_id) do\n+    assign_role_by_system!(\n+      club_id,\n+      membership_id,\n+      person_id,\n+      Roles.membership_administrator_role_id(club_id)\n+    )\n+\n+    assert Membership.person_has_club_permission?(\n+             club_id,\n+             person_id,\n+             Permissions.club_manage_members()\n+           )\n+  end\n+\n+  defp assign_role_by_system!(club_id, membership_id, person_id, role_id) do\n+    assert :ok =\n+             App.dispatch(\n+               %AssignMemberRole{\n+                 club_id: club_id,\n+                 membership_id: membership_id,\n+                 person_id: person_id,\n+                 role_id: role_id\n+               },\n+               consistency: :strong\n+             )\n+  end\n+end\n",
+        "summary": {
+          "files_changed": 39,
+          "additions": 2478,
+          "deletions": 13
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-07T23:07:43.362812839Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.wip_gate": 0,
           "thread.validate_task.current_node": "task_gate",
           "response.validate_task": "### Decision\n\n**VALID**\n\n### Evidence\n\n- **Completed todo/check-off evidence found**\n  - Live working tree is clean; `/tmp/fabro-pre-validate-snapshot.md` confirms the implementation was checkpointed.\n  - Recent checkpoint `c945f75 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `- [ ] 007 Add a public Membership query/API for permission checks...`\n    - to `- [x] 007 Add a public Membership query/API for permission checks...`\n  - Immediately before that checkpoint, `007` was the first unchecked task in `todo.md`.\n  - No todo deletion, weakening, split, or reorder was found.\n\n- **Implementation artifacts found**\n  - Added `web/lib/memba/membership/authorization.ex`, an internal Membership authorization helper querying the flattened `membership_member_permissions` projection.\n  - Added public Membership context API:\n    - `Memba.Membership.person_has_club_permission?/3`\n  - The implementation validates/casts club/person IDs and only accepts app-defined permissions via `Memba.Membership.Permissions.valid?/1`.\n  - No acceptance `*.feature` files were edited.\n\n- **Tests run/results found**\n  - Added `web/test/memba/membership/authorization_test.exs`.\n  - Updated `web/test/memba/membership/public_api_test.exs`.\n  - Validator reran focused tests successfully:\n    - `13 tests, 0 failures`\n  - `git diff --check c945f75^ c945f75` passed.\n  - Implementation summary also reports formatting passed and `dev check --quick` passed with `648 tests, 0 failures`.\n\n- **ADR/plan conformance notes**\n  - Matches plan task `007`: exposes a public Membership permission-check API answering whether a person has `club.manage_members` in a club.\n  - Respects ADR 0002 and ADR 0009 by querying CQRS/Ecto projection state rather than aggregate internals or ad hoc mutable state.\n  - Respects ADR 0007 by keeping projection-table access encapsulated inside the Membership bounded context and exposing a Membership query API.\n  - Respects ADR 0008 by testing through persistent EventStore-backed domain paths.\n  - Respects ADR 0022 patterns by using strong consistency in tests before reading projected permission state.\n  - Scope is appropriately small and independently checkpointable; later authorization/grant/revoke work remains unchecked.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
@@ -15313,7 +15652,7 @@
           "graph.default_fidelity": "summary:high",
           "outcome": "succeeded",
           "last_stage": "implement_next_task",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.retry_count.implement_next_task": 0,
           "graph.rankdir": "LR",
           "internal.retry_count.all_tasks_done": 0,
@@ -15325,9 +15664,9 @@
           "failure_signature": "",
           "internal.retry_count.preflight_sandbox": 0,
           "thread.preflight_sandbox.current_node": "resume_gate",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.node_visit_count": 8,
-          "command.output": "blob://sha256/c63c42c19b87414bf4c32a4a2a8bf5ae3bdef405e09655d1c3aa840d15f682d2",
+          "command.output": "blob://sha256/70a79e1aedd2ba676bb0b7207e86c17bbc1c46ffa8653ca6c534935ae643cb62",
           "internal.retry_count.sync_task_list": 0,
           "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
           "task_list_complete": false,
@@ -15405,15 +15744,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/4419b5af6611145dc4cd3ed9bdbbed631b71e31cfb6e73c1f11f7337e414e03e"
+              "command.output": "blob://sha256/70a79e1aedd2ba676bb0b7207e86c17bbc1c46ffa8653ca6c534935ae643cb62"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 311,
-              "active_time_ms": 311
+              "tool_time_ms": 307,
+              "active_time_ms": 307
             }
           },
           "start": {
@@ -15556,7 +15895,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "wip_gate": 1,
           "validate_task": 7,
@@ -15565,7 +15904,7 @@
           "all_tasks_done": 8,
           "sync_task_list": 8,
           "implement_next_task": 8,
-          "pre_validate_snapshot": 7,
+          "pre_validate_snapshot": 8,
           "task_gate": 7,
           "resume_gate": 1,
           "read_plan": 1
@@ -20028,7 +20367,12 @@
       "first_event_seq": 2722,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-07T23:07:39.610697711Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -20042,13 +20386,20 @@
       "output": null,
       "started_at": "2026-06-07T22:59:42.962531810Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 476647,
+        "inference_time_ms": 403940,
+        "tool_time_ms": 72123,
+        "active_time_ms": 476063
+      },
       "usage": {
-        "input_tokens": 1093542,
-        "output_tokens": 7965,
-        "total_tokens": 4011710,
+        "input_tokens": 1094492,
+        "output_tokens": 8557,
+        "total_tokens": 4129988,
         "reasoning_tokens": 6139,
-        "cache_read_tokens": 2904064,
-        "cache_write_tokens": 0
+        "cache_read_tokens": 3020800,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 7423740
       },
       "model": {
         "provider": "openai",
@@ -20223,22 +20574,22 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 117574,
-        "usage_percent": 43.22573529411765,
+        "input_tokens": 117686,
+        "usage_percent": 43.26691176470588,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-07T23:07:24.518909371Z",
-        "event_seq": 2951,
+        "generated_at": "2026-06-07T23:07:39.604315516Z",
+        "event_seq": 2957,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1009,
-            "usage_percent": 0.3709558823529412
+            "tokens": 1007,
+            "usage_percent": 0.37022058823529413
           },
           {
             "category": "tools",
-            "tokens": 1440,
-            "usage_percent": 0.5294117647058824
+            "tokens": 1437,
+            "usage_percent": 0.5283088235294118
           },
           {
             "category": "memory",
@@ -20247,16 +20598,44 @@
           },
           {
             "category": "conversation",
-            "tokens": 114761,
-            "usage_percent": 42.19154411764706
+            "tokens": 114879,
+            "usage_percent": 42.234926470588235
           },
           {
             "category": "other",
-            "tokens": 7,
-            "usage_percent": 0.002573529411764706
+            "tokens": 6,
+            "usage_percent": 0.0022058823529411764
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@8": {
+      "first_event_seq": 2965,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/027-membership-administrator-role/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-07T23:07:43.018661225Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "running"
     },
