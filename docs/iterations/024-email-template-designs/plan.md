@@ -1,7 +1,7 @@
 # Transactional email template redesign
 
 Date: 2026-06-06
-Status: merged
+Status: ready-for-review
 
 ## Goal
 
