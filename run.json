@@ -1362,7 +1362,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-06T23:43:29.719119801Z",
-  "last_event_at": "2026-06-07T00:51:38.743064517Z",
+  "last_event_at": "2026-06-07T00:52:03.090704618Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -14112,8 +14112,8 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-07T00:52:01.495661673Z",
-        "current_node": "validate_task",
+        "timestamp": "2026-06-07T00:52:04.890724228Z",
+        "current_node": "task_gate",
         "completed_nodes": [
           "start",
           "read_plan",
@@ -14159,7 +14159,8 @@
           "all_tasks_done",
           "implement_next_task",
           "pre_validate_snapshot",
-          "validate_task"
+          "validate_task",
+          "task_gate"
         ],
         "node_retries": {},
         "context_values": {
@@ -14199,7 +14200,7 @@
           "failure_signature": "",
           "internal.retry_count.reset_task_attempt": 0,
           "task_list_complete": false,
-          "current_node": "validate_task",
+          "current_node": "task_gate",
           "internal.work_dir": "/workspace/memba",
           "internal.retry_count.all_tasks_done": 0,
           "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree has no tracked diff; only untracked `.fabro/tmp/`.\n  - Latest checkpoint `a6aae2d` is pre-validation and contains no file changes.\n  - Recent implementation checkpoint `8fe5881` changed exactly one ordinary todo line in `docs/iterations/024-email-template-designs/todo.md`:\n    - `007 Update member-message delivery HTML...`\n    - from `- [ ]` to `- [x]`.\n  - The parent todo state had `001`–`006` checked and `007` as the first unchecked task.\n\n- Implementation artifacts found:\n  - Added shared renderer `web/lib/memba/messaging/member_message_email.ex`.\n  - Updated both providers to use the shared renderer:\n    - `web/lib/memba/messaging/email_delivery_providers/postmark.ex`\n    - `web/lib/memba/messaging/email_delivery_providers/local.ex`\n  - Preserved member-message `text_body(request.body)` exactly in both providers.\n  - Added `club_name` to `EmailDeliveryRequest` and populated it from `Membership.get_club/1` for club messages.\n  - Renderer provides group-led header, sender-to-members line, escaped plaintext-to-HTML body, reply guidance, Memba footer, and sanitized header values.\n\n- Tests run/results found:\n  - Implementation checkpoint updated focused tests for Postmark, local delivery, send-club-message request context, and webhook metadata HTML expectations.\n  - Reran focused tests live:\n    - `devenv shell -- bin/mix test test/memba/messaging/email_delivery_providers/postmark_test.exs test/memba/messaging/email_delivery_providers/local_test.exs test/memba/messaging/send_club_message_test.exs test/memba_web/controllers/postmark_webhook_controller_test.exs`\n    - Result: `20 tests, 0 failures`.\n  - `git diff --check 8fe5881^..8fe5881` and current `git diff --check` both passed.\n\n- ADR/plan conformance notes:\n  - No `docs/adr/*.md` files are present.\n  - No acceptance feature files were changed.\n  - Work stays within task 007 and the approved plan: provider rendering aligned through a shared module, member-message text bodies remain sender-authored, and relevant escaping/header-sanitization coverage was added.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
@@ -14207,7 +14208,7 @@
           "thread.validate_task.current_node": "task_gate",
           "thread.resume_gate.current_node": "sync_task_list",
           "internal.retry_count.task_gate": 0,
-          "internal.thread_id": "pre_validate_snapshot",
+          "internal.thread_id": "validate_task",
           "outcome": "succeeded",
           "task_list_needs_human": false,
           "response.implement_next_task": "1. **Selected todo line**\n   - `007 Update member-message delivery HTML in web/lib/memba/messaging/email_delivery_providers/postmark.ex and web/lib/memba/messaging/email_delivery_providers/local.ex, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.`\n\n2. **Changes made**\n   - Added shared renderer: `web/lib/memba/messaging/member_message_email.ex`\n     - Renders the v2 member-message HTML pattern:\n       - group-led header;\n       - sender-to-members line;\n       - escaped plaintext message body converted to safe HTML;\n       - reply guidance;\n       - Memba carrier footer.\n     - Provides shared sanitized header helpers for From, Reply-To, To, and Subject.\n   - Updated Postmark and Local providers to use the shared renderer.\n   - Preserved member-message `text_body` exactly as `request.body`.\n   - Added optional `club_name` to `EmailDeliveryRequest`.\n   - Populated `club_name` from `Membership.get_club/1` when sending club messages.\n   - Updated focused tests for:\n     - Postmark provider HTML/text/metadata/header sanitization.\n     - Local provider HTML/text/metadata/local facts/header sanitization.\n     - `send_club_message` delivery requests carrying club name.\n     - Existing Postmark webhook metadata test expecting new HTML shape.\n\n3. **Validation commands run**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted ...`\n     - Passed.\n   - `PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 PATH=\"$PWD/bin:$PATH\" devenv shell -- bin/mix test test/memba/messaging/email_delivery_providers/postmark_test.exs test/memba/messaging/email_delivery_providers/local_test.exs test/memba/messaging/send_club_message_test.exs test/memba_web/controllers/postmark_webhook_controller_test.exs`\n     - Passed: `20 tests, 0 failures`.\n   - `PGHOST=/tmp/devenv-1d7df38/postgres PGPORT=15432 PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `580 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed:\n     - `- [ ] 007 Update member-message delivery HTML ...`\n   - To:\n     - `- [x] 007 Update member-message delivery HTML ...`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - No `docs/adr/*.md` files were present.\n   - Changes stay within the iteration plan:\n     - no provider configuration/DNS/sender-domain changes;\n     - member-message From/Reply-To semantics preserved;\n     - Postmark/local rendering now shared;\n     - text member-message bodies remain exactly sender-authored;\n     - dynamic sender/group/message content is escaped or header-sanitized."
@@ -14433,9 +14434,9 @@
             }
           }
         },
-        "next_node_id": "task_gate",
+        "next_node_id": "sync_task_list",
         "node_visits": {
-          "task_gate": 6,
+          "task_gate": 7,
           "preflight_sandbox": 1,
           "pre_validate_snapshot": 7,
           "all_tasks_done": 6,
@@ -17793,7 +17794,12 @@
       "first_event_seq": 2069,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: validate_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-07T00:52:01.493617422Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -17807,13 +17813,20 @@
       "output": null,
       "started_at": "2026-06-07T00:50:09.527811592Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 111965,
+        "inference_time_ms": 102979,
+        "tool_time_ms": 8240,
+        "active_time_ms": 111219
+      },
       "usage": {
-        "input_tokens": 195469,
-        "output_tokens": 1647,
-        "total_tokens": 573701,
-        "reasoning_tokens": 777,
+        "input_tokens": 250697,
+        "output_tokens": 2172,
+        "total_tokens": 629689,
+        "reasoning_tokens": 1012,
         "cache_read_tokens": 375808,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 1536909
       },
       "model": {
         "provider": "openai",
@@ -17952,32 +17965,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 55142,
-        "usage_percent": 20.27279411764706,
+        "input_tokens": 55228,
+        "usage_percent": 20.304411764705883,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-07T00:51:38.615418551Z",
-        "event_seq": 2150,
+        "generated_at": "2026-06-07T00:52:01.490599311Z",
+        "event_seq": 2154,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1173,
-            "usage_percent": 0.43125
+            "tokens": 1166,
+            "usage_percent": 0.42867647058823527
           },
           {
             "category": "tools",
-            "tokens": 1660,
-            "usage_percent": 0.6102941176470589
+            "tokens": 1650,
+            "usage_percent": 0.6066176470588235
           },
           {
             "category": "memory",
-            "tokens": 412,
-            "usage_percent": 0.1514705882352941
+            "tokens": 410,
+            "usage_percent": 0.15073529411764705
           },
           {
             "category": "conversation",
-            "tokens": 51890,
-            "usage_percent": 19.077205882352942
+            "tokens": 51995,
+            "usage_percent": 19.115808823529413
           },
           {
             "category": "other",
@@ -17987,7 +18000,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "task_gate@4": {
       "first_event_seq": 1181,
