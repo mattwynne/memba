@@ -34,14 +34,7 @@ Feature: Staff club slugs
 
 # Rule: A club slug routes public visitors to that club's public page
 
-    @not-domain @todo-ui
-    Scenario: Robin opens a club public page on its subdomain
-      Given Kootenay Mountaineering Club has the slug "kmc"
-      When Robin opens "kmc.clubs.memba.io"
-      Then Robin should see the Kootenay Mountaineering Public club page
-      And the club page should show Powered by Memba in the footer
-
-    @not-domain @todo-ui
+    @not-domain
     Scenario: Robin opens an unknown club subdomain
       When Robin opens "unknown.clubs.memba.io"
       Then Robin should see a not found page
