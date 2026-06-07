@@ -18,6 +18,7 @@ defmodule Memba.Membership.Club do
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
+  alias Memba.Membership.Roles
   alias Memba.Membership.Slug
 
   @behaviour Aggregate
@@ -37,7 +38,22 @@ defmodule Memba.Membership.Club do
     with :ok <- validate_club_id(command.club_id),
          {:ok, name} <- normalize_name(command.name),
          {:ok, slug} <- Slug.validate(command.slug) do
-      %ClubCreated{club_id: command.club_id, name: name, slug: slug}
+      membership_administrator_role_id = Roles.membership_administrator_role_id(command.club_id)
+
+      [
+        %ClubCreated{club_id: command.club_id, name: name, slug: slug},
+        %ClubRoleDefined{
+          club_id: command.club_id,
+          role_id: membership_administrator_role_id,
+          role_key: Roles.membership_administrator_key(),
+          name: Roles.membership_administrator_name()
+        },
+        %ClubRolePermissionGranted{
+          club_id: command.club_id,
+          role_id: membership_administrator_role_id,
+          permission: Permissions.club_manage_members()
+        }
+      ]
     end
   end
 

@@ -21,6 +21,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
 
   test "Membership app dispatch routes CreateClub to the Club aggregate" do
     club_id = Memba.ID.generate(:club)
+    role_id = Roles.membership_administrator_role_id(club_id)
 
     command = %CreateClub{
       club_id: club_id,
@@ -31,27 +32,46 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 1,
+              aggregate_version: 3,
               events: [
                 %ClubCreated{
                   club_id: ^club_id,
                   name: "Kootenay Mountaineering Club",
                   slug: "kmc"
+                },
+                %ClubRoleDefined{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  role_key: "membership_administrator",
+                  name: "Membership Administrator"
+                },
+                %ClubRolePermissionGranted{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  permission: "club.manage_members"
                 }
               ],
               aggregate_state: %Club{
                 club_id: ^club_id,
                 name: "Kootenay Mountaineering Club",
-                slug: "kmc"
+                slug: "kmc",
+                roles: %{^role_id => %{role_key: "membership_administrator"}},
+                role_permissions: %{^role_id => default_role_permissions}
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
+
+    assert MapSet.member?(default_role_permissions, Permissions.club_manage_members())
 
     assert %Club{
              club_id: ^club_id,
              name: "Kootenay Mountaineering Club",
-             slug: "kmc"
+             slug: "kmc",
+             roles: %{^role_id => %{role_key: "membership_administrator"}},
+             role_permissions: %{^role_id => persisted_role_permissions}
            } =
              App.aggregate_state(Club, club_id)
+
+    assert MapSet.member?(persisted_role_permissions, Permissions.club_manage_members())
   end
 
   test "Membership app rejects a duplicate CreateClub for the same aggregate identity" do
@@ -87,7 +107,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 2,
+              aggregate_version: 4,
               events: [
                 %ClubUpdated{
                   club_id: ^club_id,
@@ -105,7 +125,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
 
   test "Membership app dispatch routes role and permission commands to the Club aggregate" do
     club_id = Memba.ID.generate(:club)
-    role_id = Roles.membership_administrator_role_id(club_id)
+    role_id = Memba.ID.generate(:role)
     membership_id = Memba.ID.generate(:membership)
     person_id = Memba.ID.generate(:person)
 
@@ -122,13 +142,13 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 2,
+              aggregate_version: 4,
               events: [
                 %ClubRoleDefined{
                   club_id: ^club_id,
                   role_id: ^role_id,
-                  role_key: "membership_administrator",
-                  name: "Membership Administrator"
+                  role_key: "custom_membership_manager",
+                  name: "Custom Membership Manager"
                 }
               ]
             }} =
@@ -136,8 +156,8 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                %DefineClubRole{
                  club_id: club_id,
                  role_id: role_id,
-                 role_key: Roles.membership_administrator_key(),
-                 name: Roles.membership_administrator_name()
+                 role_key: "custom_membership_manager",
+                 name: "Custom Membership Manager"
                },
                returning: :execution_result,
                consistency: :strong
@@ -146,7 +166,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 3,
+              aggregate_version: 5,
               events: [
                 %ClubRolePermissionGranted{
                   club_id: ^club_id,
@@ -168,7 +188,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 4,
+              aggregate_version: 6,
               events: [
                 %MemberRoleAssigned{
                   club_id: ^club_id,
@@ -192,7 +212,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
     assert {:ok,
             %ExecutionResult{
               aggregate_uuid: ^club_id,
-              aggregate_version: 5,
+              aggregate_version: 7,
               events: [
                 %MemberRoleRemoved{
                   club_id: ^club_id,
@@ -203,7 +223,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
               ],
               aggregate_state: %Club{
                 club_id: ^club_id,
-                roles: %{^role_id => %{role_key: "membership_administrator"}},
+                roles: %{^role_id => %{role_key: "custom_membership_manager"}},
                 role_assignments: %{}
               }
             }} =

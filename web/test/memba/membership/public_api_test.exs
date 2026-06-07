@@ -4,16 +4,20 @@ defmodule Memba.Membership.PublicApiTest do
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubRoleDefined
+  alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Roles
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
 
   test "create_club/2 dispatches CreateClub through the Membership context" do
     club_id = Memba.ID.generate(:club)
+    role_id = Roles.membership_administrator_role_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -23,6 +27,17 @@ defmodule Memba.Membership.PublicApiTest do
                   club_id: ^club_id,
                   name: "Kootenay Mountaineering Club",
                   slug: "kootenay-mountaineering-club"
+                },
+                %ClubRoleDefined{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  role_key: "membership_administrator",
+                  name: "Membership Administrator"
+                },
+                %ClubRolePermissionGranted{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  permission: "club.manage_members"
                 }
               ]
             }} =
@@ -38,6 +53,7 @@ defmodule Memba.Membership.PublicApiTest do
 
   test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
     club_id = Memba.ID.generate(:club)
+    role_id = Roles.membership_administrator_role_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -47,6 +63,17 @@ defmodule Memba.Membership.PublicApiTest do
                   club_id: ^club_id,
                   name: "Kootenay Mountaineering Club",
                   slug: "kmc"
+                },
+                %ClubRoleDefined{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  role_key: "membership_administrator",
+                  name: "Membership Administrator"
+                },
+                %ClubRolePermissionGranted{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  permission: "club.manage_members"
                 }
               ]
             }} =

@@ -18,8 +18,9 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Roles
 
   describe "execute/2 CreateClub" do
-    test "emits ClubCreated using the caller-supplied UUID identity" do
+    test "emits ClubCreated and initializes the default Membership Administrator bundle" do
       club_id = Memba.ID.generate(:club)
+      role_id = Roles.membership_administrator_role_id(club_id)
 
       command = %CreateClub{
         club_id: club_id,
@@ -27,11 +28,24 @@ defmodule Memba.Membership.ClubTest do
         slug: "kmc"
       }
 
-      assert %ClubCreated{
-               club_id: ^club_id,
-               name: "Kootenay Mountaineering Club",
-               slug: "kmc"
-             } = Club.execute(%Club{}, command)
+      assert [
+               %ClubCreated{
+                 club_id: ^club_id,
+                 name: "Kootenay Mountaineering Club",
+                 slug: "kmc"
+               },
+               %ClubRoleDefined{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 role_key: "membership_administrator",
+                 name: "Membership Administrator"
+               },
+               %ClubRolePermissionGranted{
+                 club_id: ^club_id,
+                 role_id: ^role_id,
+                 permission: "club.manage_members"
+               }
+             ] = Club.execute(%Club{}, command)
     end
 
     test "rejects missing or malformed club UUIDs" do
