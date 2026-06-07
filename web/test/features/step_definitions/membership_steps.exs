@@ -74,6 +74,8 @@ defmodule Memba.Cucumber.MembershipSteps do
     Enum.reduce(names, context, &create_person(&2, &1))
   end
 
+  defp scenario_slug(_context, "Kootenay Mountaineering Club"), do: "kmc"
+
   defp scenario_slug(context, club_name) do
     suffix = scenario_slug_suffix(context)
 

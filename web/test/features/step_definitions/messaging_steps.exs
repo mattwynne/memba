@@ -14,6 +14,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   alias Memba.Messaging.EmailDeliveryProviders.Fake
   alias Memba.Messaging.EmailDeliveryProviders.Unavailable
   alias Memba.Messaging.EmailDeliveryRequest
+  alias Memba.Messaging.MemberMessageEmail
   alias Memba.Messaging.Projections.EmailDelivery
 
   step "{word} sends the message {string} to Kootenay Mountaineering Club members",
@@ -42,6 +43,12 @@ defmodule Memba.Cucumber.MessagingSteps do
     try_send_message_to_kootenay_members(context, sender_name, subject)
   end
 
+  step "Alice tries to send a message to Kootenay Mountaineering Club members with subject {string} and no body",
+       %{args: [subject]} = context do
+    Fake.reset()
+    try_send_message_to_kootenay_members(context, "Alice", subject, "")
+  end
+
   step "{word} should be told the message was not sent", %{args: [_viewer_name]} = context do
     assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
 
@@ -50,6 +57,12 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   step "{word} should be told to contact support", %{args: [_viewer_name]} = context do
     assert {:error, :unavailable} = Map.fetch!(context, :failed_send_result)
+
+    context
+  end
+
+  step "{word} should be told the message body cannot be blank", context do
+    assert {:error, :invalid_body} = Map.fetch!(context, :failed_send_result)
 
     context
   end
@@ -241,26 +254,36 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step "each delivery should be sent through the email provider", context do
-    deliveries = deliveries_for_last_message!(context)
+    assert_each_delivery_sent_through_provider(context)
+  end
+
+  step "each addressed member should receive an email from Alice via Memba", context do
+    assert_each_delivery_sent_through_provider(context, sender_name: "Alice")
+  end
+
+  step "each addressed member should receive an email with the subject {string}",
+       %{args: [expected_subject]} = context do
     provider_deliveries = Fake.deliveries()
-    expected_delivery_ids = Enum.map(deliveries, & &1.delivery_id)
 
-    assert length(provider_deliveries) == length(deliveries)
-    assert Enum.map(provider_deliveries, & &1.delivery_id) == expected_delivery_ids
-    assert_unique(Enum.map(provider_deliveries, & &1.delivery_id))
+    assert length(provider_deliveries) == length(deliveries_for_last_message!(context))
 
-    Enum.zip(deliveries, provider_deliveries)
-    |> Enum.each(fn {%EmailDelivery{} = delivery, %EmailDeliveryRequest{} = request} ->
-      assert request.message_id == delivery.message_id
-      assert request.club_id == context.sent_message.club_id
-      assert request.delivery_id == delivery.delivery_id
-      assert request.recipient_id == delivery.recipient_id
-      assert request.recipient_name == delivery.recipient_name
-      assert request.recipient_address == delivery.recipient_address
-      assert request.channel == :email
-      assert request.subject == context.sent_message.subject
-      assert request.body == context.sent_message.body
+    Enum.each(provider_deliveries, fn %EmailDeliveryRequest{} = request ->
+      assert MemberMessageEmail.subject(request) == expected_subject
     end)
+
+    context
+  end
+
+  step "no club message named {string} should be created", %{args: [subject]} = context do
+    club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
+
+    refute Enum.any?(Messaging.list_messages_for_club(club_id), &(&1.subject == subject))
+
+    context
+  end
+
+  step "no addressed member should receive an email for {string}", %{args: [subject]} = context do
+    refute Enum.any?(Fake.deliveries(), &(&1.subject == subject))
 
     context
   end
@@ -303,11 +326,11 @@ defmodule Memba.Cucumber.MessagingSteps do
     })
   end
 
-  defp try_send_message_to_kootenay_members(context, sender_name, subject) do
+  defp try_send_message_to_kootenay_members(context, sender_name, subject, body \\ nil) do
     message_id = Memba.ID.generate(:message)
     club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
     sender_id = person_id_from_context!(context, sender_name)
-    body = "#{subject} details."
+    body = body || "#{subject} details."
 
     result =
       try do
@@ -336,6 +359,36 @@ defmodule Memba.Cucumber.MessagingSteps do
       subject: subject,
       body: body
     })
+  end
+
+  defp assert_each_delivery_sent_through_provider(context, opts \\ []) do
+    deliveries = deliveries_for_last_message!(context)
+    provider_deliveries = Fake.deliveries()
+    expected_delivery_ids = Enum.map(deliveries, & &1.delivery_id)
+
+    assert length(provider_deliveries) == length(deliveries)
+    assert Enum.map(provider_deliveries, & &1.delivery_id) == expected_delivery_ids
+    assert_unique(Enum.map(provider_deliveries, & &1.delivery_id))
+
+    Enum.zip(deliveries, provider_deliveries)
+    |> Enum.each(fn {%EmailDelivery{} = delivery, %EmailDeliveryRequest{} = request} ->
+      assert request.message_id == delivery.message_id
+      assert request.club_id == context.sent_message.club_id
+      assert request.delivery_id == delivery.delivery_id
+      assert request.recipient_id == delivery.recipient_id
+      assert request.recipient_name == delivery.recipient_name
+      assert request.recipient_address == delivery.recipient_address
+      assert request.channel == :email
+      assert request.subject == context.sent_message.subject
+      assert request.body == context.sent_message.body
+
+      if sender_name = Keyword.get(opts, :sender_name) do
+        assert request.sender_name == sender_name
+        assert request.sender_address == primary_email_for(context, sender_name)
+      end
+    end)
+
+    context
   end
 
   defp report_email_delivery_status(context, recipient_name, subject, status, reason \\ nil) do
@@ -472,6 +525,12 @@ defmodule Memba.Cucumber.MessagingSteps do
       %{person_id: person_id} -> person_id
       person_id when is_binary(person_id) -> person_id
     end
+  end
+
+  defp primary_email_for(context, person_name) do
+    context
+    |> person_id_from_context!(person_name)
+    |> Membership.get_person_primary_email()
   end
 
   defp fetch_from_context!(context, collection_key, item_key) do

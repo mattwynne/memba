@@ -12,7 +12,6 @@ Feature: Member message deliverability
 
 # Rule: Any member can send a message to every active member of their club
 
-    @todo-domain
     Scenario: Alice sends a club message
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then Alice should see the message "Trip planning night" in Kootenay Mountaineering Club
@@ -23,7 +22,6 @@ Feature: Member message deliverability
 
 # Rule: Club-message emails identify the club in the subject
 
-    @todo-domain
     Scenario: Alice's club-message email subject includes the club slug
       When Alice sends the message "Trip planning night" to Kootenay Mountaineering Club members
       Then each addressed member should receive an email with the subject "[kmc] Trip planning night"
@@ -58,7 +56,6 @@ Feature: Member message deliverability
       Then Alice should be told the message was not sent
       And Alice should be told to contact support
 
-    @todo-domain
     Scenario: Alice leaves the message body blank
       When Alice tries to send a message to Kootenay Mountaineering Club members with subject "Trip planning night" and no body
       Then Alice should be told the message body cannot be blank
