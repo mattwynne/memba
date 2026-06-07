@@ -56,3 +56,24 @@ Iteration planning is supposed to produce implementation-ready work. If validati
 - Make `bin/dev fabro validate-plan <plan_path>` a normal required planning step before the delivery handoff.
 - Move the existing `NOT READY` response loop into the main workflow rather than the optional early-validation branch.
 - Update the terminal state and process-flow diagram so a plan cannot be called ready until validation feedback has been handled or validation is explicitly unavailable with a recorded reason.
+
+## Resolution
+
+Date: 2026-06-06
+
+Root cause: `.pi/skills/iteration-planning/SKILL.md` treated plan validation as an optional, Matt-triggered branch. The handoff contract allowed the planning skill to stop after publishing artifacts and before receiving validator feedback, even though the skill already knew the validation command and feedback loop.
+
+Fix applied:
+
+- `.pi/skills/iteration-planning/SKILL.md`: made published plan validation a required checklist step before delivery handoff, changed the terminal state to require plan-validated artifacts or an explicit validation blocker, and updated the process-flow diagram to loop through validation feedback and plan revision.
+- `.pi/skills/iteration-planning/SKILL.md`: moved the `NOT READY` response loop into the normal handoff workflow, requiring the planning skill to revise, commit, push, and re-run validation until the plan is ready or validation is externally blocked.
+- `.pi/skills/iteration-planning/SKILL.md`: updated the final reporting checklist to include the validation command and result.
+
+Validation:
+
+- Reviewed `.pi/skills/iteration-planning/SKILL.md` for remaining optional/early-validation language with `rg` and confirmed the normal path now requires `bin/dev fabro validate-plan <plan_path>` before handoff.
+- No `dev check` run: this was a prompt/skill documentation change only, with no application code, executable script, acceptance-test, config, or migration change.
+
+Remaining follow-up:
+
+- None known.

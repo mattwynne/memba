@@ -10,7 +10,7 @@ description: Interview Matt about the next product/dev iteration, turn the discu
 Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Interview him through natural collaborative dialogue, write the plan down, publish it, and tell Matt how to launch the user-controlled Fabro delivery command.
 
 <HARD-GATE>
-Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is either committed and pushed planning artifacts with the exact `bin/dev fabro deliver <plan_path>` command for Matt to run, a revised plan after optional validation feedback, or a clear explanation of why publishing was blocked.
+Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is either committed, pushed, and plan-validated planning artifacts with the exact `bin/dev fabro deliver <plan_path>` command for Matt to run; a revised plan after validation feedback; or a clear explanation of why publishing or validation was blocked.
 </HARD-GATE>
 
 ## Checklist
@@ -24,11 +24,15 @@ Create a task for each item and complete them in order:
 5. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. Present the related problems and planned status changes alongside the draft plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
 6. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include a `Related Problems` section, an `Iteration Type` section, and an `Acceptance Scenarios / Feature Files` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. If feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
 7. **Publish planning artifacts** — before committing, verify the checkout is not left red by planning-only acceptance changes; run `dev check` when practical, or at least the targeted test/configuration checks that would discover the changed feature files. If a planning feature is expected to fail until implementation, confirm it is tagged `@wip` and excluded by the relevant test command/configuration. Then commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
-8. **Hand off delivery** — do not launch delivery automatically. Report the exact command Matt should run:
+8. **Validate the published plan** — after the planning artifacts are committed and pushed, run:
+   ```bash
+   bin/dev fabro validate-plan <plan_path>
+   ```
+   Use the validation feedback to revise the plan when needed. If validation reports `NOT READY`, summarize the blocking gaps, ask Matt one question at a time to resolve them, edit the plan, commit and push the revision, and re-run validation. Do not call the plan ready until validation passes or validation is blocked/unavailable with the exact reason recorded.
+9. **Hand off delivery** — do not launch delivery automatically. After validation passes, report the exact command Matt should run:
    ```bash
    bin/dev fabro deliver <plan_path>
    ```
-   If Matt explicitly asks for early plan validation before delivery, run `bin/dev fabro validate-plan <plan_path>` and use its feedback to revise the plan if needed.
 
 ## Process Flow
 
@@ -42,6 +46,9 @@ digraph iteration_planning {
     "Matt approves draft?" [shape=diamond];
     "Write plan file" [shape=box];
     "Commit planning artifacts" [shape=box];
+    "Validate published plan" [shape=box];
+    "Plan validation ready?" [shape=diamond];
+    "Revise plan from feedback" [shape=box];
     "Hand off delivery command" [shape=box];
     "Stop: delivery handed off" [shape=doublecircle];
 
@@ -53,7 +60,11 @@ digraph iteration_planning {
     "Matt approves draft?" -> "Interview Matt" [label="no / unclear"];
     "Matt approves draft?" -> "Write plan file" [label="yes"];
     "Write plan file" -> "Commit planning artifacts";
-    "Commit planning artifacts" -> "Hand off delivery command";
+    "Commit planning artifacts" -> "Validate published plan";
+    "Validate published plan" -> "Plan validation ready?";
+    "Plan validation ready?" -> "Revise plan from feedback" [label="no / unclear"];
+    "Revise plan from feedback" -> "Commit planning artifacts";
+    "Plan validation ready?" -> "Hand off delivery command" [label="yes"];
     "Hand off delivery command" -> "Stop: delivery handed off";
 }
 ```
@@ -203,32 +214,35 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
 - Do not update Fabro workflow code or problem-note status files during ordinary iteration planning. The relevant problems belong in the plan's `## Related Problems` section. Only edit `docs/problems/*.md` or `docs/problems/README.md` if Matt explicitly asks for problem-note maintenance as part of the planning task.
 - Example: `docs/iterations/001-member-import/plan.md`.
-- Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or explicitly marked `@wip` and excluded from the planning-time checks.
+- Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or explicitly marked `@wip` and excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>` and use the feedback to revise the plan before handoff.
 - Include workflow/skill changes in that commit only when they are needed for planning or validation.
 - Do not commit or push unrelated changes or implementation work.
 
 ## Handing Off to Fabro
 
-After committing and pushing the planning artifacts, do not wrap delivery in another skill or workflow. Give Matt the exact user-controlled command:
-
-```bash
-bin/dev fabro deliver docs/iterations/NNN-topic/plan.md
-```
-
-This command validates the plan, reserves the implementation WIP slot, runs implementation, and runs review from the CLI with `--auto-approve` at the user-run boundary. The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files.
-
-To validate a plan without starting implementation, even while another iteration is active, Matt may ask for early validation. In that case run:
+After committing and pushing the planning artifacts, run plan validation before handoff:
 
 ```bash
 bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
 ```
+
+The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files. Do not tell Matt to launch delivery until validation has passed or validation is unavailable and the blocking reason has been reported.
 
 If validation reports NOT READY:
 
 1. Summarize the blocking gaps.
 2. Ask Matt one question at a time to resolve them.
 3. Edit, commit, and push the plan.
-4. Re-run `bin/dev fabro validate-plan <plan_path>` only if Matt still wants early validation; otherwise hand off `bin/dev fabro deliver <plan_path>`.
+4. Re-run `bin/dev fabro validate-plan <plan_path>`.
+5. Repeat until validation reports ready or validation is blocked by an unavailable local Fabro service or another explicit external blocker.
+
+After validation passes, do not wrap delivery in another skill or workflow. Give Matt the exact user-controlled command:
+
+```bash
+bin/dev fabro deliver docs/iterations/NNN-topic/plan.md
+```
+
+This command reserves the implementation WIP slot, runs implementation, and runs review from the CLI with `--auto-approve` at the user-run boundary.
 
 If the local Fabro server is unavailable or the command fails before creating a run:
 
@@ -240,9 +254,10 @@ When planning is complete, report:
 
 1. Plan path.
 2. Commit SHA pushed.
-3. Related problems named in the plan, including any that remain unresolved or partially addressed.
-4. Any acceptance feature files changed and whether they are `@wip`.
-5. Exact delivery command: `bin/dev fabro deliver <plan_path>`.
+3. Plan validation command and result.
+4. Related problems named in the plan, including any that remain unresolved or partially addressed.
+5. Any acceptance feature files changed and whether they are `@wip`.
+6. Exact delivery command: `bin/dev fabro deliver <plan_path>`.
 
 ## Key Principles
 
