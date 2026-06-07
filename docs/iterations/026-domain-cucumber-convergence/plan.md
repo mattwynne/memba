@@ -1,7 +1,7 @@
 # Domain Cucumber convergence
 
 Date: 2026-06-07
-Status: ready
+Status: merged
 
 ## Goal
 
