@@ -4,6 +4,8 @@
 
 Observed: 2026-06-04
 
+Status: Resolved in the codebase by the member dashboard LiveView refresh on messaging read-model changes. I did not find a dedicated iteration plan for this fix; it appears to share the same read-model change PubSub follow-up as the delivery-status-live fix.
+
 When new messages arrive, the message list does not dynamically update.
 
 Expected:

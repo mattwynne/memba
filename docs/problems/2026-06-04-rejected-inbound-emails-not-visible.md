@@ -4,6 +4,8 @@
 
 Observed: 2026-06-04
 
+Status: Unresolved. [Iteration 019](../iterations/019-inbound-club-messages-by-email/plan.md) records accepted/rejected inbound email outcomes in a read model, but [iteration 021 follow-ups](../iterations/021-staff-area-redesign/follow-ups.md) still list an incoming/rejected inbound inbox as future work.
+
 When an inbound club email is rejected, Memba records the rejection outcome, including the sender, recipient address, provider message ID, and rejection reason. Staff or club moderators do not currently have a UI where they can see these rejected inbound emails.
 
 Expected:

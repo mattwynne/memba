@@ -4,6 +4,8 @@
 
 Observed: 2026-06-06
 
+Status: Unresolved. [Iteration 018](../iterations/018-member-club-subdomains/plan.md) delivered Memba-hosted club subdomains, but club-owned custom hostnames, DNS verification, HTTPS provisioning, and custom-host session behaviour remain future work.
+
 Kootenay Mountaineering Club would like members to use a club-owned address such as `members.kootenaymountaineeringclub.ca` for its Memba site, rather than only a Memba-hosted address such as `kmc.clubs.memba.io`.
 
 This should be explored as a product capability, with KMC as the first real user, not as a KMC-specific customization.

@@ -17,13 +17,14 @@ Do NOT implement the iteration directly in the local checkout. Do NOT edit appli
 
 Create a task for each item and complete them in order:
 
-1. **Explore project context** — read relevant project docs, current plans, ADRs, recent commits, and code only as needed to understand the iteration.
-2. **Interview Matt** — ask clarifying questions one at a time about goal, scope, acceptance criteria, business decisions, implementation shape, and validation.
-3. **Size and slice** — decide whether the work is one shippable slice or several. If it is more than one, split it into separate iteration plans before going further (see Sizing and Slicing).
-4. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
-5. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include an `Iteration Type` section and an `Acceptance Scenarios / Feature Files` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. If feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
-6. **Publish planning artifacts** — before committing, verify the checkout is not left red by planning-only acceptance changes; run `dev check` when practical, or at least the targeted test/configuration checks that would discover the changed feature files. If a planning feature is expected to fail until implementation, confirm it is tagged `@wip` and excluded by the relevant test command/configuration. Then commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any workflow/skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
-7. **Hand off delivery** — do not launch delivery automatically. Report the exact command Matt should run:
+1. **Explore project context** — read relevant project docs, current plans, ADRs, recent commits, code only as needed to understand the iteration, and `docs/problems/README.md` plus relevant `docs/problems/*.md` notes.
+2. **Identify relevant problems** — decide which captured problems the iteration might resolve, partially address, depend on, or deliberately leave unresolved. Bring those problems into brainstorming and slicing rather than treating the iteration as a standalone idea.
+3. **Interview Matt** — ask clarifying questions one at a time about goal, relevant problems, scope, acceptance criteria, business decisions, implementation shape, and validation.
+4. **Size and slice** — decide whether the work is one shippable slice or several. If it is more than one, split it into separate iteration plans before going further (see Sizing and Slicing). Use the related problem notes to avoid bundling several unrelated problems into one iteration.
+5. **Present draft plan sections and feature scenarios** — get Matt's approval or corrections before writing the final plan. Present the related problems and planned status changes alongside the draft plan. For every behaviour-facing iteration, present the BDD decision explicitly: either the acceptance feature files/scenarios to draft or update, or the reason Gherkin would not add useful stakeholder-readable examples for this slice. If acceptance feature files/scenarios are drafted or changed, explicitly invite Matt to review them as domain language before calling the plan done.
+6. **Write the iteration plan** — create an iteration folder at `docs/iterations/<iteration-number>-<topic>/` and save the plan as `plan.md` inside it. Add supporting planning artifacts there too, such as a manual demo/test script when useful. Include a `Related Problems` section, an `Iteration Type` section, and an `Acceptance Scenarios / Feature Files` section. Draft or update acceptance feature files/scenarios when they clarify the domain behaviour for the iteration; for behaviour-facing iterations, do not leave this section silent. If no Gherkin changes are useful, state the rationale. If feature changes are intentionally ahead of implementation and may fail today, mark the affected new/changed scenarios (or the whole feature) with `@wip` before publishing them. Maintain `docs/iterations/README.md` as an index.
+7. **Publish planning artifacts** — before committing, verify the checkout is not left red by planning-only acceptance changes; run `dev check` when practical, or at least the targeted test/configuration checks that would discover the changed feature files. If a planning feature is expected to fail until implementation, confirm it is tagged `@wip` and excluded by the relevant test command/configuration. Then commit and push the plan, iteration index, supporting planning artifacts, acceptance feature files, and any skill changes needed for validation before running Fabro, so Fabro's clone-based remote sandbox can see them. Do not commit or push unrelated changes.
+8. **Hand off delivery** — do not launch delivery automatically. Report the exact command Matt should run:
    ```bash
    bin/dev fabro deliver <plan_path>
    ```
@@ -34,6 +35,7 @@ Create a task for each item and complete them in order:
 ```dot
 digraph iteration_planning {
     "Explore project context" [shape=box];
+    "Identify relevant problems" [shape=box];
     "Interview Matt" [shape=box];
     "Size and slice" [shape=box];
     "Present draft plan" [shape=box];
@@ -43,7 +45,8 @@ digraph iteration_planning {
     "Hand off delivery command" [shape=box];
     "Stop: delivery handed off" [shape=doublecircle];
 
-    "Explore project context" -> "Interview Matt";
+    "Explore project context" -> "Identify relevant problems";
+    "Identify relevant problems" -> "Interview Matt";
     "Interview Matt" -> "Size and slice";
     "Size and slice" -> "Present draft plan";
     "Present draft plan" -> "Matt approves draft?";
@@ -80,9 +83,12 @@ When deciding not to add or change feature files for a behaviour-facing iteratio
 
 Ask only one question per message. Prefer multiple choice when it lowers effort, but use open questions when needed. When asking a multiple-choice question, use the `question` tool rather than writing A/B/C/D options in prose. Use normal chat only for open-ended questions or when the tool cannot express the choice clearly.
 
+Before or during early brainstorming, inspect `docs/problems/README.md` and relevant `docs/problems/*.md` files. Use them to ask whether the iteration should resolve, partially address, or deliberately defer any captured problems. If Matt's idea resembles an unresolved or partially addressed problem, name that problem explicitly and ask how tightly the iteration should target it.
+
 Cover these topics:
 
 - **Goal** — what should be true after the iteration that is not true now?
+- **Related problems** — which `docs/problems` notes does this iteration address, partially address, depend on, or leave unresolved?
 - **Beneficiary** — who benefits: club admin, member, developer/operator, or another actor?
 - **Smallest useful slice** — is this one rule or one piece of engineering, or several? (see Sizing and Slicing)
 - **Scope boundaries** — what is explicitly out of scope?
@@ -138,6 +144,10 @@ Status: draft | ready | needs-revision
 
 ## Background / Context
 
+## Related Problems
+
+List relevant `docs/problems` notes. For each one, state whether this iteration is expected to resolve it, partially address it, depend on it, or leave it unresolved. If none are relevant, write `None known.`
+
 ## Scope
 
 ### In scope
@@ -177,6 +187,8 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 
 - Create `docs/iterations/` if it does not exist.
 - Maintain `docs/iterations/README.md` as the iteration index.
+- Read `docs/problems/README.md` if it exists, plus any relevant `docs/problems/*.md` notes. If the directory exists but no README exists, inspect the problem files directly.
+- Include a `## Related Problems` section in the plan. Link each relevant problem note and say whether the iteration should resolve it, partially address it, depend on it, or intentionally leave it unresolved. If there are no relevant captured problems, write `None known.`
 - Create one folder per iteration using the next sequential zero-padded iteration number and a lowercase hyphenated topic slug.
 - Determine the next number by inspecting existing `docs/iterations/NNN-*` folders; start at `001` if none exist.
 - Save the plan as `plan.md` inside that folder.
@@ -189,6 +201,7 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Before publishing, run `dev check` when practical. If it is too slow, run the targeted checks that discover/execute the changed acceptance feature files. If the check fails because a future-facing scenario is unimplemented, add or narrow `@wip` tags rather than editing step definitions or app code. If the project does not currently exclude `@wip`, stop and report that the planning change would make the build red instead of committing it.
 - Do not implement step definitions, fixtures, app code, migrations, UI, or test adapters during planning.
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
+- Do not update Fabro workflow code or problem-note status files during ordinary iteration planning. The relevant problems belong in the plan's `## Related Problems` section. Only edit `docs/problems/*.md` or `docs/problems/README.md` if Matt explicitly asks for problem-note maintenance as part of the planning task.
 - Example: `docs/iterations/001-member-import/plan.md`.
 - Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or explicitly marked `@wip` and excluded from the planning-time checks.
 - Include workflow/skill changes in that commit only when they are needed for planning or validation.
@@ -227,8 +240,9 @@ When planning is complete, report:
 
 1. Plan path.
 2. Commit SHA pushed.
-3. Any acceptance feature files changed and whether they are `@wip`.
-4. Exact delivery command: `bin/dev fabro deliver <plan_path>`.
+3. Related problems named in the plan, including any that remain unresolved or partially addressed.
+4. Any acceptance feature files changed and whether they are `@wip`.
+5. Exact delivery command: `bin/dev fabro deliver <plan_path>`.
 
 ## Key Principles
 

@@ -4,6 +4,8 @@
 
 Observed: 2026-06-01
 
+Status: Unresolved. [Iteration 016: Multiple email addresses per person](../iterations/016-person-email-addresses/plan.md) added known primary/alternate email addresses, but explicitly left email verification workflow out of scope.
+
 When staff adds a person, Memba has not verified that the email address belongs to that person.
 
 Why it matters:

@@ -4,6 +4,8 @@
 
 Observed: 2026-06-02
 
+Status: Resolved by [iteration 019: Inbound club messages by email](../iterations/019-inbound-club-messages-by-email/plan.md). Iteration 020 added the Postmark production-migration path for the same inbound behaviour.
+
 Members can read club messages and receive club-message email, but they cannot create a new club message by sending an email into Memba.
 
 Expected:

@@ -4,6 +4,8 @@
 
 Observed: 2026-06-05
 
+Status: Unresolved. [Iteration 022](../iterations/022-request-to-club-onboarding/plan.md) added staff-approved request onboarding and staff request review screens, but the current `Memba.Onboarding.NewRequestEmail` still sends only request details and no direct browser action link.
+
 The staff notification email for a new onboarding request does not include a link to open the request in a browser. Staff must navigate to the requests area themselves before they can review the request.
 
 Expected:

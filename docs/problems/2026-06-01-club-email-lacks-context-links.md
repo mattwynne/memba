@@ -4,6 +4,8 @@
 
 Observed: 2026-06-01
 
+Status: In progress / partially addressed by [iteration 024: Transactional email template redesign](../iterations/024-email-template-designs/plan.md). That plan covers group-led member-message email context, reply guidance, and a Memba-as-carrier footer, but it is still implementing and does not appear to cover all requested links or optional slugged subjects.
+
 When a member receives an email from a club, the message arrives without enough surrounding context to understand where it came from or what to do next.
 
 The email should be designed as a club communication, not just raw message content. It should include helpful context such as:
