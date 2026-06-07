@@ -127,7 +127,7 @@ defmodule Memba.Cucumber.MessagingSteps do
        %{args: [viewer_name, person_name]} = context do
     assert_active_member!(context, viewer_name, "Kootenay Mountaineering Club")
 
-    person_id = fetch_from_context!(context, :people, person_name)
+    person_id = person_id_from_context!(context, person_name)
     deliveries = deliveries_for_last_message!(context)
 
     refute person_name in Enum.map(deliveries, & &1.recipient_name)
@@ -215,7 +215,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   end
 
   step "the message should not be addressed to {word}", %{args: [person_name]} = context do
-    excluded_person_id = fetch_from_context!(context, :people, person_name)
+    excluded_person_id = person_id_from_context!(context, person_name)
     deliveries = deliveries_for_last_message!(context)
 
     refute person_name in Enum.map(deliveries, & &1.recipient_name)
@@ -268,7 +268,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp send_message_to_kootenay_members(context, sender_name, subject) do
     message_id = Memba.ID.generate(:message)
     club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
-    sender_id = fetch_from_context!(context, :people, sender_name)
+    sender_id = person_id_from_context!(context, sender_name)
     body = "#{subject} details."
 
     assert :ok =
@@ -306,7 +306,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp try_send_message_to_kootenay_members(context, sender_name, subject) do
     message_id = Memba.ID.generate(:message)
     club_id = fetch_from_context!(context, :clubs, "Kootenay Mountaineering Club")
-    sender_id = fetch_from_context!(context, :people, sender_name)
+    sender_id = person_id_from_context!(context, sender_name)
     body = "#{subject} details."
 
     result =
@@ -401,7 +401,7 @@ defmodule Memba.Cucumber.MessagingSteps do
     assert Enum.map(deliveries, & &1.recipient_name) == expected_names
 
     expected_recipient_ids =
-      Enum.map(expected_names, &fetch_from_context!(context, :people, &1))
+      Enum.map(expected_names, &person_id_from_context!(context, &1))
 
     assert Enum.map(deliveries, & &1.recipient_id) == expected_recipient_ids
 
@@ -413,7 +413,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp member_email_delivery_for!(context, recipient_name, subject) do
     recipient_name = normalize_person_name(recipient_name)
     message = fetch_from_context!(context, :messages, subject)
-    recipient_id = fetch_from_context!(context, :people, recipient_name)
+    recipient_id = person_id_from_context!(context, recipient_name)
 
     Messaging.get_member_email_delivery(message.message_id, recipient_id) ||
       flunk("Expected a member email delivery for #{recipient_name} and #{inspect(subject)}")
@@ -426,7 +426,7 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp memba_staff_email_delivery_for!(context, recipient_name, subject) do
     recipient_name = normalize_person_name(recipient_name)
     message = fetch_from_context!(context, :messages, subject)
-    recipient_id = fetch_from_context!(context, :people, recipient_name)
+    recipient_id = person_id_from_context!(context, recipient_name)
 
     Messaging.get_memba_staff_email_delivery(message.message_id, recipient_id) ||
       flunk("Expected Memba staff email delivery for #{recipient_name} and #{inspect(subject)}")
@@ -434,7 +434,7 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   defp delivery_for!(context, recipient_name, subject) do
     message = fetch_from_context!(context, :messages, subject)
-    recipient_id = fetch_from_context!(context, :people, recipient_name)
+    recipient_id = person_id_from_context!(context, recipient_name)
 
     message.message_id
     |> Messaging.list_recipient_deliveries()
@@ -456,7 +456,7 @@ defmodule Memba.Cucumber.MessagingSteps do
 
   defp assert_active_member!(context, person_name, club_name) do
     club_id = fetch_from_context!(context, :clubs, club_name)
-    person_id = fetch_from_context!(context, :people, normalize_person_name(person_name))
+    person_id = person_id_from_context!(context, normalize_person_name(person_name))
 
     assert Membership.active_member_of_club?(club_id, person_id)
   end
@@ -466,6 +466,13 @@ defmodule Memba.Cucumber.MessagingSteps do
   defp member_email_delivery_status_for_label("Delivery problem"), do: "delivery problem"
   defp member_email_delivery_status_for_label("Opened"), do: "opened"
   defp member_email_delivery_status_for_label(status), do: status
+
+  defp person_id_from_context!(context, person_name) do
+    case fetch_from_context!(context, :people, person_name) do
+      %{person_id: person_id} -> person_id
+      person_id when is_binary(person_id) -> person_id
+    end
+  end
 
   defp fetch_from_context!(context, collection_key, item_key) do
     context

@@ -3,7 +3,6 @@ Feature: Person email addresses
 
 # Rule: A known alternate email address can identify a member
 
-    @todo-domain
     Scenario: Alice signs in with her work email address
       Given Alice is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
@@ -16,9 +15,9 @@ Feature: Person email addresses
 
 # Rule: Club messages are sent to the primary email address only
 
-    @todo-domain
     Scenario: Alice receives a club message at her primary email address
       Given Alice is a member of Kootenay Mountaineering Club
+      And Bob is a member of Kootenay Mountaineering Club
       And Alice's primary email address is "alice@example.com"
       And Alice's alternate email address is "alice@work.example"
       When Bob sends the message "Trip planning night" to Kootenay Mountaineering Club members
@@ -27,14 +26,12 @@ Feature: Person email addresses
 
 # Rule: Staff manage a person's known email addresses
 
-    @todo-domain
     Scenario: Staff creates a person with primary and alternate email addresses
       Given Pat is signed in as Memba staff
       When Pat creates a person named Alice with primary email "alice@example.com" and alternate email "alice@work.example"
       Then Alice's primary email address should be "alice@example.com"
       And Alice's alternate email addresses should include "alice@work.example"
 
-    @todo-domain
     Scenario: Staff changes a person's primary email address
       Given Pat is signed in as Memba staff
       And Alice has primary email "alice@example.com" and alternate email "alice@work.example"

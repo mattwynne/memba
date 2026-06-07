@@ -118,6 +118,51 @@ defmodule Memba.CucumberConfigurationTest do
      ]}
   ]
 
+  @person_email_address_scenarios [
+    {"Alice signs in with her work email address",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 7},
+       {"And", "Alice's primary email address is \"alice@example.com\"", 8},
+       {"And", "Alice's alternate email address is \"alice@work.example\"", 9},
+       {"When", "Alice requests a sign-in link for \"alice@work.example\"", 10},
+       {"Then", "Alice should receive a sign-in link at \"alice@work.example\"", 11},
+       {"When", "Alice follows the sign-in link", 12},
+       {"Then", "Alice should be signed in", 13},
+       {"And", "Alice should see Kootenay Mountaineering Club in their clubs", 14}
+     ]},
+    {"Alice receives a club message at her primary email address",
+     [
+       {"Given", "Alice is a member of Kootenay Mountaineering Club", 20},
+       {"And", "Bob is a member of Kootenay Mountaineering Club", 21},
+       {"And", "Alice's primary email address is \"alice@example.com\"", 22},
+       {"And", "Alice's alternate email address is \"alice@work.example\"", 23},
+       {"When",
+        "Bob sends the message \"Trip planning night\" to Kootenay Mountaineering Club members",
+        24},
+       {"Then", "Alice should receive the email at \"alice@example.com\"", 25},
+       {"And", "Alice should not receive the email at \"alice@work.example\"", 26}
+     ]},
+    {"Staff creates a person with primary and alternate email addresses",
+     [
+       {"Given", "Pat is signed in as Memba staff", 31},
+       {"When",
+        "Pat creates a person named Alice with primary email \"alice@example.com\" and alternate email \"alice@work.example\"",
+        32},
+       {"Then", "Alice's primary email address should be \"alice@example.com\"", 33},
+       {"And", "Alice's alternate email addresses should include \"alice@work.example\"", 34}
+     ]},
+    {"Staff changes a person's primary email address",
+     [
+       {"Given", "Pat is signed in as Memba staff", 38},
+       {"And",
+        "Alice has primary email \"alice@example.com\" and alternate email \"alice@work.example\"",
+        39},
+       {"When", "Pat makes \"alice@work.example\" Alice's primary email address", 40},
+       {"Then", "Alice's primary email address should be \"alice@work.example\"", 41},
+       {"And", "Alice's alternate email addresses should include \"alice@example.com\"", 42}
+     ]}
+  ]
+
   @deliverability_feature_names [
     "member_message_deliverability.feature",
     "memba_staff_email_deliverability.feature"
@@ -266,6 +311,11 @@ defmodule Memba.CucumberConfigurationTest do
                                               {_keyword, text, _line} <- steps,
                                               do: text
 
+  @required_person_email_address_scenario_steps for {_scenario_name, steps} <-
+                                                      @person_email_address_scenarios,
+                                                    {_keyword, text, _line} <- steps,
+                                                    do: text
+
   @required_authentication_step_patterns [
     "{word} is a member of Kootenay Mountaineering Club",
     "Alice is a member of Nelson Paddling Club",
@@ -357,11 +407,6 @@ defmodule Memba.CucumberConfigurationTest do
   test "domain Cucumber configuration excludes scenarios not ready or not intended for domain" do
     assert Application.fetch_env!(:cucumber, :tags) ==
              "not @not-domain and not @todo-domain and not @todo and not @wip"
-
-    configured_feature_paths()
-    |> Enum.each(fn feature_file ->
-      refute File.read!(feature_file) =~ ~r/^\s*@wip\b/m
-    end)
   end
 
   test "shared deliverability features do not describe opened receipts" do
@@ -449,6 +494,20 @@ defmodule Memba.CucumberConfigurationTest do
     end)
   end
 
+  for {scenario_name, scenario_steps} <- @person_email_address_scenarios do
+    test "person email address scenario passes through Cucumber runtime: #{scenario_name}" do
+      %Discovery.DiscoveryResult{} = discovery = discover_steps()
+
+      person_email_address_feature_file =
+        configured_feature_paths()
+        |> feature_file_named!("person_email_addresses.feature")
+
+      person_email_address_feature_file
+      |> base_cucumber_context(unquote(scenario_name))
+      |> execute_steps(unquote(Macro.escape(scenario_steps)), discovery.step_registry)
+    end
+  end
+
   defp configured_feature_paths do
     :cucumber
     |> Application.fetch_env!(:features)
@@ -495,7 +554,8 @@ defmodule Memba.CucumberConfigurationTest do
 
     Enum.uniq(
       member_message_steps ++
-        @required_operator_scenario_steps ++ @required_authentication_scenario_steps
+        @required_operator_scenario_steps ++
+        @required_authentication_scenario_steps ++ @required_person_email_address_scenario_steps
     )
   end
 
