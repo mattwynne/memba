@@ -1,0 +1,870 @@
+diff --git a/docs/iterations/024-email-template-designs/todo.md b/docs/iterations/024-email-template-designs/todo.md
+index c7cbf42..f8d078d 100644
+--- a/docs/iterations/024-email-template-designs/todo.md
++++ b/docs/iterations/024-email-template-designs/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
+ - [x] 006 Update `web/lib/memba/onboarding/welcome_email.ex` to use the compatible group-led welcome/sign-in variant and pass the converted club as context.
+ - [x] 007 Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
+-- [ ] 008 Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
++- [x] 008 Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
+ - [ ] 009 Update tests, especially:
+ - [ ] 010 Run targeted email-related tests while developing.
+ - [ ] 011 Run any affected acceptance tests if mailbox text parsing changes.
+diff --git a/web/lib/memba/messaging/inbound_club_rejection_email.ex b/web/lib/memba/messaging/inbound_club_rejection_email.ex
+index af146dc..2725114 100644
+--- a/web/lib/memba/messaging/inbound_club_rejection_email.ex
++++ b/web/lib/memba/messaging/inbound_club_rejection_email.ex
+@@ -8,9 +8,10 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
+ 
+   import Swoosh.Email
+ 
++  alias Memba.EmailTemplates
+   alias Memba.Messaging.InboundEmail
+ 
+-  @subject "Your email was not posted"
++  @subject "Your email wasn't posted"
+   @fallback_from {"Memba", "messages@mail.memba.io"}
+ 
+   @doc """
+@@ -36,34 +37,25 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
+          delivery_reference,
+          opts
+        ) do
+-    body = rejection_text_body(rejection_reason, opts)
++    reply_to_address = reply_to_address()
++    body = rejection_text_body(inbound_email, rejection_reason, opts, reply_to_address)
+ 
+     new()
+     |> from(from_address(opts))
+-    |> maybe_reply_to(reply_to_address())
++    |> maybe_reply_to(reply_to_address)
+     |> maybe_thread_as_reply(inbound_email)
+     |> to(inbound_email.from_address)
+-    |> subject(subject(inbound_email))
++    |> subject(email_subject(inbound_email, opts))
+     |> text_body(body)
+-    |> html_body(html_body(body))
++    |> html_body(html_body(inbound_email, rejection_reason, opts, reply_to_address))
+     |> put_provider_options(inbound_email, to_address, rejection_reason, delivery_reference)
+   end
+ 
+-  defp from_address(opts) do
++  defp from_address(_opts) do
+     configured_from_address()
+     |> Kernel.||(@fallback_from)
+-    |> maybe_put_club_from_name(Keyword.get(opts, :club_name))
+   end
+ 
+-  defp maybe_put_club_from_name({_name, address}, club_name) when is_binary(club_name) do
+-    case String.trim(club_name) do
+-      "" -> {"Memba", address}
+-      club_name -> {"Memba support for #{club_name}", address}
+-    end
+-  end
+-
+-  defp maybe_put_club_from_name(from_address, _club_name), do: from_address
+-
+   defp configured_from_address do
+     case selected_provider() do
+       Memba.Messaging.EmailDeliveryProviders.Resend ->
+@@ -128,15 +120,32 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
+   defp maybe_reply_to(email, nil), do: email
+   defp maybe_reply_to(email, reply_to_address), do: reply_to(email, reply_to_address)
+ 
+-  defp subject(%InboundEmail{original_message_id: original_message_id, subject: subject})
++  defp email_subject(
++         %InboundEmail{original_message_id: original_message_id, subject: original_subject},
++         _opts
++       )
+        when is_binary(original_message_id) do
+-    "Re: #{subject}"
++    original_subject
++    |> EmailTemplates.sanitize_header_text()
++    |> default_text(@subject)
++    |> reply_subject()
+   end
+ 
+-  defp subject(%InboundEmail{}), do: @subject
++  defp email_subject(%InboundEmail{}, opts) do
++    case club_name(opts) do
++      nil -> @subject
++      club_name -> "Your email to #{club_name} wasn't posted"
++    end
++  end
++
++  defp reply_subject("Re:" <> _rest = subject), do: subject
++  defp reply_subject("re:" <> _rest = subject), do: subject
++  defp reply_subject(subject), do: "Re: #{subject}"
+ 
+   defp maybe_thread_as_reply(email, %InboundEmail{original_message_id: original_message_id})
+        when is_binary(original_message_id) do
++    original_message_id = EmailTemplates.sanitize_header_text(original_message_id)
++
+     email
+     |> header("In-Reply-To", original_message_id)
+     |> header("References", original_message_id)
+@@ -195,63 +204,281 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
+     |> String.slice(0, 80)
+   end
+ 
+-  defp reason_copy("attachments_not_supported"), do: "attachments are not supported yet"
+-  defp reason_copy("plain_text_required"), do: "a plain text message body is required"
++  defp reason_copy("attachments_not_supported", _opts),
++    do: "Emails with attachments can't be posted yet, so your message wasn't posted."
+ 
+-  defp reason_copy("unknown_sender"),
+-    do:
+-      "we weren't able to find a member account for this email address so your message has not been posted"
++  defp reason_copy("plain_text_required", _opts),
++    do: "We couldn't read a plain-text message body, so your message wasn't posted."
+ 
+-  defp reason_copy("sender_not_active_member"),
+-    do: "your sender address is not an active member of that club"
++  defp reason_copy("unknown_sender", _opts),
++    do: "We couldn't find a member account for this email address, so your message wasn't posted."
+ 
+-  defp reason_copy("unknown_club_slug"), do: "the club address was not recognized"
+-  defp reason_copy("unsupported_recipient_address"), do: "the recipient address is not supported"
++  defp reason_copy("sender_not_active_member", opts) do
++    case club_name(opts) do
++      nil ->
++        "This email address isn't an active member of that group, so your message wasn't posted."
+ 
+-  defp reason_copy(_reason), do: "the email could not be posted"
++      club_name ->
++        "This email address isn't an active member of #{club_name}, so your message wasn't posted."
++    end
++  end
+ 
+-  defp rejection_text_body("unknown_sender", opts) do
+-    club_name = Keyword.get(opts, :club_name)
++  defp reason_copy("unknown_club_slug", _opts),
++    do: "We couldn't match the address you used to a Memba group, so your message wasn't posted."
++
++  defp reason_copy("unsupported_recipient_address", _opts),
++    do: "That recipient address isn't set up for member messages, so your message wasn't posted."
++
++  defp reason_copy(_reason, _opts),
++    do: "We couldn't post this email. Nothing was sent to the group."
++
++  defp rejection_text_body(%InboundEmail{} = inbound_email, reason, opts, reply_to_address) do
++    [
++      opening_line(opts),
++      "",
++      reason_copy(reason, opts),
++      membership_hint_text(reason, opts),
++      "",
++      "What to do next",
++      next_step_text(opts, reply_to_address),
++      original_context_text(inbound_email)
++    ]
++    |> Enum.reject(&is_nil/1)
++    |> Enum.join("\n")
++    |> Kernel.<>("\n")
++  end
+ 
+-    membership_hint =
+-      if is_binary(club_name) and String.trim(club_name) != "" do
+-        "\n\nIs it possible you signed up for membership of #{String.trim(club_name)} with a different email address?"
+-      else
+-        ""
+-      end
++  defp html_body(
++         %InboundEmail{} = inbound_email,
++         rejection_reason,
++         opts,
++         reply_to_address
++       ) do
++    group_name = club_name(opts)
++    reason = reason_copy(rejection_reason, opts)
++
++    content = [
++      EmailTemplates.memba_header(label: "Delivery notice"),
++      EmailTemplates.card_section(
++        [
++          delivery_status_mark(),
++          EmailTemplates.heading(@subject, margin: "12px 0 12px"),
++          intro_html(group_name),
++          reason_box(reason),
++          membership_hint_html(rejection_reason, group_name),
++          section_label("What to do next"),
++          next_step_html(opts, reply_to_address),
++          original_context_html(inbound_email)
++        ],
++        padding: "6px 28px 24px"
++      )
++    ]
++
++    EmailTemplates.render_shell(
++      title: @subject,
++      preheader: preheader(opts),
++      content: content,
++      footer:
++        EmailTemplates.memba_footer(
++          group_name: group_name,
++          recipient_email: inbound_email.from_address,
++          reply_to_email: reply_to_email(reply_to_address),
++          reason: "This is an automatic delivery notice."
++        )
++    )
++  end
+ 
++  defp opening_line(opts) do
++    case club_name(opts) do
++      nil -> "Your email wasn't posted."
++      club_name -> "Your email to #{club_name} wasn't posted."
++    end
++  end
++
++  defp preheader(opts) do
++    case club_name(opts) do
++      nil -> "Your email wasn't posted. Here's why, and how to fix it."
++      club_name -> "Your email to #{club_name} wasn't posted. Here's why, and how to fix it."
++    end
++  end
++
++  defp intro_html(nil) do
++    """
++    <p style="margin:0 0 16px;">Sorry &mdash; your email didn&rsquo;t go out to members. Here&rsquo;s why:</p>
++    """
++  end
++
++  defp intro_html(group_name) do
++    """
++    <p style="margin:0 0 16px;">Sorry &mdash; your message to <b style="color:#15201c; font-weight:600;">#{EmailTemplates.escaped_text(group_name)}</b> didn&rsquo;t go out to members. Here&rsquo;s why:</p>
+     """
+-    Hi, sorry about this, but #{reason_copy("unknown_sender")}.
+-    #{membership_hint}
++  end
++
++  defp reason_box(reason) do
++    """
++    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;"><tr>
++      <td style="background:#f7f6f3; border:1px solid #e6e3dc; border-radius:10px; padding:14px 16px; font-size:15px; line-height:1.5; color:#15201c;">
++        #{EmailTemplates.escaped_text(reason)}
++      </td>
++    </tr></table>
++    """
++  end
++
++  defp membership_hint_text("unknown_sender", opts) do
++    case club_name(opts) do
++      nil ->
++        nil
++
++      club_name ->
++        "Is it possible you signed up for membership of #{club_name} with a different email address?"
++    end
++  end
++
++  defp membership_hint_text(_reason, _opts), do: nil
+ 
+-    For help, reply to this email to contact our support team.
++  defp membership_hint_html("unknown_sender", club_name) when is_binary(club_name) do
++    """
++    <p style="margin:0 0 18px;">Is it possible you signed up for membership of #{EmailTemplates.escaped_text(club_name)} with a different email address?</p>
+     """
+   end
+ 
+-  defp rejection_text_body(reason, _opts) do
++  defp membership_hint_html(_reason, _club_name), do: ""
++
++  defp next_step_text(opts, reply_to_address) do
++    help =
++      if reply_to_email(reply_to_address) do
++        "Just reply to this email and a person will help."
++      else
++        "If you need a hand, contact Memba support."
++      end
++
++    "#{help} #{nothing_sent_sentence(opts)}"
++  end
++
++  defp next_step_html(opts, reply_to_address) do
++    help = help_html(reply_to_address)
++    nothing_sent = opts |> nothing_sent_sentence() |> EmailTemplates.escaped_text()
++
++    """
++    <p style="margin:0 0 18px;">#{help} #{nothing_sent}</p>
+     """
+-    Your email was not posted: #{reason_copy(reason)}.
++  end
++
++  defp help_html(reply_to_address) do
++    case reply_to_email(reply_to_address) do
++      nil ->
++        "If you need a hand, contact Memba support."
++
++      reply_to_email ->
++        escaped_reply_to_email = EmailTemplates.escaped_text(reply_to_email)
++
++        ~s|Just reply to this email and a person will help, or write to <a href="mailto:#{escaped_reply_to_email}" style="color:#1f4842; text-decoration:underline;">#{escaped_reply_to_email}</a>.|
++    end
++  end
++
++  defp nothing_sent_sentence(opts) do
++    case club_name(opts) do
++      nil -> "Nothing was sent to a group, so there's nothing to undo."
++      club_name -> "Nothing was sent to #{club_name}, so there's nothing to undo."
++    end
++  end
++
++  defp original_context_text(%InboundEmail{} = inbound_email) do
++    subject =
++      inbound_email.subject
++      |> EmailTemplates.sanitize_header_text()
++      |> default_text("(no subject)")
++
++    snippet = message_snippet(inbound_email.text_body)
++
++    [
++      "",
++      "Your message",
++      "Subject: #{subject}",
++      if(snippet == "", do: nil, else: snippet)
++    ]
++    |> Enum.reject(&is_nil/1)
++    |> Enum.join("\n")
++  end
++
++  defp original_context_html(%InboundEmail{} = inbound_email) do
++    subject =
++      inbound_email.subject
++      |> EmailTemplates.sanitize_header_text()
++      |> default_text("(no subject)")
+ 
+-    For help, reply to this email or contact Memba support.
++    snippet = message_snippet(inbound_email.text_body)
++
++    snippet_html =
++      if snippet == "" do
++        ""
++      else
++        """
++        <div style="font-size:13.5px; line-height:1.5; color:#7d877f;">#{EmailTemplates.escaped_text(snippet)}</div>
++        """
++      end
++
++    """
++    #{section_label("Your message")}
++    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
++      <td style="background:#ffffff; border:1px solid #e6e3dc; border-radius:10px; padding:14px 16px;">
++        <div style="font-size:14px; font-weight:600; color:#15201c; letter-spacing:-0.01em; margin-bottom:4px;">#{EmailTemplates.escaped_text(subject)}</div>
++        #{snippet_html}
++      </td>
++    </tr></table>
+     """
+   end
+ 
+-  defp html_body(text) do
+-    escaped_body =
++  defp message_snippet(nil), do: ""
++
++  defp message_snippet(text) do
++    text =
+       text
+-      |> String.split(~r/\r\n|\n|\r/, trim: false)
+-      |> Enum.map(&html_escape_to_string/1)
+-      |> Enum.join("<br>\n")
++      |> to_string()
++      |> String.replace(~r/\r\n|\r|\n/u, "\n")
++      |> String.trim()
+ 
+-    "<html><body><p>#{escaped_body}</p></body></html>"
++    if String.length(text) > 220 do
++      "#{String.slice(text, 0, 220)}…"
++    else
++      text
++    end
+   end
+ 
+-  defp html_escape_to_string(text) do
+-    text
+-    |> Phoenix.HTML.html_escape()
+-    |> Phoenix.HTML.safe_to_string()
++  defp section_label(text) do
++    """
++    <p style="margin:0 0 7px; font-size:12px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; color:#7d877f;">#{EmailTemplates.escaped_text(text)}</p>
++    """
+   end
+ 
++  defp delivery_status_mark do
++    """
++    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 2px;"><tr>
++      <td width="40" height="40" align="center" valign="middle" style="width:40px; height:40px; background:#e3e9ec; border-radius:999px; text-align:center; line-height:40px; font-size:18px; color:#4f6b78;">
++        &#9993;
++      </td>
++    </tr></table>
++    """
++  end
++
++  defp reply_to_email(nil), do: nil
++  defp reply_to_email({_name, address}) when is_binary(address), do: address
++  defp reply_to_email(address) when is_binary(address), do: address
++  defp reply_to_email(_reply_to_address), do: nil
++
++  defp club_name(opts) do
++    opts
++    |> Keyword.get(:club_name)
++    |> EmailTemplates.sanitize_header_text()
++    |> case do
++      "" -> nil
++      club_name -> club_name
++    end
++  end
++
++  defp default_text("", fallback), do: fallback
++  defp default_text(text, _fallback), do: text
++
+   defp deliver_email(email) do
+     email
+     |> Memba.Mailer.deliver()
+diff --git a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+index 478e960..0769aab 100644
+--- a/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
++++ b/web/test/memba/messaging/inbound_club_message_acceptance_test.exs
+@@ -374,7 +374,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "a plain text message body is required"
++      reason: "We couldn't read a plain-text message body"
+     )
+   end
+ 
+@@ -421,7 +421,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "a plain text message body is required"
++      reason: "We couldn't read a plain-text message body"
+     )
+   end
+ 
+@@ -468,7 +468,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "a plain text message body is required"
++      reason: "We couldn't read a plain-text message body"
+     )
+   end
+ 
+@@ -527,7 +527,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "attachments are not supported yet"
++      reason: "Emails with attachments can't be posted yet"
+     )
+   end
+ 
+@@ -578,18 +578,19 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     rejection_email =
+       assert_rejection_email_received(
+         to: "unknown@example.com",
+-        reason:
+-          "we weren't able to find a member account for this email address so your message has not been posted",
++        reason: "We couldn't find a member account for this email address",
+         subject: "Re: Trip planning night",
+-        from: {"Memba support for Kootenay Mountaineering Club", "messages@mail.memba.test"},
+-        support_copy: "For help, reply to this email to contact our support team."
++        from: {"Memba", "messages@mail.memba.test"},
++        support_copy: "Just reply to this email and a person will help."
+       )
+ 
+-    assert rejection_email.text_body =~ "Hi, sorry about this"
++    assert rejection_email.text_body =~
++             "Your email to Kootenay Mountaineering Club wasn't posted."
++
+     assert rejection_email.text_body =~ "membership of Kootenay Mountaineering Club"
+ 
+     assert rejection_email.text_body =~
+-             "For help, reply to this email to contact our support team."
++             "Just reply to this email and a person will help."
+ 
+     assert rejection_email.headers["In-Reply-To"] == "<original-trip-planning@example.com>"
+     assert rejection_email.headers["References"] == "<original-trip-planning@example.com>"
+@@ -642,8 +643,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     rejection_email =
+       assert_rejection_email_received(
+         to: "unknown@example.com",
+-        reason:
+-          "we weren't able to find a member account for this email address so your message has not been posted"
++        reason: "We couldn't find a member account for this email address"
+       )
+ 
+     assert rejection_email.provider_options[:metadata] == %{
+@@ -688,8 +688,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     rejection_email =
+       assert_rejection_email_received(
+         to: "unknown@example.com",
+-        reason:
+-          "we weren't able to find a member account for this email address so your message has not been posted",
++        reason: "We couldn't find a member account for this email address",
+         metadata?: false
+       )
+ 
+@@ -763,7 +762,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "pat@example.com",
+-      reason: "your sender address is not an active member of that club"
++      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
+     )
+   end
+ 
+@@ -810,7 +809,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "your sender address is not an active member of that club"
++      reason: "This email address isn't an active member of Kootenay Mountaineering Club"
+     )
+   end
+ 
+@@ -859,7 +858,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "the club address was not recognized"
++      reason: "We couldn't match the address you used to a Memba group"
+     )
+   end
+ 
+@@ -888,7 +887,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "attachments are not supported yet"
++      reason: "Emails with attachments can't be posted yet"
+     )
+ 
+     assert {:ok,
+@@ -989,7 +988,18 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+ 
+     assert email.reply_to == {"Memba support", "support@memba.test"}
+     assert email.to == [{"", to_address}]
+-    assert email.subject == Keyword.get(opts, :subject, "Your email was not posted")
++
++    case Keyword.fetch(opts, :subject) do
++      {:ok, subject} ->
++        assert email.subject == subject
++
++      :error ->
++        assert email.subject in [
++                 "Your email wasn't posted",
++                 "Your email to Kootenay Mountaineering Club wasn't posted"
++               ]
++    end
++
+     assert email.text_body =~ reason
+ 
+     assert email.text_body =~
+@@ -1005,11 +1015,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
+     email
+   end
+ 
+-  defp support_copy_for("we weren't able to find a member account" <> _rest) do
+-    "For help, reply to this email to contact our support team."
+-  end
+-
+-  defp support_copy_for(_reason), do: "For help, reply to this email or contact Memba support."
++  defp support_copy_for(_reason), do: "Just reply to this email and a person will help."
+ 
+   defp count_events(event_module) when is_atom(event_module) do
+     event_type = Atom.to_string(event_module)
+diff --git a/web/test/memba/messaging/inbound_club_rejection_email_test.exs b/web/test/memba/messaging/inbound_club_rejection_email_test.exs
+new file mode 100644
+index 0000000..3310441
+--- /dev/null
++++ b/web/test/memba/messaging/inbound_club_rejection_email_test.exs
+@@ -0,0 +1,210 @@
++defmodule Memba.Messaging.InboundClubRejectionEmailTest do
++  use ExUnit.Case, async: false
++
++  alias Memba.Messaging.EmailDeliveryProviders.Postmark
++  alias Memba.Messaging.EmailDeliveryProviders.Resend
++  alias Memba.Messaging.InboundClubRejectionEmail
++  alias Memba.Messaging.InboundEmail
++
++  setup do
++    original_provider = Application.get_env(:memba, :messaging_email_delivery_provider)
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_postmark_config = Application.get_env(:memba, Postmark)
++    original_resend_config = Application.get_env(:memba, Resend)
++
++    Application.put_env(:memba, Memba.Mailer, adapter: Swoosh.Adapters.Test)
++
++    Application.put_env(:memba, Postmark,
++      from: {"Memba", "messages@mail.memba.test"},
++      reply_to: {"Memba support", "support@memba.test"}
++    )
++
++    Application.put_env(:memba, Resend,
++      from: {"Memba", "messages@mail.memba.test"},
++      reply_to: {"Memba support", "support@memba.test"}
++    )
++
++    on_exit(fn ->
++      restore_env(:messaging_email_delivery_provider, original_provider)
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(Postmark, original_postmark_config)
++      restore_env(Resend, original_resend_config)
++    end)
++
++    :ok
++  end
++
++  test "renders a group-named delivery notice with safe text, HTML, and Postmark metadata" do
++    Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
++
++    club_name = "Wessex <Choir>\r\nBcc: attacker@example.com"
++
++    inbound_email =
++      inbound_email(%{
++        provider: "postmark",
++        provider_message_id: "inbound-rejection-template",
++        from_address: "margaret@example.com",
++        recipient_addresses: ["wessex@clubs.memba.io"],
++        subject: "Can I bring <guest>?",
++        text_body: "Hi — can I bring <script>alert('x')</script>?"
++      })
++
++    assert :ok =
++             InboundClubRejectionEmail.deliver(
++               inbound_email,
++               "wessex@clubs.memba.io",
++               "unknown_sender",
++               "delivery-reference-123",
++               club_name: club_name
++             )
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Memba", "messages@mail.memba.test"}
++    assert email.reply_to == {"Memba support", "support@memba.test"}
++    assert email.to == [{"", "margaret@example.com"}]
++
++    assert email.subject ==
++             "Your email to Wessex <Choir> Bcc: attacker@example.com wasn't posted"
++
++    refute email.subject =~ "\n"
++    refute elem(email.from, 0) =~ "\n"
++
++    assert email.text_body =~
++             "Your email to Wessex <Choir> Bcc: attacker@example.com wasn't posted."
++
++    assert email.text_body =~
++             "We couldn't find a member account for this email address, so your message wasn't posted."
++
++    assert email.text_body =~
++             "Is it possible you signed up for membership of Wessex <Choir> Bcc: attacker@example.com with a different email address?"
++
++    assert email.text_body =~ "Just reply to this email and a person will help."
++    assert email.text_body =~ "Nothing was sent to Wessex <Choir> Bcc: attacker@example.com"
++    assert email.text_body =~ "Subject: Can I bring <guest>?"
++
++    assert email.html_body =~ "Delivery notice"
++    assert email.html_body =~ "Your email wasn&#39;t posted"
++    assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com"
++    assert email.html_body =~ "member account for this email address"
++    assert email.html_body =~ "Just reply to this email and a person will help"
++    assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
++    refute email.html_body =~ "<script>"
++    refute email.html_body =~ "help@memba.io"
++
++    assert email.provider_options[:metadata] == %{
++             "memba_email_kind" => "inbound_club_rejection",
++             "memba_inbound_id" => InboundEmail.identity(inbound_email),
++             "memba_in_provider" => "postmark",
++             "memba_in_msg_id" => "inbound-rejection-template",
++             "memba_in_to" => "wessex@clubs.memba.io",
++             "memba_reject_reason" => "unknown_sender",
++             "memba_reject_ref" => "delivery-reference-123"
++           }
++  end
++
++  test "preserves reply threading with sanitized headers and Resend tags" do
++    Application.put_env(:memba, :messaging_email_delivery_provider, Resend)
++
++    inbound_email =
++      inbound_email(%{
++        provider: "resend",
++        provider_message_id: "1b700cb9-3a48-460d-a2d1-255fe01ed4e2",
++        from_address: "alice@example.com",
++        recipient_addresses: ["kmc@clubs.memba.io"],
++        subject: "Trip planning night\r\nBcc: attacker@example.com",
++        text_body: "See the attached route.",
++        original_message_id: "<original@example.com>\r\nReferences: injected"
++      })
++
++    assert :ok =
++             InboundClubRejectionEmail.deliver(
++               inbound_email,
++               "kmc@clubs.memba.io",
++               "attachments_not_supported",
++               "del-ref-456",
++               club_name: "Kootenay Mountaineering Club"
++             )
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.subject == "Re: Trip planning night Bcc: attacker@example.com"
++    refute email.subject =~ "\n"
++
++    assert email.headers["In-Reply-To"] == "<original@example.com> References: injected"
++    assert email.headers["References"] == "<original@example.com> References: injected"
++    refute email.headers["In-Reply-To"] =~ "\n"
++
++    assert email.text_body =~
++             "Emails with attachments can't be posted yet, so your message wasn't posted."
++
++    assert email.html_body =~ html_escape("Emails with attachments can't be posted yet")
++
++    assert email.provider_options[:tags] == [
++             %{name: "memba_email_kind", value: "inbound_club_rejection"},
++             %{
++               name: "memba_inbound_provider_message_id",
++               value: "1b700cb9-3a48-460d-a2d1-255fe01ed4e2"
++             },
++             %{name: "memba_rejection_reason", value: "attachments_not_supported"},
++             %{name: "memba_rejection_delivery_reference", value: "del-ref-456"}
++           ]
++
++    assert email.headers["X-Memba-Inbound-Email-ID"] == InboundEmail.identity(inbound_email)
++    assert email.headers["X-Memba-Rejection-Delivery-Reference"] == "del-ref-456"
++  end
++
++  test "maps each known rejection reason to plain-language text and HTML copy" do
++    Application.put_env(:memba, :messaging_email_delivery_provider, Postmark)
++
++    reason_expectations = [
++      {"attachments_not_supported", "Emails with attachments can't be posted yet"},
++      {"plain_text_required", "We couldn't read a plain-text message body"},
++      {"unknown_sender", "We couldn't find a member account for this email address"},
++      {"sender_not_active_member", "This email address isn't an active member of KMC"},
++      {"unknown_club_slug", "We couldn't match the address you used to a Memba group"},
++      {"unsupported_recipient_address",
++       "That recipient address isn't set up for member messages"},
++      {"unexpected_failure", "We couldn't post this email"}
++    ]
++
++    for {reason, expected_copy} <- reason_expectations do
++      inbound_email =
++        inbound_email(%{
++          provider: "postmark",
++          provider_message_id: "reason-#{reason}",
++          from_address: "sender@example.com",
++          recipient_addresses: ["kmc@clubs.memba.io"],
++          subject: "Reason #{reason}",
++          text_body: "Original body"
++        })
++
++      assert :ok =
++               InboundClubRejectionEmail.deliver(
++                 inbound_email,
++                 "kmc@clubs.memba.io",
++                 reason,
++                 "delivery-#{reason}",
++                 club_name: "KMC"
++               )
++
++      assert_received {:email, %Swoosh.Email{} = email}
++      assert email.text_body =~ expected_copy
++      assert email.html_body =~ html_escape(expected_copy)
++    end
++  end
++
++  defp inbound_email(attrs) do
++    {:ok, inbound_email} = InboundEmail.new(attrs)
++    inbound_email
++  end
++
++  defp html_escape(text) do
++    text
++    |> Phoenix.HTML.html_escape()
++    |> Phoenix.HTML.safe_to_string()
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++end
+diff --git a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs
+index ae160d4..500756e 100644
+--- a/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_inbound_webhook_controller_test.exs
+@@ -191,8 +191,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
+ 
+     assert_rejection_email_received(
+       to: "mystery@example.com",
+-      reason:
+-        "we weren't able to find a member account for this email address so your message has not been posted"
++      reason: "We couldn't find a member account for this email address"
+     )
+   end
+ 
+@@ -247,7 +246,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "attachments are not supported yet"
++      reason: "Emails with attachments can't be posted yet"
+     )
+ 
+     retry_payload =
+@@ -322,7 +321,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "a plain text message body is required"
++      reason: "We couldn't read a plain-text message body"
+     )
+   end
+ 
+@@ -366,7 +365,7 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
+ 
+     assert_rejection_email_received(
+       to: "alice@example.com",
+-      reason: "a plain text message body is required"
++      reason: "We couldn't read a plain-text message body"
+     )
+   end
+ 
+@@ -520,7 +519,13 @@ defmodule MembaWeb.PostmarkInboundWebhookControllerTest do
+ 
+     assert_received {:email, %Swoosh.Email{} = rejection_email}
+     assert rejection_email.to == [{"", to_address}]
+-    assert rejection_email.subject in ["Your email was not posted", "Re: Trip planning night"]
++
++    assert rejection_email.subject in [
++             "Your email wasn't posted",
++             "Your email to Kootenay Mountaineering Club wasn't posted",
++             "Re: Trip planning night"
++           ]
++
+     assert rejection_email.text_body =~ reason
+ 
+     rejection_email
+diff --git a/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs b/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs
+index 785ce27..78c66ef 100644
+--- a/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/resend_inbound_webhook_controller_test.exs
+@@ -228,8 +228,14 @@ defmodule MembaWeb.ResendInboundWebhookControllerTest do
+ 
+     assert_received {:email, %Swoosh.Email{} = rejection_email}
+     assert rejection_email.to == [{"", "alice@example.com"}]
+-    assert rejection_email.subject in ["Your email was not posted", "Re: Trip planning night"]
+-    assert rejection_email.text_body =~ "attachments are not supported yet"
++
++    assert rejection_email.subject in [
++             "Your email wasn't posted",
++             "Your email to Kootenay Mountaineering Club wasn't posted",
++             "Re: Trip planning night"
++           ]
++
++    assert rejection_email.text_body =~ "Emails with attachments can't be posted yet"
+ 
+     retry_payload =
+       valid_payload(%{
