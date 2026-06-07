@@ -136,6 +136,103 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
            )
   end
 
+  test "assign_membership_administrator_as_club_member/2 rejects ordinary members without club.manage_members" do
+    club_id = Memba.ID.generate(:club)
+    administrator_person_id = Memba.ID.generate(:person)
+    administrator_membership_id = Memba.ID.generate(:membership)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+
+    create_club!(club_id)
+    create_person!(administrator_person_id, "Robin", "robin@example.com")
+    add_member!(administrator_membership_id, club_id, administrator_person_id)
+
+    assign_membership_administrator!(
+      club_id,
+      administrator_membership_id,
+      administrator_person_id
+    )
+
+    create_person!(actor_person_id, "Alice", "alice@example.com")
+    add_member!(actor_membership_id, club_id, actor_person_id)
+    create_person!(target_person_id, "Bob", "bob@example.com")
+    add_member!(target_membership_id, club_id, target_person_id)
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             actor_person_id,
+             Permissions.club_manage_members()
+           )
+
+    assert {:error, :unauthorized} =
+             Membership.assign_membership_administrator_as_club_member(
+               %{
+                 club_id: club_id,
+                 membership_id: target_membership_id,
+                 person_id: target_person_id,
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             target_person_id,
+             Permissions.club_manage_members()
+           )
+  end
+
+  test "remove_membership_administrator_as_club_member/2 rejects ordinary members without club.manage_members" do
+    club_id = Memba.ID.generate(:club)
+    administrator_person_id = Memba.ID.generate(:person)
+    administrator_membership_id = Memba.ID.generate(:membership)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+
+    create_club!(club_id)
+    create_person!(administrator_person_id, "Robin", "robin@example.com")
+    add_member!(administrator_membership_id, club_id, administrator_person_id)
+
+    assign_membership_administrator!(
+      club_id,
+      administrator_membership_id,
+      administrator_person_id
+    )
+
+    create_person!(actor_person_id, "Alice", "alice@example.com")
+    add_member!(actor_membership_id, club_id, actor_person_id)
+    create_person!(target_person_id, "Bob", "bob@example.com")
+    add_member!(target_membership_id, club_id, target_person_id)
+    assign_membership_administrator!(club_id, target_membership_id, target_person_id)
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             actor_person_id,
+             Permissions.club_manage_members()
+           )
+
+    assert {:error, :unauthorized} =
+             Membership.remove_membership_administrator_as_club_member(
+               %{
+                 club_id: club_id,
+                 membership_id: target_membership_id,
+                 person_id: target_person_id,
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert Membership.person_has_club_permission?(
+             club_id,
+             target_person_id,
+             Permissions.club_manage_members()
+           )
+  end
+
   test "assign_member_role_as_club_member/2 requires club.manage_members" do
     club_id = Memba.ID.generate(:club)
     actor_person_id = Memba.ID.generate(:person)
