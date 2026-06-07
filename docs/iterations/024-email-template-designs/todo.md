@@ -10,6 +10,6 @@
 - [x] 008 Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
 - [x] 009 Update tests, especially:
 - [x] 010 Run targeted email-related tests while developing.
-- [ ] 011 Run any affected acceptance tests if mailbox text parsing changes.
+- [x] 011 Run any affected acceptance tests if mailbox text parsing changes.
 - [ ] 012 Run `dev check`.
 - [ ] 013 Record implementation notes and any deliberate deviations from the supplied designs in this iteration folder.
