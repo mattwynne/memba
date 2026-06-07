@@ -43,6 +43,127 @@ dev_support_processes() {
   fi
 }
 
+process_phase() {
+  DEVENV_TUI=false devenv_with_postgres_port processes status "$1" 2>/dev/null \
+    | awk -F': *' '/^Phase:/ {print $2; exit}'
+}
+
+wait_for_managed_processes() {
+  local timeout="$1"
+  shift
+  local deadline=$((SECONDS + timeout))
+  local process_name phase waiting_for
+
+  while true; do
+    waiting_for=()
+
+    for process_name in "$@"; do
+      phase="$(process_phase "$process_name")"
+      case "$phase" in
+        ready|running)
+          ;;
+        exited|failed|stopped)
+          echo "Process '$process_name' exited before becoming ready." >&2
+          DEVENV_TUI=false devenv_with_postgres_port processes logs -n 80 "$process_name" >&2 || true
+          return 1
+          ;;
+        *)
+          waiting_for+=("$process_name${phase:+ ($phase)}")
+          ;;
+      esac
+    done
+
+    if [ "${#waiting_for[@]}" -eq 0 ]; then
+      return 0
+    fi
+
+    if [ "$SECONDS" -ge "$deadline" ]; then
+      echo "Timed out waiting for managed process(es): ${waiting_for[*]}" >&2
+      for process_name in "$@"; do
+        DEVENV_TUI=false devenv_with_postgres_port processes status "$process_name" >&2 || true
+      done
+      return 1
+    fi
+
+    sleep 1
+  done
+}
+
+stop_orphaned_ngrok_dev_tunnels() {
+  local target="${MEMBA_NGROK_TARGET:-4000}"
+  local pids=()
+  local pid
+
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    pids+=("$pid")
+  done < <(
+    python3 - "$target" <<'PY'
+import shlex
+import subprocess
+import sys
+
+target = sys.argv[1]
+ps = subprocess.run(
+    ["ps", "-axo", "pid=,command="],
+    check=True,
+    text=True,
+    stdout=subprocess.PIPE,
+)
+
+for line in ps.stdout.splitlines():
+    line = line.strip()
+    if not line:
+        continue
+    pid, _, command = line.partition(" ")
+    if not pid.isdigit() or "ngrok" not in command or "http" not in command:
+        continue
+    try:
+        args = shlex.split(command)
+    except ValueError:
+        args = command.split()
+    if len(args) < 3:
+        continue
+    executable = args[0].split("/")[-1]
+    if executable != "ngrok" or args[1] != "http":
+        continue
+    tunnel_targets = [arg for arg in args[2:] if not arg.startswith("-")]
+    if target in tunnel_targets:
+        print(pid)
+        continue
+    if target.isdigit():
+        target_patterns = {
+            f"localhost:{target}",
+            f"127.0.0.1:{target}",
+            f"http://localhost:{target}",
+            f"http://127.0.0.1:{target}",
+            f"https://localhost:{target}",
+            f"https://127.0.0.1:{target}",
+        }
+        if any(candidate in tunnel_targets for candidate in target_patterns):
+            print(pid)
+PY
+  )
+
+  if [ "${#pids[@]}" -eq 0 ]; then
+    return 0
+  fi
+
+  echo "Stopping orphaned ngrok tunnel(s) for Memba dev target $target: ${pids[*]}"
+  kill "${pids[@]}" 2>/dev/null || true
+  sleep 1
+
+  for pid in "${pids[@]}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -9 "$pid" 2>/dev/null || true
+    fi
+  done
+}
+
+force_stop_dev_leftovers() {
+  stop_orphaned_ngrok_dev_tunnels
+}
+
 start_managed_processes() {
   if DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d "$@"; then
     return
@@ -219,14 +340,18 @@ case "${1:-}" in
       done < <(dev_support_processes)
 
       start_managed_processes "${support_processes[@]}" web
-      devenv_with_postgres_port processes wait --timeout 120
+      wait_for_managed_processes 120 postgres web
       sync_postmark_dev_webhooks
       exit 0
     fi
     ;;
   down)
-    if [ "$#" -eq 1 ]; then
+    if [ "$#" -eq 1 ] || { [ "$#" -eq 2 ] && [ "${2:-}" = "--force" ]; }; then
+      load_local_secrets
       devenv_with_postgres_port processes down || true
+      if [ "${2:-}" = "--force" ]; then
+        force_stop_dev_leftovers
+      fi
       exit 0
     fi
     ;;
@@ -242,7 +367,7 @@ case "${1:-}" in
       done < <(dev_support_processes)
 
       start_managed_processes "${support_processes[@]}" web
-      devenv_with_postgres_port processes wait --timeout 120
+      wait_for_managed_processes 120 postgres web
       sync_postmark_dev_webhooks
       exit 0
     fi
@@ -281,7 +406,7 @@ start_postgres() {
   fi
 
   DEVENV_TUI=false devenv_with_postgres_port processes up --no-strict-ports -d postgres
-  devenv_with_postgres_port processes wait --timeout 120
+  wait_for_managed_processes 120 postgres
 }
 
 migrate_databases() {
@@ -294,7 +419,6 @@ migrate_databases() {
 
 start_processes() {
   start_managed_processes "$@"
-  devenv_with_postgres_port processes wait --timeout 120
 }
 
 
@@ -311,19 +435,26 @@ up() {
 
   if [ "${argc_foreground:-0}" = "1" ]; then
     start_processes "${support_processes[@]}"
+    wait_for_managed_processes 120 postgres
     sync_postmark_dev_webhooks
     migrate_databases
     trap down EXIT
     (cd "$repo_root/web" && mix phx.server)
   else
     start_processes "${support_processes[@]}" web
+    wait_for_managed_processes 120 postgres web
     sync_postmark_dev_webhooks
   fi
 }
 
 # @cmd Stop development services
+# @flag --force Also stop known local dev leftovers, such as orphaned ngrok tunnels to Phoenix
 down() {
+  load_local_secrets
   devenv_with_postgres_port processes down || true
+  if [ "${argc_force:-0}" = "1" ]; then
+    force_stop_dev_leftovers
+  fi
 }
 
 # @cmd Stop and then start development services, waiting until they are ready
