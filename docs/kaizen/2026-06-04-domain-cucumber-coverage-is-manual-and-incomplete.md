@@ -64,46 +64,30 @@ This showed three separate weaknesses accumulating:
 
 A first containment commit, `b05fae6c Classify acceptance scenarios by runner intent`, added explicit runner-intent tags and replaced resting `@wip` scenarios with `@todo`/`@todo-*` classifications. This did not fix the underlying generated domain-runner gap; it made the remaining debt visible.
 
-### Progress note: 2026-06-07
+### Resolution note: 2026-06-07
 
-Commit `02cd9dc4 Add acceptance scenario count command` added a standalone operator check:
+Commit `fd08def8 Run all domain-eligible Cucumber scenarios` replaced the manual domain scenario lists with mechanical prevention.
 
-```bash
-./bin/dev acceptance-tests-count
-```
+The domain path now has a project-local runner in `web/test/support/domain_cucumber_runner.ex` that:
 
-The command asks each runner what it can see:
+- discovers the shared feature files from the configured Cucumber paths;
+- applies the domain tag filter from `web/config/test.exs`;
+- excludes `@not-domain`, `@todo-domain`, `@todo`, and `@wip` scenarios; and
+- generates ExUnit tests for every remaining domain-eligible scenario in `web/test/features/domain_cucumber_acceptance_test.exs`.
 
-- `cucumber-js` selected scenarios using `acceptance-tests/cucumber.js`.
-- `cucumber-js` visible scenarios using the same paths with no tag filter.
-- `cucumber-elixir` configured feature-file count using `Cucumber.Discovery.discover()`.
-- `cucumber-elixir` visible scenario count using its configured feature paths and parser.
-- `cucumber-elixir` selected scenario count using the current `web/config/test.exs` tag filter.
-- per-feature visible counts from the Elixir parser.
-
-Current output after the containment tagging pass was:
-
-```text
-cucumber-js selected: 47 scenarios
-cucumber-js visible with no tag filter: 59 scenarios
-cucumber-elixir configured feature files: 9
-cucumber-elixir visible with configured feature paths and parser: 59 scenarios
-cucumber-elixir selected by config/test.exs tag filter: 22 scenarios
-```
-
-This is progress because it makes parser/glob/tag-filter drift visible without running the full browser suite or pretending the manual domain harness is complete. It is not yet prevention: the command is not wired into `dev check`, does not fail on unexpected count changes, and does not prove the selected domain scenarios are actually executed by generated Elixir Cucumber tests.
+This means removing `@todo-domain` from a scenario now immediately pulls it into the domain acceptance suite. Missing domain steps fail as normal ExUnit failures. The old count-only operator command was removed because it was inspection rather than prevention.
 
 ## Impact
 
-The feedback from `mix test` can be misunderstood as complete shared-scenario coverage when it is only partial domain/application coverage. That creates a quality risk: a scenario can exist in the shared specification and pass in, or only be checked by, the browser suite while missing fast domain/application feedback.
+Before the repair, the feedback from `mix test` could be misunderstood as complete shared-scenario coverage when it was only partial domain/application coverage. That created a quality risk: a scenario could exist in the shared specification and pass in, or only be checked by, the browser suite while missing fast domain/application feedback.
 
-It also creates review and planning ambiguity. Contributors have to inspect `web/test/features/cucumber_configuration_test.exs` manually to know which shared scenarios are covered at the domain layer.
+After the repair, the domain feedback is mechanically tied to the shared feature files and tag taxonomy. Contributors no longer have to inspect or update a hard-coded scenario list to know which shared scenarios are covered at the domain layer.
 
 ## What allowed it to happen
 
-The domain Cucumber runner is wired through a manual ExUnit test that enumerates expected scenarios and step sequences. There is no guardrail that compares the shared feature files against the scenarios actually exercised at the domain/application layer.
+The domain Cucumber runner was wired through a manual ExUnit test that enumerated expected scenarios and step sequences. There was no guardrail that compared the shared feature files against the scenarios actually exercised at the domain/application layer.
 
-The ADRs describe the desired standard, but the test suite does not enforce either:
+The ADRs described the desired standard, but the test suite did not enforce either:
 
 - every eligible shared scenario is run at the domain/application layer; or
 - scenarios excluded from domain/application execution are explicitly marked or documented as browser-only or not-yet-domain-covered.
@@ -115,28 +99,27 @@ The suite also lacked a stable tag taxonomy for runner intent and coverage debt.
 ## Observations
 
 - `web/config/test.exs` points Elixir Cucumber at `../acceptance-tests/features/**/*.feature`.
-- `web/test/features/cucumber_configuration_test.exs` discovers feature files and step definitions, but runtime execution is based on hard-coded scenario lists.
-- The test names say “all ... scenarios” for particular feature areas, not all shared features.
+- `web/test/features/domain_cucumber_acceptance_test.exs` now generates one ExUnit test for every scenario selected by the domain tag filter.
 - The difference between domain-suitable scenarios, browser-only scenarios, and not-yet-wired scenarios was implicit until the 2026-06-07 containment tagging pass.
-- `Cucumber.compile_features!()` is not called from `web/test/test_helper.exs`, so the ADR-described generated runner is not part of the normal `mix test` path.
+- `Cucumber.compile_features!()` is still not called from `web/test/test_helper.exs`; the project-local runner is used instead so we can apply the tag filter before execution.
 - The current Elixir Cucumber dependency cannot parse `Rule:` sections, forcing the team either to comment out rules or avoid the BDD structure the formulation skill recommends.
-- `./bin/dev acceptance-tests-count` now gives a cheap scenario-count inventory from both Cucumber implementations, but it is an operator command rather than a quality gate.
 
 ## Why this matters
 
-Shared scenarios are meant to prevent drift between the domain model and the web application. If domain coverage is manual and partial without an explicit exclusion mechanism, new feature files or scenarios can silently skip fast domain/application feedback.
+Shared scenarios are meant to prevent drift between the domain model and the web application. The repaired domain runner now prevents eligible scenarios from silently skipping fast domain/application feedback: if a scenario should not run in the domain suite yet, it must carry an explicit exclusion tag.
 
-## Open questions
+## Remaining questions
 
-- Which shared scenarios should be required to run at the domain/application layer?
-- Which scenarios are legitimately browser-only because they specify presentation, routing, or responsive UI behaviour?
 - Is the current `@not-domain` / `@not-ui` / `@todo-domain` / `@todo-ui` / `@todo` taxonomy sufficient, or should some tags collapse after the suite converges?
 - Should we patch/replace Elixir Cucumber to support `Rule:`, or keep rules as comments until the runner changes?
 
-## Possible prevention ideas
+## Prevention now in place
 
-- Add a coverage check that reports shared scenarios not exercised by the Elixir/domain Cucumber path.
-- Require an explicit tag or manifest entry for browser-only scenarios and domain-only scenarios.
-- Generate domain Cucumber execution from parsed feature files instead of maintaining duplicate hard-coded scenario lists.
+- Domain Cucumber execution is generated from parsed feature files instead of maintained as duplicate hard-coded scenario lists.
+- Scenarios excluded from the domain runner require explicit tags.
+- `dev check --quick` runs the generated domain scenario tests through ExUnit.
+
+## Follow-up ideas
+
 - Add a parser compatibility check for feature-file syntax used by the project's BDD standard, especially `Rule:`.
-- Update the Cucumber test names or docs so `mix test` clearly reports partial versus complete shared-scenario coverage.
+- Consider moving the project-local runner behaviour upstream into the Elixir Cucumber dependency.
