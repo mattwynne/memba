@@ -64,11 +64,35 @@ Two workflow guardrails were weak:
 - The direct `dev up`/`dev restart` fast path had also bypassed the new Postmark webhook sync until corrected.
 - A failed Cucumber run left a Phoenix test server alive with many idle `memba_test` database sessions, which then blocked the next acceptance setup from dropping the test database.
 
+### Additional observation: 2026-06-07
+
+While debugging why plain `./bin/dev up` appeared to hang, we found a second cleanup gap around ngrok. The default `dev up` had started `postgres` and `web` detached, but then blocked in `devenv processes wait --timeout 120`. `postgres` and `web` were `ready`, while the managed `ngrok` process had `exited`.
+
+The ngrok logs showed:
+
+```text
+ERR_NGROK_334
+The endpoint 'https://monetary-ungodly-atop.ngrok-free.dev' is already online.
+```
+
+A separate local `ngrok http ... 4000` process was still alive outside the current devenv process manager and was holding the reserved endpoint. `devenv processes down` did not stop it. That meant the public webhook URL could still be working through an orphaned process, while the managed process status said `ngrok` was exited. The state was confusing: email webhooks depended on a process that `dev down` had not owned or cleaned up.
+
+Observed recovery commands during the investigation:
+
+```sh
+ps -axo pid,ppid,stat,etime,command | rg 'ngrok http|ngrok'
+curl -fsS http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[]? | [.public_url,.config.addr] | @tsv'
+kill <orphaned-ngrok-pid>
+./bin/dev restart
+```
+
+This is the same class of problem as the earlier orphaned Postgres observation: the command that sounds like it restores a clean dev baseline did not actually make all project-local infrastructure definitely dead.
+
 ## Why this matters
 
 Routine quality gates should be deterministic, cheap, and safe. If they inherit real provider configuration, they can fail for external reasons, hit rate limits, send unwanted email, or hide product regressions behind infrastructure noise.
 
-Similarly, if `dev down` cannot reliably clean up managed services, every retry becomes more expensive and less trustworthy.
+Similarly, if `dev down` cannot reliably clean up managed services and project-local leftovers, every retry becomes more expensive and less trustworthy. For ngrok specifically, the failure can blur email/webhook debugging because an orphaned tunnel may keep webhooks working even though the managed `ngrok` process is exited, or may prevent the managed tunnel from starting at all.
 
 ## Open questions
 
