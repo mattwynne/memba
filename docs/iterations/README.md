@@ -34,7 +34,7 @@ green than before.
 | 022 | 2026-06-05 | merged | Staff-approved request-to-club onboarding | [plan](022-request-to-club-onboarding/plan.md) |
 | 023 | 2026-06-06 | merged | Public copy pass for older community members | [plan](023-copy-review-for-older-club-members/plan.md) |
 | 024 | 2026-06-06 | merged | Transactional email template redesign | [plan](024-email-template-designs/plan.md) |
-| 025 | 2026-06-06 | implementing | Messaging and onboarding quick wins | [plan](025-messaging-and-onboarding-quick-wins/plan.md) |
+| 025 | 2026-06-06 | validated | Messaging and onboarding quick wins | [plan](025-messaging-and-onboarding-quick-wins/plan.md) |
 
 Status notes:
 
