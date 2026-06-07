@@ -21,6 +21,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Repo
 
@@ -104,6 +105,22 @@ defmodule Memba.Membership do
   def remove_member(attrs, dispatch_opts \\ []) when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command} <- remove_member_command(attrs) do
       dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Assign the built-in Membership Administrator role to an active member as a club member actor.
+
+  The caller supplies the target `:membership_id`/`:person_id`, the `:club_id`,
+  and `:actor_person_id`. The actor must have the projected
+  `club.manage_members` permission. The target member must be active in the
+  club. The built-in role ID is derived from the club so callers cannot grant an
+  arbitrary role through this Membership Administrator-specific entry point.
+  """
+  def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, attrs} <- put_membership_administrator_role_id(attrs) do
+      assign_member_role_as_club_member(attrs, dispatch_opts)
     end
   end
 
@@ -681,6 +698,13 @@ defmodule Memba.Membership do
          role_id: role_id,
          removed_by_person_id: actor_person_id
        }}
+    end
+  end
+
+  defp put_membership_administrator_role_id(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, club_id} <- cast_club_id(club_id) do
+      {:ok, Map.put(attrs, :role_id, Roles.membership_administrator_role_id(club_id))}
     end
   end
 

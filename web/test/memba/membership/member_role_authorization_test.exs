@@ -11,6 +11,51 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
   alias Memba.Membership.Permissions
   alias Memba.Membership.Roles
 
+  test "assign_membership_administrator_as_club_member/2 lets a member with club.manage_members make another active member an administrator" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+    membership_administrator_role_id = Roles.membership_administrator_role_id(club_id)
+
+    create_club!(club_id)
+    create_person!(actor_person_id, "Robin", "robin@example.com")
+    add_member!(actor_membership_id, club_id, actor_person_id)
+    assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
+    create_person!(target_person_id, "Alice", "alice@example.com")
+    add_member!(target_membership_id, club_id, target_person_id)
+
+    assert {:ok,
+            %ExecutionResult{
+              events: [
+                %MemberRoleAssigned{
+                  club_id: ^club_id,
+                  membership_id: ^target_membership_id,
+                  person_id: ^target_person_id,
+                  role_id: ^membership_administrator_role_id,
+                  assigned_by_person_id: ^actor_person_id
+                }
+              ]
+            }} =
+             Membership.assign_membership_administrator_as_club_member(
+               %{
+                 club_id: club_id,
+                 membership_id: target_membership_id,
+                 person_id: target_person_id,
+                 actor_person_id: actor_person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert Membership.person_has_club_permission?(
+             club_id,
+             target_person_id,
+             Permissions.club_manage_members()
+           )
+  end
+
   test "assign_member_role_as_club_member/2 requires club.manage_members" do
     club_id = Memba.ID.generate(:club)
     actor_person_id = Memba.ID.generate(:person)

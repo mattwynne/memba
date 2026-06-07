@@ -8,7 +8,7 @@
 - [x] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.
 - [x] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.
 - [x] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.
-- [ ] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
+- [x] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
 - [ ] 010 Add command/API support for revoking Membership Administrator while enforcing that at least one remains.
 - [ ] 011 Prevent ordinary members without `club.manage_members` from granting or revoking Membership Administrator.
 - [ ] 012 Preserve or migrate existing test data/seeds so current acceptance tests still have valid clubs and memberships. Existing clubs in test/dev may need default role setup in seeds or migration/backfill.
