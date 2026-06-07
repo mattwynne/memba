@@ -1,6 +1,7 @@
 defmodule Memba.Cucumber.MembershipSteps do
   use Cucumber.StepDefinition
 
+  import Ecto.Query
   import ExUnit.Assertions
 
   alias Memba.Membership
@@ -11,6 +12,7 @@ defmodule Memba.Cucumber.MembershipSteps do
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Slug
+  alias Memba.Repo
 
   step "Kootenay Mountaineering Club is a club", context do
     create_club(context, "Kootenay Mountaineering Club")
@@ -50,6 +52,33 @@ defmodule Memba.Cucumber.MembershipSteps do
 
   step "Pat is a member of Nelson Paddling Club", context do
     add_members(context, ["Pat"], "Nelson Paddling Club")
+  end
+
+  step "Memba staff review people", context do
+    Map.put(context, :current_read_model, :people)
+  end
+
+  step "Memba should list Alice as one person", context do
+    assert Map.get(context, :current_read_model) == :people
+    person_id = person_id_from_context!(context, "Alice")
+
+    count =
+      PersonProjection
+      |> where([person], person.name == "Alice")
+      |> Repo.aggregate(:count)
+
+    assert count == 1
+    assert %PersonProjection{name: "Alice"} = Membership.get_person(person_id)
+
+    context
+  end
+
+  step "Memba should show Alice's Kootenay Mountaineering Club membership", context do
+    assert_person_membership(context, "Alice", "Kootenay Mountaineering Club")
+  end
+
+  step "Memba should show Alice's Nelson Paddling Club membership", context do
+    assert_person_membership(context, "Alice", "Nelson Paddling Club")
   end
 
   defp create_club(context, club_name) do
@@ -161,6 +190,28 @@ defmodule Memba.Cucumber.MembershipSteps do
              Enum.find(Membership.list_active_members_of_club(club_id), &(&1.id == person_id))
 
     update_context_map(context, :memberships, {club_name, person_name}, membership_id)
+  end
+
+  defp person_id_from_context!(context, person_name) do
+    case fetch_from_context!(context, :people, person_name) do
+      %{person_id: person_id} -> person_id
+      person_id when is_binary(person_id) -> person_id
+    end
+  end
+
+  defp assert_person_membership(context, person_name, club_name) do
+    assert Map.get(context, :current_read_model) == :people
+
+    person_id = person_id_from_context!(context, person_name)
+    club_id = fetch_from_context!(context, :clubs, club_name)
+
+    assert Membership.active_member_of_club?(club_id, person_id)
+
+    assert Enum.any?(Membership.list_active_members_of_club(club_id), fn member ->
+             member.id == person_id and member.name == person_name
+           end)
+
+    context
   end
 
   defp fetch_from_context!(context, collection_key, item_key) do

@@ -24,6 +24,10 @@ When("{word} opens the staff People page", async function (_staffName) {
   await openStaffPage(this, staffPages.People);
 });
 
+When("Memba staff review people", async function () {
+  await openStaffPage(this, staffPages.People);
+});
+
 When("{word} opens the staff Messages page", async function (_staffName) {
   await openStaffPage(this, staffPages.Messages);
 });
@@ -75,9 +79,11 @@ Then(
 );
 
 Then("{word} should see Alice as one person", async function (_staffName) {
-  await playwrightExpect(personRows(this, "Alice")).toHaveCount(1, {
-    timeout: projectionTimeoutMs(this)
-  });
+  await assertPersonListedOnce(this, "Alice");
+});
+
+Then("Memba should list Alice as one person", async function () {
+  await assertPersonListedOnce(this, "Alice");
 });
 
 Then(
@@ -93,6 +99,14 @@ Then(
     await assertPersonMembership(this, personName, "Nelson Paddling Club");
   }
 );
+
+Then("Memba should show Alice's Kootenay Mountaineering Club membership", async function () {
+  await assertPersonMembership(this, "Alice", kootenayClubName);
+});
+
+Then("Memba should show Alice's Nelson Paddling Club membership", async function () {
+  await assertPersonMembership(this, "Alice", "Nelson Paddling Club");
+});
 
 Then("{word} should see {string} for Kootenay Mountaineering Club", async function (_staffName, subject) {
   const row = await messageRow(this, subject);
@@ -152,6 +166,12 @@ function personRows(world, personName) {
   return world.page.locator(
     `[data-testid="admin-person-row"][data-person-name=${cssString(personName)}]`
   );
+}
+
+async function assertPersonListedOnce(world, personName) {
+  await playwrightExpect(personRows(world, personName)).toHaveCount(1, {
+    timeout: projectionTimeoutMs(world)
+  });
 }
 
 async function assertPersonMembership(world, personName, clubName) {

@@ -22,12 +22,11 @@ Feature: Memba staff operations
 
 # Rule: People are global records that can have memberships in multiple clubs
 
-    @todo-domain
     Scenario: Alice belongs to two clubs
-      When Pat opens the staff People page
-      Then Pat should see Alice as one person
-      And Pat should see that Alice is a member of Kootenay Mountaineering Club
-      And Pat should see that Alice is a member of Nelson Paddling Club
+      When Memba staff review people
+      Then Memba should list Alice as one person
+      And Memba should show Alice's Kootenay Mountaineering Club membership
+      And Memba should show Alice's Nelson Paddling Club membership
 
 # Rule: Staff review messages without composing them
 
