@@ -17,6 +17,7 @@ defmodule Memba.Membership.AppTest do
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projectors.Person, as: PersonProjector
+  alias Memba.Membership.Projectors.Role, as: RoleProjector
   alias Memba.Membership.Router
 
   test "Membership Commanded app is supervised by the Phoenix application" do
@@ -36,6 +37,14 @@ defmodule Memba.Membership.AppTest do
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{MembershipProjector, _opts}, pid, :worker, [MembershipProjector]}
              when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{RoleProjector, _opts}, pid, :worker, [RoleProjector]} when is_pid(pid) ->
                true
 
              _child ->

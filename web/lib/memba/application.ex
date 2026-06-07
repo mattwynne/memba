@@ -22,6 +22,7 @@ defmodule Memba.Application do
       Memba.Messaging.Projectors.InboundEmailSource,
       Memba.Membership.Projectors.Club,
       Memba.Membership.Projectors.Membership,
+      Memba.Membership.Projectors.Role,
       Memba.Membership.Projectors.Person,
       {DNSCluster, query: Application.get_env(:memba, :dns_cluster_query) || :ignore},
       # Start a worker by calling: Memba.Worker.start_link(arg)
