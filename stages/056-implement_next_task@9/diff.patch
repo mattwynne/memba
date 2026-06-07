@@ -1,0 +1,118 @@
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index 0fa9767..649c49e 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Add projection tables/read models for roles, role permissions, role assignments, and/or flattened member permissions. Keep projections queryable by club and person/member.
+ - [x] 007 Add a public Membership query/API for permission checks, for example “does this person have `club.manage_members` in this club?”. Exact function names are implementation details.
+ - [x] 008 Add authorization handling to membership-management operations. For paths where Memba staff currently act through staff-only screens, keep staff authorization separate, but make club-member role assignment/removal commands rely on the permission model.
+-- [ ] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
++- [x] 009 Add command/API support for a member with `club.manage_members` to make another active member a Membership Administrator.
+ - [ ] 010 Add command/API support for revoking Membership Administrator while enforcing that at least one remains.
+ - [ ] 011 Prevent ordinary members without `club.manage_members` from granting or revoking Membership Administrator.
+ - [ ] 012 Preserve or migrate existing test data/seeds so current acceptance tests still have valid clubs and memberships. Existing clubs in test/dev may need default role setup in seeds or migration/backfill.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 21bf535..84a8973 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -21,6 +21,7 @@ defmodule Memba.Membership do
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person
+   alias Memba.Membership.Projections.PersonEmailAddress
++  alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
+   alias Memba.Repo
+ 
+@@ -107,6 +108,22 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  @doc """
++  Assign the built-in Membership Administrator role to an active member as a club member actor.
++
++  The caller supplies the target `:membership_id`/`:person_id`, the `:club_id`,
++  and `:actor_person_id`. The actor must have the projected
++  `club.manage_members` permission. The target member must be active in the
++  club. The built-in role ID is derived from the club so callers cannot grant an
++  arbitrary role through this Membership Administrator-specific entry point.
++  """
++  def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
++      when is_map(attrs) and is_list(dispatch_opts) do
++    with {:ok, attrs} <- put_membership_administrator_role_id(attrs) do
++      assign_member_role_as_club_member(attrs, dispatch_opts)
++    end
++  end
++
+   @doc """
+   Assign a club role to an active member as a club member actor.
+ 
+@@ -684,6 +701,13 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp put_membership_administrator_role_id(attrs) do
++    with {:ok, club_id} <- fetch_required(attrs, :club_id),
++         {:ok, club_id} <- cast_club_id(club_id) do
++      {:ok, Map.put(attrs, :role_id, Roles.membership_administrator_role_id(club_id))}
++    end
++  end
++
+   defp prevent_duplicate_active_membership(%AddMember{} = command) do
+     if active_member_of_club?(command.club_id, command.person_id) do
+       {:error, :already_active_member}
+diff --git a/web/test/memba/membership/member_role_authorization_test.exs b/web/test/memba/membership/member_role_authorization_test.exs
+index c71aeab..caca169 100644
+--- a/web/test/memba/membership/member_role_authorization_test.exs
++++ b/web/test/memba/membership/member_role_authorization_test.exs
+@@ -11,6 +11,51 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Roles
+ 
++  test "assign_membership_administrator_as_club_member/2 lets a member with club.manage_members make another active member an administrator" do
++    club_id = Memba.ID.generate(:club)
++    actor_person_id = Memba.ID.generate(:person)
++    actor_membership_id = Memba.ID.generate(:membership)
++    target_person_id = Memba.ID.generate(:person)
++    target_membership_id = Memba.ID.generate(:membership)
++    membership_administrator_role_id = Roles.membership_administrator_role_id(club_id)
++
++    create_club!(club_id)
++    create_person!(actor_person_id, "Robin", "robin@example.com")
++    add_member!(actor_membership_id, club_id, actor_person_id)
++    assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
++    create_person!(target_person_id, "Alice", "alice@example.com")
++    add_member!(target_membership_id, club_id, target_person_id)
++
++    assert {:ok,
++            %ExecutionResult{
++              events: [
++                %MemberRoleAssigned{
++                  club_id: ^club_id,
++                  membership_id: ^target_membership_id,
++                  person_id: ^target_person_id,
++                  role_id: ^membership_administrator_role_id,
++                  assigned_by_person_id: ^actor_person_id
++                }
++              ]
++            }} =
++             Membership.assign_membership_administrator_as_club_member(
++               %{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target_person_id,
++                 actor_person_id: actor_person_id
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert Membership.person_has_club_permission?(
++             club_id,
++             target_person_id,
++             Permissions.club_manage_members()
++           )
++  end
++
+   test "assign_member_role_as_club_member/2 requires club.manage_members" do
+     club_id = Memba.ID.generate(:club)
+     actor_person_id = Memba.ID.generate(:person)
