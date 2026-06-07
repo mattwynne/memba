@@ -64,6 +64,35 @@ This showed three separate weaknesses accumulating:
 
 A first containment commit, `b05fae6c Classify acceptance scenarios by runner intent`, added explicit runner-intent tags and replaced resting `@wip` scenarios with `@todo`/`@todo-*` classifications. This did not fix the underlying generated domain-runner gap; it made the remaining debt visible.
 
+### Progress note: 2026-06-07
+
+Commit `02cd9dc4 Add acceptance scenario count command` added a standalone operator check:
+
+```bash
+./bin/dev acceptance-tests-count
+```
+
+The command asks each runner what it can see:
+
+- `cucumber-js` selected scenarios using `acceptance-tests/cucumber.js`.
+- `cucumber-js` visible scenarios using the same paths with no tag filter.
+- `cucumber-elixir` configured feature-file count using `Cucumber.Discovery.discover()`.
+- `cucumber-elixir` visible scenario count using its configured feature paths and parser.
+- `cucumber-elixir` selected scenario count using the current `web/config/test.exs` tag filter.
+- per-feature visible counts from the Elixir parser.
+
+Current output after the containment tagging pass was:
+
+```text
+cucumber-js selected: 47 scenarios
+cucumber-js visible with no tag filter: 59 scenarios
+cucumber-elixir configured feature files: 9
+cucumber-elixir visible with configured feature paths and parser: 59 scenarios
+cucumber-elixir selected by config/test.exs tag filter: 22 scenarios
+```
+
+This is progress because it makes parser/glob/tag-filter drift visible without running the full browser suite or pretending the manual domain harness is complete. It is not yet prevention: the command is not wired into `dev check`, does not fail on unexpected count changes, and does not prove the selected domain scenarios are actually executed by generated Elixir Cucumber tests.
+
 ## Impact
 
 The feedback from `mix test` can be misunderstood as complete shared-scenario coverage when it is only partial domain/application coverage. That creates a quality risk: a scenario can exist in the shared specification and pass in, or only be checked by, the browser suite while missing fast domain/application feedback.
@@ -91,6 +120,7 @@ The suite also lacked a stable tag taxonomy for runner intent and coverage debt.
 - The difference between domain-suitable scenarios, browser-only scenarios, and not-yet-wired scenarios was implicit until the 2026-06-07 containment tagging pass.
 - `Cucumber.compile_features!()` is not called from `web/test/test_helper.exs`, so the ADR-described generated runner is not part of the normal `mix test` path.
 - The current Elixir Cucumber dependency cannot parse `Rule:` sections, forcing the team either to comment out rules or avoid the BDD structure the formulation skill recommends.
+- `./bin/dev acceptance-tests-count` now gives a cheap scenario-count inventory from both Cucumber implementations, but it is an operator command rather than a quality gate.
 
 ## Why this matters
 
