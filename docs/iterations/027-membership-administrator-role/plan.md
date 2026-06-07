@@ -1,7 +1,7 @@
 # Membership Administrator role foundation
 
 Date: 2026-06-06
-Status: ready
+Status: validated
 
 ## Goal
 
