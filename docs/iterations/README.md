@@ -35,6 +35,7 @@ green than before.
 | 023 | 2026-06-06 | merged | Public copy pass for older community members | [plan](023-copy-review-for-older-club-members/plan.md) |
 | 024 | 2026-06-06 | merged | Transactional email template redesign | [plan](024-email-template-designs/plan.md) |
 | 025 | 2026-06-06 | merged | Messaging and onboarding quick wins | [plan](025-messaging-and-onboarding-quick-wins/plan.md) |
+| 026 | 2026-06-06 | ready | Membership Administrator role foundation | [plan](026-membership-administrator-role/plan.md) |
 
 Status notes:
 
@@ -52,3 +53,4 @@ Shared acceptance feature files used across these iterations:
 - [`member_club_subdomains.feature`](../../acceptance-tests/features/member_club_subdomains.feature) (`@wip` planning scenarios for iteration 018 until member-facing club subdomain routing and navigation are implemented)
 - [`memba_staff_operations.feature`](../../acceptance-tests/features/memba_staff_operations.feature) (`@wip` planning scenarios for iteration 021 until the redesigned staff operations pages, global People page, and global Messages page are implemented)
 - [`request_account.feature`](../../acceptance-tests/features/request_account.feature) (`@wip` planning scenarios for iteration 022 until staff-approved request-to-club onboarding is implemented; iteration 025 adds an `@wip` scenario for opening request conversion from the staff notification email)
+- [`club_membership_administration.feature`](../../acceptance-tests/features/club_membership_administration.feature) (`@wip` planning scenarios for iteration 026 until the Membership Administrator role and permission foundation is implemented)
