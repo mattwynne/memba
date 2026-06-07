@@ -1,0 +1,605 @@
+diff --git a/docs/iterations/024-email-template-designs/todo.md b/docs/iterations/024-email-template-designs/todo.md
+index 67e7cf2..c7cbf42 100644
+--- a/docs/iterations/024-email-template-designs/todo.md
++++ b/docs/iterations/024-email-template-designs/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Update `web/lib/memba/accounts/auth_email.ex` to render the new sign-in template while preserving provider options and error handling. Keep `deliver_sign_in_link/2`; add an optional context/options variant for group-led sign-in where callers can provide group name/context.
+ - [x] 005 Update sign-in call sites only where group context is already available or cheaply derivable, such as club-subdomain sign-in. When no group context is available, keep the Memba-led sign-in subject/heading.
+ - [x] 006 Update `web/lib/memba/onboarding/welcome_email.ex` to use the compatible group-led welcome/sign-in variant and pass the converted club as context.
+-- [ ] 007 Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
++- [x] 007 Update member-message delivery HTML in `web/lib/memba/messaging/email_delivery_providers/postmark.ex` and `web/lib/memba/messaging/email_delivery_providers/local.ex`, extracting shared rendering so both paths stay aligned. Keep plain-text member-message bodies exactly as the sender wrote them.
+ - [ ] 008 Update `web/lib/memba/messaging/inbound_club_rejection_email.ex` to use the new delivery-notice template, subject rules, reason copy, next-step copy, threading headers, and metadata.
+ - [ ] 009 Update tests, especially:
+ - [ ] 010 Run targeted email-related tests while developing.
+diff --git a/web/lib/memba/messaging.ex b/web/lib/memba/messaging.ex
+index 184323e..fe77f3a 100644
+--- a/web/lib/memba/messaging.ex
++++ b/web/lib/memba/messaging.ex
+@@ -855,15 +855,17 @@ defmodule Memba.Messaging do
+   end
+ 
+   defp deliver_to_provider(%SendMessage{} = command) do
++    club = Membership.get_club(command.club_id)
++
+     Enum.reduce_while(command.recipients, :ok, fn %Recipient{} = recipient, :ok ->
+-      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient)) do
++      case EmailDeliveryProvider.deliver(email_delivery_request(command, recipient, club)) do
+         :ok -> {:cont, :ok}
+         {:error, _reason} = error -> {:halt, error}
+       end
+     end)
+   end
+ 
+-  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient) do
++  defp email_delivery_request(%SendMessage{} = command, %Recipient{} = recipient, club) do
+     sender = Membership.get_person(command.sender_id)
+     sender_address = Membership.get_person_primary_email(command.sender_id)
+ 
+@@ -874,6 +876,7 @@ defmodule Memba.Messaging do
+       recipient_id: recipient.person_id,
+       recipient_name: recipient.name,
+       recipient_address: recipient.email,
++      club_name: club_name(club),
+       sender_name: sender.name,
+       sender_address: sender_address,
+       channel: :email,
+@@ -881,4 +884,7 @@ defmodule Memba.Messaging do
+       body: command.body
+     }
+   end
++
++  defp club_name(%{name: name}), do: name
++  defp club_name(_club), do: nil
+ end
+diff --git a/web/lib/memba/messaging/email_delivery_providers/local.ex b/web/lib/memba/messaging/email_delivery_providers/local.ex
+index 769dafe..39b5390 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/local.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/local.ex
+@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.LocalDeliveryFacts
++  alias Memba.Messaging.MemberMessageEmail
+ 
+   @behaviour EmailDeliveryProvider
+ 
+@@ -28,12 +29,12 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+ 
+   defp email(%EmailDeliveryRequest{} = request) do
+     new()
+-    |> from({sender_display_name(request), from_address()})
+-    |> reply_to({request.sender_name, request.sender_address})
+-    |> to({request.recipient_name, request.recipient_address})
+-    |> subject(request.subject)
++    |> from({MemberMessageEmail.from_display_name(request), from_address()})
++    |> reply_to(MemberMessageEmail.reply_to(request))
++    |> to(MemberMessageEmail.to(request))
++    |> subject(MemberMessageEmail.subject(request))
+     |> text_body(request.body)
+-    |> html_body(html_body(request.body))
++    |> html_body(MemberMessageEmail.html_body(request))
+     |> put_provider_option(:metadata, metadata(request))
+   end
+ 
+@@ -43,10 +44,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+     |> normalize_address()
+   end
+ 
+-  defp sender_display_name(%EmailDeliveryRequest{} = request) do
+-    "#{request.sender_name} via Memba"
+-  end
+-
+   defp provider_config do
+     Application.get_env(:memba, Memba.Messaging.EmailDeliveryProviders.Postmark, [])
+   end
+@@ -62,22 +59,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Local do
+     }
+   end
+ 
+-  defp html_body(text) do
+-    escaped_body =
+-      text
+-      |> String.split(~r/\r\n|\n|\r/, trim: false)
+-      |> Enum.map(&html_escape_to_string/1)
+-      |> Enum.join("<br>\n")
+-
+-    "<html><body><p>#{escaped_body}</p></body></html>"
+-  end
+-
+-  defp html_escape_to_string(text) do
+-    text
+-    |> Phoenix.HTML.html_escape()
+-    |> Phoenix.HTML.safe_to_string()
+-  end
+-
+   defp deliver_email(email) do
+     email
+     |> Memba.Mailer.deliver()
+diff --git a/web/lib/memba/messaging/email_delivery_providers/postmark.ex b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+index a2eb92e..521d4f1 100644
+--- a/web/lib/memba/messaging/email_delivery_providers/postmark.ex
++++ b/web/lib/memba/messaging/email_delivery_providers/postmark.ex
+@@ -12,6 +12,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
+   alias Memba.Messaging.EmailDeliveryProvider
+   alias Memba.Messaging.EmailDeliveryRequest
+   alias Memba.Messaging.EmailDeliveryProviders.PostmarkConfig
++  alias Memba.Messaging.MemberMessageEmail
+ 
+   @behaviour EmailDeliveryProvider
+ 
+@@ -33,19 +34,15 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
+ 
+   defp email(%EmailDeliveryRequest{} = request, %PostmarkConfig{} = config) do
+     new()
+-    |> from({sender_display_name(request), config.from})
+-    |> reply_to({request.sender_name, request.sender_address})
+-    |> to({request.recipient_name, request.recipient_address})
+-    |> subject(request.subject)
++    |> from({MemberMessageEmail.from_display_name(request), config.from})
++    |> reply_to(MemberMessageEmail.reply_to(request))
++    |> to(MemberMessageEmail.to(request))
++    |> subject(MemberMessageEmail.subject(request))
+     |> text_body(request.body)
+-    |> html_body(html_body(request.body))
++    |> html_body(MemberMessageEmail.html_body(request))
+     |> put_provider_option(:metadata, metadata(request))
+   end
+ 
+-  defp sender_display_name(%EmailDeliveryRequest{} = request) do
+-    "#{request.sender_name} via Memba"
+-  end
+-
+   defp metadata(%EmailDeliveryRequest{} = request) do
+     %{
+       "memba_message_id" => request.message_id,
+@@ -54,22 +51,6 @@ defmodule Memba.Messaging.EmailDeliveryProviders.Postmark do
+     }
+   end
+ 
+-  defp html_body(text) do
+-    escaped_body =
+-      text
+-      |> String.split(~r/\r\n|\n|\r/, trim: false)
+-      |> Enum.map(&html_escape_to_string/1)
+-      |> Enum.join("<br>\n")
+-
+-    "<html><body><p>#{escaped_body}</p></body></html>"
+-  end
+-
+-  defp html_escape_to_string(text) do
+-    text
+-    |> Phoenix.HTML.html_escape()
+-    |> Phoenix.HTML.safe_to_string()
+-  end
+-
+   defp deliver_email(email) do
+     email
+     |> Memba.Mailer.deliver()
+diff --git a/web/lib/memba/messaging/email_delivery_request.ex b/web/lib/memba/messaging/email_delivery_request.ex
+index accbb36..4abcf47 100644
+--- a/web/lib/memba/messaging/email_delivery_request.ex
++++ b/web/lib/memba/messaging/email_delivery_request.ex
+@@ -28,6 +28,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+     :recipient_id,
+     :recipient_name,
+     :recipient_address,
++    :club_name,
+     :sender_name,
+     :sender_address,
+     :channel,
+@@ -42,6 +43,7 @@ defmodule Memba.Messaging.EmailDeliveryRequest do
+           recipient_id: String.t(),
+           recipient_name: String.t(),
+           recipient_address: String.t(),
++          club_name: String.t() | nil,
+           sender_name: String.t(),
+           sender_address: String.t(),
+           channel: :email,
+diff --git a/web/lib/memba/messaging/member_message_email.ex b/web/lib/memba/messaging/member_message_email.ex
+new file mode 100644
+index 0000000..0a2e31b
+--- /dev/null
++++ b/web/lib/memba/messaging/member_message_email.ex
+@@ -0,0 +1,137 @@
++defmodule Memba.Messaging.MemberMessageEmail do
++  @moduledoc """
++  Shared rendering and header helpers for member-message delivery emails.
++
++  Member-message text bodies remain exactly as the sender wrote them. The HTML
++  part uses Memba's v2 group-led template, with Memba only as the carrier.
++  """
++
++  alias Memba.EmailTemplates
++  alias Memba.Messaging.EmailDeliveryRequest
++
++  @doc "Return the sanitized From display name for a member-message email."
++  def from_display_name(%EmailDeliveryRequest{} = request) do
++    "#{sender_name(request)} via Memba"
++  end
++
++  @doc "Return the sanitized Reply-To tuple for a member-message email."
++  def reply_to(%EmailDeliveryRequest{} = request) do
++    {sender_name(request), request.sender_address}
++  end
++
++  @doc "Return the sanitized To tuple for a member-message email."
++  def to(%EmailDeliveryRequest{} = request) do
++    {recipient_name(request), request.recipient_address}
++  end
++
++  @doc "Return the sanitized subject for a member-message email header."
++  def subject(%EmailDeliveryRequest{} = request) do
++    request.subject
++    |> EmailTemplates.sanitize_header_text()
++    |> default_text("Message from #{group_name(request)}")
++  end
++
++  @doc "Render the v2-compatible HTML body for a member-message email."
++  def html_body(%EmailDeliveryRequest{} = request) do
++    group_name = group_name(request)
++    sender_name = sender_name(request)
++    title = subject(request)
++
++    content = [
++      EmailTemplates.group_header(group_name,
++        label: "Members message",
++        padding: "18px 28px",
++        border_bottom: true
++      ),
++      sender_row(sender_name, group_name),
++      message_section(title, request.body),
++      reply_hint(sender_name)
++    ]
++
++    EmailTemplates.render_shell(
++      title: title,
++      preheader: "A message from #{sender_name} to members of #{group_name}.",
++      content: content,
++      footer:
++        EmailTemplates.memba_footer(
++          group_name: group_name,
++          recipient_email: request.recipient_address,
++          reason: membership_reason(request.club_name, group_name)
++        )
++    )
++  end
++
++  defp sender_row(sender_name, group_name) do
++    """
++        <tr>
++          <td class="gutter" style="padding:22px 28px 4px;">
++            <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
++              <td style="vertical-align:middle;">
++                <div style="font-size:15px; font-weight:600; color:#15201c; letter-spacing:-0.01em;">#{EmailTemplates.escaped_text(sender_name)}</div>
++                <div style="font-size:12.5px; color:#7d877f; margin-top:1px;">to all members of #{EmailTemplates.escaped_text(group_name)}</div>
++              </td>
++            </tr></table>
++          </td>
++        </tr>
++    """
++  end
++
++  defp message_section(title, body) do
++    [
++      EmailTemplates.card_section(
++        [
++          EmailTemplates.heading(title,
++            margin: "6px 0 14px"
++          ),
++          EmailTemplates.plaintext_to_html(body,
++            color: "#2c3a35",
++            font_size: "15.5px"
++          )
++        ],
++        padding: "14px 28px 22px"
++      )
++    ]
++  end
++
++  defp reply_hint(sender_name) do
++    """
++        <tr>
++          <td class="gutter" style="padding:0 28px 22px;">
++            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
++              <td style="background:#f7f6f3; border:1px solid #e6e3dc; border-radius:10px; padding:13px 16px; font-size:13px; line-height:1.5; color:#4b5a55;">
++                Reply to this email and it goes straight to <b style="color:#15201c; font-weight:600;">#{EmailTemplates.escaped_text(sender_name)}</b> &mdash; not to the whole group.
++              </td>
++            </tr></table>
++          </td>
++        </tr>
++    """
++  end
++
++  defp sender_name(%EmailDeliveryRequest{} = request) do
++    request.sender_name
++    |> EmailTemplates.sanitize_header_text()
++    |> default_text("A member")
++  end
++
++  defp recipient_name(%EmailDeliveryRequest{} = request) do
++    request.recipient_name
++    |> EmailTemplates.sanitize_header_text()
++    |> default_text("Member")
++  end
++
++  defp group_name(%EmailDeliveryRequest{} = request) do
++    request.club_name
++    |> EmailTemplates.sanitize_header_text()
++    |> default_text("Your group")
++  end
++
++  defp membership_reason(club_name, display_name) do
++    case EmailTemplates.sanitize_header_text(club_name) do
++      "" -> "You're getting this because you're an active member of this group."
++      _club_name -> "You're getting this because you're an active member of #{display_name}."
++    end
++  end
++
++  defp default_text("", fallback), do: fallback
++  defp default_text(text, _fallback), do: text
++end
+diff --git a/web/test/memba/messaging/email_delivery_providers/local_test.exs b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+index d429661..201a42b 100644
+--- a/web/test/memba/messaging/email_delivery_providers/local_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/local_test.exs
+@@ -32,7 +32,11 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+   end
+ 
+   test "hands a rendered member message email to Swoosh" do
+-    request = email_delivery_request(body: "Hello <Alice> & Bob\nBring route ideas.")
++    request =
++      email_delivery_request(
++        club_name: "Kootenay <Mountaineers>",
++        body: "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
++      )
+ 
+     assert :ok = Local.deliver(request)
+ 
+@@ -41,8 +45,25 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+       assert email.reply_to == {"Bob", "bob@example.test"}
+       assert email.to == [{"Alice", "alice@example.test"}]
+       assert email.subject == "Trip planning night"
+-      assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."
+-      assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas."
++
++      assert email.text_body ==
++               "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
++
++      assert email.html_body =~ "<!doctype html>"
++      assert email.html_body =~ "Kootenay &lt;Mountaineers&gt;"
++      assert email.html_body =~ "Members message"
++      assert email.html_body =~ "Bob"
++      assert email.html_body =~ "to all members of Kootenay &lt;Mountaineers&gt;"
++      assert email.html_body =~ "Trip planning night"
++      assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob"
++      assert email.html_body =~ "Bring route ideas.<br>\n&lt;script&gt;alert(1)&lt;/script&gt;"
++      assert email.html_body =~ "Reply to this email and it goes straight to"
++      assert email.html_body =~ "not to the whole group"
++      assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
++      assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
++
++      refute email.html_body =~ "<Alice>"
++      refute email.html_body =~ "<script>"
+ 
+       assert email.provider_options[:metadata] == %{
+                "memba_message_id" => request.message_id,
+@@ -58,7 +79,30 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+     assert fact.to == ["Alice <alice@example.test>"]
+     assert fact.from == "Bob via Memba <messages@mail.memba.io>"
+     assert fact.subject == "Trip planning night"
+-    assert fact.text_body == "Hello <Alice> & Bob\nBring route ideas."
++
++    assert fact.text_body ==
++             "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
++  end
++
++  test "sanitizes local member-message header display values while preserving the text body" do
++    request =
++      email_delivery_request(
++        recipient_name: "Alice\nAdams",
++        sender_name: "Bob\nBarker",
++        subject: "Trip planning\nnight",
++        body: "Hello exactly as written.\nDo not add guidance here."
++      )
++
++    assert :ok = Local.deliver(request)
++
++    assert_email_sent(fn email ->
++      assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
++      assert email.reply_to == {"Bob Barker", "bob@example.test"}
++      assert email.to == [{"Alice Adams", "alice@example.test"}]
++      assert email.subject == "Trip planning night"
++      refute email.text_body =~ "Reply to this email"
++      assert email.text_body == "Hello exactly as written.\nDo not add guidance here."
++    end)
+   end
+ 
+   test "does not hand unsupported delivery channels to Swoosh" do
+@@ -79,6 +123,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.LocalTest do
+         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(overrides, :recipient_name, "Alice"),
+       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.test"),
++      club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
+       sender_name: Keyword.get(overrides, :sender_name, "Bob"),
+       sender_address: Keyword.get(overrides, :sender_address, "bob@example.test"),
+       channel: Keyword.get(overrides, :channel, :email),
+diff --git a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+index db7f8f7..a75086b 100644
+--- a/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
++++ b/web/test/memba/messaging/email_delivery_providers/postmark_test.exs
+@@ -23,13 +23,17 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     :ok
+   end
+ 
+-  test "builds and sends a multipart email with Postmark correlation metadata and no open tracking" do
++  test "builds and sends a multipart member-message email with Postmark correlation metadata and no open tracking" do
+     Application.put_env(:memba, Postmark,
+       from: "messages@mail.memba.io",
+       reply_to: "help@memba.io"
+     )
+ 
+-    request = email_delivery_request(body: "Hello <Alice> & Bob\nBring route ideas.")
++    request =
++      email_delivery_request(
++        club_name: "Kootenay <Mountaineers>",
++        body: "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
++      )
+ 
+     assert :ok = Postmark.deliver(request)
+ 
+@@ -39,12 +43,25 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     assert email.reply_to == {"Bob Barker", "bob@example.com"}
+     assert email.to == [{"Alice Adams", "alice@example.com"}]
+     assert email.subject == "Trip planning night"
+-    assert email.text_body == "Hello <Alice> & Bob\nBring route ideas."
+ 
+-    assert email.html_body ==
+-             "<html><body><p>Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas.</p></body></html>"
++    assert email.text_body ==
++             "Hello <Alice> & Bob\n\nBring route ideas.\n<script>alert(1)</script>"
++
++    assert email.html_body =~ "<!doctype html>"
++    assert email.html_body =~ "Kootenay &lt;Mountaineers&gt;"
++    assert email.html_body =~ "Members message"
++    assert email.html_body =~ "Bob Barker"
++    assert email.html_body =~ "to all members of Kootenay &lt;Mountaineers&gt;"
++    assert email.html_body =~ "Trip planning night"
++    assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob"
++    assert email.html_body =~ "Bring route ideas.<br>\n&lt;script&gt;alert(1)&lt;/script&gt;"
++    assert email.html_body =~ "Reply to this email and it goes straight to"
++    assert email.html_body =~ "not to the whole group"
++    assert email.html_body =~ "Delivered for Kootenay &lt;Mountaineers&gt; by"
++    assert email.html_body =~ "active member of Kootenay &lt;Mountaineers&gt;"
+ 
+     refute email.html_body =~ "<Alice>"
++    refute email.html_body =~ "<script>"
+ 
+     assert email.provider_options == %{
+              metadata: %{
+@@ -57,6 +74,29 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+     refute Map.has_key?(email.provider_options, :track_opens)
+   end
+ 
++  test "sanitizes member-message header display values while preserving the text body" do
++    Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
++
++    request =
++      email_delivery_request(
++        recipient_name: "Alice\nAdams",
++        sender_name: "Bob\nBarker",
++        subject: "Trip planning\nnight",
++        body: "Hello exactly as written.\nDo not add guidance here."
++      )
++
++    assert :ok = Postmark.deliver(request)
++
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.from == {"Bob Barker via Memba", "messages@mail.memba.io"}
++    assert email.reply_to == {"Bob Barker", "bob@example.com"}
++    assert email.to == [{"Alice Adams", "alice@example.com"}]
++    assert email.subject == "Trip planning night"
++    assert email.text_body == "Hello exactly as written.\nDo not add guidance here."
++    refute email.text_body =~ "Reply to this email"
++  end
++
+   test "uses the verified Memba sender address even when no provider reply-to is configured" do
+     Application.put_env(:memba, Postmark, from: "messages@mail.memba.io")
+ 
+@@ -133,6 +173,7 @@ defmodule Memba.Messaging.EmailDeliveryProviders.PostmarkTest do
+         Keyword.get_lazy(overrides, :recipient_id, fn -> Memba.ID.generate(:person) end),
+       recipient_name: Keyword.get(overrides, :recipient_name, "Alice Adams"),
+       recipient_address: Keyword.get(overrides, :recipient_address, "alice@example.com"),
++      club_name: Keyword.get(overrides, :club_name, "Kootenay Mountaineering Club"),
+       sender_name: Keyword.get(overrides, :sender_name, "Bob Barker"),
+       sender_address: Keyword.get(overrides, :sender_address, "bob@example.com"),
+       channel: Keyword.get(overrides, :channel, :email),
+diff --git a/web/test/memba/messaging/send_club_message_test.exs b/web/test/memba/messaging/send_club_message_test.exs
+index b80170f..cfaa398 100644
+--- a/web/test/memba/messaging/send_club_message_test.exs
++++ b/web/test/memba/messaging/send_club_message_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Messaging.SendClubMessageTest do
+   alias Commanded.Commands.ExecutionResult
+   alias Memba.Membership.App, as: MembershipApp
+   alias Memba.Membership.Commands.AddMember
++  alias Memba.Membership.Commands.CreateClub
+   alias Memba.Membership.Commands.CreatePerson
+   alias Memba.Messaging
+   alias Memba.Messaging.EmailDeliveryProviders.Fake
+@@ -237,6 +238,36 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     refute "bob@example.com" in delivered_addresses
+   end
+ 
++  test "includes the club name in each member-message delivery request when it is available" do
++    club_id = Memba.ID.generate(:club)
++    create_club(club_id, "Kootenay Mountaineering Club")
++
++    alice = create_person(name: "Alice", email: "alice@example.com")
++    add_member(club_id, alice.person_id)
++
++    message_id = Memba.ID.generate(:message)
++
++    assert {:ok, %ExecutionResult{}} =
++             Messaging.send_club_message(
++               %{
++                 message_id: message_id,
++                 club_id: club_id,
++                 sender_id: alice.person_id,
++                 subject: "Trip planning night",
++                 body: "Bring route ideas."
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert [
++             %EmailDeliveryRequest{
++               club_id: ^club_id,
++               club_name: "Kootenay Mountaineering Club"
++             }
++           ] = Fake.deliveries()
++  end
++
+   test "does not call the provider when the send command is rejected" do
+     club_id = Memba.ID.generate(:club)
+     alice = create_person(name: "Alice", email: "alice@example.com")
+@@ -291,6 +322,18 @@ defmodule Memba.Messaging.SendClubMessageTest do
+     assert Messaging.get_memba_staff_email_delivery(message_id, alice.person_id).status == "sent"
+   end
+ 
++  defp create_club(club_id, name) do
++    assert :ok =
++             MembershipApp.dispatch(
++               %CreateClub{
++                 club_id: club_id,
++                 name: name,
++                 slug: "kootenay-mountaineering-club"
++               },
++               consistency: :strong
++             )
++  end
++
+   defp create_person(attrs) do
+     email = Keyword.fetch!(attrs, :email)
+     email_addresses = Keyword.get(attrs, :email_addresses, [%{email: email, is_primary: true}])
+diff --git a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+index 9d1a4f3..f2b5e6e 100644
+--- a/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
++++ b/web/test/memba_web/controllers/postmark_webhook_controller_test.exs
+@@ -45,8 +45,14 @@ defmodule MembaWeb.PostmarkWebhookControllerTest do
+     assert email.subject == "Trip planning night"
+     assert email.text_body == body
+ 
+-    assert email.html_body ==
+-             "<html><body><p>Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas.</p></body></html>"
++    assert email.html_body =~ "<!doctype html>"
++    assert email.html_body =~ "Members message"
++    assert email.html_body =~ "Bob Barker"
++    assert email.html_body =~ "Trip planning night"
++    assert email.html_body =~ "Hello &lt;Alice&gt; &amp; Bob<br>\nBring route ideas."
++    assert email.html_body =~ "Reply to this email and it goes straight to"
++    assert email.html_body =~ "Delivered for Your group by"
++    refute email.html_body =~ "<Alice>"
+ 
+     assert metadata = email.provider_options[:metadata]
+ 
