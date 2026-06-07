@@ -21,6 +21,7 @@ defmodule Memba.Membership do
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Membership.Roles
   alias Memba.Membership.Slug
   alias Memba.Repo
@@ -125,6 +126,24 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Remove the built-in Membership Administrator role from an active member as a club member actor.
+
+  The caller supplies the target `:membership_id`/`:person_id`, the `:club_id`,
+  and `:actor_person_id`. The actor must have the projected
+  `club.manage_members` permission. The target member must be active in the
+  club. The built-in role ID is derived from the club so callers cannot remove an
+  arbitrary role through this Membership Administrator-specific entry point. The
+  removal is rejected when it would leave the club with no active Membership
+  Administrators.
+  """
+  def remove_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, attrs} <- put_membership_administrator_role_id(attrs) do
+      remove_member_role_as_club_member(attrs, dispatch_opts)
+    end
+  end
+
+  @doc """
   Assign a club role to an active member as a club member actor.
 
   Unlike staff/system setup paths, this entry point requires `:actor_person_id`
@@ -173,7 +192,8 @@ defmodule Memba.Membership do
              command.club_id,
              command.person_id,
              command.membership_id
-           ) do
+           ),
+         :ok <- ensure_membership_administrator_removal_keeps_an_administrator(command) do
       dispatch(command, dispatch_opts)
     end
   end
@@ -736,6 +756,48 @@ defmodule Memba.Membership do
     else
       :error -> {:error, :member_not_active}
     end
+  end
+
+  defp ensure_membership_administrator_removal_keeps_an_administrator(
+         %RemoveMemberRole{} = command
+       ) do
+    with {:ok, club_id} <- ID.cast(:club, command.club_id),
+         true <- command.role_id == Roles.membership_administrator_role_id(club_id),
+         true <-
+           active_role_assignment?(
+             club_id,
+             command.membership_id,
+             command.person_id,
+             command.role_id
+           ) do
+      if active_role_assignment_count(club_id, command.role_id) > 1 do
+        :ok
+      else
+        {:error, :last_membership_administrator}
+      end
+    else
+      _not_membership_administrator_removal -> :ok
+    end
+  end
+
+  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
+    active_role_assignments_query(club_id, role_id)
+    |> where([assignment], assignment.membership_id == ^membership_id)
+    |> where([assignment], assignment.person_id == ^person_id)
+    |> Repo.exists?()
+  end
+
+  defp active_role_assignment_count(club_id, role_id) do
+    club_id
+    |> active_role_assignments_query(role_id)
+    |> Repo.aggregate(:count, :membership_id)
+  end
+
+  defp active_role_assignments_query(club_id, role_id) do
+    RoleAssignment
+    |> where([assignment], assignment.club_id == ^club_id)
+    |> where([assignment], assignment.role_id == ^role_id)
+    |> where([assignment], assignment.active == true)
   end
 
   defp prevent_duplicate_club_slug(%CreateClub{} = command) do
