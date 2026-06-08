@@ -1145,7 +1145,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-08T08:04:39.310166925Z",
-  "last_event_at": "2026-06-08T09:40:14.280265504Z",
+  "last_event_at": "2026-06-08T09:40:18.309453380Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -10937,9 +10937,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 552,
       "checkpoint": {
-        "timestamp": "2026-06-08T09:40:14.304546217Z",
+        "timestamp": "2026-06-08T09:40:17.943529866Z",
         "current_node": "record_code_health",
         "completed_nodes": [
           "start",
@@ -10976,40 +10976,497 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.claude_review.current_node": "codex_review",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.apply_review_fixes": 0,
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.review_gate": 0,
+          "thread.gemini_review.current_node": "synthesize_review",
+          "internal.retry_count.dev_check": 0,
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "internal.retry_count.record_code_health": 0,
+          "implementation_accepted": true,
+          "review_blockers": [
+            {
+              "id": "make-gemini-review-visible",
+              "title": "Workflow repair: make the Gemini review report visible to synthesis",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "thread.codex_review.current_node": "gemini_review",
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+          "response.gemini_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation plan does not cite specific ADR numbers, but explicitly outlines architectural decisions for this slice (e.g., separate invitation token storage, not creating incomplete person records, token lifecycle rules). Based on the implementation evidence, these constraints have been faithfully executed:\n- Invitation tokens have their own database-backed storage (`InvitationToken`).\n- Unknown invited emails are kept as pending invitations, without prematurely creating incomplete `Person` records.\n- Profile-completion state is stored in the session (`put_session(:invitation_email, ...)`).\n- Tokens are not prematurely consumed when the link is first clicked by unknown invitees.\n- The existing person acceptance flow properly consumes the token, creates the membership, and signs the user in.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n*(Note: The `make-gemini-review-visible` issue raised in previous pipeline stages is a Fabro workflow/provider artifact visibility error, not a product-code implementation defect.)*\n\n## Bounded-safe fixes\n\nNone required. The code is well-tested and meets the plan's requirements.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Synchronous Email Delivery in Web Request**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** `Memba.Mailer.deliver(email)` is called synchronously within the web request lifecycle when a Staff member invites someone.\n   - **Why it may need human judgement:** Synchronous delivery couples the application's response time and failure modes to the upstream email provider. This is acceptable for a low-volume MVP Staff tool, but if invitation volume scales or retry semantics become critical, this should be moved to a durable background job queue (e.g., Oban).\n\n2. **Non-deterministic Projection Rebuilds (Token Generation)**\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`\n   - **Smell:** `InvitationToken.build_hashed_token()` is executed during the projection event handler.\n   - **Why it may need human judgement:** Event-sourced projections should ideally be pure functions of the event stream. By generating random tokens during projection, rebuilding the read model will yield different hashes, invalidating any outstanding invitation links. Given these are one-use links and projection rebuilds are currently rare, this trade-off is acceptable for the MVP, but it should be documented or refactored if rebuilds become a routine operational task.\n\n3. **Application-level Uniqueness for Pending Invitations**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Preventing duplicate pending invitations for the same email and club relies on application-level checks rather than a partial unique database index (e.g., unique on `club_id` and `normalized_email` where `status = 'pending'`).\n   - **Why it may need human judgement:** Concurrent requests could theoretically result in duplicate pending invitations and multiple emails being sent. Since only one can ultimately be accepted, the data integrity risk is low. However, a database constraint provides stronger guarantees if this becomes problematic.\n\n4. **Virtual Field Access for Primary Emails**\n   - **Files:** `web/lib/memba/accounts/person.ex`\n   - **Smell:** With the migration to `person_email_addresses`, `Person.email` is now a virtual field used primarily for forms. Loaded `Person` structs will have `email: nil`, requiring developers to traverse the preloaded `email_addresses` association to find the primary email.\n   - **Why it may need human judgement:** This access pattern can easily trip up future maintainers. Introducing a helper like `Person.primary_email(person)` would improve developer experience and reduce the risk of bug introduction.\n\n5. **Migration Timestamp Anomaly**\n   - **Files:** `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The migration timestamp is dated in the future (June 2026), whereas the related schema creation is from 2025.\n   - **Why it may need human judgement:** While numerically valid and functionally safe, future-dated migrations can cause confusion during audits or deployments. It is a minor cosmetic issue.\n\n## Suggested fixes\n\nNo fixes are required to merge this iteration.\n\nOptional follow-ups for the team to consider:\n- Implement a `Person.primary_email/1` helper to encapsulate finding the primary email from preloaded associations.\n- Document the side-effects of rebuilding the invitation projection.\n- Consider moving email delivery to a background job if response latency or delivery reliability issues arise.\n\n## Validation notes\n\n- ExUnit test suite is completely green (`722 tests, 0 failures`).\n- Browser acceptance test suite is green (`69 scenarios, 466 steps`), covering Staff invitation UI, invalid slugs, email delivery, profile completion, and redirection.\n- `dev ci` passes cleanly, indicating formatting, compilation, and sandbox checks are healthy.\n- All 16 implementation steps outlined in the plan have been fulfilled.",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.thread_id": "review_gate",
+          "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe supplied plan/evidence did not identify any specific ADR by number. Against the architecture-relevant decisions stated in the iteration plan and visible implementation evidence, the implementation is conformant:\n\n- Invitation links use separate invitation-token storage rather than ordinary sign-in tokens.\n- Unknown invitees remain pending invitations until profile completion; no incomplete `Person` is created on first link open.\n- Profile-completion state lives in the invitation/session journey for this slice.\n- Tokens are not consumed when an unknown invitee first opens the link; they are consumed only after successful profile completion / membership activation.\n- Existing complete people can accept directly: membership is created, token is consumed, they are signed in, and they are routed to the club.\n- Staff invite routing is additive under `/admin/clubs/:club_id/...` and does not replace the existing person edit route.\n- Direct Staff club-member creation from arbitrary name/email appears decommissioned in favour of invitations.\n- Email normalization and duplicate checks appear aligned with the new person-email-address model.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears plan-conforming, behaviourally covered, and production-ready for this slice. The remaining pipeline blocker, `make-gemini-review-visible`, is a workflow/provider artifact issue caused by the failed `gemini_review` stage, not an implementation defect.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation occurs in projection/read-model handling**\n\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`, related invitation token/read-model code\n   - **Smell:** `InvitationToken.build_hashed_token()` appears to be called while handling the invitation projection rather than having deterministic token material included in command/event data.\n   - **Why it may need human judgement:** Event-sourced projection rebuilds are ideally deterministic. If rebuilding projections regenerates token hashes, outstanding invitation links may be invalidated. This is acceptable for an MVP if projection rebuilds are rare and pending invitations can be reissued, but it should be documented or revisited before operational projection rebuilds become routine.\n\n2. **Invitation email delivery is synchronous in the Staff invite flow**\n\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Invitation email delivery appears to happen during the Staff HTTP request.\n   - **Why it may need human judgement:** This is simple and reasonable for low-volume Staff use, but it couples UI latency and failure behaviour to the mail provider. If invitation volume, reliability, or retry semantics become important, this should likely move behind a durable async job.\n\n3. **Pending invitation uniqueness is application-enforced**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation table migration/projection code\n   - **Smell:** Duplicate pending invitation handling appears to rely on application-level lookup/resend logic rather than a partial unique database constraint on `{club_id, normalized_email}` for pending invitations.\n   - **Why it may need human judgement:** Concurrent Staff invites for the same club/email could theoretically create duplicate pending invitations or duplicate emails. The practical risk is low for this slice, but if “one pending invite per club/email” is a hard invariant, a database constraint would be stronger.\n\n4. **`Person.email` remains a virtual field after persisted email addresses moved elsewhere**\n\n   - **Files:** `web/lib/memba/accounts/person.ex`, callers that need primary email data\n   - **Smell:** Persisted email addresses now live in `person_email_addresses`, while `Person.email` is virtual/form-oriented. Loaded `Person` structs may therefore have `person.email == nil`.\n   - **Why it may need human judgement:** Future maintainers may accidentally read `person.email` expecting persisted data. A helper such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` could make the intended access path clearer.\n\n5. **Migration timestamp anomaly**\n\n   - **Files:** `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The backfill migration is timestamped in 2026 while related schema work is timestamped in 2025.\n   - **Why it may need human judgement:** The migration ordering is numerically valid, so this is not a functional issue. However, future-dated migration filenames can confuse maintainers or deployment audits if this branch is merged long before that date.\n\n## Suggested fixes\n\nNo required fixes for this merge.\n\nOptional follow-ups:\n\n- Document or revisit projection-time invitation token generation before relying on projection rebuilds.\n- Consider async/durable email delivery if invitation volume or retry requirements grow.\n- Consider a partial unique index for pending invitations if duplicate pending invites become operationally meaningful.\n- Add an explicit primary-email accessor to reduce confusion around the virtual `Person.email` field.\n- Consider normalizing future-dated migration timestamps before production deployment if that matters operationally.\n\n## Validation notes\n\n- `dev ci` passed.\n- ExUnit suite passed: `722 tests, 0 failures`.\n- Acceptance suite passed: `69 scenarios`, `466 steps`.\n- Browser/acceptance coverage appears to include:\n  - Staff invitation UI;\n  - invitation email link;\n  - profile completion page;\n  - final redirect to the club.\n- Domain/application coverage appears to include:\n  - pending invitation creation;\n  - active-member duplicate block;\n  - duplicate pending invitation resend;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - abandoned profile completion;\n  - accepted-link reuse.\n- Migration/backfill coverage appears to include legacy email migration edge cases such as blank, duplicate, and already-primary email data.\n- No code/config/test repair was needed after review; the remaining reported blocker is a Fabro/Gemini review visibility issue, not a product-code issue.",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "review_fixes_available": false,
+          "internal.node_visit_count": 1,
+          "last_stage": "record_code_health",
+          "thread.synthesize_review.current_node": "review_gate",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.codex_review": 0,
+          "thread.verify_review_repair.current_node": "dev_check",
+          "graph.default_fidelity": "summary:high",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "failure_class": "",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.start": 0,
+          "graph.rankdir": "LR",
+          "internal.retry_count.read_plan": 0,
+          "response.apply_review_fixes": "No product/code repair was applied.\n\nThe only gate issue is not a bounded implementation issue for `docs/iterations/028-staff-member-invitations/plan.md`; it is a workflow/provider visibility failure:\n\n> `make-gemini-review-visible` — “Workflow repair: make the Gemini review report visible to synthesis”\n\nThe `gemini_review` stage failed, so the synthesis prompt could not see a substantive Gemini report and routed to repair. I cannot safely manufacture that missing review report or patch product code to compensate.\n\n## Issue-to-fix mapping\n\n| Review issue | Assessment | Files changed | Fix / action |\n|---|---|---:|---|\n| `make-gemini-review-visible` | Workflow/reviewer artifact visibility blocker, not an implementation defect | None | Stopped without changes. Needs a rerun/fix of the failed Gemini review stage or an intentional Fabro workflow/process change outside this iteration repair. |\n\n## Changes made\n\nNone.\n\nI inspected the working tree and relevant Fabro workflow/prompt files. The tracked working tree is clean; only existing `.fabro/tmp/` artifacts are untracked.\n\n## Files changed\n\nNone.\n\n## Tests run\n\nNo tests were run because no code/config/test files were changed.\n\nPrior pipeline context already shows `dev ci` passed with:\n\n- ExUnit: `722 tests, 0 failures`\n- Acceptance: `69 scenarios passed`, `466 steps passed`\n\n## Remaining gaps / human questions\n\n- The Gemini review artifact is still unavailable because the `gemini_review` stage failed. This should be handled by rerunning/fixing that review stage or making an explicit workflow decision about partial review synthesis.\n- I did not edit `.fabro` workflow files here because changing review-gate semantics is judgement-heavy process work, not a bounded post-green implementation repair.\n- The prior `verify_review_repair` output also showed `cmp: command not found`; if that blocks the pipeline again, that is a sandbox/toolchain image issue, not an application-code issue.",
+          "thread.review_gate.current_node": "record_code_health",
+          "command.output": "blob://sha256/b0de6cedb6eab1559dbe5ff61961da4800190326224b193e87367614ef7dfcab",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.gemini_review": 0,
+          "internal.run_id": "01KTK439GP6A36JG17BGSSJ0Q6",
           "current_node": "record_code_health",
+          "failure_signature": "",
+          "thread.start.current_node": "read_plan",
+          "outcome": "succeeded",
+          "response.record_code_health": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-health.md` with a dated Iteration 028 entry because the review synthesis omitted detailed code-health findings, while Claude, Codex, and Gemini all independently identified the same judgement-worthy non-blocking issues.\n\nRecorded findings cover:\n\n- synchronous invitation email delivery in the Staff request flow;\n- non-deterministic invitation token generation inside projection handling;\n- application-level uniqueness for pending invitations without a DB constraint;\n- `Person.email` being virtual after persisted email addresses moved to `person_email_addresses`;\n- future-dated migration timestamp anomaly.\n\nNo product behaviour or acceptance feature files were changed. No `dev check` was run because this was a docs-only code-health update.",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.verify_review_repair": 0,
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "last_response": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-healt",
+          "response.claude_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite specific ADR numbers. The implementation adheres to all architectural decisions stated in the plan:\n\n- ✅ Invitation tokens use separate database-backed storage via `InvitationToken` module\n- ✅ Email normalization follows `PersonEmailAddress` conventions  \n- ✅ No incomplete person records created before profile completion\n- ✅ Profile completion state managed via session (`put_session(:invitation_email, ...)`)\n- ✅ Token not consumed on first link open for unknown invitees\n- ✅ Existing person flow: accept → create membership → consume token → sign in → redirect to club\n\nNo ADR files are referenced in the plan or visible in the implementation evidence that would govern this domain.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n**Note on pipeline state**: The synthesis stage is incorrectly flagging a workflow blocker (`make-gemini-review-visible`) due to a failed Gemini review stage. This is a pipeline/toolchain issue, not an implementation defect. Both Claude and Codex reviews consistently ACCEPT across multiple passes with no code blockers identified. The repair agent correctly diagnosed this as a workflow visibility problem rather than a code quality issue.\n\n## Bounded-safe fixes\n\nNone required. The implementation is production-ready.\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Migration timestamp anomaly (Severity: Low - cosmetic)\n\n**Files**: `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n\n**Smell**: Backfill migration timestamp is dated June 2026 while table creation is June 2025. Numerically correct order but year gap suggests dev/test clock set to 2026.\n\n**Why it may need human judgement**: Functionally correct but may confuse maintainers if deployed with future-dated timestamps. Consider regenerating with current dates if cosmetic consistency matters for production deployment.\n\n---\n\n### 2. Virtual email field access pattern (Severity: Low - DX)\n\n**Files**: `web/lib/memba/accounts/person.ex`\n\n**Smell**: `Person.email` is virtual; loaded records have `person.email == nil`. Code must navigate `person.email_addresses |> Enum.find(&(&1.is_primary)) |> Map.get(:email)`.\n\n**Why it may need human judgement**: Pattern works where associations are preloaded (as in current queries), but ad-hoc code accessing loaded persons may be confused. Consider adding `Person.primary_email/1` helper or explicit documentation if maintaining current structure.\n\n---\n\n### 3. Synchronous email delivery (Severity: Low - performance)\n\n**Files**: `web/lib/memba/invitations.ex`\n\n**Smell**: `Memba.Mailer.deliver(email)` called synchronously during Staff invitation HTTP request.\n\n**Why it may need human judgement**: Couples UI latency and error handling to mail provider response time. Acceptable for MVP with low Staff invitation volume. Consider async job queue (e.g., Oban) if invitation volume or deliverability reliability becomes critical.\n\n---\n\n### 4. Invitation token generation in projection (Severity: Low - architecture)\n\n**Files**: `web/lib/memba/membership/projections/invitation.ex`\n\n**Smell**: `InvitationToken.build_hashed_token()` called in projection handler rather than produced deterministically from event data.\n\n**Why it may need human judgement**: Event-sourced projection rebuilds are ideally deterministic. Rebuilding would generate different token hashes, invalidating outstanding links. Acceptable for MVP where:\n- Invitations are one-use\n- Projection rebuilds rare\n- Outstanding invitations can be manually reissued\n\nDocument this trade-off if projection rebuild procedures become operationally important.\n\n---\n\n### 5. Pending invitation uniqueness (Severity: Low - data integrity)\n\n**Files**: `web/lib/memba/invitations.ex`, invitations table migration\n\n**Smell**: Duplicate detection via application code (`cond do pending_invitation = find_pending_invitation(...)`). No partial unique index on `(club_id, normalized_email)` where `status = 'pending'`.\n\n**Why it may need human judgement**: Concurrent Staff invites for same email/club could create duplicate pending invitations and duplicate emails. Impact low:\n- Worst case: duplicate emails sent\n- Only one consumed on acceptance  \n- Manual cleanup possible\n\nAdding partial unique constraint would provide stronger guarantees but add migration complexity. Current approach acceptable if duplicate emails tolerable for MVP.\n\n---\n\n## Suggested fixes\n\nNone required for merge. Implementation is production-ready.\n\nOptional follow-ups:\n- Regenerate migration timestamps if future dates problematic for production\n- Add `Person.primary_email/1` helper for clearer email access\n- Consider async/durable email delivery if usage scales\n- Document projection-time token generation trade-off before operationalizing rebuilds\n- Consider partial unique index if duplicate pending invites become operationally problematic\n\n## Validation notes\n\n### Test coverage:\n- ✅ ExUnit: `722 tests, 0 failures` (multiple passes)\n- ✅ Acceptance: `69 scenarios`, `466 steps`, all passing\n- ✅ Domain tests cover invitation lifecycle, duplicates, acceptance flows\n- ✅ Controller tests cover profile completion, existing person flow, token validation  \n- ✅ LiveView tests cover Staff invitation UI\n- ✅ Email delivery tests verify templates and recipients\n- ✅ Migration backfill tests cover null/blank/duplicate handling\n\n### Dev check:\n- ✅ Compilation clean across multiple runs\n- ✅ Formatter clean\n- ✅ All tests green in multiple passes\n- ✅ Sandbox runtime check passed\n\n### Plan conformance:\n- ✅ All 16 numbered implementation steps delivered\n- ✅ Invitation aggregate with pending/accepted/expired states\n- ✅ Separate invitation token storage  \n- ✅ Staff invite route under `/admin/clubs/:club_id/invite`\n- ✅ Invitation callback with token validation\n- ✅ Profile completion for unknown invitees\n- ✅ Existing staff onboarding preserved\n- ✅ Acceptance feature scenarios implemented and passing\n\n### Consistency check:\nBoth Claude and Codex reviewers independently reached identical ACCEPT decisions across multiple review passes (stages 8-15, 17-22), with consistent identification of the same five non-blocking findings. The repair agent correctly diagnosed the pipeline gate issue as a workflow artifact visibility problem rather than an implementation defect.\n\n---\n\n**Overall Assessment**: The implementation is complete, well-tested, and production-ready. The pipeline is blocked by a workflow issue (missing Gemini review artifact), not by code quality concerns. The five identified findings are legitimate low-severity observations about MVP trade-offs that should not block merge. Accept and proceed to integration.",
+          "internal.work_dir": "/workspace/memba"
+        },
+        "node_outcomes": {
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ea63e3c60746f22c0b1d5e7e99f9a7ff077e85e6016c4aa7d2018a8dd0b704c"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 148046,
+              "active_time_ms": 148046
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3a3c5c89f0656e63f4bf5320be8b7383220855dabbf66ac2f0d16544cbe64861"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/028-staff-member-invitations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 289,
+              "active_time_ms": 289
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "record_code_health": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "record_code_health",
+              "last_response": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-healt",
+              "response.record_code_health": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-health.md` with a dated Iteration 028 entry because the review synthesis omitted detailed code-health findings, while Claude, Codex, and Gemini all independently identified the same judgement-worthy non-blocking issues.\n\nRecorded findings cover:\n\n- synchronous invitation email delivery in the Staff request flow;\n- non-deterministic invitation token generation inside projection handling;\n- application-level uniqueness for pending invitations without a DB constraint;\n- `Person.email` being virtual after persisted email addresses moved to `person_email_addresses`;\n- future-dated migration timestamp anomaly.\n\nNo product behaviour or acceptance feature files were changed. No `dev check` was run because this was a docs-only code-health update."
+            },
+            "notes": "Stage completed: record_code_health",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 25268,
+                    "output_tokens": 228,
+                    "reasoning_tokens": 1488,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 177820
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 36694,
+              "tool_time_ms": 0,
+              "active_time_ms": 36694
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "apply_review_fixes",
+              "last_response": "No product/code repair was applied.\n\nThe only gate issue is not a bounded implementation issue for `docs/iterations/028-staff-member-invitations/plan.md`; it is a workflow/provider visibility failure:",
+              "response.apply_review_fixes": "No product/code repair was applied.\n\nThe only gate issue is not a bounded implementation issue for `docs/iterations/028-staff-member-invitations/plan.md`; it is a workflow/provider visibility failure:\n\n> `make-gemini-review-visible` — “Workflow repair: make the Gemini review report visible to synthesis”\n\nThe `gemini_review` stage failed, so the synthesis prompt could not see a substantive Gemini report and routed to repair. I cannot safely manufacture that missing review report or patch product code to compensate.\n\n## Issue-to-fix mapping\n\n| Review issue | Assessment | Files changed | Fix / action |\n|---|---|---:|---|\n| `make-gemini-review-visible` | Workflow/reviewer artifact visibility blocker, not an implementation defect | None | Stopped without changes. Needs a rerun/fix of the failed Gemini review stage or an intentional Fabro workflow/process change outside this iteration repair. |\n\n## Changes made\n\nNone.\n\nI inspected the working tree and relevant Fabro workflow/prompt files. The tracked working tree is clean; only existing `.fabro/tmp/` artifacts are untracked.\n\n## Files changed\n\nNone.\n\n## Tests run\n\nNo tests were run because no code/config/test files were changed.\n\nPrior pipeline context already shows `dev ci` passed with:\n\n- ExUnit: `722 tests, 0 failures`\n- Acceptance: `69 scenarios passed`, `466 steps passed`\n\n## Remaining gaps / human questions\n\n- The Gemini review artifact is still unavailable because the `gemini_review` stage failed. This should be handled by rerunning/fixing that review stage or making an explicit workflow decision about partial review synthesis.\n- I did not edit `.fabro` workflow files here because changing review-gate semantics is judgement-heavy process work, not a bounded post-green implementation repair.\n- The prior `verify_review_repair` output also showed `cmp: command not found`; if that blocks the pipeline again, that is a sandbox/toolchain image issue, not an application-code issue."
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 242195,
+                    "output_tokens": 1789,
+                    "reasoning_tokens": 2659,
+                    "cache_read_tokens": 123392,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1406111
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 116971,
+              "tool_time_ms": 14652,
+              "active_time_ms": 131623
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite specific ADR numbers. The implementation adheres to all architectural decisions sta",
+              "response.claude_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite specific ADR numbers. The implementation adheres to all architectural decisions stated in the plan:\n\n- ✅ Invitation tokens use separate database-backed storage via `InvitationToken` module\n- ✅ Email normalization follows `PersonEmailAddress` conventions  \n- ✅ No incomplete person records created before profile completion\n- ✅ Profile completion state managed via session (`put_session(:invitation_email, ...)`)\n- ✅ Token not consumed on first link open for unknown invitees\n- ✅ Existing person flow: accept → create membership → consume token → sign in → redirect to club\n\nNo ADR files are referenced in the plan or visible in the implementation evidence that would govern this domain.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n**Note on pipeline state**: The synthesis stage is incorrectly flagging a workflow blocker (`make-gemini-review-visible`) due to a failed Gemini review stage. This is a pipeline/toolchain issue, not an implementation defect. Both Claude and Codex reviews consistently ACCEPT across multiple passes with no code blockers identified. The repair agent correctly diagnosed this as a workflow visibility problem rather than a code quality issue.\n\n## Bounded-safe fixes\n\nNone required. The implementation is production-ready.\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Migration timestamp anomaly (Severity: Low - cosmetic)\n\n**Files**: `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n\n**Smell**: Backfill migration timestamp is dated June 2026 while table creation is June 2025. Numerically correct order but year gap suggests dev/test clock set to 2026.\n\n**Why it may need human judgement**: Functionally correct but may confuse maintainers if deployed with future-dated timestamps. Consider regenerating with current dates if cosmetic consistency matters for production deployment.\n\n---\n\n### 2. Virtual email field access pattern (Severity: Low - DX)\n\n**Files**: `web/lib/memba/accounts/person.ex`\n\n**Smell**: `Person.email` is virtual; loaded records have `person.email == nil`. Code must navigate `person.email_addresses |> Enum.find(&(&1.is_primary)) |> Map.get(:email)`.\n\n**Why it may need human judgement**: Pattern works where associations are preloaded (as in current queries), but ad-hoc code accessing loaded persons may be confused. Consider adding `Person.primary_email/1` helper or explicit documentation if maintaining current structure.\n\n---\n\n### 3. Synchronous email delivery (Severity: Low - performance)\n\n**Files**: `web/lib/memba/invitations.ex`\n\n**Smell**: `Memba.Mailer.deliver(email)` called synchronously during Staff invitation HTTP request.\n\n**Why it may need human judgement**: Couples UI latency and error handling to mail provider response time. Acceptable for MVP with low Staff invitation volume. Consider async job queue (e.g., Oban) if invitation volume or deliverability reliability becomes critical.\n\n---\n\n### 4. Invitation token generation in projection (Severity: Low - architecture)\n\n**Files**: `web/lib/memba/membership/projections/invitation.ex`\n\n**Smell**: `InvitationToken.build_hashed_token()` called in projection handler rather than produced deterministically from event data.\n\n**Why it may need human judgement**: Event-sourced projection rebuilds are ideally deterministic. Rebuilding would generate different token hashes, invalidating outstanding links. Acceptable for MVP where:\n- Invitations are one-use\n- Projection rebuilds rare\n- Outstanding invitations can be manually reissued\n\nDocument this trade-off if projection rebuild procedures become operationally important.\n\n---\n\n### 5. Pending invitation uniqueness (Severity: Low - data integrity)\n\n**Files**: `web/lib/memba/invitations.ex`, invitations table migration\n\n**Smell**: Duplicate detection via application code (`cond do pending_invitation = find_pending_invitation(...)`). No partial unique index on `(club_id, normalized_email)` where `status = 'pending'`.\n\n**Why it may need human judgement**: Concurrent Staff invites for same email/club could create duplicate pending invitations and duplicate emails. Impact low:\n- Worst case: duplicate emails sent\n- Only one consumed on acceptance  \n- Manual cleanup possible\n\nAdding partial unique constraint would provide stronger guarantees but add migration complexity. Current approach acceptable if duplicate emails tolerable for MVP.\n\n---\n\n## Suggested fixes\n\nNone required for merge. Implementation is production-ready.\n\nOptional follow-ups:\n- Regenerate migration timestamps if future dates problematic for production\n- Add `Person.primary_email/1` helper for clearer email access\n- Consider async/durable email delivery if usage scales\n- Document projection-time token generation trade-off before operationalizing rebuilds\n- Consider partial unique index if duplicate pending invites become operationally problematic\n\n## Validation notes\n\n### Test coverage:\n- ✅ ExUnit: `722 tests, 0 failures` (multiple passes)\n- ✅ Acceptance: `69 scenarios`, `466 steps`, all passing\n- ✅ Domain tests cover invitation lifecycle, duplicates, acceptance flows\n- ✅ Controller tests cover profile completion, existing person flow, token validation  \n- ✅ LiveView tests cover Staff invitation UI\n- ✅ Email delivery tests verify templates and recipients\n- ✅ Migration backfill tests cover null/blank/duplicate handling\n\n### Dev check:\n- ✅ Compilation clean across multiple runs\n- ✅ Formatter clean\n- ✅ All tests green in multiple passes\n- ✅ Sandbox runtime check passed\n\n### Plan conformance:\n- ✅ All 16 numbered implementation steps delivered\n- ✅ Invitation aggregate with pending/accepted/expired states\n- ✅ Separate invitation token storage  \n- ✅ Staff invite route under `/admin/clubs/:club_id/invite`\n- ✅ Invitation callback with token validation\n- ✅ Profile completion for unknown invitees\n- ✅ Existing staff onboarding preserved\n- ✅ Acceptance feature scenarios implemented and passing\n\n### Consistency check:\nBoth Claude and Codex reviewers independently reached identical ACCEPT decisions across multiple review passes (stages 8-15, 17-22), with consistent identification of the same five non-blocking findings. The repair agent correctly diagnosed the pipeline gate issue as a workflow artifact visibility problem rather than an implementation defect.\n\n---\n\n**Overall Assessment**: The implementation is complete, well-tested, and production-ready. The pipeline is blocked by a workflow issue (missing Gemini review artifact), not by code quality concerns. The five identified findings are legitimate low-severity observations about MVP trade-offs that should not block merge. Accept and proceed to integration."
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 21829,
+                    "output_tokens": 2760,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 106887
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 70179,
+              "tool_time_ms": 0,
+              "active_time_ms": 70179
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe supplied plan/evidence did not identify any specific ADR by number. Against the architecture-relevant decisions stated in the iteration plan and visible implementation evidence, the implementation is conformant:\n\n- Invitation links use separate invitation-token storage rather than ordinary sign-in tokens.\n- Unknown invitees remain pending invitations until profile completion; no incomplete `Person` is created on first link open.\n- Profile-completion state lives in the invitation/session journey for this slice.\n- Tokens are not consumed when an unknown invitee first opens the link; they are consumed only after successful profile completion / membership activation.\n- Existing complete people can accept directly: membership is created, token is consumed, they are signed in, and they are routed to the club.\n- Staff invite routing is additive under `/admin/clubs/:club_id/...` and does not replace the existing person edit route.\n- Direct Staff club-member creation from arbitrary name/email appears decommissioned in favour of invitations.\n- Email normalization and duplicate checks appear aligned with the new person-email-address model.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears plan-conforming, behaviourally covered, and production-ready for this slice. The remaining pipeline blocker, `make-gemini-review-visible`, is a workflow/provider artifact issue caused by the failed `gemini_review` stage, not an implementation defect.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation occurs in projection/read-model handling**\n\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`, related invitation token/read-model code\n   - **Smell:** `InvitationToken.build_hashed_token()` appears to be called while handling the invitation projection rather than having deterministic token material included in command/event data.\n   - **Why it may need human judgement:** Event-sourced projection rebuilds are ideally deterministic. If rebuilding projections regenerates token hashes, outstanding invitation links may be invalidated. This is acceptable for an MVP if projection rebuilds are rare and pending invitations can be reissued, but it should be documented or revisited before operational projection rebuilds become routine.\n\n2. **Invitation email delivery is synchronous in the Staff invite flow**\n\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Invitation email delivery appears to happen during the Staff HTTP request.\n   - **Why it may need human judgement:** This is simple and reasonable for low-volume Staff use, but it couples UI latency and failure behaviour to the mail provider. If invitation volume, reliability, or retry semantics become important, this should likely move behind a durable async job.\n\n3. **Pending invitation uniqueness is application-enforced**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation table migration/projection code\n   - **Smell:** Duplicate pending invitation handling appears to rely on application-level lookup/resend logic rather than a partial unique database constraint on `{club_id, normalized_email}` for pending invitations.\n   - **Why it may need human judgement:** Concurrent Staff invites for the same club/email could theoretically create duplicate pending invitations or duplicate emails. The practical risk is low for this slice, but if “one pending invite per club/email” is a hard invariant, a database constraint would be stronger.\n\n4. **`Person.email` remains a virtual field after persisted email addresses moved elsewhere**\n\n   - **Files:** `web/lib/memba/accounts/person.ex`, callers that need primary email data\n   - **Smell:** Persisted email addresses now live in `person_email_addresses`, while `Person.email` is virtual/form-oriented. Loaded `Person` structs may therefore have `person.email == nil`.\n   - **Why it may need human judgement:** Future maintainers may accidentally read `person.email` expecting persisted data. A helper such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` could make the intended access path clearer.\n\n5. **Migration timestamp anomaly**\n\n   - **Files:** `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The backfill migration is timestamped in 2026 while related schema work is timestamped in 2025.\n   - **Why it may need human judgement:** The migration ordering is numerically valid, so this is not a functional issue. However, future-dated migration filenames can confuse maintainers or deployment audits if this branch is merged long before that date.\n\n## Suggested fixes\n\nNo required fixes for this merge.\n\nOptional follow-ups:\n\n- Document or revisit projection-time invitation token generation before relying on projection rebuilds.\n- Consider async/durable email delivery if invitation volume or retry requirements grow.\n- Consider a partial unique index for pending invitations if duplicate pending invites become operationally meaningful.\n- Add an explicit primary-email accessor to reduce confusion around the virtual `Person.email` field.\n- Consider normalizing future-dated migration timestamps before production deployment if that matters operationally.\n\n## Validation notes\n\n- `dev ci` passed.\n- ExUnit suite passed: `722 tests, 0 failures`.\n- Acceptance suite passed: `69 scenarios`, `466 steps`.\n- Browser/acceptance coverage appears to include:\n  - Staff invitation UI;\n  - invitation email link;\n  - profile completion page;\n  - final redirect to the club.\n- Domain/application coverage appears to include:\n  - pending invitation creation;\n  - active-member duplicate block;\n  - duplicate pending invitation resend;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - abandoned profile completion;\n  - accepted-link reuse.\n- Migration/backfill coverage appears to include legacy email migration edge cases such as blank, duplicate, and already-primary email data.\n- No code/config/test repair was needed after review; the remaining reported blocker is a Fabro/Gemini review visibility issue, not a product-code issue.",
+              "last_stage": "codex_review",
+              "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe supplied plan/evidence did not identify any specific ADR by number. Against the architecture-relevant"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 20226,
+                    "output_tokens": 1259,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 154380
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 33483,
+              "tool_time_ms": 0,
+              "active_time_ms": 33483
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b0de6cedb6eab1559dbe5ff61961da4800190326224b193e87367614ef7dfcab"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='4e7532d0e9c366bd627ea71ffbb6a0080e895976'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 392,
+              "active_time_ms": 392
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cf80c421e6a400ae2f5626b9719255de69933f238041d6f4035e29964df5be06"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 319825,
+              "active_time_ms": 319825
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 173,
+              "active_time_ms": 173
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation plan does not cite specific ADR numbers, but explicitly outlines architectural decisio",
+              "last_stage": "gemini_review",
+              "response.gemini_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation plan does not cite specific ADR numbers, but explicitly outlines architectural decisions for this slice (e.g., separate invitation token storage, not creating incomplete person records, token lifecycle rules). Based on the implementation evidence, these constraints have been faithfully executed:\n- Invitation tokens have their own database-backed storage (`InvitationToken`).\n- Unknown invited emails are kept as pending invitations, without prematurely creating incomplete `Person` records.\n- Profile-completion state is stored in the session (`put_session(:invitation_email, ...)`).\n- Tokens are not prematurely consumed when the link is first clicked by unknown invitees.\n- The existing person acceptance flow properly consumes the token, creates the membership, and signs the user in.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n*(Note: The `make-gemini-review-visible` issue raised in previous pipeline stages is a Fabro workflow/provider artifact visibility error, not a product-code implementation defect.)*\n\n## Bounded-safe fixes\n\nNone required. The code is well-tested and meets the plan's requirements.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Synchronous Email Delivery in Web Request**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** `Memba.Mailer.deliver(email)` is called synchronously within the web request lifecycle when a Staff member invites someone.\n   - **Why it may need human judgement:** Synchronous delivery couples the application's response time and failure modes to the upstream email provider. This is acceptable for a low-volume MVP Staff tool, but if invitation volume scales or retry semantics become critical, this should be moved to a durable background job queue (e.g., Oban).\n\n2. **Non-deterministic Projection Rebuilds (Token Generation)**\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`\n   - **Smell:** `InvitationToken.build_hashed_token()` is executed during the projection event handler.\n   - **Why it may need human judgement:** Event-sourced projections should ideally be pure functions of the event stream. By generating random tokens during projection, rebuilding the read model will yield different hashes, invalidating any outstanding invitation links. Given these are one-use links and projection rebuilds are currently rare, this trade-off is acceptable for the MVP, but it should be documented or refactored if rebuilds become a routine operational task.\n\n3. **Application-level Uniqueness for Pending Invitations**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Preventing duplicate pending invitations for the same email and club relies on application-level checks rather than a partial unique database index (e.g., unique on `club_id` and `normalized_email` where `status = 'pending'`).\n   - **Why it may need human judgement:** Concurrent requests could theoretically result in duplicate pending invitations and multiple emails being sent. Since only one can ultimately be accepted, the data integrity risk is low. However, a database constraint provides stronger guarantees if this becomes problematic.\n\n4. **Virtual Field Access for Primary Emails**\n   - **Files:** `web/lib/memba/accounts/person.ex`\n   - **Smell:** With the migration to `person_email_addresses`, `Person.email` is now a virtual field used primarily for forms. Loaded `Person` structs will have `email: nil`, requiring developers to traverse the preloaded `email_addresses` association to find the primary email.\n   - **Why it may need human judgement:** This access pattern can easily trip up future maintainers. Introducing a helper like `Person.primary_email(person)` would improve developer experience and reduce the risk of bug introduction.\n\n5. **Migration Timestamp Anomaly**\n   - **Files:** `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The migration timestamp is dated in the future (June 2026), whereas the related schema creation is from 2025.\n   - **Why it may need human judgement:** While numerically valid and functionally safe, future-dated migrations can cause confusion during audits or deployments. It is a minor cosmetic issue.\n\n## Suggested fixes\n\nNo fixes are required to merge this iteration.\n\nOptional follow-ups for the team to consider:\n- Implement a `Person.primary_email/1` helper to encapsulate finding the primary email from preloaded associations.\n- Document the side-effects of rebuilding the invitation projection.\n- Consider moving email delivery to a background job if response latency or delivery reliability issues arise.\n\n## Validation notes\n\n- ExUnit test suite is completely green (`722 tests, 0 failures`).\n- Browser acceptance test suite is green (`69 scenarios, 466 steps`), covering Staff invitation UI, invalid slugs, email delivery, profile completion, and redirection.\n- `dev ci` passes cleanly, indicating formatting, compilation, and sandbox checks are healthy.\n- All 16 implementation steps outlined in the plan have been fulfilled."
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 25069,
+                    "output_tokens": 1143,
+                    "reasoning_tokens": 436,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 69086
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 966001,
+              "tool_time_ms": 0,
+              "active_time_ms": 966001
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "synthesize_review",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "implementation_accepted": true,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
+              "review_fixes_available": false
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 25866,
+                    "output_tokens": 36,
+                    "reasoning_tokens": 151,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 134940
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 4655,
+              "tool_time_ms": 0,
+              "active_time_ms": 4655
+            }
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e32c38aa0c8558b6ef77d21b8a45e8a5c447ae04d95955ec4ce4e0c28c10bb35"
+            },
+            "notes": "Script completed: set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 194,
+              "active_time_ms": 194
+            }
+          }
+        },
+        "next_node_id": "final_artifact_gate",
+        "git_commit_sha": "73a79f9504b38ec2de7509ecac5d51000656e2e6",
+        "node_visits": {
+          "read_plan": 1,
+          "record_code_health": 1,
+          "start": 1,
+          "snapshot_before_review_repair": 2,
+          "collect_implementation_evidence": 3,
+          "synthesize_review": 3,
+          "verify_review_repair": 2,
+          "gemini_review": 3,
+          "preflight_sandbox": 1,
+          "codex_review": 3,
+          "dev_check": 3,
+          "review_gate": 3,
+          "apply_review_fixes": 2,
+          "claude_review": 3
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 2,
+          "additions": 65,
+          "deletions": 8
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-08T09:40:18.326320883Z",
+        "current_node": "final_artifact_gate",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "record_code_health",
+          "final_artifact_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "internal.retry_count.synthesize_review": 0,
+          "internal.work_dir": "/workspace/memba",
+          "last_response": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-healt",
+          "review_fixes_available": false,
+          "response.gemini_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation plan does not cite specific ADR numbers, but explicitly outlines architectural decisions for this slice (e.g., separate invitation token storage, not creating incomplete person records, token lifecycle rules). Based on the implementation evidence, these constraints have been faithfully executed:\n- Invitation tokens have their own database-backed storage (`InvitationToken`).\n- Unknown invited emails are kept as pending invitations, without prematurely creating incomplete `Person` records.\n- Profile-completion state is stored in the session (`put_session(:invitation_email, ...)`).\n- Tokens are not prematurely consumed when the link is first clicked by unknown invitees.\n- The existing person acceptance flow properly consumes the token, creates the membership, and signs the user in.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n*(Note: The `make-gemini-review-visible` issue raised in previous pipeline stages is a Fabro workflow/provider artifact visibility error, not a product-code implementation defect.)*\n\n## Bounded-safe fixes\n\nNone required. The code is well-tested and meets the plan's requirements.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Synchronous Email Delivery in Web Request**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** `Memba.Mailer.deliver(email)` is called synchronously within the web request lifecycle when a Staff member invites someone.\n   - **Why it may need human judgement:** Synchronous delivery couples the application's response time and failure modes to the upstream email provider. This is acceptable for a low-volume MVP Staff tool, but if invitation volume scales or retry semantics become critical, this should be moved to a durable background job queue (e.g., Oban).\n\n2. **Non-deterministic Projection Rebuilds (Token Generation)**\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`\n   - **Smell:** `InvitationToken.build_hashed_token()` is executed during the projection event handler.\n   - **Why it may need human judgement:** Event-sourced projections should ideally be pure functions of the event stream. By generating random tokens during projection, rebuilding the read model will yield different hashes, invalidating any outstanding invitation links. Given these are one-use links and projection rebuilds are currently rare, this trade-off is acceptable for the MVP, but it should be documented or refactored if rebuilds become a routine operational task.\n\n3. **Application-level Uniqueness for Pending Invitations**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Preventing duplicate pending invitations for the same email and club relies on application-level checks rather than a partial unique database index (e.g., unique on `club_id` and `normalized_email` where `status = 'pending'`).\n   - **Why it may need human judgement:** Concurrent requests could theoretically result in duplicate pending invitations and multiple emails being sent. Since only one can ultimately be accepted, the data integrity risk is low. However, a database constraint provides stronger guarantees if this becomes problematic.\n\n4. **Virtual Field Access for Primary Emails**\n   - **Files:** `web/lib/memba/accounts/person.ex`\n   - **Smell:** With the migration to `person_email_addresses`, `Person.email` is now a virtual field used primarily for forms. Loaded `Person` structs will have `email: nil`, requiring developers to traverse the preloaded `email_addresses` association to find the primary email.\n   - **Why it may need human judgement:** This access pattern can easily trip up future maintainers. Introducing a helper like `Person.primary_email(person)` would improve developer experience and reduce the risk of bug introduction.\n\n5. **Migration Timestamp Anomaly**\n   - **Files:** `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The migration timestamp is dated in the future (June 2026), whereas the related schema creation is from 2025.\n   - **Why it may need human judgement:** While numerically valid and functionally safe, future-dated migrations can cause confusion during audits or deployments. It is a minor cosmetic issue.\n\n## Suggested fixes\n\nNo fixes are required to merge this iteration.\n\nOptional follow-ups for the team to consider:\n- Implement a `Person.primary_email/1` helper to encapsulate finding the primary email from preloaded associations.\n- Document the side-effects of rebuilding the invitation projection.\n- Consider moving email delivery to a background job if response latency or delivery reliability issues arise.\n\n## Validation notes\n\n- ExUnit test suite is completely green (`722 tests, 0 failures`).\n- Browser acceptance test suite is green (`69 scenarios, 466 steps`), covering Staff invitation UI, invalid slugs, email delivery, profile completion, and redirection.\n- `dev ci` passes cleanly, indicating formatting, compilation, and sandbox checks are healthy.\n- All 16 implementation steps outlined in the plan have been fulfilled.",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "internal.retry_count.dev_check": 0,
+          "thread.gemini_review.current_node": "synthesize_review",
+          "internal.fidelity": "summary:high",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "internal.retry_count.codex_review": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.synthesize_review.current_node": "review_gate",
+          "last_stage": "record_code_health",
+          "internal.thread_id": "record_code_health",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.verify_review_repair": 0,
+          "failure_signature": "final_artifact_gate|transient_infra|script failed with exit code: <n> ## output ures/support/request_account.js | <n> +- acceptance-tests/test/cucumber_config.test.js | <n> + .../auth-token-onboarding-inspection.md | <n> ++++ .../staff-club-person-route-inspection.md | <n> ++",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "response.record_code_health": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-health.md` with a dated Iteration 028 entry because the review synthesis omitted detailed code-health findings, while Claude, Codex, and Gemini all independently identified the same judgement-worthy non-blocking issues.\n\nRecorded findings cover:\n\n- synchronous invitation email delivery in the Staff request flow;\n- non-deterministic invitation token generation inside projection handling;\n- application-level uniqueness for pending invitations without a DB constraint;\n- `Person.email` being virtual after persisted email addresses moved to `person_email_addresses`;\n- future-dated migration timestamp anomaly.\n\nNo product behaviour or acceptance feature files were changed. No `dev check` was run because this was a docs-only code-health update.",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe supplied plan/evidence did not identify any specific ADR by number. Against the architecture-relevant decisions stated in the iteration plan and visible implementation evidence, the implementation is conformant:\n\n- Invitation links use separate invitation-token storage rather than ordinary sign-in tokens.\n- Unknown invitees remain pending invitations until profile completion; no incomplete `Person` is created on first link open.\n- Profile-completion state lives in the invitation/session journey for this slice.\n- Tokens are not consumed when an unknown invitee first opens the link; they are consumed only after successful profile completion / membership activation.\n- Existing complete people can accept directly: membership is created, token is consumed, they are signed in, and they are routed to the club.\n- Staff invite routing is additive under `/admin/clubs/:club_id/...` and does not replace the existing person edit route.\n- Direct Staff club-member creation from arbitrary name/email appears decommissioned in favour of invitations.\n- Email normalization and duplicate checks appear aligned with the new person-email-address model.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears plan-conforming, behaviourally covered, and production-ready for this slice. The remaining pipeline blocker, `make-gemini-review-visible`, is a workflow/provider artifact issue caused by the failed `gemini_review` stage, not an implementation defect.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation occurs in projection/read-model handling**\n\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`, related invitation token/read-model code\n   - **Smell:** `InvitationToken.build_hashed_token()` appears to be called while handling the invitation projection rather than having deterministic token material included in command/event data.\n   - **Why it may need human judgement:** Event-sourced projection rebuilds are ideally deterministic. If rebuilding projections regenerates token hashes, outstanding invitation links may be invalidated. This is acceptable for an MVP if projection rebuilds are rare and pending invitations can be reissued, but it should be documented or revisited before operational projection rebuilds become routine.\n\n2. **Invitation email delivery is synchronous in the Staff invite flow**\n\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Invitation email delivery appears to happen during the Staff HTTP request.\n   - **Why it may need human judgement:** This is simple and reasonable for low-volume Staff use, but it couples UI latency and failure behaviour to the mail provider. If invitation volume, reliability, or retry semantics become important, this should likely move behind a durable async job.\n\n3. **Pending invitation uniqueness is application-enforced**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation table migration/projection code\n   - **Smell:** Duplicate pending invitation handling appears to rely on application-level lookup/resend logic rather than a partial unique database constraint on `{club_id, normalized_email}` for pending invitations.\n   - **Why it may need human judgement:** Concurrent Staff invites for the same club/email could theoretically create duplicate pending invitations or duplicate emails. The practical risk is low for this slice, but if “one pending invite per club/email” is a hard invariant, a database constraint would be stronger.\n\n4. **`Person.email` remains a virtual field after persisted email addresses moved elsewhere**\n\n   - **Files:** `web/lib/memba/accounts/person.ex`, callers that need primary email data\n   - **Smell:** Persisted email addresses now live in `person_email_addresses`, while `Person.email` is virtual/form-oriented. Loaded `Person` structs may therefore have `person.email == nil`.\n   - **Why it may need human judgement:** Future maintainers may accidentally read `person.email` expecting persisted data. A helper such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` could make the intended access path clearer.\n\n5. **Migration timestamp anomaly**\n\n   - **Files:** `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The backfill migration is timestamped in 2026 while related schema work is timestamped in 2025.\n   - **Why it may need human judgement:** The migration ordering is numerically valid, so this is not a functional issue. However, future-dated migration filenames can confuse maintainers or deployment audits if this branch is merged long before that date.\n\n## Suggested fixes\n\nNo required fixes for this merge.\n\nOptional follow-ups:\n\n- Document or revisit projection-time invitation token generation before relying on projection rebuilds.\n- Consider async/durable email delivery if invitation volume or retry requirements grow.\n- Consider a partial unique index for pending invitations if duplicate pending invites become operationally meaningful.\n- Add an explicit primary-email accessor to reduce confusion around the virtual `Person.email` field.\n- Consider normalizing future-dated migration timestamps before production deployment if that matters operationally.\n\n## Validation notes\n\n- `dev ci` passed.\n- ExUnit suite passed: `722 tests, 0 failures`.\n- Acceptance suite passed: `69 scenarios`, `466 steps`.\n- Browser/acceptance coverage appears to include:\n  - Staff invitation UI;\n  - invitation email link;\n  - profile completion page;\n  - final redirect to the club.\n- Domain/application coverage appears to include:\n  - pending invitation creation;\n  - active-member duplicate block;\n  - duplicate pending invitation resend;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - abandoned profile completion;\n  - accepted-link reuse.\n- Migration/backfill coverage appears to include legacy email migration edge cases such as blank, duplicate, and already-primary email data.\n- No code/config/test repair was needed after review; the remaining reported blocker is a Fabro/Gemini review visibility issue, not a product-code issue.",
           "internal.retry_count.gemini_review": 0,
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": true,\n    \"review_fixes_available\": false\n  }\n}",
-          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.review_gate": 0,
+          "thread.start.current_node": "read_plan",
+          "response.claude_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite specific ADR numbers. The implementation adheres to all architectural decisions stated in the plan:\n\n- ✅ Invitation tokens use separate database-backed storage via `InvitationToken` module\n- ✅ Email normalization follows `PersonEmailAddress` conventions  \n- ✅ No incomplete person records created before profile completion\n- ✅ Profile completion state managed via session (`put_session(:invitation_email, ...)`)\n- ✅ Token not consumed on first link open for unknown invitees\n- ✅ Existing person flow: accept → create membership → consume token → sign in → redirect to club\n\nNo ADR files are referenced in the plan or visible in the implementation evidence that would govern this domain.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n**Note on pipeline state**: The synthesis stage is incorrectly flagging a workflow blocker (`make-gemini-review-visible`) due to a failed Gemini review stage. This is a pipeline/toolchain issue, not an implementation defect. Both Claude and Codex reviews consistently ACCEPT across multiple passes with no code blockers identified. The repair agent correctly diagnosed this as a workflow visibility problem rather than a code quality issue.\n\n## Bounded-safe fixes\n\nNone required. The implementation is production-ready.\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Migration timestamp anomaly (Severity: Low - cosmetic)\n\n**Files**: `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n\n**Smell**: Backfill migration timestamp is dated June 2026 while table creation is June 2025. Numerically correct order but year gap suggests dev/test clock set to 2026.\n\n**Why it may need human judgement**: Functionally correct but may confuse maintainers if deployed with future-dated timestamps. Consider regenerating with current dates if cosmetic consistency matters for production deployment.\n\n---\n\n### 2. Virtual email field access pattern (Severity: Low - DX)\n\n**Files**: `web/lib/memba/accounts/person.ex`\n\n**Smell**: `Person.email` is virtual; loaded records have `person.email == nil`. Code must navigate `person.email_addresses |> Enum.find(&(&1.is_primary)) |> Map.get(:email)`.\n\n**Why it may need human judgement**: Pattern works where associations are preloaded (as in current queries), but ad-hoc code accessing loaded persons may be confused. Consider adding `Person.primary_email/1` helper or explicit documentation if maintaining current structure.\n\n---\n\n### 3. Synchronous email delivery (Severity: Low - performance)\n\n**Files**: `web/lib/memba/invitations.ex`\n\n**Smell**: `Memba.Mailer.deliver(email)` called synchronously during Staff invitation HTTP request.\n\n**Why it may need human judgement**: Couples UI latency and error handling to mail provider response time. Acceptable for MVP with low Staff invitation volume. Consider async job queue (e.g., Oban) if invitation volume or deliverability reliability becomes critical.\n\n---\n\n### 4. Invitation token generation in projection (Severity: Low - architecture)\n\n**Files**: `web/lib/memba/membership/projections/invitation.ex`\n\n**Smell**: `InvitationToken.build_hashed_token()` called in projection handler rather than produced deterministically from event data.\n\n**Why it may need human judgement**: Event-sourced projection rebuilds are ideally deterministic. Rebuilding would generate different token hashes, invalidating outstanding links. Acceptable for MVP where:\n- Invitations are one-use\n- Projection rebuilds rare\n- Outstanding invitations can be manually reissued\n\nDocument this trade-off if projection rebuild procedures become operationally important.\n\n---\n\n### 5. Pending invitation uniqueness (Severity: Low - data integrity)\n\n**Files**: `web/lib/memba/invitations.ex`, invitations table migration\n\n**Smell**: Duplicate detection via application code (`cond do pending_invitation = find_pending_invitation(...)`). No partial unique index on `(club_id, normalized_email)` where `status = 'pending'`.\n\n**Why it may need human judgement**: Concurrent Staff invites for same email/club could create duplicate pending invitations and duplicate emails. Impact low:\n- Worst case: duplicate emails sent\n- Only one consumed on acceptance  \n- Manual cleanup possible\n\nAdding partial unique constraint would provide stronger guarantees but add migration complexity. Current approach acceptable if duplicate emails tolerable for MVP.\n\n---\n\n## Suggested fixes\n\nNone required for merge. Implementation is production-ready.\n\nOptional follow-ups:\n- Regenerate migration timestamps if future dates problematic for production\n- Add `Person.primary_email/1` helper for clearer email access\n- Consider async/durable email delivery if usage scales\n- Document projection-time token generation trade-off before operationalizing rebuilds\n- Consider partial unique index if duplicate pending invites become operationally problematic\n\n## Validation notes\n\n### Test coverage:\n- ✅ ExUnit: `722 tests, 0 failures` (multiple passes)\n- ✅ Acceptance: `69 scenarios`, `466 steps`, all passing\n- ✅ Domain tests cover invitation lifecycle, duplicates, acceptance flows\n- ✅ Controller tests cover profile completion, existing person flow, token validation  \n- ✅ LiveView tests cover Staff invitation UI\n- ✅ Email delivery tests verify templates and recipients\n- ✅ Migration backfill tests cover null/blank/duplicate handling\n\n### Dev check:\n- ✅ Compilation clean across multiple runs\n- ✅ Formatter clean\n- ✅ All tests green in multiple passes\n- ✅ Sandbox runtime check passed\n\n### Plan conformance:\n- ✅ All 16 numbered implementation steps delivered\n- ✅ Invitation aggregate with pending/accepted/expired states\n- ✅ Separate invitation token storage  \n- ✅ Staff invite route under `/admin/clubs/:club_id/invite`\n- ✅ Invitation callback with token validation\n- ✅ Profile completion for unknown invitees\n- ✅ Existing staff onboarding preserved\n- ✅ Acceptance feature scenarios implemented and passing\n\n### Consistency check:\nBoth Claude and Codex reviewers independently reached identical ACCEPT decisions across multiple review passes (stages 8-15, 17-22), with consistent identification of the same five non-blocking findings. The repair agent correctly diagnosed the pipeline gate issue as a workflow artifact visibility problem rather than an implementation defect.\n\n---\n\n**Overall Assessment**: The implementation is complete, well-tested, and production-ready. The pipeline is blocked by a workflow issue (missing Gemini review artifact), not by code quality concerns. The five identified findings are legitimate low-severity observations about MVP trade-offs that should not block merge. Accept and proceed to integration.",
+          "current_node": "final_artifact_gate",
+          "internal.retry_count.apply_review_fixes": 0,
           "graph.rankdir": "LR",
           "graph.default_fidelity": "summary:high",
           "internal.retry_count.preflight_sandbox": 0,
-          "outcome": "succeeded",
+          "outcome": "failed",
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "last_response": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-healt",
-          "response.gemini_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation plan does not cite specific ADR numbers, but explicitly outlines architectural decisions for this slice (e.g., separate invitation token storage, not creating incomplete person records, token lifecycle rules). Based on the implementation evidence, these constraints have been faithfully executed:\n- Invitation tokens have their own database-backed storage (`InvitationToken`).\n- Unknown invited emails are kept as pending invitations, without prematurely creating incomplete `Person` records.\n- Profile-completion state is stored in the session (`put_session(:invitation_email, ...)`).\n- Tokens are not prematurely consumed when the link is first clicked by unknown invitees.\n- The existing person acceptance flow properly consumes the token, creates the membership, and signs the user in.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n*(Note: The `make-gemini-review-visible` issue raised in previous pipeline stages is a Fabro workflow/provider artifact visibility error, not a product-code implementation defect.)*\n\n## Bounded-safe fixes\n\nNone required. The code is well-tested and meets the plan's requirements.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Synchronous Email Delivery in Web Request**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** `Memba.Mailer.deliver(email)` is called synchronously within the web request lifecycle when a Staff member invites someone.\n   - **Why it may need human judgement:** Synchronous delivery couples the application's response time and failure modes to the upstream email provider. This is acceptable for a low-volume MVP Staff tool, but if invitation volume scales or retry semantics become critical, this should be moved to a durable background job queue (e.g., Oban).\n\n2. **Non-deterministic Projection Rebuilds (Token Generation)**\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`\n   - **Smell:** `InvitationToken.build_hashed_token()` is executed during the projection event handler.\n   - **Why it may need human judgement:** Event-sourced projections should ideally be pure functions of the event stream. By generating random tokens during projection, rebuilding the read model will yield different hashes, invalidating any outstanding invitation links. Given these are one-use links and projection rebuilds are currently rare, this trade-off is acceptable for the MVP, but it should be documented or refactored if rebuilds become a routine operational task.\n\n3. **Application-level Uniqueness for Pending Invitations**\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Preventing duplicate pending invitations for the same email and club relies on application-level checks rather than a partial unique database index (e.g., unique on `club_id` and `normalized_email` where `status = 'pending'`).\n   - **Why it may need human judgement:** Concurrent requests could theoretically result in duplicate pending invitations and multiple emails being sent. Since only one can ultimately be accepted, the data integrity risk is low. However, a database constraint provides stronger guarantees if this becomes problematic.\n\n4. **Virtual Field Access for Primary Emails**\n   - **Files:** `web/lib/memba/accounts/person.ex`\n   - **Smell:** With the migration to `person_email_addresses`, `Person.email` is now a virtual field used primarily for forms. Loaded `Person` structs will have `email: nil`, requiring developers to traverse the preloaded `email_addresses` association to find the primary email.\n   - **Why it may need human judgement:** This access pattern can easily trip up future maintainers. Introducing a helper like `Person.primary_email(person)` would improve developer experience and reduce the risk of bug introduction.\n\n5. **Migration Timestamp Anomaly**\n   - **Files:** `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The migration timestamp is dated in the future (June 2026), whereas the related schema creation is from 2025.\n   - **Why it may need human judgement:** While numerically valid and functionally safe, future-dated migrations can cause confusion during audits or deployments. It is a minor cosmetic issue.\n\n## Suggested fixes\n\nNo fixes are required to merge this iteration.\n\nOptional follow-ups for the team to consider:\n- Implement a `Person.primary_email/1` helper to encapsulate finding the primary email from preloaded associations.\n- Document the side-effects of rebuilding the invitation projection.\n- Consider moving email delivery to a background job if response latency or delivery reliability issues arise.\n\n## Validation notes\n\n- ExUnit test suite is completely green (`722 tests, 0 failures`).\n- Browser acceptance test suite is green (`69 scenarios, 466 steps`), covering Staff invitation UI, invalid slugs, email delivery, profile completion, and redirection.\n- `dev ci` passes cleanly, indicating formatting, compilation, and sandbox checks are healthy.\n- All 16 implementation steps outlined in the plan have been fulfilled.",
-          "review_fixes_available": false,
           "implementation_accepted": true,
-          "internal.retry_count.synthesize_review": 0,
-          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.verify_review_repair.current_node": "dev_check",
           "internal.retry_count.read_plan": 0,
           "thread.review_gate.current_node": "record_code_health",
-          "internal.retry_count.apply_review_fixes": 0,
-          "thread.apply_review_fixes.current_node": "verify_review_repair",
-          "thread.verify_review_repair.current_node": "dev_check",
-          "internal.retry_count.dev_check": 0,
-          "failure_class": "",
-          "thread.gemini_review.current_node": "synthesize_review",
+          "failure_class": "transient_infra",
           "internal.run_id": "01KTK439GP6A36JG17BGSSJ0Q6",
-          "thread.collect_implementation_evidence.current_node": "claude_review",
-          "internal.fidelity": "summary:high",
-          "internal.retry_count.codex_review": 0,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
-          "internal.retry_count.verify_review_repair": 0,
-          "internal.retry_count.record_code_health": 0,
           "thread.preflight_sandbox.current_node": "dev_check",
-          "thread.codex_review.current_node": "gemini_review",
-          "thread.synthesize_review.current_node": "review_gate",
-          "response.record_code_health": "{\"cmd\": \"sed -n '1,220p' docs/code-health.md 2>/dev/null || true\\nprintf '\\\\n--- status ---\\\\n'\\ngit status --short\"}{\"cmd\": \"pwd\"}{\"cmd\": \"sed -n '1,80p' docs/code-health.md\"}Updated `docs/code-health.md` with a dated Iteration 028 entry because the review synthesis omitted detailed code-health findings, while Claude, Codex, and Gemini all independently identified the same judgement-worthy non-blocking issues.\n\nRecorded findings cover:\n\n- synchronous invitation email delivery in the Staff request flow;\n- non-deterministic invitation token generation inside projection handling;\n- application-level uniqueness for pending invitations without a DB constraint;\n- `Person.email` being virtual after persisted email addresses moved to `person_email_addresses`;\n- future-dated migration timestamp anomaly.\n\nNo product behaviour or acceptance feature files were changed. No `dev check` was run because this was a docs-only code-health update.",
+          "thread.record_code_health.current_node": "final_artifact_gate",
           "review_blockers": [
             {
               "id": "make-gemini-review-visible",
@@ -11020,23 +11477,14 @@
             }
           ],
           "response.apply_review_fixes": "No product/code repair was applied.\n\nThe only gate issue is not a bounded implementation issue for `docs/iterations/028-staff-member-invitations/plan.md`; it is a workflow/provider visibility failure:\n\n> `make-gemini-review-visible` — “Workflow repair: make the Gemini review report visible to synthesis”\n\nThe `gemini_review` stage failed, so the synthesis prompt could not see a substantive Gemini report and routed to repair. I cannot safely manufacture that missing review report or patch product code to compensate.\n\n## Issue-to-fix mapping\n\n| Review issue | Assessment | Files changed | Fix / action |\n|---|---|---:|---|\n| `make-gemini-review-visible` | Workflow/reviewer artifact visibility blocker, not an implementation defect | None | Stopped without changes. Needs a rerun/fix of the failed Gemini review stage or an intentional Fabro workflow/process change outside this iteration repair. |\n\n## Changes made\n\nNone.\n\nI inspected the working tree and relevant Fabro workflow/prompt files. The tracked working tree is clean; only existing `.fabro/tmp/` artifacts are untracked.\n\n## Files changed\n\nNone.\n\n## Tests run\n\nNo tests were run because no code/config/test files were changed.\n\nPrior pipeline context already shows `dev ci` passed with:\n\n- ExUnit: `722 tests, 0 failures`\n- Acceptance: `69 scenarios passed`, `466 steps passed`\n\n## Remaining gaps / human questions\n\n- The Gemini review artifact is still unavailable because the `gemini_review` stage failed. This should be handled by rerunning/fixing that review stage or making an explicit workflow decision about partial review synthesis.\n- I did not edit `.fabro` workflow files here because changing review-gate semantics is judgement-heavy process work, not a bounded post-green implementation repair.\n- The prior `verify_review_repair` output also showed `cmp: command not found`; if that blocks the pipeline again, that is a sandbox/toolchain image issue, not an application-code issue.",
-          "last_stage": "record_code_health",
-          "internal.thread_id": "review_gate",
-          "graph.max_node_visits": "160",
-          "failure_signature": "",
-          "internal.retry_count.collect_implementation_evidence": 0,
-          "internal.node_visit_count": 1,
           "internal.retry_count.claude_review": 0,
-          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
-          "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe supplied plan/evidence did not identify any specific ADR by number. Against the architecture-relevant decisions stated in the iteration plan and visible implementation evidence, the implementation is conformant:\n\n- Invitation links use separate invitation-token storage rather than ordinary sign-in tokens.\n- Unknown invitees remain pending invitations until profile completion; no incomplete `Person` is created on first link open.\n- Profile-completion state lives in the invitation/session journey for this slice.\n- Tokens are not consumed when an unknown invitee first opens the link; they are consumed only after successful profile completion / membership activation.\n- Existing complete people can accept directly: membership is created, token is consumed, they are signed in, and they are routed to the club.\n- Staff invite routing is additive under `/admin/clubs/:club_id/...` and does not replace the existing person edit route.\n- Direct Staff club-member creation from arbitrary name/email appears decommissioned in favour of invitations.\n- Email normalization and duplicate checks appear aligned with the new person-email-address model.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\nThe implementation appears plan-conforming, behaviourally covered, and production-ready for this slice. The remaining pipeline blocker, `make-gemini-review-visible`, is a workflow/provider artifact issue caused by the failed `gemini_review` stage, not an implementation defect.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation occurs in projection/read-model handling**\n\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`, related invitation token/read-model code\n   - **Smell:** `InvitationToken.build_hashed_token()` appears to be called while handling the invitation projection rather than having deterministic token material included in command/event data.\n   - **Why it may need human judgement:** Event-sourced projection rebuilds are ideally deterministic. If rebuilding projections regenerates token hashes, outstanding invitation links may be invalidated. This is acceptable for an MVP if projection rebuilds are rare and pending invitations can be reissued, but it should be documented or revisited before operational projection rebuilds become routine.\n\n2. **Invitation email delivery is synchronous in the Staff invite flow**\n\n   - **Files:** `web/lib/memba/invitations.ex`\n   - **Smell:** Invitation email delivery appears to happen during the Staff HTTP request.\n   - **Why it may need human judgement:** This is simple and reasonable for low-volume Staff use, but it couples UI latency and failure behaviour to the mail provider. If invitation volume, reliability, or retry semantics become important, this should likely move behind a durable async job.\n\n3. **Pending invitation uniqueness is application-enforced**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation table migration/projection code\n   - **Smell:** Duplicate pending invitation handling appears to rely on application-level lookup/resend logic rather than a partial unique database constraint on `{club_id, normalized_email}` for pending invitations.\n   - **Why it may need human judgement:** Concurrent Staff invites for the same club/email could theoretically create duplicate pending invitations or duplicate emails. The practical risk is low for this slice, but if “one pending invite per club/email” is a hard invariant, a database constraint would be stronger.\n\n4. **`Person.email` remains a virtual field after persisted email addresses moved elsewhere**\n\n   - **Files:** `web/lib/memba/accounts/person.ex`, callers that need primary email data\n   - **Smell:** Persisted email addresses now live in `person_email_addresses`, while `Person.email` is virtual/form-oriented. Loaded `Person` structs may therefore have `person.email == nil`.\n   - **Why it may need human judgement:** Future maintainers may accidentally read `person.email` expecting persisted data. A helper such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` could make the intended access path clearer.\n\n5. **Migration timestamp anomaly**\n\n   - **Files:** `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n   - **Smell:** The backfill migration is timestamped in 2026 while related schema work is timestamped in 2025.\n   - **Why it may need human judgement:** The migration ordering is numerically valid, so this is not a functional issue. However, future-dated migration filenames can confuse maintainers or deployment audits if this branch is merged long before that date.\n\n## Suggested fixes\n\nNo required fixes for this merge.\n\nOptional follow-ups:\n\n- Document or revisit projection-time invitation token generation before relying on projection rebuilds.\n- Consider async/durable email delivery if invitation volume or retry requirements grow.\n- Consider a partial unique index for pending invitations if duplicate pending invites become operationally meaningful.\n- Add an explicit primary-email accessor to reduce confusion around the virtual `Person.email` field.\n- Consider normalizing future-dated migration timestamps before production deployment if that matters operationally.\n\n## Validation notes\n\n- `dev ci` passed.\n- ExUnit suite passed: `722 tests, 0 failures`.\n- Acceptance suite passed: `69 scenarios`, `466 steps`.\n- Browser/acceptance coverage appears to include:\n  - Staff invitation UI;\n  - invitation email link;\n  - profile completion page;\n  - final redirect to the club.\n- Domain/application coverage appears to include:\n  - pending invitation creation;\n  - active-member duplicate block;\n  - duplicate pending invitation resend;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - abandoned profile completion;\n  - accepted-link reuse.\n- Migration/backfill coverage appears to include legacy email migration edge cases such as blank, duplicate, and already-primary email data.\n- No code/config/test repair was needed after review; the remaining reported blocker is a Fabro/Gemini review visibility issue, not a product-code issue.",
-          "internal.retry_count.review_gate": 0,
+          "internal.retry_count.record_code_health": 0,
+          "internal.retry_count.final_artifact_gate": 0,
           "thread.claude_review.current_node": "codex_review",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "thread.read_plan.current_node": "preflight_sandbox",
-          "thread.start.current_node": "read_plan",
-          "command.output": "blob://sha256/b0de6cedb6eab1559dbe5ff61961da4800190326224b193e87367614ef7dfcab",
-          "internal.retry_count.start": 0,
-          "response.claude_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite specific ADR numbers. The implementation adheres to all architectural decisions stated in the plan:\n\n- ✅ Invitation tokens use separate database-backed storage via `InvitationToken` module\n- ✅ Email normalization follows `PersonEmailAddress` conventions  \n- ✅ No incomplete person records created before profile completion\n- ✅ Profile completion state managed via session (`put_session(:invitation_email, ...)`)\n- ✅ Token not consumed on first link open for unknown invitees\n- ✅ Existing person flow: accept → create membership → consume token → sign in → redirect to club\n\nNo ADR files are referenced in the plan or visible in the implementation evidence that would govern this domain.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\n**Note on pipeline state**: The synthesis stage is incorrectly flagging a workflow blocker (`make-gemini-review-visible`) due to a failed Gemini review stage. This is a pipeline/toolchain issue, not an implementation defect. Both Claude and Codex reviews consistently ACCEPT across multiple passes with no code blockers identified. The repair agent correctly diagnosed this as a workflow visibility problem rather than a code quality issue.\n\n## Bounded-safe fixes\n\nNone required. The implementation is production-ready.\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Migration timestamp anomaly (Severity: Low - cosmetic)\n\n**Files**: `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n\n**Smell**: Backfill migration timestamp is dated June 2026 while table creation is June 2025. Numerically correct order but year gap suggests dev/test clock set to 2026.\n\n**Why it may need human judgement**: Functionally correct but may confuse maintainers if deployed with future-dated timestamps. Consider regenerating with current dates if cosmetic consistency matters for production deployment.\n\n---\n\n### 2. Virtual email field access pattern (Severity: Low - DX)\n\n**Files**: `web/lib/memba/accounts/person.ex`\n\n**Smell**: `Person.email` is virtual; loaded records have `person.email == nil`. Code must navigate `person.email_addresses |> Enum.find(&(&1.is_primary)) |> Map.get(:email)`.\n\n**Why it may need human judgement**: Pattern works where associations are preloaded (as in current queries), but ad-hoc code accessing loaded persons may be confused. Consider adding `Person.primary_email/1` helper or explicit documentation if maintaining current structure.\n\n---\n\n### 3. Synchronous email delivery (Severity: Low - performance)\n\n**Files**: `web/lib/memba/invitations.ex`\n\n**Smell**: `Memba.Mailer.deliver(email)` called synchronously during Staff invitation HTTP request.\n\n**Why it may need human judgement**: Couples UI latency and error handling to mail provider response time. Acceptable for MVP with low Staff invitation volume. Consider async job queue (e.g., Oban) if invitation volume or deliverability reliability becomes critical.\n\n---\n\n### 4. Invitation token generation in projection (Severity: Low - architecture)\n\n**Files**: `web/lib/memba/membership/projections/invitation.ex`\n\n**Smell**: `InvitationToken.build_hashed_token()` called in projection handler rather than produced deterministically from event data.\n\n**Why it may need human judgement**: Event-sourced projection rebuilds are ideally deterministic. Rebuilding would generate different token hashes, invalidating outstanding links. Acceptable for MVP where:\n- Invitations are one-use\n- Projection rebuilds rare\n- Outstanding invitations can be manually reissued\n\nDocument this trade-off if projection rebuild procedures become operationally important.\n\n---\n\n### 5. Pending invitation uniqueness (Severity: Low - data integrity)\n\n**Files**: `web/lib/memba/invitations.ex`, invitations table migration\n\n**Smell**: Duplicate detection via application code (`cond do pending_invitation = find_pending_invitation(...)`). No partial unique index on `(club_id, normalized_email)` where `status = 'pending'`.\n\n**Why it may need human judgement**: Concurrent Staff invites for same email/club could create duplicate pending invitations and duplicate emails. Impact low:\n- Worst case: duplicate emails sent\n- Only one consumed on acceptance  \n- Manual cleanup possible\n\nAdding partial unique constraint would provide stronger guarantees but add migration complexity. Current approach acceptable if duplicate emails tolerable for MVP.\n\n---\n\n## Suggested fixes\n\nNone required for merge. Implementation is production-ready.\n\nOptional follow-ups:\n- Regenerate migration timestamps if future dates problematic for production\n- Add `Person.primary_email/1` helper for clearer email access\n- Consider async/durable email delivery if usage scales\n- Document projection-time token generation trade-off before operationalizing rebuilds\n- Consider partial unique index if duplicate pending invites become operationally problematic\n\n## Validation notes\n\n### Test coverage:\n- ✅ ExUnit: `722 tests, 0 failures` (multiple passes)\n- ✅ Acceptance: `69 scenarios`, `466 steps`, all passing\n- ✅ Domain tests cover invitation lifecycle, duplicates, acceptance flows\n- ✅ Controller tests cover profile completion, existing person flow, token validation  \n- ✅ LiveView tests cover Staff invitation UI\n- ✅ Email delivery tests verify templates and recipients\n- ✅ Migration backfill tests cover null/blank/duplicate handling\n\n### Dev check:\n- ✅ Compilation clean across multiple runs\n- ✅ Formatter clean\n- ✅ All tests green in multiple passes\n- ✅ Sandbox runtime check passed\n\n### Plan conformance:\n- ✅ All 16 numbered implementation steps delivered\n- ✅ Invitation aggregate with pending/accepted/expired states\n- ✅ Separate invitation token storage  \n- ✅ Staff invite route under `/admin/clubs/:club_id/invite`\n- ✅ Invitation callback with token validation\n- ✅ Profile completion for unknown invitees\n- ✅ Existing staff onboarding preserved\n- ✅ Acceptance feature scenarios implemented and passing\n\n### Consistency check:\nBoth Claude and Codex reviewers independently reached identical ACCEPT decisions across multiple review passes (stages 8-15, 17-22), with consistent identification of the same five non-blocking findings. The repair agent correctly diagnosed the pipeline gate issue as a workflow artifact visibility problem rather than an implementation defect.\n\n---\n\n**Overall Assessment**: The implementation is complete, well-tested, and production-ready. The pipeline is blocked by a workflow issue (missing Gemini review artifact), not by code quality concerns. The five identified findings are legitimate low-severity observations about MVP trade-offs that should not block merge. Accept and proceed to integration."
+          "command.output": "blob://sha256/b497d682e4dc744ea0500a7e1bd8419b81681385a057f8c1b8cf73106c48228d",
+          "internal.retry_count.start": 0
         },
         "node_outcomes": {
           "review_gate": {
@@ -11301,6 +11749,23 @@
               "active_time_ms": 70179
             }
           },
+          "final_artifact_gate": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/b497d682e4dc744ea0500a7e1bd8419b81681385a057f8c1b8cf73106c48228d"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nures/support/request_account.js            |   9 +-\n acceptance-tests/test/cucumber_config.test.js      |   1 +\n .../auth-token-onboarding-inspection.md            | 116 ++++\n .../staff-club-person-route-inspection.md          |  59 ++\n .../028-staff-member-invitations/todo.md           |  18 +\n .../029-membership-admin-invitations/plan.md       | 159 +++++\n .../030-verified-onboarding-requests/plan.md       | 168 ++++++\n docs/iterations/README.md                          |   6 +-\n web/config/config.exs                              |   1 +\n web/lib/memba/application.ex                       |   1 +\n web/lib/memba/id.ex                                |   2 +\n web/lib/memba/membership.ex                        | 390 ++++++++++++\n web/lib/memba/membership/club_invitation.ex        | 143 +++++\n .../membership/club_member_invitation_email.ex     | 245 ++++++++\n .../commands/accept_club_member_invitation.ex      |  12 +\n .../membership/commands/invite_club_member.ex      |  11 +\n .../commands/resend_club_member_invitation.ex      |  11 +\n .../events/club_member_invitation_accepted.ex      |   9 +\n .../events/club_member_invitation_resent.ex        |   9 +\n .../memba/membership/events/club_member_invited.ex |   9 +\n web/lib/memba/membership/invitation_token.ex       |  38 ++\n .../membership/projections/club_invitation.ex      |  21 +\n .../memba/membership/projectors/club_invitation.ex |  64 ++\n web/lib/memba/membership/router.ex                 |   8 +\n .../club_member_invitation_controller.ex           | 258 ++++++++\n .../controllers/club_member_invitation_html.ex     |  14 +\n .../club_member_invitation_html/profile.html.heex  |  49 ++\n .../controllers/dev_test_support_controller.ex     |   1 +\n web/lib/memba_web/identity_auth.ex                 |   6 +\n .../live/admin/club_member_invitations_live/new.ex | 255 ++++++++\n web/lib/memba_web/live/admin/clubs_live/show.ex    | 106 ++--\n web/lib/memba_web/live/admin/people_live/new.ex    |   8 +-\n web/lib/memba_web/router.ex                        |   4 +\n ..._backfill_membership_person_email_addresses.exs |  31 +-\n ...eate_membership_club_invitations_projection.exs |  32 +\n .../club_member_invitation_steps.exs               | 651 +++++++++++++++++++++\n web/test/memba/membership/app_test.exs             |  16 +\n .../membership/club_invitation_dispatch_test.exs   | 106 ++++\n .../membership/club_invitation_projection_test.exs | 112 ++++\n web/test/memba/membership/club_invitation_test.exs | 261 +++++++++\n .../club_member_invitation_email_test.exs          | 182 ++++++\n .../club_member_invitation_lifecycle_test.exs      | 358 +++++++++++\n .../memba/membership/invitation_token_test.exs     |  28 +\n .../person_email_address_projection_test.exs       |  42 ++\n web/test/memba/membership/public_api_test.exs      | 341 +++++++++++\n .../memba_web/controllers/auth_controller_test.exs |  18 +\n .../club_member_invitation_controller_test.exs     | 235 ++++++++\n .../club_member_invitations_live/new_test.exs      | 201 +++++++\n .../memba_web/live/admin/clubs_live/show_test.exs  |  29 +-\n web/test/memba_web/live/admin_people_live_test.exs |   2 +\n .../live/browser_acceptance_harness_test.exs       |  30 +-\n web/test/support/event_sourced_case.ex             |   1 +\n 59 files changed, 5496 insertions(+), 120 deletions(-)\n\nRecent commits (may include Fabro checkpoints):\n73a79f9 fabro(01KTK439GP6A36JG17BGSSJ0Q6): record_code_health (succeeded)\n8be0e36 fabro(01KTK439GP6A36JG17BGSSJ0Q6): review_gate (succeeded)\n3850395 fabro(01KTK439GP6A36JG17BGSSJ0Q6): synthesize_review (succeeded)\n0c2a4f6 fabro(01KTK439GP6A36JG17BGSSJ0Q6): gemini_review (succeeded)\n75df369 fabro(01KTK439GP6A36JG17BGSSJ0Q6): codex_review (succeeded)\n\nRefusing to publish implementation: locked acceptance feature policy failed.\nAcceptance .feature files changed without explicit plan permission under '## Allowed acceptance feature changes':\n- acceptance-tests/features/request_account.feature\n\nTo permit a feature edit, add a '## Allowed acceptance feature changes' section to the plan naming each .feature file and the allowed kind of change.\n",
+              "category": "transient_infra"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 281,
+              "active_time_ms": 281
+            }
+          },
           "synthesize_review": {
             "status": "succeeded",
             "context_updates": {
@@ -11354,22 +11819,23 @@
             }
           }
         },
-        "next_node_id": "final_artifact_gate",
+        "next_node_id": "final_artifact_failed",
         "node_visits": {
-          "collect_implementation_evidence": 3,
-          "claude_review": 3,
           "codex_review": 3,
           "gemini_review": 3,
-          "verify_review_repair": 2,
-          "start": 1,
           "synthesize_review": 3,
-          "record_code_health": 1,
           "dev_check": 3,
           "review_gate": 3,
           "snapshot_before_review_repair": 2,
+          "final_artifact_gate": 1,
           "apply_review_fixes": 2,
           "read_plan": 1,
-          "preflight_sandbox": 1
+          "preflight_sandbox": 1,
+          "collect_implementation_evidence": 3,
+          "claude_review": 3,
+          "verify_review_repair": 2,
+          "start": 1,
+          "record_code_health": 1
         }
       },
       "diff": {}
@@ -12445,6 +12911,43 @@
       },
       "state": "succeeded"
     },
+    "final_artifact_gate@1": {
+      "first_event_seq": 555,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "bash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/028-staff-member-invitations/plan.md' '4e7532d0e9c366bd627ea71ffbb6a0080e895976'",
+        "command": "exec 2>&1\nbash .fabro/workflows/iteration-review/scripts/final_artifact_gate.sh 'docs/iterations/028-staff-member-invitations/plan.md' '4e7532d0e9c366bd627ea71ffbb6a0080e895976'",
+        "language": "shell"
+      },
+      "script_timing": {
+        "output": "blob://sha256/b497d682e4dc744ea0500a7e1bd8419b81681385a057f8c1b8cf73106c48228d",
+        "exit_code": 1,
+        "duration_ms": 281,
+        "termination": "exited",
+        "output_bytes": 8061,
+        "live_streaming": true
+      },
+      "parallel_results": null,
+      "output": null,
+      "output_bytes": 8061,
+      "live_streaming": true,
+      "termination": "exited",
+      "started_at": "2026-06-08T09:40:18.001812797Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "codex_review@3": {
       "first_event_seq": 507,
       "prompt": null,
@@ -12703,7 +13206,12 @@
       "first_event_seq": 545,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: record_code_health",
+        "failure_reason": null,
+        "timestamp": "2026-06-08T09:40:14.280917067Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -12717,6 +13225,12 @@
       "output": null,
       "started_at": "2026-06-08T09:39:37.518532394Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 36762,
+        "inference_time_ms": 36694,
+        "tool_time_ms": 0,
+        "active_time_ms": 36694
+      },
       "usage": {
         "input_tokens": 25268,
         "output_tokens": 228,
@@ -12730,7 +13244,7 @@
         "provider": "openai",
         "model_id": "gpt-5.5"
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "verify_review_repair@2": {
       "first_event_seq": 467,
