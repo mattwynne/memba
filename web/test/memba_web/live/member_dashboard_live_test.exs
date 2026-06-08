@@ -528,6 +528,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#member-invite-member-link")
   end
 
+  test "dashboard shows the invite-member action to membership admins", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    grant_manage_members_permission!(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(view, "#club-members[data-can-manage-members='true']")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new?club_id=#{alice.club_id}']",
+             "Invite member"
+           )
+  end
+
+  test "dashboard invite-member action preserves host-selected club routes", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    grant_manage_members_permission!(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    refute has_element?(view, "#member-invite-member-link[href*='club_id=']")
+  end
+
   test "logged-out club home still renders the public club page", %{conn: conn} do
     club = create_club(name: "Alpine Club")
 
