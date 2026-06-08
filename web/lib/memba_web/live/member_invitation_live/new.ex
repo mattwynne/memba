@@ -8,6 +8,9 @@ defmodule MembaWeb.MemberInvitationLive.New do
   """
   use MembaWeb, :live_view
 
+  alias Memba.Membership
+  alias Memba.Membership.Permissions
+
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
     params = put_session_club_id(params, session) |> put_club_id_source(session)
@@ -15,7 +18,11 @@ defmodule MembaWeb.MemberInvitationLive.New do
 
     case params do
       %{"club_id" => club_id} ->
-        case invitation_context(club_id, socket.assigns.current_identity_clubs) do
+        case invitation_context(
+               club_id,
+               socket.assigns.current_identity,
+               socket.assigns.current_identity_clubs
+             ) do
           {:ok, invitation_assigns} ->
             {:ok,
              socket
@@ -93,16 +100,29 @@ defmodule MembaWeb.MemberInvitationLive.New do
     """
   end
 
-  defp invitation_context(club_id, current_identity_clubs) do
-    case selected_club(current_identity_clubs, club_id) do
-      nil -> {:error, :forbidden}
-      selected_club -> {:ok, %{selected_club: selected_club}}
+  defp invitation_context(club_id, current_identity, current_identity_clubs) do
+    with selected_club when not is_nil(selected_club) <-
+           selected_club(current_identity_clubs, club_id),
+         current_person when not is_nil(current_person) <-
+           current_person_for_identity(current_identity),
+         true <-
+           Membership.person_has_club_permission?(
+             selected_club.club_id,
+             current_person.person_id,
+             Permissions.club_manage_members()
+           ) do
+      {:ok, %{selected_club: selected_club}}
+    else
+      _not_authorized -> {:error, :forbidden}
     end
   end
 
   defp selected_club(current_identity_clubs, club_id) do
     Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
   end
+
+  defp current_person_for_identity(nil), do: nil
+  defp current_person_for_identity(identity), do: Membership.get_person_by_email(identity.email)
 
   defp assign_empty_invitation_context(socket) do
     assign(socket, :selected_club, nil)

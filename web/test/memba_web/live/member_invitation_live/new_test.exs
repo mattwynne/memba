@@ -3,7 +3,9 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
   alias MembaWeb.IdentityAuth
@@ -23,7 +25,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     conn: conn
   } do
     alice =
-      create_active_member(
+      create_membership_admin(
         email: "alice@example.com",
         name: "Alice Adams",
         club_name: "Alpine Club"
@@ -56,7 +58,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     conn: conn
   } do
     alice =
-      create_active_member(
+      create_membership_admin(
         email: "alice@example.com",
         name: "Alice Adams",
         club_name: "Kootenay Mountaineering Club",
@@ -78,6 +80,55 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     refute has_element?(view, "#member-invitation-club-home-link[href*='club_id=']")
   end
 
+  test "routed GET forbids an active club member without club.manage_members permission", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    assert_raise MembaWeb.ForbiddenError, fn ->
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/members/invitations/new?club_id=#{alice.club_id}")
+    end
+  end
+
+  test "routed GET forbids a member whose manage-members permission belongs to another club", %{
+    conn: conn
+  } do
+    selected_club_member =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    other_club_admin =
+      create_membership_admin(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Backcountry Club"
+      )
+
+    refute other_club_admin.club_id == selected_club_member.club_id
+
+    assert_raise MembaWeb.ForbiddenError, fn ->
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/members/invitations/new?club_id=#{selected_club_member.club_id}")
+    end
+  end
+
+  defp create_membership_admin(attrs) do
+    attrs
+    |> create_active_member()
+    |> grant_manage_members_permission!()
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
@@ -94,14 +145,27 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
-    Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
+    membership =
+      Repo.insert!(%Membership{
+        membership_id: Memba.ID.generate(:membership),
+        club_id: club_id,
+        person_id: person.person_id,
+        active: true
+      })
+
+    %{club_id: club_id, person_id: person.person_id, membership_id: membership.membership_id}
+  end
+
+  defp grant_manage_members_permission!(member) do
+    Repo.insert!(%MemberPermission{
+      club_id: member.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
     })
 
-    %{club_id: club_id, person_id: person.person_id}
+    member
   end
 
   defp club_attrs(attrs, club_id) do
