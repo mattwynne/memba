@@ -101,6 +101,24 @@ defmodule MembaWeb.RouterTest do
       assert :error = Phoenix.Router.route_info(MembaWeb.Router, "POST", "/", "localhost")
     end
 
+    test "routes /members/invitations/new through the required club member pipeline to the member invitation LiveView" do
+      assert %{
+               path_params: %{},
+               pipe_through: [:browser, :club_member_required],
+               phoenix_live_view:
+                 {MembaWeb.ClubMemberInvitationsLive.New, :new, _opts, _live_session},
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: :new,
+               route: "/members/invitations/new"
+             } =
+               Phoenix.Router.route_info(
+                 MembaWeb.Router,
+                 "GET",
+                 "/members/invitations/new",
+                 "localhost"
+               )
+    end
+
     test "routes /messages/new through the required club member pipeline to the compose LiveView" do
       assert %{
                path_params: %{},
