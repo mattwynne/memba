@@ -97,7 +97,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
               <h1 class="text-3xl font-bold tracking-tight text-[#15201c]">New person</h1>
               <p class="max-w-3xl text-[#4b5a55]">
                 Create a person identity and contact record for use in the existing club-scoped
-                workflow. Memberships stay separate and can be added from the club page.
+                workflow. Memberships stay separate and now start through invitations.
               </p>
             </div>
 
@@ -135,7 +135,7 @@ defmodule MembaWeb.Admin.PeopleLive.New do
               </p>
               <p class="mt-3 text-lg font-semibold text-[#15201c]">Identity and contact</p>
               <p class="mt-2 text-sm text-[#4b5a55]">
-                The record can later be linked to one or more club memberships.
+                The record can later be updated here without granting club membership.
               </p>
             </article>
 
@@ -307,8 +307,8 @@ defmodule MembaWeb.Admin.PeopleLive.New do
                 Person first, membership second
               </h2>
               <p class="mt-2 text-sm text-[#4b5a55]">
-                Saving this form creates the person and email-address set. Use the club detail page
-                to add that person as an active member of a club.
+                Saving this form creates the person and email-address set only. Use invitations
+                from the club detail page when someone should become an active club member.
               </p>
             </aside>
           </div>

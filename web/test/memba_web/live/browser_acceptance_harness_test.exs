@@ -38,11 +38,13 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
     )
     |> assert_has("#staff-club-home-link[href^='/?club_id=']")
     |> assert_has("#new-person-link[aria-label='New person'][href^='/admin/clubs/']")
+    |> assert_has("#invite-member-link[aria-label='Invite member'][href^='/admin/clubs/']")
     |> refute_has("#new-person-form")
     |> assert_has("#people[aria-label='People']")
-    |> assert_has("#add-member-form[aria-label='Add a member']")
-    |> assert_has("#member-person-select[aria-label='Person to add as member']")
-    |> assert_has("#add-member-button[aria-label='Add selected person as member']")
+    |> assert_has("#memberships-invitation-notice", "Invitation required")
+    |> refute_has("#add-member-form")
+    |> refute_has("#member-person-select")
+    |> refute_has("#add-member-button")
     |> assert_has("#members[aria-label='Members']")
     |> refute_has("#new-message-form")
     |> refute_has("#message-sender-select")
@@ -230,12 +232,24 @@ defmodule MembaWeb.BrowserAcceptanceHarnessTest do
   end
 
   defp add_member(session, name) do
+    current_path = PhoenixTest.Driver.current_path(session)
+    club_id = current_path |> String.split("/", trim: true) |> List.last()
+    person = Membership.get_person_by_email(email_for(name))
+
+    assert person
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: Memba.ID.generate(:membership),
+                 club_id: club_id,
+                 person_id: person.person_id
+               },
+               consistency: :strong
+             )
+
     session
-    |> within("#add-member-form", fn session ->
-      session
-      |> select("Person", option: name)
-      |> click_button("Add member")
-    end)
+    |> visit(current_path)
     |> assert_has("#members [data-testid='member-row']", name)
   end
 

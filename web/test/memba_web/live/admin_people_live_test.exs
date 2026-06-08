@@ -102,6 +102,8 @@ defmodule MembaWeb.AdminPeopleLiveTest do
                primary?: false
              }
            ]
+
+    refute Membership.active_member_of_club?(club.club_id, person_id)
   end
 
   test "staff create form rejects malformed, missing-primary, multiple-primary, and duplicate email submissions",
