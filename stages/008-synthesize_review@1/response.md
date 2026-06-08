@@ -1,0 +1,1 @@
+{"cmd": "ls -R .fabro | sed -n '1,200p' && echo '---' && find .fabro -type f -maxdepth 4 -print"}{"cmd": "find .fabro -maxdepth 4 -type f -print | sort | sed -n '1,200p'"}{"context_updates":{"implementation_accepted":true,"review_fixes_available":false}}
