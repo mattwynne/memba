@@ -15,4 +15,4 @@
 - [x] 013 Implement step definitions only as needed during delivery to exercise the new Cucumber scenarios through domain/application behaviour. Do not create a polished member-facing admin UI in this iteration.
 - [x] 014 Add ExUnit tests for events, projections, permission checks, authorization failures, and the last-administrator invariant.
 - [x] 015 Remove `@todo-domain`/`@todo-ui` from `club_membership_administration.feature` once implementation passes the scenarios.
-- [ ] 016 Run `dev check`.
+- [x] 016 Run `dev check`.
