@@ -10,6 +10,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
   alias Memba.Membership.Roles
 
   describe "club member invitation lifecycle application API" do
@@ -448,12 +449,79 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
                match?(%{id: ^invited_person_id, membership_id: ^invited_membership_id}, member)
              end)
 
+      refute Membership.person_has_club_permission?(
+               club_id,
+               invited_person_id,
+               Permissions.club_manage_members()
+             )
+
+      assert [] = active_role_assignments(invited_membership_id)
+
       assert %ClubInvitationProjection{
                invitation_id: ^invitation_id,
                status: "accepted",
                accepted_person_id: ^invited_person_id,
                accepted_membership_id: ^invited_membership_id
              } = Membership.get_club_member_invitation_by_token(second_token)
+    end
+
+    test "existing complete person invited by a membership admin accepts as an ordinary member" do
+      club_id = Memba.ID.generate(:club)
+      actor_person_id = Memba.ID.generate(:person)
+      actor_membership_id = Memba.ID.generate(:membership)
+      invited_person_id = Memba.ID.generate(:person)
+      invited_membership_id = Memba.ID.generate(:membership)
+      invitation_id = Memba.ID.generate(:club_invitation)
+
+      create_club!(club_id)
+      create_person!(actor_person_id, "Robin Admin", "robin@example.com")
+      add_member!(actor_membership_id, club_id, actor_person_id)
+      assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
+      create_person!(invited_person_id, "Dana Existing", "dana@example.com")
+
+      assert {:ok, %{invitation_id: ^invitation_id}} =
+               Membership.invite_club_member_as_club_member(
+                 %{
+                   invitation_id: invitation_id,
+                   club_id: club_id,
+                   actor_person_id: actor_person_id,
+                   email: " DANA@Example.COM "
+                 },
+                 consistency: :strong
+               )
+
+      assert {:ok,
+              %{
+                invitation_id: ^invitation_id,
+                club_id: ^club_id,
+                person_id: ^invited_person_id,
+                membership_id: ^invited_membership_id
+              }} =
+               Membership.accept_club_member_invitation_for_existing_person(
+                 %{
+                   invitation_id: invitation_id,
+                   person_id: invited_person_id,
+                   membership_id: invited_membership_id
+                 },
+                 consistency: :strong
+               )
+
+      assert Membership.active_member_of_club?(club_id, invited_person_id)
+
+      refute Membership.person_has_club_permission?(
+               club_id,
+               invited_person_id,
+               Permissions.club_manage_members()
+             )
+
+      assert [] = active_role_assignments(invited_membership_id)
+
+      assert %ClubInvitationProjection{
+               invitation_id: ^invitation_id,
+               status: "accepted",
+               accepted_person_id: ^invited_person_id,
+               accepted_membership_id: ^invited_membership_id
+             } = Membership.get_club_member_invitation(invitation_id)
     end
 
     test "membership admin actor is authorized separately from invitation lifecycle data" do
@@ -636,5 +704,12 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
              person_id,
              Permissions.club_manage_members()
            )
+  end
+
+  defp active_role_assignments(membership_id) do
+    RoleAssignmentProjection
+    |> where([assignment], assignment.membership_id == ^membership_id)
+    |> where([assignment], assignment.active == true)
+    |> Repo.all()
   end
 end
