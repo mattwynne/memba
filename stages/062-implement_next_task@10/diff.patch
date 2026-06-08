@@ -1,0 +1,173 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 35a92f2..70100b1 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [x] 008 Keep the Admin invitation form email-only.
+ - [x] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+-- [ ] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
++- [x] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+ - [ ] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
+ - [ ] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
+ - [ ] 013 Remove or narrow `@todo-domain`/`@todo-ui` tags from the affected scenarios only when they pass in the relevant runner.
+diff --git a/web/test/memba/membership/authorization_test.exs b/web/test/memba/membership/authorization_test.exs
+index bf7ff6e..eb2bde2 100644
+--- a/web/test/memba/membership/authorization_test.exs
++++ b/web/test/memba/membership/authorization_test.exs
+@@ -9,6 +9,35 @@ defmodule Memba.Membership.AuthorizationTest do
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Roles
+ 
++  test "authorize_manage_members/2 authorizes Membership Admin invitations by club permission" do
++    club_id = Memba.ID.generate(:club)
++    other_club_id = Memba.ID.generate(:club)
++    admin_person_id = Memba.ID.generate(:person)
++    admin_membership_id = Memba.ID.generate(:membership)
++    ordinary_person_id = Memba.ID.generate(:person)
++    ordinary_membership_id = Memba.ID.generate(:membership)
++
++    create_club!(club_id)
++    create_club!(other_club_id)
++    create_person!(admin_person_id, "Robin", "robin@example.com")
++    add_member!(admin_membership_id, club_id, admin_person_id)
++    create_person!(ordinary_person_id, "Alice", "alice@example.com")
++    add_member!(ordinary_membership_id, club_id, ordinary_person_id)
++
++    assert {:error, :unauthorized} =
++             Authorization.authorize_manage_members(club_id, admin_person_id)
++
++    assign_membership_administrator!(club_id, admin_membership_id, admin_person_id)
++
++    assert :ok = Authorization.authorize_manage_members(club_id, admin_person_id)
++
++    assert {:error, :unauthorized} =
++             Authorization.authorize_manage_members(club_id, ordinary_person_id)
++
++    assert {:error, :unauthorized} =
++             Authorization.authorize_manage_members(other_club_id, admin_person_id)
++  end
++
+   test "has_permission?/3 reads the internal flattened member-permission projection" do
+     club_id = Memba.ID.generate(:club)
+     person_id = Memba.ID.generate(:person)
+@@ -60,10 +89,10 @@ defmodule Memba.Membership.AuthorizationTest do
+              )
+   end
+ 
+-  defp create_person!(person_id) do
++  defp create_person!(person_id, name \\ "Alice", email \\ "alice@example.com") do
+     assert :ok =
+              Membership.create_person(
+-               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
++               %{person_id: person_id, name: name, email: email},
+                consistency: :strong
+              )
+   end
+@@ -75,4 +104,17 @@ defmodule Memba.Membership.AuthorizationTest do
+                consistency: :strong
+              )
+   end
++
++  defp assign_membership_administrator!(club_id, membership_id, person_id) do
++    assert :ok =
++             App.dispatch(
++               %AssignMemberRole{
++                 club_id: club_id,
++                 membership_id: membership_id,
++                 person_id: person_id,
++                 role_id: Roles.membership_administrator_role_id(club_id)
++               },
++               consistency: :strong
++             )
++  end
+ end
+diff --git a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+index ed5803c..cfb54f3 100644
+--- a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
++++ b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+@@ -3,7 +3,9 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+ 
+   alias Memba.Membership
+   alias Memba.Membership.InvitationToken
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
+ 
+@@ -180,6 +182,18 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       assert [%{id: ^person_id, membership_id: ^membership_id}] =
+                Membership.list_active_members_of_club(club_id)
+ 
++      refute Membership.person_has_club_permission?(
++               club_id,
++               person_id,
++               Permissions.club_manage_members()
++             )
++
++      refute member_permission?(
++               club_id,
++               person_id,
++               Permissions.club_manage_members()
++             )
++
+       assert %ClubInvitationProjection{
+                status: "accepted",
+                accepted_person_id: ^person_id,
+@@ -237,6 +251,18 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       assert [%{id: ^person_id, membership_id: ^membership_id}] =
+                Membership.list_active_members_of_club(club_id)
+ 
++      refute Membership.person_has_club_permission?(
++               club_id,
++               person_id,
++               Permissions.club_manage_members()
++             )
++
++      refute member_permission?(
++               club_id,
++               person_id,
++               Permissions.club_manage_members()
++             )
++
+       assert %ClubInvitationProjection{
+                status: "accepted",
+                accepted_person_id: ^person_id,
+@@ -355,4 +381,14 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       assert is_nil(Repo.get(MembershipProjection, duplicate_membership_id))
+     end
+   end
++
++  defp member_permission?(club_id, person_id, permission) do
++    Repo.exists?(
++      from(member_permission in MemberPermission,
++        where: member_permission.club_id == ^club_id,
++        where: member_permission.person_id == ^person_id,
++        where: member_permission.permission == ^permission
++      )
++    )
++  end
+ end
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index 8bd2164..bba3f84 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -456,7 +456,7 @@ defmodule Memba.Membership.PublicApiTest do
+     assert [] = Membership.list_active_members_of_club(club_id)
+   end
+ 
+-  test "invite_club_member/2 creates a pending invitation without requiring an actor" do
++  test "invite_club_member/2 preserves Staff/system invitations without requiring a club-member actor" do
+     club_id = Memba.ID.generate(:club)
+     invitation_id = Memba.ID.generate(:club_invitation)
+ 
+@@ -500,6 +500,8 @@ defmodule Memba.Membership.PublicApiTest do
+              status: "pending",
+              resend_count: 0
+            } = Membership.get_club_member_invitation(invitation_id)
++
++    assert [] = Membership.list_active_members_of_club(club_id)
+   end
+ 
+   test "invite_club_member/2 rejects an active club member by normalized email" do
