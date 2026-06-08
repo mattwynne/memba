@@ -241,3 +241,97 @@ The evals are useful: they prevented us from accepting a faster workflow that si
 Keep the sequential plan-validation workflow until Fabro provides a reliable first-class way to pass all branch responses into synthesis.
 
 Do not remove or weaken `.fabro/workflows/plan-validation/test.sh`; it is the safety net that caught the regression repeatedly.
+
+## Additional observation: 2026-06-08
+
+### Context
+
+We inspected the `iteration-review` workflow after Matt observed that code review "never seems to come back with anything." The reviewed workflow was `.fabro/workflows/iteration-review/workflow.fabro`, with reviewer and synthesis prompts under `.fabro/workflows/iteration-review/prompts/`.
+
+Recent review runs inspected:
+
+```text
+01KTCS5B6M5RQS0SV9XA5QZ31M  docs/iterations/021-staff-area-redesign/plan.md
+01KTJC3F29TAD4HV6RP4DJRCM7  docs/iterations/027-membership-administrator-role/plan.md
+```
+
+### Expected standard
+
+The iteration review workflow is supposed to run independent Claude, Codex/GPT, and Gemini reviews, synthesize their reports, apply bounded-safe fixes where appropriate, and record judgement-worthy non-blocking findings in `docs/code-health.md`.
+
+A successful review should not mean only that the reviewer branches completed. It should mean the synthesis step has actually seen and accounted for the reviewer reports.
+
+### What happened
+
+Both recent review runs used parallel fan-out/fan-in for the independent reviewer stages. In both runs, the individual reviewer stages completed and produced substantive reports, but the downstream synthesis context only exposed branch metadata such as:
+
+```text
+parallel.branch_count
+parallel.fan_in.best_head_sha
+parallel.fan_in.best_id
+parallel.fan_in.best_outcome
+parallel.results
+```
+
+The synthesis prompt did not receive the full reviewer response bodies.
+
+Evidence from `01KTJC3F29TAD4HV6RP4DJRCM7`:
+
+- `gemini_review` returned a 2,245 character report and listed judgement-worthy code-health findings.
+- `codex_review` returned a 3,045 character report and listed judgement-worthy code-health findings.
+- `claude_review` returned a 10,367 character report and recommended bounded-safe fixes.
+- `synthesize_review` returned only tool-call-looking JSON plus routing:
+
+```text
+{"cmd": "ls -R .fabro | sed -n '1,200p' && echo '---' && find .fabro -type f -maxdepth 4 -print"}{"cmd": "find .fabro -maxdepth 4 -type f -print | sort | sed -n '1,200p'"}{"context_updates":{"implementation_accepted":true,"review_fixes_available":false}}
+```
+
+The workflow then routed through `record_code_health`, which also emitted tool-call-looking JSON and concluded that `docs/code-health.md` did not need an entry.
+
+Evidence from `01KTCS5B6M5RQS0SV9XA5QZ31M` showed the same pattern: all three reviewers produced substantive reports, including bounded-safe and judgement-worthy findings, but synthesis accepted with no fixes and no code-health findings.
+
+### Impact
+
+This created false-clean review results. The workflow spent model time finding useful issues, but then silently discarded the findings before the gate that decides whether to polish code or record code-health notes.
+
+The impact is quality risk rather than an immediate production bug:
+
+- bounded-safe fixes can be skipped;
+- judgement-worthy architecture or maintainability concerns do not reach `docs/code-health.md`;
+- Matt sees repeated successful reviews that appear to have found nothing;
+- diagnosis requires manual archaeology through `fabro events` rather than reading the final review output.
+
+### What allowed it to happen
+
+The same Fabro parallel fan-in evidence gap observed in plan validation also existed in iteration review. The workflow trusted parallel branch success metadata as if it implied reviewer report visibility.
+
+Missing or weak protections:
+
+- no guardrail checked that synthesis could see each reviewer body's Markdown before accepting;
+- no shape validation rejected synthesis responses that were only tool-call JSON plus routing JSON;
+- `record_code_health` relied on synthesis, so it inherited the blind spot;
+- there was no eval/test equivalent for iteration review that plants reviewer findings and proves they reach synthesis/code-health recording.
+
+### Observations
+
+- This is not a reviewer-quality problem: the individual review stages did produce useful reports.
+- This is not a product-code problem: the abnormality is in workflow evidence handoff after parallel fan-in.
+- The problem recurred after the same failure mode had already been documented and worked around in plan validation.
+- A tactical fix was applied in commit `82f1eee3` (`Harden iteration review synthesis`): iteration-review now runs the reviewer stages sequentially and the prompts fail closed if reviewer Markdown is not visible.
+
+### Why this matters
+
+Review is the last delivery-machine step meant to catch maintainability, ADR, and code-health signals after implementation. If the workflow can report a clean review while dropping reviewer findings, it weakens trust in successful runs and lets review debt accumulate invisibly.
+
+### Open questions
+
+- Should iteration review have an eval/test fixture like plan validation, with planted reviewer outputs that must reach synthesis and `docs/code-health.md`?
+- Can Fabro expose all parallel branch responses as first-class downstream context so the workflow can safely regain parallelism?
+- Should prompt response shape validation reject tool-call-looking JSON before routing context updates are accepted?
+
+### Possible prevention ideas
+
+- Keep iteration-review sequential until Fabro provides reliable fan-in evidence visibility.
+- Add an iteration-review workflow eval that fails if reviewer findings are omitted by synthesis.
+- Add a deterministic synthesis preflight/guardrail: require visible `response.claude_review`, `response.codex_review`, and `response.gemini_review` content before accepting.
+- Treat malformed synthesis output, especially command JSON followed only by routing JSON, as an infrastructure failure rather than a clean review.
