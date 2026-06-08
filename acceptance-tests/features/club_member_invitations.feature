@@ -29,7 +29,7 @@ Feature: Club member invitations
 
 # Rule: Membership Admins invite new members by email
 
-    @iteration-029 @todo-domain @todo-ui
+    @iteration-029 @todo-ui
     Scenario: Robin invites Dana to join West Coast Paddlers
       Given Robin is a Membership Admin of West Coast Paddlers
       When Robin invites "dana@example.com" to join West Coast Paddlers
@@ -44,7 +44,7 @@ Feature: Club member invitations
 
 # Rule: Membership invitations are authorized by club permission
 
-    @iteration-029 @todo-domain @todo-ui
+    @iteration-029
     Scenario: Alice cannot invite someone to join West Coast Paddlers
       Given Alice is an ordinary member of West Coast Paddlers
       When Alice tries to invite "dana@example.com" to join West Coast Paddlers
@@ -88,14 +88,14 @@ Feature: Club member invitations
       Then "robin@example.com" should receive another invitation to join West Coast Paddlers
       And there should still be only one pending invitation for "robin@example.com" to join West Coast Paddlers
 
-    @iteration-029 @todo-domain @todo-ui
+    @iteration-029
     Scenario: Robin cannot invite an active member again
       Given Robin is a Membership Admin of West Coast Paddlers
       And Alice is an active member of West Coast Paddlers
       When Robin tries to invite Alice to join West Coast Paddlers
       Then Robin should see that Alice is already a member of West Coast Paddlers
 
-    @iteration-029 @todo-domain @todo-ui
+    @iteration-029
     Scenario: Robin resends a pending invitation by inviting the same email again
       Given Robin is a Membership Admin of West Coast Paddlers
       And Robin has invited "dana@example.com" to join West Coast Paddlers
