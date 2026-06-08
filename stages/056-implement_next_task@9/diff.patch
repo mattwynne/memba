@@ -1,0 +1,69 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 32df43a..35a92f2 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+ - [x] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [x] 008 Keep the Admin invitation form email-only.
+-- [ ] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
++- [x] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [ ] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+ - [ ] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
+ - [ ] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
+diff --git a/web/test/memba_web/live/member_invitation_live/send_test.exs b/web/test/memba_web/live/member_invitation_live/send_test.exs
+index 22a610b..6dd8579 100644
+--- a/web/test/memba_web/live/member_invitation_live/send_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/send_test.exs
+@@ -91,10 +91,25 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+     |> assert_has("#member-club-home[data-club-id='#{robin.club_id}']")
+     |> assert_has("#member-dashboard-hero", "Hello, Dana.")
+ 
+-    assert %{name: "Dana Example", email: "dana@example.com"} =
++    assert %{person_id: dana_person_id, name: "Dana Example", email: "dana@example.com"} =
+              Membership.get_person_by_email("dana@example.com")
+ 
++    assert %MembershipProjection{active: true, person_id: ^dana_person_id} =
++             active_membership(robin.club_id, dana_person_id)
++
+     assert Membership.active_member_of_club_by_email?(robin.club_id, "dana@example.com")
++
++    refute Membership.person_has_club_permission?(
++             robin.club_id,
++             dana_person_id,
++             Permissions.club_manage_members()
++           )
++
++    refute member_permission?(
++             robin.club_id,
++             dana_person_id,
++             Permissions.club_manage_members()
++           )
+   end
+ 
+   test "membership admin duplicate pending invitation resends through the shared invitation rule",
+@@ -234,6 +249,24 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
+     })
+   end
+ 
++  defp active_membership(club_id, person_id) do
++    MembershipProjection
++    |> where([membership], membership.club_id == ^club_id)
++    |> where([membership], membership.person_id == ^person_id)
++    |> where([membership], membership.active == true)
++    |> Repo.one()
++  end
++
++  defp member_permission?(club_id, person_id, permission) do
++    Repo.exists?(
++      from(member_permission in MemberPermission,
++        where: member_permission.club_id == ^club_id,
++        where: member_permission.person_id == ^person_id,
++        where: member_permission.permission == ^permission
++      )
++    )
++  end
++
+   defp club_attrs(attrs, club_id) do
+     base = [
+       club_id: club_id,
