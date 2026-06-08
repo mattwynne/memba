@@ -196,6 +196,27 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "#club-members #member-invite-member-link")
   end
 
+  test "club subdomain dashboard keeps the member invite action hidden from ordinary members",
+       %{conn: conn} do
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers",
+        slug: "wcp"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "wcp.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/")
+
+    refute has_element?(view, "#club-members #member-invite-member-link")
+    refute has_element?(view, "#club-members a[href='/members/invitations/new']")
+    refute has_element?(view, "#club-members a[href*='/members/invitations/new']")
+  end
+
   test "dashboard receipt glance uses member vocabulary and does not leak Memba-staff-only fields",
        %{conn: conn} do
     alice =

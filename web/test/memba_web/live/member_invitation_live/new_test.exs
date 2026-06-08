@@ -96,6 +96,24 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     end
   end
 
+  test "club subdomain routed GET requires the current club member to have club.manage_members",
+       %{conn: conn} do
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers",
+        slug: "wcp"
+      )
+
+    assert_raise MembaWeb.ForbiddenError, fn ->
+      conn
+      |> Map.put(:host, "wcp.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/members/invitations/new")
+    end
+  end
+
   test "routed GET redirects signed-out visitors and preserves the selected club return path",
        %{conn: conn} do
     robin =
