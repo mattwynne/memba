@@ -1,26 +1,20 @@
 # Problems
 
-## Staff and membership admins can create people or add emails without verification
+## Staff can create club members without email verification
 
 Observed: 2026-06-01
 
-Status: Unresolved. [Iteration 016: Multiple email addresses per person](../iterations/016-person-email-addresses/plan.md) added known primary/alternate email addresses, but explicitly left email verification workflow out of scope. On 2026-06-07 this was observed again for Staff and Membership admins creating people or adding emails to existing people.
+Status: Resolved by plan. [Iteration 028](../iterations/028-staff-member-invitations/plan.md) removes or redirects the Staff club-member direct-creation path so Staff invite by email instead of creating an active person/member from typed name and email. The remaining related concerns are tracked separately: [Membership Admins cannot invite members themselves](2026-06-08-membership-admins-cannot-invite-members.md) and [Alternate email addresses can be added without verification](2026-06-08-person-alternate-email-verification-missing.md).
 
-When Staff or a Membership admin creates a person, or adds an email address to an existing person, Memba does not verify that the email address belongs to that person.
+When Staff creates a club member directly from a name and email address, Memba does not verify that the email address belongs to that person.
 
 Why it matters:
 
-- Staff or Membership admins could accidentally give access, messages, or identity-linked actions to the wrong email address.
-- A typo or stale address may create or update a person record that cannot reliably receive future communication.
-- If email later becomes an authentication or authorization signal, unverified addresses may weaken trust in person identity.
+- Staff could accidentally give access, messages, or identity-linked actions to the wrong email address.
+- A typo or stale address may create a person/member record that cannot reliably receive future communication.
+- Email is already an authentication and authorization signal in Memba, so unverified direct member creation weakens trust in person identity.
 
 Expected:
 
-- New people created by Staff or Membership admins should go through an invite or verification flow before their email is treated as verified.
-- New email addresses added to an existing person should be verified before they are trusted for that person.
-- People should only receive account access or identity-linked email behaviour through email addresses they have confirmed.
-
-Open questions:
-
-- What Staff or Membership admin actions, if any, should be allowed before the email is verified?
-- Should Memba send an email verification request automatically when Staff or a Membership admin creates a person or adds an email address?
+- New club members created by Staff should go through an invitation flow.
+- People should only receive club membership access after confirming control of the invited email address and completing required profile details.
