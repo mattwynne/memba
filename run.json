@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-08T02:58:23.078751279Z",
-  "last_event_at": "2026-06-08T03:00:27.123149153Z",
+  "last_event_at": "2026-06-08T03:00:35.652178545Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1069,17 +1069,19 @@
     {
       "seq": 0,
       "checkpoint": {
-        "timestamp": "2026-06-08T03:00:34.352183922Z",
-        "current_node": "synthesize",
+        "timestamp": "2026-06-08T03:00:37.291102356Z",
+        "current_node": "synthesis_gate",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize"
+          "synthesize",
+          "synthesis_gate"
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.synthesis_gate": 0,
           "internal.retry_count.claude_review": 0,
           "gemini_review_decision": "READY",
           "graph.rankdir": "LR",
@@ -1092,7 +1094,7 @@
           "thread.claude_review.current_node": "codex_review",
           "gemini_review_blocking_gap_count": 0,
           "response.synthesize": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
-          "internal.thread_id": "codex_review",
+          "internal.thread_id": "synthesize",
           "thread.codex_review.current_node": "synthesize",
           "internal.fidelity": "summary:high",
           "last_response": "{\"context_updates\":{\"plan_ready\":true,\"plan_needs_fix\":false,\"plan_needs_human\":false}}",
@@ -1118,8 +1120,9 @@
           "failure_signature": "",
           "claude_review_blocking_gaps": "None",
           "codex_review_confidence": "High",
-          "current_node": "synthesize",
+          "current_node": "synthesis_gate",
           "internal.retry_count.synthesize": 0,
+          "thread.synthesize.current_node": "synthesis_gate",
           "claude_review_blocking_gap_count": 0,
           "internal.node_visit_count": 1,
           "response.codex_review": "## Decision: READY\n\n## Confidence: High\n\n## Blocking gaps\n\nNone.\n\n## Non-blocking improvements\n\n1. Clarify the apparent tension between “consume the invitation token” and “reopening an accepted invitation link signs/keeps the person in and lands them in the club.” The intended rule appears to be: the link is one-use for membership creation, but may still resolve an already-accepted invitation safely.\n2. Add an explicit acceptance criterion for authorization, e.g. non-Staff users cannot access or submit the Staff invitation route.\n3. Name likely implementation modules/files where useful, especially for Membership invitation storage, mail delivery, auth callback/profile completion, and Staff club routes.\n4. Consider specifying what “clear Staff-facing message” means for duplicate active-member invitations, at least at the semantic level.\n5. Consider tightening the open technical decisions so they are clearly implementation choices rather than unresolved readiness issues.\n\n## Smallest viable iteration\n\nThe smallest useful slice is the one already described: Staff invite one email to one club; unknown invitees prove email control through the invitation link, enter a name, and become ordinary active members only after profile completion. Duplicate active-member blocking and duplicate pending-invitation resend should stay in the slice because they are necessary safety rules for a usable invitation flow.\n\n## Required plan edits\n\nNone required before implementation.\n\n## Validation plan\n\nSuccess can be proven by:\n\n1. Adding the planned `acceptance-tests/features/club_member_invitations.feature` scenarios.\n2. Verifying Staff can invite by email without providing a name.\n3. Verifying unknown invitees are not people or active members until they submit a non-blank name.\n4. Verifying profile completion creates the person, creates ordinary active membership, accepts the invitation, consumes it for membership creation, signs the person in, and lands them in the club.\n5. Verifying existing complete people can accept and join without repeating profile completion.\n6. Verifying duplicate active-member invitations are blocked.\n7. Verifying duplicate pending invitations resend and preserve one pending record.\n8. Verifying abandoned profile completion leaves the invitation pending and reusable.\n9. Verifying accepted-link reuse does not create duplicate memberships.\n10. Verifying existing staff onboarding, member sign-in, and club navigation still work.\n11. Running targeted domain/web/Cucumber tests and then `dev check`.\n\n{\"context_updates\":{\"codex_review_decision\":\"READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":0,\"codex_review_blocking_gaps\":\"None\",\"codex_review_required_edits\":\"None\"}}",
@@ -1128,6 +1131,11 @@
           "claude_review_required_edits": "None"
         },
         "node_outcomes": {
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1298,13 +1306,14 @@
             }
           }
         },
-        "next_node_id": "synthesis_gate",
+        "next_node_id": "publish_ready",
         "node_visits": {
           "start": 1,
           "synthesize": 1,
           "gemini_review": 1,
           "claude_review": 1,
-          "codex_review": 1
+          "codex_review": 1,
+          "synthesis_gate": 1
         }
       },
       "diff": {}
@@ -2031,7 +2040,12 @@
       "first_event_seq": 90,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: synthesize",
+        "failure_reason": null,
+        "timestamp": "2026-06-08T03:00:34.349465760Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "openai",
@@ -2045,15 +2059,26 @@
       "output": null,
       "started_at": "2026-06-08T03:00:27.109053300Z",
       "handler": "prompt",
-      "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
-        "reasoning_tokens": 0,
-        "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+      "timing": {
+        "wall_time_ms": 7240,
+        "inference_time_ms": 7164,
+        "tool_time_ms": 0,
+        "active_time_ms": 7164
       },
-      "state": "running"
+      "usage": {
+        "input_tokens": 5117,
+        "output_tokens": 33,
+        "total_tokens": 5308,
+        "reasoning_tokens": 158,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 31315
+      },
+      "model": {
+        "provider": "openai",
+        "model_id": "gpt-5.5"
+      },
+      "state": "succeeded"
     }
   }
 }
