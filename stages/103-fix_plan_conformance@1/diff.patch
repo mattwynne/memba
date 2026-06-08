@@ -1,0 +1,60 @@
+diff --git a/acceptance-tests/features/club_member_invitations.feature b/acceptance-tests/features/club_member_invitations.feature
+index affd590..4fe5040 100644
+--- a/acceptance-tests/features/club_member_invitations.feature
++++ b/acceptance-tests/features/club_member_invitations.feature
+@@ -29,7 +29,7 @@ Feature: Club member invitations
+ 
+ # Rule: Membership Admins invite new members by email
+ 
+-    @iteration-029 @todo-ui
++    @iteration-029
+     Scenario: Robin invites Dana to join West Coast Paddlers
+       Given Robin is a Membership Admin of West Coast Paddlers
+       When Robin invites "dana@example.com" to join West Coast Paddlers
+diff --git a/acceptance-tests/features/support/membership_administration.js b/acceptance-tests/features/support/membership_administration.js
+index fdc2147..d3bf194 100644
+--- a/acceptance-tests/features/support/membership_administration.js
++++ b/acceptance-tests/features/support/membership_administration.js
+@@ -160,7 +160,7 @@ function ensureMember(world, personName, clubName) {
+     clubName,
+     clubSlug: clubSlug(clubName),
+     personName,
+-    email: emailFor(personName)
++    email: emailForPerson(world, personName)
+   });
+ 
+   rememberMember(world, member);
+@@ -169,6 +169,7 @@ function ensureMember(world, personName, clubName) {
+ 
+ function memberStatus(world, personName, clubName) {
+   ensureState(world);
++  const email = emailForPerson(world, personName);
+ 
+   const status = serverCommands.runCommand(
+     `
+@@ -240,7 +241,7 @@ permission? =
+   personName: if(person, do: person.name)
+ }
+ `,
+-    { clubName, email: emailFor(personName) }
++    { clubName, email }
+   );
+ 
+   if (status.activeMember) {
+@@ -258,6 +259,16 @@ permission? =
+   return status;
+ }
+ 
++function emailForPerson(world, personName) {
++  ensureState(world);
++
++  if (world.people[personName] && world.people[personName].email) {
++    return world.people[personName].email;
++  }
++
++  return emailFor(personName);
++}
++
+ function membershipAdministratorCount(world, clubName) {
+   return serverCommands.runCommand(
+     `
