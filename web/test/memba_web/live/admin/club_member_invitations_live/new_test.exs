@@ -93,6 +93,42 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
     end)
   end
 
+  test "staff email invitation link carries an unknown invitee through profile completion to the club",
+       %{conn: conn} do
+    club =
+      insert_membership_club!(
+        name: "Kootenay Mountaineering Club",
+        slug: "kootenay-mountaineering"
+      )
+
+    conn
+    |> sign_in_staff()
+    |> visit(~p"/admin/clubs/#{club.club_id}/invitations/new")
+    |> assert_has("#club-member-invitation-form")
+    |> fill_in("Email address", with: " ROBIN@Example.COM ")
+    |> click_button("Send invitation")
+    |> assert_has("#flash-info", "Invitation sent to robin@example.com")
+
+    invitation_path = delivered_invitation_path!("robin@example.com")
+
+    new_browser_conn()
+    |> visit(invitation_path)
+    |> assert_path(~p"/invitations/club-members/profile")
+    |> assert_has("section#club-member-profile-completion[data-club-id='#{club.club_id}']")
+    |> assert_has("#club-member-profile-completion-form[aria-label='Complete your profile']")
+    |> assert_has("#club-member-profile-name-input")
+    |> fill_in("Your name", with: " Robin Example ")
+    |> click_button("Join Kootenay Mountaineering Club")
+    |> assert_path("/")
+    |> assert_has("#member-club-home[data-club-id='#{club.club_id}']")
+    |> assert_has("#member-dashboard-hero", "Hello, Robin.")
+
+    assert %{name: "Robin Example", email: "robin@example.com"} =
+             Membership.get_person_by_email("robin@example.com")
+
+    assert Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
+  end
+
   test "staff sees a form error for an invalid invitation email", %{conn: conn} do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
 
@@ -140,4 +176,26 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+
+  defp delivered_invitation_path!(email_address) do
+    assert_receive {:email, email}
+
+    assert email.to == [{"", email_address}]
+    assert email.subject == "You're invited to join Kootenay Mountaineering Club"
+
+    [invitation_url] =
+      Regex.run(~r{https?://[^\s]+/invitations/club-members/[^\s]+}, email.text_body)
+
+    assert email.html_body =~ invitation_url
+
+    %URI{path: path} = URI.parse(invitation_url)
+    assert path =~ ~r{^/invitations/club-members/.+}
+
+    path
+  end
+
+  defp new_browser_conn do
+    Phoenix.ConnTest.build_conn()
+    |> PhoenixTest.put_endpoint(MembaWeb.Endpoint)
+  end
 end

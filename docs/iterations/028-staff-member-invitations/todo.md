@@ -12,7 +12,7 @@
 - [x] 010 Generalize the current staff onboarding/profile completion enough that invited unknown members can enter their name before membership activation. For this slice, profile-completion state can live in the invitation/session journey; do not create an incomplete person before the name is submitted, and avoid overbuilding date-of-birth or configurable detail schemas.
 - [x] 011 Preserve existing staff onboarding: new Memba staff with no person record still enter a name and continue to the Staff area.
 - [x] 012 Add domain/application tests for pending invitation creation, duplicate active block, duplicate pending resend, existing-person acceptance, unknown-person profile completion, abandoned profile completion, and accepted-link reuse.
-- [ ] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
+- [x] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
 - [ ] 014 Implement or update Cucumber step definitions only as needed to exercise `club_member_invitations.feature`.
 - [ ] 015 Remove or narrow `@todo-domain`/`@todo-ui` from `club_member_invitations.feature` once implemented.
 - [ ] 016 Run targeted tests for affected auth/membership/onboarding surfaces, then run `dev check`.
