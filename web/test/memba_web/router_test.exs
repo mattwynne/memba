@@ -136,6 +136,25 @@ defmodule MembaWeb.RouterTest do
     end
   end
 
+  describe "member invitation routes" do
+    test "routes /members/invitations/new through the required club member pipeline to the invitation LiveView" do
+      assert %{
+               path_params: %{},
+               pipe_through: [:browser, :club_member_required],
+               phoenix_live_view: {MembaWeb.MemberInvitationLive.New, :new, _opts, _live_session},
+               plug: Phoenix.LiveView.Plug,
+               plug_opts: :new,
+               route: "/members/invitations/new"
+             } =
+               Phoenix.Router.route_info(
+                 MembaWeb.Router,
+                 "GET",
+                 "/members/invitations/new",
+                 "localhost"
+               )
+    end
+  end
+
   describe "removed public harness routes" do
     test "old harness paths return the normal 404 response without redirects", %{conn: conn} do
       Enum.each(@old_harness_paths, fn path ->
