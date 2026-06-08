@@ -7,6 +7,9 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubMemberInvitationAccepted
+  alias Memba.Membership.Events.ClubMemberInvitationResent
+  alias Memba.Membership.Events.ClubMemberInvited
   alias Memba.Membership.Events.ClubRoleDefined
   alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
@@ -14,8 +17,11 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.InvitationToken
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
+  alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
   alias Memba.Membership.Roles
 
@@ -448,6 +454,249 @@ defmodule Memba.Membership.PublicApiTest do
 
     refute Membership.active_member_of_club?(club_id, person_id)
     assert [] = Membership.list_active_members_of_club(club_id)
+  end
+
+  test "invite_club_member/2 creates a pending invitation and returns a plaintext token" do
+    club_id = Memba.ID.generate(:club)
+    invitation_id = Memba.ID.generate(:club_invitation)
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              invitation_token: invitation_token,
+              execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvited{
+                    invitation_id: ^invitation_id,
+                    club_id: ^club_id,
+                    email: "Robin@Example.COM",
+                    normalized_email: "robin@example.com",
+                    token_hash: token_hash
+                  }
+                ]
+              }
+            }} =
+             Membership.invite_club_member(
+               %{
+                 invitation_id: invitation_id,
+                 club_id: club_id,
+                 email: " Robin@Example.COM "
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert is_binary(invitation_token)
+    refute invitation_token == token_hash
+    assert InvitationToken.hash_token(invitation_token) == token_hash
+
+    assert %ClubInvitationProjection{
+             invitation_id: ^invitation_id,
+             club_id: ^club_id,
+             email: "Robin@Example.COM",
+             normalized_email: "robin@example.com",
+             token_hash: ^token_hash,
+             status: "pending",
+             resend_count: 0
+           } = Membership.get_club_member_invitation(invitation_id)
+  end
+
+  test "resend_club_member_invitation/2 rotates the token for the pending club email" do
+    club_id = Memba.ID.generate(:club)
+    invitation_id = Memba.ID.generate(:club_invitation)
+
+    assert {:ok, %{invitation_token: first_token}} =
+             Membership.invite_club_member(
+               %{invitation_id: invitation_id, club_id: club_id, email: "robin@example.com"},
+               consistency: :strong
+             )
+
+    first_hash = InvitationToken.hash_token(first_token)
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              invitation_token: second_token,
+              execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvitationResent{
+                    invitation_id: ^invitation_id,
+                    token_hash: second_hash
+                  }
+                ]
+              }
+            }} =
+             Membership.resend_club_member_invitation(
+               %{club_id: club_id, email: " ROBIN@example.com "},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    refute second_token == first_token
+    refute second_hash == first_hash
+    assert InvitationToken.hash_token(second_token) == second_hash
+
+    assert %ClubInvitationProjection{
+             invitation_id: ^invitation_id,
+             token_hash: ^second_hash,
+             resend_count: 1,
+             status: "pending"
+           } =
+             Membership.get_pending_club_member_invitation_by_email(club_id, "robin@example.com")
+  end
+
+  test "accept_club_member_invitation_for_existing_person/2 creates membership and accepts" do
+    club_id = Memba.ID.generate(:club)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "Alice@Example.COM"},
+               consistency: :strong
+             )
+
+    assert {:ok, %{invitation_token: _token}} =
+             Membership.invite_club_member(
+               %{invitation_id: invitation_id, club_id: club_id, email: " alice@example.com "},
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              club_id: ^club_id,
+              person_id: ^person_id,
+              membership_id: ^membership_id,
+              membership_execution_result: %ExecutionResult{
+                aggregate_uuid: ^membership_id,
+                events: [
+                  %MemberAdded{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id
+                  }
+                ]
+              },
+              invitation_execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvitationAccepted{
+                    invitation_id: ^invitation_id,
+                    person_id: ^person_id,
+                    membership_id: ^membership_id
+                  }
+                ]
+              }
+            }} =
+             Membership.accept_club_member_invitation_for_existing_person(
+               %{
+                 invitation_id: invitation_id,
+                 person_id: person_id,
+                 membership_id: membership_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert Membership.active_member_of_club?(club_id, person_id)
+
+    assert %ClubInvitationProjection{
+             status: "accepted",
+             accepted_person_id: ^person_id,
+             accepted_membership_id: ^membership_id
+           } = Membership.get_club_member_invitation(invitation_id)
+  end
+
+  test "complete_invited_club_member_profile/2 creates person, membership, and acceptance" do
+    club_id = Memba.ID.generate(:club)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+
+    assert {:ok, %{invitation_token: _token}} =
+             Membership.invite_club_member(
+               %{invitation_id: invitation_id, club_id: club_id, email: " Robin@Example.COM "},
+               consistency: :strong
+             )
+
+    assert is_nil(Membership.get_person(person_id))
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              club_id: ^club_id,
+              person_id: ^person_id,
+              membership_id: ^membership_id,
+              person_execution_result: %ExecutionResult{
+                aggregate_uuid: ^person_id,
+                events: [
+                  %PersonCreated{
+                    person_id: ^person_id,
+                    name: "Robin"
+                  },
+                  %PersonEmailAddressesReplaced{
+                    person_id: ^person_id,
+                    primary_email: "Robin@Example.COM"
+                  }
+                ]
+              },
+              membership_execution_result: %ExecutionResult{
+                aggregate_uuid: ^membership_id,
+                events: [
+                  %MemberAdded{
+                    membership_id: ^membership_id,
+                    club_id: ^club_id,
+                    person_id: ^person_id
+                  }
+                ]
+              },
+              invitation_execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvitationAccepted{
+                    invitation_id: ^invitation_id,
+                    person_id: ^person_id,
+                    membership_id: ^membership_id
+                  }
+                ]
+              }
+            }} =
+             Membership.complete_invited_club_member_profile(
+               %{
+                 invitation_id: invitation_id,
+                 person_id: person_id,
+                 membership_id: membership_id,
+                 name: " Robin "
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %PersonProjection{
+             person_id: ^person_id,
+             name: "Robin",
+             email: "Robin@Example.COM"
+           } = Membership.get_person(person_id)
+
+    assert [%{email: "Robin@Example.COM", normalized_email: "robin@example.com", primary?: true}] =
+             Membership.list_person_email_addresses(person_id)
+
+    assert %MembershipProjection{
+             membership_id: ^membership_id,
+             club_id: ^club_id,
+             person_id: ^person_id,
+             active: true
+           } = Repo.get(MembershipProjection, membership_id)
+
+    assert %ClubInvitationProjection{
+             status: "accepted",
+             accepted_person_id: ^person_id,
+             accepted_membership_id: ^membership_id
+           } = Membership.get_club_member_invitation(invitation_id)
   end
 
   test "person_has_club_permission?/3 checks backend projected member permissions" do
