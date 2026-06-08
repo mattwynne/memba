@@ -1,0 +1,164 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 24c0729..5f0e451 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
+ - [x] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
+ - [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+-- [ ] 002b2 Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action is in place.
++- [x] 002b2 Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action is in place.
+ - [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+ - [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [ ] 008 Keep the Admin invitation form email-only.
+diff --git a/web/lib/memba_web/controllers/page_html.ex b/web/lib/memba_web/controllers/page_html.ex
+index 162e37b..ec56e59 100644
+--- a/web/lib/memba_web/controllers/page_html.ex
++++ b/web/lib/memba_web/controllers/page_html.ex
+@@ -66,6 +66,11 @@ defmodule MembaWeb.PageHTML do
+   defp member_compose_path(selected_club, _source),
+     do: ~p"/messages/new?club_id=#{selected_club.club_id}"
+ 
++  defp member_invitation_path(_selected_club, "host"), do: ~p"/members/invitations/new"
++
++  defp member_invitation_path(selected_club, _source),
++    do: ~p"/members/invitations/new?club_id=#{selected_club.club_id}"
++
+   defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
+ 
+   defp member_message_path(message_id, selected_club, _source),
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index e736f19..b2676b4 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -182,6 +182,16 @@
+           <.icon name="hero-users" class="size-5 text-[var(--club-site-accent)]" />
+           Current members
+         </h2>
++
++        <.link
++          :if={@can_manage_members?}
++          id="member-invite-member-link"
++          data-testid="member-invite-member-link"
++          href={member_invitation_path(@selected_club, club_id_source)}
++          class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-2 text-sm font-semibold text-[var(--club-site-ink)] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-white hover:shadow-md"
++        >
++          <.icon name="hero-plus" class="size-4" /> Invite member
++        </.link>
+       </div>
+ 
+       <div
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 9816732..97baeb4 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -3,7 +3,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+   import Phoenix.LiveViewTest
+ 
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+@@ -395,6 +397,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     refute has_element?(view, "[data-testid='member-invite-member-link']")
+   end
+ 
++  test "membership admins see the club member invitation action in the members section",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    grant_manage_members_permission(alice)
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#club-members #member-invite-member-link[href='/members/invitations/new?club_id=#{alice.club_id}'][data-testid='member-invite-member-link']",
++             "Invite member"
++           )
++  end
++
++  test "membership admins on a club subdomain see a host-scoped invitation link",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    grant_manage_members_permission(alice)
++
++    {:ok, view, _html} =
++      conn
++      |> Map.put(:host, "kmc.lvh.me")
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/")
++
++    assert has_element?(
++             view,
++             "#club-members #member-invite-member-link[href='/members/invitations/new'][data-testid='member-invite-member-link']",
++             "Invite member"
++           )
++
++    refute has_element?(view, "#member-invite-member-link[href*='club_id=']")
++  end
++
+   test "dashboard reaches compose through links instead of inline compose controls", %{conn: conn} do
+     alice =
+       create_active_member(
+@@ -590,8 +642,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
++      membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+       active: Keyword.get(attrs, :active, true)
+@@ -599,10 +653,21 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+     %{
+       club_id: club_id,
+-      person_id: person.person_id
++      person_id: person.person_id,
++      membership_id: membership_id
+     }
+   end
+ 
++  defp grant_manage_members_permission(member) do
++    Repo.insert!(%MemberPermission{
++      club_id: member.club_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      permission: Permissions.club_manage_members(),
++      grant_count: 1
++    })
++  end
++
+   defp club_attrs(attrs, club_id, club_name) do
+     base = [
+       club_id: club_id,
+@@ -658,6 +723,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       current_identity: %{email: "alice@example.com"},
+       selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
+       current_member: %{name: "Alice Adams"},
++      can_manage_members?: false,
+       members: [],
+       active_member_count: 0,
+       message_rows: []
