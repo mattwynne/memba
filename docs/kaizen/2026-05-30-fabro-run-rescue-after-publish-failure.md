@@ -101,3 +101,100 @@ Validation:
 Remaining follow-up:
 
 - Consider an upstream Fabro oversized-blob checkpoint guard separately; this fix addresses the planned `.feature` edit failure, not the core-dump push failure.
+
+## Additional observation: 2026-06-08
+
+### Context
+
+While delivering `docs/iterations/029-membership-admin-invitations/plan.md`, Fabro implementation run `01KTKQWKQR3PQPNVTEZRWRF29T` completed all implementation tasks and reached the final validation/conformance path.
+
+The plan explicitly names the shared feature file under `## Allowed acceptance feature changes`:
+
+```text
+acceptance-tests/features/club_member_invitations.feature: implement the planned Membership Admin scenarios tagged @iteration-029; during delivery, remove or narrow @todo-domain/@todo-ui only when the covered behaviour passes in the relevant runner.
+```
+
+The run branch also contains that section at `docs/iterations/029-membership-admin-invitations/plan.md` lines 84-87.
+
+### Expected standard
+
+A behaviour-facing iteration whose plan explicitly permits a named `.feature` file should be able to remove/narrow todo tags for passing planned scenarios without manual intervention, provided the implementation keeps covered behaviour green and `dev check` passes.
+
+The locked-feature guard should distinguish:
+
+- unplanned acceptance-criteria drift, which should stop the run; from
+- explicitly planned and permitted feature-file changes, which should pass the final gates.
+
+### What happened
+
+The implementation completed and reported a green final validation task:
+
+```text
+PATH="$PWD/bin:$PATH" dev check
+ExUnit: 746 tests, 0 failures
+Browser acceptance: 72 scenarios (72 passed), 479 steps (479 passed)
+```
+
+During plan-conformance repair, Fabro removed `@todo-ui` from the primary `@iteration-029` scenario in `acceptance-tests/features/club_member_invitations.feature` and updated `acceptance-tests/features/support/membership_administration.js` so the now-running scenario used the remembered invited email address.
+
+`verify_plan_repair` then failed with:
+
+```text
+Committed files changed after repair:
+acceptance-tests/features/club_member_invitations.feature
+acceptance-tests/features/support/membership_administration.js
+Working-tree files changed after repair:
+<none>
+acceptance-tests/features/club_member_invitations.feature
+Repair modified locked acceptance feature files.
+```
+
+The workflow nevertheless continued to `dev_check`, which passed, then failed again in `plan_conformance_gate` with:
+
+```text
+Plan conformance cannot be accepted automatically because the implementation/repair modified a locked acceptance feature file: acceptance-tests/features/club_member_invitations.feature. The plan has no explicit 'Allowed acceptance feature changes' section naming this file and permitted changes, while the workflow acceptance rules require human input for any repair requiring feature-file changes. The plan also explicitly asks to remove/narrow @todo-domain/@todo-ui tags, creating a scope/process conflict that needs human confirmation rather than another repair loop.
+```
+
+That error is factually inconsistent with the plan in the run branch, which does contain the explicit allowed-change section naming `acceptance-tests/features/club_member_invitations.feature`.
+
+### Impact
+
+A green implementation was blocked after substantial work and validation because the repair/conformance machinery treated an explicitly permitted feature-file change as locked. Matt had to inspect the run and decide how to proceed manually before the implementation could be published and reviewed.
+
+This repeated the waste pattern this note originally captured: explicitly planned feature-file work still reached a late gate that could not safely recognize it.
+
+### What allowed it to happen
+
+The prevention added on 2026-05-30 is incomplete across workflow stages:
+
+- The deterministic final/publish guard understands explicit plan permissions, but `verify_plan_repair` still appears to apply a blanket feature-file rejection to repair diffs.
+- The LLM plan-conformance gate reported that no `## Allowed acceptance feature changes` section existed even though the plan had one, suggesting the prompt or evidence supplied to that gate did not make the permission easy or deterministic to verify.
+- The workflow edge from failed `verify_plan_repair` continued to `dev_check`, allowing the run to spend more time before surfacing the same policy conflict again.
+- The plan asks delivery to remove/narrow todo tags, but the repair guard cannot distinguish tag narrowing from other feature-file edits during repair.
+
+### Observations
+
+- Run: `01KTKQWKQR3PQPNVTEZRWRF29T`.
+- Changed planned feature file: `acceptance-tests/features/club_member_invitations.feature`.
+- Changed support file: `acceptance-tests/features/support/membership_administration.js`.
+- Plan path: `docs/iterations/029-membership-admin-invitations/plan.md`.
+- The run branch `origin/fabro/run/01KTKQWKQR3PQPNVTEZRWRF29T` shows the allowed section in the plan and a tag-only diff for the four `@iteration-029` scenarios in the feature file.
+- The implementation run status ended at `plan_not_ready` with `plan_conformant=false`, not because tests were red.
+
+### Why this matters
+
+Acceptance feature files are now part of the planned delivery contract for behaviour-facing iterations. If different gates interpret feature-file permissions differently, teams get a false choice between preserving the feature-file lock and completing planned BDD delivery. The late failure also makes a green run look like a product or plan problem when the abnormality is in the delivery machinery.
+
+### Open questions
+
+- Why did `plan_conformance_gate` claim the plan had no explicit allowed-change section when the run branch plan did have one?
+- Should `verify_plan_repair` call the same deterministic allowed-feature-change guard as final artifact and publish, using the repair baseline as the comparison base?
+- Should a failed `verify_plan_repair` route to a hard stop or human-input node instead of continuing to another `dev_check` loop?
+- Should tag-only changes to explicitly allowed scenarios be classified separately from broader Gherkin text changes in every gate, not only the final/publish guard?
+
+### Possible prevention ideas
+
+- Reuse `guard_acceptance_feature_changes.py` in `verify_plan_repair` and plan-conformance checks instead of maintaining separate blanket `.feature` checks.
+- Make the conformance evidence script print the parsed `## Allowed acceptance feature changes` entries and the exact feature-file diff classification before asking an LLM to judge conformance.
+- Add a workflow test fixture for a plan-conformance repair that removes `@todo-ui` from an explicitly allowed scenario and updates step support, proving the workflow accepts the repair after `dev check` passes.
+- Route failed repair verification to a clear human-input failure with the parsed permission evidence, instead of spending another `dev_check` cycle and producing a contradictory later error.
