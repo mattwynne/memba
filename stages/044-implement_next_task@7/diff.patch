@@ -1,0 +1,42 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 2b7f045..0f5606f 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
+ - [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+ - [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+-- [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
++- [x] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [ ] 008 Keep the Admin invitation form email-only.
+ - [ ] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [ ] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index d936e0f..fa55b38 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -105,6 +105,11 @@ defmodule Memba.Membership do
+   @doc """
+   Create a pending club member invitation for an email address.
+ 
++  Invitation creation is intentionally actor-neutral. Callers that represent
++  club Membership Admins must authorize the actor before calling this shared
++  lifecycle, while Staff/system callers can use the same service without being
++  represented as club members.
++
+   The public API generates the plaintext one-use invitation token before
+   dispatch and stores only its hash in Membership. The caller may supply
+   `:invitation_id`/`"invitation_id"`; otherwise this application service
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index dd7bde2..8bd2164 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -456,7 +456,7 @@ defmodule Memba.Membership.PublicApiTest do
+     assert [] = Membership.list_active_members_of_club(club_id)
+   end
+ 
+-  test "invite_club_member/2 creates a pending invitation and returns a plaintext token" do
++  test "invite_club_member/2 creates a pending invitation without requiring an actor" do
+     club_id = Memba.ID.generate(:club)
+     invitation_id = Memba.ID.generate(:club_invitation)
+ 
