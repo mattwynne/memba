@@ -1,0 +1,150 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 46f59d2..aeccc50 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -2,10 +2,11 @@
+ 
+ - [x] 001 Inspect iteration 028's Staff invitation model, commands, acceptance journey, routes, emails, and profile-completion flow.
+ - [x] 002a Inspect current member-facing club pages and decide the invitation host surface.
+-- [ ] 002b Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action and permission-aware assigns are in place.
++- [x] 002b1 Add the permission-aware dashboard assign needed to gate the Membership Admin invite action.
+ - [ ] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
+ - [ ] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
+ - [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
++- [ ] 002b2 Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action is in place.
+ - [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+ - [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [ ] 008 Keep the Admin invitation form email-only.
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index a6952d7..73ab6ac 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   alias Memba.Accounts
+   alias Memba.ID
+   alias Memba.Membership
++  alias Memba.Membership.Permissions
+   alias Memba.Messaging
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Repo
+@@ -42,6 +43,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+          members: members,
+          active_member_count: Enum.count(members),
+          current_member: current_member,
++         can_manage_members?: can_manage_members?(club_id, current_member),
+          member_names_by_id: member_names_by_id,
+          messages: messages,
+          message_rows: message_rows
+@@ -164,6 +166,12 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     |> Map.put(:avatar_initials, initials)
+   end
+ 
++  defp can_manage_members?(club_id, %{id: person_id}) do
++    Membership.person_has_club_permission?(club_id, person_id, Permissions.club_manage_members())
++  end
++
++  defp can_manage_members?(_club_id, _current_member), do: false
++
+   defp initials(name) when is_binary(name) do
+     name
+     |> String.split(~r/\s+/, trim: true)
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 9682b22..987d187 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -1,7 +1,9 @@
+ defmodule MembaWeb.MemberDashboardPresentationTest do
+   use Memba.DataCase, async: true
+ 
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+@@ -74,6 +76,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert assigns.current_member.id == alice.person_id
+     assert assigns.current_member.name == "Alice Adams"
+     assert assigns.current_member.initials == "AA"
++    refute assigns.can_manage_members?
+     assert assigns.active_member_count == 2
+ 
+     assert Enum.map(assigns.members, &{&1.id, &1.name, &1.initials}) == [
+@@ -134,6 +137,40 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     refute older_row.has_receipt_glance?
+   end
+ 
++  test "marks the current member as able to manage members when the permission is projected" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    _bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Alpine Club",
++        club_id: alice.club_id
++      )
++
++    create_member_permission(
++      club_id: alice.club_id,
++      membership_id: alice.membership_id,
++      person_id: alice.person_id,
++      permission: Permissions.club_manage_members()
++    )
++
++    assert {:ok, assigns} =
++             MemberDashboardPresentation.load(
++               alice.club_id,
++               %{email: "alice@example.com"},
++               [alice.club]
++             )
++
++    assert assigns.current_member.id == alice.person_id
++    assert assigns.can_manage_members?
++  end
++
+   test "omits timestamp labels for message rows without an inserted_at timestamp" do
+     message = %Message{
+       message_id: Memba.ID.generate(:message),
+@@ -196,8 +233,10 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
++      membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+       active: true
+@@ -206,7 +245,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     %{
+       club: club,
+       club_id: club_id,
+-      person_id: person.person_id
++      person_id: person.person_id,
++      membership_id: membership_id
+     }
+   end
+ 
+@@ -233,4 +273,14 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+       status: Keyword.fetch!(attrs, :status)
+     })
+   end
++
++  defp create_member_permission(attrs) do
++    Repo.insert!(%MemberPermission{
++      club_id: Keyword.fetch!(attrs, :club_id),
++      membership_id: Keyword.fetch!(attrs, :membership_id),
++      person_id: Keyword.fetch!(attrs, :person_id),
++      permission: Keyword.fetch!(attrs, :permission),
++      grant_count: Keyword.get(attrs, :grant_count, 1)
++    })
++  end
+ end
