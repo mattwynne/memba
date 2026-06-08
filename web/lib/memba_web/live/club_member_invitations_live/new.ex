@@ -49,6 +49,7 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
            ClubMemberInvitationSender.send_invitation(
              socket.assigns.selected_club,
              Map.get(invitation_params(invitation_params), "email"),
+             actor_person_id: socket.assigns.current_member.id,
              consistency: :strong
            ) do
       {:noreply,

@@ -3,8 +3,8 @@ defmodule MembaWeb.ClubMemberInvitationSender do
   Shared web-facing sender for club member invitations.
 
   Staff and Membership Admin invitation surfaces both call this module so they
-  create or resend invitations through `Memba.Membership.invite_club_member/2`,
-  deliver the same one-use callback link, and keep the Membership-owned
+  create or resend invitations through the appropriate Membership application
+  service, deliver the same one-use callback link, and keep the Membership-owned
   duplicate and acceptance lifecycle rules in one place.
   """
 
@@ -12,13 +12,17 @@ defmodule MembaWeb.ClubMemberInvitationSender do
   alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
 
-  def send_invitation(%{club_id: club_id} = club, email, dispatch_opts \\ [consistency: :strong])
-      when is_binary(club_id) and is_list(dispatch_opts) do
+  def send_invitation(%{club_id: club_id} = club, email, opts \\ [consistency: :strong])
+      when is_binary(club_id) and is_list(opts) do
+    {actor_person_id, dispatch_opts} = invitation_actor_and_dispatch_opts(opts)
+
     with {:ok, invited_email} <- EmailAddresses.normalize_email(email),
          resent? = pending_invitation?(club_id, invited_email.normalized_email),
          {:ok, invitation} <-
-           Membership.invite_club_member(
-             %{"club_id" => club_id, "email" => invited_email.normalized_email},
+           invite_club_member(
+             club_id,
+             invited_email.normalized_email,
+             actor_person_id,
              dispatch_opts
            ),
          :ok <- deliver_invitation(invitation, invited_email.normalized_email, club) do
@@ -29,6 +33,24 @@ defmodule MembaWeb.ClubMemberInvitationSender do
          resent?: resent?
        }}
     end
+  end
+
+  defp invitation_actor_and_dispatch_opts(opts) do
+    {Keyword.get(opts, :actor_person_id), Keyword.delete(opts, :actor_person_id)}
+  end
+
+  defp invite_club_member(club_id, email, nil, dispatch_opts) do
+    Membership.invite_club_member(
+      %{"club_id" => club_id, "email" => email},
+      dispatch_opts
+    )
+  end
+
+  defp invite_club_member(club_id, email, actor_person_id, dispatch_opts) do
+    Membership.invite_club_member_as_club_member(
+      %{"club_id" => club_id, "email" => email, "actor_person_id" => actor_person_id},
+      dispatch_opts
+    )
   end
 
   defp pending_invitation?(club_id, email) do

@@ -502,6 +502,132 @@ defmodule Memba.Membership.PublicApiTest do
            } = Membership.get_club_member_invitation(invitation_id)
   end
 
+  test "invite_club_member_as_club_member/2 lets a member with club.manage_members use the shared invitation lifecycle" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
+
+    assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "West Coast Paddlers"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: actor_person_id, name: "Robin", email: "robin@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: actor_membership_id,
+                 club_id: club_id,
+                 person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             App.dispatch(
+               %AssignMemberRole{
+                 club_id: club_id,
+                 membership_id: actor_membership_id,
+                 person_id: actor_person_id,
+                 role_id: admin_role_id
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              invitation_id: ^invitation_id,
+              invitation_token: invitation_token,
+              execution_result: %ExecutionResult{
+                aggregate_uuid: ^invitation_id,
+                events: [
+                  %ClubMemberInvited{
+                    invitation_id: ^invitation_id,
+                    club_id: ^club_id,
+                    email: "Dana@Example.COM",
+                    normalized_email: "dana@example.com"
+                  }
+                ]
+              }
+            }} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: invitation_id,
+                 club_id: club_id,
+                 email: " Dana@Example.COM ",
+                 actor_person_id: actor_person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert is_binary(invitation_token)
+
+    assert %ClubInvitationProjection{
+             invitation_id: ^invitation_id,
+             club_id: ^club_id,
+             normalized_email: "dana@example.com",
+             status: "pending"
+           } = Membership.get_club_member_invitation(invitation_id)
+  end
+
+  test "invite_club_member_as_club_member/2 rejects ordinary members without requiring Staff to be club members" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    unauthorized_invitation_id = Memba.ID.generate(:club_invitation)
+    staff_invitation_id = Memba.ID.generate(:club_invitation)
+
+    assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "West Coast Paddlers"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: actor_person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: actor_membership_id,
+                 club_id: club_id,
+                 person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:error, :unauthorized} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: unauthorized_invitation_id,
+                 club_id: club_id,
+                 email: "dana@example.com",
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert is_nil(Membership.get_club_member_invitation(unauthorized_invitation_id))
+
+    assert {:ok, %{invitation_id: ^staff_invitation_id}} =
+             Membership.invite_club_member(
+               %{invitation_id: staff_invitation_id, club_id: club_id, email: "dana@example.com"},
+               consistency: :strong
+             )
+  end
+
   test "invite_club_member/2 rejects an active club member by normalized email" do
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
