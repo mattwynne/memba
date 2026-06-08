@@ -1,0 +1,372 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index aeccc50..0a0ab2d 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect iteration 028's Staff invitation model, commands, acceptance journey, routes, emails, and profile-completion flow.
+ - [x] 002a Inspect current member-facing club pages and decide the invitation host surface.
+ - [x] 002b1 Add the permission-aware dashboard assign needed to gate the Membership Admin invite action.
+-- [ ] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
++- [x] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
+ - [ ] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
+ - [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+ - [ ] 002b2 Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action is in place.
+diff --git a/web/lib/memba_web/live/club_member_invitations_live/new.ex b/web/lib/memba_web/live/club_member_invitations_live/new.ex
+new file mode 100644
+index 0000000..6ee0fce
+--- /dev/null
++++ b/web/lib/memba_web/live/club_member_invitations_live/new.ex
+@@ -0,0 +1,173 @@
++defmodule MembaWeb.ClubMemberInvitationsLive.New do
++  @moduledoc """
++  Member-facing club-scoped entry point for inviting club members.
++
++  The route is mounted inside the existing club member live session so the
++  selected club can come from either the `club_id` query parameter or the club
++  site host session, matching the member message routes.
++  """
++  use MembaWeb, :live_view
++
++  alias Memba.Accounts
++  alias Memba.Membership
++
++  @impl Phoenix.LiveView
++  def mount(params, session, socket) when is_map(params) do
++    params = params |> put_session_club_id(session) |> put_club_id_source(session)
++    socket = ensure_identity_assigns(socket)
++
++    with %{"club_id" => club_id} <- params,
++         {:ok, invitation_assigns} <-
++           invitation_context(
++             club_id,
++             socket.assigns.current_identity,
++             socket.assigns.current_identity_clubs
++           ) do
++      {:ok,
++       socket
++       |> assign(:route_params, params)
++       |> assign(invitation_assigns)}
++    else
++      _missing_or_unauthorized -> forbidden!(socket)
++    end
++  end
++
++  @impl Phoenix.LiveView
++  def render(assigns) do
++    ~H"""
++    <Layouts.club_site
++      flash={@flash}
++      club_name={selected_club_name(@selected_club)}
++      current_identity={@current_identity}
++    >
++      <div
++        id="member-club-member-invitation-new"
++        data-live-view="member-club-member-invitation-new"
++        data-club-id={selected_club_id(@selected_club, @route_params)}
++        data-current-member-id={current_member_id(@current_member)}
++        data-active-member-count={@active_member_count}
++        class="mx-auto max-w-3xl space-y-8"
++      >
++        <section
++          id="member-invitation-page-header"
++          class="border-b border-[var(--club-site-line)] pb-8"
++        >
++          <.link
++            id="member-invitation-club-home-link"
++            href={club_home_path(@selected_club, @route_params)}
++            class="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[var(--club-site-muted)] transition duration-200 hover:text-[var(--club-site-ink)]"
++          >
++            <.icon name="hero-arrow-left" class="size-4" /> Club home
++          </.link>
++
++          <p
++            id="member-invitation-eyebrow"
++            class="mt-5 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]"
++          >
++            Member invitations
++          </p>
++
++          <h1 class="mt-2 text-4xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++            Invite a member
++          </h1>
++
++          <p class="mt-3 max-w-2xl text-base leading-7 text-[var(--club-site-muted)]">
++            Send a club-scoped invitation for {selected_club_name(@selected_club)}. Invitees
++            verify control of their email address before membership starts.
++          </p>
++        </section>
++
++        <section
++          id="member-invitation-selected-club"
++          data-club-id={selected_club_id(@selected_club, @route_params)}
++          class="rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] p-6 shadow-sm"
++        >
++          <p class="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]">
++            Current club
++          </p>
++          <h2 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--club-site-ink)]">
++            {selected_club_name(@selected_club)}
++          </h2>
++          <p
++            id="member-invitation-member-count"
++            data-active-member-count={@active_member_count}
++            class="mt-2 text-sm leading-6 text-[var(--club-site-muted)]"
++          >
++            Invitations from this page are scoped to this club and affect only its member list.
++          </p>
++        </section>
++      </div>
++    </Layouts.club_site>
++    """
++  end
++
++  defp ensure_identity_assigns(socket) do
++    socket
++    |> assign_new(:current_identity, fn -> nil end)
++    |> assign_new(:current_identity_clubs, fn -> [] end)
++  end
++
++  defp invitation_context(club_id, current_identity, current_identity_clubs) do
++    with selected_club when not is_nil(selected_club) <-
++           selected_club(current_identity_clubs, club_id),
++         members <- Membership.list_active_members_of_club(club_id),
++         current_member when not is_nil(current_member) <-
++           current_member_for_identity(members, current_identity) do
++      {:ok,
++       %{
++         selected_club: selected_club,
++         current_member: current_member,
++         active_member_count: Enum.count(members)
++       }}
++    else
++      _not_authorized -> {:error, :forbidden}
++    end
++  end
++
++  defp selected_club(current_identity_clubs, club_id) do
++    Enum.find(current_identity_clubs, fn club -> club.club_id == club_id end)
++  end
++
++  defp current_member_for_identity(_members, nil), do: nil
++
++  defp current_member_for_identity(members, identity) do
++    identity_email = Accounts.normalize_email(identity.email)
++
++    Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
++  end
++
++  defp put_session_club_id(params, session) do
++    case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
++      {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
++      _club_id_present_or_missing -> params
++    end
++  end
++
++  defp put_club_id_source(params, session) do
++    case Map.get(session, "club_id_source") do
++      "host" -> Map.put(params, "club_id_source", "host")
++      _source -> params
++    end
++  end
++
++  defp selected_club_name(nil), do: "Club"
++  defp selected_club_name(selected_club), do: selected_club.name
++
++  defp selected_club_id(nil, route_params), do: Map.get(route_params, "club_id")
++  defp selected_club_id(selected_club, _route_params), do: selected_club.club_id
++
++  defp current_member_id(nil), do: nil
++  defp current_member_id(current_member), do: current_member.id
++
++  defp club_home_path(nil, route_params) do
++    case Map.get(route_params, "club_id") do
++      nil -> ~p"/"
++      club_id -> ~p"/?club_id=#{club_id}"
++    end
++  end
++
++  defp club_home_path(_selected_club, %{"club_id_source" => "host"}), do: ~p"/"
++  defp club_home_path(selected_club, _route_params), do: ~p"/?club_id=#{selected_club.club_id}"
++
++  defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
++end
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index bf768a1..5682099 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -66,6 +66,7 @@ defmodule MembaWeb.Router do
+     live_session :club_member,
+       on_mount: [{MembaWeb.IdentityAuth, :mount_current_identity}],
+       session: {MembaWeb.Plugs.ClubSiteMemberRoute, :live_session, []} do
++      live "/members/invitations/new", ClubMemberInvitationsLive.New, :new
+       live "/messages/new", MemberMessageLive.New, :new
+       live "/messages/:message_id", MemberMessageLive.Show, :show
+     end
+diff --git a/web/test/memba_web/live/club_member_invitations_live/new_test.exs b/web/test/memba_web/live/club_member_invitations_live/new_test.exs
+new file mode 100644
+index 0000000..861e41f
+--- /dev/null
++++ b/web/test/memba_web/live/club_member_invitations_live/new_test.exs
+@@ -0,0 +1,133 @@
++defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
++  use MembaWeb.ConnCase, async: true
++
++  import Phoenix.LiveViewTest
++
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.Membership
++  alias Memba.Repo
++  alias MembaWeb.IdentityAuth
++
++  test "routed GET renders the club-scoped member invitation action for a query-selected club", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
++
++    assert has_element?(
++             view,
++             "#member-club-member-invitation-new[data-live-view='member-club-member-invitation-new'][data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}']"
++           )
++
++    assert has_element?(
++             view,
++             "#member-invitation-selected-club[data-club-id='#{alice.club_id}']",
++             "Climbing Club"
++           )
++
++    assert has_element?(
++             view,
++             "#member-invitation-club-home-link[href='/?club_id=#{alice.club_id}']",
++             "Club home"
++           )
++  end
++
++  test "club subdomain routed mount scopes the invitation action to the host-selected club", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    _bob =
++      create_active_member(
++        email: "bob@example.com",
++        name: "Bob Builder",
++        club_name: "Kootenay Mountaineering Club",
++        club_id: alice.club_id,
++        slug: "kmc"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> Map.put(:host, "kmc.lvh.me")
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/members/invitations/new")
++
++    assert has_element?(
++             view,
++             "#member-club-member-invitation-new[data-club-id='#{alice.club_id}'][data-current-member-id='#{alice.person_id}'][data-active-member-count='2']"
++           )
++
++    assert has_element?(view, "#member-invitation-club-home-link[href='/']")
++    refute has_element?(view, "#member-invitation-club-home-link[href*='club_id=']")
++  end
++
++  test "routed GET redirects signed-out visitors and preserves the selected club return path",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    return_path = ~p"/members/invitations/new?club_id=#{alice.club_id}"
++
++    conn = get(conn, return_path)
++
++    assert redirected_to(conn) == ~p"/auth"
++    assert get_session(conn, IdentityAuth.return_to_session_key()) == return_path
++  end
++
++  defp create_active_member(attrs) do
++    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
++    person_id = Memba.ID.generate(:person)
++
++    Repo.get(Club, club_id) ||
++      attrs
++      |> club_attrs(club_id)
++      |> insert_membership_club!()
++
++    person =
++      insert_membership_person!(
++        person_id: person_id,
++        name: Keyword.fetch!(attrs, :name),
++        email: Keyword.fetch!(attrs, :email)
++      )
++
++    Repo.insert!(%Membership{
++      membership_id: Memba.ID.generate(:membership),
++      club_id: club_id,
++      person_id: person.person_id,
++      active: true
++    })
++
++    %{club_id: club_id, person_id: person.person_id}
++  end
++
++  defp club_attrs(attrs, club_id) do
++    base = [
++      club_id: club_id,
++      name: Keyword.get(attrs, :club_name, "Kootenay Mountaineering Club")
++    ]
++
++    case Keyword.fetch(attrs, :slug) do
++      {:ok, slug} -> Keyword.put(base, :slug, slug)
++      :error -> base
++    end
++  end
++end
+diff --git a/web/test/memba_web/router_test.exs b/web/test/memba_web/router_test.exs
+index 1363ace..ea48404 100644
+--- a/web/test/memba_web/router_test.exs
++++ b/web/test/memba_web/router_test.exs
+@@ -101,6 +101,24 @@ defmodule MembaWeb.RouterTest do
+       assert :error = Phoenix.Router.route_info(MembaWeb.Router, "POST", "/", "localhost")
+     end
+ 
++    test "routes /members/invitations/new through the required club member pipeline to the member invitation LiveView" do
++      assert %{
++               path_params: %{},
++               pipe_through: [:browser, :club_member_required],
++               phoenix_live_view:
++                 {MembaWeb.ClubMemberInvitationsLive.New, :new, _opts, _live_session},
++               plug: Phoenix.LiveView.Plug,
++               plug_opts: :new,
++               route: "/members/invitations/new"
++             } =
++               Phoenix.Router.route_info(
++                 MembaWeb.Router,
++                 "GET",
++                 "/members/invitations/new",
++                 "localhost"
++               )
++    end
++
+     test "routes /messages/new through the required club member pipeline to the compose LiveView" do
+       assert %{
+                path_params: %{},
