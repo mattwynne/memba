@@ -622,11 +622,35 @@ defmodule Memba.Membership.PublicApiTest do
 
     assert is_nil(Membership.get_club_member_invitation(unauthorized_invitation_id))
 
-    assert {:ok, %{invitation_id: ^staff_invitation_id}} =
+    assert {:ok,
+            %{
+              invitation_id: ^staff_invitation_id,
+              invitation_token: staff_invitation_token,
+              execution_result: %ExecutionResult{
+                aggregate_uuid: ^staff_invitation_id,
+                events: [
+                  %ClubMemberInvited{
+                    invitation_id: ^staff_invitation_id,
+                    club_id: ^club_id,
+                    normalized_email: "dana@example.com"
+                  }
+                ]
+              }
+            }} =
              Membership.invite_club_member(
                %{invitation_id: staff_invitation_id, club_id: club_id, email: "dana@example.com"},
+               returning: :execution_result,
                consistency: :strong
              )
+
+    assert is_binary(staff_invitation_token)
+
+    assert %ClubInvitationProjection{
+             invitation_id: ^staff_invitation_id,
+             club_id: ^club_id,
+             normalized_email: "dana@example.com",
+             status: "pending"
+           } = Membership.get_club_member_invitation(staff_invitation_id)
   end
 
   test "invite_club_member/2 rejects an active club member by normalized email" do
@@ -657,6 +681,59 @@ defmodule Memba.Membership.PublicApiTest do
     assert {:error, :already_active_member} =
              Membership.invite_club_member(
                %{invitation_id: invitation_id, club_id: club_id, email: " robin@work.example "},
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert is_nil(Membership.get_club_member_invitation(invitation_id))
+  end
+
+  test "invite_club_member_as_club_member/2 rejects an active club member by normalized email" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    active_person_id = Memba.ID.generate(:person)
+    active_membership_id = Memba.ID.generate(:membership)
+    invitation_id = Memba.ID.generate(:club_invitation)
+
+    assert :ok =
+             create_membership_admin_inviter(
+               club_id: club_id,
+               person_id: actor_person_id,
+               membership_id: actor_membership_id
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{
+                 person_id: active_person_id,
+                 name: "Dana",
+                 email_addresses: [
+                   %{email: "dana@example.com", is_primary: true},
+                   %{email: "Dana@Work.Example", is_primary: false}
+                 ]
+               },
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{
+                 membership_id: active_membership_id,
+                 club_id: club_id,
+                 person_id: active_person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:error, :already_active_member} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: invitation_id,
+                 club_id: club_id,
+                 email: " dana@work.example ",
+                 actor_person_id: actor_person_id
+               },
                returning: :execution_result,
                consistency: :strong
              )
@@ -719,6 +796,74 @@ defmodule Memba.Membership.PublicApiTest do
              status: "pending"
            } =
              Membership.get_pending_club_member_invitation_by_email(club_id, "ROBIN@example.com")
+  end
+
+  test "invite_club_member_as_club_member/2 resends a pending invitation by normalized club email" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    original_invitation_id = Memba.ID.generate(:club_invitation)
+    duplicate_invitation_id = Memba.ID.generate(:club_invitation)
+
+    assert :ok =
+             create_membership_admin_inviter(
+               club_id: club_id,
+               person_id: actor_person_id,
+               membership_id: actor_membership_id
+             )
+
+    assert {:ok, %{invitation_token: first_token}} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: original_invitation_id,
+                 club_id: club_id,
+                 email: "Dana@Example.COM",
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    first_hash = InvitationToken.hash_token(first_token)
+
+    assert {:ok,
+            %{
+              invitation_id: ^original_invitation_id,
+              invitation_token: second_token,
+              execution_result: %ExecutionResult{
+                aggregate_uuid: ^original_invitation_id,
+                events: [
+                  %ClubMemberInvitationResent{
+                    invitation_id: ^original_invitation_id,
+                    token_hash: second_hash
+                  }
+                ]
+              }
+            }} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: duplicate_invitation_id,
+                 club_id: club_id,
+                 email: " dana@example.com ",
+                 actor_person_id: actor_person_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    refute second_token == first_token
+    refute second_hash == first_hash
+    assert InvitationToken.hash_token(second_token) == second_hash
+
+    assert is_nil(Membership.get_club_member_invitation(duplicate_invitation_id))
+
+    assert %ClubInvitationProjection{
+             invitation_id: ^original_invitation_id,
+             normalized_email: "dana@example.com",
+             token_hash: ^second_hash,
+             resend_count: 1,
+             status: "pending"
+           } =
+             Membership.get_pending_club_member_invitation_by_email(club_id, "DANA@example.com")
   end
 
   test "resend_club_member_invitation/2 rotates the token for the pending club email" do
