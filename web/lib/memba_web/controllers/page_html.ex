@@ -66,10 +66,10 @@ defmodule MembaWeb.PageHTML do
   defp member_compose_path(selected_club, _source),
     do: ~p"/messages/new?club_id=#{selected_club.club_id}"
 
-  defp member_invitation_path(_selected_club, "host"), do: "/members/invitations/new"
+  defp member_invitation_path(_selected_club, "host"), do: ~p"/members/invitations/new"
 
   defp member_invitation_path(selected_club, _source),
-    do: "/members/invitations/new?club_id=#{URI.encode_www_form(selected_club.club_id)}"
+    do: ~p"/members/invitations/new?club_id=#{selected_club.club_id}"
 
   defp member_message_path(message_id, _selected_club, "host"), do: ~p"/messages/#{message_id}"
 
