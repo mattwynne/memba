@@ -37,7 +37,7 @@ green than before.
 | 025 | 2026-06-06 | merged | Messaging and onboarding quick wins | [plan](025-messaging-and-onboarding-quick-wins/plan.md) |
 | 026 | 2026-06-07 | merged | Domain Cucumber convergence | [plan](026-domain-cucumber-convergence/plan.md) |
 | 027 | 2026-06-06 | merged | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
-| 028 | 2026-06-08 | validated | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
+| 028 | 2026-06-08 | implementing | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
 
 Status notes:
 
