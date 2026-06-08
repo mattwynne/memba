@@ -1,0 +1,99 @@
+diff --git a/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs b/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs
+index c657aa2..89f88e2 100644
+--- a/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs
++++ b/web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs
+@@ -22,18 +22,33 @@ defmodule Memba.Repo.Migrations.BackfillMembershipPersonEmailAddresses do
+     )
+     SELECT
+       'ead_' || gen_random_uuid()::text,
+-      person.person_id,
+-      btrim(person.email),
+-      lower(btrim(person.email)),
++      source.person_id,
++      source.email,
++      source.normalized_email,
+       TRUE,
+-      now(),
+-      now()
+-    FROM membership_people AS person
++      source.inserted_at,
++      source.updated_at
++    FROM (
++      SELECT DISTINCT ON (lower(btrim(person.email)))
++        person.person_id,
++        btrim(person.email) AS email,
++        lower(btrim(person.email)) AS normalized_email,
++        person.inserted_at,
++        person.updated_at
++      FROM membership_people AS person
++      WHERE btrim(person.email) <> ''
++      ORDER BY lower(btrim(person.email)), person.inserted_at, person.person_id
++    ) AS source
+     WHERE NOT EXISTS (
+       SELECT 1
+       FROM membership_person_email_addresses AS existing_email_address
+-      WHERE existing_email_address.person_id = person.person_id
+-        AND existing_email_address.normalized_email = lower(btrim(person.email))
++      WHERE existing_email_address.normalized_email = source.normalized_email
++    )
++    AND NOT EXISTS (
++      SELECT 1
++      FROM membership_person_email_addresses AS existing_primary_email_address
++      WHERE existing_primary_email_address.person_id = source.person_id
++        AND existing_primary_email_address.is_primary = TRUE
+     );
+     """
+   end
+diff --git a/web/test/memba/membership/person_email_address_projection_test.exs b/web/test/memba/membership/person_email_address_projection_test.exs
+index 63546f3..ee05e5c 100644
+--- a/web/test/memba/membership/person_email_address_projection_test.exs
++++ b/web/test/memba/membership/person_email_address_projection_test.exs
+@@ -52,6 +52,48 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
+              |> Repo.all()
+   end
+ 
++  test "backfill migration skips blank and duplicate legacy email rows" do
++    alice_id = Memba.ID.generate(:person)
++    duplicate_alice_id = Memba.ID.generate(:person)
++    blank_email_id = Memba.ID.generate(:person)
++    existing_primary_id = Memba.ID.generate(:person)
++
++    Repo.insert!(%Person{person_id: alice_id, name: "Alice", email: "alice@example.com"})
++    Repo.insert!(%Person{
++      person_id: duplicate_alice_id,
++      name: "Other Alice",
++      email: " ALICE@example.com "
++    })
++    Repo.insert!(%Person{person_id: blank_email_id, name: "Blank Email", email: "   "})
++    Repo.insert!(%Person{person_id: existing_primary_id, name: "Carol", email: "carol@example.com"})
++
++    Repo.insert!(%PersonEmailAddress{
++      person_id: existing_primary_id,
++      email: "carol@work.example",
++      normalized_email: "carol@work.example",
++      is_primary: true
++    })
++
++    Repo.query!(backfill_sql())
++
++    email_addresses =
++      PersonEmailAddress
++      |> order_by([email_address], asc: email_address.normalized_email)
++      |> Repo.all()
++
++    assert Enum.count(email_addresses, &(&1.normalized_email == "alice@example.com")) == 1
++    refute Enum.any?(email_addresses, &(&1.normalized_email == ""))
++
++    assert [
++             %PersonEmailAddress{
++               person_id: ^existing_primary_id,
++               normalized_email: "carol@work.example",
++               is_primary: true
++             }
++           ] =
++             Enum.filter(email_addresses, &(&1.person_id == existing_primary_id))
++  end
++
+   test "person email address projection rows can be persisted and read" do
+     person_id = Memba.ID.generate(:person)
+ 
