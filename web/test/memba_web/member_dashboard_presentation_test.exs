@@ -2,6 +2,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
   use Memba.DataCase, async: true
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Permissions
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
@@ -75,6 +77,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.current_member.name == "Alice Adams"
     assert assigns.current_member.initials == "AA"
     assert assigns.active_member_count == 2
+    refute assigns.can_manage_members?
 
     assert Enum.map(assigns.members, &{&1.id, &1.name, &1.initials}) == [
              {alice.person_id, "Alice Adams", "AA"},
@@ -177,6 +180,33 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
              )
   end
 
+  test "loads member-management visibility as false for ordinary members" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    other_club_member =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Backcountry Club"
+      )
+
+    grant_manage_members_permission!(other_club_member)
+
+    assert {:ok, assigns} =
+             MemberDashboardPresentation.load(
+               alice.club_id,
+               %{email: "alice@example.com"},
+               [alice.club]
+             )
+
+    refute assigns.can_manage_members?
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
@@ -196,18 +226,32 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
-    Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
+    membership =
+      Repo.insert!(%Membership{
+        membership_id: Memba.ID.generate(:membership),
+        club_id: club_id,
+        person_id: person.person_id,
+        active: true
+      })
 
     %{
       club: club,
       club_id: club_id,
+      membership_id: membership.membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp grant_manage_members_permission!(member) do
+    Repo.insert!(%MemberPermission{
+      club_id: member.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
+    })
+
+    member
   end
 
   defp create_message(attrs) do

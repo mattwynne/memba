@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.Permissions
   alias Memba.Messaging
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Repo
@@ -42,6 +43,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
          members: members,
          active_member_count: Enum.count(members),
          current_member: current_member,
+         can_manage_members?: can_manage_members?(selected_club.club_id, current_member),
          member_names_by_id: member_names_by_id,
          messages: messages,
          message_rows: message_rows
@@ -87,6 +89,14 @@ defmodule MembaWeb.MemberDashboardPresentation do
       nil -> {:error, :forbidden}
       current_member -> {:ok, current_member}
     end
+  end
+
+  defp can_manage_members?(club_id, current_member) do
+    Membership.person_has_club_permission?(
+      club_id,
+      current_member.id,
+      Permissions.club_manage_members()
+    )
   end
 
   defp load_messages(club_id) do

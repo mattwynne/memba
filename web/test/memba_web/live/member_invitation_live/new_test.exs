@@ -97,6 +97,40 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     end
   end
 
+  test "direct LiveView access forbids an ordinary member before any crafted event can run", %{
+    conn: conn
+  } do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    assert_raise MembaWeb.ForbiddenError, fn ->
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
+    end
+  end
+
+  test "host-selected direct access forbids an ordinary member", %{conn: conn} do
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    assert_raise MembaWeb.ForbiddenError, fn ->
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> get(~p"/members/invitations/new")
+    end
+  end
+
   test "routed GET forbids a member whose manage-members permission belongs to another club", %{
     conn: conn
   } do
