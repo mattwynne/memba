@@ -39,7 +39,7 @@ green than before.
 | 027 | 2026-06-06 | merged | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
 | 028 | 2026-06-08 | implementing | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
 | 029 | 2026-06-08 | validated | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
-| 030 | 2026-06-08 | ready | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
+| 030 | 2026-06-08 | validated | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
 
 Status notes:
 

@@ -1,7 +1,7 @@
 # Verified public onboarding requests
 
 Date: 2026-06-08
-Status: ready
+Status: validated
 
 ## Goal
 
