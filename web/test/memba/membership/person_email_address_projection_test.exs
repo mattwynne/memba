@@ -52,6 +52,48 @@ defmodule Memba.Membership.PersonEmailAddressProjectionTest do
              |> Repo.all()
   end
 
+  test "backfill migration skips blank and duplicate legacy email rows" do
+    alice_id = Memba.ID.generate(:person)
+    duplicate_alice_id = Memba.ID.generate(:person)
+    blank_email_id = Memba.ID.generate(:person)
+    existing_primary_id = Memba.ID.generate(:person)
+
+    Repo.insert!(%Person{person_id: alice_id, name: "Alice", email: "alice@example.com"})
+    Repo.insert!(%Person{
+      person_id: duplicate_alice_id,
+      name: "Other Alice",
+      email: " ALICE@example.com "
+    })
+    Repo.insert!(%Person{person_id: blank_email_id, name: "Blank Email", email: "   "})
+    Repo.insert!(%Person{person_id: existing_primary_id, name: "Carol", email: "carol@example.com"})
+
+    Repo.insert!(%PersonEmailAddress{
+      person_id: existing_primary_id,
+      email: "carol@work.example",
+      normalized_email: "carol@work.example",
+      is_primary: true
+    })
+
+    Repo.query!(backfill_sql())
+
+    email_addresses =
+      PersonEmailAddress
+      |> order_by([email_address], asc: email_address.normalized_email)
+      |> Repo.all()
+
+    assert Enum.count(email_addresses, &(&1.normalized_email == "alice@example.com")) == 1
+    refute Enum.any?(email_addresses, &(&1.normalized_email == ""))
+
+    assert [
+             %PersonEmailAddress{
+               person_id: ^existing_primary_id,
+               normalized_email: "carol@work.example",
+               is_primary: true
+             }
+           ] =
+             Enum.filter(email_addresses, &(&1.person_id == existing_primary_id))
+  end
+
   test "person email address projection rows can be persisted and read" do
     person_id = Memba.ID.generate(:person)
 
