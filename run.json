@@ -1145,7 +1145,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-08T08:04:39.310166925Z",
-  "last_event_at": "2026-06-08T08:49:34.983085493Z",
+  "last_event_at": "2026-06-08T08:52:10.531395572Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -5004,9 +5004,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 332,
       "checkpoint": {
-        "timestamp": "2026-06-08T08:52:07.044571352Z",
+        "timestamp": "2026-06-08T08:52:10.463277258Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -5028,7 +5028,450 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "command.output": "blob://sha256/cd15f98e815f24f13092e08c2453af68fabbe9cf9ad17cf0cdfec423d012742b",
+          "thread.gemini_review.current_node": "synthesize_review",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "thread.verify_review_repair.current_node": "dev_check",
+          "internal.retry_count.codex_review": 0,
+          "internal.fidelity": "summary:high",
+          "internal.work_dir": "/workspace/memba",
+          "thread.synthesize_review.current_node": "review_gate",
+          "thread.read_plan.current_node": "preflight_sandbox",
           "current_node": "claude_review",
+          "failure_class": "",
+          "internal.retry_count.review_gate": 0,
+          "internal.retry_count.verify_review_repair": 0,
+          "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation demonstrates adherence to all architectural decisions stated in the plan:\n\n- ✅ Invit",
+          "response.gemini_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n## ADR Violations\nNone identified. The implementation adheres to the architectural decisions stated in the plan (e.g., using separate invitation token storage, preserving incomplete person creation for profile completion, etc.).\n\n## Blocking Issues\n1. **Missing Data Migration for `people.email` to `person_email_addresses`**\n   The implementation introduces a new `person_email_addresses` table and modifies the `Person` schema to make `email` a virtual field. `Accounts.find_person_by_email/1` has been updated to query the new `person_email_addresses` table instead of the `people` table. However, there is no backfill migration to move existing `people.email` data into `person_email_addresses`.\n   \n   If any existing environment (such as production) contains persisted `people.email` data, those users will no longer be discoverable by email. This breaks duplicate active-member checks, existing-person invitation acceptance, and staff administration for those users. This requires either a data backfill migration or an explicit product decision that existing data can be safely discarded.\n\n## Bounded-Safe Fixes\n1. **Remove or document unused `AcceptInvitationPlug`**\n   `MembaWeb.Authentication.AcceptInvitationPlug` is defined but empty. Either remove it from the `router.ex` pipeline and delete the file, or add a module doc explaining it is a placeholder for future middleware.\n2. **Replace hardcoded club path construction with verified routes**\n   In `accept_invitation_controller.ex`, the helper `defp club_path(club_id), do: \"/clubs/#{club_id}\"` should use Phoenix verified routes (e.g., `~p\"/clubs/#{club_id}\"`) or the project's established subdomain-aware routing pattern.\n3. **Escape interpolated values in invitation email HTML**\n   In `club_member_invitation_email.ex`, `club.name` is interpolated directly into an HTML string (`<h2>You're invited to join #{club.name}!</h2>`). Even if club names are Staff-controlled, it is a safer default to use `Phoenix.HTML.html_escape/1` for generated HTML.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n1. **Synchronous Email Delivery (Performance)**\n   **File(s)**: `web/lib/memba/invitations.ex`\n   **Smell**: Invitation email delivery happens synchronously during the HTTP request.\n   **Why it may need human judgement**: This ties the Staff UI latency and error behavior to the email provider's response time. It is perfectly acceptable for a low-volume MVP, but may need to be moved behind a durable async job (e.g., Oban) as the application scales.\n2. **Virtual `Person.email` field may cause confusion (Maintainability)**\n   **File(s)**: `web/lib/memba/accounts/person.ex`\n   **Smell**: `Person.email` is retained as a virtual field strictly for changeset inputs. After loading a `Person` from the database, `person.email` will be `nil`.\n   **Why it may need human judgement**: Future maintainers may accidentally use the virtual field expecting a value. Adding an explicit accessor like `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n3. **Duplicate pending-invitation race not enforced by database constraint (Data Integrity)**\n   **File(s)**: `web/lib/memba/invitations.ex`, invitations table migration\n   **Smell**: Duplicate detection is performed in the context layer by checking for an existing pending invitation before creating or resending. There is no partial unique database constraint for pending invitations on `{club_id, normalized_email}`.\n   **Why it may need human judgement**: Concurrent invites could theoretically create duplicate pending invitations and send duplicate emails. Adding a unique constraint would provide stronger structural guarantees.\n4. **Invitation token generation in projection/read-model layer (Architecture)**\n   **File(s)**: `web/lib/memba/club_members/projections/invitation.ex`\n   **Smell**: The invitation URL token appears to be generated while handling the invitation projection, rather than being produced as part of the command/event workflow.\n   **Why it may need human judgement**: In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding the projection regenerates different invitation token hashes, outstanding invitation links could be invalidated. This architectural trade-off is worth noting for the future.\n\n## Suggested Fixes\n1. **Add a backfill migration**: Create an Ecto migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, skipping nulls and preserving timestamps.\n2. **Clean up Plug**: Delete `web/lib/memba_web/authentication/accept_invitation_plug.ex` and remove it from `router.ex`.\n3. **Use verified routes**: Update `club_path/1` in `accept_invitation_controller.ex` to use `~p\"/clubs/#{club_id}\"`.\n4. **Escape HTML**: Wrap `club.name` in `Phoenix.HTML.html_escape/1` in `club_member_invitation_email.ex`.\n\n## Validation Notes\n- **Dev Check**: Passed successfully.\n- **Automated Coverage**: 69 scenarios and 466 steps passed. Domain, controller, LiveView, and email delivery tests cover the planned invitation lifecycle correctly.\n- **Migration Safety**: The blocking issue regarding data migration safety was not exposed by the green test suite because test fixtures create fresh data using the new association flow, but it poses a strict risk to deployed environments holding existing records.",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "response.claude_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation demonstrates adherence to all architectural decisions stated in the plan:\n\n- ✅ Invitation tokens use separate database-backed storage (not Phoenix.Token)\n- ✅ Email normalization matches PersonEmailAddress conventions\n- ✅ No incomplete person records created before profile completion\n- ✅ Profile completion state lives in session/journey (via `put_session(:invitation_email, ...)`)\n- ✅ Token not consumed on first link open for unknown invitees\n- ✅ Existing person flow accepts invitation, creates membership, consumes token, and redirects\n\nNo ADR files were cited by number in the plan or included in implementation evidence, but the plan's explicit architectural decisions are fully implemented.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone remaining. The critical data migration issue identified in the first review has been properly resolved by the repair agent.\n\n## Bounded-safe fixes\n\nNone required. The repair agent correctly identified that three of the four initially flagged issues were false positives:\n\n1. ❌ **Empty AcceptInvitationPlug** - does not exist in the codebase\n2. ❌ **Hardcoded club path** - code uses `ClubSite.url(club, \"/\")` and verified routes\n3. ❌ **Unescaped HTML in email** - `EmailTemplates.invitation_html/2` explicitly calls `html_escape/1`\n\nThe fourth issue (data migration) was legitimately blocking and has been fixed.\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Migration timestamp oddity (Severity: Low - cosmetic)\n\n**Files**: `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n\n**Smell**: The backfill migration has a timestamp from June 2026 while the table creation is from June 2025. The backfill correctly runs *after* table creation (20260602 > 20250607 numerically), but the year gap suggests the test/dev environment clock is set to 2026.\n\n**Why it may need human judgement**: Functionally correct but cosmetically odd. If this is deployed to production, migration timestamps from 2026 might confuse maintainers in 2025. Consider regenerating with current timestamps if cosmetic consistency matters.\n\n---\n\n### 2. Virtual email field without accessor helper (Severity: Low - DX)\n\n**Files**: `web/lib/memba/accounts/person.ex`\n\n**Smell**: `Person.email` is virtual; after loading from database, `person.email` is `nil`. Code must navigate `person.email_addresses |> Enum.find(&(&1.is_primary)) |> Map.get(:email)` to access email.\n\n**Why it may need human judgement**: The implementation preloads associations in queries like `find_person_by_email/1`, which works. But ad-hoc code accessing a loaded person might be confused. Consider adding `Person.primary_email/1` helper or documenting the pattern explicitly if maintaining current structure.\n\n---\n\n### 3. Synchronous email delivery (Severity: Low - performance)\n\n**Files**: `web/lib/memba/invitations.ex`\n\n**Smell**: `Memba.Mailer.deliver(email)` is called synchronously during the Staff invitation HTTP request.\n\n**Why it may need human judgement**: Couples UI latency and error handling to email provider response time. Acceptable for MVP with low invitation volume. Consider async job queue (Oban) if invitation volume or deliverability reliability becomes important.\n\n---\n\n### 4. Invitation token generation in projection handler (Severity: Low - architecture)\n\n**Files**: `web/lib/memba/membership/projections/invitation.ex`\n\n**Smell**: `InvitationToken.build_hashed_token()` is called in the projection `handle/2` function when handling `InvitationCreated` events, rather than being produced deterministically from the event data.\n\n**Why it may need human judgement**: In event-sourced systems, projection rebuilds should be deterministic. Rebuilding projections would generate different token hashes, invalidating outstanding invitation links. Acceptable for MVP where:\n- Invitations are one-use anyway\n- Projection rebuilds should be rare\n- Outstanding invitations can be manually reissued if needed\n\nDocument this trade-off explicitly if projection rebuild procedures are formalized.\n\n---\n\n### 5. No database constraint on pending invitation uniqueness (Severity: Low - data integrity)\n\n**Files**: `web/lib/memba/invitations.ex`, invitations table migration\n\n**Smell**: Duplicate detection happens in application code (`cond do pending_invitation = find_pending_invitation(...)`). No partial unique index exists for `(club_id, normalized_email)` where `status = 'pending'`.\n\n**Why it may need human judgement**: Concurrent invites for the same email/club could create duplicate pending invitations and send duplicate emails. Impact is low:\n- Worst case: duplicate emails sent\n- Only one invitation is consumed on acceptance\n- Manual cleanup possible\n\nAdding a partial unique constraint would provide stronger guarantees but add migration complexity. Current approach is acceptable if duplicate emails are tolerable for MVP.\n\n---\n\n## Suggested fixes\n\nNone required. The implementation is production-ready after the repair pass.\n\n## Validation notes\n\n### Repair pass results:\n- ✅ Added/improved `20260602024629_backfill_membership_person_email_addresses.exs` migration with:\n  - Normalization and deduplication via `DISTINCT ON`\n  - Skips blank/null emails\n  - Checks for existing normalized emails (global uniqueness)\n  - Checks for existing primary emails (per-person uniqueness)  \n  - Preserves legacy row timestamps\n  - Proper down migration\n- ✅ Added test coverage for backfill edge cases in `person_email_address_projection_test.exs`\n- ✅ Correctly identified three false positives from first review\n\n### Test coverage:\n- ✅ 722 ExUnit tests, 0 failures (increased from earlier evidence)\n- ✅ 69 Cucumber scenarios, 466 steps, all passing\n- ✅ Domain tests cover invitation lifecycle, duplicates, acceptance flows\n- ✅ Controller tests cover profile completion, existing person flow, token validation\n- ✅ LiveView tests cover Staff invitation UI\n- ✅ Email delivery tests verify templates and recipients\n- ✅ Migration backfill tests cover null/blank/duplicate handling\n\n### Dev check:\n- ✅ Compilation clean\n- ✅ Formatter clean  \n- ✅ All tests green\n- ✅ Sandbox runtime check passed\n\n### Plan conformance:\n- ✅ All 16 numbered implementation steps delivered\n- ✅ Invitation aggregate with pending/accepted/expired states\n- ✅ Separate invitation token storage\n- ✅ Staff invite route under `/admin/clubs/:club_id/invite`\n- ✅ Invitation callback with token validation\n- ✅ Profile completion for unknown invitees\n- ✅ Existing staff onboarding preserved\n- ✅ Acceptance feature scenarios implemented and passing\n\n---\n\n**Overall Assessment**: The repair pass successfully resolved the data migration concern, and the implementation is now production-ready. The false positives in the initial review suggest overly aggressive synthesis; the actual implementation had already addressed those concerns correctly (HTML escaping, route helpers). The remaining non-blocking findings are legitimate MVP trade-offs that don't warrant blocking merge. Accept and proceed to integration.",
+          "thread.claude_review.current_node": "codex_review",
+          "thread.start.current_node": "read_plan",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "internal.run_id": "01KTK439GP6A36JG17BGSSJ0Q6",
+          "graph.rankdir": "LR",
+          "internal.retry_count.gemini_review": 0,
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "review_fixes_available": true,
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"backfill-person-email-addresses\",\n        \"title\": \"Backfill existing people.email values into person_email_addresses\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"cleanup-empty-accept-invitation-plug\",\n        \"title\": \"Remove or document empty AcceptInvitationPlug\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"use-verified-club-route\",\n        \"title\": \"Replace hardcoded club path with verified route\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"escape-invitation-email-html\",\n        \"title\": \"Escape interpolated invitation email HTML values\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "response.apply_review_fixes": "Implemented the review repair pass. No acceptance feature files were edited.\n\n## 1. Review issue mapping\n\n| Review issue | Status | Fix / justification |\n|---|---:|---|\n| `backfill-person-email-addresses` | Fixed | Tightened the existing backfill migration so legacy `membership_people.email` data is copied safely into `membership_person_email_addresses`, skipping blank emails, avoiding duplicate normalized emails, avoiding a second primary email for a person, and preserving legacy row timestamps. Added regression coverage. |\n| `cleanup-empty-accept-invitation-plug` | No change needed | Current tree has no `MembaWeb.Authentication.AcceptInvitationPlug` file and no router pipeline using it. The synthesized issue appears already absent in this implementation. |\n| `use-verified-club-route` | No change needed | Current `MembaWeb.ClubMemberInvitationController` does not have a hardcoded `club_path/1`; it redirects through `ClubSite.url(club, \"/\")` and uses verified routes for fallback/auth paths. |\n| `escape-invitation-email-html` | No change needed | Current `Memba.Membership.ClubMemberInvitationEmail` composes HTML via `Memba.EmailTemplates`, which escapes dynamic text. Existing tests already cover malicious club names like `West <Coast>\\r\\nBcc: ...`. |\n\n## 2. Files changed\n\n### Backfill existing `people.email` values into `person_email_addresses`\n\n- `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n  - Uses a normalized source subquery.\n  - Skips blank legacy email values.\n  - Uses `DISTINCT ON (lower(btrim(person.email)))` to avoid duplicate normalized email inserts.\n  - Skips rows whose normalized email already exists.\n  - Skips rows for people who already have a primary email address.\n  - Preserves `membership_people.inserted_at` / `updated_at` instead of using `now()`.\n\n- `web/test/memba/membership/person_email_address_projection_test.exs`\n  - Added coverage that the backfill skips blank legacy emails.\n  - Added coverage that duplicate normalized legacy emails do not create duplicate projection rows.\n  - Added coverage that existing primary email rows are not duplicated.\n\n## 3. Tests run\n\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Passed.\n  - ExUnit: `722 tests, 0 failures`\n  - Acceptance: `69 scenarios (69 passed)`, `466 steps (466 passed)`\n\nNotes:\n- I also attempted a direct focused command, `cd web && mix test test/memba/membership/person_email_address_projection_test.exs`, but direct `mix test` outside the dev helper could not connect to the sandbox-managed Postgres socket at `/tmp/devenv/postgres/.s.PGSQL.15432`. The required `dev check` path started/managed services correctly and passed.\n\n## 4. Remaining gaps / human questions\n\n- No remaining gaps for the selected automatic repair issues.\n- If production legacy data contains multiple people with the same normalized email, the backfill now avoids breaking the new unique index by backfilling one deterministic row. Human/data cleanup may still be useful later to reconcile those duplicate legacy people, but that is outside this bounded repair.",
+          "response.codex_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: Medium\n\nThe implementation appears broadly plan-conforming and `dev ci` passed, but there is one deployment-safety gap around the `PersonEmailAddress` storage change that needs either a small implementation pass or an explicit human decision before merge/deploy.\n\n## ADR conformance: PASS\n\nNo clear ADR violation is evident from the provided implementation evidence.\n\nThe implementation appears to respect the plan’s architecture-relevant decisions:\n\n- Invitation tokens use separate storage from ordinary sign-in tokens.\n- Unknown invited emails remain pending invitations; incomplete `Person` records are not created before profile completion.\n- Invitation acceptance consumes tokens only after successful acceptance/profile completion.\n- Existing complete people can accept and become club members directly.\n- The Staff invite route is additive and does not replace the existing person edit route.\n\n## ADR violations\n\nNone identified from the available evidence.\n\n## Blocking issues\n\n1. **Potentially unsafe migration from `people.email` to `person_email_addresses` without backfill or explicit no-data decision**\n\n   **Files:**\n\n   - `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`\n   - `web/lib/memba/accounts/person.ex`\n   - `web/lib/memba/accounts.ex`\n\n   **Issue:**\n\n   The implementation appears to move email lookup behavior from `people.email` to the new `person_email_addresses` association. `Person.email` is now virtual, and `Accounts.find_person_by_email/1` appears to query `person_email_addresses.normalized_email`.\n\n   The evidence does not show a migration that backfills existing `people.email` values into `person_email_addresses`.\n\n   **Why this blocks:**\n\n   If any existing environment contains persisted `people.email` data, those people may no longer be discoverable by email after deployment. That can affect:\n\n   - duplicate active-member checks;\n   - existing-person invitation acceptance;\n   - sign-in/onboarding flows that rely on finding a person by email;\n   - adjacent Staff/person administration behavior.\n\n   This is not merely polish if real data exists. It needs one of:\n\n   - a data backfill migration;\n   - an explicit human/product decision that no deployed database contains relevant `people.email` data and backfill is unnecessary;\n   - or a compatibility path that reads both old and new storage until migration is complete.\n\n## Bounded-safe fixes\n\n1. **Remove or document the empty invitation plug**\n\n   **Files:**\n\n   - `web/lib/memba_web/authentication/accept_invitation_plug.ex`\n   - `web/lib/memba_web/router.ex`\n\n   `MembaWeb.Authentication.AcceptInvitationPlug` appears to be an empty/pass-through plug. If it has no behavior today, it adds routing/authentication indirection without value.\n\n2. **Replace hardcoded club path construction with verified routes**\n\n   **File:**\n\n   - `web/lib/memba_web/controllers/accept_invitation_controller.ex`\n\n   The helper:\n\n   ```elixir\n   defp club_path(club_id) do\n     \"/clubs/#{club_id}\"\n   end\n   ```\n\n   should use Phoenix verified routes, e.g. `~p\"/clubs/#{club_id}\"`, or the project’s established club-routing helper if club access is subdomain-aware.\n\n3. **Escape interpolated values in invitation email HTML**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   The email HTML appears to interpolate `club.name` directly into an HTML string. Even if club names are Staff-controlled, escaping is the safer default for generated HTML.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation in projection/read-model layer**\n\n   **Files:**\n\n   - `web/lib/memba/club_members/projections/invitation.ex`\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   The invitation URL token appears to be generated while handling the invitation projection rather than being produced as part of the command/event workflow.\n\n   **Why this may need human judgement:**\n\n   In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding projections regenerates different invitation token hashes, outstanding invitation links may become invalid. That may be acceptable for this slice, but it is an architectural trade-off worth making explicit.\n\n2. **Synchronous email delivery during Staff invite request**\n\n   **File:**\n\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   Invitation email delivery appears to happen synchronously during the invite workflow.\n\n   **Why this may need human judgement:**\n\n   This is simple and acceptable for low-volume MVP usage, but it couples Staff UI latency and error behavior to the mail provider. If invitation volume or deliverability reliability becomes important, this should move behind a durable async job.\n\n3. **Duplicate pending-invitation race not enforced by database constraint**\n\n   **Files:**\n\n   - `web/lib/memba/invitations.ex`\n   - invitation projection/table migration\n\n   **Smell:**\n\n   Duplicate detection appears to be performed in application code by looking for a pending invitation before creating/resending. There does not appear to be a partial unique database constraint for pending invitations by `{club_id, normalized_email}`.\n\n   **Why this may need human judgement:**\n\n   Concurrent invites for the same email and club could create duplicate pending invitations and send duplicate emails. The behavioral impact is probably low, but database constraints are usually better for enforcing uniqueness when the invariant matters.\n\n4. **Virtual `Person.email` field may confuse future maintainers**\n\n   **Files:**\n\n   - `web/lib/memba/accounts/person.ex`\n   - callers that need a person’s email address\n\n   **Smell:**\n\n   `Person.email` appears to be retained as a virtual changeset input while persisted email addresses live in `person_email_addresses`.\n\n   **Why this may need human judgement:**\n\n   After loading a `Person`, `person.email` will be `nil` unless manually populated. Future code may accidentally use the virtual field and miss the associated email addresses. A clear accessor such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n\n5. **Invitation email template is intentionally minimal**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   **Smell:**\n\n   The email appears functional but basic: minimal branding, no reusable template, and no styling system.\n\n   **Why this may need human judgement:**\n\n   This is acceptable for an implementation slice, but before broader production use, invitation emails may need product/design review.\n\n## Suggested fixes\n\nBecause the decision is `REJECT`, address the blocking migration/data compatibility issue first.\n\nRecommended implementation options:\n\n1. **Preferred: add a backfill migration**\n\n   Add a migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, preserving existing people for duplicate checks and invitation acceptance.\n\n   The migration should:\n\n   - skip blank/null emails;\n   - normalize using the same semantics as the application where practical;\n   - avoid duplicate rows;\n   - preserve timestamps;\n   - be safe to run once in deployed environments.\n\n2. **Alternative: explicit human decision**\n\n   If Matt confirms there is no deployed/persistent data requiring migration, record that decision in the iteration notes or an appropriate technical note, then the blocker can be waived.\n\n3. **Then apply bounded-safe cleanup**\n\n   - Remove the empty `AcceptInvitationPlug` or give it a real documented responsibility.\n   - Replace hardcoded `\"/clubs/#{club_id}\"` with verified routes.\n   - Escape interpolated email HTML values.\n\n## Validation notes\n\n- `dev ci` succeeded.\n- Acceptance suite succeeded: `69 scenarios`, `466 steps`.\n- Sandbox runtime check passed.\n- The implementation appears to cover the main planned flows:\n  - Staff invite form;\n  - invitation email link;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - duplicate active-member block;\n  - duplicate pending invitation resend;\n  - accepted-link reuse behavior.\n- The remaining blocker is not exposed by the green test suite because it concerns migration behavior for pre-existing persisted `people.email` data.",
+          "internal.retry_count.dev_check": 0,
+          "internal.thread_id": "collect_implementation_evidence",
+          "review_blockers": [
+            {
+              "id": "backfill-person-email-addresses",
+              "title": "Backfill existing people.email values into person_email_addresses",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "cleanup-empty-accept-invitation-plug",
+              "title": "Remove or document empty AcceptInvitationPlug",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "use-verified-club-route",
+              "title": "Replace hardcoded club path with verified route",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            },
+            {
+              "id": "escape-invitation-email-html",
+              "title": "Escape interpolated invitation email HTML values",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "internal.retry_count.apply_review_fixes": 0,
+          "internal.node_visit_count": 2,
+          "last_stage": "claude_review",
+          "internal.retry_count.read_plan": 0,
+          "graph.max_node_visits": "160",
+          "implementation_accepted": false,
+          "internal.retry_count.synthesize_review": 0,
+          "internal.retry_count.start": 0,
+          "failure_signature": "",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "thread.codex_review.current_node": "gemini_review",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.claude_review": 0,
+          "thread.collect_implementation_evidence.current_node": "claude_review"
+        },
+        "node_outcomes": {
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/cd15f98e815f24f13092e08c2453af68fabbe9cf9ad17cf0cdfec423d012742b"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='4e7532d0e9c366bd627ea71ffbb6a0080e895976'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 388,
+              "active_time_ms": 388
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.gemini_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n## ADR Violations\nNone identified. The implementation adheres to the architectural decisions stated in the plan (e.g., using separate invitation token storage, preserving incomplete person creation for profile completion, etc.).\n\n## Blocking Issues\n1. **Missing Data Migration for `people.email` to `person_email_addresses`**\n   The implementation introduces a new `person_email_addresses` table and modifies the `Person` schema to make `email` a virtual field. `Accounts.find_person_by_email/1` has been updated to query the new `person_email_addresses` table instead of the `people` table. However, there is no backfill migration to move existing `people.email` data into `person_email_addresses`.\n   \n   If any existing environment (such as production) contains persisted `people.email` data, those users will no longer be discoverable by email. This breaks duplicate active-member checks, existing-person invitation acceptance, and staff administration for those users. This requires either a data backfill migration or an explicit product decision that existing data can be safely discarded.\n\n## Bounded-Safe Fixes\n1. **Remove or document unused `AcceptInvitationPlug`**\n   `MembaWeb.Authentication.AcceptInvitationPlug` is defined but empty. Either remove it from the `router.ex` pipeline and delete the file, or add a module doc explaining it is a placeholder for future middleware.\n2. **Replace hardcoded club path construction with verified routes**\n   In `accept_invitation_controller.ex`, the helper `defp club_path(club_id), do: \"/clubs/#{club_id}\"` should use Phoenix verified routes (e.g., `~p\"/clubs/#{club_id}\"`) or the project's established subdomain-aware routing pattern.\n3. **Escape interpolated values in invitation email HTML**\n   In `club_member_invitation_email.ex`, `club.name` is interpolated directly into an HTML string (`<h2>You're invited to join #{club.name}!</h2>`). Even if club names are Staff-controlled, it is a safer default to use `Phoenix.HTML.html_escape/1` for generated HTML.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n1. **Synchronous Email Delivery (Performance)**\n   **File(s)**: `web/lib/memba/invitations.ex`\n   **Smell**: Invitation email delivery happens synchronously during the HTTP request.\n   **Why it may need human judgement**: This ties the Staff UI latency and error behavior to the email provider's response time. It is perfectly acceptable for a low-volume MVP, but may need to be moved behind a durable async job (e.g., Oban) as the application scales.\n2. **Virtual `Person.email` field may cause confusion (Maintainability)**\n   **File(s)**: `web/lib/memba/accounts/person.ex`\n   **Smell**: `Person.email` is retained as a virtual field strictly for changeset inputs. After loading a `Person` from the database, `person.email` will be `nil`.\n   **Why it may need human judgement**: Future maintainers may accidentally use the virtual field expecting a value. Adding an explicit accessor like `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n3. **Duplicate pending-invitation race not enforced by database constraint (Data Integrity)**\n   **File(s)**: `web/lib/memba/invitations.ex`, invitations table migration\n   **Smell**: Duplicate detection is performed in the context layer by checking for an existing pending invitation before creating or resending. There is no partial unique database constraint for pending invitations on `{club_id, normalized_email}`.\n   **Why it may need human judgement**: Concurrent invites could theoretically create duplicate pending invitations and send duplicate emails. Adding a unique constraint would provide stronger structural guarantees.\n4. **Invitation token generation in projection/read-model layer (Architecture)**\n   **File(s)**: `web/lib/memba/club_members/projections/invitation.ex`\n   **Smell**: The invitation URL token appears to be generated while handling the invitation projection, rather than being produced as part of the command/event workflow.\n   **Why it may need human judgement**: In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding the projection regenerates different invitation token hashes, outstanding invitation links could be invalidated. This architectural trade-off is worth noting for the future.\n\n## Suggested Fixes\n1. **Add a backfill migration**: Create an Ecto migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, skipping nulls and preserving timestamps.\n2. **Clean up Plug**: Delete `web/lib/memba_web/authentication/accept_invitation_plug.ex` and remove it from `router.ex`.\n3. **Use verified routes**: Update `club_path/1` in `accept_invitation_controller.ex` to use `~p\"/clubs/#{club_id}\"`.\n4. **Escape HTML**: Wrap `club.name` in `Phoenix.HTML.html_escape/1` in `club_member_invitation_email.ex`.\n\n## Validation Notes\n- **Dev Check**: Passed successfully.\n- **Automated Coverage**: 69 scenarios and 466 steps passed. Domain, controller, LiveView, and email delivery tests cover the planned invitation lifecycle correctly.\n- **Migration Safety**: The blocking issue regarding data migration safety was not exposed by the green test suite because test fixtures create fresh data using the new association flow, but it poses a strict risk to deployed environments holding existing records.",
+              "last_response": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n## ADR Violations\nNone identified. The implementation adheres to the architectural decisions stated in th",
+              "last_stage": "gemini_review"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 3742,
+                    "output_tokens": 1277,
+                    "reasoning_tokens": 1947,
+                    "cache_read_tokens": 8173,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 50258
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 479921,
+              "tool_time_ms": 0,
+              "active_time_ms": 479921
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: Medium\n\nThe implementation appears broadly plan-conforming and `dev ci` passed, but there is one deployment-safety gap around the `Person",
+              "last_stage": "codex_review",
+              "response.codex_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: Medium\n\nThe implementation appears broadly plan-conforming and `dev ci` passed, but there is one deployment-safety gap around the `PersonEmailAddress` storage change that needs either a small implementation pass or an explicit human decision before merge/deploy.\n\n## ADR conformance: PASS\n\nNo clear ADR violation is evident from the provided implementation evidence.\n\nThe implementation appears to respect the plan’s architecture-relevant decisions:\n\n- Invitation tokens use separate storage from ordinary sign-in tokens.\n- Unknown invited emails remain pending invitations; incomplete `Person` records are not created before profile completion.\n- Invitation acceptance consumes tokens only after successful acceptance/profile completion.\n- Existing complete people can accept and become club members directly.\n- The Staff invite route is additive and does not replace the existing person edit route.\n\n## ADR violations\n\nNone identified from the available evidence.\n\n## Blocking issues\n\n1. **Potentially unsafe migration from `people.email` to `person_email_addresses` without backfill or explicit no-data decision**\n\n   **Files:**\n\n   - `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`\n   - `web/lib/memba/accounts/person.ex`\n   - `web/lib/memba/accounts.ex`\n\n   **Issue:**\n\n   The implementation appears to move email lookup behavior from `people.email` to the new `person_email_addresses` association. `Person.email` is now virtual, and `Accounts.find_person_by_email/1` appears to query `person_email_addresses.normalized_email`.\n\n   The evidence does not show a migration that backfills existing `people.email` values into `person_email_addresses`.\n\n   **Why this blocks:**\n\n   If any existing environment contains persisted `people.email` data, those people may no longer be discoverable by email after deployment. That can affect:\n\n   - duplicate active-member checks;\n   - existing-person invitation acceptance;\n   - sign-in/onboarding flows that rely on finding a person by email;\n   - adjacent Staff/person administration behavior.\n\n   This is not merely polish if real data exists. It needs one of:\n\n   - a data backfill migration;\n   - an explicit human/product decision that no deployed database contains relevant `people.email` data and backfill is unnecessary;\n   - or a compatibility path that reads both old and new storage until migration is complete.\n\n## Bounded-safe fixes\n\n1. **Remove or document the empty invitation plug**\n\n   **Files:**\n\n   - `web/lib/memba_web/authentication/accept_invitation_plug.ex`\n   - `web/lib/memba_web/router.ex`\n\n   `MembaWeb.Authentication.AcceptInvitationPlug` appears to be an empty/pass-through plug. If it has no behavior today, it adds routing/authentication indirection without value.\n\n2. **Replace hardcoded club path construction with verified routes**\n\n   **File:**\n\n   - `web/lib/memba_web/controllers/accept_invitation_controller.ex`\n\n   The helper:\n\n   ```elixir\n   defp club_path(club_id) do\n     \"/clubs/#{club_id}\"\n   end\n   ```\n\n   should use Phoenix verified routes, e.g. `~p\"/clubs/#{club_id}\"`, or the project’s established club-routing helper if club access is subdomain-aware.\n\n3. **Escape interpolated values in invitation email HTML**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   The email HTML appears to interpolate `club.name` directly into an HTML string. Even if club names are Staff-controlled, escaping is the safer default for generated HTML.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation in projection/read-model layer**\n\n   **Files:**\n\n   - `web/lib/memba/club_members/projections/invitation.ex`\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   The invitation URL token appears to be generated while handling the invitation projection rather than being produced as part of the command/event workflow.\n\n   **Why this may need human judgement:**\n\n   In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding projections regenerates different invitation token hashes, outstanding invitation links may become invalid. That may be acceptable for this slice, but it is an architectural trade-off worth making explicit.\n\n2. **Synchronous email delivery during Staff invite request**\n\n   **File:**\n\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   Invitation email delivery appears to happen synchronously during the invite workflow.\n\n   **Why this may need human judgement:**\n\n   This is simple and acceptable for low-volume MVP usage, but it couples Staff UI latency and error behavior to the mail provider. If invitation volume or deliverability reliability becomes important, this should move behind a durable async job.\n\n3. **Duplicate pending-invitation race not enforced by database constraint**\n\n   **Files:**\n\n   - `web/lib/memba/invitations.ex`\n   - invitation projection/table migration\n\n   **Smell:**\n\n   Duplicate detection appears to be performed in application code by looking for a pending invitation before creating/resending. There does not appear to be a partial unique database constraint for pending invitations by `{club_id, normalized_email}`.\n\n   **Why this may need human judgement:**\n\n   Concurrent invites for the same email and club could create duplicate pending invitations and send duplicate emails. The behavioral impact is probably low, but database constraints are usually better for enforcing uniqueness when the invariant matters.\n\n4. **Virtual `Person.email` field may confuse future maintainers**\n\n   **Files:**\n\n   - `web/lib/memba/accounts/person.ex`\n   - callers that need a person’s email address\n\n   **Smell:**\n\n   `Person.email` appears to be retained as a virtual changeset input while persisted email addresses live in `person_email_addresses`.\n\n   **Why this may need human judgement:**\n\n   After loading a `Person`, `person.email` will be `nil` unless manually populated. Future code may accidentally use the virtual field and miss the associated email addresses. A clear accessor such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n\n5. **Invitation email template is intentionally minimal**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   **Smell:**\n\n   The email appears functional but basic: minimal branding, no reusable template, and no styling system.\n\n   **Why this may need human judgement:**\n\n   This is acceptable for an implementation slice, but before broader production use, invitation emails may need product/design review.\n\n## Suggested fixes\n\nBecause the decision is `REJECT`, address the blocking migration/data compatibility issue first.\n\nRecommended implementation options:\n\n1. **Preferred: add a backfill migration**\n\n   Add a migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, preserving existing people for duplicate checks and invitation acceptance.\n\n   The migration should:\n\n   - skip blank/null emails;\n   - normalize using the same semantics as the application where practical;\n   - avoid duplicate rows;\n   - preserve timestamps;\n   - be safe to run once in deployed environments.\n\n2. **Alternative: explicit human decision**\n\n   If Matt confirms there is no deployed/persistent data requiring migration, record that decision in the iteration notes or an appropriate technical note, then the blocker can be waived.\n\n3. **Then apply bounded-safe cleanup**\n\n   - Remove the empty `AcceptInvitationPlug` or give it a real documented responsibility.\n   - Replace hardcoded `\"/clubs/#{club_id}\"` with verified routes.\n   - Escape interpolated email HTML values.\n\n## Validation notes\n\n- `dev ci` succeeded.\n- Acceptance suite succeeded: `69 scenarios`, `466 steps`.\n- Sandbox runtime check passed.\n- The implementation appears to cover the main planned flows:\n  - Staff invite form;\n  - invitation email link;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - duplicate active-member block;\n  - duplicate pending invitation resend;\n  - accepted-link reuse behavior.\n- The remaining blocker is not exposed by the green test suite because it concerns migration behavior for pre-existing persisted `people.email` data."
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 8263,
+                    "output_tokens": 1704,
+                    "reasoning_tokens": 2588,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 170075
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 81485,
+              "tool_time_ms": 0,
+              "active_time_ms": 81485
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "review_blockers": [
+                {
+                  "id": "backfill-person-email-addresses",
+                  "title": "Backfill existing people.email values into person_email_addresses",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "cleanup-empty-accept-invitation-plug",
+                  "title": "Remove or document empty AcceptInvitationPlug",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "use-verified-club-route",
+                  "title": "Replace hardcoded club path with verified route",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                },
+                {
+                  "id": "escape-invitation-email-html",
+                  "title": "Escape interpolated invitation email HTML values",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "review_fixes_available": true,
+              "implementation_accepted": false,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"backfill-person-email-addresses\",\n        \"title\": \"B",
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"backfill-person-email-addresses\",\n        \"title\": \"Backfill existing people.email values into person_email_addresses\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"cleanup-empty-accept-invitation-plug\",\n        \"title\": \"Remove or document empty AcceptInvitationPlug\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"use-verified-club-route\",\n        \"title\": \"Replace hardcoded club path with verified route\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"escape-invitation-email-html\",\n        \"title\": \"Escape interpolated invitation email HTML values\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "last_stage": "synthesize_review"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 11881,
+                    "output_tokens": 276,
+                    "reasoning_tokens": 1532,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 113645
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 37659,
+              "tool_time_ms": 0,
+              "active_time_ms": 37659
+            }
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e32c38aa0c8558b6ef77d21b8a45e8a5c447ae04d95955ec4ce4e0c28c10bb35"
+            },
+            "notes": "Script completed: set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 171,
+              "active_time_ms": 171
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3a3c5c89f0656e63f4bf5320be8b7383220855dabbf66ac2f0d16544cbe64861"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/028-staff-member-invitations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 289,
+              "active_time_ms": 289
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/0d47d5861d039ba28d12cc15b368cef0ad14e5d3d100ebff677147670f21ce72"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 318418,
+              "active_time_ms": 318418
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.apply_review_fixes": "Implemented the review repair pass. No acceptance feature files were edited.\n\n## 1. Review issue mapping\n\n| Review issue | Status | Fix / justification |\n|---|---:|---|\n| `backfill-person-email-addresses` | Fixed | Tightened the existing backfill migration so legacy `membership_people.email` data is copied safely into `membership_person_email_addresses`, skipping blank emails, avoiding duplicate normalized emails, avoiding a second primary email for a person, and preserving legacy row timestamps. Added regression coverage. |\n| `cleanup-empty-accept-invitation-plug` | No change needed | Current tree has no `MembaWeb.Authentication.AcceptInvitationPlug` file and no router pipeline using it. The synthesized issue appears already absent in this implementation. |\n| `use-verified-club-route` | No change needed | Current `MembaWeb.ClubMemberInvitationController` does not have a hardcoded `club_path/1`; it redirects through `ClubSite.url(club, \"/\")` and uses verified routes for fallback/auth paths. |\n| `escape-invitation-email-html` | No change needed | Current `Memba.Membership.ClubMemberInvitationEmail` composes HTML via `Memba.EmailTemplates`, which escapes dynamic text. Existing tests already cover malicious club names like `West <Coast>\\r\\nBcc: ...`. |\n\n## 2. Files changed\n\n### Backfill existing `people.email` values into `person_email_addresses`\n\n- `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n  - Uses a normalized source subquery.\n  - Skips blank legacy email values.\n  - Uses `DISTINCT ON (lower(btrim(person.email)))` to avoid duplicate normalized email inserts.\n  - Skips rows whose normalized email already exists.\n  - Skips rows for people who already have a primary email address.\n  - Preserves `membership_people.inserted_at` / `updated_at` instead of using `now()`.\n\n- `web/test/memba/membership/person_email_address_projection_test.exs`\n  - Added coverage that the backfill skips blank legacy emails.\n  - Added coverage that duplicate normalized legacy emails do not create duplicate projection rows.\n  - Added coverage that existing primary email rows are not duplicated.\n\n## 3. Tests run\n\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Passed.\n  - ExUnit: `722 tests, 0 failures`\n  - Acceptance: `69 scenarios (69 passed)`, `466 steps (466 passed)`\n\nNotes:\n- I also attempted a direct focused command, `cd web && mix test test/memba/membership/person_email_address_projection_test.exs`, but direct `mix test` outside the dev helper could not connect to the sandbox-managed Postgres socket at `/tmp/devenv/postgres/.s.PGSQL.15432`. The required `dev check` path started/managed services correctly and passed.\n\n## 4. Remaining gaps / human questions\n\n- No remaining gaps for the selected automatic repair issues.\n- If production legacy data contains multiple people with the same normalized email, the backfill now avoids breaking the new unique index by backfilling one deterministic row. Human/data cleanup may still be useful later to reconcile those duplicate legacy people, but that is outside this bounded repair.",
+              "last_stage": "apply_review_fixes",
+              "last_response": "Implemented the review repair pass. No acceptance feature files were edited.\n\n## 1. Review issue mapping\n\n| Review issue | Status | Fix / justification |\n|---|---:|---|\n| `backfill-person-email-addres"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 719429,
+                    "output_tokens": 4677,
+                    "reasoning_tokens": 4090,
+                    "cache_read_tokens": 1187328,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4453819
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 255006,
+              "tool_time_ms": 626037,
+              "active_time_ms": 881043
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5ea63e3c60746f22c0b1d5e7e99f9a7ff077e85e6016c4aa7d2018a8dd0b704c"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 148046,
+              "active_time_ms": 148046
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "response.claude_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation demonstrates adherence to all architectural decisions stated in the plan:\n\n- ✅ Invitation tokens use separate database-backed storage (not Phoenix.Token)\n- ✅ Email normalization matches PersonEmailAddress conventions\n- ✅ No incomplete person records created before profile completion\n- ✅ Profile completion state lives in session/journey (via `put_session(:invitation_email, ...)`)\n- ✅ Token not consumed on first link open for unknown invitees\n- ✅ Existing person flow accepts invitation, creates membership, consumes token, and redirects\n\nNo ADR files were cited by number in the plan or included in implementation evidence, but the plan's explicit architectural decisions are fully implemented.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone remaining. The critical data migration issue identified in the first review has been properly resolved by the repair agent.\n\n## Bounded-safe fixes\n\nNone required. The repair agent correctly identified that three of the four initially flagged issues were false positives:\n\n1. ❌ **Empty AcceptInvitationPlug** - does not exist in the codebase\n2. ❌ **Hardcoded club path** - code uses `ClubSite.url(club, \"/\")` and verified routes\n3. ❌ **Unescaped HTML in email** - `EmailTemplates.invitation_html/2` explicitly calls `html_escape/1`\n\nThe fourth issue (data migration) was legitimately blocking and has been fixed.\n\n## Judgement-worthy non-blocking code-health findings\n\n### 1. Migration timestamp oddity (Severity: Low - cosmetic)\n\n**Files**: `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`, `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n\n**Smell**: The backfill migration has a timestamp from June 2026 while the table creation is from June 2025. The backfill correctly runs *after* table creation (20260602 > 20250607 numerically), but the year gap suggests the test/dev environment clock is set to 2026.\n\n**Why it may need human judgement**: Functionally correct but cosmetically odd. If this is deployed to production, migration timestamps from 2026 might confuse maintainers in 2025. Consider regenerating with current timestamps if cosmetic consistency matters.\n\n---\n\n### 2. Virtual email field without accessor helper (Severity: Low - DX)\n\n**Files**: `web/lib/memba/accounts/person.ex`\n\n**Smell**: `Person.email` is virtual; after loading from database, `person.email` is `nil`. Code must navigate `person.email_addresses |> Enum.find(&(&1.is_primary)) |> Map.get(:email)` to access email.\n\n**Why it may need human judgement**: The implementation preloads associations in queries like `find_person_by_email/1`, which works. But ad-hoc code accessing a loaded person might be confused. Consider adding `Person.primary_email/1` helper or documenting the pattern explicitly if maintaining current structure.\n\n---\n\n### 3. Synchronous email delivery (Severity: Low - performance)\n\n**Files**: `web/lib/memba/invitations.ex`\n\n**Smell**: `Memba.Mailer.deliver(email)` is called synchronously during the Staff invitation HTTP request.\n\n**Why it may need human judgement**: Couples UI latency and error handling to email provider response time. Acceptable for MVP with low invitation volume. Consider async job queue (Oban) if invitation volume or deliverability reliability becomes important.\n\n---\n\n### 4. Invitation token generation in projection handler (Severity: Low - architecture)\n\n**Files**: `web/lib/memba/membership/projections/invitation.ex`\n\n**Smell**: `InvitationToken.build_hashed_token()` is called in the projection `handle/2` function when handling `InvitationCreated` events, rather than being produced deterministically from the event data.\n\n**Why it may need human judgement**: In event-sourced systems, projection rebuilds should be deterministic. Rebuilding projections would generate different token hashes, invalidating outstanding invitation links. Acceptable for MVP where:\n- Invitations are one-use anyway\n- Projection rebuilds should be rare\n- Outstanding invitations can be manually reissued if needed\n\nDocument this trade-off explicitly if projection rebuild procedures are formalized.\n\n---\n\n### 5. No database constraint on pending invitation uniqueness (Severity: Low - data integrity)\n\n**Files**: `web/lib/memba/invitations.ex`, invitations table migration\n\n**Smell**: Duplicate detection happens in application code (`cond do pending_invitation = find_pending_invitation(...)`). No partial unique index exists for `(club_id, normalized_email)` where `status = 'pending'`.\n\n**Why it may need human judgement**: Concurrent invites for the same email/club could create duplicate pending invitations and send duplicate emails. Impact is low:\n- Worst case: duplicate emails sent\n- Only one invitation is consumed on acceptance\n- Manual cleanup possible\n\nAdding a partial unique constraint would provide stronger guarantees but add migration complexity. Current approach is acceptable if duplicate emails are tolerable for MVP.\n\n---\n\n## Suggested fixes\n\nNone required. The implementation is production-ready after the repair pass.\n\n## Validation notes\n\n### Repair pass results:\n- ✅ Added/improved `20260602024629_backfill_membership_person_email_addresses.exs` migration with:\n  - Normalization and deduplication via `DISTINCT ON`\n  - Skips blank/null emails\n  - Checks for existing normalized emails (global uniqueness)\n  - Checks for existing primary emails (per-person uniqueness)  \n  - Preserves legacy row timestamps\n  - Proper down migration\n- ✅ Added test coverage for backfill edge cases in `person_email_address_projection_test.exs`\n- ✅ Correctly identified three false positives from first review\n\n### Test coverage:\n- ✅ 722 ExUnit tests, 0 failures (increased from earlier evidence)\n- ✅ 69 Cucumber scenarios, 466 steps, all passing\n- ✅ Domain tests cover invitation lifecycle, duplicates, acceptance flows\n- ✅ Controller tests cover profile completion, existing person flow, token validation\n- ✅ LiveView tests cover Staff invitation UI\n- ✅ Email delivery tests verify templates and recipients\n- ✅ Migration backfill tests cover null/blank/duplicate handling\n\n### Dev check:\n- ✅ Compilation clean\n- ✅ Formatter clean  \n- ✅ All tests green\n- ✅ Sandbox runtime check passed\n\n### Plan conformance:\n- ✅ All 16 numbered implementation steps delivered\n- ✅ Invitation aggregate with pending/accepted/expired states\n- ✅ Separate invitation token storage\n- ✅ Staff invite route under `/admin/clubs/:club_id/invite`\n- ✅ Invitation callback with token validation\n- ✅ Profile completion for unknown invitees\n- ✅ Existing staff onboarding preserved\n- ✅ Acceptance feature scenarios implemented and passing\n\n---\n\n**Overall Assessment**: The repair pass successfully resolved the data migration concern, and the implementation is now production-ready. The false positives in the initial review suggest overly aggressive synthesis; the actual implementation had already addressed those concerns correctly (HTML escaping, route helpers). The remaining non-blocking findings are legitimate MVP trade-offs that don't warrant blocking merge. Accept and proceed to integration.",
+              "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation demonstrates adherence to all architectural decisions stated in the plan:\n\n- ✅ Invit"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 18673,
+                    "output_tokens": 7863,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 173964
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 151997,
+              "tool_time_ms": 0,
+              "active_time_ms": 151997
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 168,
+              "active_time_ms": 168
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "8434f7edcfee1f588326f2c7e5c9348e62abea7e",
+        "node_visits": {
+          "read_plan": 1,
+          "preflight_sandbox": 1,
+          "review_gate": 1,
+          "claude_review": 2,
+          "synthesize_review": 1,
+          "apply_review_fixes": 1,
+          "snapshot_before_review_repair": 1,
+          "dev_check": 2,
+          "verify_review_repair": 1,
+          "start": 1,
+          "gemini_review": 1,
+          "codex_review": 1,
+          "collect_implementation_evidence": 2
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 2,
+          "additions": 65,
+          "deletions": 8
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-08T08:53:05.250196733Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "current_node": "codex_review",
           "internal.retry_count.gemini_review": 0,
           "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"backfill-person-email-addresses\",\n        \"title\": \"Backfill existing people.email values into person_email_addresses\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"cleanup-empty-accept-invitation-plug\",\n        \"title\": \"Remove or document empty AcceptInvitationPlug\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"use-verified-club-route\",\n        \"title\": \"Replace hardcoded club path with verified route\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      },\n      {\n        \"id\": \"escape-invitation-email-html\",\n        \"title\": \"Escape interpolated invitation email HTML values\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
           "internal.work_dir": "/workspace/memba",
@@ -5037,7 +5480,7 @@
           "internal.retry_count.preflight_sandbox": 0,
           "outcome": "succeeded",
           "thread.dev_check.current_node": "collect_implementation_evidence",
-          "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe implementation demonstrates adherence to all architectural decisions stated in the plan:\n\n- ✅ Invit",
+          "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite a specific ADR by number in the provided evidence. Against the architecture-relevan",
           "response.gemini_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\n## ADR Violations\nNone identified. The implementation adheres to the architectural decisions stated in the plan (e.g., using separate invitation token storage, preserving incomplete person creation for profile completion, etc.).\n\n## Blocking Issues\n1. **Missing Data Migration for `people.email` to `person_email_addresses`**\n   The implementation introduces a new `person_email_addresses` table and modifies the `Person` schema to make `email` a virtual field. `Accounts.find_person_by_email/1` has been updated to query the new `person_email_addresses` table instead of the `people` table. However, there is no backfill migration to move existing `people.email` data into `person_email_addresses`.\n   \n   If any existing environment (such as production) contains persisted `people.email` data, those users will no longer be discoverable by email. This breaks duplicate active-member checks, existing-person invitation acceptance, and staff administration for those users. This requires either a data backfill migration or an explicit product decision that existing data can be safely discarded.\n\n## Bounded-Safe Fixes\n1. **Remove or document unused `AcceptInvitationPlug`**\n   `MembaWeb.Authentication.AcceptInvitationPlug` is defined but empty. Either remove it from the `router.ex` pipeline and delete the file, or add a module doc explaining it is a placeholder for future middleware.\n2. **Replace hardcoded club path construction with verified routes**\n   In `accept_invitation_controller.ex`, the helper `defp club_path(club_id), do: \"/clubs/#{club_id}\"` should use Phoenix verified routes (e.g., `~p\"/clubs/#{club_id}\"`) or the project's established subdomain-aware routing pattern.\n3. **Escape interpolated values in invitation email HTML**\n   In `club_member_invitation_email.ex`, `club.name` is interpolated directly into an HTML string (`<h2>You're invited to join #{club.name}!</h2>`). Even if club names are Staff-controlled, it is a safer default to use `Phoenix.HTML.html_escape/1` for generated HTML.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n1. **Synchronous Email Delivery (Performance)**\n   **File(s)**: `web/lib/memba/invitations.ex`\n   **Smell**: Invitation email delivery happens synchronously during the HTTP request.\n   **Why it may need human judgement**: This ties the Staff UI latency and error behavior to the email provider's response time. It is perfectly acceptable for a low-volume MVP, but may need to be moved behind a durable async job (e.g., Oban) as the application scales.\n2. **Virtual `Person.email` field may cause confusion (Maintainability)**\n   **File(s)**: `web/lib/memba/accounts/person.ex`\n   **Smell**: `Person.email` is retained as a virtual field strictly for changeset inputs. After loading a `Person` from the database, `person.email` will be `nil`.\n   **Why it may need human judgement**: Future maintainers may accidentally use the virtual field expecting a value. Adding an explicit accessor like `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n3. **Duplicate pending-invitation race not enforced by database constraint (Data Integrity)**\n   **File(s)**: `web/lib/memba/invitations.ex`, invitations table migration\n   **Smell**: Duplicate detection is performed in the context layer by checking for an existing pending invitation before creating or resending. There is no partial unique database constraint for pending invitations on `{club_id, normalized_email}`.\n   **Why it may need human judgement**: Concurrent invites could theoretically create duplicate pending invitations and send duplicate emails. Adding a unique constraint would provide stronger structural guarantees.\n4. **Invitation token generation in projection/read-model layer (Architecture)**\n   **File(s)**: `web/lib/memba/club_members/projections/invitation.ex`\n   **Smell**: The invitation URL token appears to be generated while handling the invitation projection, rather than being produced as part of the command/event workflow.\n   **Why it may need human judgement**: In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding the projection regenerates different invitation token hashes, outstanding invitation links could be invalidated. This architectural trade-off is worth noting for the future.\n\n## Suggested Fixes\n1. **Add a backfill migration**: Create an Ecto migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, skipping nulls and preserving timestamps.\n2. **Clean up Plug**: Delete `web/lib/memba_web/authentication/accept_invitation_plug.ex` and remove it from `router.ex`.\n3. **Use verified routes**: Update `club_path/1` in `accept_invitation_controller.ex` to use `~p\"/clubs/#{club_id}\"`.\n4. **Escape HTML**: Wrap `club.name` in `Phoenix.HTML.html_escape/1` in `club_member_invitation_email.ex`.\n\n## Validation Notes\n- **Dev Check**: Passed successfully.\n- **Automated Coverage**: 69 scenarios and 466 steps passed. Domain, controller, LiveView, and email delivery tests cover the planned invitation lifecycle correctly.\n- **Migration Safety**: The blocking issue regarding data migration safety was not exposed by the green test suite because test fixtures create fresh data using the new association flow, but it poses a strict risk to deployed environments holding existing records.",
           "review_fixes_available": true,
           "implementation_accepted": false,
@@ -5091,15 +5534,15 @@
             }
           ],
           "response.apply_review_fixes": "Implemented the review repair pass. No acceptance feature files were edited.\n\n## 1. Review issue mapping\n\n| Review issue | Status | Fix / justification |\n|---|---:|---|\n| `backfill-person-email-addresses` | Fixed | Tightened the existing backfill migration so legacy `membership_people.email` data is copied safely into `membership_person_email_addresses`, skipping blank emails, avoiding duplicate normalized emails, avoiding a second primary email for a person, and preserving legacy row timestamps. Added regression coverage. |\n| `cleanup-empty-accept-invitation-plug` | No change needed | Current tree has no `MembaWeb.Authentication.AcceptInvitationPlug` file and no router pipeline using it. The synthesized issue appears already absent in this implementation. |\n| `use-verified-club-route` | No change needed | Current `MembaWeb.ClubMemberInvitationController` does not have a hardcoded `club_path/1`; it redirects through `ClubSite.url(club, \"/\")` and uses verified routes for fallback/auth paths. |\n| `escape-invitation-email-html` | No change needed | Current `Memba.Membership.ClubMemberInvitationEmail` composes HTML via `Memba.EmailTemplates`, which escapes dynamic text. Existing tests already cover malicious club names like `West <Coast>\\r\\nBcc: ...`. |\n\n## 2. Files changed\n\n### Backfill existing `people.email` values into `person_email_addresses`\n\n- `web/priv/repo/migrations/20260602024629_backfill_membership_person_email_addresses.exs`\n  - Uses a normalized source subquery.\n  - Skips blank legacy email values.\n  - Uses `DISTINCT ON (lower(btrim(person.email)))` to avoid duplicate normalized email inserts.\n  - Skips rows whose normalized email already exists.\n  - Skips rows for people who already have a primary email address.\n  - Preserves `membership_people.inserted_at` / `updated_at` instead of using `now()`.\n\n- `web/test/memba/membership/person_email_address_projection_test.exs`\n  - Added coverage that the backfill skips blank legacy emails.\n  - Added coverage that duplicate normalized legacy emails do not create duplicate projection rows.\n  - Added coverage that existing primary email rows are not duplicated.\n\n## 3. Tests run\n\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Passed.\n  - ExUnit: `722 tests, 0 failures`\n  - Acceptance: `69 scenarios (69 passed)`, `466 steps (466 passed)`\n\nNotes:\n- I also attempted a direct focused command, `cd web && mix test test/memba/membership/person_email_address_projection_test.exs`, but direct `mix test` outside the dev helper could not connect to the sandbox-managed Postgres socket at `/tmp/devenv/postgres/.s.PGSQL.15432`. The required `dev check` path started/managed services correctly and passed.\n\n## 4. Remaining gaps / human questions\n\n- No remaining gaps for the selected automatic repair issues.\n- If production legacy data contains multiple people with the same normalized email, the backfill now avoids breaking the new unique index by backfilling one deterministic row. Human/data cleanup may still be useful later to reconcile those duplicate legacy people, but that is outside this bounded repair.",
-          "last_stage": "claude_review",
-          "internal.thread_id": "collect_implementation_evidence",
+          "last_stage": "codex_review",
+          "internal.thread_id": "claude_review",
           "graph.max_node_visits": "160",
           "failure_signature": "",
           "internal.retry_count.collect_implementation_evidence": 0,
           "internal.node_visit_count": 2,
           "internal.retry_count.claude_review": 0,
           "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
-          "response.codex_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: Medium\n\nThe implementation appears broadly plan-conforming and `dev ci` passed, but there is one deployment-safety gap around the `PersonEmailAddress` storage change that needs either a small implementation pass or an explicit human decision before merge/deploy.\n\n## ADR conformance: PASS\n\nNo clear ADR violation is evident from the provided implementation evidence.\n\nThe implementation appears to respect the plan’s architecture-relevant decisions:\n\n- Invitation tokens use separate storage from ordinary sign-in tokens.\n- Unknown invited emails remain pending invitations; incomplete `Person` records are not created before profile completion.\n- Invitation acceptance consumes tokens only after successful acceptance/profile completion.\n- Existing complete people can accept and become club members directly.\n- The Staff invite route is additive and does not replace the existing person edit route.\n\n## ADR violations\n\nNone identified from the available evidence.\n\n## Blocking issues\n\n1. **Potentially unsafe migration from `people.email` to `person_email_addresses` without backfill or explicit no-data decision**\n\n   **Files:**\n\n   - `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`\n   - `web/lib/memba/accounts/person.ex`\n   - `web/lib/memba/accounts.ex`\n\n   **Issue:**\n\n   The implementation appears to move email lookup behavior from `people.email` to the new `person_email_addresses` association. `Person.email` is now virtual, and `Accounts.find_person_by_email/1` appears to query `person_email_addresses.normalized_email`.\n\n   The evidence does not show a migration that backfills existing `people.email` values into `person_email_addresses`.\n\n   **Why this blocks:**\n\n   If any existing environment contains persisted `people.email` data, those people may no longer be discoverable by email after deployment. That can affect:\n\n   - duplicate active-member checks;\n   - existing-person invitation acceptance;\n   - sign-in/onboarding flows that rely on finding a person by email;\n   - adjacent Staff/person administration behavior.\n\n   This is not merely polish if real data exists. It needs one of:\n\n   - a data backfill migration;\n   - an explicit human/product decision that no deployed database contains relevant `people.email` data and backfill is unnecessary;\n   - or a compatibility path that reads both old and new storage until migration is complete.\n\n## Bounded-safe fixes\n\n1. **Remove or document the empty invitation plug**\n\n   **Files:**\n\n   - `web/lib/memba_web/authentication/accept_invitation_plug.ex`\n   - `web/lib/memba_web/router.ex`\n\n   `MembaWeb.Authentication.AcceptInvitationPlug` appears to be an empty/pass-through plug. If it has no behavior today, it adds routing/authentication indirection without value.\n\n2. **Replace hardcoded club path construction with verified routes**\n\n   **File:**\n\n   - `web/lib/memba_web/controllers/accept_invitation_controller.ex`\n\n   The helper:\n\n   ```elixir\n   defp club_path(club_id) do\n     \"/clubs/#{club_id}\"\n   end\n   ```\n\n   should use Phoenix verified routes, e.g. `~p\"/clubs/#{club_id}\"`, or the project’s established club-routing helper if club access is subdomain-aware.\n\n3. **Escape interpolated values in invitation email HTML**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   The email HTML appears to interpolate `club.name` directly into an HTML string. Even if club names are Staff-controlled, escaping is the safer default for generated HTML.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation in projection/read-model layer**\n\n   **Files:**\n\n   - `web/lib/memba/club_members/projections/invitation.ex`\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   The invitation URL token appears to be generated while handling the invitation projection rather than being produced as part of the command/event workflow.\n\n   **Why this may need human judgement:**\n\n   In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding projections regenerates different invitation token hashes, outstanding invitation links may become invalid. That may be acceptable for this slice, but it is an architectural trade-off worth making explicit.\n\n2. **Synchronous email delivery during Staff invite request**\n\n   **File:**\n\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   Invitation email delivery appears to happen synchronously during the invite workflow.\n\n   **Why this may need human judgement:**\n\n   This is simple and acceptable for low-volume MVP usage, but it couples Staff UI latency and error behavior to the mail provider. If invitation volume or deliverability reliability becomes important, this should move behind a durable async job.\n\n3. **Duplicate pending-invitation race not enforced by database constraint**\n\n   **Files:**\n\n   - `web/lib/memba/invitations.ex`\n   - invitation projection/table migration\n\n   **Smell:**\n\n   Duplicate detection appears to be performed in application code by looking for a pending invitation before creating/resending. There does not appear to be a partial unique database constraint for pending invitations by `{club_id, normalized_email}`.\n\n   **Why this may need human judgement:**\n\n   Concurrent invites for the same email and club could create duplicate pending invitations and send duplicate emails. The behavioral impact is probably low, but database constraints are usually better for enforcing uniqueness when the invariant matters.\n\n4. **Virtual `Person.email` field may confuse future maintainers**\n\n   **Files:**\n\n   - `web/lib/memba/accounts/person.ex`\n   - callers that need a person’s email address\n\n   **Smell:**\n\n   `Person.email` appears to be retained as a virtual changeset input while persisted email addresses live in `person_email_addresses`.\n\n   **Why this may need human judgement:**\n\n   After loading a `Person`, `person.email` will be `nil` unless manually populated. Future code may accidentally use the virtual field and miss the associated email addresses. A clear accessor such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n\n5. **Invitation email template is intentionally minimal**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   **Smell:**\n\n   The email appears functional but basic: minimal branding, no reusable template, and no styling system.\n\n   **Why this may need human judgement:**\n\n   This is acceptable for an implementation slice, but before broader production use, invitation emails may need product/design review.\n\n## Suggested fixes\n\nBecause the decision is `REJECT`, address the blocking migration/data compatibility issue first.\n\nRecommended implementation options:\n\n1. **Preferred: add a backfill migration**\n\n   Add a migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, preserving existing people for duplicate checks and invitation acceptance.\n\n   The migration should:\n\n   - skip blank/null emails;\n   - normalize using the same semantics as the application where practical;\n   - avoid duplicate rows;\n   - preserve timestamps;\n   - be safe to run once in deployed environments.\n\n2. **Alternative: explicit human decision**\n\n   If Matt confirms there is no deployed/persistent data requiring migration, record that decision in the iteration notes or an appropriate technical note, then the blocker can be waived.\n\n3. **Then apply bounded-safe cleanup**\n\n   - Remove the empty `AcceptInvitationPlug` or give it a real documented responsibility.\n   - Replace hardcoded `\"/clubs/#{club_id}\"` with verified routes.\n   - Escape interpolated email HTML values.\n\n## Validation notes\n\n- `dev ci` succeeded.\n- Acceptance suite succeeded: `69 scenarios`, `466 steps`.\n- Sandbox runtime check passed.\n- The implementation appears to cover the main planned flows:\n  - Staff invite form;\n  - invitation email link;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - duplicate active-member block;\n  - duplicate pending invitation resend;\n  - accepted-link reuse behavior.\n- The remaining blocker is not exposed by the green test suite because it concerns migration behavior for pre-existing persisted `people.email` data.",
+          "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite a specific ADR by number in the provided evidence. Against the architecture-relevant decisions stated in the plan and the implementation evidence, the implementation appears conformant:\n\n- Invitation links use separate invitation-token storage rather than ordinary sign-in tokens.\n- Unknown invitees remain pending invitations until profile completion; no incomplete `Person` record is created on first link open.\n- Profile-completion state is kept in the invitation/session journey for this slice.\n- Existing complete people can accept directly, creating membership, consuming the token, signing in, and landing in the club.\n- Tokens are not consumed for unknown invitees on first open; they are consumed only on successful profile completion / acceptance.\n- Staff invite routing is additive under the club admin area and does not replace the existing person edit route.\n- Direct Staff club-member creation from arbitrary name/email appears decommissioned in favour of invitations.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\nThe earlier blocking concern about migrating legacy email data appears to have been addressed by the repair pass via a backfill migration for existing `membership_people.email` values into `membership_person_email_addresses`, with regression coverage for blank, duplicate, and already-primary cases.\n\nThe other synthesized blockers appear to have been false positives in the reviewed tree:\n\n1. No empty `AcceptInvitationPlug` is present or wired.\n2. Club redirects use `ClubSite.url(club, \"/\")` / verified routing patterns rather than a hardcoded `\"/clubs/#{club_id}\"` helper.\n3. Invitation email HTML is produced through escaping-aware email template code.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation happens in projection/read-model handling**\n\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`, related invitation token/read-model code\n   - **Smell:** The raw invitation token / hash appears to be generated while handling the `InvitationCreated` projection rather than being included deterministically in the command/event flow.\n   - **Why it may need human judgement:** In event-sourced systems, projection rebuilds are ideally deterministic. Regenerating invitation token hashes during rebuild could invalidate outstanding invitation links. This may be acceptable for this MVP slice, but it is worth documenting before projection rebuilds become operationally routine.\n\n2. **Synchronous email delivery during Staff invite flow**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation email delivery path\n   - **Smell:** Invitation email delivery appears to happen synchronously as part of the Staff invite request.\n   - **Why it may need human judgement:** This is simple and reasonable for low-volume Staff usage, but it couples UI latency and failure behaviour to the mail provider. If invitation volume or reliability expectations grow, this should likely move behind a durable async job.\n\n3. **Pending-invitation uniqueness is application-enforced**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation table migration/projection\n   - **Smell:** Duplicate pending invitation handling appears to rely on application-level lookup/resend logic rather than a partial unique database constraint on `{club_id, normalized_email}` for pending invitations.\n   - **Why it may need human judgement:** Concurrent Staff invites for the same club/email could theoretically create duplicate pending invitations or duplicate emails. The practical impact is probably low, but if “one pending invite per club/email” is a hard invariant, a database constraint would be stronger.\n\n4. **`Person.email` as a virtual field can be misleading**\n\n   - **Files:** `web/lib/memba/accounts/person.ex`, callers using person email data\n   - **Smell:** Persisted email addresses now live in `person_email_addresses`, while `Person.email` remains virtual for changeset/form input. Loaded `Person` structs may therefore have `person.email == nil`.\n   - **Why it may need human judgement:** Future maintainers may accidentally read `person.email` expecting persisted data. A helper such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would make the intended access pattern clearer.\n\n## Suggested fixes\n\nNo required fixes for this merge.\n\nOptional follow-ups:\n\n- Document or revisit projection-time invitation token generation before relying on projection rebuilds.\n- Consider async/durable delivery for invitation emails if usage grows.\n- Consider a partial unique index for pending invitations if duplicate pending invites become operationally meaningful.\n- Add an explicit primary-email accessor to reduce confusion around the virtual `Person.email` field.\n\n## Validation notes\n\n- `dev ci` passed.\n- ExUnit suite passed: `722 tests, 0 failures`.\n- Acceptance suite passed: `69 scenarios`, `466 steps`.\n- Browser/acceptance coverage includes Staff invitation UI, invitation email link, profile completion, and final redirects.\n- Domain/application coverage appears to include:\n  - pending invitation creation;\n  - duplicate active-member block;\n  - duplicate pending invitation resend;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - abandoned profile completion;\n  - accepted-link reuse.\n- Repair pass added/confirmed migration coverage for legacy email backfill edge cases.\n- Acceptance feature files were not modified during the repair pass.",
           "internal.retry_count.review_gate": 0,
           "thread.claude_review.current_node": "codex_review",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
@@ -5247,9 +5690,9 @@
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
-              "last_response": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: Medium\n\nThe implementation appears broadly plan-conforming and `dev ci` passed, but there is one deployment-safety gap around the `Person",
               "last_stage": "codex_review",
-              "response.codex_review": "# Iteration Review Report\n\n## Decision: REJECT\n\n## Confidence: Medium\n\nThe implementation appears broadly plan-conforming and `dev ci` passed, but there is one deployment-safety gap around the `PersonEmailAddress` storage change that needs either a small implementation pass or an explicit human decision before merge/deploy.\n\n## ADR conformance: PASS\n\nNo clear ADR violation is evident from the provided implementation evidence.\n\nThe implementation appears to respect the plan’s architecture-relevant decisions:\n\n- Invitation tokens use separate storage from ordinary sign-in tokens.\n- Unknown invited emails remain pending invitations; incomplete `Person` records are not created before profile completion.\n- Invitation acceptance consumes tokens only after successful acceptance/profile completion.\n- Existing complete people can accept and become club members directly.\n- The Staff invite route is additive and does not replace the existing person edit route.\n\n## ADR violations\n\nNone identified from the available evidence.\n\n## Blocking issues\n\n1. **Potentially unsafe migration from `people.email` to `person_email_addresses` without backfill or explicit no-data decision**\n\n   **Files:**\n\n   - `web/priv/repo/migrations/20250607031033_add_person_email_addresses_table.exs`\n   - `web/lib/memba/accounts/person.ex`\n   - `web/lib/memba/accounts.ex`\n\n   **Issue:**\n\n   The implementation appears to move email lookup behavior from `people.email` to the new `person_email_addresses` association. `Person.email` is now virtual, and `Accounts.find_person_by_email/1` appears to query `person_email_addresses.normalized_email`.\n\n   The evidence does not show a migration that backfills existing `people.email` values into `person_email_addresses`.\n\n   **Why this blocks:**\n\n   If any existing environment contains persisted `people.email` data, those people may no longer be discoverable by email after deployment. That can affect:\n\n   - duplicate active-member checks;\n   - existing-person invitation acceptance;\n   - sign-in/onboarding flows that rely on finding a person by email;\n   - adjacent Staff/person administration behavior.\n\n   This is not merely polish if real data exists. It needs one of:\n\n   - a data backfill migration;\n   - an explicit human/product decision that no deployed database contains relevant `people.email` data and backfill is unnecessary;\n   - or a compatibility path that reads both old and new storage until migration is complete.\n\n## Bounded-safe fixes\n\n1. **Remove or document the empty invitation plug**\n\n   **Files:**\n\n   - `web/lib/memba_web/authentication/accept_invitation_plug.ex`\n   - `web/lib/memba_web/router.ex`\n\n   `MembaWeb.Authentication.AcceptInvitationPlug` appears to be an empty/pass-through plug. If it has no behavior today, it adds routing/authentication indirection without value.\n\n2. **Replace hardcoded club path construction with verified routes**\n\n   **File:**\n\n   - `web/lib/memba_web/controllers/accept_invitation_controller.ex`\n\n   The helper:\n\n   ```elixir\n   defp club_path(club_id) do\n     \"/clubs/#{club_id}\"\n   end\n   ```\n\n   should use Phoenix verified routes, e.g. `~p\"/clubs/#{club_id}\"`, or the project’s established club-routing helper if club access is subdomain-aware.\n\n3. **Escape interpolated values in invitation email HTML**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   The email HTML appears to interpolate `club.name` directly into an HTML string. Even if club names are Staff-controlled, escaping is the safer default for generated HTML.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation in projection/read-model layer**\n\n   **Files:**\n\n   - `web/lib/memba/club_members/projections/invitation.ex`\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   The invitation URL token appears to be generated while handling the invitation projection rather than being produced as part of the command/event workflow.\n\n   **Why this may need human judgement:**\n\n   In an event-sourced system, projection rebuilds should usually be deterministic. If rebuilding projections regenerates different invitation token hashes, outstanding invitation links may become invalid. That may be acceptable for this slice, but it is an architectural trade-off worth making explicit.\n\n2. **Synchronous email delivery during Staff invite request**\n\n   **File:**\n\n   - `web/lib/memba/invitations.ex`\n\n   **Smell:**\n\n   Invitation email delivery appears to happen synchronously during the invite workflow.\n\n   **Why this may need human judgement:**\n\n   This is simple and acceptable for low-volume MVP usage, but it couples Staff UI latency and error behavior to the mail provider. If invitation volume or deliverability reliability becomes important, this should move behind a durable async job.\n\n3. **Duplicate pending-invitation race not enforced by database constraint**\n\n   **Files:**\n\n   - `web/lib/memba/invitations.ex`\n   - invitation projection/table migration\n\n   **Smell:**\n\n   Duplicate detection appears to be performed in application code by looking for a pending invitation before creating/resending. There does not appear to be a partial unique database constraint for pending invitations by `{club_id, normalized_email}`.\n\n   **Why this may need human judgement:**\n\n   Concurrent invites for the same email and club could create duplicate pending invitations and send duplicate emails. The behavioral impact is probably low, but database constraints are usually better for enforcing uniqueness when the invariant matters.\n\n4. **Virtual `Person.email` field may confuse future maintainers**\n\n   **Files:**\n\n   - `web/lib/memba/accounts/person.ex`\n   - callers that need a person’s email address\n\n   **Smell:**\n\n   `Person.email` appears to be retained as a virtual changeset input while persisted email addresses live in `person_email_addresses`.\n\n   **Why this may need human judgement:**\n\n   After loading a `Person`, `person.email` will be `nil` unless manually populated. Future code may accidentally use the virtual field and miss the associated email addresses. A clear accessor such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would reduce ambiguity.\n\n5. **Invitation email template is intentionally minimal**\n\n   **File:**\n\n   - `web/lib/memba_web/email/club_member_invitation_email.ex`\n\n   **Smell:**\n\n   The email appears functional but basic: minimal branding, no reusable template, and no styling system.\n\n   **Why this may need human judgement:**\n\n   This is acceptable for an implementation slice, but before broader production use, invitation emails may need product/design review.\n\n## Suggested fixes\n\nBecause the decision is `REJECT`, address the blocking migration/data compatibility issue first.\n\nRecommended implementation options:\n\n1. **Preferred: add a backfill migration**\n\n   Add a migration that copies existing `people.email` rows into `person_email_addresses` with normalized email values, preserving existing people for duplicate checks and invitation acceptance.\n\n   The migration should:\n\n   - skip blank/null emails;\n   - normalize using the same semantics as the application where practical;\n   - avoid duplicate rows;\n   - preserve timestamps;\n   - be safe to run once in deployed environments.\n\n2. **Alternative: explicit human decision**\n\n   If Matt confirms there is no deployed/persistent data requiring migration, record that decision in the iteration notes or an appropriate technical note, then the blocker can be waived.\n\n3. **Then apply bounded-safe cleanup**\n\n   - Remove the empty `AcceptInvitationPlug` or give it a real documented responsibility.\n   - Replace hardcoded `\"/clubs/#{club_id}\"` with verified routes.\n   - Escape interpolated email HTML values.\n\n## Validation notes\n\n- `dev ci` succeeded.\n- Acceptance suite succeeded: `69 scenarios`, `466 steps`.\n- Sandbox runtime check passed.\n- The implementation appears to cover the main planned flows:\n  - Staff invite form;\n  - invitation email link;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - duplicate active-member block;\n  - duplicate pending invitation resend;\n  - accepted-link reuse behavior.\n- The remaining blocker is not exposed by the green test suite because it concerns migration behavior for pre-existing persisted `people.email` data."
+              "response.codex_review": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite a specific ADR by number in the provided evidence. Against the architecture-relevant decisions stated in the plan and the implementation evidence, the implementation appears conformant:\n\n- Invitation links use separate invitation-token storage rather than ordinary sign-in tokens.\n- Unknown invitees remain pending invitations until profile completion; no incomplete `Person` record is created on first link open.\n- Profile-completion state is kept in the invitation/session journey for this slice.\n- Existing complete people can accept directly, creating membership, consuming the token, signing in, and landing in the club.\n- Tokens are not consumed for unknown invitees on first open; they are consumed only on successful profile completion / acceptance.\n- Staff invite routing is additive under the club admin area and does not replace the existing person edit route.\n- Direct Staff club-member creation from arbitrary name/email appears decommissioned in favour of invitations.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone.\n\nThe earlier blocking concern about migrating legacy email data appears to have been addressed by the repair pass via a backfill migration for existing `membership_people.email` values into `membership_person_email_addresses`, with regression coverage for blank, duplicate, and already-primary cases.\n\nThe other synthesized blockers appear to have been false positives in the reviewed tree:\n\n1. No empty `AcceptInvitationPlug` is present or wired.\n2. Club redirects use `ClubSite.url(club, \"/\")` / verified routing patterns rather than a hardcoded `\"/clubs/#{club_id}\"` helper.\n3. Invitation email HTML is produced through escaping-aware email template code.\n\n## Bounded-safe fixes\n\nNone required before merge.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Invitation token generation happens in projection/read-model handling**\n\n   - **Files:** `web/lib/memba/membership/projections/invitation.ex`, related invitation token/read-model code\n   - **Smell:** The raw invitation token / hash appears to be generated while handling the `InvitationCreated` projection rather than being included deterministically in the command/event flow.\n   - **Why it may need human judgement:** In event-sourced systems, projection rebuilds are ideally deterministic. Regenerating invitation token hashes during rebuild could invalidate outstanding invitation links. This may be acceptable for this MVP slice, but it is worth documenting before projection rebuilds become operationally routine.\n\n2. **Synchronous email delivery during Staff invite flow**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation email delivery path\n   - **Smell:** Invitation email delivery appears to happen synchronously as part of the Staff invite request.\n   - **Why it may need human judgement:** This is simple and reasonable for low-volume Staff usage, but it couples UI latency and failure behaviour to the mail provider. If invitation volume or reliability expectations grow, this should likely move behind a durable async job.\n\n3. **Pending-invitation uniqueness is application-enforced**\n\n   - **Files:** `web/lib/memba/invitations.ex`, invitation table migration/projection\n   - **Smell:** Duplicate pending invitation handling appears to rely on application-level lookup/resend logic rather than a partial unique database constraint on `{club_id, normalized_email}` for pending invitations.\n   - **Why it may need human judgement:** Concurrent Staff invites for the same club/email could theoretically create duplicate pending invitations or duplicate emails. The practical impact is probably low, but if “one pending invite per club/email” is a hard invariant, a database constraint would be stronger.\n\n4. **`Person.email` as a virtual field can be misleading**\n\n   - **Files:** `web/lib/memba/accounts/person.ex`, callers using person email data\n   - **Smell:** Persisted email addresses now live in `person_email_addresses`, while `Person.email` remains virtual for changeset/form input. Loaded `Person` structs may therefore have `person.email == nil`.\n   - **Why it may need human judgement:** Future maintainers may accidentally read `person.email` expecting persisted data. A helper such as `Person.primary_email/1` or `Accounts.primary_email_for_person/1` would make the intended access pattern clearer.\n\n## Suggested fixes\n\nNo required fixes for this merge.\n\nOptional follow-ups:\n\n- Document or revisit projection-time invitation token generation before relying on projection rebuilds.\n- Consider async/durable delivery for invitation emails if usage grows.\n- Consider a partial unique index for pending invitations if duplicate pending invites become operationally meaningful.\n- Add an explicit primary-email accessor to reduce confusion around the virtual `Person.email` field.\n\n## Validation notes\n\n- `dev ci` passed.\n- ExUnit suite passed: `722 tests, 0 failures`.\n- Acceptance suite passed: `69 scenarios`, `466 steps`.\n- Browser/acceptance coverage includes Staff invitation UI, invitation email link, profile completion, and final redirects.\n- Domain/application coverage appears to include:\n  - pending invitation creation;\n  - duplicate active-member block;\n  - duplicate pending invitation resend;\n  - existing-person acceptance;\n  - unknown-person profile completion;\n  - abandoned profile completion;\n  - accepted-link reuse.\n- Repair pass added/confirmed migration coverage for legacy email backfill edge cases.\n- Acceptance feature files were not modified during the repair pass.",
+              "last_response": "# Iteration Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe plan did not cite a specific ADR by number in the provided evidence. Against the architecture-relevan"
             },
             "notes": "Stage completed: codex_review",
             "usage": {
@@ -5260,9 +5703,9 @@
                     "model_id": "gpt-5.5"
                   },
                   "tokens": {
-                    "input_tokens": 8263,
-                    "output_tokens": 1704,
-                    "reasoning_tokens": 2588,
+                    "input_tokens": 16748,
+                    "output_tokens": 1097,
+                    "reasoning_tokens": 1034,
                     "cache_read_tokens": 0,
                     "cache_write_tokens": 0
                   }
@@ -5271,13 +5714,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 170075
+              "total_usd_micros": 147670
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 81485,
+              "inference_time_ms": 54659,
               "tool_time_ms": 0,
-              "active_time_ms": 81485
+              "active_time_ms": 54659
             }
           },
           "read_plan": {
@@ -5419,11 +5862,11 @@
             }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
           "collect_implementation_evidence": 2,
           "claude_review": 2,
-          "codex_review": 1,
+          "codex_review": 2,
           "gemini_review": 1,
           "verify_review_repair": 1,
           "start": 1,
@@ -6158,6 +6601,34 @@
       },
       "state": "succeeded"
     },
+    "codex_review@2": {
+      "first_event_seq": 335,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-08T08:52:10.512934644Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "synthesize_review@1": {
       "first_event_seq": 95,
       "prompt": null,
@@ -6206,7 +6677,12 @@
       "first_event_seq": 325,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-08T08:52:07.028641874Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -6220,15 +6696,26 @@
       "output": null,
       "started_at": "2026-06-08T08:49:34.957225484Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 152071,
+        "inference_time_ms": 151997,
+        "tool_time_ms": 0,
+        "active_time_ms": 151997
+      },
       "usage": {
-        "input_tokens": 0,
-        "output_tokens": 0,
-        "total_tokens": 0,
+        "input_tokens": 18673,
+        "output_tokens": 7863,
+        "total_tokens": 26536,
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 173964
       },
-      "state": "running"
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
+      },
+      "state": "succeeded"
     },
     "collect_implementation_evidence@1": {
       "first_event_seq": 55,
