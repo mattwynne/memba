@@ -1,6 +1,6 @@
 # Implementation TODO
 
-- [ ] 001 Inspect current Staff club/person routes and forms, especially any club-scoped create-person/add-member path and `/admin/clubs/:club_id/people/:person_id/edit`.
+- [x] 001 Inspect current Staff club/person routes and forms, especially any club-scoped create-person/add-member path and `/admin/clubs/:club_id/people/:person_id/edit`.
 - [ ] 002 Inspect the existing auth sign-in token and staff onboarding flow to decide how to reuse or extend it for invitation acceptance without mixing ordinary short-lived sign-in links with membership-granting invitation links.
 - [ ] 003 Add a minimal club invitation model in the Membership boundary, event-sourced if consistent with nearby Membership aggregates:
 - [ ] 004 Add public Membership APIs/commands for Staff/system use:
