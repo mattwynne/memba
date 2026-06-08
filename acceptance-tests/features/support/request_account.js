@@ -329,7 +329,7 @@ function assertClubExists(clubName, expectedSlug) {
 }
 
 function assertActiveMember(world, personName, clubName) {
-  const membership = activeMembership(personName, clubName, requestEmailFor(personName));
+  const membership = activeMembership(personName, clubName, requestEmailFor(personName, world));
 
   assert.ok(membership, `Expected ${personName} to be an active member of ${clubName}`);
   world.memberships[`${clubName}:${personName}`] = {
@@ -418,7 +418,7 @@ async function followWelcomeLink(world, personName) {
 
 async function assertSignedInToClub(world, personName, clubName) {
   const club = world.clubs[clubName] || clubByName(clubName);
-  const email = requestEmailFor(personName);
+  const email = requestEmailFor(personName, world);
 
   assert.ok(club, `Expected ${clubName} to be known before asserting signed-in club access`);
   world.clubs[clubName] = { clubId: club.clubId, name: club.clubName || clubName, slug: club.clubSlug || club.slug };
@@ -446,8 +446,9 @@ function requestRow(world, clubName) {
   );
 }
 
-function requestEmailFor(personName) {
-  return emailFor(personName);
+function requestEmailFor(personName, world = null) {
+  const person = world && world.people && world.people[personName];
+  return person && person.email ? person.email : emailFor(personName);
 }
 
 function personFor(world, personName) {

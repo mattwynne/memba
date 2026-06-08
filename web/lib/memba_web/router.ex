@@ -88,6 +88,9 @@ defmodule MembaWeb.Router do
     end
 
     get "/auth/sign-in/:token", AuthController, :callback
+    get "/invitations/club-members/profile", ClubMemberInvitationController, :profile
+    post "/invitations/club-members/profile", ClubMemberInvitationController, :complete_profile
+    get "/invitations/club-members/:token", ClubMemberInvitationController, :callback
     delete "/auth", AuthController, :delete
     get "/about", PageController, :about
     get "/get-started", PageController, :get_started
@@ -105,6 +108,7 @@ defmodule MembaWeb.Router do
       live "/requests/:request_id", RequestsLive.Index, :convert
       live "/people", PeopleLive.Index
       live "/clubs/:club_id", ClubsLive.Show
+      live "/clubs/:club_id/invitations/new", ClubMemberInvitationsLive.New
       live "/clubs/:club_id/people/new", PeopleLive.New
       live "/clubs/:club_id/people/:person_id/edit", PeopleLive.Edit
       live "/deliveries", DeliveriesLive.Index

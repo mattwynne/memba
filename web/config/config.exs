@@ -13,6 +13,7 @@ config :memba,
   event_sourced_projection_tables: [
     :projection_versions,
     :membership_clubs,
+    :membership_club_invitations,
     :membership_memberships,
     :membership_member_permissions,
     :membership_role_assignments,

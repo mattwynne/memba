@@ -32,7 +32,9 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
     assert has_element?(view, "#people-records-card #people[aria-label='People']")
     assert has_element?(view, "#people-records-card #person-#{person.person_id}", "Alice Example")
     assert has_element?(view, "#memberships-card", "Memberships")
-    assert has_element?(view, "#memberships-card #add-member-form[aria-label='Add a member']")
+    assert has_element?(view, "#memberships-card #invite-member-link", "Invite member")
+    assert has_element?(view, "#memberships-invitation-notice", "Invitation required")
+    refute has_element?(view, "#memberships-card #add-member-form")
     assert has_element?(view, "#memberships-card #members[aria-label='Members']")
     assert has_element?(view, "#memberships-card #member-#{person.person_id}", "Alice Example")
   end
@@ -317,7 +319,9 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
            )
   end
 
-  test "staff can add an existing person as a club member", %{conn: conn} do
+  test "staff are directed to invitations instead of adding existing people directly", %{
+    conn: conn
+  } do
     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
     alice = insert_membership_person!(name: "Alice Example", email: "alice@example.com")
 
@@ -328,14 +332,23 @@ defmodule MembaWeb.Admin.ClubsLive.ShowTest do
 
     assert has_element?(view, "#people [data-testid='person-row']", "Alice Example")
     refute has_element?(view, "#members [data-testid='member-row']", "Alice Example")
+    refute has_element?(view, "#add-member-form")
 
-    view
-    |> form("#add-member-form", membership: %{person_id: alice.person_id})
-    |> render_submit()
+    assert has_element?(
+             view,
+             "#invite-member-link[href='/admin/clubs/#{club.club_id}/invitations/new']"
+           )
 
-    assert has_element?(view, "#flash-info", "Member added")
-    assert has_element?(view, "#members [data-testid='member-row']", "Alice Example")
-    assert Membership.active_member_of_club?(club.club_id, alice.person_id)
+    assert has_element?(
+             view,
+             "#memberships-invitation-notice",
+             "Staff no longer create active club memberships directly"
+           )
+
+    render_hook(view, "add_member", %{"membership" => %{"person_id" => alice.person_id}})
+
+    assert_redirect(view, ~p"/admin/clubs/#{club.club_id}/invitations/new")
+    refute Membership.active_member_of_club?(club.club_id, alice.person_id)
   end
 
   test "staff can remove a member from a club", %{conn: conn} do

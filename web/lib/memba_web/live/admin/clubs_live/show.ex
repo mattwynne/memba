@@ -4,8 +4,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
   alias Memba.Membership
   alias MembaWeb.Admin.ClubSlugForm
 
-  @empty_membership %{"person_id" => ""}
-
   @impl Phoenix.LiveView
   def mount(%{"club_id" => club_id}, _session, socket) do
     club = Membership.get_club(club_id)
@@ -20,7 +18,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
      |> assign_club_slug_feedback(club)
      |> assign(:people_count, length(people))
      |> assign(:member_count, length(members))
-     |> assign(:person_options, person_options(people))
      |> stream(:people, people, dom_id: &"person-#{&1.person_id}")
      |> stream(:members, members, dom_id: &"member-#{&1.id}")}
   end
@@ -61,36 +58,11 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
     end
   end
 
-  def handle_event("add_member", %{"membership" => membership_params}, socket) do
-    attrs =
-      membership_params
-      |> Map.take(["person_id"])
-      |> Map.merge(%{
-        "membership_id" => Memba.ID.generate(:membership),
-        "club_id" => socket.assigns.club_id
-      })
-
-    case Membership.add_member(attrs, consistency: :strong) do
-      :ok ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Member added")
-         |> assign(:membership_form, to_form(@empty_membership, as: :membership))
-         |> refresh_members()}
-
-      {:ok, _result} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Member added")
-         |> assign(:membership_form, to_form(@empty_membership, as: :membership))
-         |> refresh_members()}
-
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> put_flash(:error, "Could not add member: #{format_reason(reason)}")
-         |> assign(:membership_form, to_form(membership_params, as: :membership))}
-    end
+  def handle_event("add_member", _params, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, "Invite members by email instead of adding active memberships directly.")
+     |> push_navigate(to: ~p"/admin/clubs/#{socket.assigns.club_id}/invitations/new")}
   end
 
   def handle_event("remove_member", %{"membership_id" => membership_id}, socket) do
@@ -380,42 +352,41 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
               id="memberships-card"
               class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
             >
-              <div class="border-b border-[#e6e3dc] p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
-                  Memberships
-                </p>
-                <h2 class="mt-1 text-lg font-semibold text-[#15201c]">Active club memberships</h2>
-                <p class="mt-1 text-sm text-[#7d877f]">
-                  Add or remove the links that make existing people active members of this club.
-                </p>
+              <div class="flex items-start justify-between gap-4 border-b border-[#e6e3dc] p-5">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                    Memberships
+                  </p>
+                  <h2 class="mt-1 text-lg font-semibold text-[#15201c]">
+                    Active club memberships
+                  </h2>
+                  <p class="mt-1 text-sm text-[#7d877f]">
+                    Members become active after accepting an invitation. Existing active members
+                    can still be removed from this club.
+                  </p>
+                </div>
+
+                <.link
+                  id="invite-member-link"
+                  navigate={~p"/admin/clubs/#{@club_id}/invitations/new"}
+                  aria-label="Invite member"
+                  class="inline-flex shrink-0 rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+                >
+                  Invite member
+                </.link>
               </div>
 
-              <.form
-                for={@membership_form}
-                id="add-member-form"
-                aria-label="Add a member"
-                class="space-y-4 border-b border-[#e6e3dc] bg-[#f7f6f3] p-5"
-                phx-submit="add_member"
+              <div
+                id="memberships-invitation-notice"
+                class="border-b border-[#e6e3dc] bg-[#f7f6f3] p-5"
               >
-                <.input
-                  field={@membership_form[:person_id]}
-                  id="member-person-select"
-                  label="Person"
-                  type="select"
-                  aria-label="Person to add as member"
-                  prompt="Choose a person"
-                  options={@person_options}
-                  required
-                />
-                <.button
-                  id="add-member-button"
-                  type="submit"
-                  aria-label="Add selected person as member"
-                  class="inline-flex items-center justify-center rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
-                >
-                  Add member
-                </.button>
-              </.form>
+                <p class="text-sm font-semibold text-[#15201c]">Invitation required</p>
+                <p class="mt-1 max-w-3xl text-sm text-[#4b5a55]">
+                  Staff no longer create active club memberships directly. Send an invitation so
+                  the person controls their email address and completes any required profile
+                  details before membership starts.
+                </p>
+              </div>
 
               <div class="overflow-x-auto">
                 <table
@@ -578,7 +549,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
       :club_form,
       ClubSlugForm.to_form(ClubSlugForm.params_from_club(socket.assigns.club))
     )
-    |> assign(:membership_form, to_form(@empty_membership, as: :membership))
   end
 
   defp refresh_club(socket) do
@@ -600,8 +570,6 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
     |> assign(:member_count, length(members))
     |> stream(:members, members, reset: true, dom_id: &"member-#{&1.id}")
   end
-
-  defp person_options(people), do: Enum.map(people, &{&1.name, &1.person_id})
 
   defp people_with_email_summaries(people) do
     Enum.map(people, fn person ->

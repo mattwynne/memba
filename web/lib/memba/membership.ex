@@ -9,15 +9,20 @@ defmodule Memba.Membership do
   alias Memba.Membership.App
   alias Memba.Membership.Authorization
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+  alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.EmailAddresses
+  alias Memba.Membership.InvitationToken
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person
   alias Memba.Membership.Projections.PersonEmailAddress
@@ -94,6 +99,133 @@ defmodule Memba.Membership do
     with {:ok, command} <- add_member_command(attrs),
          :ok <- prevent_duplicate_active_membership(command) do
       dispatch(command, dispatch_opts)
+    end
+  end
+
+  @doc """
+  Create a pending club member invitation for an email address.
+
+  The public API generates the plaintext one-use invitation token before
+  dispatch and stores only its hash in Membership. The caller may supply
+  `:invitation_id`/`"invitation_id"`; otherwise this application service
+  generates the caller-side aggregate identity before dispatching the command.
+
+  Returns `{:ok, %{invitation_id: ..., invitation_token: ...}}` on successful
+  dispatch so the caller can hand the plaintext token to the email delivery
+  layer without persisting it.
+  """
+  def invite_club_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, command, invitation_token} <- invite_club_member_command(attrs),
+         :ok <- prevent_inviting_active_club_member(command) do
+      case get_pending_club_member_invitation_by_email(command.club_id, command.email) do
+        %ClubInvitation{} = invitation ->
+          resend_pending_club_member_invitation(invitation, dispatch_opts)
+
+        nil ->
+          with {:ok, dispatch_result} <-
+                 dispatch_invitation_token_command(command, dispatch_opts) do
+            {:ok,
+             invitation_token_result(
+               command.invitation_id,
+               invitation_token,
+               :execution_result,
+               dispatch_result
+             )}
+          end
+      end
+    end
+  end
+
+  @doc """
+  Resend an existing pending club member invitation.
+
+  The pending invitation can be addressed either by `:invitation_id` or by the
+  same `:club_id`/`:email` pair that was invited. Resending rotates the stored
+  invitation token hash and returns a fresh plaintext token for email delivery.
+  """
+  def resend_club_member_invitation(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, invitation} <- pending_invitation_for_resend(attrs),
+         {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
+         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
+      {:ok,
+       invitation_token_result(
+         command.invitation_id,
+         invitation_token,
+         :execution_result,
+         dispatch_result
+       )}
+    end
+  end
+
+  @doc """
+  Accept a pending invitation for an existing complete person.
+
+  This orchestration creates an ordinary active membership for the invited club
+  and then marks the invitation accepted with the person and membership IDs. The
+  caller supplies `:person_id` and may supply `:membership_id`; otherwise this
+  application service generates the membership aggregate identity before
+  dispatch.
+  """
+  def accept_club_member_invitation_for_existing_person(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, invitation} <- pending_invitation_for_acceptance(attrs),
+         {:ok, person_id} <- fetch_required(attrs, :person_id),
+         {:ok, person_id} <- cast_person_id(person_id),
+         {:ok, _person} <- fetch_existing_person(person_id),
+         :ok <- ensure_person_has_invitation_email(person_id, invitation),
+         {:ok, membership_id} <- invitation_membership_id(attrs),
+         {:ok, membership_id} <- cast_membership_id(membership_id),
+         {:ok, add_member_command} <-
+           invitation_add_member_command(invitation, person_id, membership_id),
+         :ok <- prevent_duplicate_active_membership(add_member_command),
+         {:ok, add_member_result} <-
+           dispatch_acceptance_command(add_member_command, dispatch_opts),
+         {:ok, accept_command} <-
+           accept_club_member_invitation_command(invitation, person_id, membership_id),
+         {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
+      {:ok,
+       acceptance_result(invitation, person_id, membership_id, add_member_result, accept_result)}
+    end
+  end
+
+  @doc """
+  Complete an invited unknown person's required profile and accept the invitation.
+
+  The invitee's person record is not created until this API receives a valid
+  non-blank name. It creates the person using the invited email, creates an
+  ordinary active membership for the invited club, and then marks the invitation
+  accepted. The caller may supply `:person_id` and `:membership_id`; otherwise
+  this application service generates both aggregate identities before dispatch.
+  """
+  def complete_invited_club_member_profile(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, invitation} <- pending_invitation_for_acceptance(attrs),
+         {:ok, name} <- fetch_required(attrs, :name),
+         {:ok, person_id} <- invitation_person_id(attrs),
+         {:ok, person_id} <- cast_person_id(person_id),
+         {:ok, membership_id} <- invitation_membership_id(attrs),
+         {:ok, membership_id} <- cast_membership_id(membership_id),
+         :ok <-
+           prevent_duplicate_person_email_addresses(person_id, [
+             %{normalized_email: invitation.normalized_email}
+           ]),
+         {:ok, create_person_command} <-
+           invitation_create_person_command(invitation, person_id, name),
+         {:ok, add_member_command} <-
+           invitation_add_member_command(invitation, person_id, membership_id),
+         {:ok, create_person_result} <-
+           dispatch_acceptance_command(create_person_command, dispatch_opts),
+         {:ok, add_member_result} <-
+           dispatch_acceptance_command(add_member_command, dispatch_opts),
+         {:ok, accept_command} <-
+           accept_club_member_invitation_command(invitation, person_id, membership_id),
+         {:ok, accept_result} <- dispatch_acceptance_command(accept_command, dispatch_opts) do
+      {:ok,
+       invitation
+       |> acceptance_result(person_id, membership_id, add_member_result, accept_result)
+       |> Map.put(:person_execution_result, create_person_result)}
     end
   end
 
@@ -558,6 +690,54 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a projected club member invitation by typed invitation ID.
+
+  Returns `nil` for missing, invalid, or unknown invitation IDs.
+  """
+  def get_club_member_invitation(invitation_id) do
+    with {:ok, invitation_id} <- ID.cast(:club_invitation, invitation_id) do
+      Repo.get(ClubInvitation, invitation_id)
+    else
+      :error -> nil
+    end
+  end
+
+  @doc """
+  Fetch the pending invitation for a club/email pair.
+
+  Email lookup is normalized by trimming whitespace and comparing
+  case-insensitively. Accepted invitations and invalid inputs return `nil`.
+  """
+  def get_pending_club_member_invitation_by_email(club_id, email) do
+    with {:ok, club_id} <- ID.cast(:club, club_id),
+         {:ok, email} <- EmailAddresses.normalize_email(email) do
+      ClubInvitation
+      |> where([invitation], invitation.club_id == ^club_id)
+      |> where([invitation], invitation.normalized_email == ^email.normalized_email)
+      |> where([invitation], invitation.status == "pending")
+      |> limit(1)
+      |> Repo.one()
+    else
+      _invalid -> nil
+    end
+  end
+
+  @doc """
+  Fetch a projected club member invitation by plaintext invitation token.
+
+  Invitation tokens are stored only as SHA-256 hashes. Both pending invitations
+  and accepted invitations can be found so accepted links can be reopened
+  idempotently without creating duplicate memberships.
+  """
+  def get_club_member_invitation_by_token(token) when is_binary(token) do
+    token
+    |> InvitationToken.hash_token()
+    |> then(&Repo.get_by(ClubInvitation, token_hash: &1))
+  end
+
+  def get_club_member_invitation_by_token(_token), do: nil
+
+  @doc """
   Return whether a person currently has an app-defined club-scoped permission.
 
   Permission checks are answered from Membership's projected permission state so
@@ -680,6 +860,63 @@ defmodule Memba.Membership do
     end
   end
 
+  defp invite_club_member_command(attrs) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, email} <- fetch_required(attrs, :email),
+         {:ok, invitation_id} <- invitation_id(attrs) do
+      invitation_token = InvitationToken.generate_token()
+
+      {:ok,
+       %InviteClubMember{
+         invitation_id: invitation_id,
+         club_id: club_id,
+         email: email,
+         token_hash: InvitationToken.hash_token(invitation_token)
+       }, invitation_token}
+    end
+  end
+
+  defp resend_club_member_invitation_command(%ClubInvitation{} = invitation) do
+    invitation_token = InvitationToken.generate_token()
+
+    {:ok,
+     %ResendClubMemberInvitation{
+       invitation_id: invitation.invitation_id,
+       token_hash: InvitationToken.hash_token(invitation_token)
+     }, invitation_token}
+  end
+
+  defp invitation_create_person_command(%ClubInvitation{} = invitation, person_id, name) do
+    {:ok,
+     %CreatePerson{
+       person_id: person_id,
+       name: name,
+       email_addresses: [%{email: invitation.email, is_primary: true}]
+     }}
+  end
+
+  defp invitation_add_member_command(%ClubInvitation{} = invitation, person_id, membership_id) do
+    {:ok,
+     %AddMember{
+       membership_id: membership_id,
+       club_id: invitation.club_id,
+       person_id: person_id
+     }}
+  end
+
+  defp accept_club_member_invitation_command(
+         %ClubInvitation{} = invitation,
+         person_id,
+         membership_id
+       ) do
+    {:ok,
+     %AcceptClubMemberInvitation{
+       invitation_id: invitation.invitation_id,
+       person_id: person_id,
+       membership_id: membership_id
+     }}
+  end
+
   defp remove_member_command(attrs) do
     with {:ok, membership_id} <- fetch_required(attrs, :membership_id) do
       {:ok, %RemoveMember{membership_id: membership_id}}
@@ -735,6 +972,14 @@ defmodule Memba.Membership do
     end
   end
 
+  defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
+    if active_member_of_club_by_email?(command.club_id, command.email) do
+      {:error, :already_active_member}
+    else
+      :ok
+    end
+  end
+
   defp ensure_active_membership(club_id, person_id, membership_id) do
     with {:ok, club_id} <- ID.cast(:club, club_id),
          {:ok, person_id} <- ID.cast(:person, person_id),
@@ -754,6 +999,73 @@ defmodule Memba.Membership do
       end
     else
       :error -> {:error, :member_not_active}
+    end
+  end
+
+  defp pending_invitation_for_resend(attrs) do
+    case fetch_optional(attrs, :invitation_id) do
+      {:ok, invitation_id} ->
+        invitation_id
+        |> get_club_member_invitation()
+        |> ensure_pending_invitation()
+
+      :error ->
+        with {:ok, club_id} <- fetch_required(attrs, :club_id),
+             {:ok, email} <- fetch_required(attrs, :email) do
+          club_id
+          |> get_pending_club_member_invitation_by_email(email)
+          |> ensure_pending_invitation()
+        end
+    end
+  end
+
+  defp pending_invitation_for_acceptance(attrs) do
+    with {:ok, invitation_id} <- fetch_required(attrs, :invitation_id) do
+      invitation_id
+      |> get_club_member_invitation()
+      |> ensure_pending_invitation()
+    end
+  end
+
+  defp ensure_pending_invitation(nil), do: {:error, :pending_invitation_not_found}
+
+  defp ensure_pending_invitation(%ClubInvitation{status: "pending"} = invitation),
+    do: {:ok, invitation}
+
+  defp ensure_pending_invitation(%ClubInvitation{status: "accepted"}),
+    do: {:error, :already_accepted}
+
+  defp resend_pending_club_member_invitation(%ClubInvitation{} = invitation, dispatch_opts) do
+    with {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
+         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
+      {:ok,
+       invitation_token_result(
+         command.invitation_id,
+         invitation_token,
+         :execution_result,
+         dispatch_result
+       )}
+    end
+  end
+
+  defp fetch_existing_person(person_id) do
+    case get_person(person_id) do
+      %Person{} = person -> {:ok, person}
+      nil -> {:error, :person_not_found}
+    end
+  end
+
+  defp ensure_person_has_invitation_email(person_id, %ClubInvitation{} = invitation) do
+    has_invited_email? =
+      PersonEmailAddress
+      |> where([email_address], email_address.person_id == ^person_id)
+      |> where([email_address], email_address.normalized_email == ^invitation.normalized_email)
+      |> Repo.exists?()
+
+    if has_invited_email? do
+      :ok
+    else
+      {:error, :invitation_email_mismatch}
     end
   end
 
@@ -847,6 +1159,22 @@ defmodule Memba.Membership do
     end
   end
 
+  defp dispatch_invitation_token_command(command, dispatch_opts) do
+    case dispatch(command, dispatch_opts) do
+      :ok -> {:ok, :ok}
+      {:ok, _result} = ok -> ok
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp dispatch_acceptance_command(command, dispatch_opts) do
+    case dispatch(command, dispatch_opts) do
+      :ok -> {:ok, :ok}
+      {:ok, _result} = ok -> ok
+      {:error, _reason} = error -> error
+    end
+  end
+
   defp dispatch(command, dispatch_opts) do
     case App.dispatch(command, dispatch_opts) do
       :ok -> :ok
@@ -862,6 +1190,27 @@ defmodule Memba.Membership do
       %{^key => value} -> {:ok, value}
       %{^string_key => value} -> {:ok, value}
       _attrs -> {:error, {:missing_required_attribute, key}}
+    end
+  end
+
+  defp invitation_id(attrs) do
+    case fetch_optional(attrs, :invitation_id) do
+      {:ok, invitation_id} -> {:ok, invitation_id}
+      :error -> {:ok, ID.generate(:club_invitation)}
+    end
+  end
+
+  defp invitation_person_id(attrs) do
+    case fetch_optional(attrs, :person_id) do
+      {:ok, person_id} -> {:ok, person_id}
+      :error -> {:ok, ID.generate(:person)}
+    end
+  end
+
+  defp invitation_membership_id(attrs) do
+    case fetch_optional(attrs, :membership_id) do
+      {:ok, membership_id} -> {:ok, membership_id}
+      :error -> {:ok, ID.generate(:membership)}
     end
   end
 
@@ -907,6 +1256,13 @@ defmodule Memba.Membership do
     end
   end
 
+  defp cast_membership_id(membership_id) do
+    case ID.cast(:membership, membership_id) do
+      {:ok, membership_id} -> {:ok, membership_id}
+      :error -> {:error, :invalid_membership_id}
+    end
+  end
+
   defp club_slug(attrs, name) do
     case fetch_optional(attrs, :slug) do
       {:ok, ""} -> Slug.default_from_name(name) |> Slug.validate()
@@ -923,4 +1279,38 @@ defmodule Memba.Membership do
   end
 
   defp normalize_email(_email), do: nil
+
+  defp invitation_token_result(invitation_id, invitation_token, :execution_result, :ok) do
+    %{invitation_id: invitation_id, invitation_token: invitation_token}
+  end
+
+  defp invitation_token_result(
+         invitation_id,
+         invitation_token,
+         :execution_result,
+         execution_result
+       ) do
+    %{
+      invitation_id: invitation_id,
+      invitation_token: invitation_token,
+      execution_result: execution_result
+    }
+  end
+
+  defp acceptance_result(
+         %ClubInvitation{} = invitation,
+         person_id,
+         membership_id,
+         add_member_result,
+         accept_result
+       ) do
+    %{
+      invitation_id: invitation.invitation_id,
+      club_id: invitation.club_id,
+      person_id: person_id,
+      membership_id: membership_id,
+      membership_execution_result: add_member_result,
+      invitation_execution_result: accept_result
+    }
+  end
 end
