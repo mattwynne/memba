@@ -180,6 +180,33 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "club subdomain dashboard exposes the member invite action to Membership Admins without a club_id query",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        slug: "wcp"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "wcp.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    refute has_element?(view, "#club-members #member-invite-member-link[href*='club_id=']")
+  end
+
   test "dashboard keeps the member invite action hidden from ordinary members", %{conn: conn} do
     alice =
       create_active_member(

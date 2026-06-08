@@ -132,6 +132,24 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     end
   end
 
+  test "direct LiveView mount rejects ordinary members before rendering the invitation action",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers"
+      )
+
+    assert_raise MembaWeb.ForbiddenError, fn ->
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
+    end
+
+    refute Repo.exists?(Memba.Membership.Projections.ClubInvitation)
+  end
+
   test "club subdomain routed GET requires the current club member to have club.manage_members",
        %{conn: conn} do
     _alice =
