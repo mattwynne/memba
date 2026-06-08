@@ -25,6 +25,15 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     )
   end
 
+  step "{word} is a Membership Admin of {word} {word} {word}",
+       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
+    ensure_membership_administrator(
+      context,
+      person_name,
+      club_name(club_word_1, club_word_2, club_word_3)
+    )
+  end
+
   step "{word} is the only Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)

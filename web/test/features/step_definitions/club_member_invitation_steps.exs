@@ -6,6 +6,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
@@ -56,7 +57,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     club_name = club_name(word_1, word_2, word_3)
 
     context
-    |> ensure_signed_in_staff(actor_name)
+    |> ensure_actor_signed_in_for_invitation(actor_name, club_name)
     |> invite_email(actor_name, email, club_name)
     |> assert_invitation_received(email, club_name)
   end
@@ -102,18 +103,14 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     club_name = club_name(word_1, word_2, word_3)
     context = ensure_person(context, person_name)
     email = email_for_person(context, person_name)
-    club_id = fetch_club_id!(ensure_club(context, club_name), club_name)
+    try_invite_email(context, actor_name, email, club_name, person_name)
+  end
 
-    result =
-      Membership.invite_club_member(%{club_id: club_id, email: email}, consistency: :strong)
+  step "{word} tries to invite {string} to join {word} {word} {word}",
+       %{args: [actor_name, email, word_1, word_2, word_3]} = context do
+    club_name = club_name(word_1, word_2, word_3)
 
-    context
-    |> Map.put(:last_club_member_invitation_result, result)
-    |> Map.put(:last_club_member_invitation_attempt, %{
-      actor_name: actor_name,
-      person_name: person_name,
-      club_name: club_name
-    })
+    try_invite_email(context, actor_name, email, club_name, person_name_from_email(email))
   end
 
   step "{word} follows the invitation link", %{args: [person_name]} = context do
@@ -179,6 +176,11 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     assert_active_member(context, person_name, club_name(word_1, word_2, word_3))
   end
 
+  step "{word} should be an ordinary member of {word} {word} {word}",
+       %{args: [person_name, word_1, word_2, word_3]} = context do
+    assert_ordinary_member(context, person_name, club_name(word_1, word_2, word_3))
+  end
+
   step "{word} should be signed in to {word} {word} {word}",
        %{args: [person_name, word_1, word_2, word_3]} = context do
     club_name = club_name(word_1, word_2, word_3)
@@ -215,6 +217,30 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     context
   end
 
+  step "{word} should be told she cannot invite members to {word} {word} {word}",
+       %{args: [_actor_name, word_1, word_2, word_3]} = context do
+    expected_club_name = club_name(word_1, word_2, word_3)
+
+    assert {:error, :unauthorized} = Map.fetch!(context, :last_club_member_invitation_result)
+
+    assert %{club_name: ^expected_club_name} =
+             Map.fetch!(context, :last_club_member_invitation_attempt)
+
+    context
+  end
+
+  step "{string} should not receive an invitation to join {word} {word} {word}",
+       %{args: [email, word_1, word_2, word_3]} = context do
+    normalized_email = normalize_email!(email)
+    club_name = club_name(word_1, word_2, word_3)
+    club_id = fetch_club_id!(context, club_name)
+
+    refute get_in(context, [:club_member_invitations, {club_name, normalized_email}])
+    assert sent_invitation_count(context, club_name, normalized_email) == 0
+    assert pending_invitation_count(club_id, normalized_email) == 0
+    context
+  end
+
   step "there should still be only one pending invitation for {string} to join {word} {word} {word}",
        %{args: [email, word_1, word_2, word_3]} = context do
     club_name = club_name(word_1, word_2, word_3)
@@ -241,6 +267,17 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     end
   end
 
+  defp ensure_actor_signed_in_for_invitation(context, actor_name, club_name) do
+    case known_person(context, actor_name) do
+      %PersonProjection{} ->
+        sign_in_as(context, actor_name)
+
+      nil ->
+        ensure_signed_in_staff(context, actor_name)
+    end
+    |> ensure_club(club_name)
+  end
+
   defp invite_email(context, actor_name, email, club_name) do
     normalized_email = normalize_email!(email)
     person_name = person_name_from_email(normalized_email)
@@ -253,9 +290,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     club_id = fetch_club_id!(context, club_name)
 
     assert {:ok, %{invitation_id: invitation_id, invitation_token: invitation_token}} =
-             Membership.invite_club_member(%{club_id: club_id, email: normalized_email},
-               consistency: :strong
-             )
+             invite_club_member_for_actor(context, actor_name, club_id, normalized_email)
 
     context
     |> update_context_map(:club_member_invitations, {club_name, normalized_email}, %{
@@ -270,6 +305,48 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
       {club_name, normalized_email},
       sent_invitation_count(context, club_name, normalized_email) + 1
     )
+  end
+
+  defp try_invite_email(context, actor_name, email, club_name, person_name) do
+    normalized_email = normalize_email!(email)
+
+    context =
+      context
+      |> ensure_club(club_name)
+      |> put_person_email_if_missing(person_name, normalized_email)
+
+    club_id = fetch_club_id!(context, club_name)
+    result = invite_club_member_for_actor(context, actor_name, club_id, normalized_email)
+
+    context
+    |> Map.put(:last_club_member_invitation_result, result)
+    |> Map.put(:last_club_member_invitation_attempt, %{
+      actor_name: actor_name,
+      person_name: person_name,
+      club_name: club_name,
+      email: normalized_email
+    })
+  end
+
+  defp invite_club_member_for_actor(context, actor_name, club_id, email) do
+    case known_person(context, actor_name) do
+      %PersonProjection{person_id: actor_person_id, email: actor_email} ->
+        if Accounts.staff_email?(actor_email) do
+          invite_club_member_by_staff(club_id, email)
+        else
+          Membership.invite_club_member_as_club_member(
+            %{club_id: club_id, email: email, actor_person_id: actor_person_id},
+            consistency: :strong
+          )
+        end
+
+      nil ->
+        invite_club_member_by_staff(club_id, email)
+    end
+  end
+
+  defp invite_club_member_by_staff(club_id, email) do
+    Membership.invite_club_member(%{club_id: club_id, email: email}, consistency: :strong)
   end
 
   defp assert_invitation_received(context, recipient, club_name) do
@@ -365,6 +442,20 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
     email = email_for_person(context, person_name)
 
     assert active_membership_count_by_email(club_id, email) == 1
+    context
+  end
+
+  defp assert_ordinary_member(context, person_name, club_name) do
+    context = assert_active_member(context, person_name, club_name)
+    club_id = fetch_club_id!(context, club_name)
+    person = fetch_person!(context, person_name)
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             person.person_id,
+             Permissions.club_manage_members()
+           )
+
     context
   end
 
@@ -468,6 +559,19 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
       name: person.name,
       email: person.email
     })
+  end
+
+  defp known_person(context, person_name) do
+    case get_in(context, [:people, person_name]) do
+      %{person_id: person_id} when is_binary(person_id) ->
+        Membership.get_person(person_id)
+
+      %{email: email} ->
+        Membership.get_person_by_email(email)
+
+      _missing ->
+        nil
+    end
   end
 
   defp remember_active_membership(context, person_name, club_name) do
