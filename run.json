@@ -1371,7 +1371,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-08T21:12:11.895388977Z",
-  "last_event_at": "2026-06-08T22:54:55.809676200Z",
+  "last_event_at": "2026-06-08T22:54:59.149118197Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -11279,9 +11279,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1889,
       "checkpoint": {
-        "timestamp": "2026-06-08T22:54:55.830044558Z",
+        "timestamp": "2026-06-08T22:54:59.074846707Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -11325,6 +11325,333 @@
         ],
         "node_retries": {},
         "context_values": {
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.validate_task": 0,
+          "internal.retry_count.start": 0,
+          "graph.max_node_visits": "80",
+          "task_list_complete": false,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.read_plan": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "task_retry_available": false,
+          "internal.node_visit_count": 6,
+          "internal.retry_count.task_gate": 0,
+          "failure_class": "",
+          "internal.work_dir": "/workspace/memba",
+          "thread.start.current_node": "read_plan",
+          "thread.read_plan.current_node": "wip_gate",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.fidelity": "summary:high",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.resume_gate.current_node": "sync_task_list",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - `/tmp/fabro-pre-validate-snapshot.md` shows clean status at pre-validation.\n  - Recent checkpoint `67d27b7 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks 001–004 checked and task 005 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/test/memba_web/live/member_dashboard_live_test.exs`\n    - Adds a club-subdomain dashboard test proving ordinary members do not see `#member-invite-member-link` or links to `/members/invitations/new`.\n  - `web/test/memba_web/live/member_invitation_live/new_test.exs`\n    - Adds a club-subdomain routed GET test proving an ordinary member direct request to `/members/invitations/new` raises `MembaWeb.ForbiddenError`.\n  - Existing production authorization path supports the tests:\n    - `MemberInvitationLive.New` calls `Authorization.authorize_manage_members/2` during mount and raises `MembaWeb.ForbiddenError` on unauthorized context.\n    - `club.html.heex` renders `#member-invite-member-link` only when `@current_member_can_manage_members?`.\n\n- Tests run/results found:\n  - Focused test command was attempted live:\n    - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_invitation_live/new_test.exs`\n    - It was blocked before ExUnit by an existing Postgres `postmaster.pid` lock.\n  - Live fallback validation passed:\n    - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n    - Result: `730 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes:\n  - Scope matches task 005: ordinary members cannot see the invite action and direct club-subdomain URL access is rejected.\n  - No acceptance feature files were edited; checkpoint changed only `todo.md` and two web test files.\n  - The work is a small, independent test-coverage checkpoint and does not delete, weaken, or defer later plan-required invitation lifecycle work.\n  - Relevant constraints are respected: permission behavior uses existing projection-backed authorization, user-facing behavior is covered by LiveView/controller tests, and the member-facing surface remains LiveView-based.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.retry_count.sync_task_list": 0,
+          "internal.retry_count.wip_gate": 0,
+          "graph.default_fidelity": "summary:high",
+          "outcome": "succeeded",
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "internal.run_id": "01KTMH67CQ5X0YKQHP6F6C7MZD",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "current_node": "implement_next_task",
+          "internal.thread_id": "all_tasks_done",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n\n2. **Changes made**\n   - Updated `web/lib/memba_web/live/member_invitation_live/new.ex`\n     - Added an email-only member-facing invitation form.\n     - Submits through the existing shared `Membership.invite_club_member/2` application service.\n     - Sends via the existing `ClubMemberInvitationEmail` module.\n     - Reuses the existing invitation callback/profile-completion route by generating the same `/invitations/club-members/:token` link shape.\n     - Surfaces shared duplicate-active-member and duplicate-pending-resend outcomes with Membership Admin-facing flash messages.\n   - Added `web/test/memba_web/live/member_invitation_live/send_test.exs`\n     - Proves a Membership Admin invitation creates a pending invitation, sends the one-use email link, and carries an unknown invitee through existing profile completion.\n     - Proves duplicate pending submission resends and preserves one pending invitation.\n     - Proves active member duplicate rejection uses the shared duplicate rule and sends no email.\n\n3. **Validation**\n   - Attempted focused test:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_invitation_live/send_test.exs`\n     - Blocked before ExUnit by sandbox Postgres wrapper/PGHOST readiness issue.\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/live/member_invitation_live/new.ex test/memba_web/live/member_invitation_live/send_test.exs`\n     - Passed.\n   - Compile check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix compile --warnings-as-errors`\n     - Passed.\n   - Full project check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed, including `69 scenarios (69 passed), 466 steps (466 passed)`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n   - To:\n     - `- [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002: invitation writes continue through the Membership Commanded application service.\n   - ADR 0009: duplicate checks and assertions use projected Membership read models.\n   - ADR 0011: invitation IDs/tokens remain generated by the application service, not by the aggregate.\n   - ADR 0021/0022: full validation passed with existing projection/read-model synchronization patterns; no new polling endpoint or read-model bypass was introduced.\n   - LiveView guidance: member-facing invitation remains a LiveView route and tests use LiveView/PhoenixTest selectors and outcomes.",
+          "task_list_needs_human": false,
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "command.output": "blob://sha256/8fb32327d152b4a69740fede22b120a04ea355fafc61e27ca6d73dcb7989b0f0",
+          "graph.rankdir": "LR",
+          "internal.retry_count.resume_gate": 0,
+          "last_stage": "implement_next_task",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "thread.validate_task.current_node": "task_gate",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.all_tasks_done": 0,
+          "last_response": "1. **Selected todo line**\n   - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplica",
+          "failure_signature": "",
+          "task_valid": true,
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.wip_gate.current_node": "preflight_sandbox"
+        },
+        "node_outcomes": {
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "last_stage": "all_tasks_done",
+              "task_list_needs_human": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 19558,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 113,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 102020
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 3510,
+              "tool_time_ms": 0,
+              "active_time_ms": 3510
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf8908dd2f5abd88cf0ed7ee323b5560b367e613e9a8f5fef3ae3ccbfa2e7867"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 264225,
+              "active_time_ms": 264225
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/50584871dc4a056e13ab15a27e28abc14770bae3cdbd884ddcc27f7d77970355"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 194,
+              "active_time_ms": 194
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8fb32327d152b4a69740fede22b120a04ea355fafc61e27ca6d73dcb7989b0f0"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 178,
+              "active_time_ms": 178
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5402be3e65ac587701668c9cb9a7fa94261fd34399cf3d3c8bcc04e476dc8baf"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 237,
+              "active_time_ms": 237
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "1. **Selected todo line**\n   - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplica",
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n\n2. **Changes made**\n   - Updated `web/lib/memba_web/live/member_invitation_live/new.ex`\n     - Added an email-only member-facing invitation form.\n     - Submits through the existing shared `Membership.invite_club_member/2` application service.\n     - Sends via the existing `ClubMemberInvitationEmail` module.\n     - Reuses the existing invitation callback/profile-completion route by generating the same `/invitations/club-members/:token` link shape.\n     - Surfaces shared duplicate-active-member and duplicate-pending-resend outcomes with Membership Admin-facing flash messages.\n   - Added `web/test/memba_web/live/member_invitation_live/send_test.exs`\n     - Proves a Membership Admin invitation creates a pending invitation, sends the one-use email link, and carries an unknown invitee through existing profile completion.\n     - Proves duplicate pending submission resends and preserves one pending invitation.\n     - Proves active member duplicate rejection uses the shared duplicate rule and sends no email.\n\n3. **Validation**\n   - Attempted focused test:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_invitation_live/send_test.exs`\n     - Blocked before ExUnit by sandbox Postgres wrapper/PGHOST readiness issue.\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/live/member_invitation_live/new.ex test/memba_web/live/member_invitation_live/send_test.exs`\n     - Passed.\n   - Compile check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix compile --warnings-as-errors`\n     - Passed.\n   - Full project check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed, including `69 scenarios (69 passed), 466 steps (466 passed)`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n   - To:\n     - `- [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002: invitation writes continue through the Membership Commanded application service.\n   - ADR 0009: duplicate checks and assertions use projected Membership read models.\n   - ADR 0011: invitation IDs/tokens remain generated by the application service, not by the aggregate.\n   - ADR 0021/0022: full validation passed with existing projection/read-model synchronization patterns; no new polling endpoint or read-model bypass was introduced.\n   - LiveView guidance: member-facing invitation remains a LiveView route and tests use LiveView/PhoenixTest selectors and outcomes."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 908638,
+                    "output_tokens": 12269,
+                    "reasoning_tokens": 4247,
+                    "cache_read_tokens": 2203648,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 6140494
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 389630,
+              "tool_time_ms": 342796,
+              "active_time_ms": 732426
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/703cf2d1adec38b06b2b86ae0b1dee4b0e13d34fcb59edf7fd3ba297ee89bd98"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 178,
+              "active_time_ms": 178
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/653eb9ffccad930ee63fa8d751d7a280a2bc444d6786f16fceb0598aea0f3721"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2492,
+              "active_time_ms": 2492
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - `/tmp/fabro-pre-validate-snapshot.md` shows clean status at pre-validation.\n  - Recent checkpoint `67d27b7 fabro(...): implement_next_task (succeeded)` changed exactly one ordinary todo line:\n    - `005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks 001–004 checked and task 005 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/test/memba_web/live/member_dashboard_live_test.exs`\n    - Adds a club-subdomain dashboard test proving ordinary members do not see `#member-invite-member-link` or links to `/members/invitations/new`.\n  - `web/test/memba_web/live/member_invitation_live/new_test.exs`\n    - Adds a club-subdomain routed GET test proving an ordinary member direct request to `/members/invitations/new` raises `MembaWeb.ForbiddenError`.\n  - Existing production authorization path supports the tests:\n    - `MemberInvitationLive.New` calls `Authorization.authorize_manage_members/2` during mount and raises `MembaWeb.ForbiddenError` on unauthorized context.\n    - `club.html.heex` renders `#member-invite-member-link` only when `@current_member_can_manage_members?`.\n\n- Tests run/results found:\n  - Focused test command was attempted live:\n    - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_invitation_live/new_test.exs`\n    - It was blocked before ExUnit by an existing Postgres `postmaster.pid` lock.\n  - Live fallback validation passed:\n    - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n    - Result: `730 tests, 0 failures`.\n  - Working tree remained clean after validation.\n\n- ADR/plan conformance notes:\n  - Scope matches task 005: ordinary members cannot see the invite action and direct club-subdomain URL access is rejected.\n  - No acceptance feature files were edited; checkpoint changed only `todo.md` and two web test files.\n  - The work is a small, independent test-coverage checkpoint and does not delete, weaken, or defer later plan-required invitation lifecycle work.\n  - Relevant constraints are respected: permission behavior uses existing projection-backed authorization, user-facing behavior is covered by LiveView/controller tests, and the member-facing surface remains LiveView-based.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_stage": "validate_task",
+              "task_retry_available": false,
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live working tree is clean.\n  - `/tmp/fabro-pre-validate-snapshot.md` shows clean status at pre-validation.\n  - Rece",
+              "task_valid": true
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 213142,
+                    "output_tokens": 2148,
+                    "reasoning_tokens": 1402,
+                    "cache_read_tokens": 230400,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1287410
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 96810,
+              "tool_time_ms": 63931,
+              "active_time_ms": 160741
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "f3565b77d0a6ffa9beecdab49fe4bd756d7a84bf",
+        "node_visits": {
+          "pre_validate_snapshot": 5,
+          "implement_next_task": 6,
+          "read_plan": 1,
+          "all_tasks_done": 6,
+          "start": 1,
+          "resume_gate": 1,
+          "wip_gate": 1,
+          "validate_task": 5,
+          "task_gate": 5,
+          "preflight_sandbox": 1,
+          "sync_task_list": 6
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md\nindex e5b4772..2b7f045 100644\n--- a/docs/iterations/029-membership-admin-invitations/todo.md\n+++ b/docs/iterations/029-membership-admin-invitations/todo.md\n@@ -5,7 +5,7 @@\n - [x] 003 Add a member-facing route/action for inviting club members, scoped to the current club.\n - [x] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.\n - [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.\n-- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.\n+- [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.\n - [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.\n - [ ] 008 Keep the Admin invitation form email-only.\n - [ ] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.\ndiff --git a/web/lib/memba_web/live/member_invitation_live/new.ex b/web/lib/memba_web/live/member_invitation_live/new.ex\nindex 5e5df05..5c2489f 100644\n--- a/web/lib/memba_web/live/member_invitation_live/new.ex\n+++ b/web/lib/memba_web/live/member_invitation_live/new.ex\n@@ -11,6 +11,11 @@ defmodule MembaWeb.MemberInvitationLive.New do\n   alias Memba.Accounts\n   alias Memba.Membership\n   alias Memba.Membership.Authorization\n+  alias Memba.Membership.ClubMemberInvitationEmail\n+  alias Memba.Membership.EmailAddresses\n+\n+  @empty_invitation %{\"email\" => \"\"}\n+  @empty_errors %{email: []}\n \n   @impl Phoenix.LiveView\n   def mount(params, session, socket) when is_map(params) do\n@@ -27,7 +32,8 @@ defmodule MembaWeb.MemberInvitationLive.New do\n       {:ok,\n        socket\n        |> assign(:route_params, params)\n-       |> assign(invitation_assigns)}\n+       |> assign(invitation_assigns)\n+       |> assign_form(@empty_invitation, @empty_errors)}\n     else\n       _missing_or_forbidden_context ->\n         forbidden!(socket)\n@@ -36,6 +42,43 @@ defmodule MembaWeb.MemberInvitationLive.New do\n \n   def mount(_params, _session, socket), do: forbidden!(socket)\n \n+  @impl Phoenix.LiveView\n+  def handle_event(\"validate_invitation\", %{\"invitation\" => invitation_params}, socket) do\n+    {:noreply, assign_form(socket, invitation_params, validation_errors(invitation_params))}\n+  end\n+\n+  def handle_event(\"send_invitation\", %{\"invitation\" => invitation_params}, socket) do\n+    with {:ok, invited_email} <- invitation_email(invitation_params),\n+         club_id <- selected_club_id(socket.assigns.selected_club, socket.assigns.route_params),\n+         pending? = pending_invitation?(club_id, invited_email.normalized_email),\n+         {:ok, invitation} <-\n+           Membership.invite_club_member(\n+             %{\"club_id\" => club_id, \"email\" => invited_email.normalized_email},\n+             consistency: :strong\n+           ),\n+         :ok <-\n+           deliver_invitation(\n+             invitation,\n+             invited_email.normalized_email,\n+             socket.assigns.selected_club\n+           ) do\n+      {:noreply,\n+       socket\n+       |> put_flash(:info, success_message(invited_email.normalized_email, pending?))\n+       |> assign_form(@empty_invitation, @empty_errors)}\n+    else\n+      {:error, :invalid_email} ->\n+        {:noreply,\n+         assign_form(socket, invitation_params, %{email: [\"Enter a valid email address.\"]})}\n+\n+      {:error, reason} ->\n+        {:noreply,\n+         socket\n+         |> put_flash(:error, failure_message(reason))\n+         |> assign_form(invitation_params, @empty_errors)}\n+    end\n+  end\n+\n   @impl Phoenix.LiveView\n   def render(assigns) do\n     ~H\"\"\"\n@@ -101,11 +144,141 @@ defmodule MembaWeb.MemberInvitationLive.New do\n             </span>\n           </div>\n         </section>\n+\n+        <section\n+          id=\"member-club-invitation-form-card\"\n+          class=\"overflow-hidden rounded-3xl border border-[var(--club-site-line)] bg-[var(--club-site-paper)] shadow-sm\"\n+        >\n+          <div class=\"border-b border-[var(--club-site-line)] p-5\">\n+            <p class=\"text-xs font-semibold uppercase tracking-[0.18em] text-[var(--club-site-muted)]\">\n+              Invitation details\n+            </p>\n+            <h2 class=\"mt-1 text-lg font-semibold text-[var(--club-site-ink)]\">\n+              Email-only member invitation\n+            </h2>\n+            <p class=\"mt-1 text-sm text-[var(--club-site-muted)]\">\n+              Enter the invitee's email address. Memba sends a one-use link so the\n+              invited person controls that email before membership starts.\n+            </p>\n+          </div>\n+\n+          <.form\n+            for={@form}\n+            id=\"member-club-invitation-form\"\n+            aria-label=\"Invite member\"\n+            class=\"space-y-5 p-5\"\n+            phx-change=\"validate_invitation\"\n+            phx-submit=\"send_invitation\"\n+          >\n+            <div class=\"rounded-2xl border border-[var(--club-site-line)] bg-[var(--club-site-bg)] p-4\">\n+              <.input\n+                name={@form[:email].name}\n+                value={@form[:email].value}\n+                id=\"member-club-invitation-email-input\"\n+                type=\"email\"\n+                label=\"Email address\"\n+                aria-label=\"Invitee email address\"\n+                autocomplete=\"email\"\n+                placeholder=\"dana@example.com\"\n+                errors={@form_errors.email}\n+                required\n+              />\n+            </div>\n+\n+            <div class=\"flex flex-col gap-3 sm:flex-row sm:items-center\">\n+              <.button\n+                id=\"send-member-club-invitation-button\"\n+                type=\"submit\"\n+                aria-label=\"Send member invitation\"\n+                class=\"inline-flex items-center justify-center rounded-full border border-[var(--club-site-accent)] bg-[var(--club-site-accent)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--club-site-ink)] hover:shadow-md\"\n+              >\n+                Send invitation\n+              </.button>\n+\n+              <.link\n+                id=\"cancel-member-club-invitation-link\"\n+                href={club_home_path(@selected_club, @route_params)}\n+                aria-label=\"Cancel member invitation\"\n+                class=\"inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-2 text-sm font-semibold text-[var(--club-site-muted)] shadow-sm transition duration-200 hover:-translate-y-0.5 hover:text-[var(--club-site-ink)] hover:shadow-md\"\n+              >\n+                Cancel\n+              </.link>\n+            </div>\n+          </.form>\n+        </section>\n       </div>\n     </Layouts.club_site>\n     \"\"\"\n   end\n \n+  defp assign_form(socket, params, errors) do\n+    socket\n+    |> assign(:invitation_params, invitation_params(params))\n+    |> assign(:form_errors, Map.merge(@empty_errors, errors))\n+    |> assign(:form, to_form(invitation_params(params), as: :invitation))\n+  end\n+\n+  defp invitation_params(params) when is_map(params) do\n+    %{\"email\" => Map.get(params, \"email\", \"\")}\n+  end\n+\n+  defp invitation_params(_params), do: @empty_invitation\n+\n+  defp validation_errors(params) do\n+    case Map.get(invitation_params(params), \"email\") do\n+      \"\" ->\n+        @empty_errors\n+\n+      email ->\n+        if valid_email?(email),\n+          do: @empty_errors,\n+          else: %{email: [\"Enter a valid email address.\"]}\n+    end\n+  end\n+\n+  defp invitation_email(params) do\n+    params\n+    |> invitation_params()\n+    |> Map.get(\"email\")\n+    |> EmailAddresses.normalize_email()\n+  end\n+\n+  defp valid_email?(email), do: match?({:ok, _email}, EmailAddresses.normalize_email(email))\n+\n+  defp pending_invitation?(club_id, email) do\n+    not is_nil(Membership.get_pending_club_member_invitation_by_email(club_id, email))\n+  end\n+\n+  defp deliver_invitation(invitation, email, club) do\n+    ClubMemberInvitationEmail.deliver(%{\n+      email: email,\n+      club: club,\n+      invitation_id: invitation.invitation_id,\n+      invitation_url: invitation_url(invitation.invitation_token)\n+    })\n+  end\n+\n+  defp invitation_url(invitation_token) do\n+    MembaWeb.Endpoint.url() <>\n+      \"/invitations/club-members/\" <> URI.encode(invitation_token, &URI.char_unreserved?/1)\n+  end\n+\n+  defp success_message(email, false), do: \"Invitation sent to #{email}\"\n+  defp success_message(email, true), do: \"Invitation resent to #{email}\"\n+\n+  defp failure_message(:already_active_member),\n+    do: \"That email address is already an active member of this club.\"\n+\n+  defp failure_message({:club_member_invitation_email_configuration_error, _message}) do\n+    \"Invitation was created, but Memba could not send the email. Check auth email delivery configuration and try again.\"\n+  end\n+\n+  defp failure_message({:club_member_invitation_email_delivery_error, _reason}) do\n+    \"Invitation was created, but Memba could not send the email. Try again.\"\n+  end\n+\n+  defp failure_message(reason), do: \"Could not send invitation: #{inspect(reason)}\"\n+\n   defp ensure_identity_assigns(socket) do\n     socket\n     |> assign_new(:current_identity, fn -> nil end)\n@@ -115,10 +288,10 @@ defmodule MembaWeb.MemberInvitationLive.New do\n   defp invitation_context(club_id, current_identity, current_identity_clubs) do\n     with selected_club when not is_nil(selected_club) <-\n            selected_club(current_identity_clubs, club_id),\n-          members <- Membership.list_active_members_of_club(club_id),\n-          current_member when not is_nil(current_member) <-\n-            current_member_for_identity(members, current_identity),\n-          :ok <- Authorization.authorize_manage_members(club_id, current_member.id) do\n+         members <- Membership.list_active_members_of_club(club_id),\n+         current_member when not is_nil(current_member) <-\n+           current_member_for_identity(members, current_identity),\n+         :ok <- Authorization.authorize_manage_members(club_id, current_member.id) do\n       {:ok,\n        %{\n          selected_club: selected_club,\ndiff --git a/web/test/memba_web/live/member_invitation_live/send_test.exs b/web/test/memba_web/live/member_invitation_live/send_test.exs\nnew file mode 100644\nindex 0000000..22a610b\n--- /dev/null\n+++ b/web/test/memba_web/live/member_invitation_live/send_test.exs\n@@ -0,0 +1,274 @@\n+defmodule MembaWeb.MemberInvitationLive.SendTest do\n+  use MembaWeb.FeatureCase, async: false\n+\n+  import Phoenix.LiveViewTest\n+  import Swoosh.TestAssertions\n+  import Ecto.Query\n+\n+  alias Memba.Accounts.AuthEmail\n+  alias Memba.Membership\n+  alias Memba.Membership.Permissions\n+  alias Memba.Membership.Projections.ClubInvitation\n+  alias Memba.Membership.Projections.MemberPermission\n+  alias Memba.Membership.Projections.Membership, as: MembershipProjection\n+  alias Memba.Repo\n+  alias MembaWeb.IdentityAuth\n+\n+  setup :set_swoosh_global\n+\n+  setup do\n+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)\n+    original_auth_email_config = Application.get_env(:memba, AuthEmail)\n+\n+    Application.put_env(:memba, Memba.Mailer,\n+      adapter: Swoosh.Adapters.Test,\n+      api_key: \"server-token\"\n+    )\n+\n+    Application.put_env(:memba, AuthEmail,\n+      from: \"auth@mail.memba.local\",\n+      message_stream: \"test-auth\"\n+    )\n+\n+    on_exit(fn ->\n+      restore_env(Memba.Mailer, original_mailer_config)\n+      restore_env(AuthEmail, original_auth_email_config)\n+    end)\n+\n+    :ok\n+  end\n+\n+  test \"membership admin invitation uses the shared one-use email and profile completion lifecycle\",\n+       %{conn: conn} do\n+    robin =\n+      create_active_member(\n+        email: \"robin@example.com\",\n+        name: \"Robin Rivers\",\n+        club_name: \"West Coast Paddlers\",\n+        slug: \"wcp\"\n+      )\n+\n+    grant_manage_members!(robin)\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> Map.put(:host, \"wcp.lvh.me\")\n+      |> Plug.Test.init_test_session(%{\n+        IdentityAuth.identity_session_key() => \"robin@example.com\"\n+      })\n+      |> live(~p\"/members/invitations/new\")\n+\n+    view\n+    |> form(\"#member-club-invitation-form\", invitation: %{email: \" DANA@Example.COM \"})\n+    |> render_submit()\n+\n+    assert has_element?(view, \"#flash-info\", \"Invitation sent to dana@example.com\")\n+\n+    assert %ClubInvitation{\n+             club_id: club_id,\n+             email: \"dana@example.com\",\n+             normalized_email: \"dana@example.com\",\n+             status: \"pending\"\n+           } =\n+             Membership.get_pending_club_member_invitation_by_email(\n+               robin.club_id,\n+               \"dana@example.com\"\n+             )\n+\n+    assert club_id == robin.club_id\n+    refute Membership.get_person_by_email(\"dana@example.com\")\n+    refute Membership.active_member_of_club_by_email?(robin.club_id, \"dana@example.com\")\n+\n+    invitation_path = delivered_invitation_path!(\"dana@example.com\")\n+\n+    new_browser_conn()\n+    |> visit(invitation_path)\n+    |> assert_path(~p\"/invitations/club-members/profile\")\n+    |> assert_has(\"section#club-member-profile-completion[data-club-id='#{robin.club_id}']\")\n+    |> fill_in(\"Your name\", with: \" Dana Example \")\n+    |> click_button(\"Join West Coast Paddlers\")\n+    |> assert_path(\"/\")\n+    |> assert_has(\"#member-club-home[data-club-id='#{robin.club_id}']\")\n+    |> assert_has(\"#member-dashboard-hero\", \"Hello, Dana.\")\n+\n+    assert %{name: \"Dana Example\", email: \"dana@example.com\"} =\n+             Membership.get_person_by_email(\"dana@example.com\")\n+\n+    assert Membership.active_member_of_club_by_email?(robin.club_id, \"dana@example.com\")\n+  end\n+\n+  test \"membership admin duplicate pending invitation resends through the shared invitation rule\",\n+       %{conn: conn} do\n+    robin =\n+      create_active_member(\n+        email: \"robin@example.com\",\n+        name: \"Robin Rivers\",\n+        club_name: \"West Coast Paddlers\"\n+      )\n+\n+    grant_manage_members!(robin)\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> Plug.Test.init_test_session(%{\n+        IdentityAuth.identity_session_key() => \"robin@example.com\"\n+      })\n+      |> live(~p\"/members/invitations/new?club_id=#{robin.club_id}\")\n+\n+    view\n+    |> form(\"#member-club-invitation-form\", invitation: %{email: \"dana@example.com\"})\n+    |> render_submit()\n+\n+    first_invitation_path = delivered_invitation_path!(\"dana@example.com\")\n+\n+    view\n+    |> form(\"#member-club-invitation-form\", invitation: %{email: \" DANA@example.com \"})\n+    |> render_submit()\n+\n+    assert has_element?(view, \"#flash-info\", \"Invitation resent to dana@example.com\")\n+\n+    assert %ClubInvitation{resend_count: 1} =\n+             Membership.get_pending_club_member_invitation_by_email(\n+               robin.club_id,\n+               \"dana@example.com\"\n+             )\n+\n+    assert 1 ==\n+             Repo.aggregate(\n+               from(invitation in ClubInvitation,\n+                 where:\n+                   invitation.club_id == ^robin.club_id and\n+                     invitation.normalized_email == \"dana@example.com\"\n+               ),\n+               :count\n+             )\n+\n+    second_invitation_path = delivered_invitation_path!(\"dana@example.com\")\n+    refute second_invitation_path == first_invitation_path\n+  end\n+\n+  test \"membership admin cannot invite an already active member through the shared duplicate rule\",\n+       %{conn: conn} do\n+    robin =\n+      create_active_member(\n+        email: \"robin@example.com\",\n+        name: \"Robin Rivers\",\n+        club_name: \"West Coast Paddlers\"\n+      )\n+\n+    _alice =\n+      create_active_member(\n+        email: \"alice@example.com\",\n+        name: \"Alice Adams\",\n+        club_id: robin.club_id,\n+        club_name: \"West Coast Paddlers\"\n+      )\n+\n+    grant_manage_members!(robin)\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> Plug.Test.init_test_session(%{\n+        IdentityAuth.identity_session_key() => \"robin@example.com\"\n+      })\n+      |> live(~p\"/members/invitations/new?club_id=#{robin.club_id}\")\n+\n+    view\n+    |> form(\"#member-club-invitation-form\", invitation: %{email: \" ALICE@example.com \"})\n+    |> render_submit()\n+\n+    assert has_element?(\n+             view,\n+             \"#flash-error\",\n+             \"That email address is already an active member of this club.\"\n+           )\n+\n+    assert is_nil(\n+             Membership.get_pending_club_member_invitation_by_email(\n+               robin.club_id,\n+               \"alice@example.com\"\n+             )\n+           )\n+\n+    assert_no_email_sent()\n+  end\n+\n+  defp create_active_member(attrs) do\n+    club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)\n+    person_id = Memba.ID.generate(:person)\n+\n+    Repo.get(Memba.Membership.Projections.Club, club_id) ||\n+      attrs\n+      |> club_attrs(club_id)\n+      |> insert_membership_club!()\n+\n+    person =\n+      insert_membership_person!(\n+        person_id: person_id,\n+        name: Keyword.fetch!(attrs, :name),\n+        email: Keyword.fetch!(attrs, :email)\n+      )\n+\n+    membership =\n+      Repo.insert!(%MembershipProjection{\n+        membership_id: Memba.ID.generate(:membership),\n+        club_id: club_id,\n+        person_id: person.person_id,\n+        active: true\n+      })\n+\n+    %{\n+      club_id: club_id,\n+      membership_id: membership.membership_id,\n+      person_id: person.person_id\n+    }\n+  end\n+\n+  defp grant_manage_members!(member) do\n+    Repo.insert!(%MemberPermission{\n+      club_id: member.club_id,\n+      membership_id: member.membership_id,\n+      person_id: member.person_id,\n+      permission: Permissions.club_manage_members(),\n+      grant_count: 1\n+    })\n+  end\n+\n+  defp club_attrs(attrs, club_id) do\n+    base = [\n+      club_id: club_id,\n+      name: Keyword.get(attrs, :club_name, \"Kootenay Mountaineering Club\")\n+    ]\n+\n+    case Keyword.fetch(attrs, :slug) do\n+      {:ok, slug} -> Keyword.put(base, :slug, slug)\n+      :error -> base\n+    end\n+  end\n+\n+  defp delivered_invitation_path!(email_address) do\n+    assert_receive {:email, email}\n+\n+    assert email.to == [{\"\", email_address}]\n+    assert email.subject == \"You're invited to join West Coast Paddlers\"\n+\n+    [invitation_url] =\n+      Regex.run(~r{https?://[^\\s]+/invitations/club-members/[^\\s]+}, email.text_body)\n+\n+    assert email.text_body =~ \"This invitation link can be used once\"\n+    assert email.html_body =~ invitation_url\n+\n+    %URI{path: path} = URI.parse(invitation_url)\n+    assert path =~ ~r{^/invitations/club-members/.+}\n+\n+    path\n+  end\n+\n+  defp new_browser_conn do\n+    Phoenix.ConnTest.build_conn()\n+    |> PhoenixTest.put_endpoint(MembaWeb.Endpoint)\n+  end\n+\n+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)\n+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)\n+end\n",
+        "summary": {
+          "files_changed": 12,
+          "additions": 1233,
+          "deletions": 1
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-08T22:54:59.352623660Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.task_gate": 0,
           "internal.fidelity": "summary:high",
@@ -11335,12 +11662,12 @@
           "internal.retry_count.implement_next_task": 0,
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "thread.pre_validate_snapshot.current_node": "validate_task",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "task_valid": true,
           "internal.retry_count.resume_gate": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "failure_signature": "",
-          "command.output": "blob://sha256/8fb32327d152b4a69740fede22b120a04ea355fafc61e27ca6d73dcb7989b0f0",
+          "command.output": "blob://sha256/9a2669c4c44f51d9b117126ae8b53c8c6354f73a597087706158132a69584670",
           "internal.retry_count.all_tasks_done": 0,
           "thread.resume_gate.current_node": "sync_task_list",
           "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n\n2. **Changes made**\n   - Updated `web/lib/memba_web/live/member_invitation_live/new.ex`\n     - Added an email-only member-facing invitation form.\n     - Submits through the existing shared `Membership.invite_club_member/2` application service.\n     - Sends via the existing `ClubMemberInvitationEmail` module.\n     - Reuses the existing invitation callback/profile-completion route by generating the same `/invitations/club-members/:token` link shape.\n     - Surfaces shared duplicate-active-member and duplicate-pending-resend outcomes with Membership Admin-facing flash messages.\n   - Added `web/test/memba_web/live/member_invitation_live/send_test.exs`\n     - Proves a Membership Admin invitation creates a pending invitation, sends the one-use email link, and carries an unknown invitee through existing profile completion.\n     - Proves duplicate pending submission resends and preserves one pending invitation.\n     - Proves active member duplicate rejection uses the shared duplicate rule and sends no email.\n\n3. **Validation**\n   - Attempted focused test:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_invitation_live/send_test.exs`\n     - Blocked before ExUnit by sandbox Postgres wrapper/PGHOST readiness issue.\n   - Formatting check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted lib/memba_web/live/member_invitation_live/new.ex test/memba_web/live/member_invitation_live/send_test.exs`\n     - Passed.\n   - Compile check:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix compile --warnings-as-errors`\n     - Passed.\n   - Full project check:\n     - `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed, including `69 scenarios (69 passed), 466 steps (466 passed)`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n   - To:\n     - `- [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance evidence**\n   - ADR 0002: invitation writes continue through the Membership Commanded application service.\n   - ADR 0009: duplicate checks and assertions use projected Membership read models.\n   - ADR 0011: invitation IDs/tokens remain generated by the application service, not by the aggregate.\n   - ADR 0021/0022: full validation passed with existing projection/read-model synchronization patterns; no new polling endpoint or read-model bypass was introduced.\n   - LiveView guidance: member-facing invitation remains a LiveView route and tests use LiveView/PhoenixTest selectors and outcomes.",
@@ -11510,15 +11837,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/703cf2d1adec38b06b2b86ae0b1dee4b0e13d34fcb59edf7fd3ba297ee89bd98"
+              "command.output": "blob://sha256/9a2669c4c44f51d9b117126ae8b53c8c6354f73a597087706158132a69584670"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 178,
-              "active_time_ms": 178
+              "tool_time_ms": 171,
+              "active_time_ms": 171
             }
           },
           "validate_task": {
@@ -11579,7 +11906,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "preflight_sandbox": 1,
           "read_plan": 1,
@@ -11590,7 +11917,7 @@
           "implement_next_task": 6,
           "task_gate": 5,
           "resume_gate": 1,
-          "pre_validate_snapshot": 5,
+          "pre_validate_snapshot": 6,
           "validate_task": 5
         }
       },
@@ -13383,6 +13710,34 @@
       },
       "state": "succeeded"
     },
+    "pre_validate_snapshot@6": {
+      "first_event_seq": 1892,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-08T22:54:59.131989304Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "sync_task_list@3": {
       "first_event_seq": 712,
       "prompt": null,
@@ -14595,7 +14950,12 @@
       "first_event_seq": 1671,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-08T22:54:55.816847242Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -14609,13 +14969,20 @@
       "output": null,
       "started_at": "2026-06-08T22:42:42.840654598Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 732976,
+        "inference_time_ms": 389630,
+        "tool_time_ms": 342796,
+        "active_time_ms": 732426
+      },
       "usage": {
-        "input_tokens": 887866,
-        "output_tokens": 11560,
-        "total_tokens": 3012597,
-        "reasoning_tokens": 3731,
-        "cache_read_tokens": 2109440,
-        "cache_write_tokens": 0
+        "input_tokens": 908638,
+        "output_tokens": 12269,
+        "total_tokens": 3128802,
+        "reasoning_tokens": 4247,
+        "cache_read_tokens": 2203648,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 6140494
       },
       "model": {
         "provider": "openai",
@@ -14754,42 +15121,42 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 114180,
-        "usage_percent": 41.97794117647059,
+        "input_tokens": 114980,
+        "usage_percent": 42.27205882352941,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-08T22:54:30.042808785Z",
-        "event_seq": 1874,
+        "generated_at": "2026-06-08T22:54:55.809635555Z",
+        "event_seq": 1884,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1024,
-            "usage_percent": 0.3764705882352941
+            "tokens": 1020,
+            "usage_percent": 0.375
           },
           {
             "category": "tools",
-            "tokens": 1461,
-            "usage_percent": 0.5371323529411764
+            "tokens": 1456,
+            "usage_percent": 0.5352941176470588
           },
           {
             "category": "memory",
-            "tokens": 363,
-            "usage_percent": 0.13345588235294117
+            "tokens": 361,
+            "usage_percent": 0.13272058823529412
           },
           {
             "category": "conversation",
-            "tokens": 111327,
-            "usage_percent": 40.92904411764706
+            "tokens": 112136,
+            "usage_percent": 41.226470588235294
           },
           {
             "category": "other",
-            "tokens": 5,
-            "usage_percent": 0.001838235294117647
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
           }
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "validate_task@1": {
       "first_event_seq": 288,
