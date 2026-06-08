@@ -723,6 +723,21 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Fetch a projected club member invitation by plaintext invitation token.
+
+  Invitation tokens are stored only as SHA-256 hashes. Both pending invitations
+  and accepted invitations can be found so accepted links can be reopened
+  idempotently without creating duplicate memberships.
+  """
+  def get_club_member_invitation_by_token(token) when is_binary(token) do
+    token
+    |> InvitationToken.hash_token()
+    |> then(&Repo.get_by(ClubInvitation, token_hash: &1))
+  end
+
+  def get_club_member_invitation_by_token(_token), do: nil
+
+  @doc """
   Return whether a person currently has an app-defined club-scoped permission.
 
   Permission checks are answered from Membership's projected permission state so

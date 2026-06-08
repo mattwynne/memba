@@ -16,6 +16,7 @@ defmodule MembaWeb.IdentityAuth do
   @identity_session_key "current_identity_email"
   @return_to_session_key "identity_return_to"
   @staff_onboarding_return_to_session_key "staff_onboarding_return_to"
+  @club_member_invitation_session_key "club_member_invitation"
   @auth_path "/auth"
   @staff_onboarding_path "/auth/onboard"
 
@@ -33,6 +34,11 @@ defmodule MembaWeb.IdentityAuth do
   Return the session key used to preserve the requested staff path while onboarding.
   """
   def staff_onboarding_return_to_session_key, do: @staff_onboarding_return_to_session_key
+
+  @doc """
+  Return the session key used for a verified club-member invitation journey.
+  """
+  def club_member_invitation_session_key, do: @club_member_invitation_session_key
 
   @doc """
   Renew the browser session and store the normalized signed-in email address.
