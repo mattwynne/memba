@@ -10,6 +10,7 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.Permissions
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
@@ -112,7 +113,8 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
            selected_club(current_identity_clubs, club_id),
          members <- Membership.list_active_members_of_club(club_id),
          current_member when not is_nil(current_member) <-
-           current_member_for_identity(members, current_identity) do
+           current_member_for_identity(members, current_identity),
+         true <- can_manage_members?(club_id, current_member) do
       {:ok,
        %{
          selected_club: selected_club,
@@ -135,6 +137,12 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
 
     Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
   end
+
+  defp can_manage_members?(club_id, %{id: person_id}) do
+    Membership.person_has_club_permission?(club_id, person_id, Permissions.club_manage_members())
+  end
+
+  defp can_manage_members?(_club_id, _current_member), do: false
 
   defp put_session_club_id(params, session) do
     case {Map.get(params, "club_id"), Map.get(session, "club_id")} do

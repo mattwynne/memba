@@ -3,7 +3,9 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Repo
   alias MembaWeb.IdentityAuth
@@ -17,6 +19,8 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
         name: "Alice Adams",
         club_name: "Climbing Club"
       )
+
+    grant_manage_members_permission(alice)
 
     {:ok, view, _html} =
       conn
@@ -52,6 +56,8 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
         slug: "kmc"
       )
 
+    grant_manage_members_permission(alice)
+
     _bob =
       create_active_member(
         email: "bob@example.com",
@@ -74,6 +80,25 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
 
     assert has_element?(view, "#member-invitation-club-home-link[href='/']")
     refute has_element?(view, "#member-invitation-club-home-link[href*='club_id=']")
+  end
+
+  test "routed GET requires the signed-in member to have club.manage_members for the selected club",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Climbing Club"
+      )
+
+    error =
+      assert_raise MembaWeb.ForbiddenError, "Forbidden", fn ->
+        conn
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+        |> get(~p"/members/invitations/new?club_id=#{alice.club_id}")
+      end
+
+    assert error.plug_status == 403
   end
 
   test "routed GET redirects signed-out visitors and preserves the selected club return path",
@@ -109,14 +134,26 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: true
     })
 
-    %{club_id: club_id, person_id: person.person_id}
+    %{club_id: club_id, person_id: person.person_id, membership_id: membership_id}
+  end
+
+  defp grant_manage_members_permission(member) do
+    Repo.insert!(%MemberPermission{
+      club_id: member.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
+    })
   end
 
   defp club_attrs(attrs, club_id) do
