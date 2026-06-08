@@ -81,6 +81,42 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     refute has_element?(view, "#member-club-invitation-club-home-link[href*='club_id=']")
   end
 
+  test "membership admin invitation form asks for email address only", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, initial_html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> live(~p"/members/invitations/new?club_id=#{robin.club_id}")
+
+    initial_document = LazyHTML.from_fragment(initial_html)
+
+    assert_invitation_form_is_email_only(initial_document)
+    assert has_element?(view, "#member-club-invitation-email-input[type='email']")
+    refute has_element?(view, "#member-club-invitation-form input[name='invitation[name]']")
+    refute has_element?(view, "#member-club-invitation-form select[name='invitation[role]']")
+
+    html =
+      render_change(view, "validate_invitation", %{
+        "invitation" => %{
+          "email" => "dana@example.com",
+          "name" => "Dana Example",
+          "role" => "membership_admin"
+        }
+      })
+
+    html
+    |> LazyHTML.from_fragment()
+    |> assert_invitation_form_is_email_only()
+  end
+
   test "routed GET requires the current club member to have club.manage_members", %{conn: conn} do
     alice =
       create_active_member(
@@ -147,12 +183,13 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
-    membership = Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
-      club_id: club_id,
-      person_id: person.person_id,
-      active: true
-    })
+    membership =
+      Repo.insert!(%Membership{
+        membership_id: Memba.ID.generate(:membership),
+        club_id: club_id,
+        person_id: person.person_id,
+        active: true
+      })
 
     %{
       club_id: club_id,
@@ -169,6 +206,22 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
       permission: Permissions.club_manage_members(),
       grant_count: 1
     })
+  end
+
+  defp assert_invitation_form_is_email_only(html) do
+    assert html
+           |> LazyHTML.query(
+             "#member-club-invitation-form input[name^='invitation['], #member-club-invitation-form select[name^='invitation['], #member-club-invitation-form textarea[name^='invitation[']"
+           )
+           |> Enum.count() == 1
+
+    assert html
+           |> LazyHTML.query(
+             "#member-club-invitation-form input#member-club-invitation-email-input[name='invitation[email]'][type='email']"
+           )
+           |> Enum.any?()
+
+    html
   end
 
   defp club_attrs(attrs, club_id) do
