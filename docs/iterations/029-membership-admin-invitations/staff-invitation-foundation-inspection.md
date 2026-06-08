@@ -1,0 +1,164 @@
+# Staff invitation foundation inspection
+
+Selected task: `001 Inspect iteration 028's Staff invitation model, commands, acceptance journey, routes, emails, and profile-completion flow.`
+
+## Iteration 028 baseline
+
+Iteration 028 is merged. Commit `cefa3ee` added Staff member invitations with profile completion and recorded `dev check passed; plan conformance passed`. The iteration 028 plan is now `Status: merged`, and its todo list is fully checked.
+
+Useful iteration 028 inspection notes already exist:
+
+- `docs/iterations/028-staff-member-invitations/staff-club-person-route-inspection.md`
+- `docs/iterations/028-staff-member-invitations/auth-token-onboarding-inspection.md`
+
+## Domain model and commands
+
+Staff invitations are modelled in the Membership bounded context as an event-sourced `Memba.Membership.ClubInvitation` aggregate, routed by `Memba.Membership.Router`.
+
+The aggregate handles only invitation lifecycle state:
+
+- `InviteClubMember` creates a pending invitation for a club/email/token hash.
+- `ResendClubMemberInvitation` rotates the token hash and increments resend count.
+- `AcceptClubMemberInvitation` records the accepted person and membership identities.
+
+Related events are:
+
+- `ClubMemberInvited`
+- `ClubMemberInvitationResent`
+- `ClubMemberInvitationAccepted`
+
+The `membership_club_invitations` projection stores:
+
+- `invitation_id`
+- `club_id`
+- display `email`
+- `normalized_email`
+- `token_hash`
+- `status` (`pending` or `accepted`)
+- `accepted_person_id`
+- `accepted_membership_id`
+- `resend_count`
+
+The migration enforces a unique token hash and one pending invitation per `club_id`/`normalized_email`. There is no expiry field, matching the iteration 028 decision.
+
+## Public Membership APIs to reuse
+
+The primary application service entry points in `Memba.Membership` are:
+
+- `invite_club_member/2`
+  - normalizes email;
+  - blocks an already active member by normalized email;
+  - creates a pending invitation and plaintext token, or resends the existing pending invitation for the same club/email;
+  - returns `%{invitation_id: ..., invitation_token: ...}`.
+- `resend_club_member_invitation/2`
+  - addresses a pending invitation by `invitation_id` or by club/email and rotates its token.
+- `accept_club_member_invitation_for_existing_person/2`
+  - verifies the existing person owns the invited email;
+  - creates an ordinary active membership;
+  - marks the invitation accepted.
+- `complete_invited_club_member_profile/2`
+  - keeps unknown invitees out of the person/member projections until a valid name is submitted;
+  - creates the person with the invited email;
+  - creates an ordinary active membership;
+  - marks the invitation accepted.
+
+These APIs currently have no inviter/actor parameter. Staff use them directly from the Staff LiveView, and application-service duplicate/acceptance rules are shared independently of the UI actor.
+
+## Token and email behaviour
+
+Invitation tokens are owned by `Memba.Membership.InvitationToken` and are intentionally separate from ordinary auth sign-in tokens:
+
+- plaintext token is URL-safe and generated with strong random bytes;
+- only a SHA-256 lowercase hex hash is stored in Membership;
+- pending unknown-invitee tokens are not consumed on first open;
+- accepted tokens remain lookupable so reopening an accepted link is idempotent.
+
+`Memba.Membership.ClubMemberInvitationEmail` composes the email. It:
+
+- sends to the normalized invited email;
+- uses club context in subject/from/body;
+- includes the `/invitations/club-members/:token` callback URL;
+- describes the link as one-use for membership creation;
+- does not mention expiry.
+
+The Staff LiveView builds the callback URL with `MembaWeb.Endpoint.url() <> "/invitations/club-members/" <> encoded_token`.
+
+## Staff web routes and form
+
+Routes in `MembaWeb.Router`:
+
+- Staff invite form: `GET /admin/clubs/:club_id/invitations/new`, mounted in the Staff-only `/admin` scope as `MembaWeb.Admin.ClubMemberInvitationsLive.New`.
+- Invitation callback: `GET /invitations/club-members/:token`.
+- Profile completion:
+  - `GET /invitations/club-members/profile`
+  - `POST /invitations/club-members/profile`
+
+The Staff invitation form is email-only:
+
+- form id: `#club-member-invitation-form`
+- input id: `#club-member-invitation-email-input`
+- submit button id: `#send-club-member-invitation-button`
+
+Staff direct membership creation from name/email was decommissioned on the Staff club page:
+
+- the club detail memberships card links to `#invite-member-link`;
+- `#add-member-form` is not rendered;
+- the old `add_member` event redirects to the invitation route without creating an active membership.
+
+The person edit route remains available at `/admin/clubs/:club_id/people/:person_id/edit`.
+
+## Acceptance/profile-completion journey
+
+`MembaWeb.ClubMemberInvitationController.callback/2` handles invitation links:
+
+- Missing/invalid tokens redirect to `/auth` with an invalid-link flash and do not sign in.
+- Pending invitation + existing complete person:
+  - accepts the invitation;
+  - signs in the invited email with `IdentityAuth.log_in_identity/2`;
+  - clears invitation journey state;
+  - redirects to the invited club.
+- Pending invitation + unknown email:
+  - signs in the invited email;
+  - stores invitation journey state in session under `IdentityAuth.club_member_invitation_session_key()`;
+  - redirects to `/invitations/club-members/profile`;
+  - leaves invitation pending and token reusable.
+- Accepted invitation:
+  - signs in the invited email;
+  - redirects to the invited club without creating another membership.
+
+`complete_profile/2` validates the session journey and submitted name. A blank name keeps the invitee on the profile page without accepting the invitation. A valid name calls `complete_invited_club_member_profile/2`, signs the invitee in, clears journey state, and redirects to the invited club.
+
+## Test coverage from iteration 028
+
+Relevant Staff-flow preservation tests:
+
+- `web/test/memba/membership/club_invitation_test.exs`
+- `web/test/memba/membership/club_invitation_dispatch_test.exs`
+- `web/test/memba/membership/club_invitation_projection_test.exs`
+- `web/test/memba/membership/club_member_invitation_lifecycle_test.exs`
+- `web/test/memba/membership/club_member_invitation_email_test.exs`
+- `web/test/memba/membership/invitation_token_test.exs`
+- `web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs`
+- `web/test/memba_web/controllers/club_member_invitation_controller_test.exs`
+- `web/test/memba_web/live/admin/clubs_live/show_test.exs`
+- `web/test/features/step_definitions/club_member_invitation_steps.exs`
+- `acceptance-tests/features/step_definitions/club_member_invitation_steps.js`
+- `acceptance-tests/features/support/club_member_invitations.js`
+
+The shared feature file is `acceptance-tests/features/club_member_invitations.feature`. Iteration 028 Staff scenarios are active; iteration 029 Membership Admin scenarios remain tagged `@iteration-029 @todo-domain @todo-ui`.
+
+## Implications for iteration 029
+
+The Membership Admin slice should reuse the existing Membership APIs rather than create a parallel invitation lifecycle. The likely new work is an actor/authorization wrapper around the same `invite_club_member/2` behaviour, because the current API does not distinguish Staff/system callers from club-member callers.
+
+The current APIs already satisfy these shared lifecycle rules:
+
+- duplicate active member rejection;
+- duplicate pending invitation resend with one pending projection;
+- email normalization;
+- one-use/idempotent accepted invitation links;
+- unknown-invitee profile completion before activation;
+- existing-person acceptance without profile completion;
+- ordinary active membership creation with no Admin role assignment.
+
+The acceptance/profile-completion routes are public invitation routes and are not Staff-specific, so Membership Admin invitations can point to the same callback/profile-completion journey once the invite creation surface is authorized and wired.
