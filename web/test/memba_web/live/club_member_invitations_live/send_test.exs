@@ -38,6 +38,46 @@ defmodule MembaWeb.ClubMemberInvitationsLive.SendTest do
     :ok
   end
 
+  test "Membership Admin invitation form asks for email only", %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin-email-only@example.com",
+        name: "Robin Admin",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members_permission(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{
+        IdentityAuth.identity_session_key() => "robin-email-only@example.com"
+      })
+      |> live(~p"/members/invitations/new?club_id=#{robin.club_id}")
+
+    assert has_element?(view, "#member-club-member-invitation-form[aria-label='Invite member']")
+
+    assert has_element?(
+             view,
+             "#member-club-member-invitation-form input[name='invitation[email]'][type='email']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-club-member-invitation-form input[name^='invitation[']:not([name='invitation[email]'])"
+           )
+
+    refute has_element?(
+             view,
+             "#member-club-member-invitation-form textarea[name^='invitation[']"
+           )
+
+    refute has_element?(
+             view,
+             "#member-club-member-invitation-form select[name^='invitation[']"
+           )
+  end
+
   test "Membership Admin submits an invitation through the shared club invitation lifecycle", %{
     conn: conn
   } do
