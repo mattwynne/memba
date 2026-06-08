@@ -107,4 +107,40 @@ path.write_text(text.replace('    Then an outcome', '    Then a different outcom
 PY
 assert_passes
 
+git reset -q --hard "$base_sha"
+
+# Committed repair diffs are checked against the same explicit permission.
+cat > plan.md <<'PLAN'
+# Example plan
+
+## Allowed acceptance feature changes
+
+- `acceptance-tests/features/example.feature`: tag-only change to remove `@todo-ui`; coverage now passes in browser acceptance.
+PLAN
+python3 - <<'PY'
+from pathlib import Path
+path = Path('acceptance-tests/features/example.feature')
+text = path.read_text()
+path.write_text(text.replace('  Scenario: Original scenario', '  @iteration-029\n  Scenario: Original scenario'))
+PY
+git add plan.md acceptance-tests/features/example.feature
+git commit -q -m 'allowed tag-only repair'
+assert_passes
+
+git reset -q --hard "$base_sha"
+
+# Committed feature diffs are still rejected without explicit permission.
+cat > plan.md <<'PLAN'
+# Example plan
+PLAN
+python3 - <<'PY'
+from pathlib import Path
+path = Path('acceptance-tests/features/example.feature')
+text = path.read_text()
+path.write_text(text.replace('    Then an outcome', '    Then a different outcome'))
+PY
+git add plan.md acceptance-tests/features/example.feature
+git commit -q -m 'unplanned feature repair'
+assert_fails
+
 echo "guard_acceptance_feature_changes tests passed"

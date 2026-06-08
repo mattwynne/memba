@@ -198,3 +198,25 @@ Acceptance feature files are now part of the planned delivery contract for behav
 - Make the conformance evidence script print the parsed `## Allowed acceptance feature changes` entries and the exact feature-file diff classification before asking an LLM to judge conformance.
 - Add a workflow test fixture for a plan-conformance repair that removes `@todo-ui` from an explicitly allowed scenario and updates step support, proving the workflow accepts the repair after `dev check` passes.
 - Route failed repair verification to a clear human-input failure with the parsed permission evidence, instead of spending another `dev_check` cycle and producing a contradictory later error.
+
+## Resolution applied: plan-repair feature permissions
+
+Date: 2026-06-08
+
+Root cause: `iteration-implementation` had two different acceptance-feature policy implementations. Final artifact and publish used `guard_acceptance_feature_changes.py`, which understands `## Allowed acceptance feature changes`, but `verify_plan_repair` still used an older blanket `.feature` rejection. Its unconditional edge to `dev_check` also meant a failed repair verification could continue into another expensive validation loop and produce a later, contradictory LLM conformance message.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: changed `verify_plan_repair` to call `guard_acceptance_feature_changes.py` with the repair baseline HEAD and current plan path, so committed or working-tree repair diffs are checked against explicit plan permissions instead of blanket-rejected.
+- `.fabro/workflows/iteration-implementation/workflow.fabro`: changed `verify_plan_repair` routing so only a successful repair verification proceeds to `dev_check`; failures now route to `plan_not_ready` instead of continuing silently.
+- `.fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh`: added coverage for committed repair-style feature diffs, including an explicitly allowed tag-only committed change and a committed unplanned feature change that must fail.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-implementation/scripts/test_guard_acceptance_feature_changes.sh` — passed.
+- `python3 -m py_compile .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py` — passed.
+- `fabro validate .fabro/workflows/iteration-implementation/workflow.toml` — passed with pre-existing goal-gate retry warnings.
+
+Remaining follow-up:
+
+- The LLM `plan_conformance_gate` can still make a poor judgement if the evidence does not clearly show parsed feature-file permissions. Consider adding deterministic permission/diff-classification output to the conformance evidence script if this recurs.
