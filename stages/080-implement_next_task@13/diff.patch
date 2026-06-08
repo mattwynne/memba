@@ -1,0 +1,617 @@
+diff --git a/acceptance-tests/features/step_definitions/club_member_invitation_steps.js b/acceptance-tests/features/step_definitions/club_member_invitation_steps.js
+index 9c3839d..da3fe17 100644
+--- a/acceptance-tests/features/step_definitions/club_member_invitation_steps.js
++++ b/acceptance-tests/features/step_definitions/club_member_invitation_steps.js
+@@ -3,7 +3,9 @@ const {
+   assertAlreadyMemberMessage,
+   assertAskedForEmailOnly,
+   assertAskedForName,
++  assertCannotInviteMembers,
+   assertCannotCreateDirectActiveMember,
++  assertInvitationNotReceived,
+   assertInvitationReceived,
+   assertNotActiveMember,
+   assertOnlyOneActiveMembership,
+@@ -18,6 +20,7 @@ const {
+   invitePersonToClub,
+   leaveWithoutEnteringName,
+   openAddMemberFlow,
++  tryInviteEmailToClub,
+   tryInvitePersonToClub
+ } = require("../support/club_member_invitations");
+ 
+@@ -75,10 +78,14 @@ When("{word} wants to add a new member to {word} {word} {word}", async function
+   await openAddMemberFlow(this, actorName, clubName(word1, word2, word3));
+ });
+ 
+-When("{word} tries to invite {word} to join {word} {word} {word}", async function (actorName, personName, word1, word2, word3) {
++When(/^(\w+) tries to invite (\w+) to join (\w+) (\w+) (\w+)$/, async function (actorName, personName, word1, word2, word3) {
+   await tryInvitePersonToClub(this, actorName, personName, clubName(word1, word2, word3));
+ });
+ 
++When("{word} tries to invite {string} to join {word} {word} {word}", async function (actorName, email, word1, word2, word3) {
++  await tryInviteEmailToClub(this, actorName, email, clubName(word1, word2, word3));
++});
++
+ Then("{string} should receive an invitation to join {word} {word} {word}", async function (email, word1, word2, word3) {
+   await assertInvitationReceived(this, email, clubName(word1, word2, word3));
+ });
+@@ -115,6 +122,14 @@ Then("{word} should see that {word} is already a member of {word} {word} {word}"
+   await assertAlreadyMemberMessage(this, personName, clubName(word1, word2, word3));
+ });
+ 
++Then("{word} should be told she cannot invite members to {word} {word} {word}", async function (actorName, word1, word2, word3) {
++  await assertCannotInviteMembers(this, actorName, clubName(word1, word2, word3));
++});
++
++Then("{string} should not receive an invitation to join {word} {word} {word}", async function (email, word1, word2, word3) {
++  await assertInvitationNotReceived(this, email, clubName(word1, word2, word3));
++});
++
+ Then("there should still be only one pending invitation for {string} to join {word} {word} {word}", async function (email, word1, word2, word3) {
+   await assertSinglePendingInvitation(this, email, clubName(word1, word2, word3));
+ });
+diff --git a/acceptance-tests/features/step_definitions/membership_administration_steps.js b/acceptance-tests/features/step_definitions/membership_administration_steps.js
+index ee5ed1d..c4bb840 100644
+--- a/acceptance-tests/features/step_definitions/membership_administration_steps.js
++++ b/acceptance-tests/features/step_definitions/membership_administration_steps.js
+@@ -2,6 +2,7 @@ const { Given, When, Then } = require("@cucumber/cucumber");
+ const {
+   assertMembershipAdministrator,
+   assertNotMembershipAdministrator,
++  assertOrdinaryMember,
+   ensureMembershipAdministrator,
+   ensureOnlyMembershipAdministrator,
+   ensureOrdinaryMember,
+@@ -14,6 +15,10 @@ Given(/^(\w+) is an Admin of (.+)$/, function (personName, clubName) {
+   ensureMembershipAdministrator(this, personName, clubName);
+ });
+ 
++Given(/^(\w+) is a Membership Admin of (.+)$/, function (personName, clubName) {
++  ensureMembershipAdministrator(this, personName, clubName);
++});
++
+ Given(/^(\w+) is the only Admin of (.+)$/, function (personName, clubName) {
+   ensureOnlyMembershipAdministrator(this, personName, clubName);
+ });
+@@ -48,3 +53,7 @@ Then(/^(\w+) should still be an Admin of (.+)$/, function (personName, clubName)
+ Then(/^(\w+) should not be an Admin of (.+)$/, function (personName, clubName) {
+   assertNotMembershipAdministrator(this, personName, clubName);
+ });
++
++Then(/^(\w+) should be an ordinary member of (.+)$/, function (personName, clubName) {
++  assertOrdinaryMember(this, personName, clubName);
++});
+diff --git a/acceptance-tests/features/support/club_member_invitations.js b/acceptance-tests/features/support/club_member_invitations.js
+index 048f8ce..1c6415d 100644
+--- a/acceptance-tests/features/support/club_member_invitations.js
++++ b/acceptance-tests/features/support/club_member_invitations.js
+@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
+ const { expect: playwrightExpect } = require("@playwright/test");
+ const {
+   appUrl,
++  clubSiteUrl,
+   cssString,
+   emailFor,
+   ensureState,
+@@ -9,7 +10,7 @@ const {
+   testMailboxEmails,
+   waitForMailboxEmails
+ } = require("./member_message");
+-const { ensureMember, signInAsStaffDirectly } = require("./authentication");
++const { ensureMember, signInAsStaffDirectly, signInDirectly } = require("./authentication");
+ const serverCommands = require("./server_commands");
+ 
+ async function ensureClub(world, clubName) {
+@@ -67,17 +68,10 @@ async function ensureActiveMember(world, personName, clubName) {
+ 
+ async function inviteEmailToClub(world, actorName, email, clubName, options = {}) {
+   const club = await ensureClub(world, clubName);
+-  await ensureStaffSignedIn(world, actorName);
+-
+   const previousEmails = await testMailboxEmails(world);
++  const invitationForm = await openInvitationForm(world, actorName, club);
+ 
+-  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/invitations/new`));
+-  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
+-    timeout: projectionTimeoutMs(world)
+-  });
+-
+-  await world.page.getByLabel("Invitee email address").fill(email);
+-  await world.page.locator("#send-club-member-invitation-button").click();
++  await submitInvitationForm(world, email, invitationForm);
+ 
+   world.clubMemberInvitationRequests = world.clubMemberInvitationRequests || [];
+   world.clubMemberInvitationRequests.push({
+@@ -90,8 +84,30 @@ async function inviteEmailToClub(world, actorName, email, clubName, options = {}
+ }
+ 
+ async function tryInviteEmailToClub(world, actorName, email, clubName) {
+-  await inviteEmailToClub(world, actorName, email, clubName);
+-  world.lastClubMemberInvitationAttempt = { actorName, clubName, email: normalizeEmail(email) };
++  const club = await ensureClub(world, clubName);
++  const previousEmails = await testMailboxEmails(world);
++
++  const attempt = {
++    actorName,
++    clubName,
++    email: normalizeEmail(email),
++    previousEmails
++  };
++
++  world.lastClubMemberInvitationAttempt = attempt;
++
++  const invitationForm = await openInvitationForm(world, actorName, club, { allowForbidden: true });
++
++  if (invitationForm.forbidden) {
++    world.clubMemberInvitationRequests = world.clubMemberInvitationRequests || [];
++    world.clubMemberInvitationRequests.push({ ...attempt, forbidden: true });
++    return;
++  }
++
++  await submitInvitationForm(world, email, invitationForm);
++
++  world.clubMemberInvitationRequests = world.clubMemberInvitationRequests || [];
++  world.clubMemberInvitationRequests.push(attempt);
+ }
+ 
+ async function invitePersonToClub(world, actorName, personName, clubName, options = {}) {
+@@ -105,6 +121,41 @@ async function tryInvitePersonToClub(world, actorName, personName, clubName) {
+   world.lastClubMemberInvitationAttempt.personName = personName;
+ }
+ 
++async function openInvitationForm(world, actorName, club, options = {}) {
++  if (memberActor(world, actorName, club.name)) {
++    await signInDirectly(world, actorName);
++    const response = await world.page.goto(clubSiteUrl(world.baseUrl, club, "/members/invitations/new"));
++
++    if (options.allowForbidden && response && response.status() === 403) {
++      return { actorSurface: "member", forbidden: true, responseStatus: response.status() };
++    }
++
++    await playwrightExpect(world.page.locator("#member-club-invitation-new")).toBeVisible({
++      timeout: projectionTimeoutMs(world)
++    });
++
++    return { actorSurface: "member", forbidden: false, responseStatus: response && response.status() };
++  }
++
++  await ensureStaffSignedIn(world, actorName);
++  const response = await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/invitations/new`));
++  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
++    timeout: projectionTimeoutMs(world)
++  });
++
++  return { actorSurface: "staff", forbidden: false, responseStatus: response && response.status() };
++}
++
++async function submitInvitationForm(world, email, invitationForm) {
++  await world.page.getByLabel("Invitee email address").fill(email);
++
++  if (invitationForm.actorSurface === "member") {
++    await world.page.locator("#send-member-invitation-button").click();
++  } else {
++    await world.page.locator("#send-club-member-invitation-button").click();
++  }
++}
++
+ async function assertInvitationReceived(world, recipient, clubName, options = {}) {
+   ensureState(world);
+   const emailAddress = recipientEmail(world, recipient);
+@@ -275,6 +326,40 @@ async function assertSinglePendingInvitation(world, email, clubName) {
+   );
+ }
+ 
++async function assertCannotInviteMembers(world, actorName, clubName) {
++  const attempt = world.lastClubMemberInvitationAttempt;
++
++  assert.ok(attempt, "Expected an invitation attempt before checking the unauthorized message");
++  assert.equal(attempt.actorName, actorName);
++  assert.equal(attempt.clubName, clubName);
++
++  await playwrightExpect(world.page.locator("body")).toContainText(/Forbidden|not allowed to invite members/i, {
++    timeout: projectionTimeoutMs(world)
++  });
++}
++
++async function assertInvitationNotReceived(world, recipient, clubName) {
++  const emailAddress = recipientEmail(world, recipient);
++  const request = latestInvitationRequest(world, emailAddress, clubName);
++  const deadline = Date.now() + 1000;
++
++  do {
++    const emails = await testMailboxEmails(world);
++    const previousIds = request.previousEmails.map(mailboxMessageId).filter(Boolean);
++    const newEmails = emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
++
++    assert.equal(
++      newEmails.filter((email) => invitationEmailMatches(email, emailAddress, clubName)).length,
++      0,
++      `Expected ${emailAddress} not to receive an invitation to ${clubName}; saw ${JSON.stringify(
++        newEmails.map(emailSummary)
++      )}`
++    );
++
++    await new Promise((resolve) => setTimeout(resolve, 100));
++  } while (Date.now() <= deadline);
++}
++
+ async function inviteAndAccept(world, personName, email, clubName, fullName) {
+   await ensureClub(world, clubName);
+   await inviteEmailToClub(world, "Pat", email, clubName);
+@@ -364,6 +449,15 @@ function latestInvitationRequest(world, email, clubName) {
+   return request;
+ }
+ 
++function memberActor(world, actorName, clubName) {
++  ensureState(world);
++
++  const membership = world.memberships && world.memberships[`${clubName}:${actorName}`];
++  const person = world.people && world.people[actorName];
++
++  return Boolean(membership && membership.personId && person && person.personId);
++}
++
+ function rememberInvitationLink(world, personName, clubName, link) {
+   world.clubMemberInvitationLinks = world.clubMemberInvitationLinks || {};
+   world.clubMemberInvitationLinks[personName] = world.clubMemberInvitationLinks[personName] || {};
+@@ -489,7 +583,9 @@ module.exports = {
+   assertAlreadyMemberMessage,
+   assertAskedForEmailOnly,
+   assertAskedForName,
++  assertCannotInviteMembers,
+   assertCannotCreateDirectActiveMember,
++  assertInvitationNotReceived,
+   assertInvitationReceived,
+   assertNotActiveMember,
+   assertOnlyOneActiveMembership,
+@@ -506,5 +602,6 @@ module.exports = {
+   invitePersonToClub,
+   leaveWithoutEnteringName,
+   openAddMemberFlow,
++  tryInviteEmailToClub,
+   tryInvitePersonToClub
+ };
+diff --git a/acceptance-tests/features/support/membership_administration.js b/acceptance-tests/features/support/membership_administration.js
+index 2a12051..fdc2147 100644
+--- a/acceptance-tests/features/support/membership_administration.js
++++ b/acceptance-tests/features/support/membership_administration.js
+@@ -142,6 +142,17 @@ function assertNotMembershipAdministrator(world, personName, clubName) {
+   );
+ }
+ 
++function assertOrdinaryMember(world, personName, clubName) {
++  const status = memberStatus(world, personName, clubName);
++
++  assert.equal(status.activeMember, true, `Expected ${personName} to be an active member of ${clubName}`);
++  assert.equal(
++    status.membershipAdministrator,
++    false,
++    `Expected ${personName} to be an ordinary member of ${clubName}`
++  );
++}
++
+ function ensureMember(world, personName, clubName) {
+   ensureState(world);
+ 
+@@ -346,6 +357,7 @@ function clubSlug(clubName) {
+ module.exports = {
+   assertMembershipAdministrator,
+   assertNotMembershipAdministrator,
++  assertOrdinaryMember,
+   ensureMembershipAdministrator,
+   ensureOnlyMembershipAdministrator,
+   ensureOrdinaryMember,
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 2155d32..28fd175 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -12,6 +12,6 @@
+ - [x] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [x] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+ - [x] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
+-- [ ] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
++- [x] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
+ - [ ] 013 Remove or narrow `@todo-domain`/`@todo-ui` tags from the affected scenarios only when they pass in the relevant runner.
+ - [ ] 014 Run `dev check`.
+diff --git a/web/test/features/step_definitions/club_member_invitation_steps.exs b/web/test/features/step_definitions/club_member_invitation_steps.exs
+index 3c32937..bbc912c 100644
+--- a/web/test/features/step_definitions/club_member_invitation_steps.exs
++++ b/web/test/features/step_definitions/club_member_invitation_steps.exs
+@@ -6,10 +6,15 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+ 
+   alias Memba.Accounts
+   alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club, as: ClubProjection
+   alias Memba.Membership.Projections.ClubInvitation
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
++  alias Memba.Membership.Roles
+   alias Memba.Membership.Slug
+   alias Memba.Repo
+ 
+@@ -51,12 +56,17 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     |> ensure_active_member(person_name, club_name(word_1, word_2, word_3))
+   end
+ 
++  step "{word} is a Membership Admin of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    ensure_membership_administrator(context, person_name, club_name(word_1, word_2, word_3))
++  end
++
+   step "{word} has invited {string} to join {word} {word} {word}",
+        %{args: [actor_name, email, word_1, word_2, word_3]} = context do
+     club_name = club_name(word_1, word_2, word_3)
+ 
+     context
+-    |> ensure_signed_in_staff(actor_name)
++    |> ensure_actor_for_invitation(actor_name, club_name)
+     |> invite_email(actor_name, email, club_name)
+     |> assert_invitation_received(email, club_name)
+   end
+@@ -98,22 +108,20 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+   end
+ 
+   step "{word} tries to invite {word} to join {word} {word} {word}",
+-       %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
++       %{args: [actor_name, person_or_email, word_1, word_2, word_3]} = context do
+     club_name = club_name(word_1, word_2, word_3)
+-    context = ensure_person(context, person_name)
+-    email = email_for_person(context, person_name)
+-    club_id = fetch_club_id!(ensure_club(context, club_name), club_name)
+ 
+-    result =
+-      Membership.invite_club_member(%{club_id: club_id, email: email}, consistency: :strong)
++    if email_argument?(person_or_email) do
++      try_invite_email(context, actor_name, unquote_step_argument(person_or_email), club_name)
++    else
++      person_name = person_or_email
++      context = ensure_person(context, person_name)
++      email = email_for_person(context, person_name)
+ 
+-    context
+-    |> Map.put(:last_club_member_invitation_result, result)
+-    |> Map.put(:last_club_member_invitation_attempt, %{
+-      actor_name: actor_name,
+-      person_name: person_name,
+-      club_name: club_name
+-    })
++      context
++      |> try_invite_email(actor_name, email, club_name)
++      |> put_in([:last_club_member_invitation_attempt, :person_name], person_name)
++    end
+   end
+ 
+   step "{word} follows the invitation link", %{args: [person_name]} = context do
+@@ -179,6 +187,15 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     assert_active_member(context, person_name, club_name(word_1, word_2, word_3))
+   end
+ 
++  step "{word} should be an ordinary member of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++
++    context
++    |> assert_active_member(person_name, club_name)
++    |> assert_not_membership_administrator(person_name, club_name)
++  end
++
+   step "{word} should be signed in to {word} {word} {word}",
+        %{args: [person_name, word_1, word_2, word_3]} = context do
+     club_name = club_name(word_1, word_2, word_3)
+@@ -202,6 +219,30 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     context
+   end
+ 
++  step "{word} should be told she cannot invite members to {word} {word} {word}",
++       %{args: [actor_name, word_1, word_2, word_3]} = context do
++    expected_club_name = club_name(word_1, word_2, word_3)
++
++    assert {:error, :unauthorized} = Map.fetch!(context, :last_club_member_invitation_result)
++
++    assert %{actor_name: ^actor_name, club_name: ^expected_club_name} =
++             Map.fetch!(context, :last_club_member_invitation_attempt)
++
++    context
++  end
++
++  step "{string} should not receive an invitation to join {word} {word} {word}",
++       %{args: [email, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++    club_id = fetch_club_id!(context, club_name)
++    normalized_email = normalize_email!(email)
++
++    assert sent_invitation_count(context, club_name, normalized_email) == 0
++    assert pending_invitation_count(club_id, normalized_email) == 0
++
++    context
++  end
++
+   step "{word} should see that {word} is already a member of {word} {word} {word}",
+        %{args: [_actor_name, person_name, word_1, word_2, word_3]} = context do
+     expected_club_name = club_name(word_1, word_2, word_3)
+@@ -241,6 +282,15 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     end
+   end
+ 
++  defp ensure_actor_for_invitation(context, actor_name, club_name) do
++    context = ensure_club(context, club_name)
++
++    case member_actor_person_id(context, actor_name) do
++      {:ok, _person_id} -> context
++      :staff_or_system_actor -> ensure_signed_in_staff(context, actor_name)
++    end
++  end
++
+   defp invite_email(context, actor_name, email, club_name) do
+     normalized_email = normalize_email!(email)
+     person_name = person_name_from_email(normalized_email)
+@@ -253,9 +303,7 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     club_id = fetch_club_id!(context, club_name)
+ 
+     assert {:ok, %{invitation_id: invitation_id, invitation_token: invitation_token}} =
+-             Membership.invite_club_member(%{club_id: club_id, email: normalized_email},
+-               consistency: :strong
+-             )
++             request_invitation(context, actor_name, club_id, normalized_email)
+ 
+     context
+     |> update_context_map(:club_member_invitations, {club_name, normalized_email}, %{
+@@ -272,6 +320,40 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     )
+   end
+ 
++  defp try_invite_email(context, actor_name, email, club_name) do
++    normalized_email = normalize_email!(email)
++    person_name = person_name_from_email(normalized_email)
++
++    context =
++      context
++      |> ensure_club(club_name)
++      |> put_person_email_if_missing(person_name, normalized_email)
++
++    club_id = fetch_club_id!(context, club_name)
++    result = request_invitation(context, actor_name, club_id, normalized_email)
++
++    context
++    |> Map.put(:last_club_member_invitation_result, result)
++    |> Map.put(:last_club_member_invitation_attempt, %{
++      actor_name: actor_name,
++      email: normalized_email,
++      club_name: club_name
++    })
++  end
++
++  defp request_invitation(context, actor_name, club_id, email) do
++    case member_actor_person_id(context, actor_name) do
++      {:ok, actor_person_id} ->
++        Membership.invite_club_member_as_club_member(
++          %{club_id: club_id, actor_person_id: actor_person_id, email: email},
++          consistency: :strong
++        )
++
++      :staff_or_system_actor ->
++        Membership.invite_club_member(%{club_id: club_id, email: email}, consistency: :strong)
++    end
++  end
++
+   defp assert_invitation_received(context, recipient, club_name) do
+     email =
+       if String.contains?(recipient, "@"),
+@@ -368,6 +450,39 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     context
+   end
+ 
++  defp assert_not_membership_administrator(context, person_name, club_name) do
++    refute membership_administrator?(context, person_name, club_name)
++    context
++  end
++
++  defp ensure_membership_administrator(context, person_name, club_name) do
++    context =
++      context
++      |> ensure_club(club_name)
++      |> ensure_active_member(person_name, club_name)
++
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++    membership_id = active_membership_id!(club_id, person.person_id)
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    unless active_role_assignment?(club_id, membership_id, person.person_id, role_id) do
++      assert :ok =
++               App.dispatch(
++                 %AssignMemberRole{
++                   club_id: club_id,
++                   membership_id: membership_id,
++                   person_id: person.person_id,
++                   role_id: role_id
++                 },
++                 consistency: :strong
++               )
++    end
++
++    assert membership_administrator?(context, person_name, club_name)
++    context
++  end
++
+   defp ensure_active_member(context, person_name, club_name) do
+     context =
+       context
+@@ -491,6 +606,23 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     })
+   end
+ 
++  defp member_actor_person_id(context, actor_name) do
++    case get_in(context, [:people, actor_name]) do
++      %{person_id: person_id, email: email} when is_binary(person_id) and is_binary(email) ->
++        if Accounts.staff_email?(normalize_email!(email)) do
++          :staff_or_system_actor
++        else
++          {:ok, person_id}
++        end
++
++      %{person_id: person_id} when is_binary(person_id) ->
++        {:ok, person_id}
++
++      _missing_or_staff ->
++        :staff_or_system_actor
++    end
++  end
++
+   defp fetch_person!(context, person_name) do
+     case get_in(context, [:people, person_name]) do
+       %{person_id: person_id} when is_binary(person_id) ->
+@@ -553,6 +685,33 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+     |> Repo.one()
+   end
+ 
++  defp membership_administrator?(context, person_name, club_name) do
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++    membership_id = active_membership_id!(club_id, person.person_id)
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    active_role_assignment?(club_id, membership_id, person.person_id, role_id) and
++      Membership.person_has_club_permission?(
++        club_id,
++        person.person_id,
++        Permissions.club_manage_members()
++      )
++  end
++
++  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
++    RoleAssignmentProjection
++    |> where(
++      [assignment],
++      assignment.club_id == ^club_id and
++        assignment.membership_id == ^membership_id and
++        assignment.person_id == ^person_id and
++        assignment.role_id == ^role_id and
++        assignment.active == true
++    )
++    |> Repo.exists?()
++  end
++
+   defp fetch_club_id!(context, club_name) do
+     case get_in(context, [:clubs, club_name]) do
+       club_id when is_binary(club_id) -> club_id
+@@ -602,6 +761,14 @@ defmodule Memba.Cucumber.ClubMemberInvitationSteps do
+ 
+   defp normalize_email!(email), do: Accounts.normalize_email(email)
+ 
++  defp email_argument?(value), do: value |> unquote_step_argument() |> String.contains?("@")
++
++  defp unquote_step_argument(value) do
++    value
++    |> String.trim()
++    |> String.trim(~s("))
++  end
++
+   defp staff_email_for(person_name), do: "#{String.downcase(person_name)}@memba.io"
+ 
+   defp default_email_for(_context, "Pat"), do: staff_email_for("Pat")
