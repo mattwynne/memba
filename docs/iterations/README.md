@@ -38,6 +38,7 @@ green than before.
 | 026 | 2026-06-07 | merged | Domain Cucumber convergence | [plan](026-domain-cucumber-convergence/plan.md) |
 | 027 | 2026-06-06 | merged | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
 | 028 | 2026-06-08 | implementing | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
+| 029 | 2026-06-08 | ready | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
 
 Status notes:
 
@@ -56,4 +57,4 @@ Shared acceptance feature files used across these iterations:
 - [`memba_staff_operations.feature`](../../acceptance-tests/features/memba_staff_operations.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 021 until the redesigned staff operations pages, global People page, and global Messages page are implemented)
 - [`request_account.feature`](../../acceptance-tests/features/request_account.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 022 until staff-approved request-to-club onboarding is implemented; iteration 025 adds an `@todo-domain`/`@todo-ui` scenario for opening request conversion from the staff notification email)
 - [`club_membership_administration.feature`](../../acceptance-tests/features/club_membership_administration.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 027 until the Membership Administrator role and permission foundation is implemented)
-- [`club_member_invitations.feature`](../../acceptance-tests/features/club_member_invitations.feature) (`@iteration-028` with `@todo-domain`/`@todo-ui` planning scenarios until Staff invitation and profile-completion behaviour is implemented)
+- [`club_member_invitations.feature`](../../acceptance-tests/features/club_member_invitations.feature) (`@iteration-028` with `@todo-domain`/`@todo-ui` planning scenarios until Staff invitation and profile-completion behaviour is implemented; iteration 029 adds `@iteration-029` Membership Admin invitation scenarios under the same temporary runner-debt tags until member-admin invitation behaviour is implemented)
