@@ -1,0 +1,1367 @@
+diff --git a/acceptance-tests/features/step_definitions/club_member_invitation_steps.js b/acceptance-tests/features/step_definitions/club_member_invitation_steps.js
+new file mode 100644
+index 0000000..9c3839d
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/club_member_invitation_steps.js
+@@ -0,0 +1,142 @@
++const { Given, When, Then } = require("@cucumber/cucumber");
++const {
++  assertAlreadyMemberMessage,
++  assertAskedForEmailOnly,
++  assertAskedForName,
++  assertCannotCreateDirectActiveMember,
++  assertInvitationReceived,
++  assertNotActiveMember,
++  assertOnlyOneActiveMembership,
++  assertSinglePendingInvitation,
++  ensureActiveMember,
++  ensureClub,
++  ensurePersonIsNotMember,
++  enterInviteeName,
++  followInvitationLink,
++  inviteAndAccept,
++  inviteEmailToClub,
++  invitePersonToClub,
++  leaveWithoutEnteringName,
++  openAddMemberFlow,
++  tryInvitePersonToClub
++} = require("../support/club_member_invitations");
++
++Given("{word} {word} {word} exists as a club", async function (word1, word2, word3) {
++  await ensureClub(this, clubName(word1, word2, word3));
++});
++
++Given("{word} is not a member of {word} {word} {word}", async function (personName, word1, word2, word3) {
++  await ensurePersonIsNotMember(this, personName, clubName(word1, word2, word3));
++});
++
++Given("{word} is an active member of {word} {word} {word}", async function (personName, word1, word2, word3) {
++  await ensureActiveMember(this, personName, clubName(word1, word2, word3));
++});
++
++Given("{word} has invited {string} to join {word} {word} {word}", async function (actorName, email, word1, word2, word3) {
++  await inviteEmailToClub(this, actorName, email, clubName(word1, word2, word3));
++  await assertInvitationReceived(this, email, clubName(word1, word2, word3));
++});
++
++Given("{word} has accepted an invitation to join {word} {word} {word}", async function (personName, word1, word2, word3) {
++  const targetClubName = clubName(word1, word2, word3);
++  await inviteAndAccept(this, personName, `${personName.toLowerCase()}@example.com`, targetClubName, `${personName} Example`);
++});
++
++When("{word} invites {string} to join {word} {word} {word}", async function (actorName, email, word1, word2, word3) {
++  await inviteEmailToClub(this, actorName, email, clubName(word1, word2, word3));
++});
++
++When(/^(\w+) invites (\w+) to join (\w+) (\w+) (\w+)$/, async function (actorName, personName, word1, word2, word3) {
++  await invitePersonToClub(this, actorName, personName, clubName(word1, word2, word3));
++});
++
++When("{word} invites {string} to join {word} {word} {word} again", async function (actorName, email, word1, word2, word3) {
++  await inviteEmailToClub(this, actorName, email, clubName(word1, word2, word3), { resend: true });
++});
++
++When("{word} follows the invitation link", async function (personName) {
++  await followInvitationLink(this, personName, inferredClubName(this));
++});
++
++When("{word} follows the same invitation link again", async function (personName) {
++  await followInvitationLink(this, personName, inferredClubName(this), { same: true });
++});
++
++When("{word} enters {string} as their name", async function (personName, name) {
++  await enterInviteeName(this, personName, name, inferredClubName(this));
++});
++
++When("{word} leaves without entering their name", async function (_personName) {
++  await leaveWithoutEnteringName(this);
++});
++
++When("{word} wants to add a new member to {word} {word} {word}", async function (actorName, word1, word2, word3) {
++  await openAddMemberFlow(this, actorName, clubName(word1, word2, word3));
++});
++
++When("{word} tries to invite {word} to join {word} {word} {word}", async function (actorName, personName, word1, word2, word3) {
++  await tryInvitePersonToClub(this, actorName, personName, clubName(word1, word2, word3));
++});
++
++Then("{string} should receive an invitation to join {word} {word} {word}", async function (email, word1, word2, word3) {
++  await assertInvitationReceived(this, email, clubName(word1, word2, word3));
++});
++
++Then("{string} should receive another invitation to join {word} {word} {word}", async function (email, word1, word2, word3) {
++  await assertInvitationReceived(this, email, clubName(word1, word2, word3), { another: true });
++});
++
++Then(/^(\w+) should receive an invitation to join (\w+) (\w+) (\w+)$/, async function (personName, word1, word2, word3) {
++  await assertInvitationReceived(this, personName, clubName(word1, word2, word3));
++});
++
++Then("{word} should not be an active member of {word} {word} {word} yet", async function (personName, word1, word2, word3) {
++  await assertNotActiveMember(this, personName, clubName(word1, word2, word3));
++});
++
++Then("{word} should still not be an active member of {word} {word} {word}", async function (personName, word1, word2, word3) {
++  await assertNotActiveMember(this, personName, clubName(word1, word2, word3));
++});
++
++Then("{word} should be asked for their name", async function (personName) {
++  await assertAskedForName(this, personName, inferredClubName(this));
++});
++
++Then("{word} should be asked for the member's email address only", async function (_actorName) {
++  await assertAskedForEmailOnly(this);
++});
++
++Then("{word} should not be able to create an active member directly from a name and email address", async function (_actorName) {
++  await assertCannotCreateDirectActiveMember(this);
++});
++
++Then("{word} should see that {word} is already a member of {word} {word} {word}", async function (_actorName, personName, word1, word2, word3) {
++  await assertAlreadyMemberMessage(this, personName, clubName(word1, word2, word3));
++});
++
++Then("there should still be only one pending invitation for {string} to join {word} {word} {word}", async function (email, word1, word2, word3) {
++  await assertSinglePendingInvitation(this, email, clubName(word1, word2, word3));
++});
++
++Then("{word} should still have only one active membership of {word} {word} {word}", async function (personName, word1, word2, word3) {
++  await assertOnlyOneActiveMembership(this, personName, clubName(word1, word2, word3));
++});
++
++function clubName(word1, word2, word3) {
++  return [word1, word2, word3].join(" ");
++}
++
++function inferredClubName(world) {
++  const clubNames = Object.keys(world.clubs || {});
++
++  if (clubNames.length === 1) {
++    return clubNames[0];
++  }
++
++  if (world.pendingProfileCompletion && world.pendingProfileCompletion.clubName) {
++    return world.pendingProfileCompletion.clubName;
++  }
++
++  throw new Error(`Expected exactly one known club in the scenario; saw ${clubNames.join(", ")}`);
++}
+diff --git a/acceptance-tests/features/support/club_member_invitations.js b/acceptance-tests/features/support/club_member_invitations.js
+new file mode 100644
+index 0000000..048f8ce
+--- /dev/null
++++ b/acceptance-tests/features/support/club_member_invitations.js
+@@ -0,0 +1,510 @@
++const assert = require("node:assert/strict");
++const { expect: playwrightExpect } = require("@playwright/test");
++const {
++  appUrl,
++  cssString,
++  emailFor,
++  ensureState,
++  projectionTimeoutMs,
++  testMailboxEmails,
++  waitForMailboxEmails
++} = require("./member_message");
++const { ensureMember, signInAsStaffDirectly } = require("./authentication");
++const serverCommands = require("./server_commands");
++
++async function ensureClub(world, clubName) {
++  ensureState(world);
++
++  if (world.clubs[clubName]) {
++    return world.clubs[clubName];
++  }
++
++  const club = serverCommands.ensureClub({
++    clubName,
++    clubSlug: clubSlugFor(clubName)
++  });
++
++  world.clubs[clubName] = {
++    clubId: club.clubId,
++    name: club.clubName,
++    slug: club.clubSlug
++  };
++
++  return world.clubs[clubName];
++}
++
++async function ensurePerson(world, personName) {
++  ensureState(world);
++
++  if (world.people[personName] && world.people[personName].personId) {
++    return world.people[personName];
++  }
++
++  const person = serverCommands.ensurePerson({
++    personName,
++    email: emailFor(personName)
++  });
++
++  world.people[personName] = personState(person.personName, person.email, person.personId);
++  return world.people[personName];
++}
++
++async function ensurePersonIsNotMember(world, personName, clubName) {
++  const club = await ensureClub(world, clubName);
++  await ensurePerson(world, personName);
++
++  assert.equal(
++    activeMembershipCountByEmail(club.clubId, emailForPerson(world, personName)),
++    0,
++    `Expected ${personName} not to be an active member of ${clubName}`
++  );
++}
++
++async function ensureActiveMember(world, personName, clubName) {
++  const member = await ensureMember(world, personName, clubName);
++  return member;
++}
++
++async function inviteEmailToClub(world, actorName, email, clubName, options = {}) {
++  const club = await ensureClub(world, clubName);
++  await ensureStaffSignedIn(world, actorName);
++
++  const previousEmails = await testMailboxEmails(world);
++
++  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/invitations/new`));
++  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
++    timeout: projectionTimeoutMs(world)
++  });
++
++  await world.page.getByLabel("Invitee email address").fill(email);
++  await world.page.locator("#send-club-member-invitation-button").click();
++
++  world.clubMemberInvitationRequests = world.clubMemberInvitationRequests || [];
++  world.clubMemberInvitationRequests.push({
++    actorName,
++    clubName,
++    email: normalizeEmail(email),
++    previousEmails,
++    resend: Boolean(options.resend)
++  });
++}
++
++async function tryInviteEmailToClub(world, actorName, email, clubName) {
++  await inviteEmailToClub(world, actorName, email, clubName);
++  world.lastClubMemberInvitationAttempt = { actorName, clubName, email: normalizeEmail(email) };
++}
++
++async function invitePersonToClub(world, actorName, personName, clubName, options = {}) {
++  const person = await ensurePerson(world, personName);
++  await inviteEmailToClub(world, actorName, person.email, clubName, options);
++}
++
++async function tryInvitePersonToClub(world, actorName, personName, clubName) {
++  const person = await ensurePerson(world, personName);
++  await tryInviteEmailToClub(world, actorName, person.email, clubName);
++  world.lastClubMemberInvitationAttempt.personName = personName;
++}
++
++async function assertInvitationReceived(world, recipient, clubName, options = {}) {
++  ensureState(world);
++  const emailAddress = recipientEmail(world, recipient);
++  const request = latestInvitationRequest(world, emailAddress, clubName);
++  const expectedCount = request.previousEmails.length + 1;
++  const emails = await waitForMailboxEmails(
++    world,
++    expectedCount,
++    `club member invitation email for ${emailAddress}`
++  );
++  const previousIds = request.previousEmails.map(mailboxMessageId).filter(Boolean);
++  const newEmails = emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
++  const invitationEmail = newEmails.find((email) => invitationEmailMatches(email, emailAddress, clubName));
++
++  assert.ok(
++    invitationEmail,
++    `Expected ${emailAddress} to receive an invitation to ${clubName}; saw ${JSON.stringify(
++      newEmails.map(emailSummary)
++    )}`
++  );
++
++  const invitationLink = invitationLinkFromEmail(invitationEmail);
++  assert.ok(invitationLink, `Expected invitation email to include a link; saw ${invitationEmail.text_body}`);
++
++  const recipientName = recipientNameFor(world, recipient, emailAddress);
++  rememberInvitationLink(world, recipientName, clubName, browserAppUrl(world, invitationLink));
++
++  if (options.another) {
++    world.clubMemberInvitationEmailCounts = world.clubMemberInvitationEmailCounts || {};
++    const key = invitationKey(emailAddress, clubName);
++    world.clubMemberInvitationEmailCounts[key] = (world.clubMemberInvitationEmailCounts[key] || 0) + 1;
++    assert.ok(
++      world.clubMemberInvitationEmailCounts[key] >= 1,
++      `Expected another invitation email count for ${emailAddress} to ${clubName}`
++    );
++  }
++}
++
++async function assertNotActiveMember(world, personName, clubName) {
++  const club = await ensureClub(world, clubName);
++  const email = emailForPerson(world, personName);
++
++  assert.equal(
++    activeMembershipCountByEmail(club.clubId, email),
++    0,
++    `Expected ${personName} <${email}> not to be an active member of ${clubName}`
++  );
++}
++
++async function followInvitationLink(world, personName, clubName, options = {}) {
++  const link = invitationLinkFor(world, personName, clubName);
++  await world.page.goto(link);
++
++  if (options.same) {
++    world.followedSameInvitationLink = true;
++  }
++}
++
++async function assertAskedForName(world, personName, clubName) {
++  const club = await ensureClub(world, clubName);
++
++  await playwrightExpect(world.page).toHaveURL(/\/invitations\/club-members\/profile$/);
++  await playwrightExpect(
++    world.page.locator(`#club-member-profile-completion[data-club-id=${cssString(club.clubId)}]`)
++  ).toBeVisible({ timeout: projectionTimeoutMs(world) });
++  await playwrightExpect(world.page.getByRole("heading", { name: "Tell us your name" })).toBeVisible();
++  await playwrightExpect(world.page.getByLabel("Your name")).toBeVisible();
++
++  world.pendingProfileCompletion = { personName, clubName };
++}
++
++async function enterInviteeName(world, personName, name, clubName) {
++  await world.page.getByLabel("Your name").fill(name);
++  await world.page.locator("#complete-club-member-profile-button").click();
++
++  const club = await ensureClub(world, clubName);
++  await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
++    timeout: projectionTimeoutMs(world)
++  });
++
++  const person = personByEmail(emailForPerson(world, personName));
++  assert.ok(person && person.personId, `Expected ${personName} to have a profile after accepting an invitation`);
++  world.people[personName] = personState(person.personName || name.trim(), person.email, person.personId);
++}
++
++async function assertActiveMember(world, personName, clubName) {
++  const club = await ensureClub(world, clubName);
++  const email = emailForPerson(world, personName);
++
++  assert.equal(
++    activeMembershipCountByEmail(club.clubId, email),
++    1,
++    `Expected ${personName} <${email}> to be an active member of ${clubName}`
++  );
++}
++
++async function assertOnlyOneActiveMembership(world, personName, clubName) {
++  const club = await ensureClub(world, clubName);
++  const email = emailForPerson(world, personName);
++
++  assert.equal(
++    activeMembershipCountByEmail(club.clubId, email),
++    1,
++    `Expected ${personName} <${email}> to have exactly one active membership of ${clubName}`
++  );
++}
++
++async function assertSignedInToClub(world, personName, clubName) {
++  const club = await ensureClub(world, clubName);
++  const email = emailForPerson(world, personName);
++
++  await playwrightExpect(world.page.locator(`#member-club-home[data-club-id=${cssString(club.clubId)}]`)).toBeVisible({
++    timeout: projectionTimeoutMs(world)
++  });
++  await playwrightExpect(world.page.locator("#club-site-current-identity")).toContainText(`Signed in as ${email}`);
++}
++
++async function leaveWithoutEnteringName(world) {
++  await world.page.goto(appUrl(world.baseUrl, "/"));
++}
++
++async function openAddMemberFlow(world, actorName, clubName) {
++  const club = await ensureClub(world, clubName);
++  await ensureStaffSignedIn(world, actorName);
++
++  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}`));
++  await playwrightExpect(world.page.locator("#club-show")).toBeVisible({ timeout: projectionTimeoutMs(world) });
++  await world.page.getByRole("link", { name: "Invite member" }).click();
++  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
++    timeout: projectionTimeoutMs(world)
++  });
++}
++
++async function assertAskedForEmailOnly(world) {
++  await playwrightExpect(world.page.locator("#club-member-invitation-form")).toBeVisible();
++  await playwrightExpect(world.page.getByLabel("Invitee email address")).toBeVisible();
++  await playwrightExpect(world.page.locator("#person-name-input")).toHaveCount(0);
++  await playwrightExpect(world.page.getByLabel("Person name")).toHaveCount(0);
++}
++
++async function assertCannotCreateDirectActiveMember(world) {
++  await playwrightExpect(world.page.locator("#club-member-invitation-form")).toBeVisible();
++  await playwrightExpect(world.page.getByRole("button", { name: "Add selected person as member" })).toHaveCount(0);
++  await playwrightExpect(world.page.getByRole("button", { name: "Create person" })).toHaveCount(0);
++  await playwrightExpect(world.page.getByLabel("Person to add as member")).toHaveCount(0);
++}
++
++async function assertAlreadyMemberMessage(world, personName, clubName) {
++  const attempt = world.lastClubMemberInvitationAttempt;
++  assert.ok(attempt, "Expected an invitation attempt before checking the already-member message");
++  assert.equal(attempt.personName || personName, personName);
++  assert.equal(attempt.clubName, clubName);
++
++  await playwrightExpect(
++    world.page.getByText("That email address is already an active member of this club.")
++  ).toBeVisible({ timeout: projectionTimeoutMs(world) });
++}
++
++async function assertSinglePendingInvitation(world, email, clubName) {
++  const club = await ensureClub(world, clubName);
++  const normalizedEmail = normalizeEmail(email);
++  const count = pendingInvitationCount(club.clubId, normalizedEmail);
++
++  assert.equal(
++    count,
++    1,
++    `Expected one pending invitation for ${normalizedEmail} to ${clubName}, got ${count}`
++  );
++}
++
++async function inviteAndAccept(world, personName, email, clubName, fullName) {
++  await ensureClub(world, clubName);
++  await inviteEmailToClub(world, "Pat", email, clubName);
++  await assertInvitationReceived(world, email, clubName);
++  await followInvitationLink(world, personName, clubName);
++  await assertAskedForName(world, personName, clubName);
++  await enterInviteeName(world, personName, fullName, clubName);
++  await assertActiveMember(world, personName, clubName);
++}
++
++async function ensureStaffSignedIn(world, actorName) {
++  if (world.staffSignedInAs === actorName) {
++    return;
++  }
++
++  await signInAsStaffDirectly(world, actorName, { email: staffEmailFor(actorName) });
++  world.staffSignedInAs = actorName;
++}
++
++function activeMembershipCountByEmail(clubId, email) {
++  return serverCommands.runCommand(
++    `
++import Ecto.Query
++
++club_id = Map.fetch!(payload, "clubId")
++email = Memba.Accounts.normalize_email(Map.fetch!(payload, "email"))
++
++count =
++  Memba.Membership.Projections.Membership
++  |> join(:inner, [membership], email_address in Memba.Membership.Projections.PersonEmailAddress,
++    on: email_address.person_id == membership.person_id
++  )
++  |> where([membership, _email_address], membership.club_id == ^club_id)
++  |> where([membership, _email_address], membership.active == true)
++  |> where([_membership, email_address], email_address.normalized_email == ^email)
++  |> Memba.Repo.aggregate(:count, :membership_id)
++
++%{count: count}
++`,
++    { clubId, email }
++  ).count;
++}
++
++function pendingInvitationCount(clubId, email) {
++  return serverCommands.runCommand(
++    `
++import Ecto.Query
++
++club_id = Map.fetch!(payload, "clubId")
++email = Memba.Accounts.normalize_email(Map.fetch!(payload, "email"))
++
++count =
++  Memba.Membership.Projections.ClubInvitation
++  |> where([invitation], invitation.club_id == ^club_id)
++  |> where([invitation], invitation.normalized_email == ^email)
++  |> where([invitation], invitation.status == "pending")
++  |> Memba.Repo.aggregate(:count, :invitation_id)
++
++%{count: count}
++`,
++    { clubId, email }
++  ).count;
++}
++
++function personByEmail(email) {
++  return serverCommands.runCommand(
++    `
++email = Memba.Accounts.normalize_email(Map.fetch!(payload, "email"))
++
++case Memba.Membership.get_person_by_email(email) do
++  nil -> %{personId: nil}
++  person -> %{personId: person.person_id, personName: person.name, email: person.email}
++end
++`,
++    { email }
++  );
++}
++
++function latestInvitationRequest(world, email, clubName) {
++  const normalizedEmail = normalizeEmail(email);
++  const matchingRequests = (world.clubMemberInvitationRequests || []).filter(
++    (request) => request.email === normalizedEmail && request.clubName === clubName
++  );
++  const request = matchingRequests[matchingRequests.length - 1];
++
++  assert.ok(request, `Expected an invitation request for ${normalizedEmail} to ${clubName}`);
++  return request;
++}
++
++function rememberInvitationLink(world, personName, clubName, link) {
++  world.clubMemberInvitationLinks = world.clubMemberInvitationLinks || {};
++  world.clubMemberInvitationLinks[personName] = world.clubMemberInvitationLinks[personName] || {};
++  world.clubMemberInvitationLinks[personName][clubName] = link;
++}
++
++function invitationLinkFor(world, personName, clubName) {
++  const link = world.clubMemberInvitationLinks && world.clubMemberInvitationLinks[personName] && world.clubMemberInvitationLinks[personName][clubName];
++  assert.ok(link, `Expected ${personName} to have an invitation link for ${clubName}`);
++  return link;
++}
++
++function invitationEmailMatches(email, recipientEmail, clubName) {
++  return (
++    email.subject === `You're invited to join ${clubName}` &&
++    Array.isArray(email.to) &&
++    email.to.some((recipient) => String(recipient).includes(recipientEmail)) &&
++    String(email.text_body || "").includes("/invitations/club-members/")
++  );
++}
++
++function invitationLinkFromEmail(email) {
++  const match = String(email.text_body || "").match(/https?:\/\/\S+\/invitations\/club-members\/\S+/);
++  return match && match[0];
++}
++
++function browserAppUrl(world, url) {
++  const parsed = new URL(url, `${world.baseUrl}/`);
++  const base = new URL(world.baseUrl);
++
++  if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
++    parsed.protocol = base.protocol;
++    parsed.hostname = base.hostname;
++    parsed.port = base.port;
++  }
++
++  return parsed.toString();
++}
++
++function mailboxMessageId(email) {
++  return email && (email.id || (email.headers && email.headers["Message-ID"]));
++}
++
++function emailSummary(email) {
++  return { subject: email.subject, to: email.to, text_body: email.text_body };
++}
++
++function recipientEmail(world, recipient) {
++  if (String(recipient).includes("@")) {
++    return normalizeEmail(recipient);
++  }
++
++  return emailForPerson(world, recipient);
++}
++
++function recipientNameFor(world, recipient, email) {
++  if (!String(recipient).includes("@")) {
++    return recipient;
++  }
++
++  const personName = personNameFromEmail(email);
++  ensureState(world);
++  world.people[personName] = world.people[personName] || personState(personName, email, null);
++  return personName;
++}
++
++function emailForPerson(world, personName) {
++  ensureState(world);
++
++  if (world.people[personName] && world.people[personName].email) {
++    return normalizeEmail(world.people[personName].email);
++  }
++
++  return normalizeEmail(emailFor(personName));
++}
++
++function personNameFromEmail(email) {
++  const localPart = String(email).split("@")[0] || "invitee";
++  return localPart
++    .split(/[^a-z0-9]+/i)
++    .filter(Boolean)
++    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
++    .join(" ") || "Invitee";
++}
++
++function personState(personName, email, personId) {
++  const normalizedEmail = normalizeEmail(email);
++
++  return {
++    alternateEmails: [],
++    email: normalizedEmail,
++    emailAddresses: [{ email: normalizedEmail, isPrimary: true }],
++    name: personName,
++    personId,
++    primaryEmail: normalizedEmail
++  };
++}
++
++function normalizeEmail(email) {
++  return String(email || "").trim().toLowerCase();
++}
++
++function clubSlugFor(clubName) {
++  return String(clubName || "")
++    .trim()
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, "-")
++    .replace(/^-+|-+$/g, "")
++    .slice(0, 32)
++    .replace(/^-+|-+$/g, "");
++}
++
++function staffEmailFor(personName) {
++  return `${String(personName).trim().toLowerCase()}@memba.io`;
++}
++
++function invitationKey(email, clubName) {
++  return `${clubName}:${normalizeEmail(email)}`;
++}
++
++module.exports = {
++  assertActiveMember,
++  assertAlreadyMemberMessage,
++  assertAskedForEmailOnly,
++  assertAskedForName,
++  assertCannotCreateDirectActiveMember,
++  assertInvitationReceived,
++  assertNotActiveMember,
++  assertOnlyOneActiveMembership,
++  assertSignedInToClub,
++  assertSinglePendingInvitation,
++  ensureActiveMember,
++  ensureClub,
++  ensurePerson,
++  ensurePersonIsNotMember,
++  enterInviteeName,
++  followInvitationLink,
++  inviteAndAccept,
++  inviteEmailToClub,
++  invitePersonToClub,
++  leaveWithoutEnteringName,
++  openAddMemberFlow,
++  tryInvitePersonToClub
++};
+diff --git a/acceptance-tests/features/support/request_account.js b/acceptance-tests/features/support/request_account.js
+index 9f603d8..7074396 100644
+--- a/acceptance-tests/features/support/request_account.js
++++ b/acceptance-tests/features/support/request_account.js
+@@ -329,7 +329,7 @@ function assertClubExists(clubName, expectedSlug) {
+ }
+ 
+ function assertActiveMember(world, personName, clubName) {
+-  const membership = activeMembership(personName, clubName, requestEmailFor(personName));
++  const membership = activeMembership(personName, clubName, requestEmailFor(personName, world));
+ 
+   assert.ok(membership, `Expected ${personName} to be an active member of ${clubName}`);
+   world.memberships[`${clubName}:${personName}`] = {
+@@ -418,7 +418,7 @@ async function followWelcomeLink(world, personName) {
+ 
+ async function assertSignedInToClub(world, personName, clubName) {
+   const club = world.clubs[clubName] || clubByName(clubName);
+-  const email = requestEmailFor(personName);
++  const email = requestEmailFor(personName, world);
+ 
+   assert.ok(club, `Expected ${clubName} to be known before asserting signed-in club access`);
+   world.clubs[clubName] = { clubId: club.clubId, name: club.clubName || clubName, slug: club.clubSlug || club.slug };
+@@ -446,8 +446,9 @@ function requestRow(world, clubName) {
+   );
+ }
+ 
+-function requestEmailFor(personName) {
+-  return emailFor(personName);
++function requestEmailFor(personName, world = null) {
++  const person = world && world.people && world.people[personName];
++  return person && person.email ? person.email : emailFor(personName);
+ }
+ 
+ function personFor(world, personName) {
+diff --git a/docs/iterations/028-staff-member-invitations/todo.md b/docs/iterations/028-staff-member-invitations/todo.md
+index 61117c8..b16adba 100644
+--- a/docs/iterations/028-staff-member-invitations/todo.md
++++ b/docs/iterations/028-staff-member-invitations/todo.md
+@@ -13,6 +13,6 @@
+ - [x] 011 Preserve existing staff onboarding: new Memba staff with no person record still enter a name and continue to the Staff area.
+ - [x] 012 Add domain/application tests for pending invitation creation, duplicate active block, duplicate pending resend, existing-person acceptance, unknown-person profile completion, abandoned profile completion, and accepted-link reuse.
+ - [x] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
+-- [ ] 014 Implement or update Cucumber step definitions only as needed to exercise `club_member_invitations.feature`.
++- [x] 014 Implement or update Cucumber step definitions only as needed to exercise `club_member_invitations.feature`.
+ - [ ] 015 Remove or narrow `@todo-domain`/`@todo-ui` from `club_member_invitations.feature` once implemented.
+ - [ ] 016 Run targeted tests for affected auth/membership/onboarding surfaces, then run `dev check`.
+diff --git a/web/test/features/step_definitions/club_member_invitation_steps.exs b/web/test/features/step_definitions/club_member_invitation_steps.exs
+new file mode 100644
+index 0000000..3c32937
+--- /dev/null
++++ b/web/test/features/step_definitions/club_member_invitation_steps.exs
+@@ -0,0 +1,651 @@
++defmodule Memba.Cucumber.ClubMemberInvitationSteps do
++  use Cucumber.StepDefinition
++
++  import Ecto.Query
++  import ExUnit.Assertions
++
++  alias Memba.Accounts
++  alias Memba.Membership
++  alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Membership.Projections.ClubInvitation
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Slug
++  alias Memba.Repo
++
++  step "{word} is signed in as Memba staff", %{args: [person_name]} = context do
++    context
++    |> ensure_person(person_name, staff_email_for(person_name))
++    |> sign_in_as(person_name)
++  end
++
++  step "{word} {word} {word} exists as a club",
++       %{args: [word_1, word_2, word_3]} = context do
++    ensure_club(context, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} is a person in Memba", %{args: [person_name]} = context do
++    ensure_person(context, person_name)
++  end
++
++  step "{word} is not a member of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++
++    context =
++      context
++      |> ensure_club(club_name)
++      |> ensure_person(person_name)
++
++    club_id = fetch_club_id!(context, club_name)
++    email = email_for_person(context, person_name)
++
++    assert active_membership_count_by_email(club_id, email) == 0
++    context
++  end
++
++  step "{word} is an active member of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    context
++    |> ensure_club(club_name(word_1, word_2, word_3))
++    |> ensure_active_member(person_name, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} has invited {string} to join {word} {word} {word}",
++       %{args: [actor_name, email, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++
++    context
++    |> ensure_signed_in_staff(actor_name)
++    |> invite_email(actor_name, email, club_name)
++    |> assert_invitation_received(email, club_name)
++  end
++
++  step "{word} has accepted an invitation to join {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++    email = "#{String.downcase(person_name)}@example.com"
++
++    context
++    |> ensure_signed_in_staff("Pat")
++    |> invite_email("Pat", email, club_name)
++    |> assert_invitation_received(email, club_name)
++    |> follow_invitation_link(person_name, club_name)
++    |> enter_name(person_name, "#{person_name} Example")
++    |> assert_active_member(person_name, club_name)
++  end
++
++  step "{word} invites {string} to join {word} {word} {word}",
++       %{args: [actor_name, email, word_1, word_2, word_3]} = context do
++    invite_email(context, actor_name, email, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} invites {word} to join {word} {word} {word}",
++       %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
++    context = ensure_person(context, person_name)
++
++    invite_email(
++      context,
++      actor_name,
++      email_for_person(context, person_name),
++      club_name(word_1, word_2, word_3)
++    )
++  end
++
++  step "{word} invites {string} to join {word} {word} {word} again",
++       %{args: [actor_name, email, word_1, word_2, word_3]} = context do
++    invite_email(context, actor_name, email, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} tries to invite {word} to join {word} {word} {word}",
++       %{args: [actor_name, person_name, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++    context = ensure_person(context, person_name)
++    email = email_for_person(context, person_name)
++    club_id = fetch_club_id!(ensure_club(context, club_name), club_name)
++
++    result =
++      Membership.invite_club_member(%{club_id: club_id, email: email}, consistency: :strong)
++
++    context
++    |> Map.put(:last_club_member_invitation_result, result)
++    |> Map.put(:last_club_member_invitation_attempt, %{
++      actor_name: actor_name,
++      person_name: person_name,
++      club_name: club_name
++    })
++  end
++
++  step "{word} follows the invitation link", %{args: [person_name]} = context do
++    follow_invitation_link(context, person_name, inferred_club_name(context))
++  end
++
++  step "{word} follows the same invitation link again", %{args: [person_name]} = context do
++    follow_invitation_link(context, person_name, inferred_club_name(context))
++  end
++
++  step "{word} enters {string} as their name", %{args: [person_name, name]} = context do
++    enter_name(context, person_name, name)
++  end
++
++  step "{word} leaves without entering their name", context do
++    Map.put(context, :current_page, :away_from_profile_completion)
++  end
++
++  step "{word} wants to add a new member to {word} {word} {word}",
++       %{args: [_actor_name, word_1, word_2, word_3]} = context do
++    context
++    |> ensure_club(club_name(word_1, word_2, word_3))
++    |> Map.put(:current_page, :club_member_invitation_form)
++  end
++
++  step "{string} should receive an invitation to join {word} {word} {word}",
++       %{args: [email, word_1, word_2, word_3]} = context do
++    assert_invitation_received(context, email, club_name(word_1, word_2, word_3))
++  end
++
++  step "{string} should receive another invitation to join {word} {word} {word}",
++       %{args: [email, word_1, word_2, word_3]} = context do
++    assert_invitation_received(context, email, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} should receive an invitation to join {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    assert_invitation_received(
++      context,
++      email_for_person(context, person_name),
++      club_name(word_1, word_2, word_3)
++    )
++  end
++
++  step "{word} should not be an active member of {word} {word} {word} yet",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    assert_not_active_member(context, person_name, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} should still not be an active member of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    assert_not_active_member(context, person_name, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} should be asked for their name", %{args: [person_name]} = context do
++    assert %{person_name: ^person_name} = Map.fetch!(context, :pending_profile_completion)
++    assert Map.get(context, :current_page) == :club_member_profile_completion
++    context
++  end
++
++  step "{word} should be an active member of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    assert_active_member(context, person_name, club_name(word_1, word_2, word_3))
++  end
++
++  step "{word} should be signed in to {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++    identity = Map.fetch!(context, :signed_in_identity)
++
++    assert identity.email == Accounts.normalize_email(email_for_person(context, person_name))
++    assert Map.get(context, :current_page) == {:club_home, club_name}
++    context
++  end
++
++  step "{word} should be asked for the member's email address only", context do
++    assert Map.get(context, :current_page) == :club_member_invitation_form
++    assert Map.get(context, :member_invitation_form_fields, [:email]) == [:email]
++    context
++  end
++
++  step "{word} should not be able to create an active member directly from a name and email address",
++       context do
++    assert Map.get(context, :current_page) == :club_member_invitation_form
++    refute Map.get(context, :member_invitation_form_fields, [:email]) == [:name, :email]
++    context
++  end
++
++  step "{word} should see that {word} is already a member of {word} {word} {word}",
++       %{args: [_actor_name, person_name, word_1, word_2, word_3]} = context do
++    expected_club_name = club_name(word_1, word_2, word_3)
++
++    assert {:error, :already_active_member} =
++             Map.fetch!(context, :last_club_member_invitation_result)
++
++    assert %{person_name: ^person_name, club_name: ^expected_club_name} =
++             Map.fetch!(context, :last_club_member_invitation_attempt)
++
++    context
++  end
++
++  step "there should still be only one pending invitation for {string} to join {word} {word} {word}",
++       %{args: [email, word_1, word_2, word_3]} = context do
++    club_name = club_name(word_1, word_2, word_3)
++    club_id = fetch_club_id!(context, club_name)
++
++    assert pending_invitation_count(club_id, email) == 1
++    context
++  end
++
++  step "{word} should still have only one active membership of {word} {word} {word}",
++       %{args: [person_name, word_1, word_2, word_3]} = context do
++    assert_active_member(context, person_name, club_name(word_1, word_2, word_3))
++  end
++
++  defp ensure_signed_in_staff(context, person_name) do
++    case Map.get(context, :signed_in_identity) do
++      %{staff?: true} ->
++        context
++
++      _identity ->
++        context
++        |> ensure_person(person_name, staff_email_for(person_name))
++        |> sign_in_as(person_name)
++    end
++  end
++
++  defp invite_email(context, actor_name, email, club_name) do
++    normalized_email = normalize_email!(email)
++    person_name = person_name_from_email(normalized_email)
++
++    context =
++      context
++      |> ensure_club(club_name)
++      |> put_person_email_if_missing(person_name, normalized_email)
++
++    club_id = fetch_club_id!(context, club_name)
++
++    assert {:ok, %{invitation_id: invitation_id, invitation_token: invitation_token}} =
++             Membership.invite_club_member(%{club_id: club_id, email: normalized_email},
++               consistency: :strong
++             )
++
++    context
++    |> update_context_map(:club_member_invitations, {club_name, normalized_email}, %{
++      actor_name: actor_name,
++      club_name: club_name,
++      email: normalized_email,
++      invitation_id: invitation_id,
++      token: invitation_token
++    })
++    |> update_context_map(
++      :sent_club_member_invitation_counts,
++      {club_name, normalized_email},
++      sent_invitation_count(context, club_name, normalized_email) + 1
++    )
++  end
++
++  defp assert_invitation_received(context, recipient, club_name) do
++    email =
++      if String.contains?(recipient, "@"),
++        do: normalize_email!(recipient),
++        else: email_for_person(context, recipient)
++
++    invitation = fetch_from_context!(context, :club_member_invitations, {club_name, email})
++
++    assert %ClubInvitation{} = Membership.get_club_member_invitation(invitation.invitation_id)
++    assert is_binary(invitation.token)
++    assert sent_invitation_count(context, club_name, email) >= 1
++
++    context
++  end
++
++  defp follow_invitation_link(context, person_name, club_name) do
++    email = email_for_person(context, person_name)
++    %{token: token} = fetch_from_context!(context, :club_member_invitations, {club_name, email})
++
++    case Membership.get_club_member_invitation_by_token(token) do
++      %ClubInvitation{status: "pending"} = invitation ->
++        case Membership.get_person_by_email(invitation.normalized_email) do
++          %PersonProjection{} = person ->
++            assert {:ok, _acceptance} =
++                     Membership.accept_club_member_invitation_for_existing_person(
++                       %{invitation_id: invitation.invitation_id, person_id: person.person_id},
++                       consistency: :strong
++                     )
++
++            context
++            |> remember_person(person_name, person)
++            |> remember_active_membership(person_name, club_name)
++            |> sign_in_email(invitation.normalized_email)
++            |> Map.put(:current_page, {:club_home, club_name})
++
++          nil ->
++            context
++            |> sign_in_email(invitation.normalized_email)
++            |> Map.put(:current_page, :club_member_profile_completion)
++            |> Map.put(:pending_profile_completion, %{
++              club_name: club_name,
++              email: invitation.normalized_email,
++              invitation_id: invitation.invitation_id,
++              person_name: person_name
++            })
++        end
++
++      %ClubInvitation{status: "accepted"} = invitation ->
++        context
++        |> sign_in_email(invitation.normalized_email)
++        |> Map.put(:current_page, {:club_home, club_name})
++
++      nil ->
++        flunk("Expected #{person_name} to have a valid invitation token for #{club_name}")
++    end
++  end
++
++  defp enter_name(context, person_name, name) do
++    journey = Map.fetch!(context, :pending_profile_completion)
++
++    assert {:ok, %{person_id: person_id, membership_id: membership_id}} =
++             Membership.complete_invited_club_member_profile(
++               %{invitation_id: journey.invitation_id, name: name},
++               consistency: :strong
++             )
++
++    person = Membership.get_person(person_id)
++
++    context
++    |> update_context_map(:people, person_name, %{
++      person_id: person_id,
++      name: person.name,
++      email: person.email
++    })
++    |> update_context_map(:memberships, {journey.club_name, person_name}, membership_id)
++    |> sign_in_email(journey.email)
++    |> Map.delete(:pending_profile_completion)
++    |> Map.put(:current_page, {:club_home, journey.club_name})
++  end
++
++  defp assert_not_active_member(context, person_name, club_name) do
++    club_id = fetch_club_id!(context, club_name)
++    email = email_for_person(context, person_name)
++
++    assert active_membership_count_by_email(club_id, email) == 0
++    context
++  end
++
++  defp assert_active_member(context, person_name, club_name) do
++    club_id = fetch_club_id!(context, club_name)
++    email = email_for_person(context, person_name)
++
++    assert active_membership_count_by_email(club_id, email) == 1
++    context
++  end
++
++  defp ensure_active_member(context, person_name, club_name) do
++    context =
++      context
++      |> ensure_club(club_name)
++      |> ensure_person(person_name)
++
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++
++    case active_membership_id(club_id, person.person_id) do
++      nil ->
++        membership_id = Memba.ID.generate(:membership)
++
++        assert :ok =
++                 Membership.add_member(
++                   %{membership_id: membership_id, club_id: club_id, person_id: person.person_id},
++                   consistency: :strong
++                 )
++
++        update_context_map(context, :memberships, {club_name, person_name}, membership_id)
++
++      membership_id ->
++        update_context_map(context, :memberships, {club_name, person_name}, membership_id)
++    end
++  end
++
++  defp ensure_club(context, club_name) do
++    if get_in(context, [:clubs, club_name]) do
++      context
++    else
++      slug = scenario_slug(context, club_name)
++
++      club =
++        case Membership.get_club_by_slug(slug) do
++          %ClubProjection{} = club ->
++            club
++
++          nil ->
++            club_id = Memba.ID.generate(:club)
++
++            assert :ok =
++                     Membership.create_club(
++                       %{club_id: club_id, name: club_name, slug: slug},
++                       consistency: :strong
++                     )
++
++            Membership.get_club(club_id)
++        end
++
++      update_context_map(context, :clubs, club_name, club.club_id)
++    end
++  end
++
++  defp ensure_person(context, person_name, email \\ nil) do
++    email = email || default_email_for(context, person_name)
++
++    case get_in(context, [:people, person_name]) do
++      %{person_id: person_id} when is_binary(person_id) ->
++        context
++
++      _missing ->
++        case Membership.get_person_by_email(email) do
++          %PersonProjection{} = person ->
++            remember_person(context, person_name, person)
++
++          nil ->
++            person_id = Memba.ID.generate(:person)
++
++            assert :ok =
++                     Membership.create_person(
++                       %{
++                         person_id: person_id,
++                         name: person_name,
++                         email_addresses: [%{email: email, is_primary: true}]
++                       },
++                       consistency: :strong
++                     )
++
++            assert %PersonProjection{} = person = Membership.get_person(person_id)
++            remember_person(context, person_name, person)
++        end
++    end
++  end
++
++  defp put_person_email_if_missing(context, person_name, email) do
++    case get_in(context, [:people, person_name]) do
++      nil ->
++        update_context_map(context, :people, person_name, %{email: email, name: person_name})
++
++      _person ->
++        context
++    end
++  end
++
++  defp remember_person(context, person_name, %PersonProjection{} = person) do
++    update_context_map(context, :people, person_name, %{
++      person_id: person.person_id,
++      name: person.name,
++      email: person.email
++    })
++  end
++
++  defp remember_active_membership(context, person_name, club_name) do
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++    membership_id = active_membership_id!(club_id, person.person_id)
++    update_context_map(context, :memberships, {club_name, person_name}, membership_id)
++  end
++
++  defp sign_in_as(context, person_name) do
++    sign_in_email(context, email_for_person(context, person_name))
++  end
++
++  defp sign_in_email(context, email) do
++    normalized_email = Accounts.normalize_email(email)
++
++    Map.put(context, :signed_in_identity, %{
++      email: normalized_email,
++      staff?: Accounts.staff_email?(normalized_email),
++      active_clubs: Accounts.list_active_clubs_for_email(normalized_email)
++    })
++  end
++
++  defp fetch_person!(context, person_name) do
++    case get_in(context, [:people, person_name]) do
++      %{person_id: person_id} when is_binary(person_id) ->
++        Membership.get_person(person_id) || flunk("Expected #{person_name} to exist")
++
++      %{email: email} ->
++        Membership.get_person_by_email(email) ||
++          flunk("Expected #{person_name} to exist with #{email}")
++
++      _missing ->
++        flunk("Expected #{person_name} to be known as a person")
++    end
++  end
++
++  defp email_for_person(context, person_name) do
++    case get_in(context, [:people, person_name, :email]) do
++      email when is_binary(email) -> normalize_email!(email)
++      _missing -> default_email_for(context, person_name)
++    end
++  end
++
++  defp active_membership_count_by_email(club_id, email) do
++    normalized_email = Accounts.normalize_email(email)
++
++    MembershipProjection
++    |> join(
++      :inner,
++      [membership],
++      email_address in Memba.Membership.Projections.PersonEmailAddress,
++      on: email_address.person_id == membership.person_id
++    )
++    |> where([membership, _email_address], membership.club_id == ^club_id)
++    |> where([membership, _email_address], membership.active == true)
++    |> where([_membership, email_address], email_address.normalized_email == ^normalized_email)
++    |> Repo.aggregate(:count, :membership_id)
++  end
++
++  defp pending_invitation_count(club_id, email) do
++    normalized_email = Accounts.normalize_email(email)
++
++    ClubInvitation
++    |> where([invitation], invitation.club_id == ^club_id)
++    |> where([invitation], invitation.normalized_email == ^normalized_email)
++    |> where([invitation], invitation.status == "pending")
++    |> Repo.aggregate(:count, :invitation_id)
++  end
++
++  defp active_membership_id!(club_id, person_id) do
++    active_membership_id(club_id, person_id) ||
++      flunk("Expected active membership for #{person_id} in #{club_id}")
++  end
++
++  defp active_membership_id(club_id, person_id) do
++    MembershipProjection
++    |> where([membership], membership.club_id == ^club_id)
++    |> where([membership], membership.person_id == ^person_id)
++    |> where([membership], membership.active == true)
++    |> select([membership], membership.membership_id)
++    |> limit(1)
++    |> Repo.one()
++  end
++
++  defp fetch_club_id!(context, club_name) do
++    case get_in(context, [:clubs, club_name]) do
++      club_id when is_binary(club_id) -> club_id
++      %{club_id: club_id} when is_binary(club_id) -> club_id
++      _missing -> flunk("Expected #{club_name} to be known as a club")
++    end
++  end
++
++  defp fetch_from_context!(context, collection_key, item_key) do
++    context
++    |> Map.get(collection_key, %{})
++    |> Map.fetch(item_key)
++    |> case do
++      {:ok, value} -> value
++      :error -> flunk("Expected #{inspect(item_key)} to be present in #{inspect(collection_key)}")
++    end
++  end
++
++  defp update_context_map(context, collection_key, item_key, value) do
++    collection =
++      context
++      |> Map.get(collection_key, %{})
++      |> Map.put(item_key, value)
++
++    Map.put(context, collection_key, collection)
++  end
++
++  defp sent_invitation_count(context, club_name, email) do
++    get_in(context, [:sent_club_member_invitation_counts, {club_name, normalize_email!(email)}]) ||
++      0
++  end
++
++  defp inferred_club_name(context) do
++    case Map.keys(Map.get(context, :clubs, %{})) do
++      [club_name] ->
++        club_name
++
++      _other ->
++        case Map.get(context, :pending_profile_completion) do
++          %{club_name: club_name} -> club_name
++          _missing -> flunk("Expected exactly one club in the invitation scenario")
++        end
++    end
++  end
++
++  defp club_name(word_1, word_2, word_3), do: Enum.join([word_1, word_2, word_3], " ")
++
++  defp normalize_email!(email), do: Accounts.normalize_email(email)
++
++  defp staff_email_for(person_name), do: "#{String.downcase(person_name)}@memba.io"
++
++  defp default_email_for(_context, "Pat"), do: staff_email_for("Pat")
++
++  defp default_email_for(context, person_name),
++    do: "#{email_local_part(person_name)}-#{scenario_email_suffix(context)}@example.test"
++
++  defp person_name_from_email(email) do
++    email
++    |> String.split("@", parts: 2)
++    |> hd()
++    |> String.split(~r/[^a-z0-9]+/i, trim: true)
++    |> Enum.map_join(" ", fn part -> String.capitalize(String.downcase(part)) end)
++    |> case do
++      "" -> "Invitee"
++      person_name -> person_name
++    end
++  end
++
++  defp email_local_part(person_name) do
++    person_name
++    |> String.downcase()
++    |> String.replace(~r/[^a-z0-9]+/, ".")
++    |> String.trim(".")
++  end
++
++  defp scenario_slug(_context, "West Coast Paddlers"), do: "west-coast-paddlers"
++
++  defp scenario_slug(context, club_name) do
++    suffix = scenario_email_suffix(context)
++
++    base =
++      Slug.default_from_name(club_name)
++      |> String.slice(0, Slug.max_length() - String.length(suffix) - 1)
++      |> String.trim("-")
++
++    "#{base}-#{suffix}"
++  end
++
++  defp scenario_email_suffix(context) do
++    context
++    |> Map.get(:scenario_name, "scenario")
++    |> :erlang.phash2(1_000_000)
++    |> Integer.to_string(36)
++    |> String.downcase()
++  end
++end
