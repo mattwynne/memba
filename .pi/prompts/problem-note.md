@@ -11,7 +11,14 @@ Problem supplied with the command:
 $@
 ```
 
-Write a new Markdown file named `docs/problems/YYYY-MM-DD-short-problem-slug.md`.
+Before creating a new file, search the existing problem backlog for duplicates or closely related notes:
+
+- Inspect `docs/problems/README.md` when it exists.
+- Search `docs/problems/*.md` for related terms, actors, workflows, and expected outcomes from the supplied problem.
+- If an existing note already captures the same underlying user-facing problem, amend/update that existing note instead of creating a duplicate. Add the new observation date/context to the existing note only when it adds useful facts.
+- If the supplied problem is related but materially different, create a new note and make the distinction clear.
+
+If no existing note captures the same underlying problem, write a new Markdown file named `docs/problems/YYYY-MM-DD-short-problem-slug.md`.
 
 Use this shape unless the facts call for something simpler:
 
@@ -39,4 +46,5 @@ Guidelines:
 - Ask only for essential missing facts or context; do not invent details.
 - Do not edit application code.
 - Do not run `dev check` for this docs-only note.
-- Commit only the new problem note. Leave unrelated working-tree changes untouched.
+- When updating an existing note, commit only the touched problem note/index files and prompt changes that are part of this task. Leave unrelated working-tree changes untouched.
+- When creating a new note, commit only the new problem note and any intentional problem index update. Leave unrelated working-tree changes untouched.
