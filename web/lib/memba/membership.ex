@@ -110,13 +110,13 @@ defmodule Memba.Membership do
   end
 
   @doc """
-  Assign the built-in Membership Administrator role to an active member as a club member actor.
+  Assign the built-in Admin role to an active member as a club member actor.
 
   The caller supplies the target `:membership_id`/`:person_id`, the `:club_id`,
   and `:actor_person_id`. The actor must have the projected
   `club.manage_members` permission. The target member must be active in the
   club. The built-in role ID is derived from the club so callers cannot grant an
-  arbitrary role through this Membership Administrator-specific entry point.
+  arbitrary role through this Admin-specific entry point.
   """
   def assign_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
@@ -126,15 +126,14 @@ defmodule Memba.Membership do
   end
 
   @doc """
-  Remove the built-in Membership Administrator role from an active member as a club member actor.
+  Remove the built-in Admin role from an active member as a club member actor.
 
   The caller supplies the target `:membership_id`/`:person_id`, the `:club_id`,
   and `:actor_person_id`. The actor must have the projected
   `club.manage_members` permission. The target member must be active in the
   club. The built-in role ID is derived from the club so callers cannot remove an
-  arbitrary role through this Membership Administrator-specific entry point. The
-  removal is rejected when it would leave the club with no active Membership
-  Administrators.
+  arbitrary role through this Admin-specific entry point. The removal is rejected
+  when it would leave the club with no active Admins.
   """
   def remove_membership_administrator_as_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do

@@ -11,8 +11,8 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
         %{
           role_id: membership_administrator_role_id(club_id),
           club_id: club_id,
-          role_key: "membership_administrator",
-          name: "Membership Administrator",
+          role_key: "admin",
+          name: "Admin",
           inserted_at: now,
           updated_at: now
         }
@@ -97,7 +97,7 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
         role_id,
         club_id
       FROM membership_roles
-      WHERE role_key = 'membership_administrator'
+      WHERE role_key = 'admin'
     ),
     active_default_assignments AS (
       SELECT
@@ -129,7 +129,7 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
     WITH default_roles AS (
       SELECT role_id
       FROM membership_roles
-      WHERE role_key = 'membership_administrator'
+      WHERE role_key = 'admin'
     )
     DELETE FROM membership_role_assignments AS assignment
     USING default_roles AS role
@@ -140,7 +140,7 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
     WITH default_roles AS (
       SELECT role_id
       FROM membership_roles
-      WHERE role_key = 'membership_administrator'
+      WHERE role_key = 'admin'
     )
     DELETE FROM membership_role_permissions AS permission
     USING default_roles AS role
@@ -150,7 +150,7 @@ defmodule Memba.Repo.Migrations.BackfillMembershipAdministratorRoles do
 
     execute("""
     DELETE FROM membership_roles
-    WHERE role_key = 'membership_administrator';
+    WHERE role_key = 'admin';
     """)
   end
 

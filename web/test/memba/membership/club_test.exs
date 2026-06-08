@@ -18,7 +18,7 @@ defmodule Memba.Membership.ClubTest do
   alias Memba.Membership.Roles
 
   describe "execute/2 CreateClub" do
-    test "emits ClubCreated and initializes the default Membership Administrator bundle" do
+    test "emits ClubCreated and initializes the default Admin bundle" do
       club_id = Memba.ID.generate(:club)
       role_id = Roles.membership_administrator_role_id(club_id)
 
@@ -37,8 +37,8 @@ defmodule Memba.Membership.ClubTest do
                %ClubRoleDefined{
                  club_id: ^club_id,
                  role_id: ^role_id,
-                 role_key: "membership_administrator",
-                 name: "Membership Administrator"
+                 role_key: "admin",
+                 name: "Admin"
                },
                %ClubRolePermissionGranted{
                  club_id: ^club_id,
@@ -159,7 +159,7 @@ defmodule Memba.Membership.ClubTest do
   end
 
   describe "execute/2 DefineClubRole" do
-    test "emits ClubRoleDefined for the default Membership Administrator role" do
+    test "emits ClubRoleDefined for the default Admin role" do
       club_id = Memba.ID.generate(:club)
       role_id = Roles.membership_administrator_role_id(club_id)
       club = created_club(club_id)
@@ -167,14 +167,14 @@ defmodule Memba.Membership.ClubTest do
       assert %ClubRoleDefined{
                club_id: ^club_id,
                role_id: ^role_id,
-               role_key: "membership_administrator",
-               name: "Membership Administrator"
+               role_key: "admin",
+               name: "Admin"
              } =
                Club.execute(club, %DefineClubRole{
                  club_id: club_id,
                  role_id: role_id,
                  role_key: Roles.membership_administrator_key(),
-                 name: " Membership Administrator "
+                 name: " Admin "
                })
     end
 
@@ -192,7 +192,7 @@ defmodule Memba.Membership.ClubTest do
                  club_id: club_id,
                  role_id: role_id,
                  role_key: "custom_membership_administrator",
-                 name: "Custom Membership Administrator"
+                 name: "Custom Admin"
                })
 
       assert {:error, :role_key_already_defined} =
@@ -200,7 +200,7 @@ defmodule Memba.Membership.ClubTest do
                  club_id: club_id,
                  role_id: Memba.ID.generate(:role),
                  role_key: Roles.membership_administrator_key(),
-                 name: "Membership Administrator"
+                 name: "Admin"
                })
     end
 
@@ -415,8 +415,8 @@ defmodule Memba.Membership.ClubTest do
     assert %{
              ^role_id => %{
                role_id: ^role_id,
-               role_key: "membership_administrator",
-               name: "Membership Administrator"
+               role_key: "admin",
+               name: "Admin"
              }
            } = club.roles
 

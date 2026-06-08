@@ -42,8 +42,8 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                 %ClubRoleDefined{
                   club_id: ^club_id,
                   role_id: ^role_id,
-                  role_key: "membership_administrator",
-                  name: "Membership Administrator"
+                  role_key: "admin",
+                  name: "Admin"
                 },
                 %ClubRolePermissionGranted{
                   club_id: ^club_id,
@@ -55,7 +55,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
                 club_id: ^club_id,
                 name: "Kootenay Mountaineering Club",
                 slug: "kmc",
-                roles: %{^role_id => %{role_key: "membership_administrator"}},
+                roles: %{^role_id => %{role_key: "admin"}},
                 role_permissions: %{^role_id => default_role_permissions}
               }
             }} = App.dispatch(command, returning: :execution_result, consistency: :strong)
@@ -66,7 +66,7 @@ defmodule Memba.Membership.CreateClubDispatchTest do
              club_id: ^club_id,
              name: "Kootenay Mountaineering Club",
              slug: "kmc",
-             roles: %{^role_id => %{role_key: "membership_administrator"}},
+             roles: %{^role_id => %{role_key: "admin"}},
              role_permissions: %{^role_id => persisted_role_permissions}
            } =
              App.aggregate_state(Club, club_id)

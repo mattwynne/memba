@@ -8,7 +8,7 @@ defmodule Memba.MembershipAdministrationStepsTest do
     "A converted requester can administer membership for their new club",
     "Robin grants membership administration to Alice",
     "Alice cannot grant membership administration to Bob",
-    "Robin cannot remove the last Membership Administrator"
+    "Robin cannot remove the last Admin"
   ]
 
   for scenario_name <- @scenario_names do

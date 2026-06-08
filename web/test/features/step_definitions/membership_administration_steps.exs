@@ -16,7 +16,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
   alias Memba.Membership.Slug
   alias Memba.Repo
 
-  step "{word} is a Membership Administrator of {word} {word} {word}",
+  step "{word} is an Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     ensure_membership_administrator(
       context,
@@ -25,7 +25,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     )
   end
 
-  step "{word} is the only Membership Administrator of {word} {word} {word}",
+  step "{word} is the only Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)
     context = ensure_membership_administrator(context, person_name, club_name)
@@ -45,7 +45,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     context
   end
 
-  step "{word} makes {word} a Membership Administrator of {word} {word} {word}",
+  step "{word} makes {word} an Admin of {word} {word} {word}",
        %{args: [actor_name, target_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)
     {context, target_membership_id} = ensure_active_member(context, target_name, club_name)
@@ -67,7 +67,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     Map.put(context, :last_membership_administration_result, :ok)
   end
 
-  step "{word} tries to make {word} a Membership Administrator of {word} {word} {word}",
+  step "{word} tries to make {word} an Admin of {word} {word} {word}",
        %{args: [actor_name, target_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)
     {context, target_membership_id} = ensure_active_member(context, target_name, club_name)
@@ -90,7 +90,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     Map.put(context, :last_membership_administration_result, result)
   end
 
-  step "{word} tries to remove {word} as a Membership Administrator of {word} {word} {word}",
+  step "{word} tries to remove {word} as an Admin of {word} {word} {word}",
        %{args: [actor_name, target_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)
     {context, target_membership_id} = ensure_active_member(context, target_name, club_name)
@@ -113,7 +113,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     Map.put(context, :last_membership_administration_result, result)
   end
 
-  step "{word} should be a Membership Administrator of {word} {word} {word}",
+  step "{word} should be an Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     assert_membership_administrator(
       context,
@@ -122,7 +122,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     )
   end
 
-  step "{word} should still be a Membership Administrator of {word} {word} {word}",
+  step "{word} should still be an Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     assert_membership_administrator(
       context,
@@ -131,7 +131,7 @@ defmodule Memba.Cucumber.MembershipAdministrationSteps do
     )
   end
 
-  step "{word} should not be a Membership Administrator of {word} {word} {word}",
+  step "{word} should not be an Admin of {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     club_name = club_name(club_word_1, club_word_2, club_word_3)
 

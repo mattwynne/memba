@@ -10,7 +10,7 @@ defmodule Memba.SeedDataTest do
   alias Memba.Membership.Projections.RolePermission
   alias Memba.Membership.Roles
 
-  test "seeded clubs have a Membership Administrator role and active administrator permission" do
+  test "seeded clubs have an Admin role and active administrator permission" do
     capture_io(fn ->
       Code.eval_file(Path.expand("../../priv/repo/seeds.exs", __DIR__))
     end)
@@ -23,8 +23,8 @@ defmodule Memba.SeedDataTest do
 
     assert %Role{
              club_id: ^kootenay_club_id,
-             role_key: "membership_administrator",
-             name: "Membership Administrator"
+             role_key: "admin",
+             name: "Admin"
            } = Repo.get(Role, role_id)
 
     assert %RolePermission{

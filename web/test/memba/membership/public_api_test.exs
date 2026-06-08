@@ -35,8 +35,8 @@ defmodule Memba.Membership.PublicApiTest do
                 %ClubRoleDefined{
                   club_id: ^club_id,
                   role_id: ^role_id,
-                  role_key: "membership_administrator",
-                  name: "Membership Administrator"
+                  role_key: "admin",
+                  name: "Admin"
                 },
                 %ClubRolePermissionGranted{
                   club_id: ^club_id,
@@ -71,8 +71,8 @@ defmodule Memba.Membership.PublicApiTest do
                 %ClubRoleDefined{
                   club_id: ^club_id,
                   role_id: ^role_id,
-                  role_key: "membership_administrator",
-                  name: "Membership Administrator"
+                  role_key: "admin",
+                  name: "Admin"
                 },
                 %ClubRolePermissionGranted{
                   club_id: ^club_id,

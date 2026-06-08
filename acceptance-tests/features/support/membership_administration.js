@@ -51,7 +51,7 @@ function ensureOnlyMembershipAdministrator(world, personName, clubName) {
   ensureMembershipAdministrator(world, personName, clubName);
 
   const count = membershipAdministratorCount(world, clubName);
-  assert.equal(count, 1, `Expected ${personName} to be the only Membership Administrator of ${clubName}`);
+  assert.equal(count, 1, `Expected ${personName} to be the only Admin of ${clubName}`);
 }
 
 function ensureOrdinaryMember(world, personName, clubName) {
@@ -118,7 +118,7 @@ function assertMembershipAdministrator(world, personName, clubName) {
   assert.equal(
     status.membershipAdministrator,
     true,
-    `Expected ${personName} to be a Membership Administrator of ${clubName}`
+    `Expected ${personName} to be an Admin of ${clubName}`
   );
 
   rememberMember(world, {
@@ -138,7 +138,7 @@ function assertNotMembershipAdministrator(world, personName, clubName) {
   assert.equal(
     status.membershipAdministrator,
     false,
-    `Expected ${personName} not to be a Membership Administrator of ${clubName}`
+    `Expected ${personName} not to be an Admin of ${clubName}`
   );
 }
 

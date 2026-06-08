@@ -16,7 +16,7 @@ defmodule Memba.Membership.RoleProjectionTest do
   alias Memba.Membership.Projections.RolePermission, as: RolePermissionProjection
   alias Memba.Membership.Roles
 
-  test "CreateClub projects the default Membership Administrator role and permission grant" do
+  test "CreateClub projects the default Admin role and permission grant" do
     club_id = Memba.ID.generate(:club)
     role_id = Roles.membership_administrator_role_id(club_id)
 
@@ -33,8 +33,8 @@ defmodule Memba.Membership.RoleProjectionTest do
     assert %RoleProjection{
              role_id: ^role_id,
              club_id: ^club_id,
-             role_key: "membership_administrator",
-             name: "Membership Administrator"
+             role_key: "admin",
+             name: "Admin"
            } = Repo.get(RoleProjection, role_id)
 
     assert %RolePermissionProjection{
