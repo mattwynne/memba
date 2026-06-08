@@ -88,6 +88,8 @@ defmodule MembaWeb.Router do
     end
 
     get "/auth/sign-in/:token", AuthController, :callback
+    get "/invitations/club-members/profile", ClubMemberInvitationController, :profile
+    post "/invitations/club-members/profile", ClubMemberInvitationController, :complete_profile
     get "/invitations/club-members/:token", ClubMemberInvitationController, :callback
     delete "/auth", AuthController, :delete
     get "/about", PageController, :about
