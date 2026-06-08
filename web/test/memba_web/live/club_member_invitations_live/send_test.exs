@@ -132,6 +132,40 @@ defmodule MembaWeb.ClubMemberInvitationsLive.SendTest do
     end)
   end
 
+  test "ordinary member direct invitation request with crafted params is rejected before sending",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice-crafted@example.com",
+        name: "Alice Ordinary",
+        club_name: "West Coast Paddlers"
+      )
+
+    path =
+      ~p"/members/invitations/new?club_id=#{alice.club_id}" <>
+        "&invitation%5Bemail%5D=eve%40example.com"
+
+    error =
+      assert_raise MembaWeb.ForbiddenError, "Forbidden", fn ->
+        conn
+        |> init_test_session(%{
+          IdentityAuth.identity_session_key() => "alice-crafted@example.com"
+        })
+        |> get(path)
+      end
+
+    assert error.plug_status == 403
+
+    assert is_nil(
+             Membership.get_pending_club_member_invitation_by_email(
+               alice.club_id,
+               "eve@example.com"
+             )
+           )
+
+    assert_no_email_sent()
+  end
+
   defp create_active_member(attrs) do
     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
     person_id = Memba.ID.generate(:person)
