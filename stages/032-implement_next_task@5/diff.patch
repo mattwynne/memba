@@ -1,0 +1,187 @@
+diff --git a/docs/iterations/028-staff-member-invitations/todo.md b/docs/iterations/028-staff-member-invitations/todo.md
+index 1789c38..0761785 100644
+--- a/docs/iterations/028-staff-member-invitations/todo.md
++++ b/docs/iterations/028-staff-member-invitations/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Inspect the existing auth sign-in token and staff onboarding flow to decide how to reuse or extend it for invitation acceptance without mixing ordinary short-lived sign-in links with membership-granting invitation links.
+ - [x] 003 Add a minimal club invitation model in the Membership boundary, event-sourced if consistent with nearby Membership aggregates:
+ - [x] 004 Add public Membership APIs/commands for Staff/system use:
+-- [ ] 005 Ensure duplicate checks use normalized email:
++- [x] 005 Ensure duplicate checks use normalized email:
+ - [ ] 006 Add an invitation email module with clear club context and a one-use invitation link.
+ - [ ] 007 Add the Staff club-scoped invite route and form. Exact route name is implementation detail, but it should sit under `/admin/clubs/:club_id/...` and not replace the existing person edit route.
+ - [ ] 008 Decommission direct Staff club-member creation from name/email by hiding/removing that action or redirecting it to the invite route. Keep person edit behaviour where still needed for existing people.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index e424d11..1c3c4eb 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -117,14 +117,23 @@ defmodule Memba.Membership do
+   def invite_club_member(attrs, dispatch_opts \\ [])
+       when is_map(attrs) and is_list(dispatch_opts) do
+     with {:ok, command, invitation_token} <- invite_club_member_command(attrs),
+-         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
+-      {:ok,
+-       invitation_token_result(
+-         command.invitation_id,
+-         invitation_token,
+-         :execution_result,
+-         dispatch_result
+-       )}
++         :ok <- prevent_inviting_active_club_member(command) do
++      case get_pending_club_member_invitation_by_email(command.club_id, command.email) do
++        %ClubInvitation{} = invitation ->
++          resend_pending_club_member_invitation(invitation, dispatch_opts)
++
++        nil ->
++          with {:ok, dispatch_result} <-
++                 dispatch_invitation_token_command(command, dispatch_opts) do
++            {:ok,
++             invitation_token_result(
++               command.invitation_id,
++               invitation_token,
++               :execution_result,
++               dispatch_result
++             )}
++          end
++      end
+     end
+   end
+ 
+@@ -948,6 +957,14 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
++    if active_member_of_club_by_email?(command.club_id, command.email) do
++      {:error, :already_active_member}
++    else
++      :ok
++    end
++  end
++
+   defp ensure_active_membership(club_id, person_id, membership_id) do
+     with {:ok, club_id} <- ID.cast(:club, club_id),
+          {:ok, person_id} <- ID.cast(:person, person_id),
+@@ -1003,6 +1020,19 @@ defmodule Memba.Membership do
+   defp ensure_pending_invitation(%ClubInvitation{status: "accepted"}),
+     do: {:error, :already_accepted}
+ 
++  defp resend_pending_club_member_invitation(%ClubInvitation{} = invitation, dispatch_opts) do
++    with {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
++         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
++      {:ok,
++       invitation_token_result(
++         command.invitation_id,
++         invitation_token,
++         :execution_result,
++         dispatch_result
++       )}
++    end
++  end
++
+   defp fetch_existing_person(person_id) do
+     case get_person(person_id) do
+       %Person{} = person -> {:ok, person}
+diff --git a/web/test/memba/membership/public_api_test.exs b/web/test/memba/membership/public_api_test.exs
+index df84ae6..dd7bde2 100644
+--- a/web/test/memba/membership/public_api_test.exs
++++ b/web/test/memba/membership/public_api_test.exs
+@@ -502,6 +502,98 @@ defmodule Memba.Membership.PublicApiTest do
+            } = Membership.get_club_member_invitation(invitation_id)
+   end
+ 
++  test "invite_club_member/2 rejects an active club member by normalized email" do
++    club_id = Memba.ID.generate(:club)
++    person_id = Memba.ID.generate(:person)
++    membership_id = Memba.ID.generate(:membership)
++    invitation_id = Memba.ID.generate(:club_invitation)
++
++    assert :ok =
++             Membership.create_person(
++               %{
++                 person_id: person_id,
++                 name: "Robin",
++                 email_addresses: [
++                   %{email: "robin@example.com", is_primary: true},
++                   %{email: "Robin@Work.Example", is_primary: false}
++                 ]
++               },
++               consistency: :strong
++             )
++
++    assert :ok =
++             Membership.add_member(
++               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
++               consistency: :strong
++             )
++
++    assert {:error, :already_active_member} =
++             Membership.invite_club_member(
++               %{invitation_id: invitation_id, club_id: club_id, email: " robin@work.example "},
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    assert is_nil(Membership.get_club_member_invitation(invitation_id))
++  end
++
++  test "invite_club_member/2 resends a pending invitation by normalized club email" do
++    club_id = Memba.ID.generate(:club)
++    original_invitation_id = Memba.ID.generate(:club_invitation)
++    duplicate_invitation_id = Memba.ID.generate(:club_invitation)
++
++    assert {:ok, %{invitation_token: first_token}} =
++             Membership.invite_club_member(
++               %{
++                 invitation_id: original_invitation_id,
++                 club_id: club_id,
++                 email: "Robin@Example.COM"
++               },
++               consistency: :strong
++             )
++
++    first_hash = InvitationToken.hash_token(first_token)
++
++    assert {:ok,
++            %{
++              invitation_id: ^original_invitation_id,
++              invitation_token: second_token,
++              execution_result: %ExecutionResult{
++                aggregate_uuid: ^original_invitation_id,
++                events: [
++                  %ClubMemberInvitationResent{
++                    invitation_id: ^original_invitation_id,
++                    token_hash: second_hash
++                  }
++                ]
++              }
++            }} =
++             Membership.invite_club_member(
++               %{
++                 invitation_id: duplicate_invitation_id,
++                 club_id: club_id,
++                 email: " robin@example.com "
++               },
++               returning: :execution_result,
++               consistency: :strong
++             )
++
++    refute second_token == first_token
++    refute second_hash == first_hash
++    assert InvitationToken.hash_token(second_token) == second_hash
++
++    assert is_nil(Membership.get_club_member_invitation(duplicate_invitation_id))
++
++    assert %ClubInvitationProjection{
++             invitation_id: ^original_invitation_id,
++             normalized_email: "robin@example.com",
++             token_hash: ^second_hash,
++             resend_count: 1,
++             status: "pending"
++           } =
++             Membership.get_pending_club_member_invitation_by_email(club_id, "ROBIN@example.com")
++  end
++
+   test "resend_club_member_invitation/2 rotates the token for the pending club email" do
+     club_id = Memba.ID.generate(:club)
+     invitation_id = Memba.ID.generate(:club_invitation)
