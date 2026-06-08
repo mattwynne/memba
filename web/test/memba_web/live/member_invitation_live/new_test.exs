@@ -1,14 +1,42 @@
 defmodule MembaWeb.MemberInvitationLive.NewTest do
-  use MembaWeb.ConnCase, async: true
+  use MembaWeb.FeatureCase, async: false
 
   import Phoenix.LiveViewTest
+  import Swoosh.TestAssertions
 
+  alias Memba.Accounts.AuthEmail
+  alias Memba.Membership
   alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.ClubInvitation
   alias Memba.Membership.Projections.MemberPermission
-  alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Repo
   alias MembaWeb.IdentityAuth
+
+  setup :set_swoosh_global
+
+  setup do
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_auth_email_config = Application.get_env(:memba, AuthEmail)
+
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Test,
+      api_key: "server-token"
+    )
+
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.local",
+      message_stream: "test-auth"
+    )
+
+    on_exit(fn ->
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(AuthEmail, original_auth_email_config)
+    end)
+
+    :ok
+  end
 
   test "renders a member invitation LiveView shell in the club site layout", %{conn: conn} do
     {:ok, view, _html} = live_isolated(conn, MembaWeb.MemberInvitationLive.New)
@@ -52,6 +80,18 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
              "#member-invitation-club-home-link[href='/?club_id=#{alice.club_id}']",
              "Club home"
            )
+
+    assert has_element?(view, "#member-invitation-form[aria-label='Invite member']")
+
+    assert has_element?(
+             view,
+             "#member-invitation-email-input[aria-label='Invitee email address']"
+           )
+
+    assert has_element?(view, "#send-member-invitation-button")
+    refute has_element?(view, "#person-name-input")
+    refute has_element?(view, "input[name='invitation[name]']")
+    refute has_element?(view, "select[name='invitation[role]']")
   end
 
   test "club subdomain routed mount keeps the host-selected club after LiveView connects", %{
@@ -78,6 +118,53 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     assert has_element?(view, "#member-invitation-club-home-link[href='/']")
     refute has_element?(view, "#member-invitation-club-home-link[href*='club_id=']")
+  end
+
+  test "submitting a member invitation keeps the Membership Admin form email-only", %{
+    conn: conn
+  } do
+    alice =
+      create_membership_admin(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
+
+    render_submit(view, "send_invitation", %{
+      "invitation" => %{
+        "email" => " DANA@Example.COM ",
+        "name" => "Dana Danger",
+        "role" => "membership_administrator"
+      }
+    })
+
+    assert has_element?(view, "#flash-info", "Invitation sent to dana@example.com")
+
+    assert %ClubInvitation{
+             club_id: club_id,
+             email: "dana@example.com",
+             normalized_email: "dana@example.com",
+             status: "pending"
+           } =
+             Membership.get_pending_club_member_invitation_by_email(
+               alice.club_id,
+               "dana@example.com"
+             )
+
+    assert club_id == alice.club_id
+    refute Membership.get_person_by_email("dana@example.com")
+    refute Membership.active_member_of_club_by_email?(alice.club_id, "dana@example.com")
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"", "dana@example.com"}]
+      assert email.subject == "You're invited to join Alpine Club"
+      assert email.text_body =~ "/invitations/club-members/"
+    end)
   end
 
   test "routed GET forbids an active club member without club.manage_members permission", %{
@@ -180,7 +267,7 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
       )
 
     membership =
-      Repo.insert!(%Membership{
+      Repo.insert!(%MembershipProjection{
         membership_id: Memba.ID.generate(:membership),
         club_id: club_id,
         person_id: person.person_id,
@@ -201,6 +288,9 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
 
     member
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 
   defp club_attrs(attrs, club_id) do
     base = [
