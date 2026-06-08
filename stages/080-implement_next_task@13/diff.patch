@@ -1,0 +1,87 @@
+diff --git a/docs/iterations/028-staff-member-invitations/todo.md b/docs/iterations/028-staff-member-invitations/todo.md
+index 57673c9..61117c8 100644
+--- a/docs/iterations/028-staff-member-invitations/todo.md
++++ b/docs/iterations/028-staff-member-invitations/todo.md
+@@ -12,7 +12,7 @@
+ - [x] 010 Generalize the current staff onboarding/profile completion enough that invited unknown members can enter their name before membership activation. For this slice, profile-completion state can live in the invitation/session journey; do not create an incomplete person before the name is submitted, and avoid overbuilding date-of-birth or configurable detail schemas.
+ - [x] 011 Preserve existing staff onboarding: new Memba staff with no person record still enter a name and continue to the Staff area.
+ - [x] 012 Add domain/application tests for pending invitation creation, duplicate active block, duplicate pending resend, existing-person acceptance, unknown-person profile completion, abandoned profile completion, and accepted-link reuse.
+-- [ ] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
++- [x] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
+ - [ ] 014 Implement or update Cucumber step definitions only as needed to exercise `club_member_invitations.feature`.
+ - [ ] 015 Remove or narrow `@todo-domain`/`@todo-ui` from `club_member_invitations.feature` once implemented.
+ - [ ] 016 Run targeted tests for affected auth/membership/onboarding surfaces, then run `dev check`.
+diff --git a/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs b/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
+index 38ce77a..f1fe7b8 100644
+--- a/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
++++ b/web/test/memba_web/live/admin/club_member_invitations_live/new_test.exs
+@@ -93,6 +93,42 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
+     end)
+   end
+ 
++  test "staff email invitation link carries an unknown invitee through profile completion to the club",
++       %{conn: conn} do
++    club =
++      insert_membership_club!(
++        name: "Kootenay Mountaineering Club",
++        slug: "kootenay-mountaineering"
++      )
++
++    conn
++    |> sign_in_staff()
++    |> visit(~p"/admin/clubs/#{club.club_id}/invitations/new")
++    |> assert_has("#club-member-invitation-form")
++    |> fill_in("Email address", with: " ROBIN@Example.COM ")
++    |> click_button("Send invitation")
++    |> assert_has("#flash-info", "Invitation sent to robin@example.com")
++
++    invitation_path = delivered_invitation_path!("robin@example.com")
++
++    new_browser_conn()
++    |> visit(invitation_path)
++    |> assert_path(~p"/invitations/club-members/profile")
++    |> assert_has("section#club-member-profile-completion[data-club-id='#{club.club_id}']")
++    |> assert_has("#club-member-profile-completion-form[aria-label='Complete your profile']")
++    |> assert_has("#club-member-profile-name-input")
++    |> fill_in("Your name", with: " Robin Example ")
++    |> click_button("Join Kootenay Mountaineering Club")
++    |> assert_path("/")
++    |> assert_has("#member-club-home[data-club-id='#{club.club_id}']")
++    |> assert_has("#member-dashboard-hero", "Hello, Robin.")
++
++    assert %{name: "Robin Example", email: "robin@example.com"} =
++             Membership.get_person_by_email("robin@example.com")
++
++    assert Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
++  end
++
+   test "staff sees a form error for an invalid invitation email", %{conn: conn} do
+     club = insert_membership_club!(name: "Kootenay Mountaineering Club")
+ 
+@@ -140,4 +176,26 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.NewTest do
+ 
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
++
++  defp delivered_invitation_path!(email_address) do
++    assert_receive {:email, email}
++
++    assert email.to == [{"", email_address}]
++    assert email.subject == "You're invited to join Kootenay Mountaineering Club"
++
++    [invitation_url] =
++      Regex.run(~r{https?://[^\s]+/invitations/club-members/[^\s]+}, email.text_body)
++
++    assert email.html_body =~ invitation_url
++
++    %URI{path: path} = URI.parse(invitation_url)
++    assert path =~ ~r{^/invitations/club-members/.+}
++
++    path
++  end
++
++  defp new_browser_conn do
++    Phoenix.ConnTest.build_conn()
++    |> PhoenixTest.put_endpoint(MembaWeb.Endpoint)
++  end
+ end
