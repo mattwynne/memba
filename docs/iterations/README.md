@@ -36,7 +36,7 @@ green than before.
 | 024 | 2026-06-06 | merged | Transactional email template redesign | [plan](024-email-template-designs/plan.md) |
 | 025 | 2026-06-06 | merged | Messaging and onboarding quick wins | [plan](025-messaging-and-onboarding-quick-wins/plan.md) |
 | 026 | 2026-06-07 | merged | Domain Cucumber convergence | [plan](026-domain-cucumber-convergence/plan.md) |
-| 027 | 2026-06-06 | implementing | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
+| 027 | 2026-06-06 | merged | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
 
 Status notes:
 
