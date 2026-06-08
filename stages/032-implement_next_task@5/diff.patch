@@ -1,0 +1,135 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 0a0ab2d..efe5026 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002a Inspect current member-facing club pages and decide the invitation host surface.
+ - [x] 002b1 Add the permission-aware dashboard assign needed to gate the Membership Admin invite action.
+ - [x] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
+-- [ ] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
++- [x] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
+ - [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+ - [ ] 002b2 Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action is in place.
+ - [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+diff --git a/web/lib/memba_web/live/club_member_invitations_live/new.ex b/web/lib/memba_web/live/club_member_invitations_live/new.ex
+index 6ee0fce..1cc8a7c 100644
+--- a/web/lib/memba_web/live/club_member_invitations_live/new.ex
++++ b/web/lib/memba_web/live/club_member_invitations_live/new.ex
+@@ -10,6 +10,7 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
+ 
+   alias Memba.Accounts
+   alias Memba.Membership
++  alias Memba.Membership.Permissions
+ 
+   @impl Phoenix.LiveView
+   def mount(params, session, socket) when is_map(params) do
+@@ -112,7 +113,8 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
+            selected_club(current_identity_clubs, club_id),
+          members <- Membership.list_active_members_of_club(club_id),
+          current_member when not is_nil(current_member) <-
+-           current_member_for_identity(members, current_identity) do
++           current_member_for_identity(members, current_identity),
++         true <- can_manage_members?(club_id, current_member) do
+       {:ok,
+        %{
+          selected_club: selected_club,
+@@ -136,6 +138,12 @@ defmodule MembaWeb.ClubMemberInvitationsLive.New do
+     Enum.find(members, fn member -> Accounts.normalize_email(member.email) == identity_email end)
+   end
+ 
++  defp can_manage_members?(club_id, %{id: person_id}) do
++    Membership.person_has_club_permission?(club_id, person_id, Permissions.club_manage_members())
++  end
++
++  defp can_manage_members?(_club_id, _current_member), do: false
++
+   defp put_session_club_id(params, session) do
+     case {Map.get(params, "club_id"), Map.get(session, "club_id")} do
+       {nil, club_id} when is_binary(club_id) -> Map.put(params, "club_id", club_id)
+diff --git a/web/test/memba_web/live/club_member_invitations_live/new_test.exs b/web/test/memba_web/live/club_member_invitations_live/new_test.exs
+index 861e41f..79718a4 100644
+--- a/web/test/memba_web/live/club_member_invitations_live/new_test.exs
++++ b/web/test/memba_web/live/club_member_invitations_live/new_test.exs
+@@ -3,7 +3,9 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
+ 
+   import Phoenix.LiveViewTest
+ 
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Repo
+   alias MembaWeb.IdentityAuth
+@@ -18,6 +20,8 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
+         club_name: "Climbing Club"
+       )
+ 
++    grant_manage_members_permission(alice)
++
+     {:ok, view, _html} =
+       conn
+       |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+@@ -52,6 +56,8 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
+         slug: "kmc"
+       )
+ 
++    grant_manage_members_permission(alice)
++
+     _bob =
+       create_active_member(
+         email: "bob@example.com",
+@@ -76,6 +82,25 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
+     refute has_element?(view, "#member-invitation-club-home-link[href*='club_id=']")
+   end
+ 
++  test "routed GET requires the signed-in member to have club.manage_members for the selected club",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Climbing Club"
++      )
++
++    error =
++      assert_raise MembaWeb.ForbiddenError, "Forbidden", fn ->
++        conn
++        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++        |> get(~p"/members/invitations/new?club_id=#{alice.club_id}")
++      end
++
++    assert error.plug_status == 403
++  end
++
+   test "routed GET redirects signed-out visitors and preserves the selected club return path",
+        %{conn: conn} do
+     alice =
+@@ -109,14 +134,26 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
++    membership_id = Memba.ID.generate(:membership)
++
+     Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
++      membership_id: membership_id,
+       club_id: club_id,
+       person_id: person.person_id,
+       active: true
+     })
+ 
+-    %{club_id: club_id, person_id: person.person_id}
++    %{club_id: club_id, person_id: person.person_id, membership_id: membership_id}
++  end
++
++  defp grant_manage_members_permission(member) do
++    Repo.insert!(%MemberPermission{
++      club_id: member.club_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      permission: Permissions.club_manage_members(),
++      grant_count: 1
++    })
+   end
+ 
+   defp club_attrs(attrs, club_id) do
