@@ -1371,7 +1371,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-08T21:12:11.895388977Z",
-  "last_event_at": "2026-06-08T22:39:37.476348643Z",
+  "last_event_at": "2026-06-08T22:39:40.821148013Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -9349,9 +9349,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 1543,
       "checkpoint": {
-        "timestamp": "2026-06-08T22:39:37.495325437Z",
+        "timestamp": "2026-06-08T22:39:40.767038066Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -9389,6 +9389,327 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.validate_task": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.retry_count.sync_task_list": 0,
+          "graph.max_node_visits": "80",
+          "internal.retry_count.preflight_sandbox": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/live/member_dashboard_live_test.exs`\n     - Added coverage that an ordinary member on a club subdomain does **not** see the `Invite member` action or any invitation link in the members section.\n   - Updated `web/test/memba_web/live/member_invitation_live/new_test.exs`\n     - Added coverage that an ordinary member cannot craft a club-subdomain request directly to `/members/invitations/new`; it raises `MembaWeb.ForbiddenError`.\n   - No production code changes were needed; the earlier permission gate already enforced the behavior.\n\n3. **Validation**\n   - Attempted focused test:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_invitation_live/new_test.exs`\n     - Did not reach ExUnit because the sandbox Postgres wrapper hit an existing `postmaster.pid` lock.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `730 tests, 0 failures`.\n   - Full validation:\n     - First `PATH=\"$PWD/bin:$PATH\" dev check` attempt timed out while another quality gate lock was active.\n     - Retried `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `730 tests, 0 failures`; `69 scenarios (69 passed), 466 steps (466 passed)`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n   - To:\n     - `- [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0015: member-facing invitation surface remains LiveView-based.\n   - ADR 0013: added user-facing web regression coverage for visibility and authorization behavior.\n   - ADR 0009: continued using projection-backed permission behavior; no duplicate permission state added.\n   - ADR 0022: no new write/read-after-write flow was introduced.",
+          "failure_signature": "",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.read_plan": 0,
+          "task_retry_available": false,
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "internal.retry_count.task_gate": 0,
+          "internal.retry_count.wip_gate": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "command.output": "blob://sha256/459bdf4e41e7245e090243e3e26e8224603abc5015ee3e83c433e6ca0ad0addf",
+          "last_stage": "implement_next_task",
+          "failure_class": "",
+          "thread.start.current_node": "read_plan",
+          "graph.rankdir": "LR",
+          "internal.retry_count.resume_gate": 0,
+          "outcome": "succeeded",
+          "internal.retry_count.start": 0,
+          "internal.thread_id": "all_tasks_done",
+          "internal.work_dir": "/workspace/memba",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live `git status --short` is clean.\n  - Recent checkpoint `f77e24a fabro(...): implement_next_task (succeeded)` contains the just-completed task.\n  - `git diff f77e24a^ f77e24a -- docs/iterations/029-membership-admin-invitations/todo.md` shows exactly one ordinary task changed:\n    - `004 Authorize the route/action using the club.manage_members permission for the signed-in person in the current club.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks 001–003 checked and 004 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/live/member_invitation_live/new.ex`\n    - Adds `Memba.Membership.Authorization`.\n    - Calls `Authorization.authorize_manage_members(club_id, current_member.id)` while loading the invitation context.\n    - Converts missing/unauthorized context to existing `MembaWeb.ForbiddenError` behavior.\n  - `web/test/memba_web/live/member_invitation_live/new_test.exs`\n    - Grants `club.manage_members` in successful invitation page tests.\n    - Adds a direct routed GET rejection test for an active member without `club.manage_members`.\n    - Adds a focused `grant_manage_members!/1` helper using the existing `MemberPermission` projection.\n\n- Tests run/results found:\n  - Validator reran `PATH=\"$PWD/bin:$PATH\" dev check --quick`.\n  - Result: passed, `728 tests, 0 failures`.\n  - Working tree remained clean after validation.\n  - Implementation summary also reported full `dev check` passing with acceptance tests.\n\n- ADR/plan conformance notes:\n  - Scope matches task 004: the member-facing invitation route/action is now permission-gated by `club.manage_members`.\n  - The work is a small independent checkpoint and does not prematurely implement remaining invitation lifecycle tasks.\n  - No acceptance feature files changed in this checkpoint.\n  - ADR 0015 respected: member-facing surface remains a LiveView.\n  - ADR 0013 respected: route/LiveView authorization behavior has web test coverage; lower-level helpers are appropriate for route/session/error mechanics here.\n  - ADR 0009 respected: uses existing projection-backed permission read model.\n  - ADR 0022 not triggered: no new command/write/read-after-write flow was added.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.run_id": "01KTMH67CQ5X0YKQHP6F6C7MZD",
+          "task_valid": true,
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "thread.read_plan.current_node": "wip_gate",
+          "last_response": "1. **Selected todo line**\n   - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n2. **Changes made**\n   - Updated `web/test/memb",
+          "task_list_complete": false,
+          "internal.retry_count.all_tasks_done": 0,
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "current_node": "implement_next_task",
+          "thread.task_gate.current_node": "sync_task_list",
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "thread.validate_task.current_node": "task_gate",
+          "task_list_needs_human": false,
+          "thread.sync_task_list.current_node": "all_tasks_done",
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "internal.fidelity": "summary:high",
+          "internal.node_visit_count": 5
+        },
+        "node_outcomes": {
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "implement_next_task",
+              "last_response": "1. **Selected todo line**\n   - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n2. **Changes made**\n   - Updated `web/test/memb",
+              "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/live/member_dashboard_live_test.exs`\n     - Added coverage that an ordinary member on a club subdomain does **not** see the `Invite member` action or any invitation link in the members section.\n   - Updated `web/test/memba_web/live/member_invitation_live/new_test.exs`\n     - Added coverage that an ordinary member cannot craft a club-subdomain request directly to `/members/invitations/new`; it raises `MembaWeb.ForbiddenError`.\n   - No production code changes were needed; the earlier permission gate already enforced the behavior.\n\n3. **Validation**\n   - Attempted focused test:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_invitation_live/new_test.exs`\n     - Did not reach ExUnit because the sandbox Postgres wrapper hit an existing `postmaster.pid` lock.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `730 tests, 0 failures`.\n   - Full validation:\n     - First `PATH=\"$PWD/bin:$PATH\" dev check` attempt timed out while another quality gate lock was active.\n     - Retried `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `730 tests, 0 failures`; `69 scenarios (69 passed), 466 steps (466 passed)`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n   - To:\n     - `- [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0015: member-facing invitation surface remains LiveView-based.\n   - ADR 0013: added user-facing web regression coverage for visibility and authorization behavior.\n   - ADR 0009: continued using projection-backed permission behavior; no duplicate permission state added.\n   - ADR 0022: no new write/read-after-write flow was introduced."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 566695,
+                    "output_tokens": 3554,
+                    "reasoning_tokens": 3121,
+                    "cache_read_tokens": 1041920,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 3554685
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 179017,
+              "tool_time_ms": 735043,
+              "active_time_ms": 914060
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/7873acd8a4552c4bb6a246969186a6ef88e6de244d8bd6a34bfa91f21433d5d7"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 192,
+              "active_time_ms": 192
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/50584871dc4a056e13ab15a27e28abc14770bae3cdbd884ddcc27f7d77970355"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 194,
+              "active_time_ms": 194
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/5402be3e65ac587701668c9cb9a7fa94261fd34399cf3d3c8bcc04e476dc8baf"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 237,
+              "active_time_ms": 237
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/459bdf4e41e7245e090243e3e26e8224603abc5015ee3e83c433e6ca0ad0addf"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 182,
+              "active_time_ms": 182
+            }
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_complete": false,
+              "task_list_needs_human": false,
+              "last_stage": "all_tasks_done"
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 16525,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 78,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 85805
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 2979,
+              "tool_time_ms": 0,
+              "active_time_ms": 2979
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "task_valid": true,
+              "task_retry_available": false,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live `git status --short` is clean.\n  - Recent checkpoint `f77e24a fabro(...): implement_next_task (succeeded)` contains the just-completed task.\n  - `git diff f77e24a^ f77e24a -- docs/iterations/029-membership-admin-invitations/todo.md` shows exactly one ordinary task changed:\n    - `004 Authorize the route/action using the club.manage_members permission for the signed-in person in the current club.`\n    - from `- [ ]` to `- [x]`.\n  - Parent todo state had tasks 001–003 checked and 004 as the first unchecked task.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/live/member_invitation_live/new.ex`\n    - Adds `Memba.Membership.Authorization`.\n    - Calls `Authorization.authorize_manage_members(club_id, current_member.id)` while loading the invitation context.\n    - Converts missing/unauthorized context to existing `MembaWeb.ForbiddenError` behavior.\n  - `web/test/memba_web/live/member_invitation_live/new_test.exs`\n    - Grants `club.manage_members` in successful invitation page tests.\n    - Adds a direct routed GET rejection test for an active member without `club.manage_members`.\n    - Adds a focused `grant_manage_members!/1` helper using the existing `MemberPermission` projection.\n\n- Tests run/results found:\n  - Validator reran `PATH=\"$PWD/bin:$PATH\" dev check --quick`.\n  - Result: passed, `728 tests, 0 failures`.\n  - Working tree remained clean after validation.\n  - Implementation summary also reported full `dev check` passing with acceptance tests.\n\n- ADR/plan conformance notes:\n  - Scope matches task 004: the member-facing invitation route/action is now permission-gated by `club.manage_members`.\n  - The work is a small independent checkpoint and does not prematurely implement remaining invitation lifecycle tasks.\n  - No acceptance feature files changed in this checkpoint.\n  - ADR 0015 respected: member-facing surface remains a LiveView.\n  - ADR 0013 respected: route/LiveView authorization behavior has web test coverage; lower-level helpers are appropriate for route/session/error mechanics here.\n  - ADR 0009 respected: uses existing projection-backed permission read model.\n  - ADR 0022 not triggered: no new command/write/read-after-write flow was added.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Live `git status --short` is clean.\n  - Recent checkpoint `f77e24a fabro(...): implement_next_task (succeeded)` cont"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 239679,
+                    "output_tokens": 2140,
+                    "reasoning_tokens": 1151,
+                    "cache_read_tokens": 236032,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 1415141
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 90993,
+              "tool_time_ms": 58404,
+              "active_time_ms": 149397
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/bf8908dd2f5abd88cf0ed7ee323b5560b367e613e9a8f5fef3ae3ccbfa2e7867"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 264225,
+              "active_time_ms": 264225
+            }
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/653eb9ffccad930ee63fa8d751d7a280a2bc444d6786f16fceb0598aea0f3721"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2492,
+              "active_time_ms": 2492
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "67d27b7964266a796f13386f262124e34c48d1ce",
+        "node_visits": {
+          "start": 1,
+          "all_tasks_done": 5,
+          "wip_gate": 1,
+          "preflight_sandbox": 1,
+          "task_gate": 4,
+          "validate_task": 4,
+          "implement_next_task": 5,
+          "read_plan": 1,
+          "pre_validate_snapshot": 4,
+          "resume_gate": 1,
+          "sync_task_list": 5
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md\nindex 59836b0..e5b4772 100644\n--- a/docs/iterations/029-membership-admin-invitations/todo.md\n+++ b/docs/iterations/029-membership-admin-invitations/todo.md\n@@ -4,7 +4,7 @@\n - [x] 002 Inspect current member-facing club pages to find whether a members list already exists. If it exists, add the invite action there for Membership Admins. If it does not, add the smallest member-facing club members/admin page needed to host the invite action.\n - [x] 003 Add a member-facing route/action for inviting club members, scoped to the current club.\n - [x] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.\n-- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.\n+- [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.\n - [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.\n - [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.\n - [ ] 008 Keep the Admin invitation form email-only.\ndiff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs\nindex 780fe2b..5b4425a 100644\n--- a/web/test/memba_web/live/member_dashboard_live_test.exs\n+++ b/web/test/memba_web/live/member_dashboard_live_test.exs\n@@ -196,6 +196,27 @@ defmodule MembaWeb.MemberDashboardLiveTest do\n     refute has_element?(view, \"#club-members #member-invite-member-link\")\n   end\n \n+  test \"club subdomain dashboard keeps the member invite action hidden from ordinary members\",\n+       %{conn: conn} do\n+    _alice =\n+      create_active_member(\n+        email: \"alice@example.com\",\n+        name: \"Alice Adams\",\n+        club_name: \"West Coast Paddlers\",\n+        slug: \"wcp\"\n+      )\n+\n+    {:ok, view, _html} =\n+      conn\n+      |> Map.put(:host, \"wcp.lvh.me\")\n+      |> init_test_session(%{IdentityAuth.identity_session_key() => \"alice@example.com\"})\n+      |> live(~p\"/\")\n+\n+    refute has_element?(view, \"#club-members #member-invite-member-link\")\n+    refute has_element?(view, \"#club-members a[href='/members/invitations/new']\")\n+    refute has_element?(view, \"#club-members a[href*='/members/invitations/new']\")\n+  end\n+\n   test \"dashboard receipt glance uses member vocabulary and does not leak Memba-staff-only fields\",\n        %{conn: conn} do\n     alice =\ndiff --git a/web/test/memba_web/live/member_invitation_live/new_test.exs b/web/test/memba_web/live/member_invitation_live/new_test.exs\nindex b2aa196..301dd20 100644\n--- a/web/test/memba_web/live/member_invitation_live/new_test.exs\n+++ b/web/test/memba_web/live/member_invitation_live/new_test.exs\n@@ -96,6 +96,24 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do\n     end\n   end\n \n+  test \"club subdomain routed GET requires the current club member to have club.manage_members\",\n+       %{conn: conn} do\n+    _alice =\n+      create_active_member(\n+        email: \"alice@example.com\",\n+        name: \"Alice Adams\",\n+        club_name: \"West Coast Paddlers\",\n+        slug: \"wcp\"\n+      )\n+\n+    assert_raise MembaWeb.ForbiddenError, fn ->\n+      conn\n+      |> Map.put(:host, \"wcp.lvh.me\")\n+      |> init_test_session(%{IdentityAuth.identity_session_key() => \"alice@example.com\"})\n+      |> get(~p\"/members/invitations/new\")\n+    end\n+  end\n+\n   test \"routed GET redirects signed-out visitors and preserves the selected club return path\",\n        %{conn: conn} do\n     robin =\n",
+        "summary": {
+          "files_changed": 11,
+          "additions": 786,
+          "deletions": 1
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-08T22:39:41.026028114Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.task_gate": 0,
           "internal.fidelity": "summary:high",
@@ -9399,12 +9720,12 @@
           "internal.retry_count.implement_next_task": 0,
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
           "thread.pre_validate_snapshot.current_node": "validate_task",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "task_valid": true,
           "internal.retry_count.resume_gate": 0,
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "failure_signature": "",
-          "command.output": "blob://sha256/459bdf4e41e7245e090243e3e26e8224603abc5015ee3e83c433e6ca0ad0addf",
+          "command.output": "blob://sha256/703cf2d1adec38b06b2b86ae0b1dee4b0e13d34fcb59edf7fd3ba297ee89bd98",
           "internal.retry_count.all_tasks_done": 0,
           "thread.resume_gate.current_node": "sync_task_list",
           "response.implement_next_task": "1. **Selected todo line**\n   - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/live/member_dashboard_live_test.exs`\n     - Added coverage that an ordinary member on a club subdomain does **not** see the `Invite member` action or any invitation link in the members section.\n   - Updated `web/test/memba_web/live/member_invitation_live/new_test.exs`\n     - Added coverage that an ordinary member cannot craft a club-subdomain request directly to `/members/invitations/new`; it raises `MembaWeb.ForbiddenError`.\n   - No production code changes were needed; the earlier permission gate already enforced the behavior.\n\n3. **Validation**\n   - Attempted focused test:\n     - `PATH=\"$PWD/bin:$PATH\" bin/mix test test/memba_web/live/member_dashboard_live_test.exs test/memba_web/live/member_invitation_live/new_test.exs`\n     - Did not reach ExUnit because the sandbox Postgres wrapper hit an existing `postmaster.pid` lock.\n   - Broad quick validation:\n     - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `730 tests, 0 failures`.\n   - Full validation:\n     - First `PATH=\"$PWD/bin:$PATH\" dev check` attempt timed out while another quality gate lock was active.\n     - Retried `PATH=\"$PWD/bin:$PATH\" dev check`\n     - Passed: `730 tests, 0 failures`; `69 scenarios (69 passed), 466 steps (466 passed)`.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n   - To:\n     - `- [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - ADR 0015: member-facing invitation surface remains LiveView-based.\n   - ADR 0013: added user-facing web regression coverage for visibility and authorization behavior.\n   - ADR 0009: continued using projection-backed permission behavior; no duplicate permission state added.\n   - ADR 0022: no new write/read-after-write flow was introduced.",
@@ -9574,15 +9895,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/7873acd8a4552c4bb6a246969186a6ef88e6de244d8bd6a34bfa91f21433d5d7"
+              "command.output": "blob://sha256/703cf2d1adec38b06b2b86ae0b1dee4b0e13d34fcb59edf7fd3ba297ee89bd98"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 192,
-              "active_time_ms": 192
+              "tool_time_ms": 178,
+              "active_time_ms": 178
             }
           },
           "validate_task": {
@@ -9643,7 +9964,7 @@
             }
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "preflight_sandbox": 1,
           "read_plan": 1,
@@ -9654,7 +9975,7 @@
           "implement_next_task": 5,
           "task_gate": 4,
           "resume_gate": 1,
-          "pre_validate_snapshot": 4,
+          "pre_validate_snapshot": 5,
           "validate_task": 4
         }
       },
@@ -10088,7 +10409,12 @@
       "first_event_seq": 1412,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-08T22:39:37.486155633Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -10102,13 +10428,20 @@
       "output": null,
       "started_at": "2026-06-08T22:24:22.903527307Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 914580,
+        "inference_time_ms": 179017,
+        "tool_time_ms": 735043,
+        "active_time_ms": 914060
+      },
       "usage": {
-        "input_tokens": 561407,
-        "output_tokens": 3037,
-        "total_tokens": 1537013,
-        "reasoning_tokens": 2841,
-        "cache_read_tokens": 969728,
-        "cache_write_tokens": 0
+        "input_tokens": 566695,
+        "output_tokens": 3554,
+        "total_tokens": 1615290,
+        "reasoning_tokens": 3121,
+        "cache_read_tokens": 1041920,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 3554685
       },
       "model": {
         "provider": "openai",
@@ -10247,40 +10580,68 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 77270,
-        "usage_percent": 28.408088235294116,
+        "input_tokens": 77480,
+        "usage_percent": 28.485294117647058,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-08T22:39:21.439547629Z",
-        "event_seq": 1532,
+        "generated_at": "2026-06-08T22:39:37.476324438Z",
+        "event_seq": 1538,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1087,
-            "usage_percent": 0.3996323529411765
+            "tokens": 1082,
+            "usage_percent": 0.3977941176470588
           },
           {
             "category": "tools",
-            "tokens": 1551,
-            "usage_percent": 0.5702205882352941
+            "tokens": 1544,
+            "usage_percent": 0.5676470588235294
           },
           {
             "category": "memory",
-            "tokens": 385,
-            "usage_percent": 0.14154411764705882
+            "tokens": 383,
+            "usage_percent": 0.14080882352941176
           },
           {
             "category": "conversation",
-            "tokens": 74241,
-            "usage_percent": 27.294485294117646
+            "tokens": 74464,
+            "usage_percent": 27.376470588235293
           },
           {
             "category": "other",
-            "tokens": 6,
-            "usage_percent": 0.0022058823529411764
+            "tokens": 7,
+            "usage_percent": 0.002573529411764706
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "pre_validate_snapshot@5": {
+      "first_event_seq": 1546,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "command": "exec 2>&1\nset -eu\nPLAN_PATH='docs/iterations/029-membership-admin-invitations/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+        "language": "shell",
+        "timeout_ms": 120000
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-08T22:39:40.820541372Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "running"
     },
