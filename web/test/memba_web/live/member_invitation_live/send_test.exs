@@ -91,10 +91,25 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
     |> assert_has("#member-club-home[data-club-id='#{robin.club_id}']")
     |> assert_has("#member-dashboard-hero", "Hello, Dana.")
 
-    assert %{name: "Dana Example", email: "dana@example.com"} =
+    assert %{person_id: dana_person_id, name: "Dana Example", email: "dana@example.com"} =
              Membership.get_person_by_email("dana@example.com")
 
+    assert %MembershipProjection{active: true, person_id: ^dana_person_id} =
+             active_membership(robin.club_id, dana_person_id)
+
     assert Membership.active_member_of_club_by_email?(robin.club_id, "dana@example.com")
+
+    refute Membership.person_has_club_permission?(
+             robin.club_id,
+             dana_person_id,
+             Permissions.club_manage_members()
+           )
+
+    refute member_permission?(
+             robin.club_id,
+             dana_person_id,
+             Permissions.club_manage_members()
+           )
   end
 
   test "membership admin duplicate pending invitation resends through the shared invitation rule",
@@ -232,6 +247,24 @@ defmodule MembaWeb.MemberInvitationLive.SendTest do
       permission: Permissions.club_manage_members(),
       grant_count: 1
     })
+  end
+
+  defp active_membership(club_id, person_id) do
+    MembershipProjection
+    |> where([membership], membership.club_id == ^club_id)
+    |> where([membership], membership.person_id == ^person_id)
+    |> where([membership], membership.active == true)
+    |> Repo.one()
+  end
+
+  defp member_permission?(club_id, person_id, permission) do
+    Repo.exists?(
+      from(member_permission in MemberPermission,
+        where: member_permission.club_id == ^club_id,
+        where: member_permission.person_id == ^person_id,
+        where: member_permission.permission == ^permission
+      )
+    )
   end
 
   defp club_attrs(attrs, club_id) do
