@@ -1,0 +1,405 @@
+diff --git a/docs/iterations/028-staff-member-invitations/todo.md b/docs/iterations/028-staff-member-invitations/todo.md
+index 2b18e8d..aefa340 100644
+--- a/docs/iterations/028-staff-member-invitations/todo.md
++++ b/docs/iterations/028-staff-member-invitations/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Add the Staff club-scoped invite route and form. Exact route name is implementation detail, but it should sit under `/admin/clubs/:club_id/...` and not replace the existing person edit route.
+ - [x] 008 Decommission direct Staff club-member creation from name/email by hiding/removing that action or redirecting it to the invite route. Keep person edit behaviour where still needed for existing people.
+ - [x] 009 Add an invitation callback route that validates invitation tokens, signs in the invited email for the invitation journey, and routes to either profile completion or the invited club. Do not consume a pending unknown invitee's token on first open; consume it only when profile completion or existing-person acceptance succeeds.
+-- [ ] 010 Generalize the current staff onboarding/profile completion enough that invited unknown members can enter their name before membership activation. For this slice, profile-completion state can live in the invitation/session journey; do not create an incomplete person before the name is submitted, and avoid overbuilding date-of-birth or configurable detail schemas.
++- [x] 010 Generalize the current staff onboarding/profile completion enough that invited unknown members can enter their name before membership activation. For this slice, profile-completion state can live in the invitation/session journey; do not create an incomplete person before the name is submitted, and avoid overbuilding date-of-birth or configurable detail schemas.
+ - [ ] 011 Preserve existing staff onboarding: new Memba staff with no person record still enter a name and continue to the Staff area.
+ - [ ] 012 Add domain/application tests for pending invitation creation, duplicate active block, duplicate pending resend, existing-person acceptance, unknown-person profile completion, abandoned profile completion, and accepted-link reuse.
+ - [ ] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
+diff --git a/web/lib/memba_web/controllers/club_member_invitation_controller.ex b/web/lib/memba_web/controllers/club_member_invitation_controller.ex
+index 558af6c..452b233 100644
+--- a/web/lib/memba_web/controllers/club_member_invitation_controller.ex
++++ b/web/lib/memba_web/controllers/club_member_invitation_controller.ex
+@@ -10,8 +10,39 @@ defmodule MembaWeb.ClubMemberInvitationController do
+   alias MembaWeb.IdentityAuth
+ 
+   @invalid_link_notice "That invitation link is no longer valid. Please ask for a new invitation."
++  @missing_profile_journey_notice "Follow your invitation link before completing your profile."
+   @profile_completion_path "/invitations/club-members/profile"
+ 
++  def profile(conn, _params) do
++    case fetch_profile_journey(conn) do
++      {:ok, journey} ->
++        render_profile(conn, journey)
++
++      {:accepted, %ClubInvitation{} = invitation} ->
++        conn
++        |> delete_session(IdentityAuth.club_member_invitation_session_key())
++        |> redirect_to_invited_club(invitation)
++
++      {:error, reason} ->
++        reject_profile_journey(conn, reason)
++    end
++  end
++
++  def complete_profile(conn, params) do
++    case fetch_profile_journey(conn) do
++      {:ok, journey} ->
++        complete_pending_profile(conn, journey, profile_params(params))
++
++      {:accepted, %ClubInvitation{} = invitation} ->
++        conn
++        |> delete_session(IdentityAuth.club_member_invitation_session_key())
++        |> redirect_to_invited_club(invitation)
++
++      {:error, reason} ->
++        reject_profile_journey(conn, reason)
++    end
++  end
++
+   def callback(conn, %{"token" => token}) do
+     case Membership.get_club_member_invitation_by_token(token) do
+       %ClubInvitation{status: "pending"} = invitation ->
+@@ -68,6 +99,34 @@ defmodule MembaWeb.ClubMemberInvitationController do
+     |> redirect(to: @profile_completion_path)
+   end
+ 
++  defp complete_pending_profile(conn, journey, profile_params) do
++    case Membership.complete_invited_club_member_profile(
++           %{
++             invitation_id: journey.invitation.invitation_id,
++             name: Map.get(profile_params, "name")
++           },
++           consistency: :strong
++         ) do
++      {:ok, _acceptance} ->
++        conn
++        |> IdentityAuth.log_in_identity(journey.email)
++        |> put_flash(:info, accepted_profile_message(journey))
++        |> redirect_to_invited_club(journey.invitation)
++
++      {:error, :invalid_name} ->
++        conn
++        |> put_status(:unprocessable_entity)
++        |> put_flash(:error, "Please tell us your name.")
++        |> render_profile(journey, profile_params, %{name: ["Please tell us your name."]})
++
++      {:error, reason} ->
++        conn
++        |> put_status(:unprocessable_entity)
++        |> put_flash(:error, profile_completion_error(reason))
++        |> render_profile(journey, profile_params)
++    end
++  end
++
+   defp redirect_accepted_invitation(conn, %ClubInvitation{} = invitation) do
+     conn
+     |> IdentityAuth.log_in_identity(invitation.normalized_email)
+@@ -95,6 +154,99 @@ defmodule MembaWeb.ClubMemberInvitationController do
+     end
+   end
+ 
++  defp render_profile(
++         conn,
++         journey,
++         profile_params \\ %{"name" => ""},
++         form_errors \\ %{name: []}
++       ) do
++    conn
++    |> assign(:page_title, "Complete your profile")
++    |> assign(:club, journey.club)
++    |> assign(:email, journey.email)
++    |> assign(:form_errors, form_errors)
++    |> assign(:form, Phoenix.Component.to_form(profile_params(profile_params), as: :profile))
++    |> render(:profile)
++  end
++
++  defp fetch_profile_journey(conn) do
++    with %{"invitation_id" => invitation_id, "club_id" => club_id, "email" => email} <-
++           get_session(conn, IdentityAuth.club_member_invitation_session_key()),
++         current_email when is_binary(current_email) <-
++           get_session(conn, IdentityAuth.identity_session_key()),
++         :ok <- ensure_same_email(current_email, email),
++         %ClubInvitation{} = invitation <- Membership.get_club_member_invitation(invitation_id),
++         :ok <- ensure_matching_invitation(invitation, club_id, email) do
++      case invitation.status do
++        "pending" ->
++          {:ok,
++           %{
++             invitation: invitation,
++             club: Membership.get_club(invitation.club_id),
++             email: invitation.normalized_email
++           }}
++
++        "accepted" ->
++          {:accepted, invitation}
++
++        _other_status ->
++          {:error, :invalid_invitation_status}
++      end
++    else
++      nil -> {:error, :missing_profile_journey}
++      :error -> {:error, :missing_profile_journey}
++      {:error, _reason} = error -> error
++      _other -> {:error, :missing_profile_journey}
++    end
++  end
++
++  defp ensure_same_email(email, email), do: :ok
++  defp ensure_same_email(_current_email, _journey_email), do: {:error, :identity_email_mismatch}
++
++  defp ensure_matching_invitation(%ClubInvitation{} = invitation, club_id, email) do
++    if invitation.club_id == club_id and invitation.normalized_email == email do
++      :ok
++    else
++      {:error, :invitation_session_mismatch}
++    end
++  end
++
++  defp profile_params(%{"profile" => profile_params}) when is_map(profile_params) do
++    %{"name" => Map.get(profile_params, "name", "")}
++  end
++
++  defp profile_params(%{"name" => _name} = profile_params) do
++    %{"name" => Map.get(profile_params, "name", "")}
++  end
++
++  defp profile_params(_params), do: %{"name" => ""}
++
++  defp accepted_profile_message(%{club: %{name: name}}) when is_binary(name) do
++    "Welcome to #{name}."
++  end
++
++  defp accepted_profile_message(_journey), do: "Welcome to Memba."
++
++  defp profile_completion_error(:email_address_taken),
++    do: "That email address is already attached to another profile."
++
++  defp profile_completion_error(:pending_invitation_not_found),
++    do: @invalid_link_notice
++
++  defp profile_completion_error(:already_accepted),
++    do: @invalid_link_notice
++
++  defp profile_completion_error(reason), do: "Could not complete your profile: #{inspect(reason)}"
++
++  defp reject_profile_journey(conn, reason) do
++    Logger.warning("Rejected club member invitation profile completion: #{inspect(reason)}")
++
++    conn
++    |> delete_session(IdentityAuth.club_member_invitation_session_key())
++    |> put_flash(:error, @missing_profile_journey_notice)
++    |> redirect(to: ~p"/auth")
++  end
++
+   defp reject_invitation_link(conn, reason) do
+     Logger.warning("Rejected club member invitation callback: #{inspect(reason)}")
+ 
+diff --git a/web/lib/memba_web/controllers/club_member_invitation_html.ex b/web/lib/memba_web/controllers/club_member_invitation_html.ex
+new file mode 100644
+index 0000000..e06b396
+--- /dev/null
++++ b/web/lib/memba_web/controllers/club_member_invitation_html.ex
+@@ -0,0 +1,14 @@
++defmodule MembaWeb.ClubMemberInvitationHTML do
++  @moduledoc """
++  Renders club member invitation journey pages.
++  """
++  use MembaWeb, :html
++
++  embed_templates "club_member_invitation_html/*"
++
++  defp club_name(%{name: name}) when is_binary(name), do: name
++  defp club_name(_club), do: "your club"
++
++  defp club_id(%{club_id: club_id}) when is_binary(club_id), do: club_id
++  defp club_id(_club), do: nil
++end
+diff --git a/web/lib/memba_web/controllers/club_member_invitation_html/profile.html.heex b/web/lib/memba_web/controllers/club_member_invitation_html/profile.html.heex
+new file mode 100644
+index 0000000..7d4ae2d
+--- /dev/null
++++ b/web/lib/memba_web/controllers/club_member_invitation_html/profile.html.heex
+@@ -0,0 +1,49 @@
++<Layouts.app flash={@flash}>
++  <section
++    id="club-member-profile-completion"
++    data-club-id={club_id(@club)}
++    class="space-y-8"
++  >
++    <div class="space-y-4">
++      <p class="text-sm font-semibold uppercase tracking-[0.2em] text-sage-600">
++        Member invitation
++      </p>
++      <h1 class="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">
++        Tell us your name
++      </h1>
++      <p class="text-lg leading-8 text-ink-2">
++        You’re accepting an invitation to join {club_name(@club)}. We’ll use your name and {@email} to create your member profile before your membership starts.
++      </p>
++    </div>
++
++    <.form
++      for={@form}
++      action={~p"/invitations/club-members/profile"}
++      method="post"
++      id="club-member-profile-completion-form"
++      aria-label="Complete your profile"
++      class="rounded-3xl border border-line bg-paper p-6 shadow-sm"
++    >
++      <.input
++        name={@form[:name].name}
++        value={@form[:name].value}
++        errors={@form_errors.name}
++        id="club-member-profile-name-input"
++        type="text"
++        label="Your name"
++        autocomplete="name"
++        placeholder="Robin Example"
++        required
++      />
++
++      <.button
++        id="complete-club-member-profile-button"
++        type="submit"
++        variant="primary"
++        class="mt-4 btn btn-primary"
++      >
++        Join {club_name(@club)}
++      </.button>
++    </.form>
++  </section>
++</Layouts.app>
+diff --git a/web/lib/memba_web/router.ex b/web/lib/memba_web/router.ex
+index 1b49e71..bf768a1 100644
+--- a/web/lib/memba_web/router.ex
++++ b/web/lib/memba_web/router.ex
+@@ -88,6 +88,8 @@ defmodule MembaWeb.Router do
+     end
+ 
+     get "/auth/sign-in/:token", AuthController, :callback
++    get "/invitations/club-members/profile", ClubMemberInvitationController, :profile
++    post "/invitations/club-members/profile", ClubMemberInvitationController, :complete_profile
+     get "/invitations/club-members/:token", ClubMemberInvitationController, :callback
+     delete "/auth", AuthController, :delete
+     get "/about", PageController, :about
+diff --git a/web/test/memba_web/controllers/club_member_invitation_controller_test.exs b/web/test/memba_web/controllers/club_member_invitation_controller_test.exs
+index 7ad24cc..bfe6f12 100644
+--- a/web/test/memba_web/controllers/club_member_invitation_controller_test.exs
++++ b/web/test/memba_web/controllers/club_member_invitation_controller_test.exs
+@@ -99,6 +99,120 @@ defmodule MembaWeb.ClubMemberInvitationControllerTest do
+     end
+   end
+ 
++  describe "GET /invitations/club-members/profile" do
++    test "shows a profile-completion form for a verified unknown invitee without creating records",
++         %{conn: conn} do
++      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      {invitation, token} = invite_member!(club, "robin@example.com")
++
++      conn = get(conn, ~p"/invitations/club-members/#{token}")
++      assert redirected_to(conn) == ~p"/invitations/club-members/profile"
++
++      profile_conn = conn |> recycle() |> get(~p"/invitations/club-members/profile")
++      response = html_response(profile_conn, 200)
++      html = LazyHTML.from_fragment(response)
++
++      assert response =~ "Tell us your name"
++      assert response =~ "Kootenay Mountaineering Club"
++
++      assert html
++             |> LazyHTML.query("section#club-member-profile-completion")
++             |> Enum.any?()
++
++      assert html
++             |> LazyHTML.query(
++               "form#club-member-profile-completion-form[action='/invitations/club-members/profile']"
++             )
++             |> Enum.any?()
++
++      assert html
++             |> LazyHTML.query("input#club-member-profile-name-input[name='profile[name]']")
++             |> Enum.any?()
++
++      assert %ClubInvitation{status: "pending"} =
++               Membership.get_club_member_invitation(invitation.invitation_id)
++
++      refute Membership.get_person_by_email("robin@example.com")
++      refute Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
++    end
++
++    test "redirects browsers without a verified invitation journey", %{conn: conn} do
++      conn = get(conn, ~p"/invitations/club-members/profile")
++
++      assert redirected_to(conn) == ~p"/auth"
++
++      assert flash(conn, :error) ==
++               "Follow your invitation link before completing your profile."
++    end
++  end
++
++  describe "POST /invitations/club-members/profile" do
++    test "keeps a blank-name invitee on profile completion without accepting the invitation",
++         %{conn: conn} do
++      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      {invitation, token} = invite_member!(club, "robin@example.com")
++
++      conn = get(conn, ~p"/invitations/club-members/#{token}")
++
++      profile_conn =
++        conn
++        |> recycle()
++        |> post(~p"/invitations/club-members/profile", profile: %{name: " "})
++
++      response = html_response(profile_conn, 422)
++
++      assert response =~ "Tell us your name"
++      assert response =~ "Please tell us your name."
++      assert get_session(profile_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
++
++      assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == %{
++               "club_id" => club.club_id,
++               "email" => "robin@example.com",
++               "invitation_id" => invitation.invitation_id
++             }
++
++      assert %ClubInvitation{status: "pending"} =
++               Membership.get_club_member_invitation(invitation.invitation_id)
++
++      assert %ClubInvitation{status: "pending"} =
++               Membership.get_club_member_invitation_by_token(token)
++
++      refute Membership.get_person_by_email("robin@example.com")
++      refute Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
++    end
++
++    test "creates the invitee profile, activates ordinary membership, and clears journey state",
++         %{conn: conn} do
++      club = insert_membership_club!(name: "Kootenay Mountaineering Club", slug: "kmc")
++      {invitation, token} = invite_member!(club, "robin@example.com")
++
++      conn = get(conn, ~p"/invitations/club-members/#{token}")
++
++      profile_conn =
++        conn
++        |> recycle()
++        |> post(~p"/invitations/club-members/profile", profile: %{name: " Robin Example "})
++
++      assert redirected_to(profile_conn) == ClubSite.url(club, "/")
++      assert flash(profile_conn, :info) == "Welcome to Kootenay Mountaineering Club."
++      assert get_session(profile_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
++      assert get_session(profile_conn, IdentityAuth.club_member_invitation_session_key()) == nil
++
++      assert %{person_id: person_id, name: "Robin Example", email: "robin@example.com"} =
++               Membership.get_person_by_email("robin@example.com")
++
++      assert %ClubInvitation{
++               status: "accepted",
++               accepted_person_id: ^person_id,
++               accepted_membership_id: accepted_membership_id
++             } = Membership.get_club_member_invitation(invitation.invitation_id)
++
++      assert is_binary(accepted_membership_id)
++      assert Membership.active_member_of_club_by_email?(club.club_id, "robin@example.com")
++      assert membership_count(club.club_id, person_id) == 1
++    end
++  end
++
+   defp invite_member!(club, email) do
+     assert {:ok, %{invitation_id: invitation_id, invitation_token: token}} =
+              Membership.invite_club_member(
