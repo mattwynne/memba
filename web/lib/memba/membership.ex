@@ -117,14 +117,23 @@ defmodule Memba.Membership do
   def invite_club_member(attrs, dispatch_opts \\ [])
       when is_map(attrs) and is_list(dispatch_opts) do
     with {:ok, command, invitation_token} <- invite_club_member_command(attrs),
-         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
-      {:ok,
-       invitation_token_result(
-         command.invitation_id,
-         invitation_token,
-         :execution_result,
-         dispatch_result
-       )}
+         :ok <- prevent_inviting_active_club_member(command) do
+      case get_pending_club_member_invitation_by_email(command.club_id, command.email) do
+        %ClubInvitation{} = invitation ->
+          resend_pending_club_member_invitation(invitation, dispatch_opts)
+
+        nil ->
+          with {:ok, dispatch_result} <-
+                 dispatch_invitation_token_command(command, dispatch_opts) do
+            {:ok,
+             invitation_token_result(
+               command.invitation_id,
+               invitation_token,
+               :execution_result,
+               dispatch_result
+             )}
+          end
+      end
     end
   end
 
@@ -948,6 +957,14 @@ defmodule Memba.Membership do
     end
   end
 
+  defp prevent_inviting_active_club_member(%InviteClubMember{} = command) do
+    if active_member_of_club_by_email?(command.club_id, command.email) do
+      {:error, :already_active_member}
+    else
+      :ok
+    end
+  end
+
   defp ensure_active_membership(club_id, person_id, membership_id) do
     with {:ok, club_id} <- ID.cast(:club, club_id),
          {:ok, person_id} <- ID.cast(:person, person_id),
@@ -1002,6 +1019,19 @@ defmodule Memba.Membership do
 
   defp ensure_pending_invitation(%ClubInvitation{status: "accepted"}),
     do: {:error, :already_accepted}
+
+  defp resend_pending_club_member_invitation(%ClubInvitation{} = invitation, dispatch_opts) do
+    with {:ok, command, invitation_token} <- resend_club_member_invitation_command(invitation),
+         {:ok, dispatch_result} <- dispatch_invitation_token_command(command, dispatch_opts) do
+      {:ok,
+       invitation_token_result(
+         command.invitation_id,
+         invitation_token,
+         :execution_result,
+         dispatch_result
+       )}
+    end
+  end
 
   defp fetch_existing_person(person_id) do
     case get_person(person_id) do
