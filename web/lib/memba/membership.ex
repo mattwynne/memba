@@ -105,6 +105,11 @@ defmodule Memba.Membership do
   @doc """
   Create a pending club member invitation for an email address.
 
+  This is the Staff/system entry point. It does not require the caller to be an
+  active club member; member-facing callers should use
+  `invite_club_member_as_club_member/2` so their actor is authorized separately
+  from the invitation lifecycle data.
+
   The public API generates the plaintext one-use invitation token before
   dispatch and stores only its hash in Membership. The caller may supply
   `:invitation_id`/`"invitation_id"`; otherwise this application service
@@ -151,7 +156,9 @@ defmodule Memba.Membership do
     with {:ok, club_id} <- fetch_required(attrs, :club_id),
          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
          :ok <- Authorization.authorize_manage_members(club_id, actor_person_id) do
-      invite_club_member(attrs, dispatch_opts)
+      attrs
+      |> invitation_attrs_without_actor()
+      |> invite_club_member(dispatch_opts)
     end
   end
 
@@ -892,6 +899,10 @@ defmodule Memba.Membership do
          token_hash: InvitationToken.hash_token(invitation_token)
        }, invitation_token}
     end
+  end
+
+  defp invitation_attrs_without_actor(attrs) do
+    Map.drop(attrs, [:actor_person_id, "actor_person_id"])
   end
 
   defp resend_club_member_invitation_command(%ClubInvitation{} = invitation) do
