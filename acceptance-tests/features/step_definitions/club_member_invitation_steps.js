@@ -3,7 +3,9 @@ const {
   assertAlreadyMemberMessage,
   assertAskedForEmailOnly,
   assertAskedForName,
+  assertCannotInviteMembers,
   assertCannotCreateDirectActiveMember,
+  assertInvitationNotReceived,
   assertInvitationReceived,
   assertNotActiveMember,
   assertOnlyOneActiveMembership,
@@ -18,6 +20,7 @@ const {
   invitePersonToClub,
   leaveWithoutEnteringName,
   openAddMemberFlow,
+  tryInviteEmailToClub,
   tryInvitePersonToClub
 } = require("../support/club_member_invitations");
 
@@ -75,8 +78,12 @@ When("{word} wants to add a new member to {word} {word} {word}", async function 
   await openAddMemberFlow(this, actorName, clubName(word1, word2, word3));
 });
 
-When("{word} tries to invite {word} to join {word} {word} {word}", async function (actorName, personName, word1, word2, word3) {
+When(/^(\w+) tries to invite (\w+) to join (\w+) (\w+) (\w+)$/, async function (actorName, personName, word1, word2, word3) {
   await tryInvitePersonToClub(this, actorName, personName, clubName(word1, word2, word3));
+});
+
+When("{word} tries to invite {string} to join {word} {word} {word}", async function (actorName, email, word1, word2, word3) {
+  await tryInviteEmailToClub(this, actorName, email, clubName(word1, word2, word3));
 });
 
 Then("{string} should receive an invitation to join {word} {word} {word}", async function (email, word1, word2, word3) {
@@ -113,6 +120,14 @@ Then("{word} should not be able to create an active member directly from a name 
 
 Then("{word} should see that {word} is already a member of {word} {word} {word}", async function (_actorName, personName, word1, word2, word3) {
   await assertAlreadyMemberMessage(this, personName, clubName(word1, word2, word3));
+});
+
+Then("{word} should be told she cannot invite members to {word} {word} {word}", async function (actorName, word1, word2, word3) {
+  await assertCannotInviteMembers(this, actorName, clubName(word1, word2, word3));
+});
+
+Then("{string} should not receive an invitation to join {word} {word} {word}", async function (email, word1, word2, word3) {
+  await assertInvitationNotReceived(this, email, clubName(word1, word2, word3));
 });
 
 Then("there should still be only one pending invitation for {string} to join {word} {word} {word}", async function (email, word1, word2, word3) {

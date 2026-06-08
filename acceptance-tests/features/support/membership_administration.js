@@ -142,6 +142,17 @@ function assertNotMembershipAdministrator(world, personName, clubName) {
   );
 }
 
+function assertOrdinaryMember(world, personName, clubName) {
+  const status = memberStatus(world, personName, clubName);
+
+  assert.equal(status.activeMember, true, `Expected ${personName} to be an active member of ${clubName}`);
+  assert.equal(
+    status.membershipAdministrator,
+    false,
+    `Expected ${personName} to be an ordinary member of ${clubName}`
+  );
+}
+
 function ensureMember(world, personName, clubName) {
   ensureState(world);
 
@@ -346,6 +357,7 @@ function clubSlug(clubName) {
 module.exports = {
   assertMembershipAdministrator,
   assertNotMembershipAdministrator,
+  assertOrdinaryMember,
   ensureMembershipAdministrator,
   ensureOnlyMembershipAdministrator,
   ensureOrdinaryMember,

@@ -2,6 +2,7 @@ const { Given, When, Then } = require("@cucumber/cucumber");
 const {
   assertMembershipAdministrator,
   assertNotMembershipAdministrator,
+  assertOrdinaryMember,
   ensureMembershipAdministrator,
   ensureOnlyMembershipAdministrator,
   ensureOrdinaryMember,
@@ -11,6 +12,10 @@ const {
 } = require("../support/membership_administration");
 
 Given(/^(\w+) is an Admin of (.+)$/, function (personName, clubName) {
+  ensureMembershipAdministrator(this, personName, clubName);
+});
+
+Given(/^(\w+) is a Membership Admin of (.+)$/, function (personName, clubName) {
   ensureMembershipAdministrator(this, personName, clubName);
 });
 
@@ -47,4 +52,8 @@ Then(/^(\w+) should still be an Admin of (.+)$/, function (personName, clubName)
 
 Then(/^(\w+) should not be an Admin of (.+)$/, function (personName, clubName) {
   assertNotMembershipAdministrator(this, personName, clubName);
+});
+
+Then(/^(\w+) should be an ordinary member of (.+)$/, function (personName, clubName) {
+  assertOrdinaryMember(this, personName, clubName);
 });
