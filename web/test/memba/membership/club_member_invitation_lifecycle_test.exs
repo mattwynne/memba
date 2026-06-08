@@ -524,6 +524,91 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
              } = Membership.get_club_member_invitation(invitation_id)
     end
 
+    test "Staff invitation flow is preserved alongside member-facing authorization" do
+      club_id = Memba.ID.generate(:club)
+      invitation_id = Memba.ID.generate(:club_invitation)
+      duplicate_invitation_id = Memba.ID.generate(:club_invitation)
+      invited_person_id = Memba.ID.generate(:person)
+      invited_membership_id = Memba.ID.generate(:membership)
+
+      create_club!(club_id)
+
+      assert {:ok, %{invitation_id: ^invitation_id, invitation_token: first_token}} =
+               Membership.invite_club_member(
+                 %{
+                   invitation_id: invitation_id,
+                   club_id: club_id,
+                   email: " Dana@Example.COM "
+                 },
+                 consistency: :strong
+               )
+
+      assert %ClubInvitationProjection{
+               invitation_id: ^invitation_id,
+               normalized_email: "dana@example.com",
+               status: "pending",
+               resend_count: 0
+             } = Membership.get_club_member_invitation(invitation_id)
+
+      assert {:ok, %{invitation_id: ^invitation_id, invitation_token: second_token}} =
+               Membership.invite_club_member(
+                 %{
+                   invitation_id: duplicate_invitation_id,
+                   club_id: club_id,
+                   email: "dana@example.com"
+                 },
+                 consistency: :strong
+               )
+
+      refute second_token == first_token
+      assert is_nil(Membership.get_club_member_invitation(duplicate_invitation_id))
+
+      assert 1 ==
+               Repo.aggregate(
+                 from(invitation in ClubInvitationProjection,
+                   where:
+                     invitation.club_id == ^club_id and
+                       invitation.normalized_email == "dana@example.com"
+                 ),
+                 :count
+               )
+
+      create_person!(invited_person_id, "Dana Staff Invitee", "dana@example.com")
+
+      assert {:ok,
+              %{
+                invitation_id: ^invitation_id,
+                club_id: ^club_id,
+                person_id: ^invited_person_id,
+                membership_id: ^invited_membership_id
+              }} =
+               Membership.accept_club_member_invitation_for_existing_person(
+                 %{
+                   invitation_id: invitation_id,
+                   person_id: invited_person_id,
+                   membership_id: invited_membership_id
+                 },
+                 consistency: :strong
+               )
+
+      assert Membership.active_member_of_club?(club_id, invited_person_id)
+
+      refute Membership.person_has_club_permission?(
+               club_id,
+               invited_person_id,
+               Permissions.club_manage_members()
+             )
+
+      assert [] = active_role_assignments(invited_membership_id)
+
+      assert %ClubInvitationProjection{
+               invitation_id: ^invitation_id,
+               status: "accepted",
+               accepted_person_id: ^invited_person_id,
+               accepted_membership_id: ^invited_membership_id
+             } = Membership.get_club_member_invitation(invitation_id)
+    end
+
     test "membership admin actor is authorized separately from invitation lifecycle data" do
       club_id = Memba.ID.generate(:club)
       actor_person_id = Memba.ID.generate(:person)
