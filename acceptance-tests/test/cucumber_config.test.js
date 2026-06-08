@@ -20,6 +20,7 @@ test("default browser Cucumber profile selects all web-backed shared features", 
 
   assert.deepEqual(selectedFeatureNames, [
     "authentication.feature",
+    "club_member_invitations.feature",
     "club_membership_administration.feature",
     "homepage.feature",
     "memba_staff_email_deliverability.feature",
