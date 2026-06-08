@@ -571,7 +571,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-08T02:44:53.893559689Z",
-  "last_event_at": "2026-06-08T02:47:51.664679057Z",
+  "last_event_at": "2026-06-08T02:47:56.319098093Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1067,74 +1067,194 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 94,
       "checkpoint": {
-        "timestamp": "2026-06-08T02:47:53.274481835Z",
-        "current_node": "synthesis_gate",
+        "timestamp": "2026-06-08T02:47:53.274048828Z",
+        "current_node": "synthesize",
         "completed_nodes": [
           "start",
           "gemini_review",
           "claude_review",
           "codex_review",
-          "synthesize",
-          "synthesis_gate"
+          "synthesize"
         ],
         "node_retries": {},
         "context_values": {
           "gemini_review_blocking_gap_count": 0,
-          "thread.synthesize.current_node": "synthesis_gate",
-          "internal.thread_id": "synthesize",
-          "gemini_review_confidence": "High",
+          "thread.codex_review.current_node": "synthesize",
           "thread.gemini_review.current_node": "claude_review",
-          "claude_review_required_edits": "None",
-          "gemini_review_required_edits": "None",
-          "claude_review_confidence": "High",
-          "codex_review_decision": "NOT READY",
-          "plan_ready": false,
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
-          "internal.retry_count.synthesis_gate": 0,
-          "failure_class": "",
-          "current_node": "synthesis_gate",
-          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
-          "outcome": "succeeded",
+          "gemini_review_confidence": "High",
+          "internal.fidelity": "summary:high",
           "internal.retry_count.gemini_review": 0,
-          "thread.claude_review.current_node": "codex_review",
-          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is ready for implementation. It demonstrates exceptional clarity, comprehensive acceptance criteria, and thoughtful scope boundaries. The plan explicitly names Cucumber feature files, scenarios, and rules; resolves all business decisions; and provides a detailed, ordered implementation plan with named modules and concerns.\n\n---\n\n## Blocking Gaps\n\n**None.**\n\n---\n\n## Non-Blocking Improvements\n\n1. **Invitation aggregate shape decision could advance**: The \"Open Technical Decisions\" section lists \"exact invitation aggregate/stream shape and event names\" as unresolved. While this is a reasonable implementation-time decision, the plan could note whether invitations should be a new aggregate root or events on an existing stream (e.g., Membership). This would reduce early implementation uncertainty. However, the plan provides enough guidance that implementers can make this decision cleanly during step 3.\n\n2. **Token storage decision could advance**: The choice between \"reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection\" is left open. A slight preference or rationale would help, but the plan correctly identifies the key property: \"invitation tokens are one-use and membership-granting.\" This is acceptable for technical decisions that are best made during implementation with full context.\n\n3. **\"Incomplete person\" representation could be clearer**: The plan asks whether to create \"pending invitation only, or an incomplete person-like identity record\" before acceptance. The acceptance criteria strongly imply \"no active person,\" but the plan could state a preference. However, step 10 (\"generalize the current staff onboarding/profile completion\") and the acceptance criteria (\"unknown invited emails create a pending invitation, not an active person\") together provide enough direction.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan **is already the smallest viable slice**. The scope:\n\n- Solves one coherent problem: Staff-driven invitation with profile completion before membership activation\n- Explicitly defers Membership Admin self-service, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Delivers user value: Staff can now invite members without trusting Staff-typed identity data, and invitees control their own email and name\n\nThe only possible reduction would be removing the \"existing complete person can accept without re-entering name\" case, but that would make the system regress for multi-club scenarios and feels less viable than the current scope.\n\n---\n\n## Required Plan Edits\n\n**None.**\n\nThe plan already satisfies all readiness requirements.\n\n---\n\n## Validation Plan\n\nThe plan's validation section (lines 172-179) is clear and complete. To prove the iteration succeeded:\n\n1. **Pre-delivery domain review**: Matt reviews `acceptance-tests/features/club_member_invitations.feature` for domain language correctness.\n\n2. **Unit/integration coverage**: Domain/application tests cover:\n   - Pending invitation creation\n   - Duplicate active member block\n   - Duplicate pending invitation resend\n   - Existing-person acceptance without profile completion\n   - Unknown-person profile completion requirement\n   - Abandoned profile completion (no membership created)\n   - Accepted-link reuse (no duplicate membership)\n\n3. **Web/LiveView coverage**: Controller/LiveView tests cover:\n   - Staff invitation form/page\n   - Invitation email delivery\n   - Invitation callback route\n   - Profile completion flow\n   - Redirects to club after acceptance\n\n4. **BDD scenarios pass**: All scenarios in `club_member_invitations.feature` pass with `@todo-domain`/`@todo-ui` removed or narrowed.\n\n5. **Regression protection**: Run existing authentication, request-account, person-email-address, and club membership administration tests.\n\n6. **Full check**: `dev check` passes.\n\n---\n\n## Detailed Readiness Assessment\n\n### 1. Goal Clarity ✅\n\n**Clearly articulated.** The goal (lines 6-8) states:\n- **Who**: Staff (the actor)\n- **What**: Add club members by invitation instead of direct creation\n- **Outcome**: Invited person controls email, completes profile, and only then becomes an active ordinary member\n- **Benefit**: Avoids trusting Staff-entered identity details; creates a pattern for future required details\n\nThe goal describes a user/business outcome, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Tightly focused and coherent.** The plan:\n- Solves one problem: Staff invitation with profile completion before membership activation\n- Explicitly lists 14 in-scope items and 8 out-of-scope items (lines 29-54)\n- Clearly defers Membership Admin UI, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Could not be smaller while remaining useful\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Concrete, complete, and testable.** The acceptance criteria (lines 92-111):\n- Cover happy paths: new person invitation, existing person invitation, profile completion, membership creation\n- Cover edge cases: abandoning profile completion (line 99), reopening accepted link (line 104)\n- Cover error states: inviting active member (line 102), duplicate pending invitation (line 103)\n- Cover permissions: Staff-only access, no Admin role by default (line 107)\n- Cover data/state changes: pending invitation creation (line 96), active membership creation (line 100), sign-in (line 100)\n- Are objectively testable\n\n**BDD decision is clear.** Lines 62-85:\n- Iteration type: \"Behaviour-facing\" (line 58)\n- BDD decision: \"Required\" (line 64)\n- Feature file named: `acceptance-tests/features/club_member_invitations.feature`\n- Rules and scenarios are enumerated with clear names\n- Rationale: \"identity, membership activation, invitation lifecycle, and Staff workflow\" changes require stakeholder-readable examples\n\n**Business decisions are resolved.** Lines 113-128:\n- \"None known for this slice\" (line 115)\n- Lists 8 confirmed decisions\n- No unresolved product, policy, copy, workflow, or domain questions\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Clear, ordered, and specific.** The 16-step plan (lines 129-159):\n- Orders steps logically: inspect → model → APIs → UI → tests → validation\n- Names modules: Membership boundary, invitation model, email module\n- Names routes: `/admin/clubs/:club_id/...` (line 149)\n- Names files/features: `club_member_invitations.feature`\n- Specifies migrations: invitation aggregate/stream (line 133)\n- Identifies integration points: auth sign-in token reuse (line 132), staff onboarding generalization (line 152)\n\n**Technical decisions are explicitly listed.** Lines 160-167 enumerate 5 open technical decisions:\n- Invitation aggregate shape and event names\n- Token storage strategy (reuse auth table or separate table)\n- Unknown email representation before person exists\n- Exact URLs and LiveView/controller split\n- Profile-completion gate representation\n\nEach decision lists the key properties or constraints that guide implementation (e.g., \"invitation tokens are one-use and membership-granting\").\n\n### 5. Expected Capability and Validation ✅\n\n**Clear new capability** (lines 168-170): \"Memba can invite a person to a club by email without trusting Staff-entered identity details. The invitee proves control of the email, supplies their own required name, and only then becomes an active ordinary club member.\"\n\n**Clear validation plan** (lines 172-179): Domain review, domain/application tests, web tests, Cucumber scenarios, regression tests, `dev check`.\n\n**Clear stop condition**: When all acceptance criteria pass, Cucumber scenarios pass with `@todo` tags removed, and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **exemplary**. It demonstrates:\n- Clear goal and beneficiary\n- Tightly scoped, smallest-viable iteration\n- Comprehensive, testable acceptance criteria covering happy paths, edge cases, permissions, and error states\n- Explicit BDD decision with named feature file, rules, and scenarios\n- All business decisions resolved\n- Clear, ordered, specific implementation plan with named modules, routes, and integration points\n- Open technical decisions explicitly listed with guiding constraints\n- Clear new capability and validation plan\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
-          "plan_needs_fix": false,
-          "claude_review_blocking_gap_count": 0,
-          "codex_review_blocking_gap_count": 2,
+          "current_node": "synthesize",
           "claude_review_blocking_gaps": "None",
-          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "internal.retry_count.start": 0,
+          "last_stage": "synthesize",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "thread.start.current_node": "gemini_review",
+          "claude_review_confidence": "High",
+          "claude_review_decision": "READY",
+          "codex_review_confidence": "High",
+          "gemini_review_required_edits": "None",
+          "claude_review_blocking_gap_count": 0,
+          "internal.run_id": "01KTJHWNAPM13FTX4TH0PZNJZT",
           "graph.rankdir": "LR",
+          "internal.thread_id": "codex_review",
+          "codex_review_blocking_gaps": "Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open",
+          "outcome": "succeeded",
+          "codex_review_decision": "NOT READY",
+          "claude_review_required_edits": "None",
+          "plan_ready": false,
+          "codex_review_required_edits": "Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior",
+          "gemini_review_blocking_gaps": "None",
+          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profile-completion lifecycle is not fully decided.**  \n   The plan says invitation links are “one-use”, that unknown invitees must enter a name before membership starts, and that leaving before entering a name must not create membership. However, it does not clearly decide whether the invitation token is consumed on first link open, on final profile completion, or whether an invitee who leaves before entering their name can return via the same link. This is a key workflow and security decision.\n\n2. **Material technical decisions remain explicitly open.**  \n   The plan’s `## Open Technical Decisions` section leaves unresolved several implementation-shaping choices, especially token storage/reuse vs separate invitation token storage, representation of invited unknown emails before a person exists, and how the generalized profile-completion gate records required details. These affect data model, auth/session flow, and domain invariants, so the plan is not yet implementation-ready.\n\n## Non-blocking improvements\n\n1. Add an explicit invalid/malformed invitation token acceptance criterion, even if the expected behavior is simply a safe error page or redirect with no state change.\n2. Name likely route/module candidates if known, while still allowing implementation flexibility.\n3. Add a brief note about database/domain uniqueness guarantees for “one pending invitation per normalized club/email” and “one active membership per person/club.”\n4. Define the minimum Staff-facing copy expectations for active-member duplicate and pending-invitation resend messages.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Staff invite an unknown email to a club.\n- A pending invitation is created without active person or membership.\n- The invitee follows the email link, enters a non-blank name, and only then becomes an active ordinary member.\n- Duplicate active-member invites are blocked.\n- Duplicate pending invites resend without creating another pending record.\n- Direct Staff club-member creation from name/email is decommissioned.\n\nExisting complete-person acceptance could remain in this iteration if needed for real-world usefulness, but the core pattern is the unknown-email invitation plus profile completion lifecycle.\n\n## Required plan edits\n\n1. Decide and document the invitation token lifecycle:\n   - when the token is consumed;\n   - what “one-use” means before profile completion;\n   - whether an invitee who leaves before entering their name can resume via the same link;\n   - when the invitation state changes from pending to accepted.\n\n2. Resolve or constrain the open technical decisions that affect architecture:\n   - token storage/reuse strategy;\n   - pending invitation vs incomplete person representation;\n   - profile-completion gate state model;\n   - acceptance/profile route ownership at a high level.\n\n3. Add or update acceptance criteria/scenarios for the abandoned profile-completion case to state the expected resume/retry behavior.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. New Cucumber scenarios in `acceptance-tests/features/club_member_invitations.feature` covering the Staff invite flow, unknown invitee profile completion, existing-person acceptance, direct-creation bypass prevention, duplicate active member, duplicate pending resend, and accepted-link reuse.\n2. Domain/application tests for invitation creation, normalized-email duplicate handling, token consumption semantics, abandoned profile completion, accepted invitation reuse, and no duplicate memberships.\n3. Web tests for the Staff invite form, email/link generation, invitation callback, profile-completion page, redirects, and relevant error states.\n4. Regression tests confirming existing staff onboarding, member sign-in, and club navigation still work.\n5. `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open\",\"codex_review_required_edits\":\"Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior\"}}",
+          "graph.default_fidelity": "summary:high",
+          "failure_class": "",
           "internal.node_visit_count": 1,
           "internal.retry_count.synthesize": 0,
-          "response.gemini_review": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-critical features (like invitation expiry, Admin self-service, and pending invitation management UI) to maintain momentum.\n\n### Review Report\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:** None\n- **Non-blocking improvements:**\n  1. The implementation plan step 3 mentions \"event-sourced if consistent with nearby Membership aggregates\". Providing a more explicit directive (e.g., whether to use event sourcing or a standard Ecto schema for the invitation model) could save the implementer some discovery time, though leaving it open is acceptable for this slice.\n- **Smallest viable iteration:** The proposed iteration is already sliced perfectly. Deferring Admin permissions and invitation management UI keeps the scope strictly focused on proving the core invitation and profile-completion workflow.\n- **Required plan edits:** None\n- **Validation plan:** As stated in the plan: implement the described scenarios in `acceptance-tests/features/club_member_invitations.feature`, complete domain and web testing for the new routes and token states, and ensure `dev check` passes cleanly.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```",
-          "internal.fidelity": "summary:high",
-          "thread.start.current_node": "gemini_review",
-          "internal.run_id": "01KTJHWNAPM13FTX4TH0PZNJZT",
-          "graph.default_fidelity": "summary:high",
-          "codex_review_blocking_gaps": "Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open",
-          "last_stage": "synthesize",
-          "claude_review_decision": "READY",
-          "internal.work_dir": "/workspace/memba",
-          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profile-completion lifecycle is not fully decided.**  \n   The plan says invitation links are “one-use”, that unknown invitees must enter a name before membership starts, and that leaving before entering a name must not create membership. However, it does not clearly decide whether the invitation token is consumed on first link open, on final profile completion, or whether an invitee who leaves before entering their name can return via the same link. This is a key workflow and security decision.\n\n2. **Material technical decisions remain explicitly open.**  \n   The plan’s `## Open Technical Decisions` section leaves unresolved several implementation-shaping choices, especially token storage/reuse vs separate invitation token storage, representation of invited unknown emails before a person exists, and how the generalized profile-completion gate records required details. These affect data model, auth/session flow, and domain invariants, so the plan is not yet implementation-ready.\n\n## Non-blocking improvements\n\n1. Add an explicit invalid/malformed invitation token acceptance criterion, even if the expected behavior is simply a safe error page or redirect with no state change.\n2. Name likely route/module candidates if known, while still allowing implementation flexibility.\n3. Add a brief note about database/domain uniqueness guarantees for “one pending invitation per normalized club/email” and “one active membership per person/club.”\n4. Define the minimum Staff-facing copy expectations for active-member duplicate and pending-invitation resend messages.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Staff invite an unknown email to a club.\n- A pending invitation is created without active person or membership.\n- The invitee follows the email link, enters a non-blank name, and only then becomes an active ordinary member.\n- Duplicate active-member invites are blocked.\n- Duplicate pending invites resend without creating another pending record.\n- Direct Staff club-member creation from name/email is decommissioned.\n\nExisting complete-person acceptance could remain in this iteration if needed for real-world usefulness, but the core pattern is the unknown-email invitation plus profile completion lifecycle.\n\n## Required plan edits\n\n1. Decide and document the invitation token lifecycle:\n   - when the token is consumed;\n   - what “one-use” means before profile completion;\n   - whether an invitee who leaves before entering their name can resume via the same link;\n   - when the invitation state changes from pending to accepted.\n\n2. Resolve or constrain the open technical decisions that affect architecture:\n   - token storage/reuse strategy;\n   - pending invitation vs incomplete person representation;\n   - profile-completion gate state model;\n   - acceptance/profile route ownership at a high level.\n\n3. Add or update acceptance criteria/scenarios for the abandoned profile-completion case to state the expected resume/retry behavior.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. New Cucumber scenarios in `acceptance-tests/features/club_member_invitations.feature` covering the Staff invite flow, unknown invitee profile completion, existing-person acceptance, direct-creation bypass prevention, duplicate active member, duplicate pending resend, and accepted-link reuse.\n2. Domain/application tests for invitation creation, normalized-email duplicate handling, token consumption semantics, abandoned profile completion, accepted invitation reuse, and no duplicate memberships.\n3. Web tests for the Staff invite form, email/link generation, invitation callback, profile-completion page, redirects, and relevant error states.\n4. Regression tests confirming existing staff onboarding, member sign-in, and club navigation still work.\n5. `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open\",\"codex_review_required_edits\":\"Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior\"}}",
-          "gemini_review_blocking_gaps": "None",
-          "codex_review_required_edits": "Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior",
-          "internal.retry_count.start": 0,
-          "codex_review_confidence": "High",
-          "thread.codex_review.current_node": "synthesize",
-          "gemini_review_decision": "READY",
-          "plan_needs_human": true,
-          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
           "failure_signature": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
           "internal.retry_count.codex_review": 0,
-          "internal.retry_count.claude_review": 0
+          "plan_needs_fix": false,
+          "plan_needs_human": true,
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "gemini_review_decision": "READY",
+          "thread.claude_review.current_node": "codex_review",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.claude_review": 0,
+          "response.gemini_review": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-critical features (like invitation expiry, Admin self-service, and pending invitation management UI) to maintain momentum.\n\n### Review Report\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:** None\n- **Non-blocking improvements:**\n  1. The implementation plan step 3 mentions \"event-sourced if consistent with nearby Membership aggregates\". Providing a more explicit directive (e.g., whether to use event sourcing or a standard Ecto schema for the invitation model) could save the implementer some discovery time, though leaving it open is acceptable for this slice.\n- **Smallest viable iteration:** The proposed iteration is already sliced perfectly. Deferring Admin permissions and invitation management UI keeps the scope strictly focused on proving the core invitation and profile-completion workflow.\n- **Required plan edits:** None\n- **Validation plan:** As stated in the plan: implement the described scenarios in `acceptance-tests/features/club_member_invitations.feature`, complete domain and web testing for the new routes and token states, and ensure `dev check` passes cleanly.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```",
+          "codex_review_blocking_gap_count": 2,
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is ready for implementation. It demonstrates exceptional clarity, comprehensive acceptance criteria, and thoughtful scope boundaries. The plan explicitly names Cucumber feature files, scenarios, and rules; resolves all business decisions; and provides a detailed, ordered implementation plan with named modules and concerns.\n\n---\n\n## Blocking Gaps\n\n**None.**\n\n---\n\n## Non-Blocking Improvements\n\n1. **Invitation aggregate shape decision could advance**: The \"Open Technical Decisions\" section lists \"exact invitation aggregate/stream shape and event names\" as unresolved. While this is a reasonable implementation-time decision, the plan could note whether invitations should be a new aggregate root or events on an existing stream (e.g., Membership). This would reduce early implementation uncertainty. However, the plan provides enough guidance that implementers can make this decision cleanly during step 3.\n\n2. **Token storage decision could advance**: The choice between \"reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection\" is left open. A slight preference or rationale would help, but the plan correctly identifies the key property: \"invitation tokens are one-use and membership-granting.\" This is acceptable for technical decisions that are best made during implementation with full context.\n\n3. **\"Incomplete person\" representation could be clearer**: The plan asks whether to create \"pending invitation only, or an incomplete person-like identity record\" before acceptance. The acceptance criteria strongly imply \"no active person,\" but the plan could state a preference. However, step 10 (\"generalize the current staff onboarding/profile completion\") and the acceptance criteria (\"unknown invited emails create a pending invitation, not an active person\") together provide enough direction.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan **is already the smallest viable slice**. The scope:\n\n- Solves one coherent problem: Staff-driven invitation with profile completion before membership activation\n- Explicitly defers Membership Admin self-service, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Delivers user value: Staff can now invite members without trusting Staff-typed identity data, and invitees control their own email and name\n\nThe only possible reduction would be removing the \"existing complete person can accept without re-entering name\" case, but that would make the system regress for multi-club scenarios and feels less viable than the current scope.\n\n---\n\n## Required Plan Edits\n\n**None.**\n\nThe plan already satisfies all readiness requirements.\n\n---\n\n## Validation Plan\n\nThe plan's validation section (lines 172-179) is clear and complete. To prove the iteration succeeded:\n\n1. **Pre-delivery domain review**: Matt reviews `acceptance-tests/features/club_member_invitations.feature` for domain language correctness.\n\n2. **Unit/integration coverage**: Domain/application tests cover:\n   - Pending invitation creation\n   - Duplicate active member block\n   - Duplicate pending invitation resend\n   - Existing-person acceptance without profile completion\n   - Unknown-person profile completion requirement\n   - Abandoned profile completion (no membership created)\n   - Accepted-link reuse (no duplicate membership)\n\n3. **Web/LiveView coverage**: Controller/LiveView tests cover:\n   - Staff invitation form/page\n   - Invitation email delivery\n   - Invitation callback route\n   - Profile completion flow\n   - Redirects to club after acceptance\n\n4. **BDD scenarios pass**: All scenarios in `club_member_invitations.feature` pass with `@todo-domain`/`@todo-ui` removed or narrowed.\n\n5. **Regression protection**: Run existing authentication, request-account, person-email-address, and club membership administration tests.\n\n6. **Full check**: `dev check` passes.\n\n---\n\n## Detailed Readiness Assessment\n\n### 1. Goal Clarity ✅\n\n**Clearly articulated.** The goal (lines 6-8) states:\n- **Who**: Staff (the actor)\n- **What**: Add club members by invitation instead of direct creation\n- **Outcome**: Invited person controls email, completes profile, and only then becomes an active ordinary member\n- **Benefit**: Avoids trusting Staff-entered identity details; creates a pattern for future required details\n\nThe goal describes a user/business outcome, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Tightly focused and coherent.** The plan:\n- Solves one problem: Staff invitation with profile completion before membership activation\n- Explicitly lists 14 in-scope items and 8 out-of-scope items (lines 29-54)\n- Clearly defers Membership Admin UI, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Could not be smaller while remaining useful\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Concrete, complete, and testable.** The acceptance criteria (lines 92-111):\n- Cover happy paths: new person invitation, existing person invitation, profile completion, membership creation\n- Cover edge cases: abandoning profile completion (line 99), reopening accepted link (line 104)\n- Cover error states: inviting active member (line 102), duplicate pending invitation (line 103)\n- Cover permissions: Staff-only access, no Admin role by default (line 107)\n- Cover data/state changes: pending invitation creation (line 96), active membership creation (line 100), sign-in (line 100)\n- Are objectively testable\n\n**BDD decision is clear.** Lines 62-85:\n- Iteration type: \"Behaviour-facing\" (line 58)\n- BDD decision: \"Required\" (line 64)\n- Feature file named: `acceptance-tests/features/club_member_invitations.feature`\n- Rules and scenarios are enumerated with clear names\n- Rationale: \"identity, membership activation, invitation lifecycle, and Staff workflow\" changes require stakeholder-readable examples\n\n**Business decisions are resolved.** Lines 113-128:\n- \"None known for this slice\" (line 115)\n- Lists 8 confirmed decisions\n- No unresolved product, policy, copy, workflow, or domain questions\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Clear, ordered, and specific.** The 16-step plan (lines 129-159):\n- Orders steps logically: inspect → model → APIs → UI → tests → validation\n- Names modules: Membership boundary, invitation model, email module\n- Names routes: `/admin/clubs/:club_id/...` (line 149)\n- Names files/features: `club_member_invitations.feature`\n- Specifies migrations: invitation aggregate/stream (line 133)\n- Identifies integration points: auth sign-in token reuse (line 132), staff onboarding generalization (line 152)\n\n**Technical decisions are explicitly listed.** Lines 160-167 enumerate 5 open technical decisions:\n- Invitation aggregate shape and event names\n- Token storage strategy (reuse auth table or separate table)\n- Unknown email representation before person exists\n- Exact URLs and LiveView/controller split\n- Profile-completion gate representation\n\nEach decision lists the key properties or constraints that guide implementation (e.g., \"invitation tokens are one-use and membership-granting\").\n\n### 5. Expected Capability and Validation ✅\n\n**Clear new capability** (lines 168-170): \"Memba can invite a person to a club by email without trusting Staff-entered identity details. The invitee proves control of the email, supplies their own required name, and only then becomes an active ordinary club member.\"\n\n**Clear validation plan** (lines 172-179): Domain review, domain/application tests, web tests, Cucumber scenarios, regression tests, `dev check`.\n\n**Clear stop condition**: When all acceptance criteria pass, Cucumber scenarios pass with `@todo` tags removed, and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **exemplary**. It demonstrates:\n- Clear goal and beneficiary\n- Tightly scoped, smallest-viable iteration\n- Comprehensive, testable acceptance criteria covering happy paths, edge cases, permissions, and error states\n- Explicit BDD decision with named feature file, rules, and scenarios\n- All business decisions resolved\n- Clear, ordered, specific implementation plan with named modules, routes, and integration points\n- Open technical decisions explicitly listed with guiding constraints\n- Clear new capability and validation plan\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```"
         },
         "node_outcomes": {
-          "synthesis_gate": {
+          "gemini_review": {
             "status": "succeeded",
-            "notes": "Conditional node evaluated: synthesis_gate",
+            "context_updates": {
+              "gemini_review_blocking_gap_count": 0,
+              "response.gemini_review": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-critical features (like invitation expiry, Admin self-service, and pending invitation management UI) to maintain momentum.\n\n### Review Report\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:** None\n- **Non-blocking improvements:**\n  1. The implementation plan step 3 mentions \"event-sourced if consistent with nearby Membership aggregates\". Providing a more explicit directive (e.g., whether to use event sourcing or a standard Ecto schema for the invitation model) could save the implementer some discovery time, though leaving it open is acceptable for this slice.\n- **Smallest viable iteration:** The proposed iteration is already sliced perfectly. Deferring Admin permissions and invitation management UI keeps the scope strictly focused on proving the core invitation and profile-completion workflow.\n- **Required plan edits:** None\n- **Validation plan:** As stated in the plan: implement the described scenarios in `acceptance-tests/features/club_member_invitations.feature`, complete domain and web testing for the new routes and token states, and ensure `dev check` passes cleanly.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```",
+              "gemini_review_blocking_gaps": "None",
+              "last_stage": "gemini_review",
+              "gemini_review_required_edits": "None",
+              "gemini_review_confidence": "High",
+              "gemini_review_decision": "READY",
+              "last_response": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 13197,
+                    "output_tokens": 398,
+                    "reasoning_tokens": 713,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 39726
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 10207,
+              "tool_time_ms": 59,
+              "active_time_ms": 10266
+            }
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_needs_fix": false,
+              "plan_needs_human": true,
+              "plan_ready": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5670,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 2946,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 117720
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 55453,
+              "tool_time_ms": 0,
+              "active_time_ms": 55453
+            }
+          },
+          "start": {
+            "status": "succeeded",
             "usage": null
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_required_edits": "None",
+              "claude_review_decision": "READY",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_blocking_gap_count": 0,
+              "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is ready for implementation. It demonstrates exceptional clarity, comprehensive acceptance criteria, and thoughtful scope boundaries. The plan explicitly names Cucumber feature files, scenarios, and rules; resolves all business decisions; and provides a detailed, ordered implementation plan with named modules and concerns.\n\n---\n\n## Blocking Gaps\n\n**None.**\n\n---\n\n## Non-Blocking Improvements\n\n1. **Invitation aggregate shape decision could advance**: The \"Open Technical Decisions\" section lists \"exact invitation aggregate/stream shape and event names\" as unresolved. While this is a reasonable implementation-time decision, the plan could note whether invitations should be a new aggregate root or events on an existing stream (e.g., Membership). This would reduce early implementation uncertainty. However, the plan provides enough guidance that implementers can make this decision cleanly during step 3.\n\n2. **Token storage decision could advance**: The choice between \"reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection\" is left open. A slight preference or rationale would help, but the plan correctly identifies the key property: \"invitation tokens are one-use and membership-granting.\" This is acceptable for technical decisions that are best made during implementation with full context.\n\n3. **\"Incomplete person\" representation could be clearer**: The plan asks whether to create \"pending invitation only, or an incomplete person-like identity record\" before acceptance. The acceptance criteria strongly imply \"no active person,\" but the plan could state a preference. However, step 10 (\"generalize the current staff onboarding/profile completion\") and the acceptance criteria (\"unknown invited emails create a pending invitation, not an active person\") together provide enough direction.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan **is already the smallest viable slice**. The scope:\n\n- Solves one coherent problem: Staff-driven invitation with profile completion before membership activation\n- Explicitly defers Membership Admin self-service, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Delivers user value: Staff can now invite members without trusting Staff-typed identity data, and invitees control their own email and name\n\nThe only possible reduction would be removing the \"existing complete person can accept without re-entering name\" case, but that would make the system regress for multi-club scenarios and feels less viable than the current scope.\n\n---\n\n## Required Plan Edits\n\n**None.**\n\nThe plan already satisfies all readiness requirements.\n\n---\n\n## Validation Plan\n\nThe plan's validation section (lines 172-179) is clear and complete. To prove the iteration succeeded:\n\n1. **Pre-delivery domain review**: Matt reviews `acceptance-tests/features/club_member_invitations.feature` for domain language correctness.\n\n2. **Unit/integration coverage**: Domain/application tests cover:\n   - Pending invitation creation\n   - Duplicate active member block\n   - Duplicate pending invitation resend\n   - Existing-person acceptance without profile completion\n   - Unknown-person profile completion requirement\n   - Abandoned profile completion (no membership created)\n   - Accepted-link reuse (no duplicate membership)\n\n3. **Web/LiveView coverage**: Controller/LiveView tests cover:\n   - Staff invitation form/page\n   - Invitation email delivery\n   - Invitation callback route\n   - Profile completion flow\n   - Redirects to club after acceptance\n\n4. **BDD scenarios pass**: All scenarios in `club_member_invitations.feature` pass with `@todo-domain`/`@todo-ui` removed or narrowed.\n\n5. **Regression protection**: Run existing authentication, request-account, person-email-address, and club membership administration tests.\n\n6. **Full check**: `dev check` passes.\n\n---\n\n## Detailed Readiness Assessment\n\n### 1. Goal Clarity ✅\n\n**Clearly articulated.** The goal (lines 6-8) states:\n- **Who**: Staff (the actor)\n- **What**: Add club members by invitation instead of direct creation\n- **Outcome**: Invited person controls email, completes profile, and only then becomes an active ordinary member\n- **Benefit**: Avoids trusting Staff-entered identity details; creates a pattern for future required details\n\nThe goal describes a user/business outcome, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Tightly focused and coherent.** The plan:\n- Solves one problem: Staff invitation with profile completion before membership activation\n- Explicitly lists 14 in-scope items and 8 out-of-scope items (lines 29-54)\n- Clearly defers Membership Admin UI, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Could not be smaller while remaining useful\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Concrete, complete, and testable.** The acceptance criteria (lines 92-111):\n- Cover happy paths: new person invitation, existing person invitation, profile completion, membership creation\n- Cover edge cases: abandoning profile completion (line 99), reopening accepted link (line 104)\n- Cover error states: inviting active member (line 102), duplicate pending invitation (line 103)\n- Cover permissions: Staff-only access, no Admin role by default (line 107)\n- Cover data/state changes: pending invitation creation (line 96), active membership creation (line 100), sign-in (line 100)\n- Are objectively testable\n\n**BDD decision is clear.** Lines 62-85:\n- Iteration type: \"Behaviour-facing\" (line 58)\n- BDD decision: \"Required\" (line 64)\n- Feature file named: `acceptance-tests/features/club_member_invitations.feature`\n- Rules and scenarios are enumerated with clear names\n- Rationale: \"identity, membership activation, invitation lifecycle, and Staff workflow\" changes require stakeholder-readable examples\n\n**Business decisions are resolved.** Lines 113-128:\n- \"None known for this slice\" (line 115)\n- Lists 8 confirmed decisions\n- No unresolved product, policy, copy, workflow, or domain questions\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Clear, ordered, and specific.** The 16-step plan (lines 129-159):\n- Orders steps logically: inspect → model → APIs → UI → tests → validation\n- Names modules: Membership boundary, invitation model, email module\n- Names routes: `/admin/clubs/:club_id/...` (line 149)\n- Names files/features: `club_member_invitations.feature`\n- Specifies migrations: invitation aggregate/stream (line 133)\n- Identifies integration points: auth sign-in token reuse (line 132), staff onboarding generalization (line 152)\n\n**Technical decisions are explicitly listed.** Lines 160-167 enumerate 5 open technical decisions:\n- Invitation aggregate shape and event names\n- Token storage strategy (reuse auth table or separate table)\n- Unknown email representation before person exists\n- Exact URLs and LiveView/controller split\n- Profile-completion gate representation\n\nEach decision lists the key properties or constraints that guide implementation (e.g., \"invitation tokens are one-use and membership-granting\").\n\n### 5. Expected Capability and Validation ✅\n\n**Clear new capability** (lines 168-170): \"Memba can invite a person to a club by email without trusting Staff-entered identity details. The invitee proves control of the email, supplies their own required name, and only then becomes an active ordinary club member.\"\n\n**Clear validation plan** (lines 172-179): Domain review, domain/application tests, web tests, Cucumber scenarios, regression tests, `dev check`.\n\n**Clear stop condition**: When all acceptance criteria pass, Cucumber scenarios pass with `@todo` tags removed, and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **exemplary**. It demonstrates:\n- Clear goal and beneficiary\n- Tightly scoped, smallest-viable iteration\n- Comprehensive, testable acceptance criteria covering happy paths, edge cases, permissions, and error states\n- Explicit BDD decision with named feature file, rules, and scenarios\n- All business decisions resolved\n- Clear, ordered, specific implementation plan with named modules, routes, and integration points\n- Open technical decisions explicitly listed with guiding constraints\n- Clear new capability and validation plan\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "last_response": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5821,
+                    "output_tokens": 2225,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4568,
+                    "cache_write_tokens": 5833
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 5833,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 74081
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 51313,
+              "tool_time_ms": 59,
+              "active_time_ms": 51372
+            }
           },
           "codex_review": {
             "status": "succeeded",
@@ -1176,7 +1296,354 @@
               "tool_time_ms": 56,
               "active_time_ms": 47369
             }
+          }
+        },
+        "next_node_id": "synthesis_gate",
+        "git_commit_sha": "d88b7d93da36e4b715907b5adc68a3d9db7079f7",
+        "node_visits": {
+          "gemini_review": 1,
+          "synthesize": 1,
+          "start": 1,
+          "claude_review": 1,
+          "codex_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 102,
+      "checkpoint": {
+        "timestamp": "2026-06-08T02:47:56.318796165Z",
+        "current_node": "synthesis_gate",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "codex_review_blocking_gaps": "Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open",
+          "outcome": "succeeded",
+          "last_stage": "synthesize",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "codex_review_decision": "NOT READY",
+          "graph.default_fidelity": "summary:high",
+          "response.gemini_review": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-critical features (like invitation expiry, Admin self-service, and pending invitation management UI) to maintain momentum.\n\n### Review Report\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:** None\n- **Non-blocking improvements:**\n  1. The implementation plan step 3 mentions \"event-sourced if consistent with nearby Membership aggregates\". Providing a more explicit directive (e.g., whether to use event sourcing or a standard Ecto schema for the invitation model) could save the implementer some discovery time, though leaving it open is acceptable for this slice.\n- **Smallest viable iteration:** The proposed iteration is already sliced perfectly. Deferring Admin permissions and invitation management UI keeps the scope strictly focused on proving the core invitation and profile-completion workflow.\n- **Required plan edits:** None\n- **Validation plan:** As stated in the plan: implement the described scenarios in `acceptance-tests/features/club_member_invitations.feature`, complete domain and web testing for the new routes and token states, and ensure `dev check` passes cleanly.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```",
+          "codex_review_confidence": "High",
+          "internal.retry_count.start": 0,
+          "internal.retry_count.synthesize": 0,
+          "internal.thread_id": "synthesize",
+          "gemini_review_blocking_gaps": "None",
+          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "codex_review_required_edits": "Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior",
+          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profile-completion lifecycle is not fully decided.**  \n   The plan says invitation links are “one-use”, that unknown invitees must enter a name before membership starts, and that leaving before entering a name must not create membership. However, it does not clearly decide whether the invitation token is consumed on first link open, on final profile completion, or whether an invitee who leaves before entering their name can return via the same link. This is a key workflow and security decision.\n\n2. **Material technical decisions remain explicitly open.**  \n   The plan’s `## Open Technical Decisions` section leaves unresolved several implementation-shaping choices, especially token storage/reuse vs separate invitation token storage, representation of invited unknown emails before a person exists, and how the generalized profile-completion gate records required details. These affect data model, auth/session flow, and domain invariants, so the plan is not yet implementation-ready.\n\n## Non-blocking improvements\n\n1. Add an explicit invalid/malformed invitation token acceptance criterion, even if the expected behavior is simply a safe error page or redirect with no state change.\n2. Name likely route/module candidates if known, while still allowing implementation flexibility.\n3. Add a brief note about database/domain uniqueness guarantees for “one pending invitation per normalized club/email” and “one active membership per person/club.”\n4. Define the minimum Staff-facing copy expectations for active-member duplicate and pending-invitation resend messages.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Staff invite an unknown email to a club.\n- A pending invitation is created without active person or membership.\n- The invitee follows the email link, enters a non-blank name, and only then becomes an active ordinary member.\n- Duplicate active-member invites are blocked.\n- Duplicate pending invites resend without creating another pending record.\n- Direct Staff club-member creation from name/email is decommissioned.\n\nExisting complete-person acceptance could remain in this iteration if needed for real-world usefulness, but the core pattern is the unknown-email invitation plus profile completion lifecycle.\n\n## Required plan edits\n\n1. Decide and document the invitation token lifecycle:\n   - when the token is consumed;\n   - what “one-use” means before profile completion;\n   - whether an invitee who leaves before entering their name can resume via the same link;\n   - when the invitation state changes from pending to accepted.\n\n2. Resolve or constrain the open technical decisions that affect architecture:\n   - token storage/reuse strategy;\n   - pending invitation vs incomplete person representation;\n   - profile-completion gate state model;\n   - acceptance/profile route ownership at a high level.\n\n3. Add or update acceptance criteria/scenarios for the abandoned profile-completion case to state the expected resume/retry behavior.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. New Cucumber scenarios in `acceptance-tests/features/club_member_invitations.feature` covering the Staff invite flow, unknown invitee profile completion, existing-person acceptance, direct-creation bypass prevention, duplicate active member, duplicate pending resend, and accepted-link reuse.\n2. Domain/application tests for invitation creation, normalized-email duplicate handling, token consumption semantics, abandoned profile completion, accepted invitation reuse, and no duplicate memberships.\n3. Web tests for the Staff invite form, email/link generation, invitation callback, profile-completion page, redirects, and relevant error states.\n4. Regression tests confirming existing staff onboarding, member sign-in, and club navigation still work.\n5. `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open\",\"codex_review_required_edits\":\"Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior\"}}",
+          "failure_signature": "",
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "internal.retry_count.synthesis_gate": 0,
+          "thread.start.current_node": "gemini_review",
+          "gemini_review_decision": "READY",
+          "claude_review_required_edits": "None",
+          "internal.retry_count.gemini_review": 0,
+          "thread.gemini_review.current_node": "claude_review",
+          "plan_ready": false,
+          "claude_review_confidence": "High",
+          "internal.retry_count.claude_review": 0,
+          "claude_review_decision": "READY",
+          "internal.work_dir": "/workspace/memba",
+          "claude_review_blocking_gap_count": 0,
+          "codex_review_blocking_gap_count": 2,
+          "gemini_review_blocking_gap_count": 0,
+          "internal.run_id": "01KTJHWNAPM13FTX4TH0PZNJZT",
+          "thread.codex_review.current_node": "synthesize",
+          "internal.fidelity": "summary:high",
+          "thread.synthesize.current_node": "synthesis_gate",
+          "plan_needs_human": true,
+          "graph.rankdir": "LR",
+          "plan_needs_fix": false,
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is ready for implementation. It demonstrates exceptional clarity, comprehensive acceptance criteria, and thoughtful scope boundaries. The plan explicitly names Cucumber feature files, scenarios, and rules; resolves all business decisions; and provides a detailed, ordered implementation plan with named modules and concerns.\n\n---\n\n## Blocking Gaps\n\n**None.**\n\n---\n\n## Non-Blocking Improvements\n\n1. **Invitation aggregate shape decision could advance**: The \"Open Technical Decisions\" section lists \"exact invitation aggregate/stream shape and event names\" as unresolved. While this is a reasonable implementation-time decision, the plan could note whether invitations should be a new aggregate root or events on an existing stream (e.g., Membership). This would reduce early implementation uncertainty. However, the plan provides enough guidance that implementers can make this decision cleanly during step 3.\n\n2. **Token storage decision could advance**: The choice between \"reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection\" is left open. A slight preference or rationale would help, but the plan correctly identifies the key property: \"invitation tokens are one-use and membership-granting.\" This is acceptable for technical decisions that are best made during implementation with full context.\n\n3. **\"Incomplete person\" representation could be clearer**: The plan asks whether to create \"pending invitation only, or an incomplete person-like identity record\" before acceptance. The acceptance criteria strongly imply \"no active person,\" but the plan could state a preference. However, step 10 (\"generalize the current staff onboarding/profile completion\") and the acceptance criteria (\"unknown invited emails create a pending invitation, not an active person\") together provide enough direction.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan **is already the smallest viable slice**. The scope:\n\n- Solves one coherent problem: Staff-driven invitation with profile completion before membership activation\n- Explicitly defers Membership Admin self-service, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Delivers user value: Staff can now invite members without trusting Staff-typed identity data, and invitees control their own email and name\n\nThe only possible reduction would be removing the \"existing complete person can accept without re-entering name\" case, but that would make the system regress for multi-club scenarios and feels less viable than the current scope.\n\n---\n\n## Required Plan Edits\n\n**None.**\n\nThe plan already satisfies all readiness requirements.\n\n---\n\n## Validation Plan\n\nThe plan's validation section (lines 172-179) is clear and complete. To prove the iteration succeeded:\n\n1. **Pre-delivery domain review**: Matt reviews `acceptance-tests/features/club_member_invitations.feature` for domain language correctness.\n\n2. **Unit/integration coverage**: Domain/application tests cover:\n   - Pending invitation creation\n   - Duplicate active member block\n   - Duplicate pending invitation resend\n   - Existing-person acceptance without profile completion\n   - Unknown-person profile completion requirement\n   - Abandoned profile completion (no membership created)\n   - Accepted-link reuse (no duplicate membership)\n\n3. **Web/LiveView coverage**: Controller/LiveView tests cover:\n   - Staff invitation form/page\n   - Invitation email delivery\n   - Invitation callback route\n   - Profile completion flow\n   - Redirects to club after acceptance\n\n4. **BDD scenarios pass**: All scenarios in `club_member_invitations.feature` pass with `@todo-domain`/`@todo-ui` removed or narrowed.\n\n5. **Regression protection**: Run existing authentication, request-account, person-email-address, and club membership administration tests.\n\n6. **Full check**: `dev check` passes.\n\n---\n\n## Detailed Readiness Assessment\n\n### 1. Goal Clarity ✅\n\n**Clearly articulated.** The goal (lines 6-8) states:\n- **Who**: Staff (the actor)\n- **What**: Add club members by invitation instead of direct creation\n- **Outcome**: Invited person controls email, completes profile, and only then becomes an active ordinary member\n- **Benefit**: Avoids trusting Staff-entered identity details; creates a pattern for future required details\n\nThe goal describes a user/business outcome, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Tightly focused and coherent.** The plan:\n- Solves one problem: Staff invitation with profile completion before membership activation\n- Explicitly lists 14 in-scope items and 8 out-of-scope items (lines 29-54)\n- Clearly defers Membership Admin UI, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Could not be smaller while remaining useful\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Concrete, complete, and testable.** The acceptance criteria (lines 92-111):\n- Cover happy paths: new person invitation, existing person invitation, profile completion, membership creation\n- Cover edge cases: abandoning profile completion (line 99), reopening accepted link (line 104)\n- Cover error states: inviting active member (line 102), duplicate pending invitation (line 103)\n- Cover permissions: Staff-only access, no Admin role by default (line 107)\n- Cover data/state changes: pending invitation creation (line 96), active membership creation (line 100), sign-in (line 100)\n- Are objectively testable\n\n**BDD decision is clear.** Lines 62-85:\n- Iteration type: \"Behaviour-facing\" (line 58)\n- BDD decision: \"Required\" (line 64)\n- Feature file named: `acceptance-tests/features/club_member_invitations.feature`\n- Rules and scenarios are enumerated with clear names\n- Rationale: \"identity, membership activation, invitation lifecycle, and Staff workflow\" changes require stakeholder-readable examples\n\n**Business decisions are resolved.** Lines 113-128:\n- \"None known for this slice\" (line 115)\n- Lists 8 confirmed decisions\n- No unresolved product, policy, copy, workflow, or domain questions\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Clear, ordered, and specific.** The 16-step plan (lines 129-159):\n- Orders steps logically: inspect → model → APIs → UI → tests → validation\n- Names modules: Membership boundary, invitation model, email module\n- Names routes: `/admin/clubs/:club_id/...` (line 149)\n- Names files/features: `club_member_invitations.feature`\n- Specifies migrations: invitation aggregate/stream (line 133)\n- Identifies integration points: auth sign-in token reuse (line 132), staff onboarding generalization (line 152)\n\n**Technical decisions are explicitly listed.** Lines 160-167 enumerate 5 open technical decisions:\n- Invitation aggregate shape and event names\n- Token storage strategy (reuse auth table or separate table)\n- Unknown email representation before person exists\n- Exact URLs and LiveView/controller split\n- Profile-completion gate representation\n\nEach decision lists the key properties or constraints that guide implementation (e.g., \"invitation tokens are one-use and membership-granting\").\n\n### 5. Expected Capability and Validation ✅\n\n**Clear new capability** (lines 168-170): \"Memba can invite a person to a club by email without trusting Staff-entered identity details. The invitee proves control of the email, supplies their own required name, and only then becomes an active ordinary club member.\"\n\n**Clear validation plan** (lines 172-179): Domain review, domain/application tests, web tests, Cucumber scenarios, regression tests, `dev check`.\n\n**Clear stop condition**: When all acceptance criteria pass, Cucumber scenarios pass with `@todo` tags removed, and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **exemplary**. It demonstrates:\n- Clear goal and beneficiary\n- Tightly scoped, smallest-viable iteration\n- Comprehensive, testable acceptance criteria covering happy paths, edge cases, permissions, and error states\n- Explicit BDD decision with named feature file, rules, and scenarios\n- All business decisions resolved\n- Clear, ordered, specific implementation plan with named modules, routes, and integration points\n- Open technical decisions explicitly listed with guiding constraints\n- Clear new capability and validation plan\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "current_node": "synthesis_gate",
+          "thread.claude_review.current_node": "codex_review",
+          "failure_class": "",
+          "gemini_review_confidence": "High",
+          "gemini_review_required_edits": "None",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 1,
+          "claude_review_blocking_gaps": "None",
+          "internal.retry_count.codex_review": 0
+        },
+        "node_outcomes": {
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "codex_review_decision": "NOT READY",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profi",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gap_count": 2,
+              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profile-completion lifecycle is not fully decided.**  \n   The plan says invitation links are “one-use”, that unknown invitees must enter a name before membership starts, and that leaving before entering a name must not create membership. However, it does not clearly decide whether the invitation token is consumed on first link open, on final profile completion, or whether an invitee who leaves before entering their name can return via the same link. This is a key workflow and security decision.\n\n2. **Material technical decisions remain explicitly open.**  \n   The plan’s `## Open Technical Decisions` section leaves unresolved several implementation-shaping choices, especially token storage/reuse vs separate invitation token storage, representation of invited unknown emails before a person exists, and how the generalized profile-completion gate records required details. These affect data model, auth/session flow, and domain invariants, so the plan is not yet implementation-ready.\n\n## Non-blocking improvements\n\n1. Add an explicit invalid/malformed invitation token acceptance criterion, even if the expected behavior is simply a safe error page or redirect with no state change.\n2. Name likely route/module candidates if known, while still allowing implementation flexibility.\n3. Add a brief note about database/domain uniqueness guarantees for “one pending invitation per normalized club/email” and “one active membership per person/club.”\n4. Define the minimum Staff-facing copy expectations for active-member duplicate and pending-invitation resend messages.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Staff invite an unknown email to a club.\n- A pending invitation is created without active person or membership.\n- The invitee follows the email link, enters a non-blank name, and only then becomes an active ordinary member.\n- Duplicate active-member invites are blocked.\n- Duplicate pending invites resend without creating another pending record.\n- Direct Staff club-member creation from name/email is decommissioned.\n\nExisting complete-person acceptance could remain in this iteration if needed for real-world usefulness, but the core pattern is the unknown-email invitation plus profile completion lifecycle.\n\n## Required plan edits\n\n1. Decide and document the invitation token lifecycle:\n   - when the token is consumed;\n   - what “one-use” means before profile completion;\n   - whether an invitee who leaves before entering their name can resume via the same link;\n   - when the invitation state changes from pending to accepted.\n\n2. Resolve or constrain the open technical decisions that affect architecture:\n   - token storage/reuse strategy;\n   - pending invitation vs incomplete person representation;\n   - profile-completion gate state model;\n   - acceptance/profile route ownership at a high level.\n\n3. Add or update acceptance criteria/scenarios for the abandoned profile-completion case to state the expected resume/retry behavior.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. New Cucumber scenarios in `acceptance-tests/features/club_member_invitations.feature` covering the Staff invite flow, unknown invitee profile completion, existing-person acceptance, direct-creation bypass prevention, duplicate active member, duplicate pending resend, and accepted-link reuse.\n2. Domain/application tests for invitation creation, normalized-email duplicate handling, token consumption semantics, abandoned profile completion, accepted invitation reuse, and no duplicate memberships.\n3. Web tests for the Staff invite form, email/link generation, invitation callback, profile-completion page, redirects, and relevant error states.\n4. Regression tests confirming existing staff onboarding, member sign-in, and club navigation still work.\n5. `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open\",\"codex_review_required_edits\":\"Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior\"}}",
+              "codex_review_blocking_gaps": "Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open",
+              "codex_review_required_edits": "Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10910,
+                    "output_tokens": 909,
+                    "reasoning_tokens": 1592,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 129580
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 47313,
+              "tool_time_ms": 56,
+              "active_time_ms": 47369
+            }
           },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "claude_review_required_edits": "None",
+              "claude_review_decision": "READY",
+              "claude_review_confidence": "High",
+              "claude_review_blocking_gaps": "None",
+              "claude_review_blocking_gap_count": 0,
+              "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is ready for implementation. It demonstrates exceptional clarity, comprehensive acceptance criteria, and thoughtful scope boundaries. The plan explicitly names Cucumber feature files, scenarios, and rules; resolves all business decisions; and provides a detailed, ordered implementation plan with named modules and concerns.\n\n---\n\n## Blocking Gaps\n\n**None.**\n\n---\n\n## Non-Blocking Improvements\n\n1. **Invitation aggregate shape decision could advance**: The \"Open Technical Decisions\" section lists \"exact invitation aggregate/stream shape and event names\" as unresolved. While this is a reasonable implementation-time decision, the plan could note whether invitations should be a new aggregate root or events on an existing stream (e.g., Membership). This would reduce early implementation uncertainty. However, the plan provides enough guidance that implementers can make this decision cleanly during step 3.\n\n2. **Token storage decision could advance**: The choice between \"reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection\" is left open. A slight preference or rationale would help, but the plan correctly identifies the key property: \"invitation tokens are one-use and membership-granting.\" This is acceptable for technical decisions that are best made during implementation with full context.\n\n3. **\"Incomplete person\" representation could be clearer**: The plan asks whether to create \"pending invitation only, or an incomplete person-like identity record\" before acceptance. The acceptance criteria strongly imply \"no active person,\" but the plan could state a preference. However, step 10 (\"generalize the current staff onboarding/profile completion\") and the acceptance criteria (\"unknown invited emails create a pending invitation, not an active person\") together provide enough direction.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan **is already the smallest viable slice**. The scope:\n\n- Solves one coherent problem: Staff-driven invitation with profile completion before membership activation\n- Explicitly defers Membership Admin self-service, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Delivers user value: Staff can now invite members without trusting Staff-typed identity data, and invitees control their own email and name\n\nThe only possible reduction would be removing the \"existing complete person can accept without re-entering name\" case, but that would make the system regress for multi-club scenarios and feels less viable than the current scope.\n\n---\n\n## Required Plan Edits\n\n**None.**\n\nThe plan already satisfies all readiness requirements.\n\n---\n\n## Validation Plan\n\nThe plan's validation section (lines 172-179) is clear and complete. To prove the iteration succeeded:\n\n1. **Pre-delivery domain review**: Matt reviews `acceptance-tests/features/club_member_invitations.feature` for domain language correctness.\n\n2. **Unit/integration coverage**: Domain/application tests cover:\n   - Pending invitation creation\n   - Duplicate active member block\n   - Duplicate pending invitation resend\n   - Existing-person acceptance without profile completion\n   - Unknown-person profile completion requirement\n   - Abandoned profile completion (no membership created)\n   - Accepted-link reuse (no duplicate membership)\n\n3. **Web/LiveView coverage**: Controller/LiveView tests cover:\n   - Staff invitation form/page\n   - Invitation email delivery\n   - Invitation callback route\n   - Profile completion flow\n   - Redirects to club after acceptance\n\n4. **BDD scenarios pass**: All scenarios in `club_member_invitations.feature` pass with `@todo-domain`/`@todo-ui` removed or narrowed.\n\n5. **Regression protection**: Run existing authentication, request-account, person-email-address, and club membership administration tests.\n\n6. **Full check**: `dev check` passes.\n\n---\n\n## Detailed Readiness Assessment\n\n### 1. Goal Clarity ✅\n\n**Clearly articulated.** The goal (lines 6-8) states:\n- **Who**: Staff (the actor)\n- **What**: Add club members by invitation instead of direct creation\n- **Outcome**: Invited person controls email, completes profile, and only then becomes an active ordinary member\n- **Benefit**: Avoids trusting Staff-entered identity details; creates a pattern for future required details\n\nThe goal describes a user/business outcome, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Tightly focused and coherent.** The plan:\n- Solves one problem: Staff invitation with profile completion before membership activation\n- Explicitly lists 14 in-scope items and 8 out-of-scope items (lines 29-54)\n- Clearly defers Membership Admin UI, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Could not be smaller while remaining useful\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Concrete, complete, and testable.** The acceptance criteria (lines 92-111):\n- Cover happy paths: new person invitation, existing person invitation, profile completion, membership creation\n- Cover edge cases: abandoning profile completion (line 99), reopening accepted link (line 104)\n- Cover error states: inviting active member (line 102), duplicate pending invitation (line 103)\n- Cover permissions: Staff-only access, no Admin role by default (line 107)\n- Cover data/state changes: pending invitation creation (line 96), active membership creation (line 100), sign-in (line 100)\n- Are objectively testable\n\n**BDD decision is clear.** Lines 62-85:\n- Iteration type: \"Behaviour-facing\" (line 58)\n- BDD decision: \"Required\" (line 64)\n- Feature file named: `acceptance-tests/features/club_member_invitations.feature`\n- Rules and scenarios are enumerated with clear names\n- Rationale: \"identity, membership activation, invitation lifecycle, and Staff workflow\" changes require stakeholder-readable examples\n\n**Business decisions are resolved.** Lines 113-128:\n- \"None known for this slice\" (line 115)\n- Lists 8 confirmed decisions\n- No unresolved product, policy, copy, workflow, or domain questions\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Clear, ordered, and specific.** The 16-step plan (lines 129-159):\n- Orders steps logically: inspect → model → APIs → UI → tests → validation\n- Names modules: Membership boundary, invitation model, email module\n- Names routes: `/admin/clubs/:club_id/...` (line 149)\n- Names files/features: `club_member_invitations.feature`\n- Specifies migrations: invitation aggregate/stream (line 133)\n- Identifies integration points: auth sign-in token reuse (line 132), staff onboarding generalization (line 152)\n\n**Technical decisions are explicitly listed.** Lines 160-167 enumerate 5 open technical decisions:\n- Invitation aggregate shape and event names\n- Token storage strategy (reuse auth table or separate table)\n- Unknown email representation before person exists\n- Exact URLs and LiveView/controller split\n- Profile-completion gate representation\n\nEach decision lists the key properties or constraints that guide implementation (e.g., \"invitation tokens are one-use and membership-granting\").\n\n### 5. Expected Capability and Validation ✅\n\n**Clear new capability** (lines 168-170): \"Memba can invite a person to a club by email without trusting Staff-entered identity details. The invitee proves control of the email, supplies their own required name, and only then becomes an active ordinary club member.\"\n\n**Clear validation plan** (lines 172-179): Domain review, domain/application tests, web tests, Cucumber scenarios, regression tests, `dev check`.\n\n**Clear stop condition**: When all acceptance criteria pass, Cucumber scenarios pass with `@todo` tags removed, and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **exemplary**. It demonstrates:\n- Clear goal and beneficiary\n- Tightly scoped, smallest-viable iteration\n- Comprehensive, testable acceptance criteria covering happy paths, edge cases, permissions, and error states\n- Explicit BDD decision with named feature file, rules, and scenarios\n- All business decisions resolved\n- Clear, ordered, specific implementation plan with named modules, routes, and integration points\n- Open technical decisions explicitly listed with guiding constraints\n- Clear new capability and validation plan\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+              "last_response": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5821,
+                    "output_tokens": 2225,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 4568,
+                    "cache_write_tokens": 5833
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 5833,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 74081
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 51313,
+              "tool_time_ms": 59,
+              "active_time_ms": 51372
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "gemini_review_blocking_gap_count": 0,
+              "response.gemini_review": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-critical features (like invitation expiry, Admin self-service, and pending invitation management UI) to maintain momentum.\n\n### Review Report\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:** None\n- **Non-blocking improvements:**\n  1. The implementation plan step 3 mentions \"event-sourced if consistent with nearby Membership aggregates\". Providing a more explicit directive (e.g., whether to use event sourcing or a standard Ecto schema for the invitation model) could save the implementer some discovery time, though leaving it open is acceptable for this slice.\n- **Smallest viable iteration:** The proposed iteration is already sliced perfectly. Deferring Admin permissions and invitation management UI keeps the scope strictly focused on proving the core invitation and profile-completion workflow.\n- **Required plan edits:** None\n- **Validation plan:** As stated in the plan: implement the described scenarios in `acceptance-tests/features/club_member_invitations.feature`, complete domain and web testing for the new routes and token states, and ensure `dev check` passes cleanly.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```",
+              "gemini_review_blocking_gaps": "None",
+              "last_stage": "gemini_review",
+              "gemini_review_required_edits": "None",
+              "gemini_review_confidence": "High",
+              "gemini_review_decision": "READY",
+              "last_response": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-"
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 13197,
+                    "output_tokens": 398,
+                    "reasoning_tokens": 713,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 39726
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 10207,
+              "tool_time_ms": 59,
+              "active_time_ms": 10266
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "synthesize": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "last_stage": "synthesize",
+              "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+              "plan_needs_fix": false,
+              "plan_needs_human": true,
+              "plan_ready": false
+            },
+            "notes": "Stage completed: synthesize",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 5670,
+                    "output_tokens": 33,
+                    "reasoning_tokens": 2946,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 117720
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 55453,
+              "tool_time_ms": 0,
+              "active_time_ms": 55453
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          }
+        },
+        "next_node_id": "not_ready",
+        "git_commit_sha": "53f642497cd182da51fe50ea784dc8d8951521c3",
+        "node_visits": {
+          "codex_review": 1,
+          "gemini_review": 1,
+          "start": 1,
+          "synthesis_gate": 1,
+          "synthesize": 1,
+          "claude_review": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-08T02:47:56.515944996Z",
+        "current_node": "not_ready",
+        "completed_nodes": [
+          "start",
+          "gemini_review",
+          "claude_review",
+          "codex_review",
+          "synthesize",
+          "synthesis_gate",
+          "not_ready"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "gemini_review_blocking_gap_count": 0,
+          "thread.synthesize.current_node": "synthesis_gate",
+          "internal.thread_id": "synthesis_gate",
+          "gemini_review_confidence": "High",
+          "thread.gemini_review.current_node": "claude_review",
+          "claude_review_required_edits": "None",
+          "gemini_review_required_edits": "None",
+          "claude_review_confidence": "High",
+          "codex_review_decision": "NOT READY",
+          "plan_ready": false,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #synthesize { model: gpt-5.5; reasoning_effort: high; }\n            #codex_update { model: gpt-5.5; reasoning_effort: high; }\n            #opus_recheck { model: gpt-5.5; reasoning_effort: high; }\n            #publish_ready { reasoning_effort: low; }\n        ",
+          "internal.retry_count.synthesis_gate": 0,
+          "failure_class": "deterministic",
+          "current_node": "not_ready",
+          "last_response": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "outcome": "failed",
+          "internal.retry_count.gemini_review": 0,
+          "thread.claude_review.current_node": "codex_review",
+          "response.claude_review": "Now I'll evaluate the plan against the readiness criteria and provide a comprehensive review.\n\n---\n\n# Iteration 028 Plan Review: Staff Member Invitations\n\n## Decision: **READY**\n\n## Confidence: **High**\n\nThis plan is ready for implementation. It demonstrates exceptional clarity, comprehensive acceptance criteria, and thoughtful scope boundaries. The plan explicitly names Cucumber feature files, scenarios, and rules; resolves all business decisions; and provides a detailed, ordered implementation plan with named modules and concerns.\n\n---\n\n## Blocking Gaps\n\n**None.**\n\n---\n\n## Non-Blocking Improvements\n\n1. **Invitation aggregate shape decision could advance**: The \"Open Technical Decisions\" section lists \"exact invitation aggregate/stream shape and event names\" as unresolved. While this is a reasonable implementation-time decision, the plan could note whether invitations should be a new aggregate root or events on an existing stream (e.g., Membership). This would reduce early implementation uncertainty. However, the plan provides enough guidance that implementers can make this decision cleanly during step 3.\n\n2. **Token storage decision could advance**: The choice between \"reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection\" is left open. A slight preference or rationale would help, but the plan correctly identifies the key property: \"invitation tokens are one-use and membership-granting.\" This is acceptable for technical decisions that are best made during implementation with full context.\n\n3. **\"Incomplete person\" representation could be clearer**: The plan asks whether to create \"pending invitation only, or an incomplete person-like identity record\" before acceptance. The acceptance criteria strongly imply \"no active person,\" but the plan could state a preference. However, step 10 (\"generalize the current staff onboarding/profile completion\") and the acceptance criteria (\"unknown invited emails create a pending invitation, not an active person\") together provide enough direction.\n\n---\n\n## Smallest Viable Iteration\n\nThe plan **is already the smallest viable slice**. The scope:\n\n- Solves one coherent problem: Staff-driven invitation with profile completion before membership activation\n- Explicitly defers Membership Admin self-service, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Delivers user value: Staff can now invite members without trusting Staff-typed identity data, and invitees control their own email and name\n\nThe only possible reduction would be removing the \"existing complete person can accept without re-entering name\" case, but that would make the system regress for multi-club scenarios and feels less viable than the current scope.\n\n---\n\n## Required Plan Edits\n\n**None.**\n\nThe plan already satisfies all readiness requirements.\n\n---\n\n## Validation Plan\n\nThe plan's validation section (lines 172-179) is clear and complete. To prove the iteration succeeded:\n\n1. **Pre-delivery domain review**: Matt reviews `acceptance-tests/features/club_member_invitations.feature` for domain language correctness.\n\n2. **Unit/integration coverage**: Domain/application tests cover:\n   - Pending invitation creation\n   - Duplicate active member block\n   - Duplicate pending invitation resend\n   - Existing-person acceptance without profile completion\n   - Unknown-person profile completion requirement\n   - Abandoned profile completion (no membership created)\n   - Accepted-link reuse (no duplicate membership)\n\n3. **Web/LiveView coverage**: Controller/LiveView tests cover:\n   - Staff invitation form/page\n   - Invitation email delivery\n   - Invitation callback route\n   - Profile completion flow\n   - Redirects to club after acceptance\n\n4. **BDD scenarios pass**: All scenarios in `club_member_invitations.feature` pass with `@todo-domain`/`@todo-ui` removed or narrowed.\n\n5. **Regression protection**: Run existing authentication, request-account, person-email-address, and club membership administration tests.\n\n6. **Full check**: `dev check` passes.\n\n---\n\n## Detailed Readiness Assessment\n\n### 1. Goal Clarity ✅\n\n**Clearly articulated.** The goal (lines 6-8) states:\n- **Who**: Staff (the actor)\n- **What**: Add club members by invitation instead of direct creation\n- **Outcome**: Invited person controls email, completes profile, and only then becomes an active ordinary member\n- **Benefit**: Avoids trusting Staff-entered identity details; creates a pattern for future required details\n\nThe goal describes a user/business outcome, not just tasks.\n\n### 2. Scope Focus ✅\n\n**Tightly focused and coherent.** The plan:\n- Solves one problem: Staff invitation with profile completion before membership activation\n- Explicitly lists 14 in-scope items and 8 out-of-scope items (lines 29-54)\n- Clearly defers Membership Admin UI, pending-invitation management, expiry, roles, bulk flows, and additional profile fields\n- Could not be smaller while remaining useful\n\n### 3. Acceptance Criteria, BDD Decision, and Business Decisions ✅\n\n**Concrete, complete, and testable.** The acceptance criteria (lines 92-111):\n- Cover happy paths: new person invitation, existing person invitation, profile completion, membership creation\n- Cover edge cases: abandoning profile completion (line 99), reopening accepted link (line 104)\n- Cover error states: inviting active member (line 102), duplicate pending invitation (line 103)\n- Cover permissions: Staff-only access, no Admin role by default (line 107)\n- Cover data/state changes: pending invitation creation (line 96), active membership creation (line 100), sign-in (line 100)\n- Are objectively testable\n\n**BDD decision is clear.** Lines 62-85:\n- Iteration type: \"Behaviour-facing\" (line 58)\n- BDD decision: \"Required\" (line 64)\n- Feature file named: `acceptance-tests/features/club_member_invitations.feature`\n- Rules and scenarios are enumerated with clear names\n- Rationale: \"identity, membership activation, invitation lifecycle, and Staff workflow\" changes require stakeholder-readable examples\n\n**Business decisions are resolved.** Lines 113-128:\n- \"None known for this slice\" (line 115)\n- Lists 8 confirmed decisions\n- No unresolved product, policy, copy, workflow, or domain questions\n\n### 4. Implementation Plan and Technical Decisions ✅\n\n**Clear, ordered, and specific.** The 16-step plan (lines 129-159):\n- Orders steps logically: inspect → model → APIs → UI → tests → validation\n- Names modules: Membership boundary, invitation model, email module\n- Names routes: `/admin/clubs/:club_id/...` (line 149)\n- Names files/features: `club_member_invitations.feature`\n- Specifies migrations: invitation aggregate/stream (line 133)\n- Identifies integration points: auth sign-in token reuse (line 132), staff onboarding generalization (line 152)\n\n**Technical decisions are explicitly listed.** Lines 160-167 enumerate 5 open technical decisions:\n- Invitation aggregate shape and event names\n- Token storage strategy (reuse auth table or separate table)\n- Unknown email representation before person exists\n- Exact URLs and LiveView/controller split\n- Profile-completion gate representation\n\nEach decision lists the key properties or constraints that guide implementation (e.g., \"invitation tokens are one-use and membership-granting\").\n\n### 5. Expected Capability and Validation ✅\n\n**Clear new capability** (lines 168-170): \"Memba can invite a person to a club by email without trusting Staff-entered identity details. The invitee proves control of the email, supplies their own required name, and only then becomes an active ordinary club member.\"\n\n**Clear validation plan** (lines 172-179): Domain review, domain/application tests, web tests, Cucumber scenarios, regression tests, `dev check`.\n\n**Clear stop condition**: When all acceptance criteria pass, Cucumber scenarios pass with `@todo` tags removed, and `dev check` passes.\n\n---\n\n## Summary\n\nThis plan is **exemplary**. It demonstrates:\n- Clear goal and beneficiary\n- Tightly scoped, smallest-viable iteration\n- Comprehensive, testable acceptance criteria covering happy paths, edge cases, permissions, and error states\n- Explicit BDD decision with named feature file, rules, and scenarios\n- All business decisions resolved\n- Clear, ordered, specific implementation plan with named modules, routes, and integration points\n- Open technical decisions explicitly listed with guiding constraints\n- Clear new capability and validation plan\n\nThe plan is ready for implementation without edits.\n\n---\n\n```json\n{\"context_updates\":{\"claude_review_decision\":\"READY\",\"claude_review_confidence\":\"High\",\"claude_review_blocking_gap_count\":0,\"claude_review_blocking_gaps\":\"None\",\"claude_review_required_edits\":\"None\"}}\n```",
+          "plan_needs_fix": false,
+          "claude_review_blocking_gap_count": 0,
+          "codex_review_blocking_gap_count": 2,
+          "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438",
+          "claude_review_blocking_gaps": "None",
+          "response.synthesize": "{\"context_updates\":{\"plan_ready\":false,\"plan_needs_fix\":false,\"plan_needs_human\":true}}",
+          "thread.synthesis_gate.current_node": "not_ready",
+          "graph.rankdir": "LR",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.synthesize": 0,
+          "response.gemini_review": "This iteration plan is well-defined, focused, and ready for implementation. It correctly identifies a tight slice of functionality (Staff-initiated invitations with profile completion) and defers non-critical features (like invitation expiry, Admin self-service, and pending invitation management UI) to maintain momentum.\n\n### Review Report\n\n- **Decision:** READY\n- **Confidence:** High\n- **Blocking gaps:** None\n- **Non-blocking improvements:**\n  1. The implementation plan step 3 mentions \"event-sourced if consistent with nearby Membership aggregates\". Providing a more explicit directive (e.g., whether to use event sourcing or a standard Ecto schema for the invitation model) could save the implementer some discovery time, though leaving it open is acceptable for this slice.\n- **Smallest viable iteration:** The proposed iteration is already sliced perfectly. Deferring Admin permissions and invitation management UI keeps the scope strictly focused on proving the core invitation and profile-completion workflow.\n- **Required plan edits:** None\n- **Validation plan:** As stated in the plan: implement the described scenarios in `acceptance-tests/features/club_member_invitations.feature`, complete domain and web testing for the new routes and token states, and ensure `dev check` passes cleanly.\n\n```json\n{\n  \"context_updates\": {\n    \"gemini_review_decision\": \"READY\",\n    \"gemini_review_confidence\": \"High\",\n    \"gemini_review_blocking_gap_count\": 0,\n    \"gemini_review_blocking_gaps\": \"None\",\n    \"gemini_review_required_edits\": \"None\"\n  }\n}\n```",
+          "internal.fidelity": "summary:high",
+          "thread.start.current_node": "gemini_review",
+          "internal.run_id": "01KTJHWNAPM13FTX4TH0PZNJZT",
+          "graph.default_fidelity": "summary:high",
+          "codex_review_blocking_gaps": "Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open",
+          "last_stage": "synthesize",
+          "claude_review_decision": "READY",
+          "internal.work_dir": "/workspace/memba",
+          "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profile-completion lifecycle is not fully decided.**  \n   The plan says invitation links are “one-use”, that unknown invitees must enter a name before membership starts, and that leaving before entering a name must not create membership. However, it does not clearly decide whether the invitation token is consumed on first link open, on final profile completion, or whether an invitee who leaves before entering their name can return via the same link. This is a key workflow and security decision.\n\n2. **Material technical decisions remain explicitly open.**  \n   The plan’s `## Open Technical Decisions` section leaves unresolved several implementation-shaping choices, especially token storage/reuse vs separate invitation token storage, representation of invited unknown emails before a person exists, and how the generalized profile-completion gate records required details. These affect data model, auth/session flow, and domain invariants, so the plan is not yet implementation-ready.\n\n## Non-blocking improvements\n\n1. Add an explicit invalid/malformed invitation token acceptance criterion, even if the expected behavior is simply a safe error page or redirect with no state change.\n2. Name likely route/module candidates if known, while still allowing implementation flexibility.\n3. Add a brief note about database/domain uniqueness guarantees for “one pending invitation per normalized club/email” and “one active membership per person/club.”\n4. Define the minimum Staff-facing copy expectations for active-member duplicate and pending-invitation resend messages.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Staff invite an unknown email to a club.\n- A pending invitation is created without active person or membership.\n- The invitee follows the email link, enters a non-blank name, and only then becomes an active ordinary member.\n- Duplicate active-member invites are blocked.\n- Duplicate pending invites resend without creating another pending record.\n- Direct Staff club-member creation from name/email is decommissioned.\n\nExisting complete-person acceptance could remain in this iteration if needed for real-world usefulness, but the core pattern is the unknown-email invitation plus profile completion lifecycle.\n\n## Required plan edits\n\n1. Decide and document the invitation token lifecycle:\n   - when the token is consumed;\n   - what “one-use” means before profile completion;\n   - whether an invitee who leaves before entering their name can resume via the same link;\n   - when the invitation state changes from pending to accepted.\n\n2. Resolve or constrain the open technical decisions that affect architecture:\n   - token storage/reuse strategy;\n   - pending invitation vs incomplete person representation;\n   - profile-completion gate state model;\n   - acceptance/profile route ownership at a high level.\n\n3. Add or update acceptance criteria/scenarios for the abandoned profile-completion case to state the expected resume/retry behavior.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. New Cucumber scenarios in `acceptance-tests/features/club_member_invitations.feature` covering the Staff invite flow, unknown invitee profile completion, existing-person acceptance, direct-creation bypass prevention, duplicate active member, duplicate pending resend, and accepted-link reuse.\n2. Domain/application tests for invitation creation, normalized-email duplicate handling, token consumption semantics, abandoned profile completion, accepted invitation reuse, and no duplicate memberships.\n3. Web tests for the Staff invite form, email/link generation, invitation callback, profile-completion page, redirects, and relevant error states.\n4. Regression tests confirming existing staff onboarding, member sign-in, and club navigation still work.\n5. `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open\",\"codex_review_required_edits\":\"Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior\"}}",
+          "gemini_review_blocking_gaps": "None",
+          "codex_review_required_edits": "Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior",
+          "internal.retry_count.start": 0,
+          "codex_review_confidence": "High",
+          "thread.codex_review.current_node": "synthesize",
+          "gemini_review_decision": "READY",
+          "plan_needs_human": true,
+          "internal.retry_count.not_ready": 0,
+          "graph.goal": "Validate that an iteration plan is ready for implementation and mark it validated without starting implementation",
+          "failure_signature": "not_ready|deterministic|script failed with exit code: <n> ## output plan validation failed: the plan is not ready for implementation. see the opus report for remaining gaps or decisions that need human input.",
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.claude_review": 0
+        },
+        "node_outcomes": {
           "gemini_review": {
             "status": "succeeded",
             "context_updates": {
@@ -1304,13 +1771,77 @@
               "tool_time_ms": 0,
               "active_time_ms": 55453
             }
+          },
+          "not_ready": {
+            "status": "failed",
+            "context_updates": {
+              "command.output": "blob://sha256/7d842d8c098a1b2b3dbe41345d53820e14d8e9fafc69e62c69a2d7c32e2cc438"
+            },
+            "failure": {
+              "message": "Script failed with exit code: 1\n\n## output\nPlan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.\n",
+              "category": "deterministic"
+            },
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 182,
+              "active_time_ms": 182
+            }
+          },
+          "synthesis_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: synthesis_gate",
+            "usage": null
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "codex_review",
+              "codex_review_decision": "NOT READY",
+              "last_response": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profi",
+              "codex_review_confidence": "High",
+              "codex_review_blocking_gap_count": 2,
+              "response.codex_review": "## Decision: NOT READY\n\n## Confidence: High\n\nI read the complete plan directly from `docs/iterations/028-staff-member-invitations/plan.md` lines 1–187.\n\n## Blocking gaps\n\n1. **Invitation token/profile-completion lifecycle is not fully decided.**  \n   The plan says invitation links are “one-use”, that unknown invitees must enter a name before membership starts, and that leaving before entering a name must not create membership. However, it does not clearly decide whether the invitation token is consumed on first link open, on final profile completion, or whether an invitee who leaves before entering their name can return via the same link. This is a key workflow and security decision.\n\n2. **Material technical decisions remain explicitly open.**  \n   The plan’s `## Open Technical Decisions` section leaves unresolved several implementation-shaping choices, especially token storage/reuse vs separate invitation token storage, representation of invited unknown emails before a person exists, and how the generalized profile-completion gate records required details. These affect data model, auth/session flow, and domain invariants, so the plan is not yet implementation-ready.\n\n## Non-blocking improvements\n\n1. Add an explicit invalid/malformed invitation token acceptance criterion, even if the expected behavior is simply a safe error page or redirect with no state change.\n2. Name likely route/module candidates if known, while still allowing implementation flexibility.\n3. Add a brief note about database/domain uniqueness guarantees for “one pending invitation per normalized club/email” and “one active membership per person/club.”\n4. Define the minimum Staff-facing copy expectations for active-member duplicate and pending-invitation resend messages.\n\n## Smallest viable iteration\n\nThe smallest useful slice is:\n\n- Staff invite an unknown email to a club.\n- A pending invitation is created without active person or membership.\n- The invitee follows the email link, enters a non-blank name, and only then becomes an active ordinary member.\n- Duplicate active-member invites are blocked.\n- Duplicate pending invites resend without creating another pending record.\n- Direct Staff club-member creation from name/email is decommissioned.\n\nExisting complete-person acceptance could remain in this iteration if needed for real-world usefulness, but the core pattern is the unknown-email invitation plus profile completion lifecycle.\n\n## Required plan edits\n\n1. Decide and document the invitation token lifecycle:\n   - when the token is consumed;\n   - what “one-use” means before profile completion;\n   - whether an invitee who leaves before entering their name can resume via the same link;\n   - when the invitation state changes from pending to accepted.\n\n2. Resolve or constrain the open technical decisions that affect architecture:\n   - token storage/reuse strategy;\n   - pending invitation vs incomplete person representation;\n   - profile-completion gate state model;\n   - acceptance/profile route ownership at a high level.\n\n3. Add or update acceptance criteria/scenarios for the abandoned profile-completion case to state the expected resume/retry behavior.\n\n## Validation plan\n\nSuccess should be proven by:\n\n1. New Cucumber scenarios in `acceptance-tests/features/club_member_invitations.feature` covering the Staff invite flow, unknown invitee profile completion, existing-person acceptance, direct-creation bypass prevention, duplicate active member, duplicate pending resend, and accepted-link reuse.\n2. Domain/application tests for invitation creation, normalized-email duplicate handling, token consumption semantics, abandoned profile completion, accepted invitation reuse, and no duplicate memberships.\n3. Web tests for the Staff invite form, email/link generation, invitation callback, profile-completion page, redirects, and relevant error states.\n4. Regression tests confirming existing staff onboarding, member sign-in, and club navigation still work.\n5. `dev check` passing.\n\n{\"context_updates\":{\"codex_review_decision\":\"NOT READY\",\"codex_review_confidence\":\"High\",\"codex_review_blocking_gap_count\":2,\"codex_review_blocking_gaps\":\"Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open\",\"codex_review_required_edits\":\"Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior\"}}",
+              "codex_review_blocking_gaps": "Invitation token/profile-completion lifecycle is not fully decided; Material technical decisions remain explicitly open",
+              "codex_review_required_edits": "Decide token consumption/resume semantics; Resolve or constrain token storage, pending/incomplete identity representation, and profile-completion gate model; Add acceptance criteria for abandoned profile-completion retry/resume behavior"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 10910,
+                    "output_tokens": 909,
+                    "reasoning_tokens": 1592,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 129580
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 47313,
+              "tool_time_ms": 56,
+              "active_time_ms": 47369
+            }
           }
         },
-        "next_node_id": "not_ready",
+        "next_node_id": "exit",
         "node_visits": {
           "start": 1,
           "claude_review": 1,
           "codex_review": 1,
+          "not_ready": 1,
           "gemini_review": 1,
           "synthesize": 1,
           "synthesis_gate": 1
@@ -1787,6 +2318,67 @@
           }
         ],
         "warnings": []
+      },
+      "state": "succeeded"
+    },
+    "not_ready@1": {
+      "first_event_seq": 105,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "echo 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "command": "exec 2>&1\necho 'Plan validation failed: the plan is not ready for implementation. See the Opus report for remaining gaps or decisions that need human input.' >&2\nexit 1",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-08T02:47:56.319065917Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
+    "synthesis_gate@1": {
+      "first_event_seq": 97,
+      "prompt": null,
+      "response": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Conditional node evaluated: synthesis_gate",
+        "failure_reason": null,
+        "timestamp": "2026-06-08T02:47:53.274398427Z"
+      },
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-08T02:47:53.274313546Z",
+      "handler": "conditional",
+      "timing": {
+        "wall_time_ms": 0,
+        "inference_time_ms": 0,
+        "tool_time_ms": 0,
+        "active_time_ms": 0
+      },
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
       },
       "state": "succeeded"
     },
