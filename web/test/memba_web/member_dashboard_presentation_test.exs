@@ -1,7 +1,9 @@
 defmodule MembaWeb.MemberDashboardPresentationTest do
   use Memba.DataCase, async: true
 
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
@@ -74,6 +76,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert assigns.current_member.id == alice.person_id
     assert assigns.current_member.name == "Alice Adams"
     assert assigns.current_member.initials == "AA"
+    refute assigns.can_manage_members?
     assert assigns.active_member_count == 2
 
     assert Enum.map(assigns.members, &{&1.id, &1.name, &1.initials}) == [
@@ -132,6 +135,40 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     assert older_row.receipt_segments == []
     assert older_row.receipt_glance_copy == nil
     refute older_row.has_receipt_glance?
+  end
+
+  test "marks the current member as able to manage members when the permission is projected" do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    _bob =
+      create_active_member(
+        email: "bob@example.com",
+        name: "Bob Builder",
+        club_name: "Alpine Club",
+        club_id: alice.club_id
+      )
+
+    create_member_permission(
+      club_id: alice.club_id,
+      membership_id: alice.membership_id,
+      person_id: alice.person_id,
+      permission: Permissions.club_manage_members()
+    )
+
+    assert {:ok, assigns} =
+             MemberDashboardPresentation.load(
+               alice.club_id,
+               %{email: "alice@example.com"},
+               [alice.club]
+             )
+
+    assert assigns.current_member.id == alice.person_id
+    assert assigns.can_manage_members?
   end
 
   test "omits timestamp labels for message rows without an inserted_at timestamp" do
@@ -196,8 +233,10 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: true
@@ -206,7 +245,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
     %{
       club: club,
       club_id: club_id,
-      person_id: person.person_id
+      person_id: person.person_id,
+      membership_id: membership_id
     }
   end
 
@@ -231,6 +271,16 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
       recipient_id: Keyword.fetch!(attrs, :recipient_id),
       recipient_name: Keyword.fetch!(attrs, :recipient_name),
       status: Keyword.fetch!(attrs, :status)
+    })
+  end
+
+  defp create_member_permission(attrs) do
+    Repo.insert!(%MemberPermission{
+      club_id: Keyword.fetch!(attrs, :club_id),
+      membership_id: Keyword.fetch!(attrs, :membership_id),
+      person_id: Keyword.fetch!(attrs, :person_id),
+      permission: Keyword.fetch!(attrs, :permission),
+      grant_count: Keyword.get(attrs, :grant_count, 1)
     })
   end
 end

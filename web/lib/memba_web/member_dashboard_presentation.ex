@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
   alias Memba.Accounts
   alias Memba.ID
   alias Memba.Membership
+  alias Memba.Membership.Permissions
   alias Memba.Messaging
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Repo
@@ -42,6 +43,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
          members: members,
          active_member_count: Enum.count(members),
          current_member: current_member,
+         can_manage_members?: can_manage_members?(club_id, current_member),
          member_names_by_id: member_names_by_id,
          messages: messages,
          message_rows: message_rows
@@ -163,6 +165,12 @@ defmodule MembaWeb.MemberDashboardPresentation do
     |> Map.put(:initials, initials)
     |> Map.put(:avatar_initials, initials)
   end
+
+  defp can_manage_members?(club_id, %{id: person_id}) do
+    Membership.person_has_club_permission?(club_id, person_id, Permissions.club_manage_members())
+  end
+
+  defp can_manage_members?(_club_id, _current_member), do: false
 
   defp initials(name) when is_binary(name) do
     name

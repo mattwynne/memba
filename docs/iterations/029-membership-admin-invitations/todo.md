@@ -2,10 +2,11 @@
 
 - [x] 001 Inspect iteration 028's Staff invitation model, commands, acceptance journey, routes, emails, and profile-completion flow.
 - [x] 002a Inspect current member-facing club pages and decide the invitation host surface.
-- [ ] 002b Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action and permission-aware assigns are in place.
+- [x] 002b1 Add the permission-aware dashboard assign needed to gate the Membership Admin invite action.
 - [ ] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
 - [ ] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
 - [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+- [ ] 002b2 Add the Membership Admin invite action to the existing member dashboard `#club-members` section once the member-facing invitation route/action is in place.
 - [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
 - [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
 - [ ] 008 Keep the Admin invitation form email-only.
