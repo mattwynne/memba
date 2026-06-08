@@ -1,0 +1,138 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index a8109f1..237ed45 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+ - [x] 005a Add the invitation action to the selected member-facing members surface for Membership Admins once it can target the route and permission-gated visibility.
+ - [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+-- [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
++- [x] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [ ] 008 Keep the Admin invitation form email-only.
+ - [ ] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [ ] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+diff --git a/web/lib/memba/membership.ex b/web/lib/memba/membership.ex
+index 8572b5b..3555288 100644
+--- a/web/lib/memba/membership.ex
++++ b/web/lib/memba/membership.ex
+@@ -105,6 +105,11 @@ defmodule Memba.Membership do
+   @doc """
+   Create a pending club member invitation for an email address.
+ 
++  This is the Staff/system entry point. It does not require the caller to be an
++  active club member; member-facing callers should use
++  `invite_club_member_as_club_member/2` so their actor is authorized separately
++  from the invitation lifecycle data.
++
+   The public API generates the plaintext one-use invitation token before
+   dispatch and stores only its hash in Membership. The caller may supply
+   `:invitation_id`/`"invitation_id"`; otherwise this application service
+@@ -151,7 +156,9 @@ defmodule Memba.Membership do
+     with {:ok, club_id} <- fetch_required(attrs, :club_id),
+          {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+          :ok <- Authorization.authorize_manage_members(club_id, actor_person_id) do
+-      invite_club_member(attrs, dispatch_opts)
++      attrs
++      |> invitation_attrs_without_actor()
++      |> invite_club_member(dispatch_opts)
+     end
+   end
+ 
+@@ -894,6 +901,10 @@ defmodule Memba.Membership do
+     end
+   end
+ 
++  defp invitation_attrs_without_actor(attrs) do
++    Map.drop(attrs, [:actor_person_id, "actor_person_id"])
++  end
++
+   defp resend_club_member_invitation_command(%ClubInvitation{} = invitation) do
+     invitation_token = InvitationToken.generate_token()
+ 
+diff --git a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+index d9d02ab..94ad5eb 100644
+--- a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
++++ b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+@@ -4,6 +4,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+   alias Memba.Membership
+   alias Memba.Membership.App
+   alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Events.ClubMemberInvited
+   alias Memba.Membership.InvitationToken
+   alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
+@@ -455,6 +456,48 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+              } = Membership.get_club_member_invitation_by_token(second_token)
+     end
+ 
++    test "membership admin actor is authorized separately from invitation lifecycle data" do
++      club_id = Memba.ID.generate(:club)
++      actor_person_id = Memba.ID.generate(:person)
++      actor_membership_id = Memba.ID.generate(:membership)
++      invitation_id = Memba.ID.generate(:club_invitation)
++
++      create_club!(club_id)
++      create_person!(actor_person_id, "Robin Admin", "robin@example.com")
++      add_member!(actor_membership_id, club_id, actor_person_id)
++      assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
++
++      assert {:ok,
++              %{
++                invitation_id: ^invitation_id,
++                invitation_token: invitation_token,
++                execution_result: %{events: [%ClubMemberInvited{} = event]}
++              }} =
++               Membership.invite_club_member_as_club_member(
++                 %{
++                   "invitation_id" => invitation_id,
++                   "club_id" => club_id,
++                   "actor_person_id" => actor_person_id,
++                   "email" => " Dana@Example.COM "
++                 },
++                 returning: :execution_result,
++                 consistency: :strong
++               )
++
++      refute Map.has_key?(Map.from_struct(event), :actor_person_id)
++      assert event.invitation_id == invitation_id
++      assert event.club_id == club_id
++      assert event.normalized_email == "dana@example.com"
++
++      assert %ClubInvitationProjection{
++               invitation_id: ^invitation_id,
++               token_hash: token_hash,
++               status: "pending"
++             } = Membership.get_club_member_invitation(invitation_id)
++
++      assert InvitationToken.hash_token(invitation_token) == token_hash
++    end
++
+     test "membership admin invitations reuse the active-member duplicate rule" do
+       club_id = Memba.ID.generate(:club)
+       actor_person_id = Memba.ID.generate(:person)
+@@ -498,6 +541,25 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+       assert Membership.active_member_of_club_by_email?(club_id, "ALICE@WORK.EXAMPLE")
+     end
+ 
++    test "member-facing invitations require a club member actor" do
++      club_id = Memba.ID.generate(:club)
++      invitation_id = Memba.ID.generate(:club_invitation)
++
++      create_club!(club_id)
++
++      assert {:error, {:missing_required_attribute, :actor_person_id}} =
++               Membership.invite_club_member_as_club_member(
++                 %{
++                   invitation_id: invitation_id,
++                   club_id: club_id,
++                   email: "dana@example.com"
++                 },
++                 consistency: :strong
++               )
++
++      assert is_nil(Membership.get_club_member_invitation(invitation_id))
++    end
++
+     test "ordinary members cannot use the member-facing invitation service" do
+       club_id = Memba.ID.generate(:club)
+       actor_person_id = Memba.ID.generate(:person)
