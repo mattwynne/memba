@@ -35,11 +35,12 @@ There is already a staff-only onboarding page at `/auth/onboard` that asks new M
 - Send an invitation email with a one-use invitation magic link.
 - Following the invitation link signs/verifies the invited email into the invitation journey.
 - Unknown invited people must enter their name before they become active members or continue into the club.
-- Completing the name creates the person and active ordinary membership, signs the person in, and lands them in the club.
+- Invitation tokens for unknown invitees remain pending and reusable until profile completion succeeds.
+- Completing the name creates the person and active ordinary membership, signs the person in, marks the invitation accepted, consumes the invitation token, and lands them in the club.
 - Existing complete people invited to a new club can accept by following the invitation link; Memba creates the active ordinary membership and lands them in the club without asking for their name again.
 - Inviting an email that is already an active member of the club is blocked with a clear Staff-facing message.
 - Inviting an email that already has a pending invitation for the same club resends the invitation instead of creating a duplicate pending invitation.
-- Accepted invitation links cannot create duplicate memberships when reopened.
+- Accepted invitation links cannot create duplicate memberships when reopened; reopening an accepted invitation signs or keeps the person in and lands them in the club.
 - No invitation expiry in this slice.
 
 ### Out of scope
@@ -73,7 +74,7 @@ New feature file:
     - Scenario: Robin accepts an invitation and completes their profile
     - Scenario: Alice accepts an invitation as an existing person
   - Rule: Invited people complete required profile details before membership starts
-    - Scenario: Robin leaves before entering their name
+    - Scenario: Robin leaves before entering their name, then returns with the same invitation link
   - Rule: Staff club-member creation goes through invitations
     - Scenario: Pat cannot bypass invitation when adding a club member
   - Rule: An invitation does not create duplicate club membership
@@ -94,14 +95,15 @@ The feature is tagged `@todo-domain`/`@todo-ui` because the invitation domain, r
 - Staff can open a club-scoped invitation page/route and submit an email address.
 - Staff do not provide the invitee's name on the invitation form.
 - Unknown invited emails create a pending invitation, not an active person and not an active membership.
-- The invitation email contains a one-use invitation link.
+- The invitation email contains an invitation link that is one-use for successful membership creation.
 - Following an invitation link for an unknown email asks the invitee for their name before creating an active membership.
-- If the invitee leaves before entering their name, they are still not an active member of the club.
-- Submitting a non-blank name creates the person with the invited email, creates an ordinary active membership for the invited club, signs the person in, and takes them to the invited club.
+- If the invitee leaves before entering their name, they are still not an active member of the club, the invitation remains pending, and the same invitation link can be followed again to resume profile completion.
+- Submitting a non-blank name creates the person with the invited email, creates an ordinary active membership for the invited club, marks the invitation accepted, consumes the invitation token, signs the person in, and takes them to the invited club.
 - Following an invitation link for an existing complete person who is not a member of the club creates an ordinary active membership and signs them in to the invited club without asking for their name again.
 - Inviting an email that is already an active member of the club is rejected with a clear message.
 - Inviting an email that already has a pending invitation for the club resends an invitation email and preserves a single pending invitation record.
 - Reopening an already accepted invitation link signs/keeps the person in and takes them to the club without creating another membership or repeating profile completion.
+- Reopening a pending invitation before profile completion resumes the profile-completion step and does not consume the invitation until completion succeeds.
 - Staff club-member creation paths no longer allow creating an active club member directly from name and email; Staff are directed to the invitation flow instead.
 - Invitation links are one-use for membership creation. No expiry is required in this slice.
 - New invited members receive no Admin role by default.
@@ -133,7 +135,9 @@ Confirmed decisions:
 3. Add a minimal club invitation model in the Membership boundary, event-sourced if consistent with nearby Membership aggregates:
    - pending invitation for club/email;
    - accepted state;
-   - one-use acceptance token or token hash;
+   - separate invitation token/token-hash storage from ordinary sign-in tokens, because invitation links grant membership;
+   - token remains usable while the invitation is pending and profile completion has not succeeded;
+   - successful acceptance/profile completion marks the invitation accepted and consumes the token;
    - resend behaviour for duplicate pending invite submissions;
    - no expiry for this slice.
 4. Add public Membership APIs/commands for Staff/system use:
@@ -148,8 +152,8 @@ Confirmed decisions:
 6. Add an invitation email module with clear club context and a one-use invitation link.
 7. Add the Staff club-scoped invite route and form. Exact route name is implementation detail, but it should sit under `/admin/clubs/:club_id/...` and not replace the existing person edit route.
 8. Decommission direct Staff club-member creation from name/email by hiding/removing that action or redirecting it to the invite route. Keep person edit behaviour where still needed for existing people.
-9. Add an invitation callback route that consumes invitation tokens, signs in the invited email, and routes to either profile completion or the invited club.
-10. Generalize the current staff onboarding/profile completion enough that invited unknown members can enter their name before membership activation. Avoid overbuilding date-of-birth or configurable detail schemas.
+9. Add an invitation callback route that validates invitation tokens, signs in the invited email for the invitation journey, and routes to either profile completion or the invited club. Do not consume a pending unknown invitee's token on first open; consume it only when profile completion or existing-person acceptance succeeds.
+10. Generalize the current staff onboarding/profile completion enough that invited unknown members can enter their name before membership activation. For this slice, profile-completion state can live in the invitation/session journey; do not create an incomplete person before the name is submitted, and avoid overbuilding date-of-birth or configurable detail schemas.
 11. Preserve existing staff onboarding: new Memba staff with no person record still enter a name and continue to the Staff area.
 12. Add domain/application tests for pending invitation creation, duplicate active block, duplicate pending resend, existing-person acceptance, unknown-person profile completion, abandoned profile completion, and accepted-link reuse.
 13. Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
@@ -160,10 +164,15 @@ Confirmed decisions:
 ## Open Technical Decisions
 
 - Exact invitation aggregate/stream shape and event names.
-- Whether invitation tokens reuse the auth token table with a distinct purpose or use a separate invitation-token table/projection. The important property is that invitation tokens are one-use and membership-granting, unlike ordinary requested sign-in links.
-- Exact representation of an invited unknown email before a person exists: pending invitation only, or an incomplete person-like identity record. The accepted behaviour should not make them an active person/member until profile completion.
 - Exact URL and LiveView/controller split for the Staff invite page, invitation callback, and profile completion step.
-- How the generalized profile-completion gate records and validates “required details complete” while only requiring name in this slice.
+
+Resolved technical decisions for this slice:
+
+- Invitation tokens use separate invitation-token storage from ordinary sign-in tokens, because invitation links grant membership.
+- Unknown invited emails are represented as pending invitations only before acceptance/profile completion; do not create incomplete person records in this slice.
+- Profile-completion state for invited unknown people lives in the invitation/session journey until the invitee submits a valid name.
+- The invitation token is not consumed when an unknown invitee first opens the link. It remains usable while the invitation is pending, and is consumed only when profile completion succeeds and membership is created.
+- For existing complete people, following the link accepts the invitation, creates membership, consumes the token, signs them in, and lands them in the club.
 
 ## New Capability
 
