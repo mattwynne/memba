@@ -5,14 +5,19 @@ defmodule Memba.Membership.AppTest do
 
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AddMember
+  alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
+  alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Commands.RemoveMember
+  alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projectors.Club, as: ClubProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projectors.Person, as: PersonProjector
+  alias Memba.Membership.Projectors.Role, as: RoleProjector
   alias Memba.Membership.Router
 
   test "Membership Commanded app is supervised by the Phoenix application" do
@@ -39,6 +44,14 @@ defmodule Memba.Membership.AppTest do
            end)
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{RoleProjector, _opts}, pid, :worker, [RoleProjector]} when is_pid(pid) ->
+               true
+
+             _child ->
+               false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{PersonProjector, _opts}, pid, :worker, [PersonProjector]} when is_pid(pid) ->
                true
 
@@ -51,9 +64,13 @@ defmodule Memba.Membership.AppTest do
     expected_commands =
       MapSet.new([
         AddMember,
+        AssignMemberRole,
         CreateClub,
         CreatePerson,
+        DefineClubRole,
+        GrantClubRolePermission,
         RemoveMember,
+        RemoveMemberRole,
         ReplacePersonEmailAddresses,
         UpdateClub
       ])

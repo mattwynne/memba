@@ -3,17 +3,25 @@ defmodule Memba.Membership.PublicApiTest do
 
   alias Commanded.Commands.ExecutionResult
   alias Memba.Membership
+  alias Memba.Membership.App
+  alias Memba.Membership.Commands.AssignMemberRole
+  alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubRoleDefined
+  alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
   alias Memba.Membership.Events.MemberAdded
   alias Memba.Membership.Events.MemberRemoved
   alias Memba.Membership.Events.PersonEmailAddressesReplaced
   alias Memba.Membership.Events.PersonCreated
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Roles
 
   test "create_club/2 dispatches CreateClub through the Membership context" do
     club_id = Memba.ID.generate(:club)
+    role_id = Roles.membership_administrator_role_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -23,6 +31,17 @@ defmodule Memba.Membership.PublicApiTest do
                   club_id: ^club_id,
                   name: "Kootenay Mountaineering Club",
                   slug: "kootenay-mountaineering-club"
+                },
+                %ClubRoleDefined{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  role_key: "membership_administrator",
+                  name: "Membership Administrator"
+                },
+                %ClubRolePermissionGranted{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  permission: "club.manage_members"
                 }
               ]
             }} =
@@ -38,6 +57,7 @@ defmodule Memba.Membership.PublicApiTest do
 
   test "create_club/2 allows an address-safe slug override and rejects invalid slugs" do
     club_id = Memba.ID.generate(:club)
+    role_id = Roles.membership_administrator_role_id(club_id)
 
     assert {:ok,
             %ExecutionResult{
@@ -47,6 +67,17 @@ defmodule Memba.Membership.PublicApiTest do
                   club_id: ^club_id,
                   name: "Kootenay Mountaineering Club",
                   slug: "kmc"
+                },
+                %ClubRoleDefined{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  role_key: "membership_administrator",
+                  name: "Membership Administrator"
+                },
+                %ClubRolePermissionGranted{
+                  club_id: ^club_id,
+                  role_id: ^role_id,
+                  permission: "club.manage_members"
                 }
               ]
             }} =
@@ -417,5 +448,62 @@ defmodule Memba.Membership.PublicApiTest do
 
     refute Membership.active_member_of_club?(club_id, person_id)
     assert [] = Membership.list_active_members_of_club(club_id)
+  end
+
+  test "person_has_club_permission?/3 checks backend projected member permissions" do
+    club_id = Memba.ID.generate(:club)
+    person_id = Memba.ID.generate(:person)
+    membership_id = Memba.ID.generate(:membership)
+    role_id = Roles.membership_administrator_role_id(club_id)
+    permission = Permissions.club_manage_members()
+
+    assert :ok =
+             Membership.create_club(
+               membership_club_attrs(club_id: club_id, name: "Kootenay Mountaineering Club"),
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: person_id, name: "Alice", email: "alice@example.com"},
+               consistency: :strong
+             )
+
+    assert :ok =
+             Membership.add_member(
+               %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+               consistency: :strong
+             )
+
+    refute Membership.person_has_club_permission?(club_id, person_id, permission)
+
+    assert :ok =
+             App.dispatch(
+               %AssignMemberRole{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id,
+                 role_id: role_id
+               },
+               consistency: :strong
+             )
+
+    assert Membership.person_has_club_permission?(club_id, person_id, permission)
+    refute Membership.person_has_club_permission?("not-a-club-id", person_id, permission)
+    refute Membership.person_has_club_permission?(club_id, "not-a-person-id", permission)
+    refute Membership.person_has_club_permission?(club_id, person_id, "club.manage_trips")
+
+    assert :ok =
+             App.dispatch(
+               %RemoveMemberRole{
+                 club_id: club_id,
+                 membership_id: membership_id,
+                 person_id: person_id,
+                 role_id: role_id
+               },
+               consistency: :strong
+             )
+
+    refute Membership.person_has_club_permission?(club_id, person_id, permission)
   end
 end

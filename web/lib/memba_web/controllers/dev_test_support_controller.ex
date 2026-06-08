@@ -13,6 +13,7 @@ defmodule MembaWeb.DevTestSupportController do
   @projectors [
     Memba.Membership.Projectors.Club,
     Memba.Membership.Projectors.Membership,
+    Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
     Memba.Messaging.Projectors.Message,
     Memba.Messaging.Projectors.EmailDelivery,

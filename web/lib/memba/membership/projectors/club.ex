@@ -10,7 +10,11 @@ defmodule Memba.Membership.Projectors.Club do
     consistency: :strong
 
   alias Memba.Membership.Events.ClubCreated
+  alias Memba.Membership.Events.ClubRoleDefined
+  alias Memba.Membership.Events.ClubRolePermissionGranted
   alias Memba.Membership.Events.ClubUpdated
+  alias Memba.Membership.Events.MemberRoleAssigned
+  alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Projections.Club, as: ClubProjection
   alias Memba.Membership.Slug
 
@@ -34,6 +38,14 @@ defmodule Memba.Membership.Projectors.Club do
       )
     end
   end)
+
+  project(%ClubRoleDefined{}, fn multi -> multi end)
+
+  project(%ClubRolePermissionGranted{}, fn multi -> multi end)
+
+  project(%MemberRoleAssigned{}, fn multi -> multi end)
+
+  project(%MemberRoleRemoved{}, fn multi -> multi end)
 
   defp projected_slug(%ClubCreated{} = event) do
     case Slug.validate(event.slug) do

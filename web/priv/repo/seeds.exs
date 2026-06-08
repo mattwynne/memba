@@ -7,9 +7,15 @@
 # The data is idempotent: running this file again refreshes the same records.
 
 alias Memba.Membership.Projections.Club
+alias Memba.Membership.Projections.MemberPermission
 alias Memba.Membership.Projections.Membership
 alias Memba.Membership.Projections.Person
 alias Memba.Membership.Projections.PersonEmailAddress
+alias Memba.Membership.Projections.Role
+alias Memba.Membership.Projections.RoleAssignment
+alias Memba.Membership.Projections.RolePermission
+alias Memba.Membership.Permissions
+alias Memba.Membership.Roles
 alias Memba.Messaging.Projections.EmailDelivery
 alias Memba.Messaging.Projections.MembaStaffEmailDelivery
 alias Memba.Messaging.Projections.MemberEmailDelivery
@@ -214,6 +220,68 @@ memberships = [
   }
 ]
 
+membership_administrator_roles =
+  Enum.map(clubs, fn club ->
+    %{
+      role_id: Roles.membership_administrator_role_id(club.club_id),
+      club_id: club.club_id,
+      role_key: Roles.membership_administrator_key(),
+      name: Roles.membership_administrator_name(),
+      inserted_at: club.inserted_at,
+      updated_at: now
+    }
+  end)
+
+membership_administrator_role_by_club_id =
+  Map.new(membership_administrator_roles, fn role -> {role.club_id, role} end)
+
+membership_administrator_role_permissions =
+  Enum.map(membership_administrator_roles, fn role ->
+    %{
+      club_id: role.club_id,
+      role_id: role.role_id,
+      permission: Permissions.club_manage_members(),
+      inserted_at: two_days_ago,
+      updated_at: now
+    }
+  end)
+
+membership_administrator_memberships =
+  memberships
+  |> Enum.filter(& &1.active)
+  |> Enum.reduce(%{}, fn membership, memberships_by_club_id ->
+    Map.put_new(memberships_by_club_id, membership.club_id, membership)
+  end)
+  |> Map.values()
+
+membership_administrator_role_assignments =
+  Enum.map(membership_administrator_memberships, fn membership ->
+    role = Map.fetch!(membership_administrator_role_by_club_id, membership.club_id)
+
+    %{
+      club_id: membership.club_id,
+      membership_id: membership.membership_id,
+      person_id: membership.person_id,
+      role_id: role.role_id,
+      active: true,
+      inserted_at: membership.inserted_at,
+      updated_at: now
+    }
+  end)
+
+membership_administrator_member_permissions =
+  Enum.map(membership_administrator_role_assignments, fn assignment ->
+    %{
+      club_id: assignment.club_id,
+      membership_id: assignment.membership_id,
+      person_id: assignment.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1,
+      inserted_at: assignment.inserted_at,
+      updated_at: now
+    }
+  end)
+
 messages = [
   %{
     message_id: "30000000-0000-0000-0000-000000000001",
@@ -358,6 +426,47 @@ Repo.insert_all(PersonEmailAddress, person_email_addresses,
 Repo.insert_all(Membership, memberships,
   on_conflict: {:replace_all_except, [:membership_id]},
   conflict_target: :membership_id
+)
+
+seed_membership_ids = Enum.map(memberships, & &1.membership_id)
+seed_role_ids = Enum.map(membership_administrator_roles, & &1.role_id)
+
+Repo.delete_all(
+  from(member_permission in MemberPermission,
+    where:
+      member_permission.membership_id in ^seed_membership_ids and
+        member_permission.permission == ^Permissions.club_manage_members()
+  )
+)
+
+Repo.delete_all(
+  from(role_assignment in RoleAssignment, where: role_assignment.role_id in ^seed_role_ids)
+)
+
+Repo.delete_all(
+  from(role_permission in RolePermission, where: role_permission.role_id in ^seed_role_ids)
+)
+
+Repo.delete_all(from(role in Role, where: role.role_id in ^seed_role_ids))
+
+Repo.insert_all(Role, membership_administrator_roles,
+  on_conflict: {:replace_all_except, [:role_id]},
+  conflict_target: :role_id
+)
+
+Repo.insert_all(RolePermission, membership_administrator_role_permissions,
+  on_conflict: :nothing,
+  conflict_target: [:role_id, :permission]
+)
+
+Repo.insert_all(RoleAssignment, membership_administrator_role_assignments,
+  on_conflict: :nothing,
+  conflict_target: [:membership_id, :role_id]
+)
+
+Repo.insert_all(MemberPermission, membership_administrator_member_permissions,
+  on_conflict: :nothing,
+  conflict_target: [:club_id, :person_id, :membership_id, :permission]
 )
 
 Repo.insert_all(Message, messages,
