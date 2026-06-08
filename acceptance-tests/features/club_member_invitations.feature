@@ -29,7 +29,7 @@ Feature: Club member invitations
 
 # Rule: Membership Admins invite new members by email
 
-    @iteration-029 @todo-ui
+    @iteration-029
     Scenario: Robin invites Dana to join West Coast Paddlers
       Given Robin is a Membership Admin of West Coast Paddlers
       When Robin invites "dana@example.com" to join West Coast Paddlers

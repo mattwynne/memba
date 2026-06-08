@@ -160,7 +160,7 @@ function ensureMember(world, personName, clubName) {
     clubName,
     clubSlug: clubSlug(clubName),
     personName,
-    email: emailFor(personName)
+    email: emailForPerson(world, personName)
   });
 
   rememberMember(world, member);
@@ -169,6 +169,7 @@ function ensureMember(world, personName, clubName) {
 
 function memberStatus(world, personName, clubName) {
   ensureState(world);
+  const email = emailForPerson(world, personName);
 
   const status = serverCommands.runCommand(
     `
@@ -240,7 +241,7 @@ permission? =
   personName: if(person, do: person.name)
 }
 `,
-    { clubName, email: emailFor(personName) }
+    { clubName, email }
   );
 
   if (status.activeMember) {
@@ -256,6 +257,16 @@ permission? =
   }
 
   return status;
+}
+
+function emailForPerson(world, personName) {
+  ensureState(world);
+
+  if (world.people[personName] && world.people[personName].email) {
+    return world.people[personName].email;
+  }
+
+  return emailFor(personName);
 }
 
 function membershipAdministratorCount(world, clubName) {
