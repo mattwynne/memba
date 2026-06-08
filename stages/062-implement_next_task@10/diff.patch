@@ -1,0 +1,118 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 6976b33..0f22f73 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+ - [x] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+ - [x] 008 Keep the Admin invitation form email-only.
+-- [ ] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
++- [x] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [ ] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+ - [ ] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
+ - [ ] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
+diff --git a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+index 94ad5eb..60b91d9 100644
+--- a/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
++++ b/web/test/memba/membership/club_member_invitation_lifecycle_test.exs
+@@ -10,6 +10,7 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
+   alias Memba.Membership.Projections.Membership, as: MembershipProjection
+   alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
+   alias Memba.Membership.Roles
+ 
+   describe "club member invitation lifecycle application API" do
+@@ -448,6 +449,14 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+                match?(%{id: ^invited_person_id, membership_id: ^invited_membership_id}, member)
+              end)
+ 
++      refute Membership.person_has_club_permission?(
++               club_id,
++               invited_person_id,
++               Permissions.club_manage_members()
++             )
++
++      assert [] = active_role_assignments(invited_membership_id)
++
+       assert %ClubInvitationProjection{
+                invitation_id: ^invitation_id,
+                status: "accepted",
+@@ -456,6 +465,65 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+              } = Membership.get_club_member_invitation_by_token(second_token)
+     end
+ 
++    test "existing complete person invited by a membership admin accepts as an ordinary member" do
++      club_id = Memba.ID.generate(:club)
++      actor_person_id = Memba.ID.generate(:person)
++      actor_membership_id = Memba.ID.generate(:membership)
++      invited_person_id = Memba.ID.generate(:person)
++      invited_membership_id = Memba.ID.generate(:membership)
++      invitation_id = Memba.ID.generate(:club_invitation)
++
++      create_club!(club_id)
++      create_person!(actor_person_id, "Robin Admin", "robin@example.com")
++      add_member!(actor_membership_id, club_id, actor_person_id)
++      assign_membership_administrator!(club_id, actor_membership_id, actor_person_id)
++      create_person!(invited_person_id, "Dana Existing", "dana@example.com")
++
++      assert {:ok, %{invitation_id: ^invitation_id}} =
++               Membership.invite_club_member_as_club_member(
++                 %{
++                   invitation_id: invitation_id,
++                   club_id: club_id,
++                   actor_person_id: actor_person_id,
++                   email: " DANA@Example.COM "
++                 },
++                 consistency: :strong
++               )
++
++      assert {:ok,
++              %{
++                invitation_id: ^invitation_id,
++                club_id: ^club_id,
++                person_id: ^invited_person_id,
++                membership_id: ^invited_membership_id
++              }} =
++               Membership.accept_club_member_invitation_for_existing_person(
++                 %{
++                   invitation_id: invitation_id,
++                   person_id: invited_person_id,
++                   membership_id: invited_membership_id
++                 },
++                 consistency: :strong
++               )
++
++      assert Membership.active_member_of_club?(club_id, invited_person_id)
++
++      refute Membership.person_has_club_permission?(
++               club_id,
++               invited_person_id,
++               Permissions.club_manage_members()
++             )
++
++      assert [] = active_role_assignments(invited_membership_id)
++
++      assert %ClubInvitationProjection{
++               invitation_id: ^invitation_id,
++               status: "accepted",
++               accepted_person_id: ^invited_person_id,
++               accepted_membership_id: ^invited_membership_id
++             } = Membership.get_club_member_invitation(invitation_id)
++    end
++
+     test "membership admin actor is authorized separately from invitation lifecycle data" do
+       club_id = Memba.ID.generate(:club)
+       actor_person_id = Memba.ID.generate(:person)
+@@ -637,4 +705,11 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
+              Permissions.club_manage_members()
+            )
+   end
++
++  defp active_role_assignments(membership_id) do
++    RoleAssignmentProjection
++    |> where([assignment], assignment.membership_id == ^membership_id)
++    |> where([assignment], assignment.active == true)
++    |> Repo.all()
++  end
+ end
