@@ -1,6 +1,7 @@
 defmodule MembaWeb.MemberInvitationLive.NewTest do
   use MembaWeb.FeatureCase, async: false
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
@@ -167,6 +168,41 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
     end)
   end
 
+  test "crafted submit is rejected if the actor no longer has club.manage_members", %{
+    conn: conn
+  } do
+    alice =
+      create_membership_admin(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
+
+    revoke_manage_members_permission!(alice)
+
+    render_submit(view, "send_invitation", %{
+      "invitation" => %{"email" => "dana@example.com"}
+    })
+
+    assert has_element?(
+             view,
+             "#flash-error",
+             "You are not allowed to invite members for this club."
+           )
+
+    refute Membership.get_pending_club_member_invitation_by_email(
+             alice.club_id,
+             "dana@example.com"
+           )
+
+    assert_no_email_sent()
+  end
+
   test "routed GET forbids an active club member without club.manage_members permission", %{
     conn: conn
   } do
@@ -285,6 +321,20 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
       permission: Permissions.club_manage_members(),
       grant_count: 1
     })
+
+    member
+  end
+
+  defp revoke_manage_members_permission!(member) do
+    {1, nil} =
+      MemberPermission
+      |> where([member_permission], member_permission.club_id == ^member.club_id)
+      |> where([member_permission], member_permission.person_id == ^member.person_id)
+      |> where(
+        [member_permission],
+        member_permission.permission == ^Permissions.club_manage_members()
+      )
+      |> Repo.delete_all()
 
     member
   end

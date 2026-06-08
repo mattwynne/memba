@@ -352,7 +352,9 @@ defmodule MembaWeb.MemberInvitationLive.New do
     "Invitation was created, but Memba could not send the email. Try again."
   end
 
-  defp failure_message(:forbidden), do: "You are not allowed to invite members for this club."
+  defp failure_message(reason) when reason in [:forbidden, :unauthorized],
+    do: "You are not allowed to invite members for this club."
+
   defp failure_message(reason), do: "Could not send invitation: #{inspect(reason)}"
 
   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
