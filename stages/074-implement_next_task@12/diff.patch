@@ -1,0 +1,103 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 3651410..2155d32 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 008 Keep the Admin invitation form email-only.
+ - [x] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [x] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+-- [ ] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
++- [x] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
+ - [ ] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
+ - [ ] 013 Remove or narrow `@todo-domain`/`@todo-ui` tags from the affected scenarios only when they pass in the relevant runner.
+ - [ ] 014 Run `dev check`.
+diff --git a/web/lib/memba_web/live/member_invitation_live/new.ex b/web/lib/memba_web/live/member_invitation_live/new.ex
+index db061a3..48e7518 100644
+--- a/web/lib/memba_web/live/member_invitation_live/new.ex
++++ b/web/lib/memba_web/live/member_invitation_live/new.ex
+@@ -352,7 +352,9 @@ defmodule MembaWeb.MemberInvitationLive.New do
+     "Invitation was created, but Memba could not send the email. Try again."
+   end
+ 
+-  defp failure_message(:forbidden), do: "You are not allowed to invite members for this club."
++  defp failure_message(reason) when reason in [:forbidden, :unauthorized],
++    do: "You are not allowed to invite members for this club."
++
+   defp failure_message(reason), do: "Could not send invitation: #{inspect(reason)}"
+ 
+   defp forbidden!(_socket), do: raise(MembaWeb.ForbiddenError)
+diff --git a/web/test/memba_web/live/member_invitation_live/new_test.exs b/web/test/memba_web/live/member_invitation_live/new_test.exs
+index f32d7f0..61e4f5c 100644
+--- a/web/test/memba_web/live/member_invitation_live/new_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/new_test.exs
+@@ -1,6 +1,7 @@
+ defmodule MembaWeb.MemberInvitationLive.NewTest do
+   use MembaWeb.FeatureCase, async: false
+ 
++  import Ecto.Query
+   import Phoenix.LiveViewTest
+   import Swoosh.TestAssertions
+ 
+@@ -167,6 +168,41 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
+     end)
+   end
+ 
++  test "crafted submit is rejected if the actor no longer has club.manage_members", %{
++    conn: conn
++  } do
++    alice =
++      create_membership_admin(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
++
++    revoke_manage_members_permission!(alice)
++
++    render_submit(view, "send_invitation", %{
++      "invitation" => %{"email" => "dana@example.com"}
++    })
++
++    assert has_element?(
++             view,
++             "#flash-error",
++             "You are not allowed to invite members for this club."
++           )
++
++    refute Membership.get_pending_club_member_invitation_by_email(
++             alice.club_id,
++             "dana@example.com"
++           )
++
++    assert_no_email_sent()
++  end
++
+   test "routed GET forbids an active club member without club.manage_members permission", %{
+     conn: conn
+   } do
+@@ -289,6 +325,20 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
+     member
+   end
+ 
++  defp revoke_manage_members_permission!(member) do
++    {1, nil} =
++      MemberPermission
++      |> where([member_permission], member_permission.club_id == ^member.club_id)
++      |> where([member_permission], member_permission.person_id == ^member.person_id)
++      |> where(
++        [member_permission],
++        member_permission.permission == ^Permissions.club_manage_members()
++      )
++      |> Repo.delete_all()
++
++    member
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ 
