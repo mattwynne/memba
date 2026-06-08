@@ -105,6 +105,11 @@ defmodule Memba.Membership do
   @doc """
   Create a pending club member invitation for an email address.
 
+  Invitation creation is intentionally actor-neutral. Callers that represent
+  club Membership Admins must authorize the actor before calling this shared
+  lifecycle, while Staff/system callers can use the same service without being
+  represented as club members.
+
   The public API generates the plaintext one-use invitation token before
   dispatch and stores only its hash in Membership. The caller may supply
   `:invitation_id`/`"invitation_id"`; otherwise this application service
