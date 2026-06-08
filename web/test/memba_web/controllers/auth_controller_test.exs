@@ -376,6 +376,24 @@ defmodule MembaWeb.AuthControllerTest do
   end
 
   describe "staff onboarding LiveView" do
+    test "first-time Memba staff can sign in, enter their name, and continue to Staff", %{
+      conn: conn
+    } do
+      assert {:ok, %{token: token}} = Accounts.request_sign_in_link(" Pat@Memba.IO ")
+
+      conn
+      |> visit(~p"/auth/sign-in/#{token}")
+      |> assert_path(~p"/auth/onboard")
+      |> assert_has("section#staff-onboarding")
+      |> fill_in("Your name", with: " Pat Staff ")
+      |> click_button("Continue to Memba staff")
+      |> assert_path(~p"/admin/clubs")
+      |> assert_has("#clubs-index")
+
+      assert %{name: "Pat Staff", email: "pat@memba.io"} =
+               Memba.Membership.get_person_by_email("pat@memba.io")
+    end
+
     test "creates a person record for first-time staff and redirects to the staff area", %{
       conn: conn
     } do
