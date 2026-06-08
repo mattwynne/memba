@@ -380,14 +380,27 @@ defmodule MembaWeb.Admin.ClubsLive.Show do
               id="memberships-card"
               class="overflow-hidden rounded-2xl border border-[#e6e3dc] bg-white shadow-sm"
             >
-              <div class="border-b border-[#e6e3dc] p-5">
-                <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
-                  Memberships
-                </p>
-                <h2 class="mt-1 text-lg font-semibold text-[#15201c]">Active club memberships</h2>
-                <p class="mt-1 text-sm text-[#7d877f]">
-                  Add or remove the links that make existing people active members of this club.
-                </p>
+              <div class="flex items-start justify-between gap-4 border-b border-[#e6e3dc] p-5">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-[#7d877f]">
+                    Memberships
+                  </p>
+                  <h2 class="mt-1 text-lg font-semibold text-[#15201c]">
+                    Active club memberships
+                  </h2>
+                  <p class="mt-1 text-sm text-[#7d877f]">
+                    Add or remove the links that make existing people active members of this club.
+                  </p>
+                </div>
+
+                <.link
+                  id="invite-member-link"
+                  navigate={~p"/admin/clubs/#{@club_id}/invitations/new"}
+                  aria-label="Invite member"
+                  class="inline-flex shrink-0 rounded-full border border-[#1f4842] bg-[#1f4842] px-4 py-2 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-[#15201c] hover:shadow-md"
+                >
+                  Invite member
+                </.link>
               </div>
 
               <.form

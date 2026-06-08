@@ -12,6 +12,7 @@ defmodule MembaWeb.DevTestSupportController do
   @projection_versions_table :projection_versions
   @projectors [
     Memba.Membership.Projectors.Club,
+    Memba.Membership.Projectors.ClubInvitation,
     Memba.Membership.Projectors.Membership,
     Memba.Membership.Projectors.Role,
     Memba.Membership.Projectors.Person,
