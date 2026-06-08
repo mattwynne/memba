@@ -1,7 +1,7 @@
 # Membership Admin invitations
 
 Date: 2026-06-08
-Status: ready
+Status: validated
 
 ## Goal
 

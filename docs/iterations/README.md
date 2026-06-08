@@ -38,7 +38,7 @@ green than before.
 | 026 | 2026-06-07 | merged | Domain Cucumber convergence | [plan](026-domain-cucumber-convergence/plan.md) |
 | 027 | 2026-06-06 | merged | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
 | 028 | 2026-06-08 | implementing | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
-| 029 | 2026-06-08 | ready | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
+| 029 | 2026-06-08 | validated | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
 
 Status notes:
 
