@@ -15,4 +15,4 @@
 - [x] 013 Add browser/LiveView/controller tests for the Staff invite page, invitation email link, profile completion page, and final redirect to the club.
 - [x] 014 Implement or update Cucumber step definitions only as needed to exercise `club_member_invitations.feature`.
 - [x] 015 Remove or narrow `@todo-domain`/`@todo-ui` from `club_member_invitations.feature` once implemented.
-- [ ] 016 Run targeted tests for affected auth/membership/onboarding surfaces, then run `dev check`.
+- [x] 016 Run targeted tests for affected auth/membership/onboarding surfaces, then run `dev check`.
