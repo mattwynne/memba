@@ -89,6 +89,41 @@ defmodule Memba.Membership.RoleProjectionTest do
              )
   end
 
+  test "granting a permission projects flattened member permissions for active assignments" do
+    club_id = Memba.ID.generate(:club)
+    role_id = Memba.ID.generate(:role)
+    membership_id = Memba.ID.generate(:membership)
+    person_id = Memba.ID.generate(:person)
+
+    create_club!(club_id)
+    add_member!(membership_id, club_id, person_id)
+    define_role!(club_id, role_id)
+    assign_role!(club_id, membership_id, person_id, role_id)
+
+    refute member_permission(
+             club_id,
+             person_id,
+             membership_id,
+             Permissions.club_manage_members()
+           )
+
+    grant_manage_members!(club_id, role_id)
+
+    assert %MemberPermissionProjection{
+             club_id: ^club_id,
+             membership_id: ^membership_id,
+             person_id: ^person_id,
+             permission: "club.manage_members",
+             grant_count: 1
+           } =
+             member_permission(
+               club_id,
+               person_id,
+               membership_id,
+               Permissions.club_manage_members()
+             )
+  end
+
   test "removing a role assignment deactivates it and removes its flattened permission" do
     club_id = Memba.ID.generate(:club)
     role_id = Roles.membership_administrator_role_id(club_id)

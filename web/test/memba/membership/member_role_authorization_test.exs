@@ -6,6 +6,7 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
   alias Memba.Membership.App
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.DefineClubRole
+  alias Memba.Membership.Commands.GrantClubRolePermission
   alias Memba.Membership.Events.MemberRoleAssigned
   alias Memba.Membership.Events.MemberRoleRemoved
   alias Memba.Membership.Permissions
@@ -132,6 +133,49 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
     assert Membership.person_has_club_permission?(
              club_id,
              actor_person_id,
+             Permissions.club_manage_members()
+           )
+  end
+
+  test "last-administrator invariant is enforced even when the actor has permission through another role" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    target_person_id = Memba.ID.generate(:person)
+    target_membership_id = Memba.ID.generate(:membership)
+    custom_role_id = Memba.ID.generate(:role)
+
+    create_club!(club_id)
+    create_person!(actor_person_id, "Alice", "alice@example.com")
+    add_member!(actor_membership_id, club_id, actor_person_id)
+    create_person!(target_person_id, "Robin", "robin@example.com")
+    add_member!(target_membership_id, club_id, target_person_id)
+
+    define_role!(club_id, custom_role_id)
+    grant_manage_members!(club_id, custom_role_id)
+    assign_role_by_system!(club_id, actor_membership_id, actor_person_id, custom_role_id)
+    assign_membership_administrator!(club_id, target_membership_id, target_person_id)
+
+    assert Membership.person_has_club_permission?(
+             club_id,
+             actor_person_id,
+             Permissions.club_manage_members()
+           )
+
+    assert {:error, :last_membership_administrator} =
+             Membership.remove_membership_administrator_as_club_member(
+               %{
+                 club_id: club_id,
+                 membership_id: target_membership_id,
+                 person_id: target_person_id,
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert Membership.person_has_club_permission?(
+             club_id,
+             target_person_id,
              Permissions.club_manage_members()
            )
   end
@@ -388,6 +432,18 @@ defmodule Memba.Membership.MemberRoleAuthorizationTest do
                  role_id: role_id,
                  role_key: nil,
                  name: "Roster Helper"
+               },
+               consistency: :strong
+             )
+  end
+
+  defp grant_manage_members!(club_id, role_id) do
+    assert :ok =
+             App.dispatch(
+               %GrantClubRolePermission{
+                 club_id: club_id,
+                 role_id: role_id,
+                 permission: Permissions.club_manage_members()
                },
                consistency: :strong
              )
