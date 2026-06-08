@@ -2,8 +2,8 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
   use MembaWeb, :live_view
 
   alias Memba.Membership
-  alias Memba.Membership.ClubMemberInvitationEmail
   alias Memba.Membership.EmailAddresses
+  alias MembaWeb.ClubMemberInvitationSender
 
   @empty_invitation %{"email" => ""}
   @empty_errors %{email: []}
@@ -26,17 +26,15 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
 
   def handle_event("send_invitation", %{"invitation" => invitation_params}, socket) do
     with %{} = club <- socket.assigns.club,
-         {:ok, invited_email} <- invitation_email(invitation_params),
-         pending? = pending_invitation?(socket.assigns.club_id, invited_email.normalized_email),
          {:ok, invitation} <-
-           Membership.invite_club_member(
-             %{"club_id" => socket.assigns.club_id, "email" => invited_email.normalized_email},
+           ClubMemberInvitationSender.send_invitation(
+             club,
+             Map.get(invitation_params(invitation_params), "email"),
              consistency: :strong
-           ),
-         :ok <- deliver_invitation(invitation, invited_email.normalized_email, club) do
+           ) do
       {:noreply,
        socket
-       |> put_flash(:info, success_message(invited_email.normalized_email, pending?))
+       |> put_flash(:info, success_message(invitation.email, invitation.resent?))
        |> assign_form(@empty_invitation, @empty_errors)}
     else
       nil ->
@@ -210,32 +208,7 @@ defmodule MembaWeb.Admin.ClubMemberInvitationsLive.New do
     end
   end
 
-  defp invitation_email(params) do
-    params
-    |> invitation_params()
-    |> Map.get("email")
-    |> EmailAddresses.normalize_email()
-  end
-
   defp valid_email?(email), do: match?({:ok, _email}, EmailAddresses.normalize_email(email))
-
-  defp pending_invitation?(club_id, email) do
-    not is_nil(Membership.get_pending_club_member_invitation_by_email(club_id, email))
-  end
-
-  defp deliver_invitation(invitation, email, club) do
-    ClubMemberInvitationEmail.deliver(%{
-      email: email,
-      club: club,
-      invitation_id: invitation.invitation_id,
-      invitation_url: invitation_url(invitation.invitation_token)
-    })
-  end
-
-  defp invitation_url(invitation_token) do
-    MembaWeb.Endpoint.url() <>
-      "/invitations/club-members/" <> URI.encode(invitation_token, &URI.char_unreserved?/1)
-  end
 
   defp success_message(email, false), do: "Invitation sent to #{email}"
   defp success_message(email, true), do: "Invitation resent to #{email}"
