@@ -5,7 +5,7 @@
 - [x] 003 Add a minimal club invitation model in the Membership boundary, event-sourced if consistent with nearby Membership aggregates:
 - [x] 004 Add public Membership APIs/commands for Staff/system use:
 - [x] 005 Ensure duplicate checks use normalized email:
-- [ ] 006 Add an invitation email module with clear club context and a one-use invitation link.
+- [x] 006 Add an invitation email module with clear club context and a one-use invitation link.
 - [ ] 007 Add the Staff club-scoped invite route and form. Exact route name is implementation detail, but it should sit under `/admin/clubs/:club_id/...` and not replace the existing person edit route.
 - [ ] 008 Decommission direct Staff club-member creation from name/email by hiding/removing that action or redirecting it to the invite route. Keep person edit behaviour where still needed for existing people.
 - [ ] 009 Add an invitation callback route that validates invitation tokens, signs in the invited email for the invitation journey, and routes to either profile completion or the invited club. Do not consume a pending unknown invitee's token on first open; consume it only when profile completion or existing-person acceptance succeeds.
