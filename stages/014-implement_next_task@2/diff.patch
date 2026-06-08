@@ -1,0 +1,135 @@
+diff --git a/docs/iterations/028-staff-member-invitations/auth-token-onboarding-inspection.md b/docs/iterations/028-staff-member-invitations/auth-token-onboarding-inspection.md
+new file mode 100644
+index 0000000..40a9b67
+--- /dev/null
++++ b/docs/iterations/028-staff-member-invitations/auth-token-onboarding-inspection.md
+@@ -0,0 +1,116 @@
++# Auth token and onboarding inspection
++
++Selected task: `002 Inspect the existing auth sign-in token and staff onboarding flow to decide how to reuse or extend it for invitation acceptance without mixing ordinary short-lived sign-in links with membership-granting invitation links.`
++
++## Current ordinary sign-in-link flow
++
++`Memba.Accounts` owns ordinary authentication token generation and consumption:
++
++- `request_sign_in_link/2` only creates a token for:
++  - an exact `memba.io` staff-domain email; or
++  - an email address that already belongs to an active club member.
++- Unknown, invalid, and non-member emails return `{:ok, nil}` so the UI can keep a neutral "check your email" response.
++- `create_sign_in_token/2` creates an opaque 32-byte URL-safe token, stores only its SHA-256 hash in `auth_sign_in_tokens`, and sets a 15-minute expiry.
++- `consume_sign_in_token/2` locks the matching token row, rejects unknown/expired/consumed rows, and sets `consumed_at` on success.
++
++The persistence table is intentionally ordinary-auth-specific:
++
++- `auth_sign_in_tokens.email`
++- `auth_sign_in_tokens.token_hash`
++- `auth_sign_in_tokens.expires_at`
++- `auth_sign_in_tokens.consumed_at`
++
++`MembaWeb.AuthLive.SignIn` requests and emails these links. `MembaWeb.AuthController.callback/2` handles `GET /auth/sign-in/:token`, consumes the token immediately, signs the browser in with `MembaWeb.IdentityAuth.log_in_identity/2`, and redirects by ordinary auth rules.
++
++`Memba.Onboarding.WelcomeEmail` also uses `Accounts.create_sign_in_token/2`, but only after Staff request conversion has already created the club, person, active membership, and Admin role. That welcome link is authentication-only; it does not grant membership by itself.
++
++## Current signed-in session shape
++
++`MembaWeb.IdentityAuth.log_in_identity/2` renews the browser session and stores only the normalized email under `current_identity_email`.
++
++Every request rematerializes current identity from that email:
++
++- staff status comes from `Accounts.staff_email?/1`;
++- active clubs come from `Accounts.list_active_clubs_for_email/1`, which delegates to Membership read models.
++
++This session helper is reusable for invitations after the invitation token proves control of the invited email. It should remain the common way to sign the browser in; the ordinary sign-in token table and `/auth/sign-in/:token` callback should not become invitation-specific.
++
++## Current Staff onboarding flow
++
++`/auth/onboard` is mounted under the `:staff_onboarding_browser` pipeline:
++
++- the browser must already be signed in;
++- the signed-in email must be a Memba staff email;
++- the route intentionally does not require the Staff person record to exist yet.
++
++`MembaWeb.AuthLive.Onboard`:
++
++- reads the signed-in email from the session;
++- rejects non-staff identities;
++- redirects Staff who already have a person record;
++- asks first-time Staff for a name;
++- creates a person through `Membership.create_person(..., consistency: :strong)`;
++- redirects back to the stored Staff return path or `/admin/clubs`.
++
++This gives a useful profile-completion pattern, but the current route and LiveView are staff-only. It cannot be reused directly for invited ordinary members because it requires a `memba.io` email and creates only a person record, not club membership or invitation acceptance.
++
++## Decision for invitation acceptance
++
++Do **not** reuse `auth_sign_in_tokens`, `Accounts.create_sign_in_token/2`, `Accounts.consume_sign_in_token/2`, or `/auth/sign-in/:token` for club invitations.
++
++Reasons:
++
++- Ordinary sign-in links are short-lived authentication links; invitation links grant membership and the plan explicitly requires no expiry for this slice.
++- Ordinary sign-in tokens are consumed on first successful callback. Unknown invitees must be able to open a pending invitation, leave before entering their name, then reopen the same link without consuming it.
++- Ordinary sign-in token reuse maps consumed links to a generic invalid-link response unless the browser is already signed in. Accepted invitation links need an invitation-aware idempotent path that can land the invitee in the club without creating duplicate membership.
++- Ordinary sign-in eligibility blocks unknown non-member emails. Invitations intentionally start from unknown emails and become active membership only after acceptance/profile completion.
++- Keeping the token stores separate avoids overloading `auth_sign_in_tokens` with invitation state, membership IDs, no-expiry semantics, and accepted-link-reuse rules.
++
++Later implementation should add separate invitation-token storage owned by the Membership invitation flow. It can reuse the same safe token mechanics—opaque plaintext delivered once, SHA-256 hash stored, row-level locking during state changes—but should keep separate schema/API semantics for:
++
++- pending invitation lookup by token hash;
++- accepted invitation lookup by consumed token hash for idempotent accepted-link reopen;
++- no expiry in this slice;
++- token consumption only when existing-person acceptance or unknown-person profile completion succeeds.
++
++## Reuse points for later tasks
++
++The invitation callback should reuse:
++
++- `Accounts.normalize_email/1` for email normalization;
++- `IdentityAuth.log_in_identity/2` after a valid invitation proves control of the invited email;
++- existing safe-return/club URL conventions from `IdentityAuth` and `ClubSite` where applicable;
++- the onboarding LiveView's broad shape of "signed-in email plus one required name field", but behind an invitation/profile-completion route that is not staff-only.
++
++The invitation callback should not reuse:
++
++- `Accounts.request_sign_in_link/2`, because it intentionally suppresses unknown non-members;
++- `Accounts.consume_sign_in_token/2`, because it always consumes on first successful auth and enforces expiry;
++- `MembaWeb.AuthLive.Onboard` directly, because it is staff-gated and does not activate membership.
++
++## Suggested callback/profile-completion shape
++
++Later route work can use this split without changing the ordinary auth flow:
++
++1. Staff submits an invite email under `/admin/clubs/:club_id/...`.
++2. Membership creates or resends a pending club invitation and stores a separate invitation token hash.
++3. Invitation email links to a new invitation callback route, not `/auth/sign-in/:token`.
++4. Callback validates the invitation token:
++   - existing complete person: accept invitation, create ordinary active membership, consume the invitation token, sign in the invited email, and redirect to the club;
++   - unknown email: sign in the invited email for the invitation journey, store invitation journey state in session, and redirect to invitation profile completion without consuming the token;
++   - accepted invitation/token: do not create another membership; sign in or keep signed in and redirect to the club.
++5. Profile completion submits the invited person's name, creates the person and ordinary active membership, marks the invitation accepted, consumes the invitation token, and redirects to the invited club.
++
++## Adjacent tests to protect later
++
++Existing tests document ordinary auth and Staff onboarding behaviour that should keep passing:
++
++- `web/test/memba/accounts_test.exs`
++- `web/test/memba/auth_persistence_test.exs`
++- `web/test/memba_web/controllers/auth_controller_test.exs`
++- `web/test/memba_web/user_auth_test.exs`
++- `web/test/memba_web/auth_gates_test.exs`
++- `web/test/memba/onboarding_conversion_test.exs`
++- `web/test/features/step_definitions/authentication_steps.exs`
++
++Invitation tests added later should assert that invitation token rows are separate from `auth_sign_in_tokens` and that invitation callbacks do not alter ordinary sign-in token semantics.
+diff --git a/docs/iterations/028-staff-member-invitations/todo.md b/docs/iterations/028-staff-member-invitations/todo.md
+index a2895dc..1824a5d 100644
+--- a/docs/iterations/028-staff-member-invitations/todo.md
++++ b/docs/iterations/028-staff-member-invitations/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect current Staff club/person routes and forms, especially any club-scoped create-person/add-member path and `/admin/clubs/:club_id/people/:person_id/edit`.
+-- [ ] 002 Inspect the existing auth sign-in token and staff onboarding flow to decide how to reuse or extend it for invitation acceptance without mixing ordinary short-lived sign-in links with membership-granting invitation links.
++- [x] 002 Inspect the existing auth sign-in token and staff onboarding flow to decide how to reuse or extend it for invitation acceptance without mixing ordinary short-lived sign-in links with membership-granting invitation links.
+ - [ ] 003 Add a minimal club invitation model in the Membership boundary, event-sourced if consistent with nearby Membership aggregates:
+ - [ ] 004 Add public Membership APIs/commands for Staff/system use:
+ - [ ] 005 Ensure duplicate checks use normalized email:
