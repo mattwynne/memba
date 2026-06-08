@@ -1,0 +1,300 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 98c5636..fdef7b2 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Inspect current member-facing club pages and decide whether to use an existing members list or add a new member-facing members/admin page.
+ - [x] 003 Add a member-facing route/action for inviting club members, scoped to the current club.
+ - [x] 004 Authorize the route/action using the `club.manage_members` permission for the signed-in person in the current club.
+-- [ ] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
++- [x] 005 Ensure ordinary members do not see the invitation action and cannot use it by direct URL or crafted request.
+ - [ ] 005a Add the invitation action to the selected member-facing members surface for Membership Admins once it can target the route and permission-gated visibility.
+ - [ ] 006 Reuse the iteration 028 invitation command/application service where possible so Staff and Membership Admin invitations share duplicate-active-member, duplicate-pending-invitation, email, one-use-link, acceptance, and profile-completion rules.
+ - [ ] 007 If needed, add an inviter/actor distinction to the invitation API so both Staff/system actors and club Membership Admin actors can be represented without giving Staff implicit club membership.
+diff --git a/web/lib/memba_web/controllers/page_html/club.html.heex b/web/lib/memba_web/controllers/page_html/club.html.heex
+index e736f19..91f822c 100644
+--- a/web/lib/memba_web/controllers/page_html/club.html.heex
++++ b/web/lib/memba_web/controllers/page_html/club.html.heex
+@@ -176,7 +176,7 @@
+       </div>
+     </section>
+ 
+-    <section id="club-members">
++    <section id="club-members" data-can-manage-members={to_string(@can_manage_members?)}>
+       <div class="flex items-center justify-between gap-4">
+         <h2 class="flex items-center gap-2 text-base font-semibold text-[var(--club-site-ink)]">
+           <.icon name="hero-users" class="size-5 text-[var(--club-site-accent)]" />
+diff --git a/web/lib/memba_web/member_dashboard_presentation.ex b/web/lib/memba_web/member_dashboard_presentation.ex
+index a6952d7..2be1968 100644
+--- a/web/lib/memba_web/member_dashboard_presentation.ex
++++ b/web/lib/memba_web/member_dashboard_presentation.ex
+@@ -12,6 +12,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+   alias Memba.Accounts
+   alias Memba.ID
+   alias Memba.Membership
++  alias Memba.Membership.Permissions
+   alias Memba.Messaging
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Repo
+@@ -42,6 +43,7 @@ defmodule MembaWeb.MemberDashboardPresentation do
+          members: members,
+          active_member_count: Enum.count(members),
+          current_member: current_member,
++         can_manage_members?: can_manage_members?(selected_club.club_id, current_member),
+          member_names_by_id: member_names_by_id,
+          messages: messages,
+          message_rows: message_rows
+@@ -89,6 +91,14 @@ defmodule MembaWeb.MemberDashboardPresentation do
+     end
+   end
+ 
++  defp can_manage_members?(club_id, current_member) do
++    Membership.person_has_club_permission?(
++      club_id,
++      current_member.id,
++      Permissions.club_manage_members()
++    )
++  end
++
+   defp load_messages(club_id) do
+     club_id
+     |> Messaging.list_messages_for_club()
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 90ef21c..bab8285 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -3,7 +3,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+ 
+   import Phoenix.LiveViewTest
+ 
++  alias Memba.Membership.Permissions
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+@@ -500,6 +502,32 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "dashboard does not show the invite-member action to ordinary members", %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    other_club_admin =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Backcountry Club"
++      )
++
++    grant_manage_members_permission!(other_club_admin)
++
++    {:ok, view, _html} =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/?club_id=#{alice.club_id}")
++
++    assert has_element?(view, "#club-members[data-can-manage-members='false']")
++    refute has_element?(view, "#member-invite-member-link")
++  end
++
+   test "logged-out club home still renders the public club page", %{conn: conn} do
+     club = create_club(name: "Alpine Club")
+ 
+@@ -571,15 +599,17 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
+-    Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
+-      club_id: club_id,
+-      person_id: person.person_id,
+-      active: Keyword.get(attrs, :active, true)
+-    })
++    membership =
++      Repo.insert!(%Membership{
++        membership_id: Memba.ID.generate(:membership),
++        club_id: club_id,
++        person_id: person.person_id,
++        active: Keyword.get(attrs, :active, true)
++      })
+ 
+     %{
+       club_id: club_id,
++      membership_id: membership.membership_id,
+       person_id: person.person_id
+     }
+   end
+@@ -596,6 +626,18 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+     end
+   end
+ 
++  defp grant_manage_members_permission!(member) do
++    Repo.insert!(%MemberPermission{
++      club_id: member.club_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      permission: Permissions.club_manage_members(),
++      grant_count: 1
++    })
++
++    member
++  end
++
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+ 
+@@ -639,6 +681,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+       current_identity: %{email: "alice@example.com"},
+       selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
+       current_member: %{name: "Alice Adams"},
++      can_manage_members?: false,
+       members: [],
+       active_member_count: 0,
+       message_rows: []
+diff --git a/web/test/memba_web/live/member_invitation_live/new_test.exs b/web/test/memba_web/live/member_invitation_live/new_test.exs
+index 2bde5ad..af81d38 100644
+--- a/web/test/memba_web/live/member_invitation_live/new_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/new_test.exs
+@@ -97,6 +97,40 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
+     end
+   end
+ 
++  test "direct LiveView access forbids an ordinary member before any crafted event can run", %{
++    conn: conn
++  } do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    assert_raise MembaWeb.ForbiddenError, fn ->
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
++    end
++  end
++
++  test "host-selected direct access forbids an ordinary member", %{conn: conn} do
++    _alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Kootenay Mountaineering Club",
++        slug: "kmc"
++      )
++
++    assert_raise MembaWeb.ForbiddenError, fn ->
++      conn
++      |> Map.put(:host, "kmc.lvh.me")
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> get(~p"/members/invitations/new")
++    end
++  end
++
+   test "routed GET forbids a member whose manage-members permission belongs to another club", %{
+     conn: conn
+   } do
+diff --git a/web/test/memba_web/member_dashboard_presentation_test.exs b/web/test/memba_web/member_dashboard_presentation_test.exs
+index 9682b22..b91af6b 100644
+--- a/web/test/memba_web/member_dashboard_presentation_test.exs
++++ b/web/test/memba_web/member_dashboard_presentation_test.exs
+@@ -2,6 +2,8 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+   use Memba.DataCase, async: true
+ 
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+@@ -75,6 +77,7 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+     assert assigns.current_member.name == "Alice Adams"
+     assert assigns.current_member.initials == "AA"
+     assert assigns.active_member_count == 2
++    refute assigns.can_manage_members?
+ 
+     assert Enum.map(assigns.members, &{&1.id, &1.name, &1.initials}) == [
+              {alice.person_id, "Alice Adams", "AA"},
+@@ -177,6 +180,33 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+              )
+   end
+ 
++  test "loads member-management visibility as false for ordinary members" do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Alpine Club"
++      )
++
++    other_club_member =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "Backcountry Club"
++      )
++
++    grant_manage_members_permission!(other_club_member)
++
++    assert {:ok, assigns} =
++             MemberDashboardPresentation.load(
++               alice.club_id,
++               %{email: "alice@example.com"},
++               [alice.club]
++             )
++
++    refute assigns.can_manage_members?
++  end
++
+   defp create_active_member(attrs) do
+     club_id = Keyword.get_lazy(attrs, :club_id, fn -> Memba.ID.generate(:club) end)
+     person_id = Memba.ID.generate(:person)
+@@ -196,20 +226,34 @@ defmodule MembaWeb.MemberDashboardPresentationTest do
+         email: Keyword.fetch!(attrs, :email)
+       )
+ 
+-    Repo.insert!(%Membership{
+-      membership_id: Memba.ID.generate(:membership),
+-      club_id: club_id,
+-      person_id: person.person_id,
+-      active: true
+-    })
++    membership =
++      Repo.insert!(%Membership{
++        membership_id: Memba.ID.generate(:membership),
++        club_id: club_id,
++        person_id: person.person_id,
++        active: true
++      })
+ 
+     %{
+       club: club,
+       club_id: club_id,
++      membership_id: membership.membership_id,
+       person_id: person.person_id
+     }
+   end
+ 
++  defp grant_manage_members_permission!(member) do
++    Repo.insert!(%MemberPermission{
++      club_id: member.club_id,
++      membership_id: member.membership_id,
++      person_id: member.person_id,
++      permission: Permissions.club_manage_members(),
++      grant_count: 1
++    })
++
++    member
++  end
++
+   defp create_message(attrs) do
+     inserted_at = Keyword.get_lazy(attrs, :inserted_at, &DateTime.utc_now/0)
+ 
