@@ -23,6 +23,7 @@ defmodule Memba.Membership.PublicApiTest do
   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
+  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
   alias Memba.Membership.Roles
 
   test "create_club/2 dispatches CreateClub through the Membership context" do
@@ -829,6 +830,74 @@ defmodule Memba.Membership.PublicApiTest do
            } = Membership.get_club_member_invitation(invitation_id)
   end
 
+  test "accepting a Membership Admin invitation for an existing person creates ordinary membership only" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    invited_person_id = Memba.ID.generate(:person)
+    invited_membership_id = Memba.ID.generate(:membership)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
+
+    assert :ok =
+             create_membership_admin_inviter(
+               club_id: club_id,
+               person_id: actor_person_id,
+               membership_id: actor_membership_id
+             )
+
+    assert :ok =
+             Membership.create_person(
+               %{person_id: invited_person_id, name: "Dana", email: "Dana@Example.COM"},
+               consistency: :strong
+             )
+
+    assert {:ok, %{invitation_id: ^invitation_id}} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: invitation_id,
+                 club_id: club_id,
+                 email: " dana@example.com ",
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              membership_id: ^invited_membership_id,
+              membership_execution_result: %ExecutionResult{
+                aggregate_uuid: ^invited_membership_id,
+                events: [
+                  %MemberAdded{
+                    membership_id: ^invited_membership_id,
+                    club_id: ^club_id,
+                    person_id: ^invited_person_id
+                  }
+                ]
+              }
+            }} =
+             Membership.accept_club_member_invitation_for_existing_person(
+               %{
+                 invitation_id: invitation_id,
+                 person_id: invited_person_id,
+                 membership_id: invited_membership_id
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert Membership.active_member_of_club?(club_id, invited_person_id)
+
+    refute active_membership_role_assignment?(invited_membership_id, admin_role_id)
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             invited_person_id,
+             Permissions.club_manage_members()
+           )
+  end
+
   test "complete_invited_club_member_profile/2 creates person, membership, and acceptance" do
     club_id = Memba.ID.generate(:club)
     invitation_id = Memba.ID.generate(:club_invitation)
@@ -917,6 +986,75 @@ defmodule Memba.Membership.PublicApiTest do
            } = Membership.get_club_member_invitation(invitation_id)
   end
 
+  test "completing a Membership Admin invitation profile creates ordinary membership only" do
+    club_id = Memba.ID.generate(:club)
+    actor_person_id = Memba.ID.generate(:person)
+    actor_membership_id = Memba.ID.generate(:membership)
+    invited_person_id = Memba.ID.generate(:person)
+    invited_membership_id = Memba.ID.generate(:membership)
+    invitation_id = Memba.ID.generate(:club_invitation)
+    admin_role_id = Roles.membership_administrator_role_id(club_id)
+
+    assert :ok =
+             create_membership_admin_inviter(
+               club_id: club_id,
+               person_id: actor_person_id,
+               membership_id: actor_membership_id
+             )
+
+    assert {:ok, %{invitation_id: ^invitation_id}} =
+             Membership.invite_club_member_as_club_member(
+               %{
+                 invitation_id: invitation_id,
+                 club_id: club_id,
+                 email: " dana@example.com ",
+                 actor_person_id: actor_person_id
+               },
+               consistency: :strong
+             )
+
+    assert {:ok,
+            %{
+              person_id: ^invited_person_id,
+              membership_id: ^invited_membership_id,
+              membership_execution_result: %ExecutionResult{
+                aggregate_uuid: ^invited_membership_id,
+                events: [
+                  %MemberAdded{
+                    membership_id: ^invited_membership_id,
+                    club_id: ^club_id,
+                    person_id: ^invited_person_id
+                  }
+                ]
+              }
+            }} =
+             Membership.complete_invited_club_member_profile(
+               %{
+                 invitation_id: invitation_id,
+                 person_id: invited_person_id,
+                 membership_id: invited_membership_id,
+                 name: " Dana "
+               },
+               returning: :execution_result,
+               consistency: :strong
+             )
+
+    assert %MembershipProjection{
+             membership_id: ^invited_membership_id,
+             club_id: ^club_id,
+             person_id: ^invited_person_id,
+             active: true
+           } = Repo.get(MembershipProjection, invited_membership_id)
+
+    refute active_membership_role_assignment?(invited_membership_id, admin_role_id)
+
+    refute Membership.person_has_club_permission?(
+             club_id,
+             invited_person_id,
+             Permissions.club_manage_members()
+           )
+  end
+
   test "person_has_club_permission?/3 checks backend projected member permissions" do
     club_id = Memba.ID.generate(:club)
     person_id = Memba.ID.generate(:person)
@@ -972,5 +1110,48 @@ defmodule Memba.Membership.PublicApiTest do
              )
 
     refute Membership.person_has_club_permission?(club_id, person_id, permission)
+  end
+
+  defp create_membership_admin_inviter(attrs) when is_list(attrs) do
+    club_id = Keyword.fetch!(attrs, :club_id)
+    person_id = Keyword.fetch!(attrs, :person_id)
+    membership_id = Keyword.fetch!(attrs, :membership_id)
+    role_id = Roles.membership_administrator_role_id(club_id)
+
+    with :ok <-
+           Membership.create_club(
+             membership_club_attrs(club_id: club_id, name: "West Coast Paddlers"),
+             consistency: :strong
+           ),
+         :ok <-
+           Membership.create_person(
+             %{person_id: person_id, name: "Robin", email: "robin@example.com"},
+             consistency: :strong
+           ),
+         :ok <-
+           Membership.add_member(
+             %{membership_id: membership_id, club_id: club_id, person_id: person_id},
+             consistency: :strong
+           ) do
+      App.dispatch(
+        %AssignMemberRole{
+          club_id: club_id,
+          membership_id: membership_id,
+          person_id: person_id,
+          role_id: role_id
+        },
+        consistency: :strong
+      )
+    end
+  end
+
+  defp active_membership_role_assignment?(membership_id, role_id) do
+    not is_nil(
+      Repo.get_by(RoleAssignmentProjection,
+        membership_id: membership_id,
+        role_id: role_id,
+        active: true
+      )
+    )
   end
 end
