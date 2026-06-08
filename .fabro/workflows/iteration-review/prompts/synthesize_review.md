@@ -9,8 +9,11 @@ Use the prior context from this workflow run:
 - The iteration plan text and its explicit requirements.
 - Implementation evidence collected from `{{ inputs.base_sha }}` to `HEAD`.
 - Successful `dev check` output.
-- Independent review reports (Claude, Codex, Gemini).
+- The full Markdown responses from the Claude Review, Codex/GPT Review, and Gemini Review stages immediately preceding this stage.
 - Previous synthesis decisions and repair summaries, if this is a repeated synthesis after repair.
+
+If you cannot see the substantive Markdown response from each independent review stage, do not silently accept. Return **FIX** and ask for a workflow repair that makes review reports visible to synthesis.
+Do not emit shell-command/tool-call JSON; return the Markdown synthesis and final routing JSON only.
 
 ## Standards
 
@@ -20,6 +23,8 @@ Use the prior context from this workflow run:
 - Do not introduce new product behaviour in review.
 - If a finding requires product, architecture, scope, or acceptance-criteria judgement, do not block. Mark it as a code-health/manual follow-up.
 - If a prior automatic repair attempted the same issue and it still remains, do not request another repair. Mark it as a code-health/manual follow-up.
+- If any reviewer lists judgement-worthy non-blocking code-health findings, preserve them in the `Code-health findings for human judgement` section even when the final decision is **ACCEPTED**.
+- If any reviewer lists bounded-safe fixes, either route **FIX** with exact bounded changes, or explicitly explain why each proposed fix is dismissed/deferred.
 - If no bounded automatic fixes are worth attempting, accept the review and let the next step record any judgement-worthy findings in `docs/code-health.md`.
 
 ## Output format
