@@ -10,6 +10,7 @@ defmodule MembaWeb.MemberInvitationLive.New do
 
   alias Memba.Accounts
   alias Memba.Membership
+  alias Memba.Membership.Authorization
 
   @impl Phoenix.LiveView
   def mount(params, session, socket) when is_map(params) do
@@ -114,9 +115,10 @@ defmodule MembaWeb.MemberInvitationLive.New do
   defp invitation_context(club_id, current_identity, current_identity_clubs) do
     with selected_club when not is_nil(selected_club) <-
            selected_club(current_identity_clubs, club_id),
-         members <- Membership.list_active_members_of_club(club_id),
-         current_member when not is_nil(current_member) <-
-           current_member_for_identity(members, current_identity) do
+          members <- Membership.list_active_members_of_club(club_id),
+          current_member when not is_nil(current_member) <-
+            current_member_for_identity(members, current_identity),
+          :ok <- Authorization.authorize_manage_members(club_id, current_member.id) do
       {:ok,
        %{
          selected_club: selected_club,
