@@ -1,0 +1,80 @@
+diff --git a/docs/iterations/029-membership-admin-invitations/todo.md b/docs/iterations/029-membership-admin-invitations/todo.md
+index 70100b1..bf76818 100644
+--- a/docs/iterations/029-membership-admin-invitations/todo.md
++++ b/docs/iterations/029-membership-admin-invitations/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Keep the Admin invitation form email-only.
+ - [x] 009 Ensure accepted Membership Admin invitations create ordinary active memberships only.
+ - [x] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
+-- [ ] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
++- [x] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
+ - [ ] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
+ - [ ] 013 Remove or narrow `@todo-domain`/`@todo-ui` tags from the affected scenarios only when they pass in the relevant runner.
+ - [ ] 014 Run `dev check`.
+diff --git a/web/test/memba_web/live/member_dashboard_live_test.exs b/web/test/memba_web/live/member_dashboard_live_test.exs
+index 5b4425a..ce27b40 100644
+--- a/web/test/memba_web/live/member_dashboard_live_test.exs
++++ b/web/test/memba_web/live/member_dashboard_live_test.exs
+@@ -180,6 +180,33 @@ defmodule MembaWeb.MemberDashboardLiveTest do
+            )
+   end
+ 
++  test "club subdomain dashboard exposes the member invite action to Membership Admins without a club_id query",
++       %{conn: conn} do
++    robin =
++      create_active_member(
++        email: "robin@example.com",
++        name: "Robin Rivers",
++        club_name: "West Coast Paddlers",
++        slug: "wcp"
++      )
++
++    grant_manage_members!(robin)
++
++    {:ok, view, _html} =
++      conn
++      |> Map.put(:host, "wcp.lvh.me")
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
++      |> live(~p"/")
++
++    assert has_element?(
++             view,
++             "#club-members #member-invite-member-link[href='/members/invitations/new']",
++             "Invite member"
++           )
++
++    refute has_element?(view, "#club-members #member-invite-member-link[href*='club_id=']")
++  end
++
+   test "dashboard keeps the member invite action hidden from ordinary members", %{conn: conn} do
+     alice =
+       create_active_member(
+diff --git a/web/test/memba_web/live/member_invitation_live/new_test.exs b/web/test/memba_web/live/member_invitation_live/new_test.exs
+index a1d5921..a602c6d 100644
+--- a/web/test/memba_web/live/member_invitation_live/new_test.exs
++++ b/web/test/memba_web/live/member_invitation_live/new_test.exs
+@@ -132,6 +132,24 @@ defmodule MembaWeb.MemberInvitationLive.NewTest do
+     end
+   end
+ 
++  test "direct LiveView mount rejects ordinary members before rendering the invitation action",
++       %{conn: conn} do
++    alice =
++      create_active_member(
++        email: "alice@example.com",
++        name: "Alice Adams",
++        club_name: "West Coast Paddlers"
++      )
++
++    assert_raise MembaWeb.ForbiddenError, fn ->
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
++      |> live(~p"/members/invitations/new?club_id=#{alice.club_id}")
++    end
++
++    refute Repo.exists?(Memba.Membership.Projections.ClubInvitation)
++  end
++
+   test "club subdomain routed GET requires the current club member to have club.manage_members",
+        %{conn: conn} do
+     _alice =
