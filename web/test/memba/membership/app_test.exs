@@ -4,17 +4,21 @@ defmodule Memba.Membership.AppTest do
   import ExUnit.CaptureLog
 
   alias Memba.Membership.App
+  alias Memba.Membership.Commands.AcceptClubMemberInvitation
   alias Memba.Membership.Commands.AddMember
   alias Memba.Membership.Commands.AssignMemberRole
   alias Memba.Membership.Commands.CreateClub
   alias Memba.Membership.Commands.CreatePerson
   alias Memba.Membership.Commands.DefineClubRole
   alias Memba.Membership.Commands.GrantClubRolePermission
+  alias Memba.Membership.Commands.InviteClubMember
   alias Memba.Membership.Commands.RemoveMember
   alias Memba.Membership.Commands.RemoveMemberRole
   alias Memba.Membership.Commands.ReplacePersonEmailAddresses
+  alias Memba.Membership.Commands.ResendClubMemberInvitation
   alias Memba.Membership.Commands.UpdateClub
   alias Memba.Membership.Projectors.Club, as: ClubProjector
+  alias Memba.Membership.Projectors.ClubInvitation, as: ClubInvitationProjector
   alias Memba.Membership.Projectors.Membership, as: MembershipProjector
   alias Memba.Membership.Projectors.Person, as: PersonProjector
   alias Memba.Membership.Projectors.Role, as: RoleProjector
@@ -32,6 +36,15 @@ defmodule Memba.Membership.AppTest do
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
              {{ClubProjector, _opts}, pid, :worker, [ClubProjector]} when is_pid(pid) -> true
              _child -> false
+           end)
+
+    assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
+             {{ClubInvitationProjector, _opts}, pid, :worker, [ClubInvitationProjector]}
+             when is_pid(pid) ->
+               true
+
+             _child ->
+               false
            end)
 
     assert Enum.any?(Supervisor.which_children(Memba.Supervisor), fn
@@ -63,15 +76,18 @@ defmodule Memba.Membership.AppTest do
   test "Membership Commanded app includes the Membership router" do
     expected_commands =
       MapSet.new([
+        AcceptClubMemberInvitation,
         AddMember,
         AssignMemberRole,
         CreateClub,
         CreatePerson,
         DefineClubRole,
         GrantClubRolePermission,
+        InviteClubMember,
         RemoveMember,
         RemoveMemberRole,
         ReplacePersonEmailAddresses,
+        ResendClubMemberInvitation,
         UpdateClub
       ])
 
