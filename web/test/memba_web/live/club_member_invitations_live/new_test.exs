@@ -101,6 +101,27 @@ defmodule MembaWeb.ClubMemberInvitationsLive.NewTest do
     assert error.plug_status == 403
   end
 
+  test "club subdomain routed GET rejects an ordinary member without club.manage_members",
+       %{conn: conn} do
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    error =
+      assert_raise MembaWeb.ForbiddenError, "Forbidden", fn ->
+        conn
+        |> Map.put(:host, "kmc.lvh.me")
+        |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+        |> get(~p"/members/invitations/new")
+      end
+
+    assert error.plug_status == 403
+  end
+
   test "routed GET redirects signed-out visitors and preserves the selected club return path",
        %{conn: conn} do
     alice =

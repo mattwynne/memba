@@ -376,6 +376,25 @@ defmodule MembaWeb.MemberDashboardLiveTest do
            )
   end
 
+  test "ordinary members do not see the club member invitation action on the dashboard",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    refute has_element?(view, "#club-members a[href*='/members/invitations/new']")
+    refute has_element?(view, "#member-invite-member-link")
+    refute has_element?(view, "[data-testid='member-invite-member-link']")
+  end
+
   test "dashboard reaches compose through links instead of inline compose controls", %{conn: conn} do
     alice =
       create_active_member(
