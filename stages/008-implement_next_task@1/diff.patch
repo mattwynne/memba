@@ -1,0 +1,77 @@
+diff --git a/docs/iterations/028-staff-member-invitations/staff-club-person-route-inspection.md b/docs/iterations/028-staff-member-invitations/staff-club-person-route-inspection.md
+new file mode 100644
+index 0000000..50952d0
+--- /dev/null
++++ b/docs/iterations/028-staff-member-invitations/staff-club-person-route-inspection.md
+@@ -0,0 +1,59 @@
++# Staff club/person route inspection
++
++Selected task: `001 Inspect current Staff club/person routes and forms, especially any club-scoped create-person/add-member path and /admin/clubs/:club_id/people/:person_id/edit`.
++
++## Current Staff routes
++
++`MembaWeb.Router` mounts the Staff club/person surface under the `/admin` scope with the `:staff_browser` pipeline:
++
++- `GET /admin/clubs` -> `MembaWeb.Admin.ClubsLive.Index`
++- `GET /admin/clubs/:club_id` -> `MembaWeb.Admin.ClubsLive.Show`
++- `GET /admin/clubs/:club_id/people/new` -> `MembaWeb.Admin.PeopleLive.New`
++- `GET /admin/clubs/:club_id/people/:person_id/edit` -> `MembaWeb.Admin.PeopleLive.Edit`
++
++There is currently no Staff invitation route under `/admin/clubs/:club_id/...`.
++
++## Current club-scoped creation/member paths
++
++`MembaWeb.Admin.ClubsLive.Show` is the current club detail page and exposes two separate Staff workflows:
++
++- A `New person` link (`#new-person-link`) to `/admin/clubs/:club_id/people/new`.
++- An `Add a member` form (`#add-member-form`) that submits the `add_member` LiveView event with only `membership[person_id]`.
++
++The `add_member` event generates a membership id, adds the current `club_id`, and calls `Membership.add_member(..., consistency: :strong)`. This creates an active club membership immediately for an existing projected person.
++
++`MembaWeb.Admin.PeopleLive.New` is the club-scoped person creation page. Its form (`#person-form`, aria-label `Create person`) collects:
++
++- name;
++- one primary email address;
++- optional alternate email addresses.
++
++Submitting `create_person` calls `Membership.create_person(..., consistency: :strong)` and navigates back to `/admin/clubs/:club_id`. It does not create membership by itself, but in combination with the club detail page's `Add a member` form it is the current Staff bypass for creating an active member from Staff-entered name/email.
++
++## Existing person edit route
++
++`MembaWeb.Admin.PeopleLive.Edit` backs `/admin/clubs/:club_id/people/:person_id/edit`.
++
++The route:
++
++- preserves club context and returns to `/admin/clubs/:club_id` after save/cancel;
++- displays the existing person name read-only;
++- lets Staff replace the person's primary/alternate email address set with `Membership.replace_person_email_addresses(..., consistency: :strong)`;
++- does not manage active memberships directly.
++
++The iteration plan says this route should remain available where needed for existing people.
++
++## Test and acceptance references to update later
++
++Current Phoenix tests assert the existing routes/selectors:
++
++- `web/test/memba_web/live/admin/clubs_live/show_test.exs`
++- `web/test/memba_web/live/admin_people_live_test.exs`
++- `web/test/memba_web/live/browser_acceptance_harness_test.exs`
++
++Current acceptance helper plumbing also drives direct person creation and add-member flows:
++
++- `acceptance-tests/features/support/member_message.js`
++- `acceptance-tests/features/support/server_commands.js`
++
++Later tasks that add invitations and decommission direct Staff member creation will need to update these tests/helpers intentionally rather than deleting the existing person edit coverage.
+diff --git a/docs/iterations/028-staff-member-invitations/todo.md b/docs/iterations/028-staff-member-invitations/todo.md
+index 559726c..a2895dc 100644
+--- a/docs/iterations/028-staff-member-invitations/todo.md
++++ b/docs/iterations/028-staff-member-invitations/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect current Staff club/person routes and forms, especially any club-scoped create-person/add-member path and `/admin/clubs/:club_id/people/:person_id/edit`.
++- [x] 001 Inspect current Staff club/person routes and forms, especially any club-scoped create-person/add-member path and `/admin/clubs/:club_id/people/:person_id/edit`.
+ - [ ] 002 Inspect the existing auth sign-in token and staff onboarding flow to decide how to reuse or extend it for invitation acceptance without mixing ordinary short-lived sign-in links with membership-granting invitation links.
+ - [ ] 003 Add a minimal club invitation model in the Membership boundary, event-sourced if consistent with nearby Membership aggregates:
+ - [ ] 004 Add public Membership APIs/commands for Staff/system use:
