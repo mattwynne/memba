@@ -3,7 +3,9 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
@@ -395,6 +397,56 @@ defmodule MembaWeb.MemberDashboardLiveTest do
     refute has_element?(view, "[data-testid='member-invite-member-link']")
   end
 
+  test "membership admins see the club member invitation action in the members section",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Alpine Club"
+      )
+
+    grant_manage_members_permission(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new?club_id=#{alice.club_id}'][data-testid='member-invite-member-link']",
+             "Invite member"
+           )
+  end
+
+  test "membership admins on a club subdomain see a host-scoped invitation link",
+       %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "Kootenay Mountaineering Club",
+        slug: "kmc"
+      )
+
+    grant_manage_members_permission(alice)
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "kmc.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new'][data-testid='member-invite-member-link']",
+             "Invite member"
+           )
+
+    refute has_element?(view, "#member-invite-member-link[href*='club_id=']")
+  end
+
   test "dashboard reaches compose through links instead of inline compose controls", %{conn: conn} do
     alice =
       create_active_member(
@@ -590,8 +642,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: Keyword.get(attrs, :active, true)
@@ -599,8 +653,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     %{
       club_id: club_id,
-      person_id: person.person_id
+      person_id: person.person_id,
+      membership_id: membership_id
     }
+  end
+
+  defp grant_manage_members_permission(member) do
+    Repo.insert!(%MemberPermission{
+      club_id: member.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
+    })
   end
 
   defp club_attrs(attrs, club_id, club_name) do
@@ -658,6 +723,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       current_identity: %{email: "alice@example.com"},
       selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
       current_member: %{name: "Alice Adams"},
+      can_manage_members?: false,
       members: [],
       active_member_count: 0,
       message_rows: []
