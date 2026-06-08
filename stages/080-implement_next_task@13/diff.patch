@@ -1,0 +1,856 @@
+diff --git a/acceptance-tests/features/step_definitions/membership_administration_steps.js b/acceptance-tests/features/step_definitions/membership_administration_steps.js
+new file mode 100644
+index 0000000..3e24b4d
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/membership_administration_steps.js
+@@ -0,0 +1,50 @@
++const { Given, When, Then } = require("@cucumber/cucumber");
++const {
++  assertMembershipAdministrator,
++  assertNotMembershipAdministrator,
++  ensureMembershipAdministrator,
++  ensureOnlyMembershipAdministrator,
++  ensureOrdinaryMember,
++  makeMembershipAdministrator,
++  tryMakeMembershipAdministrator,
++  tryRemoveMembershipAdministrator
++} = require("../support/membership_administration");
++
++Given(/^(\w+) is a Membership Administrator of (.+)$/, function (personName, clubName) {
++  ensureMembershipAdministrator(this, personName, clubName);
++});
++
++Given(/^(\w+) is the only Membership Administrator of (.+)$/, function (personName, clubName) {
++  ensureOnlyMembershipAdministrator(this, personName, clubName);
++});
++
++Given(/^(\w+) is an ordinary member of (.+)$/, function (personName, clubName) {
++  ensureOrdinaryMember(this, personName, clubName);
++});
++
++When(/^(\w+) makes (\w+) a Membership Administrator of (.+)$/, function (actorName, targetName, clubName) {
++  makeMembershipAdministrator(this, actorName, targetName, clubName);
++});
++
++When(/^(\w+) tries to make (\w+) a Membership Administrator of (.+)$/, function (actorName, targetName, clubName) {
++  tryMakeMembershipAdministrator(this, actorName, targetName, clubName);
++});
++
++When(
++  /^(\w+) tries to remove (\w+) as a Membership Administrator of (.+)$/,
++  function (actorName, targetName, clubName) {
++    tryRemoveMembershipAdministrator(this, actorName, targetName, clubName);
++  }
++);
++
++Then(/^(\w+) should be a Membership Administrator of (.+)$/, function (personName, clubName) {
++  assertMembershipAdministrator(this, personName, clubName);
++});
++
++Then(/^(\w+) should still be a Membership Administrator of (.+)$/, function (personName, clubName) {
++  assertMembershipAdministrator(this, personName, clubName);
++});
++
++Then(/^(\w+) should not be a Membership Administrator of (.+)$/, function (personName, clubName) {
++  assertNotMembershipAdministrator(this, personName, clubName);
++});
+diff --git a/acceptance-tests/features/support/membership_administration.js b/acceptance-tests/features/support/membership_administration.js
+new file mode 100644
+index 0000000..e126ecc
+--- /dev/null
++++ b/acceptance-tests/features/support/membership_administration.js
+@@ -0,0 +1,355 @@
++const assert = require("node:assert/strict");
++const { emailFor, ensureState } = require("./member_message");
++const serverCommands = require("./server_commands");
++
++function ensureMembershipAdministrator(world, personName, clubName) {
++  const member = ensureMember(world, personName, clubName);
++
++  const status = serverCommands.runCommand(
++    `
++import Ecto.Query
++
++club_id = Map.fetch!(payload, "clubId")
++membership_id = Map.fetch!(payload, "membershipId")
++person_id = Map.fetch!(payload, "personId")
++role_id = Memba.Membership.Roles.membership_administrator_role_id(club_id)
++
++already_assigned? =
++  Memba.Membership.Projections.RoleAssignment
++  |> where([assignment],
++    assignment.club_id == ^club_id and
++      assignment.membership_id == ^membership_id and
++      assignment.person_id == ^person_id and
++      assignment.role_id == ^role_id and
++      assignment.active == true
++  )
++  |> Memba.Repo.exists?()
++
++unless already_assigned? do
++  :ok =
++    Memba.Membership.App.dispatch(
++      %Memba.Membership.Commands.AssignMemberRole{
++        club_id: club_id,
++        membership_id: membership_id,
++        person_id: person_id,
++        role_id: role_id
++      },
++      consistency: :strong
++    )
++end
++
++%{status: "ok"}
++`,
++    member
++  );
++
++  assert.equal(status.status, "ok");
++  assertMembershipAdministrator(world, personName, clubName);
++}
++
++function ensureOnlyMembershipAdministrator(world, personName, clubName) {
++  ensureMembershipAdministrator(world, personName, clubName);
++
++  const count = membershipAdministratorCount(world, clubName);
++  assert.equal(count, 1, `Expected ${personName} to be the only Membership Administrator of ${clubName}`);
++}
++
++function ensureOrdinaryMember(world, personName, clubName) {
++  ensureMember(world, personName, clubName);
++  assertNotMembershipAdministrator(world, personName, clubName);
++}
++
++function makeMembershipAdministrator(world, actorName, targetName, clubName) {
++  const actor = memberStatus(world, actorName, clubName);
++  const target = ensureMember(world, targetName, clubName);
++
++  assert.ok(actor.personId, `Expected ${actorName} to be known in ${clubName}`);
++
++  const result = membershipAdministratorCommand("assign", {
++    actorPersonId: actor.personId,
++    clubId: target.clubId,
++    membershipId: target.membershipId,
++    personId: target.personId
++  });
++
++  assert.deepEqual(result, { status: "ok" });
++  world.lastMembershipAdministrationResult = result;
++}
++
++function tryMakeMembershipAdministrator(world, actorName, targetName, clubName) {
++  const actor = memberStatus(world, actorName, clubName);
++  const target = ensureMember(world, targetName, clubName);
++
++  assert.ok(actor.personId, `Expected ${actorName} to be known in ${clubName}`);
++
++  const result = membershipAdministratorCommand("assign", {
++    actorPersonId: actor.personId,
++    clubId: target.clubId,
++    membershipId: target.membershipId,
++    personId: target.personId
++  });
++
++  assert.deepEqual(result, { status: "error", reason: "unauthorized" });
++  world.lastMembershipAdministrationResult = result;
++}
++
++function tryRemoveMembershipAdministrator(world, actorName, targetName, clubName) {
++  const actor = memberStatus(world, actorName, clubName);
++  const target = memberStatus(world, targetName, clubName);
++
++  assert.ok(actor.personId, `Expected ${actorName} to be known in ${clubName}`);
++  assert.ok(target.membershipId, `Expected ${targetName} to be an active member of ${clubName}`);
++
++  const result = membershipAdministratorCommand("remove", {
++    actorPersonId: actor.personId,
++    clubId: target.clubId,
++    membershipId: target.membershipId,
++    personId: target.personId
++  });
++
++  assert.deepEqual(result, { status: "error", reason: "last_membership_administrator" });
++  world.lastMembershipAdministrationResult = result;
++}
++
++function assertMembershipAdministrator(world, personName, clubName) {
++  const status = memberStatus(world, personName, clubName);
++
++  assert.equal(status.activeMember, true, `Expected ${personName} to be an active member of ${clubName}`);
++  assert.equal(
++    status.membershipAdministrator,
++    true,
++    `Expected ${personName} to be a Membership Administrator of ${clubName}`
++  );
++
++  rememberMember(world, {
++    clubId: status.clubId,
++    clubName,
++    clubSlug: status.clubSlug,
++    email: status.email,
++    membershipId: status.membershipId,
++    personId: status.personId,
++    personName
++  });
++}
++
++function assertNotMembershipAdministrator(world, personName, clubName) {
++  const status = memberStatus(world, personName, clubName);
++
++  assert.equal(
++    status.membershipAdministrator,
++    false,
++    `Expected ${personName} not to be a Membership Administrator of ${clubName}`
++  );
++}
++
++function ensureMember(world, personName, clubName) {
++  ensureState(world);
++
++  const member = serverCommands.ensureMember({
++    clubName,
++    clubSlug: clubSlug(clubName),
++    personName,
++    email: emailFor(personName)
++  });
++
++  rememberMember(world, member);
++  return member;
++}
++
++function memberStatus(world, personName, clubName) {
++  ensureState(world);
++
++  const status = serverCommands.runCommand(
++    `
++import Ecto.Query
++
++club_name = Map.fetch!(payload, "clubName")
++email = Map.fetch!(payload, "email")
++
++club =
++  Memba.Membership.Projections.Club
++  |> where([club], club.name == ^club_name)
++  |> order_by([club], desc: club.inserted_at)
++  |> limit(1)
++  |> Memba.Repo.one()
++
++person = Memba.Membership.get_person_by_email(email)
++
++membership =
++  if club && person do
++    Memba.Membership.Projections.Membership
++    |> where([membership],
++      membership.club_id == ^club.club_id and
++        membership.person_id == ^person.person_id and
++        membership.active == true
++    )
++    |> limit(1)
++    |> Memba.Repo.one()
++  end
++
++role_id =
++  if club do
++    Memba.Membership.Roles.membership_administrator_role_id(club.club_id)
++  end
++
++role_assignment? =
++  if club && person && membership && role_id do
++    Memba.Membership.Projections.RoleAssignment
++    |> where([assignment],
++      assignment.club_id == ^club.club_id and
++        assignment.membership_id == ^membership.membership_id and
++        assignment.person_id == ^person.person_id and
++        assignment.role_id == ^role_id and
++        assignment.active == true
++    )
++    |> Memba.Repo.exists?()
++  else
++    false
++  end
++
++permission? =
++  if club && person do
++    Memba.Membership.person_has_club_permission?(
++      club.club_id,
++      person.person_id,
++      Memba.Membership.Permissions.club_manage_members()
++    )
++  else
++    false
++  end
++
++%{
++  activeMember: not is_nil(membership),
++  clubId: if(club, do: club.club_id),
++  clubSlug: if(club, do: club.slug),
++  email: email,
++  membershipAdministrator: role_assignment? && permission?,
++  membershipId: if(membership, do: membership.membership_id),
++  personId: if(person, do: person.person_id),
++  personName: if(person, do: person.name)
++}
++`,
++    { clubName, email: emailFor(personName) }
++  );
++
++  if (status.activeMember) {
++    rememberMember(world, {
++      clubId: status.clubId,
++      clubName,
++      clubSlug: status.clubSlug,
++      email: status.email,
++      membershipId: status.membershipId,
++      personId: status.personId,
++      personName: status.personName || personName
++    });
++  }
++
++  return status;
++}
++
++function membershipAdministratorCount(world, clubName) {
++  return serverCommands.runCommand(
++    `
++import Ecto.Query
++
++club_name = Map.fetch!(payload, "clubName")
++
++club =
++  Memba.Membership.Projections.Club
++  |> where([club], club.name == ^club_name)
++  |> order_by([club], desc: club.inserted_at)
++  |> limit(1)
++  |> Memba.Repo.one()
++
++count =
++  if club do
++    role_id = Memba.Membership.Roles.membership_administrator_role_id(club.club_id)
++
++    Memba.Membership.Projections.RoleAssignment
++    |> where([assignment], assignment.club_id == ^club.club_id)
++    |> where([assignment], assignment.role_id == ^role_id)
++    |> where([assignment], assignment.active == true)
++    |> Memba.Repo.aggregate(:count, :membership_id)
++  else
++    0
++  end
++
++%{count: count}
++`,
++    { clubName }
++  ).count;
++}
++
++function membershipAdministratorCommand(action, attrs) {
++  const functionName =
++    action === "assign"
++      ? "assign_membership_administrator_as_club_member"
++      : "remove_membership_administrator_as_club_member";
++
++  return serverCommands.runCommand(
++    `
++function_name = Map.fetch!(payload, "functionName")
++
++attrs = %{
++  club_id: Map.fetch!(payload, "clubId"),
++  membership_id: Map.fetch!(payload, "membershipId"),
++  person_id: Map.fetch!(payload, "personId"),
++  actor_person_id: Map.fetch!(payload, "actorPersonId")
++}
++
++result = apply(Memba.Membership, String.to_existing_atom(function_name), [attrs, [consistency: :strong]])
++
++case result do
++  :ok -> %{status: "ok"}
++  {:error, reason} -> %{status: "error", reason: to_string(reason)}
++end
++`,
++    { ...attrs, functionName }
++  );
++}
++
++function rememberMember(world, member) {
++  ensureState(world);
++
++  world.clubs[member.clubName] = {
++    clubId: member.clubId,
++    name: member.clubName,
++    slug: member.clubSlug
++  };
++
++  world.people[member.personName] = {
++    alternateEmails: [],
++    email: member.email,
++    emailAddresses: [{ email: member.email, isPrimary: true }],
++    name: member.personName,
++    personId: member.personId,
++    primaryEmail: member.email
++  };
++
++  world.memberships[`${member.clubName}:${member.personName}`] = {
++    clubId: member.clubId,
++    membershipId: member.membershipId,
++    personId: member.personId
++  };
++}
++
++function clubSlug(clubName) {
++  return String(clubName || "")
++    .trim()
++    .toLowerCase()
++    .replace(/[^a-z0-9]+/g, "-")
++    .replace(/^-+|-+$/g, "")
++    .slice(0, 32)
++    .replace(/^-+|-+$/g, "");
++}
++
++module.exports = {
++  assertMembershipAdministrator,
++  assertNotMembershipAdministrator,
++  ensureMembershipAdministrator,
++  ensureOnlyMembershipAdministrator,
++  ensureOrdinaryMember,
++  makeMembershipAdministrator,
++  tryMakeMembershipAdministrator,
++  tryRemoveMembershipAdministrator
++};
+diff --git a/docs/iterations/027-membership-administrator-role/todo.md b/docs/iterations/027-membership-administrator-role/todo.md
+index e44e96b..30ceb53 100644
+--- a/docs/iterations/027-membership-administrator-role/todo.md
++++ b/docs/iterations/027-membership-administrator-role/todo.md
+@@ -12,7 +12,7 @@
+ - [x] 010 Add command/API support for revoking Membership Administrator while enforcing that at least one remains.
+ - [x] 011 Prevent ordinary members without `club.manage_members` from granting or revoking Membership Administrator.
+ - [x] 012 Preserve or migrate existing test data/seeds so current acceptance tests still have valid clubs and memberships. Existing clubs in test/dev may need default role setup in seeds or migration/backfill.
+-- [ ] 013 Implement step definitions only as needed during delivery to exercise the new Cucumber scenarios through domain/application behaviour. Do not create a polished member-facing admin UI in this iteration.
++- [x] 013 Implement step definitions only as needed during delivery to exercise the new Cucumber scenarios through domain/application behaviour. Do not create a polished member-facing admin UI in this iteration.
+ - [ ] 014 Add ExUnit tests for events, projections, permission checks, authorization failures, and the last-administrator invariant.
+ - [ ] 015 Remove `@todo-domain`/`@todo-ui` from `club_membership_administration.feature` once implementation passes the scenarios.
+ - [ ] 016 Run `dev check`.
+diff --git a/web/test/features/membership_administration_steps_test.exs b/web/test/features/membership_administration_steps_test.exs
+new file mode 100644
+index 0000000..7f0edac
+--- /dev/null
++++ b/web/test/features/membership_administration_steps_test.exs
+@@ -0,0 +1,37 @@
++defmodule Memba.MembershipAdministrationStepsTest do
++  use Memba.EventSourcedCase, async: false
++
++  alias Memba.DomainCucumberRunner
++
++  @feature_basename "club_membership_administration.feature"
++  @scenario_names [
++    "A converted requester can administer membership for their new club",
++    "Robin grants membership administration to Alice",
++    "Alice cannot grant membership administration to Bob",
++    "Robin cannot remove the last Membership Administrator"
++  ]
++
++  for scenario_name <- @scenario_names do
++    test "domain step definitions execute #{scenario_name}" do
++      scenario_name = unquote(scenario_name)
++      discovery = DomainCucumberRunner.discover()
++      feature = feature!(discovery, @feature_basename)
++      scenario = scenario!(feature, scenario_name)
++
++      DomainCucumberRunner.run_scenario(
++        %{feature: feature, scenario: scenario},
++        discovery.step_registry
++      )
++    end
++  end
++
++  defp feature!(discovery, basename) do
++    Enum.find(discovery.features, &(Path.basename(&1.file) == basename)) ||
++      flunk("Expected #{basename} to be discovered")
++  end
++
++  defp scenario!(feature, name) do
++    Enum.find(feature.scenarios, &(&1.name == name)) ||
++      flunk("Expected #{feature.file} to include scenario #{inspect(name)}")
++  end
++end
+diff --git a/web/test/features/step_definitions/membership_administration_steps.exs b/web/test/features/step_definitions/membership_administration_steps.exs
+new file mode 100644
+index 0000000..46726dd
+--- /dev/null
++++ b/web/test/features/step_definitions/membership_administration_steps.exs
+@@ -0,0 +1,377 @@
++defmodule Memba.Cucumber.MembershipAdministrationSteps do
++  use Cucumber.StepDefinition
++
++  import Ecto.Query
++  import ExUnit.Assertions
++
++  alias Memba.Membership
++  alias Memba.Membership.App
++  alias Memba.Membership.Commands.AssignMemberRole
++  alias Memba.Membership.Permissions
++  alias Memba.Membership.Projections.Club, as: ClubProjection
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Projections.Person, as: PersonProjection
++  alias Memba.Membership.Projections.RoleAssignment, as: RoleAssignmentProjection
++  alias Memba.Membership.Roles
++  alias Memba.Membership.Slug
++  alias Memba.Repo
++
++  step "{word} is a Membership Administrator of {word} {word} {word}",
++       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
++    ensure_membership_administrator(
++      context,
++      person_name,
++      club_name(club_word_1, club_word_2, club_word_3)
++    )
++  end
++
++  step "{word} is the only Membership Administrator of {word} {word} {word}",
++       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
++    club_name = club_name(club_word_1, club_word_2, club_word_3)
++    context = ensure_membership_administrator(context, person_name, club_name)
++    club_id = fetch_club_id!(context, club_name)
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    assert active_role_assignment_count(club_id, role_id) == 1
++    context
++  end
++
++  step "{word} is an ordinary member of {word} {word} {word}",
++       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
++    club_name = club_name(club_word_1, club_word_2, club_word_3)
++    {context, _membership_id} = ensure_active_member(context, person_name, club_name)
++
++    refute membership_administrator?(context, person_name, club_name)
++    context
++  end
++
++  step "{word} makes {word} a Membership Administrator of {word} {word} {word}",
++       %{args: [actor_name, target_name, club_word_1, club_word_2, club_word_3]} = context do
++    club_name = club_name(club_word_1, club_word_2, club_word_3)
++    {context, target_membership_id} = ensure_active_member(context, target_name, club_name)
++    club_id = fetch_club_id!(context, club_name)
++    actor = fetch_person!(context, actor_name)
++    target = fetch_person!(context, target_name)
++
++    assert :ok =
++             Membership.assign_membership_administrator_as_club_member(
++               %{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target.person_id,
++                 actor_person_id: actor.person_id
++               },
++               consistency: :strong
++             )
++
++    Map.put(context, :last_membership_administration_result, :ok)
++  end
++
++  step "{word} tries to make {word} a Membership Administrator of {word} {word} {word}",
++       %{args: [actor_name, target_name, club_word_1, club_word_2, club_word_3]} = context do
++    club_name = club_name(club_word_1, club_word_2, club_word_3)
++    {context, target_membership_id} = ensure_active_member(context, target_name, club_name)
++    club_id = fetch_club_id!(context, club_name)
++    actor = fetch_person!(context, actor_name)
++    target = fetch_person!(context, target_name)
++
++    assert {:error, :unauthorized} =
++             result =
++             Membership.assign_membership_administrator_as_club_member(
++               %{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target.person_id,
++                 actor_person_id: actor.person_id
++               },
++               consistency: :strong
++             )
++
++    Map.put(context, :last_membership_administration_result, result)
++  end
++
++  step "{word} tries to remove {word} as a Membership Administrator of {word} {word} {word}",
++       %{args: [actor_name, target_name, club_word_1, club_word_2, club_word_3]} = context do
++    club_name = club_name(club_word_1, club_word_2, club_word_3)
++    {context, target_membership_id} = ensure_active_member(context, target_name, club_name)
++    club_id = fetch_club_id!(context, club_name)
++    actor = fetch_person!(context, actor_name)
++    target = fetch_person!(context, target_name)
++
++    assert {:error, :last_membership_administrator} =
++             result =
++             Membership.remove_membership_administrator_as_club_member(
++               %{
++                 club_id: club_id,
++                 membership_id: target_membership_id,
++                 person_id: target.person_id,
++                 actor_person_id: actor.person_id
++               },
++               consistency: :strong
++             )
++
++    Map.put(context, :last_membership_administration_result, result)
++  end
++
++  step "{word} should be a Membership Administrator of {word} {word} {word}",
++       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
++    assert_membership_administrator(
++      context,
++      person_name,
++      club_name(club_word_1, club_word_2, club_word_3)
++    )
++  end
++
++  step "{word} should still be a Membership Administrator of {word} {word} {word}",
++       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
++    assert_membership_administrator(
++      context,
++      person_name,
++      club_name(club_word_1, club_word_2, club_word_3)
++    )
++  end
++
++  step "{word} should not be a Membership Administrator of {word} {word} {word}",
++       %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
++    club_name = club_name(club_word_1, club_word_2, club_word_3)
++
++    refute membership_administrator?(context, person_name, club_name)
++    context
++  end
++
++  defp ensure_membership_administrator(context, person_name, club_name) do
++    {context, membership_id} = ensure_active_member(context, person_name, club_name)
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    unless active_role_assignment?(club_id, membership_id, person.person_id, role_id) do
++      assert :ok =
++               App.dispatch(
++                 %AssignMemberRole{
++                   club_id: club_id,
++                   membership_id: membership_id,
++                   person_id: person.person_id,
++                   role_id: role_id
++                 },
++                 consistency: :strong
++               )
++    end
++
++    assert_membership_administrator(context, person_name, club_name)
++  end
++
++  defp assert_membership_administrator(context, person_name, club_name) do
++    assert membership_administrator?(context, person_name, club_name)
++    context
++  end
++
++  defp membership_administrator?(context, person_name, club_name) do
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++    membership_id = active_membership_id!(club_id, person.person_id)
++    role_id = Roles.membership_administrator_role_id(club_id)
++
++    active_role_assignment?(club_id, membership_id, person.person_id, role_id) and
++      Membership.person_has_club_permission?(
++        club_id,
++        person.person_id,
++        Permissions.club_manage_members()
++      )
++  end
++
++  defp ensure_active_member(context, person_name, club_name) do
++    context = ensure_club(context, club_name)
++    context = ensure_person(context, person_name)
++    club_id = fetch_club_id!(context, club_name)
++    person = fetch_person!(context, person_name)
++    membership_key = {club_name, person_name}
++
++    case active_membership_id(club_id, person.person_id) do
++      nil ->
++        membership_id = Memba.ID.generate(:membership)
++
++        assert :ok =
++                 Membership.add_member(
++                   %{
++                     membership_id: membership_id,
++                     club_id: club_id,
++                     person_id: person.person_id
++                   },
++                   consistency: :strong
++                 )
++
++        {update_context_map(context, :memberships, membership_key, membership_id), membership_id}
++
++      membership_id ->
++        {update_context_map(context, :memberships, membership_key, membership_id), membership_id}
++    end
++  end
++
++  defp ensure_club(context, club_name) do
++    case get_in(context, [:clubs, club_name]) do
++      nil ->
++        case fetch_club_by_name(club_name) do
++          nil ->
++            club_id = Memba.ID.generate(:club)
++
++            assert :ok =
++                     Membership.create_club(
++                       %{
++                         club_id: club_id,
++                         name: club_name,
++                         slug: scenario_slug(context, club_name)
++                       },
++                       consistency: :strong
++                     )
++
++            update_context_map(context, :clubs, club_name, club_id)
++
++          %ClubProjection{club_id: club_id} ->
++            update_context_map(context, :clubs, club_name, club_id)
++        end
++
++      _club ->
++        context
++    end
++  end
++
++  defp ensure_person(context, person_name) do
++    case get_in(context, [:people, person_name]) do
++      %{person_id: person_id} when is_binary(person_id) ->
++        context
++
++      _missing ->
++        person_id = Memba.ID.generate(:person)
++        email = default_email_for(context, person_name)
++
++        assert :ok =
++                 Membership.create_person(
++                   %{
++                     person_id: person_id,
++                     name: person_name,
++                     email: email,
++                     email_addresses: [%{email: email, is_primary: true}]
++                   },
++                   consistency: :strong
++                 )
++
++        update_context_map(context, :people, person_name, %{
++          person_id: person_id,
++          name: person_name,
++          email: email
++        })
++    end
++  end
++
++  defp fetch_club_id!(context, club_name) do
++    case get_in(context, [:clubs, club_name]) do
++      club_id when is_binary(club_id) ->
++        club_id
++
++      %{club_id: club_id} when is_binary(club_id) ->
++        club_id
++
++      _missing ->
++        case fetch_club_by_name(club_name) do
++          %ClubProjection{club_id: club_id} -> club_id
++          nil -> flunk("Expected #{club_name} to be known as a club")
++        end
++    end
++  end
++
++  defp fetch_person!(context, person_name) do
++    case get_in(context, [:people, person_name]) do
++      %{person_id: person_id} when is_binary(person_id) ->
++        Membership.get_person(person_id) ||
++          flunk("Expected #{person_name} to exist as a projected person")
++
++      _missing ->
++        PersonProjection
++        |> where([person], person.name == ^person_name)
++        |> limit(1)
++        |> Repo.one()
++        |> case do
++          nil -> flunk("Expected #{person_name} to be known as a person")
++          person -> person
++        end
++    end
++  end
++
++  defp fetch_club_by_name(club_name) do
++    ClubProjection
++    |> where([club], club.name == ^club_name)
++    |> limit(1)
++    |> Repo.one()
++  end
++
++  defp active_membership_id!(club_id, person_id) do
++    active_membership_id(club_id, person_id) ||
++      flunk("Expected active membership for #{person_id} in #{club_id}")
++  end
++
++  defp active_membership_id(club_id, person_id) do
++    MembershipProjection
++    |> where([membership], membership.club_id == ^club_id)
++    |> where([membership], membership.person_id == ^person_id)
++    |> where([membership], membership.active == true)
++    |> select([membership], membership.membership_id)
++    |> limit(1)
++    |> Repo.one()
++  end
++
++  defp active_role_assignment?(club_id, membership_id, person_id, role_id) do
++    RoleAssignmentProjection
++    |> where([assignment], assignment.club_id == ^club_id)
++    |> where([assignment], assignment.membership_id == ^membership_id)
++    |> where([assignment], assignment.person_id == ^person_id)
++    |> where([assignment], assignment.role_id == ^role_id)
++    |> where([assignment], assignment.active == true)
++    |> Repo.exists?()
++  end
++
++  defp active_role_assignment_count(club_id, role_id) do
++    RoleAssignmentProjection
++    |> where([assignment], assignment.club_id == ^club_id)
++    |> where([assignment], assignment.role_id == ^role_id)
++    |> where([assignment], assignment.active == true)
++    |> Repo.aggregate(:count, :membership_id)
++  end
++
++  defp update_context_map(context, collection_key, item_key, value) do
++    collection =
++      context
++      |> Map.get(collection_key, %{})
++      |> Map.put(item_key, value)
++
++    Map.put(context, collection_key, collection)
++  end
++
++  defp club_name(word_1, word_2, word_3), do: Enum.join([word_1, word_2, word_3], " ")
++
++  defp scenario_slug(context, club_name) do
++    case Slug.default_from_name(club_name) do
++      {:ok, slug} -> slug
++      slug when is_binary(slug) -> slug
++      _invalid -> "club-#{scenario_suffix(context)}"
++    end
++  end
++
++  defp default_email_for(context, person_name) do
++    normalized_name =
++      person_name
++      |> String.downcase()
++      |> String.replace(~r/[^a-z0-9]+/, ".")
++      |> String.trim(".")
++
++    "#{normalized_name}-#{scenario_suffix(context)}@example.test"
++  end
++
++  defp scenario_suffix(context) do
++    context
++    |> Map.get(:scenario_name, "scenario")
++    |> :erlang.phash2(1_000_000)
++    |> Integer.to_string(36)
++    |> String.downcase()
++  end
++end
