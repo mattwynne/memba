@@ -138,6 +138,24 @@ defmodule Memba.Membership do
   end
 
   @doc """
+  Create or resend a pending club member invitation as a club member actor.
+
+  This member-facing entry point authorizes the submitted `:actor_person_id`
+  (or `"actor_person_id"`) with the projected `club.manage_members`
+  permission, then delegates to `invite_club_member/2` so Membership Admin and
+  Staff invitation paths share duplicate-member, duplicate-pending, token, and
+  acceptance lifecycle rules.
+  """
+  def invite_club_member_as_club_member(attrs, dispatch_opts \\ [])
+      when is_map(attrs) and is_list(dispatch_opts) do
+    with {:ok, club_id} <- fetch_required(attrs, :club_id),
+         {:ok, actor_person_id} <- fetch_required(attrs, :actor_person_id),
+         :ok <- Authorization.authorize_manage_members(club_id, actor_person_id) do
+      invite_club_member(attrs, dispatch_opts)
+    end
+  end
+
+  @doc """
   Resend an existing pending club member invitation.
 
   The pending invitation can be addressed either by `:invitation_id` or by the
