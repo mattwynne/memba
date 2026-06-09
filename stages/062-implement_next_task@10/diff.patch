@@ -1,0 +1,134 @@
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index 304e5fe..9cdf05d 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -9,7 +9,7 @@
+ - [x] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
+ - [x] 008 Ensure the club-message rejection email uses the standard transactional email footer.
+ - [x] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
+-- [ ] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
++- [x] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
+ - [ ] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
+ - [ ] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
+ - [ ] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 8984994..25e7950 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -338,7 +338,15 @@ defmodule MembaWeb.Layouts do
+         class="border-t border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-6 sm:px-6 lg:px-8"
+       >
+         <div class="mx-auto max-w-7xl text-sm font-medium text-[var(--club-site-muted)]">
+-          Powered by <span class="font-semibold text-[var(--club-site-accent)]">Memba</span>
++          Powered by
++          <a
++            id="club-site-footer-memba-home-link"
++            href={~p"/"}
++            aria-label="Visit Memba home"
++            class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
++          >
++            Memba
++          </a>
+         </div>
+       </footer>
+     </div>
+diff --git a/web/lib/memba_web/live/public_club_page_live.ex b/web/lib/memba_web/live/public_club_page_live.ex
+index e12cd61..4c9582d 100644
+--- a/web/lib/memba_web/live/public_club_page_live.ex
++++ b/web/lib/memba_web/live/public_club_page_live.ex
+@@ -40,10 +40,12 @@ defmodule MembaWeb.PublicClubPageLive do
+                   Email me a sign-in link
+                 </a>
+                 <a
++                  id="public-club-page-memba-home-link"
+                   href={~p"/"}
++                  aria-label="Visit Memba home"
+                   class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+                 >
+-                  Back to Memba
++                  Visit Memba home
+                 </a>
+               </div>
+             </div>
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index b6f6a12..4c85701 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -138,6 +138,12 @@ defmodule MembaWeb.LayoutsTest do
+     assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
+     refute_text(html, "#club-site-layout header", "Powered by Memba")
+     assert_text(html, "#club-site-footer", "Powered by Memba")
++
++    assert_selector(
++      html,
++      "#club-site-footer a#club-site-footer-memba-home-link[href='/'][aria-label='Visit Memba home']"
++    )
++
+     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
+     assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
+     assert_selector(html, "button#club-site-sign-out-button[type='submit']")
+@@ -190,7 +196,7 @@ defmodule MembaWeb.LayoutsTest do
+   end
+ 
+   defp assert_text(html, selector, expected_text) do
+-    text = selected_text(html, selector)
++    text = html |> selected_text(selector) |> normalize_whitespace()
+ 
+     assert text =~ expected_text
+   end
+@@ -206,6 +212,12 @@ defmodule MembaWeb.LayoutsTest do
+     |> LazyHTML.text()
+   end
+ 
++  defp normalize_whitespace(text) when is_binary(text) do
++    text
++    |> String.replace(~r/\s+/, " ")
++    |> String.trim()
++  end
++
+   defp only_attribute(html, selector, attribute) do
+     attributes =
+       html
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index ff6da6a..22e6046 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -136,6 +136,15 @@ defmodule MembaWeb.PageControllerTest do
+            |> Enum.any?()
+ 
+     assert html |> LazyHTML.query("a#public-club-page-sign-in-link[href='/auth']") |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']")
++           |> LazyHTML.text() =~ "Visit Memba home"
++
++    assert html
++           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']")
++           |> LazyHTML.text() =~ "Memba"
++
+     refute response =~ "Send a club message"
+     refute response =~ "Signed in as"
+   end
+@@ -318,7 +327,8 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     assert html
+            |> LazyHTML.query("#club-site-layout footer")
+-           |> LazyHTML.text() =~ "Powered by Memba"
++           |> LazyHTML.text()
++           |> normalize_whitespace() =~ "Powered by Memba"
+ 
+     assert html
+            |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
+@@ -1367,6 +1377,12 @@ defmodule MembaWeb.PageControllerTest do
+     )
+   end
+ 
++  defp normalize_whitespace(text) when is_binary(text) do
++    text
++    |> String.replace(~r/\s+/, " ")
++    |> String.trim()
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
