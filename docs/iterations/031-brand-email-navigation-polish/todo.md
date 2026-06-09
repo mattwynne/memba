@@ -9,7 +9,7 @@
 - [x] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
 - [x] 008 Ensure the club-message rejection email uses the standard transactional email footer.
 - [x] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
-- [ ] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
+- [x] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
 - [ ] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
 - [ ] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
 - [ ] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.

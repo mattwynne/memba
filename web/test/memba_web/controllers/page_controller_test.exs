@@ -136,6 +136,15 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
 
     assert html |> LazyHTML.query("a#public-club-page-sign-in-link[href='/auth']") |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']")
+           |> LazyHTML.text() =~ "Visit Memba home"
+
+    assert html
+           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']")
+           |> LazyHTML.text() =~ "Memba"
+
     refute response =~ "Send a club message"
     refute response =~ "Signed in as"
   end
@@ -318,7 +327,8 @@ defmodule MembaWeb.PageControllerTest do
 
     assert html
            |> LazyHTML.query("#club-site-layout footer")
-           |> LazyHTML.text() =~ "Powered by Memba"
+           |> LazyHTML.text()
+           |> normalize_whitespace() =~ "Powered by Memba"
 
     assert html
            |> LazyHTML.query("#member-club-home[data-club-id='#{club.club_id}']")
@@ -1365,6 +1375,12 @@ defmodule MembaWeb.PageControllerTest do
       from: "auth@mail.memba.io",
       message_stream: "outbound-authentication"
     )
+  end
+
+  defp normalize_whitespace(text) when is_binary(text) do
+    text
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

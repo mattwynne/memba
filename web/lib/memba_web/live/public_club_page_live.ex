@@ -40,10 +40,12 @@ defmodule MembaWeb.PublicClubPageLive do
                   Email me a sign-in link
                 </a>
                 <a
+                  id="public-club-page-memba-home-link"
                   href={~p"/"}
+                  aria-label="Visit Memba home"
                   class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
                 >
-                  Back to Memba
+                  Visit Memba home
                 </a>
               </div>
             </div>
