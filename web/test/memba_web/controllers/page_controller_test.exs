@@ -972,6 +972,8 @@ defmodule MembaWeb.PageControllerTest do
 
     assert response =~ "robin@example.com"
     assert response =~ "You’ve verified your email."
+    assert response =~ "Name"
+    assert response =~ "Email"
 
     refute html
            |> LazyHTML.query("form#get-started-verification-form")
@@ -987,7 +989,7 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
            |> Enum.any?()
 
-    assert html
+    refute html
            |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
            |> Enum.any?()
 

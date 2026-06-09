@@ -4,7 +4,7 @@
 - [x] 002 Split the public Get Started experience into two states:
 - [x] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
 - [x] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
-- [ ] 005 Update request form rendering:
+- [x] 005 Update request form rendering:
 - [ ] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
 - [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
 - [ ] 008 Ensure verified request submission does not create Person, club, membership, or club access.
