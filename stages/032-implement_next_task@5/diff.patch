@@ -1,0 +1,54 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index d19b614..22e5222 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -4,7 +4,7 @@
+ - [x] 002 Split the public Get Started experience into two states:
+ - [x] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
+ - [x] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
+-- [ ] 005 Update request form rendering:
++- [x] 005 Update request form rendering:
+ - [ ] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+ - [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
+ - [ ] 008 Ensure verified request submission does not create Person, club, membership, or club access.
+diff --git a/web/lib/memba_web/controllers/page_html/get_started.html.heex b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+index 1d1b124..9b7690c 100644
+--- a/web/lib/memba_web/controllers/page_html/get_started.html.heex
++++ b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+@@ -182,14 +182,6 @@
+               autocomplete="name"
+               required
+             />
+-            <.input
+-              field={@request_form[:requester_email]}
+-              id="get-started-requester-email"
+-              label="Email address"
+-              type="email"
+-              autocomplete="email"
+-              required
+-            />
+           <% end %>
+ 
+           <.input
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 76b0689..6786d3b 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -972,6 +972,8 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     assert response =~ "robin@example.com"
+     assert response =~ "You’ve verified your email."
++    assert response =~ "Name"
++    assert response =~ "Email"
+ 
+     refute html
+            |> LazyHTML.query("form#get-started-verification-form")
+@@ -987,7 +989,7 @@ defmodule MembaWeb.PageControllerTest do
+            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
+            |> Enum.any?()
+ 
+-    assert html
++    refute html
+            |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
+            |> Enum.any?()
+ 
