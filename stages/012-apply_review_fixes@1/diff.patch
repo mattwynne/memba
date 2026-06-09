@@ -1,0 +1,104 @@
+diff --git a/.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh b/.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh
+new file mode 100644
+index 0000000..b816221
+--- /dev/null
++++ b/.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh
+@@ -0,0 +1,45 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++workflow_path=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/workflow.fabro
++
++assert_contains() {
++  local expected=$1
++
++  if ! grep -Fq "$expected" "$workflow_path"; then
++    echo "Expected iteration-review workflow to contain: $expected" >&2
++    exit 1
++  fi
++}
++
++assert_not_contains() {
++  local unexpected=$1
++
++  if grep -Fq "$unexpected" "$workflow_path"; then
++    echo "Expected iteration-review workflow not to contain: $unexpected" >&2
++    exit 1
++  fi
++}
++
++review_retry_count=$(grep -Fc 'retry_policy="patient"' "$workflow_path")
++if [ "$review_retry_count" -lt 4 ]; then
++  echo "Expected patient retry policy on the three review stages and synthesis; found $review_retry_count" >&2
++  exit 1
++fi
++
++# Review synthesis requires all independent reviewer Markdown reports. A failed
++# reviewer must not continue to synthesis with missing prior-stage context.
++assert_contains 'claude_review -> codex_review [condition="outcome=succeeded"]'
++assert_contains 'claude_review -> synthesis_unavailable'
++assert_contains 'codex_review -> gemini_review [condition="outcome=succeeded"]'
++assert_contains 'codex_review -> synthesis_unavailable'
++assert_contains 'gemini_review -> synthesize_review [condition="outcome=succeeded"]'
++assert_contains 'gemini_review -> synthesis_unavailable'
++assert_contains 'synthesize_review -> review_gate [condition="outcome=succeeded"]'
++assert_contains 'synthesize_review -> synthesis_unavailable [label="Synthesis unavailable"]'
++
++assert_not_contains 'claude_review -> codex_review;'
++assert_not_contains 'codex_review -> gemini_review;'
++assert_not_contains 'gemini_review -> synthesize_review;'
++
++echo "iteration-review report routing tests passed"
+diff --git a/.fabro/workflows/iteration-review/workflow.fabro b/.fabro/workflows/iteration-review/workflow.fabro
+index ce0b1d4..cddea38 100644
+--- a/.fabro/workflows/iteration-review/workflow.fabro
++++ b/.fabro/workflows/iteration-review/workflow.fabro
+@@ -79,17 +79,20 @@ digraph IterationReview {
+     claude_review [
+         label="Claude Review",
+         shape=tab,
+-        prompt="@prompts/review.md"
++        prompt="@prompts/review.md",
++        retry_policy="patient"
+     ]
+     codex_review [
+         label="Codex/GPT Review",
+         shape=tab,
+-        prompt="@prompts/review.md"
++        prompt="@prompts/review.md",
++        retry_policy="patient"
+     ]
+     gemini_review [
+         label="Gemini Review",
+         shape=tab,
+-        prompt="@prompts/review.md"
++        prompt="@prompts/review.md",
++        retry_policy="patient"
+     ]
+     synthesize_review [
+         label="Synthesize Review",
+@@ -103,7 +106,7 @@ digraph IterationReview {
+         label="Fail: Review Synthesis Unavailable",
+         shape=parallelogram,
+         goal_gate=true,
+-        script="echo 'Iteration review could not synthesize completed independent reviews after retrying a transient LLM/provider failure. Product review evidence exists in the completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
++        script="echo 'Iteration review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
+     ]
+     review_gate [shape=diamond, label="Implementation accepted?"]
+     snapshot_before_review_repair [
+@@ -198,9 +201,12 @@ digraph IterationReview {
+     collect_implementation_evidence -> collect_evidence_failed
+     collect_evidence_failed -> exit
+ 
+-    claude_review -> codex_review
+-    codex_review -> gemini_review
+-    gemini_review -> synthesize_review
++    claude_review -> codex_review [condition="outcome=succeeded"]
++    claude_review -> synthesis_unavailable
++    codex_review -> gemini_review [condition="outcome=succeeded"]
++    codex_review -> synthesis_unavailable
++    gemini_review -> synthesize_review [condition="outcome=succeeded"]
++    gemini_review -> synthesis_unavailable
+     synthesize_review -> review_gate [condition="outcome=succeeded"]
+     synthesize_review -> synthesis_unavailable [label="Synthesis unavailable"]
+     synthesis_unavailable -> exit

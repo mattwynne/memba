@@ -1142,7 +1142,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-09T06:42:30.994116659Z",
-  "last_event_at": "2026-06-09T07:08:53.084637973Z",
+  "last_event_at": "2026-06-09T07:08:57.010951335Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -3019,9 +3019,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 297,
       "checkpoint": {
-        "timestamp": "2026-06-09T07:08:53.111113596Z",
+        "timestamp": "2026-06-09T07:08:56.963219644Z",
         "current_node": "apply_review_fixes",
         "completed_nodes": [
           "start",
@@ -3039,6 +3039,357 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.run_id": "01KTNHT1MC8VYH0EKM85ZCGE19",
+          "failure_class": "",
+          "outcome": "succeeded",
+          "review_blockers": [
+            {
+              "id": "repair-missing-gemini-review",
+              "title": "Repair workflow so Gemini review Markdown is visible to synthesis",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "thread.claude_review.current_node": "codex_review",
+          "internal.retry_count.apply_review_fixes": 0,
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.review_gate": 0,
+          "failure_signature": "",
+          "graph.rankdir": "LR",
+          "implementation_accepted": false,
+          "internal.retry_count.dev_check": 0,
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "internal.thread_id": "snapshot_before_review_repair",
+          "thread.codex_review.current_node": "gemini_review",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "last_stage": "apply_review_fixes",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "graph.max_node_visits": "160",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "response.apply_review_fixes": "Implemented the only concrete gate issue selected by synthesis.\n\n## 1. Gate issue addressed\n\n### `repair-missing-gemini-review`\n**Title:** Repair workflow so Gemini review Markdown is visible to synthesis.\n\n**Fix:** Updated the iteration-review workflow so synthesis only runs after all three independent review stages succeed. If Claude, Codex/GPT, or Gemini fails, the workflow now routes to the existing infrastructure-style unavailable path instead of letting synthesis run with missing reviewer Markdown.\n\nI did **not** apply the Claude/Codex product-code polish suggestions because the synthesis gate did not select them as repair items.\n\n## 2. Code/config/test changes made\n\n### Workflow hardening\nUpdated:\n\n- `.fabro/workflows/iteration-review/workflow.fabro`\n\nChanges:\n\n- Added `retry_policy=\"patient\"` to:\n  - `claude_review`\n  - `codex_review`\n  - `gemini_review`\n- Changed reviewer-stage edges so:\n  - `claude_review -> codex_review` only happens on `outcome=succeeded`\n  - `codex_review -> gemini_review` only happens on `outcome=succeeded`\n  - `gemini_review -> synthesize_review` only happens on `outcome=succeeded`\n- Added fallback routes from each reviewer stage to `synthesis_unavailable`.\n- Updated the unavailable message to cover both “could not collect” and “could not synthesize” all independent review reports.\n\n### Regression coverage\nAdded:\n\n- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n\nThis static workflow regression test verifies:\n\n- Reviewer stages have patient retry policy.\n- Synthesis is reachable only after successful reviewer stages.\n- Failed reviewer stages route to `synthesis_unavailable`.\n- The old unconditional reviewer-to-synthesis routing is absent.\n\n## 3. Issue-to-fix mapping\n\n| Review issue | Files/modules/tests addressing it |\n|---|---|\n| `repair-missing-gemini-review` | `.fabro/workflows/iteration-review/workflow.fabro` |\n| `repair-missing-gemini-review` regression proof | `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` |\n\n## 4. Tests and validation run\n\nPassed:\n\n- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n  - Result: passed\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Result: passed\n  - ExUnit: `754 tests, 0 failures`\n  - Acceptance: `73 scenarios, 489 steps`, all passed\n\nAttempted but unavailable:\n\n- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check`\n  - Could not run because `fabro` is not installed in this sandbox/devenv.\n\n## 5. Remaining gaps / human questions\n\n- No product-code gaps remain from the synthesized gate issue.\n- No acceptance feature files were changed.\n- The new test script is runnable via `bash .../test_review_report_routing.sh`. I attempted to make it executable, but this sandbox reported `Operation not permitted` on `chmod` because repository files are owned by `root` while the session user is `user`.",
+          "thread.synthesize_review.current_node": "review_gate",
+          "internal.node_visit_count": 1,
+          "current_node": "apply_review_fixes",
+          "internal.retry_count.read_plan": 0,
+          "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"repair-missing-gemini-review\",\n        \"title\": \"Repair workflow so Gemini review Markdown is visible to synthesis\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+          "thread.gemini_review.current_node": "synthesize_review",
+          "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.synthesize_review": 0,
+          "review_fixes_available": true,
+          "last_response": "Implemented the only concrete gate issue selected by synthesis.\n\n## 1. Gate issue addressed\n\n### `repair-missing-gemini-review`\n**Title:** Repair workflow so Gemini review Markdown is visible to synth",
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.codex_review": 0,
+          "internal.retry_count.gemini_review": 0,
+          "response.codex_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration plan does not cite a specific ADR, and the collected evidence does not show ADR files changed. The implementation appears to preserve existing architecture and infrastructure choices:\n\n- Reuses the existing magic-link sign-in/token flow rather than introducing a parallel verification mechanism.\n- Keeps request creation in the existing Onboarding context.\n- Preserves Staff inbox and notification behaviour for actual verified onboarding requests.\n- Does not introduce new membership-domain side effects during public request submission.\n\nNo ADR-level architecture drift is evident from the implementation evidence.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\n## Bounded-safe fixes\n\n1. **Simplify request attribute construction in `GetStartedController`**\n\n   File: `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   The request creation path appears to build attrs with `requester_name` from submitted params, then overwrites it when an existing Person is found. This is behaviourally correct, but slightly obscures the invariant that existing Person names win.\n\n   Prefer assigning the value once:\n\n   ```elixir\n   requester_name =\n     if person do\n       person.name\n     else\n       request_params[\"requester_name\"]\n     end\n\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: requester_name,\n     club_name: String.trim(request_params[\"club_name\"] || \"\"),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   ```\n\n2. **Guard string trimming against missing params**\n\n   File: `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   The evidence shows manual trimming for fields such as `club_name` and `note`. Ensure all `String.trim/1` calls receive a binary, especially for malformed or hand-crafted POSTs.\n\n   Safe pattern:\n\n   ```elixir\n   String.trim(request_params[\"club_name\"] || \"\")\n   ```\n\n   This is low-risk and avoids turning bad form input into a controller exception before the changeset can report validation errors.\n\n3. **Consider moving trimming into the Onboarding changeset**\n\n   Files likely involved:\n   - `web/lib/memba/onboarding.ex`\n   - Onboarding request schema/changeset module, if separate\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Trimming `club_name`, `note`, and possibly `requester_name` in the changeset would centralize data normalization and keep the controller focused on flow control. This is safe if existing tests continue to assert the same persisted values and validation behaviour.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Context API still appears caller-discipline based for verified emails**\n\n   Files:\n   - `web/lib/memba/onboarding.ex`\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Smell: The controller constructs attrs including `requester_email: identity.email` and passes them to `Onboarding.create_onboarding_request/1`. That satisfies the public web flow, but the context API still appears to accept a requester email as ordinary attrs.\n\n   Why it may need human judgement: This is not a merge blocker because tests and routing appear to prove the public path no longer trusts a typed email. However, for longer-term safety, the domain API could make verification harder to bypass, for example:\n\n   ```elixir\n   create_onboarding_request(verified_identity_email, attrs)\n   ```\n\n   or\n\n   ```elixir\n   create_verified_onboarding_request(identity, attrs)\n   ```\n\n   That would encode the security boundary in the function shape rather than relying on every caller to remember not to pass a typed email.\n\n2. **Email normalization may be duplicated outside the auth boundary**\n\n   File:\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Smell: The signed-out Get Started verification path normalizes email with trim/downcase before creating a sign-in token.\n\n   Why it may need human judgement: This is fine locally and likely matches existing behaviour. If similar normalization exists in Auth, Identity, Person lookup, and onboarding code, a shared email normalization helper would reduce drift. If this is the only extra occurrence, extraction would be unnecessary abstraction.\n\n3. **One controller action now multiplexes two distinct user intents**\n\n   Files:\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n   - `web/lib/memba_web/controllers/get_started_html/show.html.heex`\n\n   Smell: `/get-started` now serves both:\n   - signed-out email verification request, and\n   - signed-in verified onboarding request submission.\n\n   Why it may need human judgement: This matches the plan and keeps the UX simple. The trade-off is that the controller/template carry two workflows keyed by session state and param shape. If future iterations add resend links, pre-verification state, CAPTCHA, rate limits, or richer onboarding fields, splitting into explicit verification/request helpers or separate components may become worthwhile.\n\n## Suggested fixes\n\nRecommended non-blocking cleanup before or after merge:\n\n1. Refactor request attr construction so the existing-Person name override is expressed directly.\n2. Ensure all controller-level `String.trim/1` calls are nil-safe.\n3. If desired, move field trimming into the Onboarding request changeset and remove duplicate controller normalization.\n4. Consider, in a future hardening pass, changing the Onboarding context API so verified identity email is passed as a separate trusted argument rather than as ordinary attrs.\n\n## Validation notes\n\nRelevant validation already completed:\n\n- `dev ci` passed successfully.\n- Full acceptance suite passed: **73 scenarios, 489 steps**.\n- Evidence shows coverage for:\n  - signed-out `/get-started` email-only verification;\n  - sign-in token creation with `return_to=/get-started`;\n  - verified signed-in request form;\n  - signed-in identity with no Person;\n  - signed-in identity with existing Person;\n  - Staff inbox visibility for verified submitted requests;\n  - no Staff notification and no Staff-visible request for email-only verification;\n  - no Membership Person/club/membership/access creation during verified request submission.\n- No manual checks required for merge based on the supplied evidence.",
+          "response.claude_review": "# Implementation Review Report: Iteration 030 - Verified Onboarding Requests\n\n## Decision: **ACCEPT**\n\n## Confidence: **High**\n\n## ADR Conformance: **PASS**\n\nNo ADRs were explicitly cited in the iteration plan. No ADR files appear in the changed file list. The implementation builds on existing infrastructure patterns visible in the codebase:\n- Reuses `Auth.create_sign_in_token/2` for magic-link email verification\n- Follows established Phoenix controller/template conventions\n- Uses existing `Onboarding` context functions\n- Maintains Staff notification patterns for verified requests only\n\nThe implementation introduces no new architectural decisions and follows Phoenix/Elixir/Ecto standard practices throughout.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone identified.\n\n## Bounded-Safe Fixes\n\n1. **Clearer conditional name assignment in request creation** (web/lib/memba_web/controllers/get_started_controller.ex:35-45)\n   \n   Current pattern builds `attrs` map with form `requester_name`, then conditionally overwrites it:\n   ```elixir\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: request_params[\"requester_name\"],\n     club_name: String.trim(request_params[\"club_name\"]),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   \n   attrs =\n     if person do\n       Map.put(attrs, :requester_name, person.name)\n     else\n       attrs\n     end\n   ```\n   \n   Clearer intent with conditional in initial assignment:\n   ```elixir\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: if(person, do: person.name, else: request_params[\"requester_name\"]),\n     club_name: String.trim(request_params[\"club_name\"]),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   ```\n   \n   **Rationale**: Eliminates wasteful map construction and makes the \"use person name when available\" logic clearer at first read. Tests already verify this behaviour correctly.\n\n2. **Move string trimming to changeset validation** (web/lib/memba_web/controllers/get_started_controller.ex:37-38)\n   \n   Manual `String.trim()` calls in controller for `club_name` and `note` could move to `Onboarding.change_onboarding_request/1` changeset validation for consistency with Ecto conventions.\n   \n   **Rationale**: Controllers should delegate data transformation to contexts/changesets. This keeps controller focused on request flow and makes trimming behaviour testable at the domain layer.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Email normalization duplication** (web/lib/memba_web/controllers/get_started_controller.ex:21)\n   \n   The pattern `String.trim(email) |> String.downcase()` appears in the controller. If this email normalization pattern is used elsewhere in the codebase (e.g., in `Auth` or `Identity` contexts), consider extracting to a shared helper like `Email.normalize/1`.\n   \n   **Why it may need judgement**: Current approach is clear and localized. Extraction only adds value if the pattern repeats across multiple contexts. Requires codebase-wide search to determine if centralization improves or complicates maintenance.\n\n2. **Two-form conditional rendering coupling** (web/lib/memba_web/controllers/get_started_html/show.html.heex)\n   \n   Single template with `if @current_identity` controlling two distinct forms creates coupling between signed-out verification flow and signed-in request flow.\n   \n   **Why it may need judgement**: Current approach is readable and keeps related flows together. Alternative of separate templates/views would increase file count but improve separation. Trade-off between cohesion (current) vs separation (alternative) depends on future evolution - if these flows diverge significantly, splitting becomes clearer; if they remain parallel, current approach is simpler.\n\n3. **Controller pattern-match clause ordering** (web/lib/memba_web/controllers/get_started_controller.ex:11-23)\n   \n   Using pattern-matching on `%{assigns: %{current_identity: %Identity{}}}` vs `current_identity: nil` in separate function clauses is idiomatic Elixir but creates implicit ordering dependency. Function clauses must remain in current order (specific patterns before general) or behaviour changes.\n   \n   **Why it may need judgement**: This is standard Elixir convention and tests verify both paths. However, as the controller grows, clause ordering becomes a maintenance consideration. Alternative guard clauses or explicit condition checks trade Elixir idioms for explicitness. Current approach is more functional/Elixir-native; alternatives would be more defensive but less idiomatic.\n\n## Suggested Fixes\n\nIf bounded-safe fixes are applied:\n\n**Fix 1**: Simplify attrs construction in `create/2` request path:\n```elixir\ndef create(%{assigns: %{current_identity: identity}} = conn, %{\"request\" => request_params}) do\n  person = Membership.get_person_by_email(identity.email)\n\n  attrs = %{\n    requester_email: identity.email,\n    requester_name: if(person, do: person.name, else: request_params[\"requester_name\"]),\n    club_name: String.trim(request_params[\"club_name\"]),\n    note: String.trim(request_params[\"note\"] || \"\")\n  }\n\n  case Onboarding.create_onboarding_request(attrs) do\n    # ... rest unchanged\n  end\nend\n```\n\n**Fix 2**: Move trimming to `Onboarding` context changesets. Update `Onboarding.change_onboarding_request/1` and related functions to trim `club_name` and `note` fields in changeset validation. Remove manual trimming from controller.\n\n## Validation Notes\n\n**Tests/Checks Validating This Decision:**\n\n1. ✅ **Dev check passed completely** - No compilation warnings, Dialyzer clean, Credo clean, all tests green\n2. ✅ **Comprehensive controller test coverage** (web/test/memba_web/controllers/get_started_controller_test.exs):\n   - Signed-out email verification flow\n   - Magic-link token creation with return_to parameter\n   - Email normalization (trim + downcase)\n   - Signed-in request form for new identity\n   - Signed-in request form for existing person\n   - Person name override behaviour\n   - Request creation with verified email only\n   - No request/notification for email-only verification\n3. ✅ **Staff request visibility verification** (web/test/memba_web/live/admin_requests_live_test.exs):\n   - Staff can see verified submitted requests\n   - Staff request inbox stays empty after email-only verification\n   - No staff notification email sent for verification-only flow\n4. ✅ **73 passing acceptance scenarios** including iteration-030 scenarios\n5. ✅ **Plan conformance validated** in prior workflow stage\n\n**Manual/Runtime Checks Recommended:**\n\nNone required - automated test coverage and dev check success provide sufficient confidence.\n\n**Acceptance Behaviour Verified:**\n\n- Email verification creates sign-in token, sends magic link, sets return_to=/get-started\n- Following magic link signs in identity and redirects to Get Started request form\n- Request form pre-fills verified email (readonly)\n- Request form uses existing person name when available (readonly)\n- Request form collects new name when no person exists\n- Request submission requires signed-in identity\n- Staff only see and receive notifications for verified submitted requests\n- No Person/club/membership created until Staff conversion",
+          "internal.work_dir": "/workspace/memba",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.start": 0,
+          "thread.start.current_node": "read_plan",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        "
+        },
+        "node_outcomes": {
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/09cbc42e584a9c62c96bf417e135faf3459888850d857dabb7f4c5fff9842912"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 275,
+              "active_time_ms": 275
+            }
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 175,
+              "active_time_ms": 175
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.apply_review_fixes": "Implemented the only concrete gate issue selected by synthesis.\n\n## 1. Gate issue addressed\n\n### `repair-missing-gemini-review`\n**Title:** Repair workflow so Gemini review Markdown is visible to synthesis.\n\n**Fix:** Updated the iteration-review workflow so synthesis only runs after all three independent review stages succeed. If Claude, Codex/GPT, or Gemini fails, the workflow now routes to the existing infrastructure-style unavailable path instead of letting synthesis run with missing reviewer Markdown.\n\nI did **not** apply the Claude/Codex product-code polish suggestions because the synthesis gate did not select them as repair items.\n\n## 2. Code/config/test changes made\n\n### Workflow hardening\nUpdated:\n\n- `.fabro/workflows/iteration-review/workflow.fabro`\n\nChanges:\n\n- Added `retry_policy=\"patient\"` to:\n  - `claude_review`\n  - `codex_review`\n  - `gemini_review`\n- Changed reviewer-stage edges so:\n  - `claude_review -> codex_review` only happens on `outcome=succeeded`\n  - `codex_review -> gemini_review` only happens on `outcome=succeeded`\n  - `gemini_review -> synthesize_review` only happens on `outcome=succeeded`\n- Added fallback routes from each reviewer stage to `synthesis_unavailable`.\n- Updated the unavailable message to cover both “could not collect” and “could not synthesize” all independent review reports.\n\n### Regression coverage\nAdded:\n\n- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n\nThis static workflow regression test verifies:\n\n- Reviewer stages have patient retry policy.\n- Synthesis is reachable only after successful reviewer stages.\n- Failed reviewer stages route to `synthesis_unavailable`.\n- The old unconditional reviewer-to-synthesis routing is absent.\n\n## 3. Issue-to-fix mapping\n\n| Review issue | Files/modules/tests addressing it |\n|---|---|\n| `repair-missing-gemini-review` | `.fabro/workflows/iteration-review/workflow.fabro` |\n| `repair-missing-gemini-review` regression proof | `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` |\n\n## 4. Tests and validation run\n\nPassed:\n\n- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n  - Result: passed\n- `PATH=\"$PWD/bin:$PATH\" dev check`\n  - Result: passed\n  - ExUnit: `754 tests, 0 failures`\n  - Acceptance: `73 scenarios, 489 steps`, all passed\n\nAttempted but unavailable:\n\n- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check`\n  - Could not run because `fabro` is not installed in this sandbox/devenv.\n\n## 5. Remaining gaps / human questions\n\n- No product-code gaps remain from the synthesized gate issue.\n- No acceptance feature files were changed.\n- The new test script is runnable via `bash .../test_review_report_routing.sh`. I attempted to make it executable, but this sandbox reported `Operation not permitted` on `chmod` because repository files are owned by `root` while the session user is `user`.",
+              "last_response": "Implemented the only concrete gate issue selected by synthesis.\n\n## 1. Gate issue addressed\n\n### `repair-missing-gemini-review`\n**Title:** Repair workflow so Gemini review Markdown is visible to synth",
+              "last_stage": "apply_review_fixes"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 652037,
+                    "output_tokens": 5131,
+                    "reasoning_tokens": 5982,
+                    "cache_read_tokens": 835584,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 4011367
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 394333,
+              "tool_time_ms": 341943,
+              "active_time_ms": 736276
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "review_blockers": [
+                {
+                  "id": "repair-missing-gemini-review",
+                  "title": "Repair workflow so Gemini review Markdown is visible to synthesis",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_stage": "synthesize_review",
+              "implementation_accepted": false,
+              "response.synthesize_review": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"repair-missing-gemini-review\",\n        \"title\": \"Repair workflow so Gemini review Markdown is visible to synthesis\",\n        \"source\": \"review_synthesis\",\n        \"first_seen_stage\": \"synthesize_review\",\n        \"status\": \"open\"\n      }\n    ]\n  }\n}",
+              "review_fixes_available": true,
+              "last_response": "{\n  \"context_updates\": {\n    \"implementation_accepted\": false,\n    \"review_fixes_available\": true,\n    \"review_blockers\": [\n      {\n        \"id\": \"repair-missing-gemini-review\",\n        \"title\": \"Repa"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9100,
+                    "output_tokens": 105,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 64130
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 19078,
+              "tool_time_ms": 0,
+              "active_time_ms": 19078
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.claude_review": "# Implementation Review Report: Iteration 030 - Verified Onboarding Requests\n\n## Decision: **ACCEPT**\n\n## Confidence: **High**\n\n## ADR Conformance: **PASS**\n\nNo ADRs were explicitly cited in the iteration plan. No ADR files appear in the changed file list. The implementation builds on existing infrastructure patterns visible in the codebase:\n- Reuses `Auth.create_sign_in_token/2` for magic-link email verification\n- Follows established Phoenix controller/template conventions\n- Uses existing `Onboarding` context functions\n- Maintains Staff notification patterns for verified requests only\n\nThe implementation introduces no new architectural decisions and follows Phoenix/Elixir/Ecto standard practices throughout.\n\n## ADR Violations\n\nNone identified.\n\n## Blocking Issues\n\nNone identified.\n\n## Bounded-Safe Fixes\n\n1. **Clearer conditional name assignment in request creation** (web/lib/memba_web/controllers/get_started_controller.ex:35-45)\n   \n   Current pattern builds `attrs` map with form `requester_name`, then conditionally overwrites it:\n   ```elixir\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: request_params[\"requester_name\"],\n     club_name: String.trim(request_params[\"club_name\"]),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   \n   attrs =\n     if person do\n       Map.put(attrs, :requester_name, person.name)\n     else\n       attrs\n     end\n   ```\n   \n   Clearer intent with conditional in initial assignment:\n   ```elixir\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: if(person, do: person.name, else: request_params[\"requester_name\"]),\n     club_name: String.trim(request_params[\"club_name\"]),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   ```\n   \n   **Rationale**: Eliminates wasteful map construction and makes the \"use person name when available\" logic clearer at first read. Tests already verify this behaviour correctly.\n\n2. **Move string trimming to changeset validation** (web/lib/memba_web/controllers/get_started_controller.ex:37-38)\n   \n   Manual `String.trim()` calls in controller for `club_name` and `note` could move to `Onboarding.change_onboarding_request/1` changeset validation for consistency with Ecto conventions.\n   \n   **Rationale**: Controllers should delegate data transformation to contexts/changesets. This keeps controller focused on request flow and makes trimming behaviour testable at the domain layer.\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Email normalization duplication** (web/lib/memba_web/controllers/get_started_controller.ex:21)\n   \n   The pattern `String.trim(email) |> String.downcase()` appears in the controller. If this email normalization pattern is used elsewhere in the codebase (e.g., in `Auth` or `Identity` contexts), consider extracting to a shared helper like `Email.normalize/1`.\n   \n   **Why it may need judgement**: Current approach is clear and localized. Extraction only adds value if the pattern repeats across multiple contexts. Requires codebase-wide search to determine if centralization improves or complicates maintenance.\n\n2. **Two-form conditional rendering coupling** (web/lib/memba_web/controllers/get_started_html/show.html.heex)\n   \n   Single template with `if @current_identity` controlling two distinct forms creates coupling between signed-out verification flow and signed-in request flow.\n   \n   **Why it may need judgement**: Current approach is readable and keeps related flows together. Alternative of separate templates/views would increase file count but improve separation. Trade-off between cohesion (current) vs separation (alternative) depends on future evolution - if these flows diverge significantly, splitting becomes clearer; if they remain parallel, current approach is simpler.\n\n3. **Controller pattern-match clause ordering** (web/lib/memba_web/controllers/get_started_controller.ex:11-23)\n   \n   Using pattern-matching on `%{assigns: %{current_identity: %Identity{}}}` vs `current_identity: nil` in separate function clauses is idiomatic Elixir but creates implicit ordering dependency. Function clauses must remain in current order (specific patterns before general) or behaviour changes.\n   \n   **Why it may need judgement**: This is standard Elixir convention and tests verify both paths. However, as the controller grows, clause ordering becomes a maintenance consideration. Alternative guard clauses or explicit condition checks trade Elixir idioms for explicitness. Current approach is more functional/Elixir-native; alternatives would be more defensive but less idiomatic.\n\n## Suggested Fixes\n\nIf bounded-safe fixes are applied:\n\n**Fix 1**: Simplify attrs construction in `create/2` request path:\n```elixir\ndef create(%{assigns: %{current_identity: identity}} = conn, %{\"request\" => request_params}) do\n  person = Membership.get_person_by_email(identity.email)\n\n  attrs = %{\n    requester_email: identity.email,\n    requester_name: if(person, do: person.name, else: request_params[\"requester_name\"]),\n    club_name: String.trim(request_params[\"club_name\"]),\n    note: String.trim(request_params[\"note\"] || \"\")\n  }\n\n  case Onboarding.create_onboarding_request(attrs) do\n    # ... rest unchanged\n  end\nend\n```\n\n**Fix 2**: Move trimming to `Onboarding` context changesets. Update `Onboarding.change_onboarding_request/1` and related functions to trim `club_name` and `note` fields in changeset validation. Remove manual trimming from controller.\n\n## Validation Notes\n\n**Tests/Checks Validating This Decision:**\n\n1. ✅ **Dev check passed completely** - No compilation warnings, Dialyzer clean, Credo clean, all tests green\n2. ✅ **Comprehensive controller test coverage** (web/test/memba_web/controllers/get_started_controller_test.exs):\n   - Signed-out email verification flow\n   - Magic-link token creation with return_to parameter\n   - Email normalization (trim + downcase)\n   - Signed-in request form for new identity\n   - Signed-in request form for existing person\n   - Person name override behaviour\n   - Request creation with verified email only\n   - No request/notification for email-only verification\n3. ✅ **Staff request visibility verification** (web/test/memba_web/live/admin_requests_live_test.exs):\n   - Staff can see verified submitted requests\n   - Staff request inbox stays empty after email-only verification\n   - No staff notification email sent for verification-only flow\n4. ✅ **73 passing acceptance scenarios** including iteration-030 scenarios\n5. ✅ **Plan conformance validated** in prior workflow stage\n\n**Manual/Runtime Checks Recommended:**\n\nNone required - automated test coverage and dev check success provide sufficient confidence.\n\n**Acceptance Behaviour Verified:**\n\n- Email verification creates sign-in token, sends magic link, sets return_to=/get-started\n- Following magic link signs in identity and redirects to Get Started request form\n- Request form pre-fills verified email (readonly)\n- Request form uses existing person name when available (readonly)\n- Request form collects new name when no person exists\n- Request submission requires signed-in identity\n- Staff only see and receive notifications for verified submitted requests\n- No Person/club/membership created until Staff conversion",
+              "last_response": "# Implementation Review Report: Iteration 030 - Verified Onboarding Requests\n\n## Decision: **ACCEPT**\n\n## Confidence: **High**\n\n## ADR Conformance: **PASS**\n\nNo ADRs were explicitly cited in the itera",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6100,
+                    "output_tokens": 8474,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 145410
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 168645,
+              "tool_time_ms": 0,
+              "active_time_ms": 168645
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d120e08808d12372df0243e2eee14be2ef7f1d8a2ab55163da7c255514e449a3"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 352244,
+              "active_time_ms": 352244
+            }
+          },
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.codex_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration plan does not cite a specific ADR, and the collected evidence does not show ADR files changed. The implementation appears to preserve existing architecture and infrastructure choices:\n\n- Reuses the existing magic-link sign-in/token flow rather than introducing a parallel verification mechanism.\n- Keeps request creation in the existing Onboarding context.\n- Preserves Staff inbox and notification behaviour for actual verified onboarding requests.\n- Does not introduce new membership-domain side effects during public request submission.\n\nNo ADR-level architecture drift is evident from the implementation evidence.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\n## Bounded-safe fixes\n\n1. **Simplify request attribute construction in `GetStartedController`**\n\n   File: `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   The request creation path appears to build attrs with `requester_name` from submitted params, then overwrites it when an existing Person is found. This is behaviourally correct, but slightly obscures the invariant that existing Person names win.\n\n   Prefer assigning the value once:\n\n   ```elixir\n   requester_name =\n     if person do\n       person.name\n     else\n       request_params[\"requester_name\"]\n     end\n\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: requester_name,\n     club_name: String.trim(request_params[\"club_name\"] || \"\"),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   ```\n\n2. **Guard string trimming against missing params**\n\n   File: `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   The evidence shows manual trimming for fields such as `club_name` and `note`. Ensure all `String.trim/1` calls receive a binary, especially for malformed or hand-crafted POSTs.\n\n   Safe pattern:\n\n   ```elixir\n   String.trim(request_params[\"club_name\"] || \"\")\n   ```\n\n   This is low-risk and avoids turning bad form input into a controller exception before the changeset can report validation errors.\n\n3. **Consider moving trimming into the Onboarding changeset**\n\n   Files likely involved:\n   - `web/lib/memba/onboarding.ex`\n   - Onboarding request schema/changeset module, if separate\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Trimming `club_name`, `note`, and possibly `requester_name` in the changeset would centralize data normalization and keep the controller focused on flow control. This is safe if existing tests continue to assert the same persisted values and validation behaviour.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Context API still appears caller-discipline based for verified emails**\n\n   Files:\n   - `web/lib/memba/onboarding.ex`\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Smell: The controller constructs attrs including `requester_email: identity.email` and passes them to `Onboarding.create_onboarding_request/1`. That satisfies the public web flow, but the context API still appears to accept a requester email as ordinary attrs.\n\n   Why it may need human judgement: This is not a merge blocker because tests and routing appear to prove the public path no longer trusts a typed email. However, for longer-term safety, the domain API could make verification harder to bypass, for example:\n\n   ```elixir\n   create_onboarding_request(verified_identity_email, attrs)\n   ```\n\n   or\n\n   ```elixir\n   create_verified_onboarding_request(identity, attrs)\n   ```\n\n   That would encode the security boundary in the function shape rather than relying on every caller to remember not to pass a typed email.\n\n2. **Email normalization may be duplicated outside the auth boundary**\n\n   File:\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Smell: The signed-out Get Started verification path normalizes email with trim/downcase before creating a sign-in token.\n\n   Why it may need human judgement: This is fine locally and likely matches existing behaviour. If similar normalization exists in Auth, Identity, Person lookup, and onboarding code, a shared email normalization helper would reduce drift. If this is the only extra occurrence, extraction would be unnecessary abstraction.\n\n3. **One controller action now multiplexes two distinct user intents**\n\n   Files:\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n   - `web/lib/memba_web/controllers/get_started_html/show.html.heex`\n\n   Smell: `/get-started` now serves both:\n   - signed-out email verification request, and\n   - signed-in verified onboarding request submission.\n\n   Why it may need human judgement: This matches the plan and keeps the UX simple. The trade-off is that the controller/template carry two workflows keyed by session state and param shape. If future iterations add resend links, pre-verification state, CAPTCHA, rate limits, or richer onboarding fields, splitting into explicit verification/request helpers or separate components may become worthwhile.\n\n## Suggested fixes\n\nRecommended non-blocking cleanup before or after merge:\n\n1. Refactor request attr construction so the existing-Person name override is expressed directly.\n2. Ensure all controller-level `String.trim/1` calls are nil-safe.\n3. If desired, move field trimming into the Onboarding request changeset and remove duplicate controller normalization.\n4. Consider, in a future hardening pass, changing the Onboarding context API so verified identity email is passed as a separate trusted argument rather than as ordinary attrs.\n\n## Validation notes\n\nRelevant validation already completed:\n\n- `dev ci` passed successfully.\n- Full acceptance suite passed: **73 scenarios, 489 steps**.\n- Evidence shows coverage for:\n  - signed-out `/get-started` email-only verification;\n  - sign-in token creation with `return_to=/get-started`;\n  - verified signed-in request form;\n  - signed-in identity with no Person;\n  - signed-in identity with existing Person;\n  - Staff inbox visibility for verified submitted requests;\n  - no Staff notification and no Staff-visible request for email-only verification;\n  - no Membership Person/club/membership/access creation during verified request submission.\n- No manual checks required for merge based on the supplied evidence.",
+              "last_stage": "codex_review",
+              "last_response": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration plan does not cite a specific ADR, and the collected evidence does not show ADR files "
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 7115,
+                    "output_tokens": 1277,
+                    "reasoning_tokens": 2070,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 135985
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 102341,
+              "tool_time_ms": 0,
+              "active_time_ms": 102341
+            }
+          },
+          "gemini_review": {
+            "status": "failed",
+            "failure": {
+              "message": "LLM error: Server error from gemini: This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+              "category": "transient_infra",
+              "signature": "api_transient|gemini|server_error"
+            },
+            "usage": null
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3a8b062c26cb18b18a29d5491a5da9812f078945a367b1f5acb141c642ca4d6b"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='4bbaa97b6cdd8bd810bcf1ffefff58f6f42c4bc1'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 280,
+              "active_time_ms": 280
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/b47c6774790afadab790dd1d070fa5120d6bbc3ff6eddf8dfce61117448809d3"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 141746,
+              "active_time_ms": 141746
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          }
+        },
+        "next_node_id": "verify_review_repair",
+        "git_commit_sha": "9982c3a65f622226b1f40c2da27281dce0daad99",
+        "node_visits": {
+          "collect_implementation_evidence": 1,
+          "gemini_review": 1,
+          "dev_check": 1,
+          "preflight_sandbox": 1,
+          "review_gate": 1,
+          "start": 1,
+          "snapshot_before_review_repair": 1,
+          "apply_review_fixes": 1,
+          "synthesize_review": 1,
+          "read_plan": 1,
+          "claude_review": 1,
+          "codex_review": 1
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh b/.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh\nnew file mode 100644\nindex 0000000..b816221\n--- /dev/null\n+++ b/.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh\n@@ -0,0 +1,45 @@\n+#!/usr/bin/env bash\n+set -euo pipefail\n+\n+workflow_path=$(cd \"$(dirname \"${BASH_SOURCE[0]}\")/..\" && pwd)/workflow.fabro\n+\n+assert_contains() {\n+  local expected=$1\n+\n+  if ! grep -Fq \"$expected\" \"$workflow_path\"; then\n+    echo \"Expected iteration-review workflow to contain: $expected\" >&2\n+    exit 1\n+  fi\n+}\n+\n+assert_not_contains() {\n+  local unexpected=$1\n+\n+  if grep -Fq \"$unexpected\" \"$workflow_path\"; then\n+    echo \"Expected iteration-review workflow not to contain: $unexpected\" >&2\n+    exit 1\n+  fi\n+}\n+\n+review_retry_count=$(grep -Fc 'retry_policy=\"patient\"' \"$workflow_path\")\n+if [ \"$review_retry_count\" -lt 4 ]; then\n+  echo \"Expected patient retry policy on the three review stages and synthesis; found $review_retry_count\" >&2\n+  exit 1\n+fi\n+\n+# Review synthesis requires all independent reviewer Markdown reports. A failed\n+# reviewer must not continue to synthesis with missing prior-stage context.\n+assert_contains 'claude_review -> codex_review [condition=\"outcome=succeeded\"]'\n+assert_contains 'claude_review -> synthesis_unavailable'\n+assert_contains 'codex_review -> gemini_review [condition=\"outcome=succeeded\"]'\n+assert_contains 'codex_review -> synthesis_unavailable'\n+assert_contains 'gemini_review -> synthesize_review [condition=\"outcome=succeeded\"]'\n+assert_contains 'gemini_review -> synthesis_unavailable'\n+assert_contains 'synthesize_review -> review_gate [condition=\"outcome=succeeded\"]'\n+assert_contains 'synthesize_review -> synthesis_unavailable [label=\"Synthesis unavailable\"]'\n+\n+assert_not_contains 'claude_review -> codex_review;'\n+assert_not_contains 'codex_review -> gemini_review;'\n+assert_not_contains 'gemini_review -> synthesize_review;'\n+\n+echo \"iteration-review report routing tests passed\"\ndiff --git a/.fabro/workflows/iteration-review/workflow.fabro b/.fabro/workflows/iteration-review/workflow.fabro\nindex ce0b1d4..cddea38 100644\n--- a/.fabro/workflows/iteration-review/workflow.fabro\n+++ b/.fabro/workflows/iteration-review/workflow.fabro\n@@ -79,17 +79,20 @@ digraph IterationReview {\n     claude_review [\n         label=\"Claude Review\",\n         shape=tab,\n-        prompt=\"@prompts/review.md\"\n+        prompt=\"@prompts/review.md\",\n+        retry_policy=\"patient\"\n     ]\n     codex_review [\n         label=\"Codex/GPT Review\",\n         shape=tab,\n-        prompt=\"@prompts/review.md\"\n+        prompt=\"@prompts/review.md\",\n+        retry_policy=\"patient\"\n     ]\n     gemini_review [\n         label=\"Gemini Review\",\n         shape=tab,\n-        prompt=\"@prompts/review.md\"\n+        prompt=\"@prompts/review.md\",\n+        retry_policy=\"patient\"\n     ]\n     synthesize_review [\n         label=\"Synthesize Review\",\n@@ -103,7 +106,7 @@ digraph IterationReview {\n         label=\"Fail: Review Synthesis Unavailable\",\n         shape=parallelogram,\n         goal_gate=true,\n-        script=\"echo 'Iteration review could not synthesize completed independent reviews after retrying a transient LLM/provider failure. Product review evidence exists in the completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\\nexit 1\"\n+        script=\"echo 'Iteration review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\\nexit 1\"\n     ]\n     review_gate [shape=diamond, label=\"Implementation accepted?\"]\n     snapshot_before_review_repair [\n@@ -198,9 +201,12 @@ digraph IterationReview {\n     collect_implementation_evidence -> collect_evidence_failed\n     collect_evidence_failed -> exit\n \n-    claude_review -> codex_review\n-    codex_review -> gemini_review\n-    gemini_review -> synthesize_review\n+    claude_review -> codex_review [condition=\"outcome=succeeded\"]\n+    claude_review -> synthesis_unavailable\n+    codex_review -> gemini_review [condition=\"outcome=succeeded\"]\n+    codex_review -> synthesis_unavailable\n+    gemini_review -> synthesize_review [condition=\"outcome=succeeded\"]\n+    gemini_review -> synthesis_unavailable\n     synthesize_review -> review_gate [condition=\"outcome=succeeded\"]\n     synthesize_review -> synthesis_unavailable [label=\"Synthesis unavailable\"]\n     synthesis_unavailable -> exit\n",
+        "summary": {
+          "files_changed": 2,
+          "additions": 58,
+          "deletions": 7
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-09T07:08:57.209076193Z",
+        "current_node": "verify_review_repair",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair"
+        ],
+        "node_retries": {},
+        "context_values": {
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
           "failure_signature": "",
           "internal.retry_count.codex_review": 0,
@@ -3048,11 +3399,11 @@
           "thread.start.current_node": "read_plan",
           "internal.retry_count.dev_check": 0,
           "thread.synthesize_review.current_node": "review_gate",
-          "current_node": "apply_review_fixes",
+          "current_node": "verify_review_repair",
           "thread.claude_review.current_node": "codex_review",
           "response.codex_review": "# Implementation Review Report\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR conformance: PASS\n\nThe iteration plan does not cite a specific ADR, and the collected evidence does not show ADR files changed. The implementation appears to preserve existing architecture and infrastructure choices:\n\n- Reuses the existing magic-link sign-in/token flow rather than introducing a parallel verification mechanism.\n- Keeps request creation in the existing Onboarding context.\n- Preserves Staff inbox and notification behaviour for actual verified onboarding requests.\n- Does not introduce new membership-domain side effects during public request submission.\n\nNo ADR-level architecture drift is evident from the implementation evidence.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\n## Bounded-safe fixes\n\n1. **Simplify request attribute construction in `GetStartedController`**\n\n   File: `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   The request creation path appears to build attrs with `requester_name` from submitted params, then overwrites it when an existing Person is found. This is behaviourally correct, but slightly obscures the invariant that existing Person names win.\n\n   Prefer assigning the value once:\n\n   ```elixir\n   requester_name =\n     if person do\n       person.name\n     else\n       request_params[\"requester_name\"]\n     end\n\n   attrs = %{\n     requester_email: identity.email,\n     requester_name: requester_name,\n     club_name: String.trim(request_params[\"club_name\"] || \"\"),\n     note: String.trim(request_params[\"note\"] || \"\")\n   }\n   ```\n\n2. **Guard string trimming against missing params**\n\n   File: `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   The evidence shows manual trimming for fields such as `club_name` and `note`. Ensure all `String.trim/1` calls receive a binary, especially for malformed or hand-crafted POSTs.\n\n   Safe pattern:\n\n   ```elixir\n   String.trim(request_params[\"club_name\"] || \"\")\n   ```\n\n   This is low-risk and avoids turning bad form input into a controller exception before the changeset can report validation errors.\n\n3. **Consider moving trimming into the Onboarding changeset**\n\n   Files likely involved:\n   - `web/lib/memba/onboarding.ex`\n   - Onboarding request schema/changeset module, if separate\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Trimming `club_name`, `note`, and possibly `requester_name` in the changeset would centralize data normalization and keep the controller focused on flow control. This is safe if existing tests continue to assert the same persisted values and validation behaviour.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Context API still appears caller-discipline based for verified emails**\n\n   Files:\n   - `web/lib/memba/onboarding.ex`\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Smell: The controller constructs attrs including `requester_email: identity.email` and passes them to `Onboarding.create_onboarding_request/1`. That satisfies the public web flow, but the context API still appears to accept a requester email as ordinary attrs.\n\n   Why it may need human judgement: This is not a merge blocker because tests and routing appear to prove the public path no longer trusts a typed email. However, for longer-term safety, the domain API could make verification harder to bypass, for example:\n\n   ```elixir\n   create_onboarding_request(verified_identity_email, attrs)\n   ```\n\n   or\n\n   ```elixir\n   create_verified_onboarding_request(identity, attrs)\n   ```\n\n   That would encode the security boundary in the function shape rather than relying on every caller to remember not to pass a typed email.\n\n2. **Email normalization may be duplicated outside the auth boundary**\n\n   File:\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n\n   Smell: The signed-out Get Started verification path normalizes email with trim/downcase before creating a sign-in token.\n\n   Why it may need human judgement: This is fine locally and likely matches existing behaviour. If similar normalization exists in Auth, Identity, Person lookup, and onboarding code, a shared email normalization helper would reduce drift. If this is the only extra occurrence, extraction would be unnecessary abstraction.\n\n3. **One controller action now multiplexes two distinct user intents**\n\n   Files:\n   - `web/lib/memba_web/controllers/get_started_controller.ex`\n   - `web/lib/memba_web/controllers/get_started_html/show.html.heex`\n\n   Smell: `/get-started` now serves both:\n   - signed-out email verification request, and\n   - signed-in verified onboarding request submission.\n\n   Why it may need human judgement: This matches the plan and keeps the UX simple. The trade-off is that the controller/template carry two workflows keyed by session state and param shape. If future iterations add resend links, pre-verification state, CAPTCHA, rate limits, or richer onboarding fields, splitting into explicit verification/request helpers or separate components may become worthwhile.\n\n## Suggested fixes\n\nRecommended non-blocking cleanup before or after merge:\n\n1. Refactor request attr construction so the existing-Person name override is expressed directly.\n2. Ensure all controller-level `String.trim/1` calls are nil-safe.\n3. If desired, move field trimming into the Onboarding request changeset and remove duplicate controller normalization.\n4. Consider, in a future hardening pass, changing the Onboarding context API so verified identity email is passed as a separate trusted argument rather than as ordinary attrs.\n\n## Validation notes\n\nRelevant validation already completed:\n\n- `dev ci` passed successfully.\n- Full acceptance suite passed: **73 scenarios, 489 steps**.\n- Evidence shows coverage for:\n  - signed-out `/get-started` email-only verification;\n  - sign-in token creation with `return_to=/get-started`;\n  - verified signed-in request form;\n  - signed-in identity with no Person;\n  - signed-in identity with existing Person;\n  - Staff inbox visibility for verified submitted requests;\n  - no Staff notification and no Staff-visible request for email-only verification;\n  - no Membership Person/club/membership/access creation during verified request submission.\n- No manual checks required for merge based on the supplied evidence.",
           "internal.retry_count.start": 0,
-          "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109",
+          "command.output": "blob://sha256/e32c38aa0c8558b6ef77d21b8a45e8a5c447ae04d95955ec4ce4e0c28c10bb35",
           "internal.retry_count.apply_review_fixes": 0,
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "thread.codex_review.current_node": "gemini_review",
@@ -3060,6 +3411,7 @@
           "internal.retry_count.claude_review": 0,
           "thread.gemini_review.current_node": "synthesize_review",
           "internal.fidelity": "summary:high",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
           "review_fixes_available": true,
           "internal.work_dir": "/workspace/memba",
           "outcome": "succeeded",
@@ -3079,6 +3431,7 @@
           ],
           "internal.retry_count.review_gate": 0,
           "internal.retry_count.snapshot_before_review_repair": 0,
+          "internal.retry_count.verify_review_repair": 0,
           "thread.read_plan.current_node": "preflight_sandbox",
           "thread.preflight_sandbox.current_node": "dev_check",
           "last_response": "Implemented the only concrete gate issue selected by synthesis.\n\n## 1. Gate issue addressed\n\n### `repair-missing-gemini-review`\n**Title:** Repair workflow so Gemini review Markdown is visible to synth",
@@ -3093,7 +3446,7 @@
           "thread.review_gate.current_node": "snapshot_before_review_repair",
           "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
           "failure_class": "",
-          "internal.thread_id": "snapshot_before_review_repair"
+          "internal.thread_id": "apply_review_fixes"
         },
         "node_outcomes": {
           "start": {
@@ -3159,6 +3512,20 @@
               "inference_time_ms": 19078,
               "tool_time_ms": 0,
               "active_time_ms": 19078
+            }
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e32c38aa0c8558b6ef77d21b8a45e8a5c447ae04d95955ec4ce4e0c28c10bb35"
+            },
+            "notes": "Script completed: set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 180,
+              "active_time_ms": 180
             }
           },
           "claude_review": {
@@ -3342,10 +3709,11 @@
             }
           }
         },
-        "next_node_id": "verify_review_repair",
+        "next_node_id": "dev_check",
         "node_visits": {
           "preflight_sandbox": 1,
           "claude_review": 1,
+          "verify_review_repair": 1,
           "start": 1,
           "dev_check": 1,
           "review_gate": 1,
@@ -3604,7 +3972,12 @@
       "first_event_seq": 122,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: apply_review_fixes",
+        "failure_reason": null,
+        "timestamp": "2026-06-09T07:08:53.098035235Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -3618,13 +3991,20 @@
       "output": null,
       "started_at": "2026-06-09T06:56:36.234975554Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 736862,
+        "inference_time_ms": 394333,
+        "tool_time_ms": 341943,
+        "active_time_ms": 736276
+      },
       "usage": {
         "input_tokens": 652037,
         "output_tokens": 5131,
         "total_tokens": 1498734,
         "reasoning_tokens": 5982,
         "cache_read_tokens": 835584,
-        "cache_write_tokens": 0
+        "cache_write_tokens": 0,
+        "total_usd_micros": 4011367
       },
       "model": {
         "provider": "openai",
@@ -3828,7 +4208,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "start@1": {
       "first_event_seq": 21,
@@ -3999,6 +4379,33 @@
         "model_id": "gpt-5.5"
       },
       "state": "succeeded"
+    },
+    "verify_review_repair@1": {
+      "first_event_seq": 300,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": null,
+      "diff": null,
+      "script_invocation": {
+        "script": "set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+        "command": "exec 2>&1\nset -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+        "language": "shell"
+      },
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-09T07:08:57.009754656Z",
+      "handler": "command",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
     },
     "dev_check@1": {
       "first_event_seq": 45,
