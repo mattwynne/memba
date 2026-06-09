@@ -1,0 +1,72 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index e990f3e..d19b614 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -3,7 +3,7 @@
+ - [x] 001 Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
+ - [x] 002 Split the public Get Started experience into two states:
+ - [x] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
+-- [ ] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
++- [x] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
+ - [ ] 005 Update request form rendering:
+ - [ ] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+ - [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 9e68f13..76b0689 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -886,6 +886,54 @@ defmodule MembaWeb.PageControllerTest do
+     refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
+   end
+ 
++  test "following the Get Started magic link signs in and returns to the request form", %{
++    conn: conn
++  } do
++    configure_auth_email()
++
++    conn =
++      post(conn, ~p"/get-started",
++        verification: %{
++          email: " Robin@Example.COM "
++        }
++      )
++
++    assert redirected_to(conn) == ~p"/auth/check-email"
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert [_, token, query] =
++             Regex.run(~r{/auth/sign-in/([^?\s"<]+)\?([^\s"<]+)}, email.text_body)
++
++    callback_conn =
++      conn
++      |> recycle()
++      |> get("/auth/sign-in/#{token}?#{query}")
++
++    assert redirected_to(callback_conn) == ~p"/get-started"
++    assert get_session(callback_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
++
++    get_started_conn =
++      callback_conn
++      |> recycle()
++      |> get(~p"/get-started")
++
++    response = html_response(get_started_conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "You’ve verified your email."
++    assert response =~ "robin@example.com"
++
++    refute html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query(
++             "form#get-started-request-form[action='/get-started'][method='post']"
++           )
++           |> Enum.any?()
++  end
++
+   test "POST /get-started rejects invalid verification email without a token or email",
+        %{conn: conn} do
+     configure_auth_email()
