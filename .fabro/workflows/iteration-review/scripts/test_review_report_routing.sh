@@ -43,6 +43,13 @@ assert_not_contains 'claude_review -> codex_review;'
 assert_not_contains 'codex_review -> gemini_review;'
 assert_not_contains 'gemini_review -> synthesize_review;'
 
+# Review repair verification must fail closed when comparing the before/after
+# patches. `cmp` is not available in all Fabro sandboxes and can fail open when
+# used directly in an `if` condition.
+assert_contains 'git diff --no-index --quiet \"$before\" \"$after\"'
+assert_contains 'Could not compare ${kind} repair patches.'
+assert_not_contains 'cmp -s \"$before\" \"$after\"'
+
 # Code-health recording must have live repository access and must not silently
 # continue to finalization when it reports or routes a recording failure.
 assert_contains 'shape=box,'

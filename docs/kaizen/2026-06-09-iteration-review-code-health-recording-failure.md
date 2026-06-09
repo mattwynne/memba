@@ -143,3 +143,8 @@ Review repair validation:
 - `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` — passed.
 - `bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 745e53ab293802c5ced1a4c877e3c604a996469e | grep -E '^(=== \\.fabro/workflows/iteration-review/(workflow\\.fabro|prompts/record_code_health\\.md|scripts/test_review_report_routing\\.sh) ===|=== docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure\\.md ===|--- changed source/config/test/workflow/kaizen file excerpts ---)'` — passed.
 - `dev check --quick` — passed: 758 tests, 0 failures.
+
+Second review repair:
+
+- `.fabro/workflows/iteration-review/workflow.fabro`: replaced the `verify_review_repair` patch comparison from `cmp -s` with `git diff --no-index --quiet`, and made unexpected comparison statuses fail the verification step instead of silently passing.
+- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added guard assertions that the repair verifier no longer depends on `cmp` and includes the checked comparison failure path.
