@@ -1,0 +1,120 @@
+diff --git a/acceptance-tests/features/step_definitions/homepage_steps.js b/acceptance-tests/features/step_definitions/homepage_steps.js
+index 56b6042..ab88f1d 100644
+--- a/acceptance-tests/features/step_definitions/homepage_steps.js
++++ b/acceptance-tests/features/step_definitions/homepage_steps.js
+@@ -2,6 +2,7 @@ const { Given, When, Then } = require("@cucumber/cucumber");
+ const {
+   assertHomepageFitsScreen,
+   assertMembaHomepage,
++  assertHomepageVolunteeringPromise,
+   visitHomepage
+ } = require("../support/homepage");
+ 
+@@ -17,6 +18,10 @@ Then("I should see the Memba homepage", async function () {
+   await assertMembaHomepage(this);
+ });
+ 
++Then("I should see that volunteering should not feel like work", async function () {
++  await assertHomepageVolunteeringPromise(this);
++});
++
+ Then("the homepage should fit the screen", async function () {
+   await assertHomepageFitsScreen(this);
+ });
+diff --git a/acceptance-tests/features/support/homepage.js b/acceptance-tests/features/support/homepage.js
+index 25106ca..c6ecc22 100644
+--- a/acceptance-tests/features/support/homepage.js
++++ b/acceptance-tests/features/support/homepage.js
+@@ -21,7 +21,8 @@ async function visitHomepage({ baseUrl, page }) {
+ async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpect } = {}) {
+   await expect(page).toHaveURL(homepageUrlPattern(baseUrl));
+   await expect(page).toHaveTitle(/Memba/);
+-  await expect(page.getByRole("heading", { name: "A simpler way to keep your group members informed." })).toBeVisible();
++  await assertHomepageVolunteeringPromise({ page }, { expect });
++
+   const getStartedLink = page.getByRole("link", { name: "Request access for your group" });
+   await expect(getStartedLink.first ? getStartedLink.first() : getStartedLink).toBeVisible();
+ 
+@@ -32,6 +33,10 @@ async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpec
+   }
+ }
+ 
++async function assertHomepageVolunteeringPromise({ page }, { expect = playwrightExpect } = {}) {
++  await expect(page.getByText("Volunteering shouldn’t feel like work.", { exact: true })).toBeVisible();
++}
++
+ async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } = {}) {
+   const viewport = page.viewportSize();
+   const overflow = await page.evaluate(() => ({
+@@ -48,6 +53,7 @@ async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect }
+ module.exports = {
+   assertHomepageFitsScreen,
+   assertMembaHomepage,
++  assertHomepageVolunteeringPromise,
+   homepageUrl,
+   homepageUrlPattern,
+   visitHomepage
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index 0a825d4..3940b44 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.
+   - Finding: the signed-out homepage hero is in `web/lib/memba_web/controllers/page_html/home.html.heex`. The smallest copy/template change is to replace the public hero `h1` text `A simpler way to keep your group members informed.` with `Volunteering shouldn’t feel like work.` and update the matching signed-out `page_title` in `web/lib/memba_web/controllers/page_controller.ex`; the existing eyebrow already says `Private member websites for volunteer-run groups` and the existing body copy already keeps the promise grounded in today's product.
+-- [ ] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
++- [x] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
+ - [ ] 003 Inspect the transactional email layout/helpers from iteration 024 and identify the canonical footer component or helper.
+ - [ ] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
+ - [ ] 005 Ensure the sign-in email uses the standard transactional email footer.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index 582e874..95359f0 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -52,7 +52,7 @@ defmodule MembaWeb.PageController do
+       if conn.assigns.current_identity do
+         "Your clubs"
+       else
+-        "A simpler way to keep your group members informed"
++        "Volunteering shouldn’t feel like work"
+       end
+ 
+     conn
+diff --git a/web/lib/memba_web/controllers/page_html/home.html.heex b/web/lib/memba_web/controllers/page_html/home.html.heex
+index b8ebd77..4780dd8 100644
+--- a/web/lib/memba_web/controllers/page_html/home.html.heex
++++ b/web/lib/memba_web/controllers/page_html/home.html.heex
+@@ -158,7 +158,7 @@
+               Private member websites for volunteer-run groups
+             </p>
+             <h1 class="mt-5 max-w-[12ch] text-balance text-5xl font-semibold leading-[0.98] tracking-[-0.045em] text-ink sm:max-w-none sm:text-7xl sm:tracking-[-0.055em] lg:text-8xl">
+-              A simpler way to keep your group members informed.
++              Volunteering shouldn’t feel like work.
+             </h1>
+             <p class="mt-7 max-w-3xl text-pretty text-lg leading-8 text-ink-2 sm:text-xl">
+               Memba helps small non-profit groups, clubs, societies, and associations share member messages in one private place.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 16c973f..e886833 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -38,7 +38,10 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     html = LazyHTML.from_fragment(response)
+ 
+-    assert response =~ "A simpler way to keep your group members informed."
++    assert html
++           |> LazyHTML.text()
++           |> String.contains?("Volunteering shouldn’t feel like work.")
++
+     assert response =~ "Kootenay Mountaineering Club"
+     assert response =~ "Request access for your group"
+     assert response =~ "See what members can do"
+@@ -84,7 +87,7 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "You’re a member of 2 clubs"
+     assert response =~ "Alpine Club"
+     assert response =~ "Bridge Club"
+-    refute response =~ "A simpler way to keep your group members informed."
++    refute response =~ "Volunteering shouldn’t feel like work."
+ 
+     for club <- [first_club, second_club] do
+       assert html
