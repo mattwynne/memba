@@ -262,10 +262,7 @@ defmodule MembaWeb.PageController do
         attrs =
           request_params
           |> club_request_details()
-          |> Map.merge(%{
-            "requester_name" => requester.name,
-            "requester_email" => requester.email
-          })
+          |> Map.merge(verified_requester_details(requester))
 
         {attrs,
          [verified_identity_email: requester.email, requester_person_id: requester.person_id]}
@@ -303,7 +300,14 @@ defmodule MembaWeb.PageController do
     }
   end
 
-  defp request_param(request_params, key) do
+  defp verified_requester_details(requester) do
+    %{
+      "requester_name" => requester.name,
+      "requester_email" => requester.email
+    }
+  end
+
+  defp request_param(request_params, key) when is_map(request_params) do
     atom_key =
       case key do
         "requester_name" -> :requester_name
@@ -313,6 +317,8 @@ defmodule MembaWeb.PageController do
 
     Map.get(request_params, key) || Map.get(request_params, atom_key)
   end
+
+  defp request_param(_request_params, _key), do: nil
 
   defp render_member_dashboard(conn, club_id, club_id_source) do
     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,

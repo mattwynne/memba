@@ -1202,6 +1202,33 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "We’ll email you if Memba looks like a good fit for your group."
   end
 
+  test "POST /get-started validates malformed signed-in request details without creating a request",
+       %{conn: conn} do
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: " Robin Requester ",
+          note: " Missing the club name should stay on the request form. "
+        }
+      )
+
+    response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "You’ve verified your email."
+    assert response =~ "What would you like Memba to help with?"
+
+    assert html
+           |> LazyHTML.query("form#get-started-request-form")
+           |> LazyHTML.text()
+           |> String.contains?("can't be blank")
+
+    assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
+  end
+
   test "POST /get-started stores signed-in identity details from the current person", %{
     conn: conn
   } do

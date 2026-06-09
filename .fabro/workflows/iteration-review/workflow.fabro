@@ -79,17 +79,20 @@ digraph IterationReview {
     claude_review [
         label="Claude Review",
         shape=tab,
-        prompt="@prompts/review.md"
+        prompt="@prompts/review.md",
+        retry_policy="patient"
     ]
     codex_review [
         label="Codex/GPT Review",
         shape=tab,
-        prompt="@prompts/review.md"
+        prompt="@prompts/review.md",
+        retry_policy="patient"
     ]
     gemini_review [
         label="Gemini Review",
         shape=tab,
-        prompt="@prompts/review.md"
+        prompt="@prompts/review.md",
+        retry_policy="patient"
     ]
     synthesize_review [
         label="Synthesize Review",
@@ -103,7 +106,7 @@ digraph IterationReview {
         label="Fail: Review Synthesis Unavailable",
         shape=parallelogram,
         goal_gate=true,
-        script="echo 'Iteration review could not synthesize completed independent reviews after retrying a transient LLM/provider failure. Product review evidence exists in the completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
+        script="echo 'Iteration review could not collect and synthesize all independent review reports after retrying a transient LLM/provider failure. Product review evidence may exist in completed review stages; inspect the run events/artifacts and rerun or manually synthesize rather than treating this as reviewer rejection.' >&2\nexit 1"
     ]
     review_gate [shape=diamond, label="Implementation accepted?"]
     snapshot_before_review_repair [
@@ -198,9 +201,12 @@ digraph IterationReview {
     collect_implementation_evidence -> collect_evidence_failed
     collect_evidence_failed -> exit
 
-    claude_review -> codex_review
-    codex_review -> gemini_review
-    gemini_review -> synthesize_review
+    claude_review -> codex_review [condition="outcome=succeeded"]
+    claude_review -> synthesis_unavailable
+    codex_review -> gemini_review [condition="outcome=succeeded"]
+    codex_review -> synthesis_unavailable
+    gemini_review -> synthesize_review [condition="outcome=succeeded"]
+    gemini_review -> synthesis_unavailable
     synthesize_review -> review_gate [condition="outcome=succeeded"]
     synthesize_review -> synthesis_unavailable [label="Synthesis unavailable"]
     synthesis_unavailable -> exit
