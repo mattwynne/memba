@@ -1,16 +1,16 @@
 ---
 name: iteration-planning
-description: Interview Matt about the next product/dev iteration, turn the discussion into a focused iteration plan, publish planning artifacts, and hand off to the user-controlled Fabro delivery command. Use when planning the next iteration, shaping work before implementation, or preparing a plan for delivery.
+description: Interview Matt about the next product/dev iteration, turn the discussion into a focused iteration plan, publish planning artifacts, validate the plan, and ask whether this LLM session should launch the Fabro implementation-and-review delivery workflow. Use when planning the next iteration, shaping work before implementation, or preparing a plan for delivery.
 ---
 
 # Iteration Planning Interview
 
 ## Overview
 
-Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Interview him through natural collaborative dialogue, write the plan down, publish it, and tell Matt how to launch the user-controlled Fabro delivery command.
+Help Matt turn an early idea for the next iteration into an implementation-ready iteration plan. Interview him through natural collaborative dialogue, write the plan down, publish it, validate it, then ask Matt whether he wants the current LLM session to launch the Fabro delivery workflow that runs implementation and review.
 
 <HARD-GATE>
-Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is either committed, pushed, and plan-validated planning artifacts with the exact `bin/dev fabro deliver <plan_path>` command for Matt to run; a revised plan after validation feedback; or a clear explanation of why publishing or validation was blocked.
+Do NOT implement the iteration directly in the local checkout. Do NOT edit application code, migrations, step definitions, UI, or production docs except for iteration-planning artifacts in that iteration's `docs/iterations/` folder and acceptance feature files/scenarios when they are part of planning. Feature files are domain modelling and acceptance criteria; step definitions and executable test plumbing are implementation. This skill's terminal state is either committed, pushed, and plan-validated planning artifacts followed by Matt's explicit choice about launching `bin/dev fabro deliver <plan_path>`; a revised plan after validation feedback; or a clear explanation of why publishing, validation, or delivery launch was blocked.
 </HARD-GATE>
 
 ## Checklist
@@ -29,10 +29,11 @@ Create a task for each item and complete them in order:
    bin/dev fabro validate-plan <plan_path>
    ```
    Use the validation feedback to revise the plan when needed. If validation reports `NOT READY`, summarize the blocking gaps, ask Matt one question at a time to resolve them, edit the plan, commit and push the revision, and re-run validation. Do not call the plan ready until validation passes or validation is blocked/unavailable with the exact reason recorded.
-9. **Hand off delivery** — do not launch delivery automatically. After validation passes, report the exact command Matt should run:
+9. **Ask whether to launch delivery** — do not launch delivery automatically. After validation passes, ask Matt whether he wants this LLM session to run the implementation-and-review delivery workflow now, or whether he wants to run it himself later. Use the `question` tool when available. Always show the exact command:
    ```bash
    bin/dev fabro deliver <plan_path>
    ```
+   If Matt chooses to proceed, run that command. If he declines or does not answer, stop after reporting the command.
 
 ## Process Flow
 
@@ -49,8 +50,9 @@ digraph iteration_planning {
     "Validate published plan" [shape=box];
     "Plan validation ready?" [shape=diamond];
     "Revise plan from feedback" [shape=box];
-    "Hand off delivery command" [shape=box];
-    "Stop: delivery handed off" [shape=doublecircle];
+    "Ask Matt about delivery launch" [shape=box];
+    "Launch delivery if approved" [shape=box];
+    "Stop: delivery launched or handed off" [shape=doublecircle];
 
     "Explore project context" -> "Identify relevant problems";
     "Identify relevant problems" -> "Interview Matt";
@@ -64,8 +66,10 @@ digraph iteration_planning {
     "Validate published plan" -> "Plan validation ready?";
     "Plan validation ready?" -> "Revise plan from feedback" [label="no / unclear"];
     "Revise plan from feedback" -> "Commit planning artifacts";
-    "Plan validation ready?" -> "Hand off delivery command" [label="yes"];
-    "Hand off delivery command" -> "Stop: delivery handed off";
+    "Plan validation ready?" -> "Ask Matt about delivery launch" [label="yes"];
+    "Ask Matt about delivery launch" -> "Launch delivery if approved" [label="yes"];
+    "Ask Matt about delivery launch" -> "Stop: delivery launched or handed off" [label="no / later"];
+    "Launch delivery if approved" -> "Stop: delivery launched or handed off";
 }
 ```
 
@@ -215,19 +219,19 @@ Keep plans focused. If a section has no open decisions, write `None known.` rath
 - Add or update the index entry in `docs/iterations/README.md` with the iteration number, title/topic, plan link, date, status, and any acceptance feature files changed.
 - Do not update Fabro workflow code or problem-note status files during ordinary iteration planning. The relevant problems belong in the plan's `## Related Problems` section. Only edit `docs/problems/*.md` or `docs/problems/README.md` if Matt explicitly asks for problem-note maintenance as part of the planning task.
 - Example: `docs/iterations/001-member-import/plan.md`.
-- Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or explicitly marked `@wip` and excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>` and use the feedback to revise the plan before handoff.
+- Commit and push the plan, iteration index, supporting planning artifacts, and acceptance feature files before running Fabro validation so the clone-based remote sandbox can see them. Do this only after the acceptance files are either still executable and green, or explicitly marked `@wip` and excluded from the planning-time checks. Then run `bin/dev fabro validate-plan <plan_path>` and use the feedback to revise the plan before asking Matt about delivery.
 - Include workflow/skill changes in that commit only when they are needed for planning or validation.
 - Do not commit or push unrelated changes or implementation work.
 
-## Handing Off to Fabro
+## Validating and Optionally Launching Fabro Delivery
 
-After committing and pushing the planning artifacts, run plan validation before handoff:
+After committing and pushing the planning artifacts, run plan validation before asking about delivery:
 
 ```bash
 bin/dev fabro validate-plan docs/iterations/NNN-topic/plan.md
 ```
 
-The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files. Do not tell Matt to launch delivery until validation has passed or validation is unavailable and the blocking reason has been reported.
+The workflow runs in clone-based remote sandboxes; pushed artifacts are required so Fabro can read newly-created plans and acceptance feature files. Do not ask Matt whether to launch delivery until validation has passed. If validation is unavailable, report the blocker and the retry command instead of asking to launch delivery.
 
 If validation reports NOT READY:
 
@@ -237,13 +241,18 @@ If validation reports NOT READY:
 4. Re-run `bin/dev fabro validate-plan <plan_path>`.
 5. Repeat until validation reports ready or validation is blocked by an unavailable local Fabro service or another explicit external blocker.
 
-After validation passes, do not wrap delivery in another skill or workflow. Give Matt the exact user-controlled command:
+After validation passes, do not wrap delivery in another skill or workflow. Ask Matt whether he wants this LLM session to run the user-controlled delivery command now. Use the `question` tool when available with choices equivalent to:
+
+- Yes — run implementation and review now.
+- No — stop after handing off the command.
+
+Always show the exact command:
 
 ```bash
 bin/dev fabro deliver docs/iterations/NNN-topic/plan.md
 ```
 
-This command reserves the implementation WIP slot, runs implementation, and runs review from the CLI with `--auto-approve` at the user-run boundary.
+This command reserves the implementation WIP slot, runs implementation, and runs review from the CLI with `--auto-approve` at the user-approved boundary. If Matt says yes, run the command and report the initial result. If Matt says no or does not explicitly approve, do not run it.
 
 If the local Fabro server is unavailable or the command fails before creating a run:
 
@@ -258,7 +267,8 @@ When planning is complete, report:
 3. Plan validation command and result.
 4. Related problems named in the plan, including any that remain unresolved or partially addressed.
 5. Any acceptance feature files changed, their `@iteration-NNN` tags, and whether they are `@wip`.
-6. Exact delivery command: `bin/dev fabro deliver <plan_path>`.
+6. Matt's delivery-launch choice.
+7. Exact delivery command: `bin/dev fabro deliver <plan_path>`.
 
 ## Key Principles
 
@@ -268,4 +278,4 @@ When planning is complete, report:
 - Make technical decisions explicit enough to start.
 - Make acceptance criteria testable.
 - Make validation observable.
-- Do not implement locally during this skill; `bin/dev fabro deliver` owns implementation after Matt launches it.
+- Do not implement locally during this skill; `bin/dev fabro deliver` owns implementation after Matt explicitly approves launching it or runs it himself.
