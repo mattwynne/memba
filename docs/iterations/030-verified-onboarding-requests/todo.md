@@ -8,7 +8,7 @@
 - [x] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
 - [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
 - [x] 008 Ensure verified request submission does not create Person, club, membership, or club access.
-- [ ] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+- [x] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
 - [ ] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
 - [ ] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
 - [ ] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
