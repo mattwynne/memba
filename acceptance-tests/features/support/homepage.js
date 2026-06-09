@@ -21,7 +21,8 @@ async function visitHomepage({ baseUrl, page }) {
 async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpect } = {}) {
   await expect(page).toHaveURL(homepageUrlPattern(baseUrl));
   await expect(page).toHaveTitle(/Memba/);
-  await expect(page.getByRole("heading", { name: "A simpler way to keep your group members informed." })).toBeVisible();
+  await assertHomepageVolunteeringPromise({ page }, { expect });
+
   const getStartedLink = page.getByRole("link", { name: "Request access for your group" });
   await expect(getStartedLink.first ? getStartedLink.first() : getStartedLink).toBeVisible();
 
@@ -30,6 +31,10 @@ async function assertMembaHomepage({ baseUrl, page }, { expect = playwrightExpec
     const signInLink = page.getByRole("link", { name: "Sign in" });
     await expect(signInLink.first ? signInLink.first() : signInLink).toBeVisible();
   }
+}
+
+async function assertHomepageVolunteeringPromise({ page }, { expect = playwrightExpect } = {}) {
+  await expect(page.getByText("Volunteering shouldn’t feel like work.", { exact: true })).toBeVisible();
 }
 
 async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } = {}) {
@@ -48,6 +53,7 @@ async function assertHomepageFitsScreen({ page }, { expect = playwrightExpect } 
 module.exports = {
   assertHomepageFitsScreen,
   assertMembaHomepage,
+  assertHomepageVolunteeringPromise,
   homepageUrl,
   homepageUrlPattern,
   visitHomepage
