@@ -581,12 +581,15 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     requester_email = Keyword.get(opts, :requester_email, "requester-#{unique}@example.com")
 
     {:ok, request} =
-      Onboarding.create_request(%{
-        requester_name: requester_name,
-        requester_email: requester_email,
-        requested_club_name: club_name,
-        note: "Please onboard #{club_name}."
-      })
+      Onboarding.create_request(
+        %{
+          requester_name: requester_name,
+          requester_email: requester_email,
+          requested_club_name: club_name,
+          note: "Please onboard #{club_name}."
+        },
+        verified_identity_email: requester_email
+      )
 
     request
   end

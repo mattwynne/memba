@@ -184,14 +184,18 @@ defmodule Memba.OnboardingConversionTest do
 
   defp request_fixture(club_name, opts \\ []) do
     unique = System.unique_integer([:positive])
+    requester_email = Keyword.get(opts, :requester_email, "requester-#{unique}@example.com")
 
     {:ok, request} =
-      Onboarding.create_request(%{
-        requester_name: Keyword.get(opts, :requester_name, "Robin Requester"),
-        requester_email: Keyword.get(opts, :requester_email, "requester-#{unique}@example.com"),
-        requested_club_name: club_name,
-        note: "Please onboard #{club_name}."
-      })
+      Onboarding.create_request(
+        %{
+          requester_name: Keyword.get(opts, :requester_name, "Robin Requester"),
+          requester_email: requester_email,
+          requested_club_name: club_name,
+          note: "Please onboard #{club_name}."
+        },
+        verified_identity_email: requester_email
+      )
 
     request
   end

@@ -417,15 +417,17 @@ defmodule Memba.Cucumber.RequestAccountSteps do
            requester_email: email,
            requested_club_name: club_name,
            note: short_note()
-         }, [requester_person_id: person_id]}
+         }, [verified_identity_email: email, requester_person_id: person_id]}
 
       _missing ->
+        requester_email = default_email_for(context, person_name)
+
         {%{
            requester_name: "#{person_name} Requester",
-           requester_email: default_email_for(context, person_name),
+           requester_email: requester_email,
            requested_club_name: club_name,
            note: short_note()
-         }, []}
+         }, [verified_identity_email: requester_email]}
     end
   end
 

@@ -37,10 +37,10 @@ defmodule Memba.Onboarding.Request do
   @doc false
   def create_changeset(attrs, opts \\ []) when is_map(attrs) and is_list(opts) do
     %__MODULE__{request_id: ID.generate(:onboarding_request), status: @status_active}
-    |> cast(attrs, [:requester_name, :requester_email, :requested_club_name, :note])
-    |> trim_changes([:requester_name, :requester_email, :requested_club_name, :note])
-    |> validate_required([:requester_name, :requester_email, :requested_club_name, :note])
-    |> put_normalized_requester_email()
+    |> cast(attrs, [:requester_name, :requested_club_name, :note])
+    |> trim_changes([:requester_name, :requested_club_name, :note])
+    |> validate_required([:requester_name, :requested_club_name, :note])
+    |> put_verified_identity_email(Keyword.get(opts, :verified_identity_email))
     |> put_optional_typed_id(
       :requester_person_id,
       Keyword.get(opts, :requester_person_id),
@@ -89,22 +89,24 @@ defmodule Memba.Onboarding.Request do
     end)
   end
 
-  defp put_normalized_requester_email(changeset) do
-    case get_field(changeset, :requester_email) do
-      email when is_binary(email) and email != "" ->
-        case EmailAddresses.normalize_email(email) do
-          {:ok, %{email: email, normalized_email: normalized_email}} ->
-            changeset
-            |> put_change(:requester_email, email)
-            |> put_change(:normalized_requester_email, normalized_email)
-
-          {:error, :invalid_email} ->
-            add_error(changeset, :requester_email, "is invalid")
-        end
-
-      _email ->
+  defp put_verified_identity_email(changeset, email) when is_binary(email) do
+    case EmailAddresses.normalize_email(email) do
+      {:ok, %{normalized_email: normalized_email}} ->
         changeset
+        |> put_change(:requester_email, normalized_email)
+        |> put_change(:normalized_requester_email, normalized_email)
+
+      {:error, :invalid_email} ->
+        if String.trim(email) == "" do
+          add_error(changeset, :requester_email, "must be verified")
+        else
+          add_error(changeset, :requester_email, "is invalid")
+        end
     end
+  end
+
+  defp put_verified_identity_email(changeset, _email) do
+    add_error(changeset, :requester_email, "must be verified")
   end
 
   defp put_optional_typed_id(changeset, _field, nil, _type), do: changeset

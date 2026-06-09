@@ -253,7 +253,7 @@ defmodule MembaWeb.PageController do
           |> verified_identity_request_details()
           |> Map.put("requester_email", identity_email)
 
-        {attrs, []}
+        {attrs, [verified_identity_email: identity_email]}
 
       {nil, _requester} ->
         {%{}, []}
@@ -267,7 +267,8 @@ defmodule MembaWeb.PageController do
             "requester_email" => requester.email
           })
 
-        {attrs, [requester_person_id: requester.person_id]}
+        {attrs,
+         [verified_identity_email: requester.email, requester_person_id: requester.person_id]}
     end
   end
 
