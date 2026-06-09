@@ -186,6 +186,49 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     )
   end
 
+  test "staff requests index stays empty after an email-only Get Started verification", %{
+    conn: conn
+  } do
+    configure_auth_email()
+
+    verification_conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: " Robin@Example.COM "
+        }
+      )
+
+    assert redirected_to(verification_conn) == ~p"/auth/check-email"
+    assert Onboarding.list_active_requests() == []
+
+    assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] = Repo.all(SignInToken)
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"", "robin@example.com"}]
+      assert email.subject == "Sign in to Memba"
+      assert email.text_body =~ "/auth/sign-in/"
+      assert email.text_body =~ "return_to=%2Fget-started"
+      true
+    end)
+
+    refute_email_sent(to: [{"", "hello@memba.io"}])
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    assert has_element?(view, "#admin-requests-active-count", "0")
+    assert has_element?(view, "#admin-requests-empty")
+
+    html =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+
+    assert row_ids(html) == []
+  end
+
   test "staff can reject an active request with required internal notes and no requester email",
        %{
          conn: conn

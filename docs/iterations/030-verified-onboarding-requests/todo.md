@@ -10,7 +10,7 @@
 - [x] 008 Ensure verified request submission does not create Person, club, membership, or club access.
 - [x] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
 - [x] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
-- [ ] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
+- [x] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
 - [ ] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
 - [ ] 013 Update Cucumber step definitions only as needed during delivery to exercise the `@iteration-030` scenarios.
 - [ ] 014 Remove or narrow `@todo-domain`/`@todo-ui` from the new/updated scenarios only when they pass in the relevant runner.
