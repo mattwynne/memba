@@ -1,0 +1,63 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index fbc9633..811cc55 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -7,7 +7,7 @@
+ - [x] 005 Update request form rendering:
+ - [x] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+ - [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
+-- [ ] 008 Ensure verified request submission does not create Person, club, membership, or club access.
++- [x] 008 Ensure verified request submission does not create Person, club, membership, or club access.
+ - [ ] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+ - [ ] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
+ - [ ] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 0b21741..e3b62f4 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -7,7 +7,11 @@ defmodule MembaWeb.PageControllerTest do
+   alias Memba.Accounts.AuthEmail
+   alias Memba.Accounts.SignInToken
+   alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.MemberPermission
+   alias Memba.Membership.Projections.Membership
++  alias Memba.Membership.Projections.Person
++  alias Memba.Membership.Projections.PersonEmailAddress
++  alias Memba.Membership.Projections.RoleAssignment
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+   alias Memba.Messaging.Projections.Message
+   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
+@@ -1133,6 +1137,15 @@ defmodule MembaWeb.PageControllerTest do
+   test "POST /get-started stores a verified identity request without trusting typed email", %{
+     conn: conn
+   } do
++    membership_projection_counts = %{
++      clubs: Repo.aggregate(Club, :count),
++      member_permissions: Repo.aggregate(MemberPermission, :count),
++      memberships: Repo.aggregate(Membership, :count),
++      people: Repo.aggregate(Person, :count),
++      person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
++      role_assignments: Repo.aggregate(RoleAssignment, :count)
++    }
++
+     conn =
+       conn
+       |> init_test_session(%{IdentityAuth.identity_session_key() => "Robin@Example.COM"})
+@@ -1168,6 +1181,17 @@ defmodule MembaWeb.PageControllerTest do
+     refute email.text_body =~ "forged@example.net"
+     assert email.provider_options == %{message_stream: "outbound-onboarding"}
+ 
++    assert %{
++             clubs: Repo.aggregate(Club, :count),
++             member_permissions: Repo.aggregate(MemberPermission, :count),
++             memberships: Repo.aggregate(Membership, :count),
++             people: Repo.aggregate(Person, :count),
++             person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
++             role_assignments: Repo.aggregate(RoleAssignment, :count)
++           } == membership_projection_counts
++
++    assert Memba.Membership.list_active_clubs_for_member_email("robin@example.com") == []
++
+     response =
+       conn
+       |> recycle()
