@@ -1,0 +1,109 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index 811cc55..79c4884 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+ - [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
+ - [x] 008 Ensure verified request submission does not create Person, club, membership, or club access.
+-- [ ] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
++- [x] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+ - [ ] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
+ - [ ] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
+ - [ ] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
+diff --git a/web/test/memba_web/live/admin/requests_live/index_test.exs b/web/test/memba_web/live/admin/requests_live/index_test.exs
+index 5dd8129..d750c40 100644
+--- a/web/test/memba_web/live/admin/requests_live/index_test.exs
++++ b/web/test/memba_web/live/admin/requests_live/index_test.exs
+@@ -14,6 +14,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
+   alias Memba.Onboarding
+   alias Memba.Onboarding.Request
+   alias Memba.Repo
++  alias MembaWeb.IdentityAuth
+ 
+   setup context do
+     set_swoosh_global(context)
+@@ -108,6 +109,83 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
+     refute_selector_exists(html, "#request-row-#{converted.request_id}")
+   end
+ 
++  test "staff requests index lists verified Get Started submissions after notifying staff", %{
++    conn: conn
++  } do
++    request_conn =
++      conn
++      |> Plug.Test.init_test_session(%{
++        IdentityAuth.identity_session_key() => "Robin@Example.COM"
++      })
++      |> post(~p"/get-started",
++        request: %{
++          requester_name: " Robin Requester ",
++          requester_email: "forged@example.net",
++          requested_club_name: " Verified Paddlers ",
++          note: " We need a safer way to message members. "
++        }
++      )
++
++    assert redirected_to(request_conn) == ~p"/get-started?submitted=true"
++
++    assert [%Request{} = request] = Onboarding.list_active_requests()
++    assert request.requester_name == "Robin Requester"
++    assert request.requester_email == "robin@example.com"
++    assert request.requested_club_name == "Verified Paddlers"
++    assert request.note == "We need a safer way to message members."
++    assert request.status == "active"
++
++    assert_email_sent(fn email ->
++      assert email.to == [{"", "hello@memba.io"}]
++      assert email.reply_to == {"Robin Requester", "robin@example.com"}
++      assert email.subject == "New Memba request: Verified Paddlers"
++      assert email.text_body =~ "Request ID: #{request.request_id}"
++      assert email.text_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
++      assert email.text_body =~ "Verified Paddlers"
++      assert email.text_body =~ "Robin Requester"
++      assert email.text_body =~ "robin@example.com"
++      refute email.text_body =~ "forged@example.net"
++      true
++    end)
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/requests")
++
++    assert has_element?(view, "#admin-requests-active-count", "1")
++    assert has_element?(view, "#request-row-#{request.request_id}")
++
++    html =
++      view
++      |> render()
++      |> LazyHTML.from_fragment()
++
++    assert text_for(
++             html,
++             "#request-row-#{request.request_id} [data-testid='admin-request-requester']"
++           ) =~
++             "Robin Requester"
++
++    assert text_for(html, "#request-row-#{request.request_id}") =~ "robin@example.com"
++
++    assert text_for(html, "#request-row-#{request.request_id} [data-testid='admin-request-club']") =~
++             "Verified Paddlers"
++
++    assert text_for(html, "#request-row-#{request.request_id} [data-testid='admin-request-note']") =~
++             "We need a safer way to message members."
++
++    assert_selector_exists(
++      html,
++      "#reject-request-#{request.request_id}[data-admin-request-action='reject']"
++    )
++
++    assert_selector_exists(
++      html,
++      "#convert-request-#{request.request_id}[data-admin-request-action='convert']"
++    )
++  end
++
+   test "staff can reject an active request with required internal notes and no requester email",
+        %{
+          conn: conn
