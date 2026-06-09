@@ -313,7 +313,7 @@ defmodule Memba.EmailTemplates do
   end
 
   @doc """
-  Render the ambient Memba footer used by non-auth transactional emails.
+  Render the ambient Memba footer used by transactional emails.
 
   Optional `:reply_to_email` may be supplied from a configured reply-to address.
   No support mailbox is hard-coded when that option is absent.

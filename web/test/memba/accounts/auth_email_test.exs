@@ -56,7 +56,9 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert email.html_body =~ ~s|d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"|
     assert email.html_body =~ ~s|fill="#d2925a"|
     refute email.html_body =~ ~s|d="M 18 34 L 28 44 L 46 24"|
+    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
     assert email.html_body =~ "Sent to alice@example.com."
+    assert email.html_body =~ "Need a hand? Contact Memba support."
     refute email.html_body =~ "help@memba.io"
 
     assert email.provider_options == %{
@@ -91,7 +93,9 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert email.html_body =~ ~s|href="https://app.memba.io/auth/sign-in/token-123"|
     assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
     assert email.html_body =~ "Secured by Memba"
+    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
     assert email.html_body =~ "Sent to alice@example.com."
+    assert email.html_body =~ "Need a hand? Contact Memba support."
     refute email.html_body =~ "help@memba.io"
 
     assert email.provider_options == %{
@@ -134,6 +138,11 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com"
     assert email.html_body =~ "Sign in to Wessex &lt;Choir&gt; Bcc: attacker@example.com"
     assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com runs on Memba"
+
+    assert email.html_body =~
+             "Delivered for Wessex &lt;Choir&gt; Bcc: attacker@example.com by"
+
+    assert email.html_body =~ "Sent to member@example.com."
     refute email.html_body =~ "\r\nBcc"
     refute email.html_body =~ "<Choir>"
   end
