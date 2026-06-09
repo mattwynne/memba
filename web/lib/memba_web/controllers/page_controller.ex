@@ -135,9 +135,14 @@ defmodule MembaWeb.PageController do
     conn
     |> assign(:page_title, "Request access")
     |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
+    |> assign(:signed_in_get_started?, signed_in_get_started?(conn))
+    |> assign(:verification_form, Phoenix.Component.to_form(%{}, as: :verification))
     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
     |> render(:get_started)
   end
+
+  defp signed_in_get_started?(%{assigns: %{current_identity: identity}}), do: not is_nil(identity)
+  defp signed_in_get_started?(_conn), do: false
 
   defp get_started_request_attrs(conn, request_params) do
     case signed_in_get_started_requester(conn) do

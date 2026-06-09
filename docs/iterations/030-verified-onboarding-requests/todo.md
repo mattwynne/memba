@@ -1,7 +1,7 @@
 # Implementation TODO
 
 - [x] 001 Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
-- [ ] 002 Split the public Get Started experience into two states:
+- [x] 002 Split the public Get Started experience into two states:
 - [ ] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
 - [ ] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
 - [ ] 005 Update request form rendering:

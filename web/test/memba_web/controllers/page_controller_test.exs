@@ -799,17 +799,66 @@ defmodule MembaWeb.PageControllerTest do
     assert html_response(conn, 200) =~ "Simple software for volunteer-run groups."
   end
 
-  test "GET /get-started shows a signed-out request form with public navigation", %{conn: conn} do
+  test "GET /get-started shows a signed-out email verification form with public navigation", %{
+    conn: conn
+  } do
     conn = get(conn, ~p"/get-started")
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Ask us to set up Memba for your group."
     assert response =~ "Want to use Memba with your club or group?"
-    assert response =~ "Memba staff will review your request"
+    assert response =~ "Verify your email first"
 
     assert html
            |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "form#get-started-verification-form[action='/get-started'][method='post']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("input#get-started-verification-email[name='verification[email]']")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("form#get-started-request-form")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("input#get-started-requester-name")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("input#get-started-club-name")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("button#get-started-verification-submit[type='submit']")
+           |> Enum.any?()
+
+    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+  end
+
+  test "GET /get-started shows the request form to a signed-in identity without a person", %{
+    conn: conn
+  } do
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> get(~p"/get-started")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "robin@example.com"
+    assert response =~ "You’ve verified your email."
+
+    refute html
+           |> LazyHTML.query("form#get-started-verification-form")
            |> Enum.any?()
 
     assert html
@@ -833,12 +882,6 @@ defmodule MembaWeb.PageControllerTest do
     assert html
            |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
            |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("button#get-started-request-submit[type='submit']")
-           |> Enum.any?()
-
-    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
   end
 
   test "GET /get-started shows signed-in requester identity as read-only details", %{conn: conn} do
@@ -868,6 +911,10 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "What would you like Memba to help with?"
 
     refute html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    refute html
            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
            |> Enum.any?()
 
@@ -884,7 +931,8 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
   end
 
-  test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
+  test "POST /get-started keeps signed-out visitors on the verification step when details are missing",
+       %{conn: conn} do
     conn =
       post(conn, ~p"/get-started",
         request: %{
@@ -896,14 +944,23 @@ defmodule MembaWeb.PageControllerTest do
       )
 
     response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
 
     assert response =~ "Want to use Memba with your club or group?"
-    assert response =~ "can&#39;t be blank"
+    assert response =~ "Verify your email first"
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
     assert Repo.aggregate(Request, :count) == 0
     assert_no_email_sent()
   end
 
-  test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
+  test "POST /get-started keeps signed-out visitors on the verification step for invalid details",
+       %{
+         conn: conn
+       } do
     conn =
       post(conn, ~p"/get-started",
         request: %{
@@ -915,8 +972,14 @@ defmodule MembaWeb.PageControllerTest do
       )
 
     response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
 
-    assert response =~ "is invalid"
+    assert response =~ "Verify your email first"
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
     assert Repo.aggregate(Request, :count) == 0
     assert_no_email_sent()
   end
