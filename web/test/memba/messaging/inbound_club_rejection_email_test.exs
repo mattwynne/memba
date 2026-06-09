@@ -60,7 +60,7 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"Memba", "messages@mail.memba.test"}
+    assert email.from == {"Wessex <Choir> Bcc: attacker@example.com via Memba", "messages@mail.memba.test"}
     assert email.reply_to == {"Memba support", "support@memba.test"}
     assert email.to == [{"", "margaret@example.com"}]
 
@@ -180,6 +180,7 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert email.subject == "Your email wasn't posted"
+    assert email.from == {"Memba", "messages@mail.memba.test"}
     refute email.reply_to
 
     assert email.text_body =~ "Your email wasn't posted."

@@ -6,7 +6,7 @@
 - [x] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
 - [x] 005 Ensure the sign-in email uses the standard transactional email footer.
 - [x] 006 Inspect inbound club-message rejection email construction and the email request/provider shape for display-name support.
-- [ ] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
+- [x] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
 - [ ] 008 Ensure the club-message rejection email uses the standard transactional email footer.
 - [ ] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
 - [ ] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
