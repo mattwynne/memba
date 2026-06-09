@@ -4,6 +4,8 @@ defmodule MembaWeb.PageControllerTest do
   import Swoosh.TestAssertions
 
   alias Memba.Accounts
+  alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Club
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
@@ -13,6 +15,18 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
+
+  setup do
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_auth_email_config = Application.get_env(:memba, AuthEmail)
+
+    on_exit(fn ->
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(AuthEmail, original_auth_email_config)
+    end)
+
+    :ok
+  end
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
@@ -843,6 +857,60 @@ defmodule MembaWeb.PageControllerTest do
     refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
   end
 
+  test "POST /get-started sends a magic sign-in link back to Get Started for signed-out visitors",
+       %{conn: conn} do
+    configure_auth_email()
+
+    conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: " Robin@Example.COM "
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/auth/check-email"
+    assert Repo.aggregate(Request, :count) == 0
+
+    assert [%SignInToken{email: "robin@example.com"}] = Repo.all(SignInToken)
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.to == [{"", "robin@example.com"}]
+    assert email.from == {"Memba", "auth@mail.memba.io"}
+    assert email.subject == "Sign in to Memba"
+    assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
+
+    assert [_, _token, query] =
+             Regex.run(~r{/auth/sign-in/([^?\s"<]+)\?([^\s"<]+)}, email.text_body)
+
+    assert URI.decode_query(query) == %{"return_to" => ~p"/get-started"}
+    refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
+  end
+
+  test "POST /get-started rejects invalid verification email without a token or email",
+       %{conn: conn} do
+    configure_auth_email()
+
+    conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: "not an email address"
+        }
+      )
+
+    response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Enter a valid email address."
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    assert Repo.aggregate(SignInToken, :count) == 0
+    assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
+  end
+
   test "GET /get-started shows the request form to a signed-in identity without a person", %{
     conn: conn
   } do
@@ -1161,4 +1229,19 @@ defmodule MembaWeb.PageControllerTest do
       reason: Keyword.fetch!(attrs, :reason)
     })
   end
+
+  defp configure_auth_email do
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Test,
+      api_key: "server-token"
+    )
+
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.io",
+      message_stream: "outbound-authentication"
+    )
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end

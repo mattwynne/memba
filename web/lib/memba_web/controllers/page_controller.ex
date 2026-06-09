@@ -3,7 +3,10 @@ defmodule MembaWeb.PageController do
 
   require Logger
 
+  alias Memba.Accounts
+  alias Memba.Accounts.AuthEmail
   alias Memba.Membership
+  alias Memba.Membership.EmailAddresses
   alias Memba.Onboarding
   alias Memba.Onboarding.NewRequestEmail
   alias MembaWeb.ClubSite
@@ -90,21 +93,105 @@ defmodule MembaWeb.PageController do
   end
 
   def submit_get_started(conn, params) do
-    request_params = Map.get(params, "request", %{})
+    cond do
+      signed_out_verification_request?(conn, params) ->
+        request_get_started_verification(conn, Map.get(params, "verification", %{}))
 
-    {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
+      true ->
+        request_params = Map.get(params, "request", %{})
 
-    case Onboarding.create_request(request_attrs, request_opts) do
-      {:ok, request} ->
-        deliver_new_request_notification(request)
-        redirect(conn, to: ~p"/get-started?submitted=true")
+        {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
+
+        case Onboarding.create_request(request_attrs, request_opts) do
+          {:ok, request} ->
+            deliver_new_request_notification(request)
+            redirect(conn, to: ~p"/get-started?submitted=true")
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> assign(:request_submitted?, false)
+            |> render_get_started(changeset)
+        end
+    end
+  end
+
+  defp signed_out_verification_request?(conn, params) do
+    not signed_in_get_started?(conn) and Map.has_key?(params, "verification")
+  end
+
+  defp request_get_started_verification(conn, verification_params) do
+    case verified_get_started_email(verification_params) do
+      {:ok, email} ->
+        create_and_deliver_get_started_sign_in_link(email)
+        redirect(conn, to: ~p"/auth/check-email")
 
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
+        |> put_flash(:error, "Enter a valid email address.")
         |> assign(:request_submitted?, false)
-        |> render_get_started(changeset)
+        |> render_get_started(
+          Onboarding.change_request(%{}),
+          Phoenix.Component.to_form(%{changeset | action: :validate}, as: :verification)
+        )
     end
+  end
+
+  defp verified_get_started_email(verification_params) do
+    changeset = verification_changeset(verification_params)
+
+    if changeset.valid? do
+      changeset
+      |> Ecto.Changeset.get_field(:email)
+      |> EmailAddresses.normalize_email()
+      |> case do
+        {:ok, %{normalized_email: normalized_email}} -> {:ok, normalized_email}
+        {:error, :invalid_email} -> {:error, changeset}
+      end
+    else
+      {:error, changeset}
+    end
+  end
+
+  defp verification_changeset(params) when is_map(params) do
+    {%{}, %{email: :string}}
+    |> Ecto.Changeset.cast(params, [:email])
+    |> Ecto.Changeset.validate_required([:email])
+    |> Ecto.Changeset.validate_change(:email, fn :email, email ->
+      case EmailAddresses.normalize_email(email) do
+        {:ok, _email} -> []
+        {:error, :invalid_email} -> [email: "must be a valid email address"]
+      end
+    end)
+  end
+
+  defp verification_changeset(_params), do: verification_changeset(%{})
+
+  defp create_and_deliver_get_started_sign_in_link(email) do
+    case Accounts.create_sign_in_token(email) do
+      {:ok, %{email: recipient_email, token: token}} ->
+        deliver_get_started_sign_in_link(recipient_email, token)
+
+      {:error, reason} ->
+        Logger.warning("Could not create get-started sign-in link: #{inspect(reason)}")
+    end
+  end
+
+  defp deliver_get_started_sign_in_link(recipient_email, token) do
+    callback_url = get_started_sign_in_callback_url(token)
+
+    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("Could not deliver get-started sign-in link email: #{inspect(reason)}")
+    end
+  end
+
+  defp get_started_sign_in_callback_url(token) do
+    MembaWeb.Endpoint.url() <> ~p"/auth/sign-in/#{token}?#{[return_to: ~p"/get-started"]}"
   end
 
   defp deliver_new_request_notification(request) do
@@ -131,12 +218,15 @@ defmodule MembaWeb.PageController do
     |> render(:privacy)
   end
 
-  defp render_get_started(conn, changeset) do
+  defp render_get_started(conn, changeset, verification_form \\ nil) do
     conn
     |> assign(:page_title, "Request access")
     |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
     |> assign(:signed_in_get_started?, signed_in_get_started?(conn))
-    |> assign(:verification_form, Phoenix.Component.to_form(%{}, as: :verification))
+    |> assign(
+      :verification_form,
+      verification_form || Phoenix.Component.to_form(%{}, as: :verification)
+    )
     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
     |> render(:get_started)
   end
