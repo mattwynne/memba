@@ -29,6 +29,7 @@ fi
 
 # Review synthesis requires all independent reviewer Markdown reports. A failed
 # reviewer must not continue to synthesis with missing prior-stage context.
+assert_contains 'script="bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh'
 assert_contains 'claude_review -> codex_review [condition="outcome=succeeded"]'
 assert_contains 'claude_review -> synthesis_unavailable'
 assert_contains 'codex_review -> gemini_review [condition="outcome=succeeded"]'
@@ -41,6 +42,13 @@ assert_contains 'synthesize_review -> synthesis_unavailable [label="Synthesis un
 assert_not_contains 'claude_review -> codex_review;'
 assert_not_contains 'codex_review -> gemini_review;'
 assert_not_contains 'gemini_review -> synthesize_review;'
+
+# Review repair verification must fail closed when comparing the before/after
+# patches. `cmp` is not available in all Fabro sandboxes and can fail open when
+# used directly in an `if` condition.
+assert_contains 'git diff --no-index --quiet \"$before\" \"$after\"'
+assert_contains 'Could not compare ${kind} repair patches.'
+assert_not_contains 'cmp -s \"$before\" \"$after\"'
 
 # Code-health recording must have live repository access and must not silently
 # continue to finalization when it reports or routes a recording failure.
