@@ -886,6 +886,54 @@ defmodule MembaWeb.PageControllerTest do
     refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
   end
 
+  test "following the Get Started magic link signs in and returns to the request form", %{
+    conn: conn
+  } do
+    configure_auth_email()
+
+    conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: " Robin@Example.COM "
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/auth/check-email"
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert [_, token, query] =
+             Regex.run(~r{/auth/sign-in/([^?\s"<]+)\?([^\s"<]+)}, email.text_body)
+
+    callback_conn =
+      conn
+      |> recycle()
+      |> get("/auth/sign-in/#{token}?#{query}")
+
+    assert redirected_to(callback_conn) == ~p"/get-started"
+    assert get_session(callback_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
+
+    get_started_conn =
+      callback_conn
+      |> recycle()
+      |> get(~p"/get-started")
+
+    response = html_response(get_started_conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "You’ve verified your email."
+    assert response =~ "robin@example.com"
+
+    refute html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "form#get-started-request-form[action='/get-started'][method='post']"
+           )
+           |> Enum.any?()
+  end
+
   test "POST /get-started rejects invalid verification email without a token or email",
        %{conn: conn} do
     configure_auth_email()
