@@ -3,13 +3,15 @@ Apply the automatic repair brief from the preceding Synthesize Review stage for 
 Rules:
 
 - Fix only the concrete bounded issues selected by the review synthesis.
-- Treat this as a post-green refactoring/maintainability pass. Do not add new product behaviour here.
+- Treat this as a post-green refactoring, maintainability, verification, and hardening pass. Do not add new product behaviour here.
 - Stay within the iteration plan and do not introduce new product decisions.
+- Enforce or prove existing intended behaviour when safe: add/strengthen automated tests, validation attributes, input normalization, constraints, comments, or small shared-service refactors when the synthesis selected them.
 - Never edit acceptance feature files (`*.feature`, including files under `acceptance-tests/`). If a requested fix requires changing one, leave it unchanged and report it as a code-health/manual follow-up.
-- Add or update automated tests only when needed to preserve or clarify existing behaviour while refactoring.
+- Add or update automated tests whenever they are the safest bounded way to prove a reviewer concern about lifecycle reuse, authorization, duplicate handling, state transitions, or other already-planned behaviour.
 - Do not skip or weaken existing validation.
 - Do not commit changes.
 - Review must never push red. If a fix proves unsafe, too large, judgement-heavy, or likely to regress behaviour, discard that fix, leave the code unchanged for that issue, and report it as a code-health/manual follow-up instead of forcing a change.
+- Do not abandon a selected fix merely because it is a hardening or verification change. First try the smallest safe test/config/code change that addresses the concern within the existing design.
 - **Sandbox/runtime boundary**: If the requested fix or failure appears caused by sandbox/toolchain/runtime incoherence (stale `/env` paths, unwritable caches, missing tools, broken services, stale process-compose state), stop and report a sandbox blocker. Do not patch `bin/dev`, application scripts, product code, dependencies, or tests merely to compensate for sandbox runtime defects.
 - **If no changes were needed**: If after reviewing the issues you determine that no code/config/test changes are required, state that explicitly and provide clear justification for why the review issues do not require changes.
 

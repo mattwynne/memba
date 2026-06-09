@@ -18,13 +18,14 @@ Do not emit shell-command/tool-call JSON; return the Markdown synthesis and fina
 ## Standards
 
 - Treat automated tests and implementation plan-conformance as already-owned by the implementation workflow.
-- Request automatic fixes only for concrete, bounded refactoring, maintainability, project-convention, documentation, or low-risk test-quality issues that can be resolved without changing product behaviour or feature files.
+- Prefer automatic improvement over deferral. Request automatic fixes for every concrete, bounded refactoring, maintainability, project-convention, documentation, security-hardening, data-integrity-hardening, or low-risk test-quality issue that can be resolved without changing acceptance feature files or making a new product decision.
+- Verification findings are often auto-fixable: if reviewers are unsure whether an implemented rule is truly wired, reused, or protected, route **FIX** when the workflow can add/strengthen targeted automated tests, assertions, constraints, or code comments to prove the existing intended behaviour.
+- Examples of normally bounded automatic fixes: normalizing inputs before duplicate checks, adding HTML form attributes that match existing validation, adding double-submit protection where the project has an established pattern, adding/strengthening domain/web tests for planned behaviour, adding database constraints that enforce an already-existing invariant, replacing duplicated implementation with an existing shared service, and documenting a non-obvious shared path in code.
 - Do not request edits to acceptance feature files (`*.feature`).
-- Do not introduce new product behaviour in review.
-- If a finding requires product, architecture, scope, or acceptance-criteria judgement, do not block. Mark it as a code-health/manual follow-up.
-- If a prior automatic repair attempted the same issue and it still remains, do not request another repair. Mark it as a code-health/manual follow-up.
+- Do not introduce new product behaviour in review; hardening is allowed when it enforces or proves behaviour already required by the iteration plan.
+- Mark a finding as code-health/manual only when it needs external/manual verification that cannot be represented by an automated test, requires a product/architecture/scope decision, is too large or risky for the review repair budget, or a prior automatic repair attempted the same issue and it still remains.
 - If any reviewer lists judgement-worthy non-blocking code-health findings, preserve them in the `Code-health findings for human judgement` section even when the final decision is **ACCEPTED**.
-- If any reviewer lists bounded-safe fixes, either route **FIX** with exact bounded changes, or explicitly explain why each proposed fix is dismissed/deferred.
+- If any reviewer lists bounded-safe fixes or hardening ideas, either route **FIX** with exact bounded changes, or explicitly explain why each proposed fix is not auto-fixable under these rules. Do not silently defer useful hardening.
 - If no bounded automatic fixes are worth attempting, accept the review and let the next step record any judgement-worthy findings in `docs/code-health.md`.
 
 ## Output format
@@ -39,9 +40,13 @@ One of: **ACCEPTED** or **FIX**.
 
 Summarize the important findings across reviewers.
 
+### Finding disposition
+
+Account for each substantive reviewer finding as one of: auto-fix now, record for human judgement, dismissed as unsupported, duplicate/already fixed.
+
 ### Bounded automatic fixes
 
-If **FIX**, list exact bounded changes to make, with constraints and validation.
+If **FIX**, list exact bounded changes to make, with constraints and validation. Include test/constraint/documentation-only fixes when they are the safest way to make an uncertainty visible and enforceable.
 
 ### Code-health findings for human judgement
 
