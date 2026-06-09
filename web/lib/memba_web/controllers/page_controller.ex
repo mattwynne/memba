@@ -97,6 +97,9 @@ defmodule MembaWeb.PageController do
       signed_out_verification_request?(conn, params) ->
         request_get_started_verification(conn, Map.get(params, "verification", %{}))
 
+      not signed_in_get_started?(conn) ->
+        require_get_started_verification(conn)
+
       true ->
         request_params = Map.get(params, "request", %{})
 
@@ -114,6 +117,14 @@ defmodule MembaWeb.PageController do
             |> render_get_started(changeset)
         end
     end
+  end
+
+  defp require_get_started_verification(conn) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_flash(:error, "Verify your email before completing your request.")
+    |> assign(:request_submitted?, false)
+    |> render_get_started(Onboarding.change_request(%{}))
   end
 
   defp signed_out_verification_request?(conn, params) do
@@ -235,11 +246,19 @@ defmodule MembaWeb.PageController do
   defp signed_in_get_started?(_conn), do: false
 
   defp get_started_request_attrs(conn, request_params) do
-    case signed_in_get_started_requester(conn) do
-      nil ->
-        {request_params, []}
+    case {Map.get(conn.assigns, :current_identity), signed_in_get_started_requester(conn)} do
+      {%{email: identity_email}, nil} ->
+        attrs =
+          request_params
+          |> verified_identity_request_details()
+          |> Map.put("requester_email", identity_email)
 
-      requester ->
+        {attrs, []}
+
+      {nil, _requester} ->
+        {%{}, []}
+
+      {_identity, requester} ->
         attrs =
           request_params
           |> club_request_details()
@@ -268,6 +287,14 @@ defmodule MembaWeb.PageController do
 
   defp signed_in_get_started_requester(_conn), do: nil
 
+  defp verified_identity_request_details(request_params) do
+    %{
+      "requester_name" => request_param(request_params, "requester_name"),
+      "requested_club_name" => request_param(request_params, "requested_club_name"),
+      "note" => request_param(request_params, "note")
+    }
+  end
+
   defp club_request_details(request_params) do
     %{
       "requested_club_name" => request_param(request_params, "requested_club_name"),
@@ -278,6 +305,7 @@ defmodule MembaWeb.PageController do
   defp request_param(request_params, key) do
     atom_key =
       case key do
+        "requester_name" -> :requester_name
         "requested_club_name" -> :requested_club_name
         "note" -> :note
       end

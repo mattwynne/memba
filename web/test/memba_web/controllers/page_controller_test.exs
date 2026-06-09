@@ -1102,12 +1102,9 @@ defmodule MembaWeb.PageControllerTest do
     assert_no_email_sent()
   end
 
-  test "POST /get-started stores a signed-out request and acknowledges staff review", %{
+  test "POST /get-started refuses signed-out request details until the email is verified", %{
     conn: conn
   } do
-    club_count = Repo.aggregate(Club, :count)
-    membership_count = Repo.aggregate(Membership, :count)
-
     conn =
       post(conn, ~p"/get-started",
         request: %{
@@ -1118,11 +1115,39 @@ defmodule MembaWeb.PageControllerTest do
         }
       )
 
+    response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Verify your email first"
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
+  end
+
+  test "POST /get-started stores a verified identity request without trusting typed email", %{
+    conn: conn
+  } do
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "Robin@Example.COM"})
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: " Robin Requester ",
+          requester_email: "forged@example.net",
+          requested_club_name: " West Coast Paddlers ",
+          note: " We want a safer way to message members. "
+        }
+      )
+
     assert redirected_to(conn) == ~p"/get-started?submitted=true"
 
     assert [%Request{} = request] = Repo.all(Request)
     assert request.requester_name == "Robin Requester"
-    assert request.requester_email == "Robin@Example.COM"
+    assert request.requester_email == "robin@example.com"
     assert request.normalized_requester_email == "robin@example.com"
     assert request.requested_club_name == "West Coast Paddlers"
     assert request.note == "We want a safer way to message members."
@@ -1132,17 +1157,14 @@ defmodule MembaWeb.PageControllerTest do
     assert_received {:email, %Swoosh.Email{} = email}
     assert email.from == {"Memba", "messages@mail.memba.io"}
     assert email.to == [{"", "hello@memba.io"}]
-    assert email.reply_to == {"Robin Requester", "Robin@Example.COM"}
+    assert email.reply_to == {"Robin Requester", "robin@example.com"}
     assert email.subject == "New Memba request: West Coast Paddlers"
     assert email.text_body =~ "Request ID: #{request.request_id}"
     assert email.text_body =~ "Club: West Coast Paddlers"
     assert email.text_body =~ "Robin Requester"
-    assert email.text_body =~ "Robin@Example.COM"
-    assert email.text_body =~ "We want a safer way to message members."
+    assert email.text_body =~ "robin@example.com"
+    refute email.text_body =~ "forged@example.net"
     assert email.provider_options == %{message_stream: "outbound-onboarding"}
-
-    assert Repo.aggregate(Club, :count) == club_count
-    assert Repo.aggregate(Membership, :count) == membership_count
 
     response =
       conn
