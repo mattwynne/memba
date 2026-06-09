@@ -1,0 +1,412 @@
+diff --git a/.fabro/workflows/README.md b/.fabro/workflows/README.md
+index 48eead0..a78b6f9 100644
+--- a/.fabro/workflows/README.md
++++ b/.fabro/workflows/README.md
+@@ -10,8 +10,8 @@ The helper runs the real workflows directly from the CLI, so approval stays at t
+ 
+ 1. `plan-validation` validates the plan at `plan_path` with `--auto-approve` only when the plan status is `ready`. A plan already marked `validated` reuses that result and skips validation. NOT READY stops before implementation. READY plans are marked `validated`, which is a holding state that does not occupy the implementation WIP slot.
+ 2. `bin/dev` checks that all earlier-numbered iterations are `merged`, then waits for the implementation WIP slot by polling `origin/main:docs/iterations/README.md` by default. Use `--no-wait` to fail immediately when the slot is occupied, or `--poll-interval seconds` to change the default 60-second interval. Once the predecessor and WIP checks pass, it marks the selected iteration `implementing`, updates `docs/iterations/README.md`, commits and pushes the status metadata, and captures the resulting `origin/main` SHA as the review base.
+-3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, and pushes that commit directly to `main`.
+-4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and marks the iteration `merged` after a successful review.
++3. `iteration-implementation` implements the plan at `plan_path`. It drains the iteration todo list, validates each task against Fabro checkpoint evidence, runs `dev ci`, proves plan conformance, squashes the implementation into one `iteration NNN: ...` commit, marks the iteration `merged`, and pushes that commit directly to `main`.
++4. `iteration-review` reviews the merged implementation diff from the captured `base_sha` to `HEAD`. It reruns `dev ci`, runs independent reviewer synthesis, applies bounded polish when safe, records judgement-worthy findings in `docs/code-health.md`, pushes any green polish as a separate `review polish: iteration NNN` commit to `main`, and leaves already-merged iteration lifecycle metadata unchanged.
+ 
+ Canonical commands:
+ 
+@@ -54,7 +54,7 @@ Prepare steps should reference files through `/workspace/memba/...` or run from
+ 
+ ## Delivery contract
+ 
+-Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses `.feature` changes unless the plan explicitly permits them in a `## Allowed acceptance feature changes` section, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
++Implementation publishes with a deterministic script after `dev ci` and plan conformance pass. The script rebases on `origin/main`, refuses `.feature` changes unless the plan explicitly permits them in a `## Allowed acceptance feature changes` section, marks the plan and iteration index `merged`, squashes Fabro checkpoint commits into one `iteration NNN: <title>` commit, writes deterministic run metadata trailers, and pushes `HEAD:main`.
+ 
+ Acceptance feature files are locked by default. When an iteration genuinely needs to change shared `.feature` files, the plan must include:
+ 
+@@ -68,7 +68,7 @@ Each bullet must name the exact `.feature` path and the allowed kind of change.
+ 
+ Review is post-merge and non-blocking. It must never push red: changes flow back through `dev ci`, and the publish script only runs after that green check. If there are no review changes, the publish step exits successfully without touching `main`. If there are bounded safe changes, they are squashed into one `review polish: iteration NNN` commit and pushed to `main`. Human-judgement findings belong in `docs/code-health.md`, not in a PR or blocking gate.
+ 
+-After review publish/no-op succeeds, the review workflow marks the iteration `merged` in the plan, implementation record when present, and `docs/iterations/README.md`, then commits and pushes that status finalization to `main`. If review fails, the iteration remains in its current in-progress state; rerun review with the printed `bin/dev fabro review ...` command after resolving the failure.
++After review publish/no-op succeeds, the review workflow verifies the iteration is marked `merged` in the plan, implementation record when present, and `docs/iterations/README.md`; when implementation already published the merged metadata, this is a no-op. If review fails, the implementation remains merged and the review run can be retried with the printed `bin/dev fabro review ...` command after resolving the failure.
+ 
+ When `bin/dev fabro review` must review `origin/main` while local `main` is checked out, it creates a temporary pushed branch under `review/tmp/` so Fabro can clone a real branch without detaching `main`. These branches are safe to delete only after their foreground review run has finished and their tip is already contained in `origin/main`. Use `bin/dev fabro clean-branches` to dry-run safe cleanup, then `bin/dev fabro clean-branches --force` to delete the listed temporary local and remote branches. The cleanup command also recognises older `review/main-YYYYMMDDHHMMSS` temporary branches.
+ 
+diff --git a/.fabro/workflows/iteration-implementation/scripts/final_artifact_gate.sh b/.fabro/workflows/iteration-implementation/scripts/final_artifact_gate.sh
+new file mode 100755
+index 0000000..0dd161b
+--- /dev/null
++++ b/.fabro/workflows/iteration-implementation/scripts/final_artifact_gate.sh
+@@ -0,0 +1,107 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++PLAN_PATH="${1:?plan path required}"
++
++echo '=== Final Artifact Gate ==='
++echo ''
++echo 'Checking for implementation artifact evidence...'
++echo ''
++
++if [ ! -f "$PLAN_PATH" ]; then
++  echo "ERROR: Plan file not found: $PLAN_PATH" >&2
++  exit 1
++fi
++
++git fetch --quiet origin main:refs/remotes/origin/main || true
++base_ref=''
++for ref in origin/main main; do
++  if git rev-parse --verify "$ref" >/dev/null 2>&1; then
++    base_ref=$ref
++    break
++  fi
++done
++if [ -z "$base_ref" ]; then
++  echo 'ERROR: Could not determine implementation base. Tried origin/main and main.' >&2
++  git branch -a -vv >&2 || true
++  git show-ref >&2 || true
++  exit 1
++fi
++
++merge_base_err="${TMPDIR:-/tmp}/memba-final-artifact-merge-base-$$.err"
++if ! base_sha=$(git merge-base HEAD "$base_ref" 2>"$merge_base_err"); then
++  echo "ERROR: Could not compute merge base between HEAD and $base_ref." >&2
++  cat "$merge_base_err" >&2 || true
++  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)
++  echo "Repository shallow: $shallow" >&2
++  if [ "$shallow" = true ]; then
++    echo 'Trying to unshallow repository before failing...' >&2
++    git fetch --quiet --unshallow origin || true
++  fi
++  if ! base_sha=$(git merge-base HEAD "$base_ref" 2>"$merge_base_err"); then
++    echo "ERROR: Still could not compute merge base between HEAD and $base_ref." >&2
++    cat "$merge_base_err" >&2 || true
++    git log --oneline --decorate --max-count=40 --all >&2 || true
++    git branch -a -vv >&2 || true
++    git show-ref >&2 || true
++    exit 1
++  fi
++fi
++rm -f "$merge_base_err"
++
++echo "Base ref: $base_ref"
++echo "Implementation base sha: $base_sha"
++echo "HEAD: $(git rev-parse HEAD)"
++echo ''
++
++status=$(git status --short)
++if [ -n "$status" ]; then
++  echo 'Working tree changes still present:'
++  printf '%s\n' "$status"
++  echo ''
++else
++  echo 'Working tree is clean (changes may have been checkpointed).'
++  echo ''
++fi
++
++committed_changed=$(git diff --name-only "$base_sha"..HEAD)
++working_changed=$(git diff --name-only)
++staged_changed=$(git diff --cached --name-only)
++changed_paths=$( { printf '%s\n' "$committed_changed"; printf '%s\n' "$working_changed"; printf '%s\n' "$staged_changed"; } | sed '/^$/d' | sed '/^\.fabro\/tmp\//d' | sort -u )
++
++if [ -n "$changed_paths" ]; then
++  echo "Files changed since implementation base $base_sha, including working tree/staged changes:"
++  printf '%s\n' "$changed_paths"
++  echo ''
++  echo 'Committed change summary:'
++  git diff --stat "$base_sha"..HEAD || true
++  echo ''
++  if [ -n "$working_changed" ] || [ -n "$staged_changed" ]; then
++    echo 'Uncommitted change summary:'
++    git diff --stat || true
++    git diff --cached --stat || true
++    echo ''
++  fi
++else
++  echo "No implementation differences found against $base_sha."
++  echo ''
++fi
++
++recent_commits=$(git log --oneline -5 --format='%h %s')
++if [ -n "$recent_commits" ]; then
++  echo 'Recent commits (may include Fabro checkpoints):'
++  printf '%s\n' "$recent_commits"
++  echo ''
++fi
++
++python3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py "$PLAN_PATH" "$base_sha"
++
++if [ -z "$changed_paths" ] && [ -z "$status" ]; then
++  echo 'ERROR: Implementation workflow reached finalization with no artifact evidence.' >&2
++  echo "No working tree changes, no base-head diff from $base_sha, and no staged changes." >&2
++  echo 'Refusing to report success without implementation artifacts.' >&2
++  exit 1
++fi
++
++echo 'Final artifact evidence confirmed.'
++echo 'Final artifact gate passed.'
+diff --git a/.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh b/.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh
+index 0b5b67e..aba50b3 100755
+--- a/.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh
++++ b/.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh
+@@ -43,6 +43,12 @@ run_id="${FABRO_RUN_ID:-${FABRO_RUN:-unknown}}"
+ workflow="iteration-implementation"
+ validation="dev check passed; plan conformance passed"
+ 
++# Publishing the implementation is the point at which the iteration's
++# lifecycle metadata should stop blocking later iterations. Include the merged
++# status in the same trunk commit as the implementation so the product artifact
++# and iteration index cannot drift apart.
++.fabro/workflows/scripts/iteration_status.py mark "$PLAN_PATH" merged
++
+ git add -A -- . ':!.fabro/tmp' ':!.fabro/tmp/**'
+ 
+ # Collapse Fabro checkpoint commits and any remaining working-tree changes into
+diff --git a/.fabro/workflows/iteration-implementation/scripts/test_final_artifact_gate.sh b/.fabro/workflows/iteration-implementation/scripts/test_final_artifact_gate.sh
+new file mode 100755
+index 0000000..b533076
+--- /dev/null
++++ b/.fabro/workflows/iteration-implementation/scripts/test_final_artifact_gate.sh
+@@ -0,0 +1,98 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/final_artifact_gate.sh
++repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
++guard_source="$repo_root/.fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py"
++workdir=$(mktemp -d)
++trap 'rm -rf "$workdir"' EXIT
++
++setup_repo() {
++  local repo=$1
++  rm -rf "$repo"
++  mkdir -p "$repo"
++  cd "$repo"
++  git init -q --initial-branch=main
++  git config user.name Test
++  git config user.email test@example.com
++  mkdir -p .fabro/workflows/iteration-implementation/scripts docs/iterations/001-example acceptance-tests/features
++  cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py
++  cat > docs/iterations/001-example/plan.md <<'PLAN'
++# Example plan
++
++Status: implementing
++PLAN
++  cat > acceptance-tests/features/example.feature <<'FEATURE'
++Feature: Example
++
++  Scenario: Original scenario
++    Given a fact
++    Then an outcome
++FEATURE
++  echo original > app.txt
++  git add .
++  git commit -q -m initial
++
++  rm -rf "$workdir/origin.git"
++  git init -q --bare "$workdir/origin.git"
++  git remote add origin "$workdir/origin.git"
++  git push -q origin main
++}
++
++run_gate() {
++  "$script_path" docs/iterations/001-example/plan.md >/tmp/implementation-final-gate.out 2>/tmp/implementation-final-gate.err
++}
++
++assert_passes() {
++  if ! run_gate; then
++    echo "Expected final artifact gate to pass" >&2
++    cat /tmp/implementation-final-gate.out >&2 || true
++    cat /tmp/implementation-final-gate.err >&2 || true
++    exit 1
++  fi
++}
++
++assert_fails() {
++  if run_gate; then
++    echo "Expected final artifact gate to fail" >&2
++    cat /tmp/implementation-final-gate.out >&2 || true
++    exit 1
++  fi
++}
++
++setup_repo "$workdir/checkpointed"
++cd "$workdir/checkpointed"
++echo implemented > app.txt
++git add app.txt
++git commit -q -m 'implementation change'
++# Simulate a Fabro checkpoint with no tree change after the implementation.
++git commit -q --allow-empty -m 'fabro checkpoint after implementation'
++assert_passes
++
++grep -q 'Implementation base sha:' /tmp/implementation-final-gate.out
++grep -q 'app.txt' /tmp/implementation-final-gate.out
++
++setup_repo "$workdir/unchanged"
++cd "$workdir/unchanged"
++assert_fails
++grep -q 'no artifact evidence' /tmp/implementation-final-gate.err
++
++setup_repo "$workdir/uncommitted"
++cd "$workdir/uncommitted"
++echo implemented > app.txt
++assert_passes
++
++setup_repo "$workdir/feature-policy"
++cd "$workdir/feature-policy"
++python3 - <<'PY'
++from pathlib import Path
++path = Path('acceptance-tests/features/example.feature')
++text = path.read_text()
++path.write_text(text.replace('    Then an outcome', '    Then a different outcome'))
++PY
++git add acceptance-tests/features/example.feature
++git commit -q -m 'implementation edits feature without permission'
++assert_fails
++grep -q 'locked acceptance feature policy failed' /tmp/implementation-final-gate.err
++
++echo "implementation final_artifact_gate tests passed"
+diff --git a/.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh b/.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh
+new file mode 100755
+index 0000000..0e32661
+--- /dev/null
++++ b/.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh
+@@ -0,0 +1,85 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/publish_to_main.sh
++repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)
++iteration_status_source="$repo_root/.fabro/workflows/scripts/iteration_status.py"
++guard_source="$repo_root/.fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py"
++workdir=$(mktemp -d)
++trap 'rm -rf "$workdir"' EXIT
++
++cd "$workdir"
++git init -q --initial-branch=main repo
++git init -q --bare origin.git
++cd repo
++git config user.name Test
++git config user.email test@example.com
++mkdir -p .fabro/workflows/scripts .fabro/workflows/iteration-implementation/scripts docs/iterations/001-example web/lib
++cp "$iteration_status_source" .fabro/workflows/scripts/iteration_status.py
++chmod +x .fabro/workflows/scripts/iteration_status.py
++cp "$guard_source" .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py
++cat > docs/iterations/README.md <<'README'
++# Iterations
++
++| # | Date | Status | Title | Plan |
++| --- | --- | --- | --- | --- |
++| 001 | 2026-01-01 | implementing | Example iteration | [plan](001-example/plan.md) |
++README
++cat > docs/iterations/001-example/plan.md <<'PLAN'
++# Example iteration
++
++Status: implementing
++
++## Goal
++
++Ship an example implementation.
++PLAN
++cat > web/lib/example.ex <<'CODE'
++defmodule Example do
++  def value, do: :before
++end
++CODE
++git add .
++git commit -q -m initial
++git remote add origin "$workdir/origin.git"
++git push -q origin main
++
++cat > web/lib/example.ex <<'CODE'
++defmodule Example do
++  def value, do: :after
++end
++CODE
++git add web/lib/example.ex
++git commit -q -m 'fabro checkpoint implementation'
++
++FABRO_RUN_ID=TEST-RUN "$script_path" docs/iterations/001-example/plan.md >/tmp/publish-to-main.out 2>/tmp/publish-to-main.err
++
++git fetch -q origin main
++published=$(git rev-parse origin/main)
++message=$(git log -1 --format=%B origin/main)
++
++if ! grep -q 'iteration 001: Example iteration' <<<"$message"; then
++  echo "Expected implementation commit subject on origin/main" >&2
++  echo "$message" >&2
++  exit 1
++fi
++if ! grep -q 'Fabro-Run-Id: TEST-RUN' <<<"$message"; then
++  echo "Expected Fabro run id in commit message" >&2
++  echo "$message" >&2
++  exit 1
++fi
++if [ "$(git show "$published:docs/iterations/001-example/plan.md" | sed -n 's/^Status: //p')" != "merged" ]; then
++  echo "Expected plan status to be merged on origin/main" >&2
++  exit 1
++fi
++if ! git show "$published:docs/iterations/README.md" | grep -q '| 001 | 2026-01-01 | merged | Example iteration |'; then
++  echo "Expected iteration index status to be merged on origin/main" >&2
++  git show "$published:docs/iterations/README.md" >&2
++  exit 1
++fi
++if ! git show "$published:web/lib/example.ex" | grep -q ':after'; then
++  echo "Expected product implementation to be published" >&2
++  exit 1
++fi
++
++echo "publish_to_main tests passed"
+diff --git a/.fabro/workflows/iteration-implementation/workflow.fabro b/.fabro/workflows/iteration-implementation/workflow.fabro
+index f807ccc..f299e90 100644
+--- a/.fabro/workflows/iteration-implementation/workflow.fabro
++++ b/.fabro/workflows/iteration-implementation/workflow.fabro
+@@ -189,7 +189,7 @@ digraph IterationImplementation {
+     final_artifact_gate [
+         label="Final Artifact Gate",
+         shape=parallelogram,
+-        script="set -eu\necho '=== Final Artifact Gate ==='\necho ''\necho 'Checking for implementation artifact evidence...'\necho ''\n\n# Strategy: prefer git base/head comparison over working-tree dirtiness alone,\n# since Fabro may checkpoint changes between nodes.\n\n# 1. Check working tree status first (may be clean if already checkpointed)\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo \"Working tree changes still present:\"\n  printf '%s\\n' \"$status\"\n  echo ''\nelse\n  echo \"Working tree is clean (changes may have been checkpointed).\"\n  echo ''\nfi\n\n# 2. Look for recent commits since workflow start (more reliable after checkpoint)\n# Get the base commit (start of workflow) - try common refs\nbase_ref=''\nchanged_files=''\nfor ref in HEAD@{1} HEAD~1 HEAD~2 HEAD~3 origin/main; do\n  if git rev-parse --verify \"$ref\" >/dev/null 2>&1; then\n    base_ref=\"$ref\"\n    break\n  fi\ndone\n\nif [ -n \"$base_ref\" ]; then\n  echo \"Comparing HEAD with $base_ref...\"\n  changed_files=$(git diff --name-only \"$base_ref\" HEAD 2>/dev/null || true)\n  if [ -n \"$changed_files\" ]; then\n    echo \"Files changed since workflow start:\"\n    printf '%s\\n' \"$changed_files\"\n    echo ''\n    echo \"Change summary:\"\n    git diff --stat \"$base_ref\" HEAD || true\n    echo ''\n  else\n    echo \"No differences found between $base_ref and HEAD.\"\n    echo ''\n  fi\nelse\n  echo \"Could not determine base reference for comparison.\"\n  echo ''\nfi\n\n# 3. Check for very recent commits (Fabro checkpoints)\nrecent_commits=$(git log --oneline -5 --format='%h %s')\nif [ -n \"$recent_commits\" ]; then\n  echo \"Recent commits (may include Fabro checkpoints):\"\n  printf '%s\\n' \"$recent_commits\"\n  echo ''\nfi\n\n# 4. Gather all evidence\nevidence=''\nif [ -n \"$status\" ]; then\n  evidence=\"working-tree\"\nfi\nif [ -n \"$changed_files\" ]; then\n  evidence=\"${evidence:+$evidence, }base-head-diff\"\nfi\n\n# 5. Check acceptance .feature file policy\nPLAN_PATH='{{ inputs.plan_path }}'\nif [ -n \"$base_ref\" ]; then\n  base_sha=$(git rev-parse \"$base_ref\")\n  python3 .fabro/workflows/iteration-implementation/scripts/guard_acceptance_feature_changes.py \"$PLAN_PATH\" \"$base_sha\"\nelse\n  echo 'ERROR: Could not determine base reference for acceptance feature policy check.' >&2\n  exit 1\nfi\n\n# 6. Fail if no evidence of changes\nif [ -z \"$evidence\" ]; then\n  echo 'ERROR: Implementation workflow reached finalization with no artifact evidence.' >&2\n  echo 'No working tree changes, no base-head diff, and no captured checkpoint found.' >&2\n  echo 'Refusing to report success without implementation artifacts.' >&2\n  exit 1\nfi\n\necho \"Final artifact evidence confirmed: $evidence\"\necho 'Final artifact gate passed.'"
++        script="bash .fabro/workflows/iteration-implementation/scripts/final_artifact_gate.sh '{{ inputs.plan_path }}'"
+     ]
+ 
+     publish_to_main [
+diff --git a/docs/iterations/029-membership-admin-invitations/plan.md b/docs/iterations/029-membership-admin-invitations/plan.md
+index fb6373d..013c990 100644
+--- a/docs/iterations/029-membership-admin-invitations/plan.md
++++ b/docs/iterations/029-membership-admin-invitations/plan.md
+@@ -1,7 +1,7 @@
+ # Membership Admin invitations
+ 
+ Date: 2026-06-08
+-Status: validated
++Status: merged
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/030-verified-onboarding-requests/plan.md b/docs/iterations/030-verified-onboarding-requests/plan.md
+index dfc983f..bcbad3f 100644
+--- a/docs/iterations/030-verified-onboarding-requests/plan.md
++++ b/docs/iterations/030-verified-onboarding-requests/plan.md
+@@ -1,7 +1,7 @@
+ # Verified public onboarding requests
+ 
+ Date: 2026-06-08
+-Status: validated
++Status: implementing
+ 
+ ## Goal
+ 
+diff --git a/docs/iterations/README.md b/docs/iterations/README.md
+index 37213a4..b659d4d 100644
+--- a/docs/iterations/README.md
++++ b/docs/iterations/README.md
+@@ -38,8 +38,8 @@ green than before.
+ | 026 | 2026-06-07 | merged | Domain Cucumber convergence | [plan](026-domain-cucumber-convergence/plan.md) |
+ | 027 | 2026-06-06 | merged | Membership Administrator role foundation | [plan](027-membership-administrator-role/plan.md) |
+ | 028 | 2026-06-08 | merged | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
+-| 029 | 2026-06-08 | validated | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
+-| 030 | 2026-06-08 | validated | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
++| 029 | 2026-06-08 | merged | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
++| 030 | 2026-06-08 | implementing | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
+ 
+ Status notes:
+ 
