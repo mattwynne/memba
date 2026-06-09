@@ -40,6 +40,7 @@ green than before.
 | 028 | 2026-06-08 | merged | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
 | 029 | 2026-06-08 | merged | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
 | 030 | 2026-06-08 | merged | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
+| 031 | 2026-06-08 | ready | Brand, email, and navigation polish | [plan](031-brand-email-navigation-polish/plan.md) |
 
 Status notes:
 
@@ -54,8 +55,10 @@ Shared acceptance feature files used across these iterations:
 - [`memba_staff_email_deliverability.feature`](../../acceptance-tests/features/memba_staff_email_deliverability.feature) (iteration 017 removes opened receipt expectations; iteration 007 remodels this as a deliveries overview across messages; browser Cucumber automation is iteration 006)
 - [`staff_club_slugs.feature`](../../acceptance-tests/features/staff_club_slugs.feature) (`@todo-domain`/`@todo-ui` for iteration 015 planning until staff slug management and public club subdomain routing are implemented)
 - [`person_email_addresses.feature`](../../acceptance-tests/features/person_email_addresses.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 016 until the person email-address model and staff/member behaviours are implemented)
-- [`member_club_subdomains.feature`](../../acceptance-tests/features/member_club_subdomains.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 018 until member-facing club subdomain routing and navigation are implemented)
+- [`member_club_subdomains.feature`](../../acceptance-tests/features/member_club_subdomains.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 018 until member-facing club subdomain routing and navigation are implemented; iteration 031 adds an `@not-domain @todo-ui` public club-page link back to Memba scenario)
 - [`memba_staff_operations.feature`](../../acceptance-tests/features/memba_staff_operations.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 021 until the redesigned staff operations pages, global People page, and global Messages page are implemented)
 - [`request_account.feature`](../../acceptance-tests/features/request_account.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 022 until staff-approved request-to-club onboarding is implemented; iteration 025 adds an `@todo-domain`/`@todo-ui` scenario for opening request conversion from the staff notification email; iteration 030 adds `@iteration-030 @todo-domain @todo-ui` scenarios for verified public onboarding requests)
 - [`club_membership_administration.feature`](../../acceptance-tests/features/club_membership_administration.feature) (`@todo-domain`/`@todo-ui` planning scenarios for iteration 027 until the Membership Administrator role and permission foundation is implemented)
 - [`club_member_invitations.feature`](../../acceptance-tests/features/club_member_invitations.feature) (`@iteration-028` with `@todo-domain`/`@todo-ui` planning scenarios until Staff invitation and profile-completion behaviour is implemented; iteration 029 adds `@iteration-029` Membership Admin invitation scenarios under the same temporary runner-debt tags until member-admin invitation behaviour is implemented)
+- [`homepage.feature`](../../acceptance-tests/features/homepage.feature) (iteration 031 adds an `@not-domain @todo-ui` homepage volunteering-vision scenario)
+- [`email_branding.feature`](../../acceptance-tests/features/email_branding.feature) (iteration 031 adds `@todo-domain @todo-ui` planning scenarios for sign-in email branding and club rejection email sender/footer polish)

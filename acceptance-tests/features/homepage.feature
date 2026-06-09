@@ -4,6 +4,13 @@ Feature: Homepage
     When I visit the homepage
     Then I should see the Memba homepage
 
+# Rule: The homepage leads with Memba's volunteering promise
+
+  @iteration-031 @not-domain @todo-ui
+  Scenario: Robin sees the volunteering vision first
+    When I visit the homepage
+    Then I should see that volunteering should not feel like work
+
   @not-domain
   Scenario: Visiting the homepage on a phone
     Given I am using a phone

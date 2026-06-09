@@ -58,6 +58,14 @@ Feature: Member club subdomains
       Then Robin should see the Kootenay Mountaineering Public club page
       And the club page should show Powered by Memba in the footer
 
+# Rule: Club pages offer a path back to Memba
+
+    @iteration-031 @not-domain @todo-ui
+    Scenario: Robin returns from a club page to Memba
+      Given Kootenay Mountaineering Club has the slug "kmc"
+      When Robin opens "kmc.clubs.memba.io"
+      Then Robin should see a link to the Memba homepage
+
 # Rule: Memba keeps a smoke-test club available without publishing it
 
     @not-domain
