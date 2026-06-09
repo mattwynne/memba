@@ -4,7 +4,7 @@
 
 Observed: 2026-06-08
 
-Status: Unresolved. [Iteration 027](../iterations/027-membership-administrator-role/plan.md) created the Admin / `club.manage_members` foundation. [Iteration 028](../iterations/028-staff-member-invitations/plan.md) plans the first invitation and profile-completion path for Staff only, deliberately leaving Membership Admin invitation UI and authorization as a follow-up.
+Status: Resolved by [iteration 029: Membership Admin invitations](../iterations/029-membership-admin-invitations/plan.md). [Iteration 027](../iterations/027-membership-administrator-role/plan.md) created the Admin / `club.manage_members` foundation, [iteration 028](../iterations/028-staff-member-invitations/plan.md) added the invitation/profile-completion path for Staff, and iteration 029 exposed the same invitation capability to Membership Admins for their own club.
 
 A newly approved club has an Admin, but that Admin still cannot invite additional people to join the club without Memba Staff doing it for them.
 

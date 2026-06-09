@@ -4,7 +4,7 @@
 
 Observed: 2026-06-08
 
-Status: Unresolved. [Iteration 028](../iterations/028-staff-member-invitations/plan.md) plans initial Staff invitation sending and automatic resend when the same pending club/email invitation is submitted again, but deliberately leaves a pending-invitation management surface out of scope.
+Status: Unresolved. [Iteration 028](../iterations/028-staff-member-invitations/plan.md) adds initial Staff invitation sending and automatic resend when the same pending club/email invitation is submitted again. [Iteration 029](../iterations/029-membership-admin-invitations/plan.md) extends invitation sending/resend behaviour to Membership Admins. Neither iteration adds a pending-invitation management surface for listing, cancelling, manually resending, or auditing pending invitations.
 
 After an invitation has been sent, Staff or Membership Admins do not have a clear place to see that it is pending, resend it deliberately, cancel it, or understand whether it has been accepted.
 

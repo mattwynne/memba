@@ -4,6 +4,8 @@
 
 Observed: 2026-06-07
 
+Status: Resolved by [iteration 031: Brand, email, and navigation polish](../iterations/031-brand-email-navigation-polish/plan.md). Public club pages now include a “Powered by Memba” footer link that resolves to the main Memba home URL via `MembaWeb.ClubSite.root_url()`.
+
 When someone is on a club homepage, there is no obvious way to navigate back to the main Memba homepage. This can leave visitors stuck in the club-specific context when they want to return to the broader product site.
 
 Expected:

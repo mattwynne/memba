@@ -4,7 +4,7 @@
 
 Observed: 2026-06-05
 
-Status: In progress / partially addressed by [iteration 024: Transactional email template redesign](../iterations/024-email-template-designs/plan.md). That plan preserves the current rule that replies go to the sender, not the group, and adds reply guidance to HTML member-message email; it is still implementing.
+Status: Resolved for current outgoing member-message email by [iteration 024: Transactional email template redesign](../iterations/024-email-template-designs/plan.md). The implemented member-message HTML now uses the v2 pattern with group-led context and explicit reply guidance that replies go to the sender, not to the group or an in-app discussion. Evidence: [iteration 024 implementation notes](../iterations/024-email-template-designs/implementation-notes.md) and `web/test/memba_web/controllers/postmark_webhook_controller_test.exs`.
 
 The current club email wording describes sending a message, but does not make clear that this email behaves like an announcement. Recipients can reply to the email, but the reply goes directly to the sender rather than back into Memba or out to other members.
 
@@ -26,4 +26,4 @@ Relevant acceptance criteria in [iteration 024](../iterations/024-email-template
 - Member-message From, Reply-To, subject, provider metadata, and local-delivery fact recording continue to work.
 - Member-message plain text remains exactly the sender's original body; the clarification is added in the HTML part for this iteration.
 
-This should close the copy/expectation problem for outgoing club-message email once iteration 024 is delivered: the email should make clear that replies go to the sender, not to the whole group or to an in-app discussion.
+This closed the copy/expectation problem for current outgoing club-message email: the HTML email makes clear that replies go to the sender, not to the whole group or to an in-app discussion.

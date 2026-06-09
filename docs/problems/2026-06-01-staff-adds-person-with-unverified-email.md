@@ -4,7 +4,7 @@
 
 Observed: 2026-06-01
 
-Status: Resolved by plan. [Iteration 028](../iterations/028-staff-member-invitations/plan.md) removes or redirects the Staff club-member direct-creation path so Staff invite by email instead of creating an active person/member from typed name and email. The remaining related concerns are tracked separately: [Membership Admins cannot invite members themselves](2026-06-08-membership-admins-cannot-invite-members.md) and [Alternate email addresses can be added without verification](2026-06-08-person-alternate-email-verification-missing.md).
+Status: Resolved by [iteration 028: Staff member invitations](../iterations/028-staff-member-invitations/plan.md). Staff now invite by email instead of creating an active person/member from typed name and email through the club-member direct-creation path. The remaining related concern is tracked separately: [Alternate email addresses can be added without verification](2026-06-08-person-alternate-email-verification-missing.md).
 
 When Staff creates a club member directly from a name and email address, Memba does not verify that the email address belongs to that person.
 
