@@ -1,0 +1,26 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index 875cefb..fbc9633 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -6,7 +6,7 @@
+ - [x] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
+ - [x] 005 Update request form rendering:
+ - [x] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+-- [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
++- [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
+ - [ ] 008 Ensure verified request submission does not create Person, club, membership, or club access.
+ - [ ] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+ - [ ] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 6b494a2..0b21741 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -911,6 +911,8 @@ defmodule MembaWeb.PageControllerTest do
+ 
+     assert redirected_to(callback_conn) == ~p"/get-started"
+     assert get_session(callback_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
++    assert Repo.aggregate(Request, :count) == 0
++    refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
+ 
+     get_started_conn =
+       callback_conn

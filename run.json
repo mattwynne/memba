@@ -1371,7 +1371,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-09T01:44:09.208556274Z",
-  "last_event_at": "2026-06-09T03:09:17.151699580Z",
+  "last_event_at": "2026-06-09T03:09:40.354559445Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -13227,9 +13227,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 2177,
       "checkpoint": {
-        "timestamp": "2026-06-09T03:09:36.849562795Z",
+        "timestamp": "2026-06-09T03:09:40.354502462Z",
         "current_node": "implement_next_task",
         "completed_nodes": [
           "start",
@@ -13279,12 +13279,345 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.retry_count.pre_validate_snapshot": 0,
+          "failure_class": "",
+          "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.sync_task_list": 0,
+          "thread.preflight_sandbox.current_node": "resume_gate",
+          "task_retry_available": false,
+          "outcome": "succeeded",
+          "thread.start.current_node": "read_plan",
+          "thread.validate_task.current_node": "task_gate",
+          "internal.retry_count.read_plan": 0,
+          "task_list_complete": false,
+          "graph.default_fidelity": "summary:high",
+          "internal.retry_count.task_gate": 0,
+          "internal.retry_count.implement_next_task": 0,
+          "internal.retry_count.start": 0,
+          "internal.run_id": "01KTN0R73HS0W7WKN4QTS9TWPV",
+          "last_stage": "implement_next_task",
+          "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/controllers/page_controller_test.exs`\n     - Strengthened the Get Started magic-link return-to test to prove that completing only the email verification/sign-in step:\n       - creates **zero** onboarding request records;\n       - does **not** send a Staff new-request notification.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted test/memba_web/controllers/page_controller_test.exs`\n     - Passed.\n   - Initial focused `bin/mix test ...` attempt hit the known sandbox issue where bare `pg_isready` is unavailable to the wrapper.\n   - Retried with an explicit devenv shell because of that wrapper issue:\n     - `DEVENV_TUI=false devenv processes up --strict-ports -d postgres && DEVENV_TUI=false devenv processes wait --timeout 120 && devenv shell -- bash -lc 'cd web && mix test test/memba_web/controllers/page_controller_test.exs:860 test/memba_web/controllers/page_controller_test.exs:889 --seed 0'`\n     - Passed: `39 tests, 0 failures, 37 excluded`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `746 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n   - To:\n     - `- [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - The plan does not explicitly reference any ADRs, and no `docs/adr/*.md` files were present in the current tree.\n   - Changes stayed within Phoenix controller test coverage for the selected behavior.\n   - No acceptance feature files were changed.",
+          "internal.retry_count.all_tasks_done": 0,
+          "task_list_needs_human": false,
+          "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.implement_next_task.current_node": "pre_validate_snapshot",
+          "failure_signature": "",
+          "thread.wip_gate.current_node": "preflight_sandbox",
+          "graph.max_node_visits": "80",
+          "thread.pre_validate_snapshot.current_node": "validate_task",
+          "command.output": "blob://sha256/eeef7e6feff30ebdd15cb2feba7b59d464daf0886cc4f934eb3f0838b3f69e40",
+          "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean.\n  - Recent implementation checkpoint `ac045aa` changed exactly one ordinary todo line:\n    - `006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.`\n    - from `- [ ]` to `- [x]`.\n  - `git show ac045aa^:docs/iterations/030-verified-onboarding-requests/todo.md` confirms task 006 was the first unchecked task when implementation started.\n  - Current `todo.md` has tasks 001–006 checked, with 007 next unchecked.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/controllers/page_controller.ex`\n    - Signed-out non-verification `POST /get-started` submissions now return `422` and render the verification step instead of creating a Staff-visible onboarding request.\n    - Signed-in identities without a Membership Person submit using `current_identity.email`.\n    - Existing signed-in Person submissions still use known Person name/email.\n    - Typed `requester_email` is not trusted for Staff-visible requests.\n  - `web/test/memba_web/controllers/page_controller_test.exs`\n    - Added/updated coverage for signed-out request-detail refusal.\n    - Added coverage for verified identity submission with forged typed email ignored.\n\n- Tests run/results found:\n  - Validator ran `git show --check ac045aa && git diff --check` — passed.\n  - Validator ran `bin/mix format --check-formatted lib/memba_web/controllers/page_controller.ex test/memba_web/controllers/page_controller_test.exs` — passed.\n  - `bin/mix test ...` initially could not run because the wrapper needs bare `pg_isready`; after explicitly starting Postgres, validator ran the focused controller tests inside `devenv shell` with the real Mix executable:\n    - `mix test test/memba_web/controllers/page_controller_test.exs:1105 test/memba_web/controllers/page_controller_test.exs:1131 --seed 0`\n    - Passed: `39 tests, 0 failures, 37 excluded`.\n\n- ADR/plan conformance notes:\n  - Work matches task 006 and stays within the approved iteration plan.\n  - No acceptance feature files were edited.\n  - No plan-required todo work was deleted, weakened, split, or silently deferred.\n  - Scope is appropriately small for an independent Fabro checkpoint.\n  - Relevant ADR constraints are respected: Phoenix web app change only; focused controller tests are appropriate for this controller-rendered behavior; acceptance feature files remain untouched.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}",
+          "internal.work_dir": "/workspace/memba",
+          "current_node": "implement_next_task",
+          "thread.all_tasks_done.current_node": "implement_next_task",
+          "internal.retry_count.resume_gate": 0,
+          "internal.retry_count.wip_gate": 0,
+          "internal.fidelity": "summary:high",
+          "internal.node_visit_count": 7,
+          "internal.thread_id": "all_tasks_done",
+          "graph.rankdir": "LR",
+          "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n2. **Chan",
+          "task_valid": true,
+          "thread.read_plan.current_node": "wip_gate",
+          "internal.retry_count.validate_task": 0,
+          "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+          "thread.resume_gate.current_node": "sync_task_list",
+          "thread.task_gate.current_node": "sync_task_list",
+          "thread.sync_task_list.current_node": "all_tasks_done"
+        },
+        "node_outcomes": {
+          "implement_next_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n2. **Chan",
+              "last_stage": "implement_next_task",
+              "response.implement_next_task": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n2. **Changes made**\n   - Updated `web/test/memba_web/controllers/page_controller_test.exs`\n     - Strengthened the Get Started magic-link return-to test to prove that completing only the email verification/sign-in step:\n       - creates **zero** onboarding request records;\n       - does **not** send a Staff new-request notification.\n\n3. **Focused validation**\n   - `PATH=\"$PWD/bin:$PATH\" bin/mix format --check-formatted test/memba_web/controllers/page_controller_test.exs`\n     - Passed.\n   - Initial focused `bin/mix test ...` attempt hit the known sandbox issue where bare `pg_isready` is unavailable to the wrapper.\n   - Retried with an explicit devenv shell because of that wrapper issue:\n     - `DEVENV_TUI=false devenv processes up --strict-ports -d postgres && DEVENV_TUI=false devenv processes wait --timeout 120 && devenv shell -- bash -lc 'cd web && mix test test/memba_web/controllers/page_controller_test.exs:860 test/memba_web/controllers/page_controller_test.exs:889 --seed 0'`\n     - Passed: `39 tests, 0 failures, 37 excluded`.\n   - `PATH=\"$PWD/bin:$PATH\" dev check --quick`\n     - Passed: `746 tests, 0 failures`.\n   - `git diff --check`\n     - Passed.\n\n4. **Todo check-off made**\n   - Changed exactly:\n     - `- [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n   - To:\n     - `- [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n5. **Todo splits/additions/reordering**\n   - None.\n\n6. **ADR conformance**\n   - The plan does not explicitly reference any ADRs, and no `docs/adr/*.md` files were present in the current tree.\n   - Changes stayed within Phoenix controller test coverage for the selected behavior.\n   - No acceptance feature files were changed."
+            },
+            "notes": "Stage completed: implement_next_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 426321,
+                    "output_tokens": 2862,
+                    "reasoning_tokens": 3057,
+                    "cache_read_tokens": 489984,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2554167
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 213759,
+              "tool_time_ms": 76864,
+              "active_time_ms": 290623
+            }
+          },
+          "task_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: task_gate",
+            "usage": null
+          },
+          "all_tasks_done": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "all_tasks_done",
+              "last_response": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "response.all_tasks_done": "{\"context_updates\":{\"task_list_complete\":false,\"task_list_needs_human\":false}}",
+              "task_list_needs_human": false,
+              "task_list_complete": false
+            },
+            "notes": "Stage completed: all_tasks_done",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 23742,
+                    "output_tokens": 28,
+                    "reasoning_tokens": 83,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 122040
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 6577,
+              "tool_time_ms": 0,
+              "active_time_ms": 6577
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e98e4f74eb9eb7cd8c4905520d1e5c76308d5c1c77acb8200cf0522428945b4c"
+            },
+            "notes": "Script completed: set -eu\nfor tool in nix python3; do\n  if ! command -v \"$tool\" >/dev/null 2>&1; then\n    echo \"Missing required bare sandbox tool: $tool\" >&2\n    echo \"The iteration workflow uses $tool before or outside bin/dev's devenv shell. Rebuild the Fabro sandbox image with this tool on the default PATH.\" >&2\n    exit 1\n  fi\ndone\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 255570,
+              "active_time_ms": 255570
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/777068190e3ae3b6c72fb74d2db14c7a2692307f8127a625ce60184561df1439"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 292,
+              "active_time_ms": 292
+            }
+          },
+          "pre_validate_snapshot": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/3fd6fc8b5a9d64072de5d6ee187f2d18cf826a3a56f2fd7cc3746c747863bca1"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 188,
+              "active_time_ms": 188
+            }
+          },
+          "resume_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/d46a7e93d70a5dd104ac4db2bf6f1455790c814e0ceee76cb5d063d14f94e2bd"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\necho '=== Iteration resume gate ==='\nif git rev-parse --verify HEAD >/dev/null 2>&1; then\n  printf 'HEAD: ' && git log -1 --format='%h %s'\nelse\n  echo 'HEAD: unavailable'\nfi\nif [ -f \"$TODO_PATH\" ]; then\n  checked=$(grep -E '^[[:space:]]*- \\[x\\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  unchecked=$(grep -E '^[[:space:]]*- \\[ \\] ' \"$TODO_PATH\" | wc -l | tr -d ' ')\n  printf 'Todo: %s (%s checked, %s unchecked)\\n' \"$TODO_PATH\" \"${checked:-0}\" \"${unchecked:-0}\"\nelse\n  printf 'Todo: %s is absent; sync_task_list will create it from plan.md.\\n' \"$TODO_PATH\"\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Uncommitted changes present:'\n  printf '%s\\n' \"$status\"\n  echo 'Refusing to resume with a dirty working tree. Commit, stash, or run git reset --hard HEAD (and clean untracked files if appropriate), then rerun iteration-implementation.' >&2\n  exit 1\nfi\necho 'Working tree clean; safe to resume from durable Fabro checkpoint commits.'",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 232,
+              "active_time_ms": 232
+            }
+          },
+          "validate_task": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean.\n  - Recent implementation checkpoint `ac045aa` changed exactly one ordinary todo line:\n    - ",
+              "task_retry_available": false,
+              "task_valid": true,
+              "last_stage": "validate_task",
+              "response.validate_task": "### Decision\n**VALID**\n\n### Evidence\n- Completed todo/check-off evidence found:\n  - Working tree is clean.\n  - Recent implementation checkpoint `ac045aa` changed exactly one ordinary todo line:\n    - `006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.`\n    - from `- [ ]` to `- [x]`.\n  - `git show ac045aa^:docs/iterations/030-verified-onboarding-requests/todo.md` confirms task 006 was the first unchecked task when implementation started.\n  - Current `todo.md` has tasks 001–006 checked, with 007 next unchecked.\n\n- Implementation artifacts found:\n  - `web/lib/memba_web/controllers/page_controller.ex`\n    - Signed-out non-verification `POST /get-started` submissions now return `422` and render the verification step instead of creating a Staff-visible onboarding request.\n    - Signed-in identities without a Membership Person submit using `current_identity.email`.\n    - Existing signed-in Person submissions still use known Person name/email.\n    - Typed `requester_email` is not trusted for Staff-visible requests.\n  - `web/test/memba_web/controllers/page_controller_test.exs`\n    - Added/updated coverage for signed-out request-detail refusal.\n    - Added coverage for verified identity submission with forged typed email ignored.\n\n- Tests run/results found:\n  - Validator ran `git show --check ac045aa && git diff --check` — passed.\n  - Validator ran `bin/mix format --check-formatted lib/memba_web/controllers/page_controller.ex test/memba_web/controllers/page_controller_test.exs` — passed.\n  - `bin/mix test ...` initially could not run because the wrapper needs bare `pg_isready`; after explicitly starting Postgres, validator ran the focused controller tests inside `devenv shell` with the real Mix executable:\n    - `mix test test/memba_web/controllers/page_controller_test.exs:1105 test/memba_web/controllers/page_controller_test.exs:1131 --seed 0`\n    - Passed: `39 tests, 0 failures, 37 excluded`.\n\n- ADR/plan conformance notes:\n  - Work matches task 006 and stays within the approved iteration plan.\n  - No acceptance feature files were edited.\n  - No plan-required todo work was deleted, weakened, split, or silently deferred.\n  - Scope is appropriately small for an independent Fabro checkpoint.\n  - Relevant ADR constraints are respected: Phoenix web app change only; focused controller tests are appropriate for this controller-rendered behavior; acceptance feature files remain untouched.\n\n{\"context_updates\":{\"task_valid\":true,\"task_retry_available\":false}}"
+            },
+            "notes": "Stage completed: validate_task",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 526140,
+                    "output_tokens": 2909,
+                    "reasoning_tokens": 1956,
+                    "cache_read_tokens": 384000,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2968650
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 150864,
+              "tool_time_ms": 26642,
+              "active_time_ms": 177506
+            }
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "wip_gate": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4ed37fac706410ea3a7e4c30fbc216706e4beb411528ca94a9b938908abd62dc"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\nPATH=\"$PWD/bin:$PATH\" dev iteration check-predecessors \"$PLAN_PATH\"\nPATH=\"$PWD/bin:$PATH\" dev iteration check-clear \"$PLAN_PATH\" --allow-same-iteration",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 2152,
+              "active_time_ms": 2152
+            }
+          },
+          "sync_task_list": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/eeef7e6feff30ebdd15cb2feba7b59d464daf0886cc4f934eb3f0838b3f69e40"
+            },
+            "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nmkdir -p .fabro/tmp\n# Resume contract: once todo.md exists, it is the execution-state source of truth.\n# Preserve existing check-offs, splits, and reorderings across runs. Regenerate\n# from plan.md only when todo.md is absent.\nif [ ! -f \"$TODO_PATH\" ]; then\n  tmp=.fabro/tmp/generated-todo.md\n  {\n    printf '# Implementation TODO\\n\\n'\n    in_plan=0\n    count=0\n    while IFS= read -r line; do\n      case \"$line\" in\n        '## Implementation Plan') in_plan=1; continue ;;\n        '## '*) if [ \"$in_plan\" -eq 1 ]; then break; fi ;;\n      esac\n      if [ \"$in_plan\" -eq 1 ]; then\n        case \"$line\" in\n          [0-9]*'. '*)\n            count=$((count + 1))\n            task=${line#*. }\n            printf -- '- [ ] %03d %s\\n' \"$count\" \"$task\"\n            ;;\n        esac\n      fi\n    done < \"$PLAN_PATH\"\n    if [ \"${count:-0}\" -eq 0 ]; then\n      echo \"No numbered tasks found under ## Implementation Plan in $PLAN_PATH\" >&2\n      exit 1\n    fi\n  } > \"$tmp\"\n  mkdir -p \"$ITERATION_DIR\"\n  mv \"$tmp\" \"$TODO_PATH\"\n  echo \"Created $TODO_PATH from $PLAN_PATH\"\nelse\n  echo \"Using existing $TODO_PATH; preserving existing check-offs, splits, and ordering.\"\nfi\nprintf 'PLAN_PATH=%s\\nTODO_PATH=%s\\n' \"$PLAN_PATH\" \"$TODO_PATH\"\nsed -n '1,120p' \"$TODO_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 186,
+              "active_time_ms": 186
+            }
+          }
+        },
+        "next_node_id": "pre_validate_snapshot",
+        "git_commit_sha": "36c3ca9e3b3d401e12adbcf867b06547d87d7d33",
+        "node_visits": {
+          "resume_gate": 1,
+          "task_gate": 6,
+          "all_tasks_done": 7,
+          "implement_next_task": 7,
+          "read_plan": 1,
+          "start": 1,
+          "wip_gate": 1,
+          "preflight_sandbox": 1,
+          "sync_task_list": 7,
+          "pre_validate_snapshot": 6,
+          "validate_task": 6
+        }
+      },
+      "diff": {
+        "patch": "diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md\nindex 875cefb..fbc9633 100644\n--- a/docs/iterations/030-verified-onboarding-requests/todo.md\n+++ b/docs/iterations/030-verified-onboarding-requests/todo.md\n@@ -6,7 +6,7 @@\n - [x] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.\n - [x] 005 Update request form rendering:\n - [x] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.\n-- [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.\n+- [x] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.\n - [ ] 008 Ensure verified request submission does not create Person, club, membership, or club access.\n - [ ] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.\n - [ ] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.\ndiff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs\nindex 6b494a2..0b21741 100644\n--- a/web/test/memba_web/controllers/page_controller_test.exs\n+++ b/web/test/memba_web/controllers/page_controller_test.exs\n@@ -911,6 +911,8 @@ defmodule MembaWeb.PageControllerTest do\n \n     assert redirected_to(callback_conn) == ~p\"/get-started\"\n     assert get_session(callback_conn, IdentityAuth.identity_session_key()) == \"robin@example.com\"\n+    assert Repo.aggregate(Request, :count) == 0\n+    refute_received {:email, %Swoosh.Email{to: [{\"\", \"hello@memba.io\"}]}}\n \n     get_started_conn =\n       callback_conn\n",
+        "summary": {
+          "files_changed": 5,
+          "additions": 591,
+          "deletions": 50
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-09T03:09:40.869936330Z",
+        "current_node": "pre_validate_snapshot",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "wip_gate",
+          "preflight_sandbox",
+          "resume_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot",
+          "validate_task",
+          "task_gate",
+          "sync_task_list",
+          "all_tasks_done",
+          "implement_next_task",
+          "pre_validate_snapshot"
+        ],
+        "node_retries": {},
+        "context_values": {
           "task_list_needs_human": false,
           "internal.fidelity": "summary:high",
           "thread.start.current_node": "read_plan",
           "graph.goal": "Implement a validated iteration plan and leave the codebase passing dev check",
           "graph.default_fidelity": "summary:high",
-          "internal.thread_id": "all_tasks_done",
+          "internal.thread_id": "implement_next_task",
           "internal.retry_count.wip_gate": 0,
           "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #sync_task_list { model: gpt-5.5; reasoning_effort: high; }\n            #resume_gate { reasoning_effort: low; }\n            #implement_next_task { model: gpt-5.5; reasoning_effort: high; }\n            #validate_task { model: gpt-5.5; reasoning_effort: high; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #plan_conformance_gate { model: gpt-5.5; reasoning_effort: high; }\n            #fix_plan_conformance { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "thread.wip_gate.current_node": "preflight_sandbox",
@@ -13303,7 +13636,7 @@
           "thread.preflight_sandbox.current_node": "resume_gate",
           "failure_signature": "",
           "failure_class": "",
-          "current_node": "implement_next_task",
+          "current_node": "pre_validate_snapshot",
           "internal.node_visit_count": 7,
           "last_response": "Implemented the next unchecked iteration task.\n\n1. **Selected todo line**\n   - `007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.`\n\n2. **Chan",
           "thread.implement_next_task.current_node": "pre_validate_snapshot",
@@ -13321,7 +13654,7 @@
           "thread.read_plan.current_node": "wip_gate",
           "thread.resume_gate.current_node": "sync_task_list",
           "graph.max_node_visits": "80",
-          "command.output": "blob://sha256/eeef7e6feff30ebdd15cb2feba7b59d464daf0886cc4f934eb3f0838b3f69e40",
+          "command.output": "blob://sha256/85e56fe7ad9c451bfb2fa367a4d69c389d1851bc038d92dce5915ac60924fb15",
           "thread.sync_task_list.current_node": "all_tasks_done",
           "task_valid": true,
           "internal.run_id": "01KTN0R73HS0W7WKN4QTS9TWPV"
@@ -13386,15 +13719,15 @@
           "pre_validate_snapshot": {
             "status": "succeeded",
             "context_updates": {
-              "command.output": "blob://sha256/3fd6fc8b5a9d64072de5d6ee187f2d18cf826a3a56f2fd7cc3746c747863bca1"
+              "command.output": "blob://sha256/85e56fe7ad9c451bfb2fa367a4d69c389d1851bc038d92dce5915ac60924fb15"
             },
             "notes": "Script completed: set -eu\nPLAN_PATH='docs/iterations/030-verified-onboarding-requests/plan.md'\ncase \"$PLAN_PATH\" in\n  */plan.md) ITERATION_DIR=${PLAN_PATH%/plan.md} ;;\n  *) echo \"plan_path must end with /plan.md: $PLAN_PATH\" >&2; exit 1 ;;\nesac\nTODO_PATH=\"$ITERATION_DIR/todo.md\"\nSNAPSHOT=/tmp/fabro-pre-validate-snapshot.md\n{\n  echo '# Pre-validation repository snapshot'\n  echo\n  echo 'Validation-time contract: Fabro checkpoints after every node. The just-completed task may appear either as uncommitted working-tree changes or as the latest/recent Fabro checkpoint commit on HEAD.'\n  echo\n  echo '## HEAD'\n  git rev-parse --short HEAD || true\n  git log -1 --format='%h %s' || true\n  echo\n  echo '## git status --short'\n  git status --short || true\n  echo\n  echo '## git diff --stat'\n  git diff --stat || true\n  echo\n  echo \"## Working-tree diff for $TODO_PATH\"\n  if [ -f \"$TODO_PATH\" ]; then\n    git diff -- \"$TODO_PATH\" || true\n  else\n    echo \"Todo file missing: $TODO_PATH\"\n  fi\n  echo\n  echo '## git diff --name-only'\n  git diff --name-only || true\n  echo\n  echo '## Untracked files'\n  git ls-files --others --exclude-standard || true\n  echo\n  echo '## Combined changed path list from git status --porcelain'\n  git status --porcelain || true\n} > \"$SNAPSHOT\"\necho \"Wrote $SNAPSHOT\"\nsed -n '1,220p' \"$SNAPSHOT\"",
             "usage": null,
             "timing": {
               "wall_time_ms": 0,
               "inference_time_ms": 0,
-              "tool_time_ms": 188,
-              "active_time_ms": 188
+              "tool_time_ms": 334,
+              "active_time_ms": 334
             }
           },
           "all_tasks_done": {
@@ -13533,7 +13866,7 @@
             "usage": null
           }
         },
-        "next_node_id": "pre_validate_snapshot",
+        "next_node_id": "validate_task",
         "node_visits": {
           "sync_task_list": 7,
           "start": 1,
@@ -13542,7 +13875,7 @@
           "implement_next_task": 7,
           "task_gate": 6,
           "wip_gate": 1,
-          "pre_validate_snapshot": 6,
+          "pre_validate_snapshot": 7,
           "all_tasks_done": 7,
           "validate_task": 6,
           "preflight_sandbox": 1
@@ -13575,7 +13908,12 @@
       "first_event_seq": 2052,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: implement_next_task",
+        "failure_reason": null,
+        "timestamp": "2026-06-09T03:09:36.832555419Z"
+      },
       "provider_used": {
         "mode": "agent",
         "provider": "openai",
@@ -13589,13 +13927,20 @@
       "output": null,
       "started_at": "2026-06-09T03:04:45.718347426Z",
       "handler": "agent",
+      "timing": {
+        "wall_time_ms": 291114,
+        "inference_time_ms": 213759,
+        "tool_time_ms": 76864,
+        "active_time_ms": 290623
+      },
       "usage": {
-        "input_tokens": 425964,
-        "output_tokens": 2397,
-        "total_tokens": 861587,
-        "reasoning_tokens": 2634,
-        "cache_read_tokens": 430592,
-        "cache_write_tokens": 0
+        "input_tokens": 426321,
+        "output_tokens": 2862,
+        "total_tokens": 922224,
+        "reasoning_tokens": 3057,
+        "cache_read_tokens": 489984,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 2554167
       },
       "model": {
         "provider": "openai",
@@ -13764,32 +14109,32 @@
         "provider": "openai",
         "model": "gpt-5.5",
         "context_window_tokens": 272000,
-        "input_tokens": 59627,
-        "usage_percent": 21.92169117647059,
+        "input_tokens": 59749,
+        "usage_percent": 21.966544117647057,
         "count_method": "response_usage_scaled_breakdown",
         "staleness": "live",
-        "generated_at": "2026-06-09T03:09:17.149030653Z",
-        "event_seq": 2163,
+        "generated_at": "2026-06-09T03:09:36.824114785Z",
+        "event_seq": 2169,
         "breakdown": [
           {
             "category": "system_prompt",
-            "tokens": 1085,
-            "usage_percent": 0.39889705882352944
+            "tokens": 1078,
+            "usage_percent": 0.3963235294117647
           },
           {
             "category": "tools",
-            "tokens": 1549,
-            "usage_percent": 0.569485294117647
+            "tokens": 1538,
+            "usage_percent": 0.5654411764705882
           },
           {
             "category": "memory",
-            "tokens": 385,
-            "usage_percent": 0.14154411764705882
+            "tokens": 382,
+            "usage_percent": 0.14044117647058824
           },
           {
             "category": "conversation",
-            "tokens": 56602,
-            "usage_percent": 20.80955882352941
+            "tokens": 56745,
+            "usage_percent": 20.862132352941178
           },
           {
             "category": "other",
@@ -13799,7 +14144,7 @@
         ],
         "warnings": []
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "sync_task_list@1": {
       "first_event_seq": 65,
