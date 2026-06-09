@@ -100,6 +100,9 @@ defmodule Memba.EmailTemplatesTest do
     assert memba_header =~ "Memba"
     assert memba_header =~ "Delivery &lt;notice&gt;"
     assert memba_header =~ "<svg"
+    assert memba_header =~ ~s|d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"|
+    assert memba_header =~ ~s|fill="#d2925a"|
+    refute memba_header =~ ~s|d="M 18 34 L 28 44 L 46 24"|
   end
 
   test "renders escaped Memba footer and trust footer without hard-coded support addresses" do

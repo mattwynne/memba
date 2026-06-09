@@ -463,9 +463,9 @@ defmodule Memba.EmailTemplates do
     ~s|Need a hand? Reply to this email or write to <a href="mailto:#{escaped_reply_to_email}" style="color:#{@ink_3}; text-decoration:underline;">#{escaped_reply_to_email}</a>.|
   end
 
-  defp memba_mark_svg(size, stroke, stroke_width) do
+  defp memba_mark_svg(size, foliage_color, stem_width) do
     """
-    <svg width="#{size}" height="#{size}" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#{@forest}"></rect><path d="M 18 34 L 28 44 L 46 24" fill="none" stroke="#{stroke}" stroke-width="#{stroke_width}" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    <svg width="#{size}" height="#{size}" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#{@forest}"></rect><path d="M32 51 C32 43 32 36 32 18" stroke="#{foliage_color}" stroke-width="#{stem_width}" stroke-linecap="round"></path><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="#{foliage_color}"></path><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="#{foliage_color}"></path><circle cx="32" cy="15" r="3.7" fill="#d2925a"></circle></svg>
     """
   end
 end

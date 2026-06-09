@@ -5,7 +5,8 @@
 - [x] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
 - [x] 003 Inspect the transactional email layout/helpers from iteration 024 and identify the canonical footer component or helper.
   - Finding: iteration 024 introduced `Memba.EmailTemplates` in `web/lib/memba/email_templates.ex` as the shared transactional email rendering layer. The canonical standard footer helper is `EmailTemplates.memba_footer/1`, rendered through `EmailTemplates.render_shell/1`'s `:footer` option; it provides the ambient Memba baseline (`Delivered for <group> by Memba`, recipient/why/reply-to support lines, consistent border/padding/mark). `EmailTemplates.trust_footer/1` is a separate sign-in/welcome trust panel (`Secured by Memba`) that may sit above the standard footer but is not the standard footer itself.
-- [ ] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
+- [x] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
+  - Change: `Memba.EmailTemplates` now renders the shared email Memba mark with the same sprig silhouette paths used by `MembaWeb.Brand.sprig/1` instead of the previous checkmark path, and focused auth-email/template tests assert sign-in email HTML contains the sprig leaf/bud markup and no longer contains the checkmark path.
 - [ ] 005 Ensure the sign-in email uses the standard transactional email footer.
 - [ ] 006 Inspect inbound club-message rejection email construction and the email request/provider shape for display-name support.
 - [ ] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
