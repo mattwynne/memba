@@ -1,0 +1,323 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index 717aeb6..567c6da 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+ - [x] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
+ - [x] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
+-- [ ] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
++- [x] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
+ - [ ] 013 Update Cucumber step definitions only as needed during delivery to exercise the `@iteration-030` scenarios.
+ - [ ] 014 Remove or narrow `@todo-domain`/`@todo-ui` from the new/updated scenarios only when they pass in the relevant runner.
+ - [ ] 015 Run `dev check`.
+diff --git a/web/lib/memba/onboarding/request.ex b/web/lib/memba/onboarding/request.ex
+index 21626a1..6651e34 100644
+--- a/web/lib/memba/onboarding/request.ex
++++ b/web/lib/memba/onboarding/request.ex
+@@ -37,10 +37,10 @@ defmodule Memba.Onboarding.Request do
+   @doc false
+   def create_changeset(attrs, opts \\ []) when is_map(attrs) and is_list(opts) do
+     %__MODULE__{request_id: ID.generate(:onboarding_request), status: @status_active}
+-    |> cast(attrs, [:requester_name, :requester_email, :requested_club_name, :note])
+-    |> trim_changes([:requester_name, :requester_email, :requested_club_name, :note])
+-    |> validate_required([:requester_name, :requester_email, :requested_club_name, :note])
+-    |> put_normalized_requester_email()
++    |> cast(attrs, [:requester_name, :requested_club_name, :note])
++    |> trim_changes([:requester_name, :requested_club_name, :note])
++    |> validate_required([:requester_name, :requested_club_name, :note])
++    |> put_verified_identity_email(Keyword.get(opts, :verified_identity_email))
+     |> put_optional_typed_id(
+       :requester_person_id,
+       Keyword.get(opts, :requester_person_id),
+@@ -89,24 +89,26 @@ defmodule Memba.Onboarding.Request do
+     end)
+   end
+ 
+-  defp put_normalized_requester_email(changeset) do
+-    case get_field(changeset, :requester_email) do
+-      email when is_binary(email) and email != "" ->
+-        case EmailAddresses.normalize_email(email) do
+-          {:ok, %{email: email, normalized_email: normalized_email}} ->
+-            changeset
+-            |> put_change(:requester_email, email)
+-            |> put_change(:normalized_requester_email, normalized_email)
+-
+-          {:error, :invalid_email} ->
+-            add_error(changeset, :requester_email, "is invalid")
+-        end
+-
+-      _email ->
++  defp put_verified_identity_email(changeset, email) when is_binary(email) do
++    case EmailAddresses.normalize_email(email) do
++      {:ok, %{normalized_email: normalized_email}} ->
+         changeset
++        |> put_change(:requester_email, normalized_email)
++        |> put_change(:normalized_requester_email, normalized_email)
++
++      {:error, :invalid_email} ->
++        if String.trim(email) == "" do
++          add_error(changeset, :requester_email, "must be verified")
++        else
++          add_error(changeset, :requester_email, "is invalid")
++        end
+     end
+   end
+ 
++  defp put_verified_identity_email(changeset, _email) do
++    add_error(changeset, :requester_email, "must be verified")
++  end
++
+   defp put_optional_typed_id(changeset, _field, nil, _type), do: changeset
+ 
+   defp put_optional_typed_id(changeset, field, value, type) do
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index c56d339..fbb1bbf 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -253,7 +253,7 @@ defmodule MembaWeb.PageController do
+           |> verified_identity_request_details()
+           |> Map.put("requester_email", identity_email)
+ 
+-        {attrs, []}
++        {attrs, [verified_identity_email: identity_email]}
+ 
+       {nil, _requester} ->
+         {%{}, []}
+@@ -267,7 +267,8 @@ defmodule MembaWeb.PageController do
+             "requester_email" => requester.email
+           })
+ 
+-        {attrs, [requester_person_id: requester.person_id]}
++        {attrs,
++         [verified_identity_email: requester.email, requester_person_id: requester.person_id]}
+     end
+   end
+ 
+diff --git a/web/test/features/step_definitions/request_account_steps.exs b/web/test/features/step_definitions/request_account_steps.exs
+index 1fc58fd..989343f 100644
+--- a/web/test/features/step_definitions/request_account_steps.exs
++++ b/web/test/features/step_definitions/request_account_steps.exs
+@@ -417,15 +417,17 @@ defmodule Memba.Cucumber.RequestAccountSteps do
+            requester_email: email,
+            requested_club_name: club_name,
+            note: short_note()
+-         }, [requester_person_id: person_id]}
++         }, [verified_identity_email: email, requester_person_id: person_id]}
+ 
+       _missing ->
++        requester_email = default_email_for(context, person_name)
++
+         {%{
+            requester_name: "#{person_name} Requester",
+-           requester_email: default_email_for(context, person_name),
++           requester_email: requester_email,
+            requested_club_name: club_name,
+            note: short_note()
+-         }, []}
++         }, [verified_identity_email: requester_email]}
+     end
+   end
+ 
+diff --git a/web/test/memba/onboarding_conversion_test.exs b/web/test/memba/onboarding_conversion_test.exs
+index f8c5186..1acccc5 100644
+--- a/web/test/memba/onboarding_conversion_test.exs
++++ b/web/test/memba/onboarding_conversion_test.exs
+@@ -184,14 +184,18 @@ defmodule Memba.OnboardingConversionTest do
+ 
+   defp request_fixture(club_name, opts \\ []) do
+     unique = System.unique_integer([:positive])
++    requester_email = Keyword.get(opts, :requester_email, "requester-#{unique}@example.com")
+ 
+     {:ok, request} =
+-      Onboarding.create_request(%{
+-        requester_name: Keyword.get(opts, :requester_name, "Robin Requester"),
+-        requester_email: Keyword.get(opts, :requester_email, "requester-#{unique}@example.com"),
+-        requested_club_name: club_name,
+-        note: "Please onboard #{club_name}."
+-      })
++      Onboarding.create_request(
++        %{
++          requester_name: Keyword.get(opts, :requester_name, "Robin Requester"),
++          requester_email: requester_email,
++          requested_club_name: club_name,
++          note: "Please onboard #{club_name}."
++        },
++        verified_identity_email: requester_email
++      )
+ 
+     request
+   end
+diff --git a/web/test/memba/onboarding_test.exs b/web/test/memba/onboarding_test.exs
+index 12fed96..4e21e9c 100644
+--- a/web/test/memba/onboarding_test.exs
++++ b/web/test/memba/onboarding_test.exs
+@@ -3,21 +3,31 @@ defmodule Memba.OnboardingTest do
+ 
+   alias Memba.Onboarding
+   alias Memba.Onboarding.Request
++  alias Memba.Membership
++  alias Memba.Membership.Projections.Club
++  alias Memba.Membership.Projections.MemberPermission
++  alias Memba.Membership.Projections.Membership, as: MembershipProjection
++  alias Memba.Membership.Projections.Person
++  alias Memba.Membership.Projections.PersonEmailAddress
++  alias Memba.Membership.Projections.RoleAssignment
+ 
+   describe "create_request/2" do
+-    test "creates an active request with trimmed details and a normalized email" do
++    test "creates an active request with trimmed details and the verified identity email" do
+       assert {:ok, %Request{} = request} =
+-               Onboarding.create_request(%{
+-                 "requester_name" => " Robin Rider ",
+-                 "requester_email" => " Robin@Example.COM ",
+-                 "requested_club_name" => " West Coast Paddlers ",
+-                 "note" => " We want to try Memba. "
+-               })
++               Onboarding.create_request(
++                 %{
++                   "requester_name" => " Robin Rider ",
++                   "requester_email" => " forged@example.net ",
++                   "requested_club_name" => " West Coast Paddlers ",
++                   "note" => " We want to try Memba. "
++                 },
++                 verified_identity_email: " Robin@Example.COM "
++               )
+ 
+       assert "req_" <> _uuid = request.request_id
+       assert request.status == "active"
+       assert request.requester_name == "Robin Rider"
+-      assert request.requester_email == "Robin@Example.COM"
++      assert request.requester_email == "robin@example.com"
+       assert request.normalized_requester_email == "robin@example.com"
+       assert request.requested_club_name == "West Coast Paddlers"
+       assert request.note == "We want to try Memba."
+@@ -25,6 +35,19 @@ defmodule Memba.OnboardingTest do
+       assert is_nil(request.triaged_at)
+     end
+ 
++    test "requires a verified identity email instead of trusting a typed requester email" do
++      assert {:error, changeset} =
++               Onboarding.create_request(%{
++                 requester_name: "Robin Rider",
++                 requester_email: "spoofed@example.net",
++                 requested_club_name: "West Coast Paddlers",
++                 note: "Please onboard my club."
++               })
++
++      assert %{requester_email: ["must be verified"]} = errors_on(changeset)
++      assert Repo.aggregate(Request, :count) == 0
++    end
++
+     test "stores a signed-in requester person ID when provided by the caller" do
+       person_id = Memba.ID.generate(:person)
+ 
+@@ -36,6 +59,7 @@ defmodule Memba.OnboardingTest do
+                    requested_club_name: "Alice Paddling Club",
+                    note: "Please onboard my club."
+                  },
++                 verified_identity_email: "alice@example.com",
+                  requester_person_id: person_id
+                )
+     end
+@@ -49,6 +73,7 @@ defmodule Memba.OnboardingTest do
+                    requested_club_name: "",
+                    note: nil
+                  },
++                 verified_identity_email: "not an email",
+                  requester_person_id: "not-a-person-id"
+                )
+ 
+@@ -60,6 +85,26 @@ defmodule Memba.OnboardingTest do
+                note: ["can't be blank"]
+              } = errors_on(changeset)
+     end
++
++    test "does not create membership-domain records for a verified request submission" do
++      membership_projection_counts = membership_projection_counts()
++
++      assert {:ok, %Request{} = request} =
++               Onboarding.create_request(
++                 %{
++                   requester_name: "Robin Rider",
++                   requester_email: "forged@example.net",
++                   requested_club_name: "West Coast Paddlers",
++                   note: "Please onboard my club."
++                 },
++                 verified_identity_email: "robin@example.com"
++               )
++
++      assert request.requester_email == "robin@example.com"
++
++      assert membership_projection_counts() == membership_projection_counts
++      assert Membership.list_active_clubs_for_member_email("robin@example.com") == []
++    end
+   end
+ 
+   describe "list_active_requests/0 and get_request/1" do
+@@ -208,17 +253,33 @@ defmodule Memba.OnboardingTest do
+   defp request_fixture(club_name) do
+     unique = System.unique_integer([:positive])
+ 
++    requester_email = "requester-#{unique}@example.com"
++
+     {:ok, request} =
+-      Onboarding.create_request(%{
+-        requester_name: "Requester #{unique}",
+-        requester_email: "requester-#{unique}@example.com",
+-        requested_club_name: club_name,
+-        note: "Please onboard #{club_name}."
+-      })
++      Onboarding.create_request(
++        %{
++          requester_name: "Requester #{unique}",
++          requester_email: requester_email,
++          requested_club_name: club_name,
++          note: "Please onboard #{club_name}."
++        },
++        verified_identity_email: requester_email
++      )
+ 
+     request
+   end
+ 
++  defp membership_projection_counts do
++    %{
++      clubs: Repo.aggregate(Club, :count),
++      member_permissions: Repo.aggregate(MemberPermission, :count),
++      memberships: Repo.aggregate(MembershipProjection, :count),
++      people: Repo.aggregate(Person, :count),
++      person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
++      role_assignments: Repo.aggregate(RoleAssignment, :count)
++    }
++  end
++
+   defp update_inserted_at(%Request{} = request, inserted_at) do
+     Repo.update_all(
+       from(onboarding_request in Request,
+diff --git a/web/test/memba_web/live/admin/requests_live/index_test.exs b/web/test/memba_web/live/admin/requests_live/index_test.exs
+index f597745..a73b2e1 100644
+--- a/web/test/memba_web/live/admin/requests_live/index_test.exs
++++ b/web/test/memba_web/live/admin/requests_live/index_test.exs
+@@ -581,12 +581,15 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
+     requester_email = Keyword.get(opts, :requester_email, "requester-#{unique}@example.com")
+ 
+     {:ok, request} =
+-      Onboarding.create_request(%{
+-        requester_name: requester_name,
+-        requester_email: requester_email,
+-        requested_club_name: club_name,
+-        note: "Please onboard #{club_name}."
+-      })
++      Onboarding.create_request(
++        %{
++          requester_name: requester_name,
++          requester_email: requester_email,
++          requested_club_name: club_name,
++          note: "Please onboard #{club_name}."
++        },
++        verified_identity_email: requester_email
++      )
+ 
+     request
+   end
