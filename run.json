@@ -1228,7 +1228,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-09T21:22:22.278420540Z",
-  "last_event_at": "2026-06-09T21:48:25.057609517Z",
+  "last_event_at": "2026-06-09T21:48:28.438847841Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -4809,9 +4809,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 319,
       "checkpoint": {
-        "timestamp": "2026-06-09T21:48:25.069168758Z",
+        "timestamp": "2026-06-09T21:48:28.384007144Z",
         "current_node": "claude_review",
         "completed_nodes": [
           "start",
@@ -4833,6 +4833,411 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.node_visit_count": 2,
+          "internal.retry_count.gemini_review": 0,
+          "internal.retry_count.verify_review_repair": 0,
+          "review_fixes_available": true,
+          "response.codex_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect implementation excerpts for the changed `.fabro/` workflow files were not included in the collected evidence, so this review relies on the plan resolution, diff summary, validation output, and prior review context rather than line-by-line inspection.\n\n## ADR conformance: PASS\n\nNo ADRs were cited by the plan, and the changed files are limited to Fabro workflow/prompt/test wiring plus the kaizen note. Based on the available evidence, this does not appear to replace or bypass any ADR-mandated product architecture or infrastructure.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe implementation appears plan-conforming, narrowly scoped, and validated by a successful `dev ci` run, including the browser acceptance suite.\n\n## Bounded-safe fixes\n\nNone identified from the available evidence.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Code-health recording success still appears to rely on agent self-reporting**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The fix routes based on `context.code_health_recording_ok=true/false`, which is produced by the recorder agent. That is a clear improvement over ignoring the failure signal, but it still appears to depend on the agent truthfully and correctly reporting whether durable recording happened.\n   - **Why it may need human judgement:** The original failure was a workflow trust issue: the run succeeded while findings were not durably recorded. A deterministic postcondition check, such as verifying a `docs/code-health.md` diff when findings are present, would provide stronger assurance than a prompt contract. This does not block this merge because the route now has an explicit failure path and the previous unconditional-success problem appears addressed, but humans may want stronger guarantees for the final review gate.\n\n2. **Actual file-editing path remains validated only indirectly**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The plan records that a future real review run should confirm the new agent node can append `docs/code-health.md` when judgement-worthy findings are present. The current validation proves workflow syntax/configuration and static routing assertions, but not a full synthetic “findings present → file changed → success route” execution.\n   - **Why it may need human judgement:** For internal workflow tooling this may be an acceptable incremental fix, especially because failure should now be routed visibly. However, because this workflow is intended to preserve review debt, human judgement may be needed on whether to add a script-backed or synthetic integration check before relying on the first real run as validation.\n\n3. **Review evidence collection did not excerpt the changed workflow files**\n   - **Files:** `.fabro/workflows/iteration-review/*`\n   - **Smell:** The implementation changed only `.fabro/` workflow files and a kaizen document, but the evidence excerpt filter reported: “No changed files matched the excerpt filter.” That means reviewers could not directly inspect the actual workflow/prompt/test changes from the collected evidence.\n   - **Why it may need human judgement:** This is not a defect in the implementation itself, but it weakens review quality for workflow-focused iterations. If Fabro workflow changes are common, the evidence collector should probably include `.fabro/workflows/` excerpts so future reviewers can assess routing, prompts, and guard scripts directly.\n\n4. **Previously observed acceptance instability remains a project signal**\n   - **Files:** Not directly tied to this change.\n   - **Smell:** The kaizen note records an earlier full `dev check` failure in the `Staff create a club with the suggested slug` acceptance scenario, later passing on rerun. The review-stage `dev ci` output now shows the scenario and full acceptance suite passing.\n   - **Why it may need human judgement:** This implementation did not touch that product path, and the final validation is green, so it should not block this workflow fix. Still, intermittent browser acceptance instability reduces confidence in future validation and may deserve separate tracking if it recurs.\n\n## Suggested fixes\n\nNo required fixes.\n\nOptional future improvements:\n\n- Add a deterministic post-recording gate that fails when findings exist but `docs/code-health.md` was not changed or another durable artifact was not created.\n- Add a synthetic workflow test for the “judgement-worthy findings present” path.\n- Include `.fabro/workflows/` files in implementation evidence excerpts for workflow-review iterations.\n\n## Validation notes\n\nRelevant validation evidence:\n\n- Preflight sandbox check passed.\n- `dev ci` passed.\n- Browser acceptance passed: `77 scenarios`, `502 steps`.\n- The previously unstable `Staff create a club with the suggested slug` scenario passed in the review run.\n- Changed files are limited to:\n  - `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n  - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n  - `.fabro/workflows/iteration-review/workflow.fabro`\n  - `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n- Acceptance feature files were not changed.",
+          "thread.start.current_node": "read_plan",
+          "internal.retry_count.snapshot_before_review_repair": 0,
+          "current_node": "claude_review",
+          "internal.retry_count.start": 0,
+          "internal.thread_id": "collect_implementation_evidence",
+          "failure_signature": "",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "thread.snapshot_before_review_repair.current_node": "apply_review_fixes",
+          "thread.verify_review_repair.current_node": "dev_check",
+          "implementation_accepted": false,
+          "internal.retry_count.claude_review": 0,
+          "internal.retry_count.review_gate": 0,
+          "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"include-fabro-files-in-review-evidence\",\"title\":\"Include Fabro workflow and kaizen files in implementation evidence excerpts\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}",
+          "graph.rankdir": "LR",
+          "thread.codex_review.current_node": "gemini_review",
+          "internal.retry_count.codex_review": 0,
+          "failure_class": "",
+          "internal.fidelity": "summary:high",
+          "internal.retry_count.dev_check": 0,
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\nNo ADRs were cited in the plan. The implementation changes are limited to internal Fabro workflow mechanics (`.fa",
+          "last_stage": "claude_review",
+          "thread.claude_review.current_node": "codex_review",
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "response.gemini_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect file excerpts for the changes inside `.fabro/` and `docs/kaizen/` were omitted by the `collect_implementation_evidence` stage due to its restrictive file filter. Therefore, this review is based on the git diff summary, plan resolution, and successful test/validation outputs rather than line-by-line inspection. \n\n## ADR conformance: PASS\n\nThe plan and changed files involve internal Fabro workflow mechanics and do not intersect with product architecture or infrastructure governed by current project ADRs. No ADR violations were detected based on the evidence provided.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified. The implementation directly aligns with the kaizen plan, changing the recording node to an agent, establishing a clear routing path on failure, and passing the associated local/CI checks.\n\n## Bounded-safe fixes\n\nNone identified. \n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Evidence extraction filter excludes workflow and kaizen files**\n   - **Files**: `.fabro/workflows/iteration-review/*`, `docs/kaizen/*` (implicit)\n   - **Smell**: The `collect_implementation_evidence` stage uses a grep regex (`^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)`) that ignores changes to `.fabro/` and `docs/kaizen/` files. The output correctly states: `No changed files matched the excerpt filter.` \n   - **Why it may need human judgement**: For an iteration entirely focused on fixing a workflow, the reviewer agent cannot verify the actual code changes, limiting review effectiveness. Humans should consider updating the evidence collector regex in a future kaizen to include workflow configurations and kaizen logs.\n\n2. **Reliance on agent self-reporting for workflow routing**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell**: The new routing relies on the `record_code_health` agent correctly setting `context.code_health_recording_ok=true` after editing the file. If the agent hallucinates the context variable without actually persisting the file edit, the pipeline will still falsely succeed.\n   - **Why it may need human judgement**: The plan honestly notes that \"A future real review run should confirm the agent node can append docs/code-health.md.\" Humans may want to decide if a deterministic post-condition gate (e.g., asserting a git diff on `docs/code-health.md` when findings are detected) is required instead of trusting the agent's output context.\n\n3. **Intermittent browser acceptance test instability**\n   - **Files**: `features/staff_club_slugs.feature`\n   - **Smell**: The plan notes a reproduction of a failure in `Staff create a club with the suggested slug` (`#club-slug-input` remained empty). While it passed smoothly in this review's `dev ci` run, the plan confirms it's an existing flaky test.\n   - **Why it may need human judgement**: Flaky end-to-end tests diminish confidence in CI pipelines over time. Because this iteration does not touch product code, this doesn't block the workflow fix, but it should be tracked for remediation in a separate iteration.\n\n## Suggested fixes\n\nNo fixes are required to accept this run. For future iterations:\n- Update the `collect_implementation_evidence` pipeline script to include `^\\.fabro/` and `^docs/kaizen/` in its extraction regex.\n\n## Validation notes\n\n- **Preflight Sandbox**: Passed clean working tree and runtime checks.\n- **Automated tests**: `dev ci` passed 77 scenarios and 502 steps without issue, clearing the prior flaky test observation.\n- **Workflow verification**: The newly added `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` passed successfully during the developer loop, confirming the node shape and failure route constraints.",
+          "response.apply_review_fixes": "Implemented the selected automatic repair.\n\n## 1. Review issue from the gate\n\n### `include-fabro-files-in-review-evidence`\n**Issue:** The iteration-review evidence collector excluded `.fabro/workflows/` and `docs/kaizen/`, so workflow-focused reviews could not inspect the actual changed workflow/config/kaizen files.\n\n## 2. Concrete changes made\n\n### Issue-to-fix mapping\n\n| Review issue | Fix | Files/tests |\n|---|---|---|\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Extracted the embedded evidence collection script into a dedicated script so the excerpt policy is maintainable and directly testable | `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`, `.fabro/workflows/iteration-review/workflow.fabro` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Expanded excerpt filter to include `docs/kaizen/` and `.fabro/workflows/` while preserving existing product/bin/iteration/ADR paths | `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Added a regression test proving changed workflow and kaizen files are excerpted, while unrelated docs remain excluded | `.fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Strengthened routing guard test to ensure the workflow uses the script-backed collector | `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Recorded the review repair and validation in the kaizen note | `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md` |\n\n## 3. Files changed\n\n### Evidence collector repair\n- `.fabro/workflows/iteration-review/workflow.fabro`\n- `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`\n\n### Automated tests / guards\n- `.fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh`\n- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n\n### Kaizen documentation\n- `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n\n## 4. Tests run\n\nPassed:\n\n- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n- `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh`\n- `bash -n .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n- `bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 745e53ab293802c5ced1a4c877e3c604a996469e | grep -E ...`\n  - Confirmed excerpts are now selected for:\n    - `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n    - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n    - `.fabro/workflows/iteration-review/workflow.fabro`\n    - `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n- `dev check --quick`\n  - Passed: 758 tests, 0 failures\n- `git diff --check`\n  - Passed\n\nAttempted but unavailable in this sandbox:\n\n- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check`\n  - `fabro` was not on PATH.\n- `dev fabro validate ...`\n  - The local `dev fabro` wrapper does not expose a `validate` command.\n\n## 5. Remaining gaps / human questions\n\n- No product behaviour was changed.\n- No acceptance feature files were edited.\n- `.fabro/tmp/` remains untracked from the existing Fabro run state.\n- The new scripts are marked intent-to-add so they appear in `git diff`; no content is staged.\n- Full Fabro workflow validation could not be rerun in this sandbox because the validation CLI was unavailable here. The focused workflow shell tests and `dev check --quick` passed.",
+          "graph.max_node_visits": "160",
+          "thread.synthesize_review.current_node": "review_gate",
+          "internal.run_id": "01KTQ45GRD55MMEQHTT5G6C4X0",
+          "command.output": "blob://sha256/20a04eebe46896cd5d6e4fbaddb94e4935f0c655d2fd1c1af5e104f520454744",
+          "thread.apply_review_fixes.current_node": "verify_review_repair",
+          "review_blockers": [
+            {
+              "id": "include-fabro-files-in-review-evidence",
+              "title": "Include Fabro workflow and kaizen files in implementation evidence excerpts",
+              "source": "review_synthesis",
+              "first_seen_stage": "synthesize_review",
+              "status": "open"
+            }
+          ],
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.retry_count.synthesize_review": 0,
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.work_dir": "/workspace/memba",
+          "outcome": "succeeded",
+          "graph.default_fidelity": "summary:high",
+          "response.claude_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\nNo ADRs were cited in the plan. The implementation changes are limited to internal Fabro workflow mechanics (`.fabro/workflows/iteration-review/*`) and a kaizen note. No product architecture or infrastructure governed by ADRs was touched.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe original implementation fixed the code-health recording failure as planned. The review repair addressed the evidence collection gap. All automated validation passed (`dev check`, workflow guard tests, script tests). The acknowledged limitation that \"a future real review run should confirm the agent node can append docs/code-health.md when judgement-worthy findings are present\" is documented follow-up, not a validation gap requiring a block.\n\n## Bounded-safe fixes\n\nNone identified.\n\nThe repair agent already extracted the evidence collector into a dedicated script, expanded the filter, added regression tests, and strengthened guards. Without direct file content visibility (see findings below), no additional concrete low-risk refactoring opportunities are apparent.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Workflow instance executed old definition after mid-run repair**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`\n   - **Smell**: The second `collect_implementation_evidence` stage (after the review repair) still ran the old inline script with the restrictive filter, reporting `No changed files matched the excerpt filter.` The repair agent's validation evidence shows it correctly created the new script, updated `workflow.fabro` to call it, and tested it successfully. But the running workflow instance continued executing the old definition.\n   - **Why it may need human judgement**: This creates a meta-verification gap: the review repair fixed the evidence collection limitation, but we can't see the fix working in this run because Fabro didn't reload the workflow definition mid-run. The fix is correct and will work in future runs (proven by the repair agent's script tests and `dev check` passing). Humans may want to decide: (a) Is mid-run workflow reload expected Fabro behavior? (b) Should workflow repairs trigger instance restart? (c) Is this execution model limitation acceptable for review workflows? This doesn't block merge because the code changes are correct and validated, but it's a workflow execution trust signal.\n\n2. **Agent-based code-health recording success still depends on self-reporting**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell**: The routing logic uses `context.code_health_recording_ok=true/false` set by the `record_code_health` agent node. There's no deterministic postcondition gate verifying a `docs/code-health.md` diff when findings are present, or checking file timestamps, or other independent evidence that durable recording actually happened.\n   - **Why it may need human judgement**: The original failure was a trust issue (workflow succeeded while findings weren't recorded). The fix routes on agent-reported success/failure, which is better than ignoring the signal, but still trusts the agent to truthfully report. A deterministic postcondition check would provide stronger assurance. The plan acknowledges \"a future real review run should confirm the agent node can append docs/code-health.md when judgement-worthy findings are present.\" Humans should decide: acceptable validation threshold for workflow quality gates? Synthetic test scenario before merge? Or first-real-run validation sufficient for internal tooling?\n\n3. **Routing logic validated by guards but not exercised with real findings**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, routing tests\n   - **Smell**: The new routing (success → final artifact gate, failure → dedicated failure gate) passed static guard assertions but hasn't been proven with an actual review run containing judgement-worthy code-health findings.\n   - **Why it may need human judgement**: For a quality gate designed to preserve maintainability signals, untested routing is a coverage gap. The plan explicitly acknowledges this as \"remaining follow-up.\" Humans should decide: acceptable to merge before first real run validation? Create synthetic test scenario? Or is the guard test + first-real-run approach sufficient for workflow infrastructure?\n\n4. **Pre-existing acceptance test instability observed during validation**\n   - **Files**: `features/staff_club_slugs.feature` (not changed)\n   - **Smell**: The plan notes a full `dev check` failure in \"Staff create a club with the suggested slug\" scenario (`#club-slug-input` remained empty), documented as pre-existing/unrelated. Final `dev check` in this run passed (77 scenarios, 502 steps), but the instability signal remains.\n   - **Why it may need human judgement**: Flaky browser acceptance tests reduce confidence in validation over time. This implementation didn't touch product code or feature files, and the final run passed, but if the instability recurs it should be tracked separately. Not a blocker for this workflow fix.\n\n## Suggested fixes\n\nNone required for acceptance.\n\nOptional future consideration:\n- Add a deterministic postcondition gate after `record_code_health` that verifies `docs/code-health.md` was modified when findings are present (or another durable artifact was created).\n- Document Fabro workflow instance execution model: mid-run definition changes expected behavior? When do changes take effect?\n\n## Validation notes\n\n**Positive validation signals:**\n- Preflight sandbox check passed (clean working tree, runtime check)\n- `dev ci` passed twice (before and after review repair): 758 tests, 0 failures; 77 acceptance scenarios, 502 steps\n- Workflow guard tests passed: `test_review_report_routing.sh`, `test_collect_implementation_evidence.sh`\n- Review repair validation: new evidence collector script tested and confirmed to excerpt `.fabro/workflows/` and `docs/kaizen/` files\n- Changed files limited to workflow infrastructure and kaizen note (no product code, no feature files)\n- `git diff --check` passed (no whitespace errors)\n\n**Caveats:**\n- Direct file content inspection limited due to workflow instance not reloading after repair (old evidence collector still ran in this instance)\n- Routing logic with real code-health findings validated by tests but not exercised in a real review run (acknowledged as remaining follow-up)\n- One acceptance scenario showed instability during earlier validation but passed in final run (documented as pre-existing/unrelated)\n\n**Acceptance reasoning:**\nThis is a focused fix for an internal workflow quality gate. The original implementation addressed the plan's core issue (code-health recording failure). The review repair correctly addressed the evidence collection gap. All automated validation passed. The meta-issue (workflow instance executing old definition after mid-run changes) is a workflow execution model observation, not an implementation defect—the code changes are correct and will function properly in future runs. The judgement-worthy findings are real concerns but documented as follow-up or acceptable validation approaches for workflow infrastructure. No blocking issues were identified.",
+          "internal.retry_count.apply_review_fixes": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.review_gate.current_node": "snapshot_before_review_repair",
+          "internal.retry_count.read_plan": 0,
+          "internal.retry_count.preflight_sandbox": 0,
+          "thread.gemini_review.current_node": "synthesize_review"
+        },
+        "node_outcomes": {
+          "codex_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "response.codex_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect implementation excerpts for the changed `.fabro/` workflow files were not included in the collected evidence, so this review relies on the plan resolution, diff summary, validation output, and prior review context rather than line-by-line inspection.\n\n## ADR conformance: PASS\n\nNo ADRs were cited by the plan, and the changed files are limited to Fabro workflow/prompt/test wiring plus the kaizen note. Based on the available evidence, this does not appear to replace or bypass any ADR-mandated product architecture or infrastructure.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe implementation appears plan-conforming, narrowly scoped, and validated by a successful `dev ci` run, including the browser acceptance suite.\n\n## Bounded-safe fixes\n\nNone identified from the available evidence.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Code-health recording success still appears to rely on agent self-reporting**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The fix routes based on `context.code_health_recording_ok=true/false`, which is produced by the recorder agent. That is a clear improvement over ignoring the failure signal, but it still appears to depend on the agent truthfully and correctly reporting whether durable recording happened.\n   - **Why it may need human judgement:** The original failure was a workflow trust issue: the run succeeded while findings were not durably recorded. A deterministic postcondition check, such as verifying a `docs/code-health.md` diff when findings are present, would provide stronger assurance than a prompt contract. This does not block this merge because the route now has an explicit failure path and the previous unconditional-success problem appears addressed, but humans may want stronger guarantees for the final review gate.\n\n2. **Actual file-editing path remains validated only indirectly**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The plan records that a future real review run should confirm the new agent node can append `docs/code-health.md` when judgement-worthy findings are present. The current validation proves workflow syntax/configuration and static routing assertions, but not a full synthetic “findings present → file changed → success route” execution.\n   - **Why it may need human judgement:** For internal workflow tooling this may be an acceptable incremental fix, especially because failure should now be routed visibly. However, because this workflow is intended to preserve review debt, human judgement may be needed on whether to add a script-backed or synthetic integration check before relying on the first real run as validation.\n\n3. **Review evidence collection did not excerpt the changed workflow files**\n   - **Files:** `.fabro/workflows/iteration-review/*`\n   - **Smell:** The implementation changed only `.fabro/` workflow files and a kaizen document, but the evidence excerpt filter reported: “No changed files matched the excerpt filter.” That means reviewers could not directly inspect the actual workflow/prompt/test changes from the collected evidence.\n   - **Why it may need human judgement:** This is not a defect in the implementation itself, but it weakens review quality for workflow-focused iterations. If Fabro workflow changes are common, the evidence collector should probably include `.fabro/workflows/` excerpts so future reviewers can assess routing, prompts, and guard scripts directly.\n\n4. **Previously observed acceptance instability remains a project signal**\n   - **Files:** Not directly tied to this change.\n   - **Smell:** The kaizen note records an earlier full `dev check` failure in the `Staff create a club with the suggested slug` acceptance scenario, later passing on rerun. The review-stage `dev ci` output now shows the scenario and full acceptance suite passing.\n   - **Why it may need human judgement:** This implementation did not touch that product path, and the final validation is green, so it should not block this workflow fix. Still, intermittent browser acceptance instability reduces confidence in future validation and may deserve separate tracking if it recurs.\n\n## Suggested fixes\n\nNo required fixes.\n\nOptional future improvements:\n\n- Add a deterministic post-recording gate that fails when findings exist but `docs/code-health.md` was not changed or another durable artifact was not created.\n- Add a synthetic workflow test for the “judgement-worthy findings present” path.\n- Include `.fabro/workflows/` files in implementation evidence excerpts for workflow-review iterations.\n\n## Validation notes\n\nRelevant validation evidence:\n\n- Preflight sandbox check passed.\n- `dev ci` passed.\n- Browser acceptance passed: `77 scenarios`, `502 steps`.\n- The previously unstable `Staff create a club with the suggested slug` scenario passed in the review run.\n- Changed files are limited to:\n  - `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n  - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n  - `.fabro/workflows/iteration-review/workflow.fabro`\n  - `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n- Acceptance feature files were not changed.",
+              "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect implementation excerpts for the changed `.fabro/` workflow files were not included in the collected evidence, so this review relies ",
+              "last_stage": "codex_review"
+            },
+            "notes": "Stage completed: codex_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6779,
+                    "output_tokens": 1104,
+                    "reasoning_tokens": 2588,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 144655
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 68374,
+              "tool_time_ms": 0,
+              "active_time_ms": 68374
+            }
+          },
+          "gemini_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "gemini_review",
+              "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect file excerpts for the changes inside `.fabro/` and `docs/kaizen/` were omitted by the `collect_implementation_evidence` stage due to",
+              "response.gemini_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect file excerpts for the changes inside `.fabro/` and `docs/kaizen/` were omitted by the `collect_implementation_evidence` stage due to its restrictive file filter. Therefore, this review is based on the git diff summary, plan resolution, and successful test/validation outputs rather than line-by-line inspection. \n\n## ADR conformance: PASS\n\nThe plan and changed files involve internal Fabro workflow mechanics and do not intersect with product architecture or infrastructure governed by current project ADRs. No ADR violations were detected based on the evidence provided.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified. The implementation directly aligns with the kaizen plan, changing the recording node to an agent, establishing a clear routing path on failure, and passing the associated local/CI checks.\n\n## Bounded-safe fixes\n\nNone identified. \n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Evidence extraction filter excludes workflow and kaizen files**\n   - **Files**: `.fabro/workflows/iteration-review/*`, `docs/kaizen/*` (implicit)\n   - **Smell**: The `collect_implementation_evidence` stage uses a grep regex (`^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)`) that ignores changes to `.fabro/` and `docs/kaizen/` files. The output correctly states: `No changed files matched the excerpt filter.` \n   - **Why it may need human judgement**: For an iteration entirely focused on fixing a workflow, the reviewer agent cannot verify the actual code changes, limiting review effectiveness. Humans should consider updating the evidence collector regex in a future kaizen to include workflow configurations and kaizen logs.\n\n2. **Reliance on agent self-reporting for workflow routing**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell**: The new routing relies on the `record_code_health` agent correctly setting `context.code_health_recording_ok=true` after editing the file. If the agent hallucinates the context variable without actually persisting the file edit, the pipeline will still falsely succeed.\n   - **Why it may need human judgement**: The plan honestly notes that \"A future real review run should confirm the agent node can append docs/code-health.md.\" Humans may want to decide if a deterministic post-condition gate (e.g., asserting a git diff on `docs/code-health.md` when findings are detected) is required instead of trusting the agent's output context.\n\n3. **Intermittent browser acceptance test instability**\n   - **Files**: `features/staff_club_slugs.feature`\n   - **Smell**: The plan notes a reproduction of a failure in `Staff create a club with the suggested slug` (`#club-slug-input` remained empty). While it passed smoothly in this review's `dev ci` run, the plan confirms it's an existing flaky test.\n   - **Why it may need human judgement**: Flaky end-to-end tests diminish confidence in CI pipelines over time. Because this iteration does not touch product code, this doesn't block the workflow fix, but it should be tracked for remediation in a separate iteration.\n\n## Suggested fixes\n\nNo fixes are required to accept this run. For future iterations:\n- Update the `collect_implementation_evidence` pipeline script to include `^\\.fabro/` and `^docs/kaizen/` in its extraction regex.\n\n## Validation notes\n\n- **Preflight Sandbox**: Passed clean working tree and runtime checks.\n- **Automated tests**: `dev ci` passed 77 scenarios and 502 steps without issue, clearing the prior flaky test observation.\n- **Workflow verification**: The newly added `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` passed successfully during the developer loop, confirming the node shape and failure route constraints."
+            },
+            "notes": "Stage completed: gemini_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "gemini",
+                    "model_id": "gemini-3.1-pro-preview"
+                  },
+                  "tokens": {
+                    "input_tokens": 9158,
+                    "output_tokens": 902,
+                    "reasoning_tokens": 1444,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "gemini",
+                  "storage_segments": []
+                }
+              },
+              "total_usd_micros": 46468
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 20771,
+              "tool_time_ms": 0,
+              "active_time_ms": 20771
+            }
+          },
+          "synthesize_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"include-fabro-files-in-review-evidence\",\"title\":\"Include Fabro workflow and kaizen files in ",
+              "implementation_accepted": false,
+              "review_blockers": [
+                {
+                  "id": "include-fabro-files-in-review-evidence",
+                  "title": "Include Fabro workflow and kaizen files in implementation evidence excerpts",
+                  "source": "review_synthesis",
+                  "first_seen_stage": "synthesize_review",
+                  "status": "open"
+                }
+              ],
+              "last_stage": "synthesize_review",
+              "review_fixes_available": true,
+              "response.synthesize_review": "{\"context_updates\":{\"implementation_accepted\":false,\"review_fixes_available\":true,\"review_blockers\":[{\"id\":\"include-fabro-files-in-review-evidence\",\"title\":\"Include Fabro workflow and kaizen files in implementation evidence excerpts\",\"source\":\"review_synthesis\",\"first_seen_stage\":\"synthesize_review\",\"status\":\"open\"}]}}"
+            },
+            "notes": "Stage completed: synthesize_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 9382,
+                    "output_tokens": 78,
+                    "reasoning_tokens": 516,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 64730
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 13572,
+              "tool_time_ms": 0,
+              "active_time_ms": 13572
+            }
+          },
+          "verify_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/e32c38aa0c8558b6ef77d21b8a45e8a5c447ae04d95955ec4ce4e0c28c10bb35"
+            },
+            "notes": "Script completed: set -eu\nkind='review'\nbefore=\".fabro/tmp/${kind}-repair-before.patch\"\nafter=\".fabro/tmp/${kind}-repair-after.patch\"\ngit diff --binary > \"$after\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-after-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-after-stat.txt\" || true\nprintf 'Repair baseline (%s) captured in %s\\n' \"$kind\" \"$before\"\nprintf 'Repair after    (%s) captured in %s\\n' \"$kind\" \"$after\"\nprintf 'Changed files after repair:\\n'\ngit diff --name-only\nif cmp -s \"$before\" \"$after\"; then\n  echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n  echo \"If no code/config/test changes were required, route to human input or make the repair prompt explicitly justify that case.\" >&2\n  exit 1\nfi\nif git diff --name-only | grep -E '\\.feature$'; then\n  echo \"Repair modified locked acceptance feature files.\" >&2\n  exit 1\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 177,
+              "active_time_ms": 177
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/be235e3607acd99789f6d5ef8e429b31a786096df4c7312045ef8877aa66e086"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 338429,
+              "active_time_ms": 338429
+            }
+          },
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\nNo ADRs were cited in the plan. The implementation changes are limited to internal Fabro workflow mechanics (`.fa",
+              "response.claude_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\nNo ADRs were cited in the plan. The implementation changes are limited to internal Fabro workflow mechanics (`.fabro/workflows/iteration-review/*`) and a kaizen note. No product architecture or infrastructure governed by ADRs was touched.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe original implementation fixed the code-health recording failure as planned. The review repair addressed the evidence collection gap. All automated validation passed (`dev check`, workflow guard tests, script tests). The acknowledged limitation that \"a future real review run should confirm the agent node can append docs/code-health.md when judgement-worthy findings are present\" is documented follow-up, not a validation gap requiring a block.\n\n## Bounded-safe fixes\n\nNone identified.\n\nThe repair agent already extracted the evidence collector into a dedicated script, expanded the filter, added regression tests, and strengthened guards. Without direct file content visibility (see findings below), no additional concrete low-risk refactoring opportunities are apparent.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Workflow instance executed old definition after mid-run repair**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`\n   - **Smell**: The second `collect_implementation_evidence` stage (after the review repair) still ran the old inline script with the restrictive filter, reporting `No changed files matched the excerpt filter.` The repair agent's validation evidence shows it correctly created the new script, updated `workflow.fabro` to call it, and tested it successfully. But the running workflow instance continued executing the old definition.\n   - **Why it may need human judgement**: This creates a meta-verification gap: the review repair fixed the evidence collection limitation, but we can't see the fix working in this run because Fabro didn't reload the workflow definition mid-run. The fix is correct and will work in future runs (proven by the repair agent's script tests and `dev check` passing). Humans may want to decide: (a) Is mid-run workflow reload expected Fabro behavior? (b) Should workflow repairs trigger instance restart? (c) Is this execution model limitation acceptable for review workflows? This doesn't block merge because the code changes are correct and validated, but it's a workflow execution trust signal.\n\n2. **Agent-based code-health recording success still depends on self-reporting**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell**: The routing logic uses `context.code_health_recording_ok=true/false` set by the `record_code_health` agent node. There's no deterministic postcondition gate verifying a `docs/code-health.md` diff when findings are present, or checking file timestamps, or other independent evidence that durable recording actually happened.\n   - **Why it may need human judgement**: The original failure was a trust issue (workflow succeeded while findings weren't recorded). The fix routes on agent-reported success/failure, which is better than ignoring the signal, but still trusts the agent to truthfully report. A deterministic postcondition check would provide stronger assurance. The plan acknowledges \"a future real review run should confirm the agent node can append docs/code-health.md when judgement-worthy findings are present.\" Humans should decide: acceptable validation threshold for workflow quality gates? Synthetic test scenario before merge? Or first-real-run validation sufficient for internal tooling?\n\n3. **Routing logic validated by guards but not exercised with real findings**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, routing tests\n   - **Smell**: The new routing (success → final artifact gate, failure → dedicated failure gate) passed static guard assertions but hasn't been proven with an actual review run containing judgement-worthy code-health findings.\n   - **Why it may need human judgement**: For a quality gate designed to preserve maintainability signals, untested routing is a coverage gap. The plan explicitly acknowledges this as \"remaining follow-up.\" Humans should decide: acceptable to merge before first real run validation? Create synthetic test scenario? Or is the guard test + first-real-run approach sufficient for workflow infrastructure?\n\n4. **Pre-existing acceptance test instability observed during validation**\n   - **Files**: `features/staff_club_slugs.feature` (not changed)\n   - **Smell**: The plan notes a full `dev check` failure in \"Staff create a club with the suggested slug\" scenario (`#club-slug-input` remained empty), documented as pre-existing/unrelated. Final `dev check` in this run passed (77 scenarios, 502 steps), but the instability signal remains.\n   - **Why it may need human judgement**: Flaky browser acceptance tests reduce confidence in validation over time. This implementation didn't touch product code or feature files, and the final run passed, but if the instability recurs it should be tracked separately. Not a blocker for this workflow fix.\n\n## Suggested fixes\n\nNone required for acceptance.\n\nOptional future consideration:\n- Add a deterministic postcondition gate after `record_code_health` that verifies `docs/code-health.md` was modified when findings are present (or another durable artifact was created).\n- Document Fabro workflow instance execution model: mid-run definition changes expected behavior? When do changes take effect?\n\n## Validation notes\n\n**Positive validation signals:**\n- Preflight sandbox check passed (clean working tree, runtime check)\n- `dev ci` passed twice (before and after review repair): 758 tests, 0 failures; 77 acceptance scenarios, 502 steps\n- Workflow guard tests passed: `test_review_report_routing.sh`, `test_collect_implementation_evidence.sh`\n- Review repair validation: new evidence collector script tested and confirmed to excerpt `.fabro/workflows/` and `docs/kaizen/` files\n- Changed files limited to workflow infrastructure and kaizen note (no product code, no feature files)\n- `git diff --check` passed (no whitespace errors)\n\n**Caveats:**\n- Direct file content inspection limited due to workflow instance not reloading after repair (old evidence collector still ran in this instance)\n- Routing logic with real code-health findings validated by tests but not exercised in a real review run (acknowledged as remaining follow-up)\n- One acceptance scenario showed instability during earlier validation but passed in final run (documented as pre-existing/unrelated)\n\n**Acceptance reasoning:**\nThis is a focused fix for an internal workflow quality gate. The original implementation addressed the plan's core issue (code-health recording failure). The review repair correctly addressed the evidence collection gap. All automated validation passed. The meta-issue (workflow instance executing old definition after mid-run changes) is a workflow execution model observation, not an implementation defect—the code changes are correct and will function properly in future runs. The judgement-worthy findings are real concerns but documented as follow-up or acceptable validation approaches for workflow infrastructure. No blocking issues were identified.",
+              "last_stage": "claude_review"
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 15405,
+                    "output_tokens": 4510,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 113865
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 109129,
+              "tool_time_ms": 0,
+              "active_time_ms": 109129
+            }
+          },
+          "apply_review_fixes": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "apply_review_fixes",
+              "response.apply_review_fixes": "Implemented the selected automatic repair.\n\n## 1. Review issue from the gate\n\n### `include-fabro-files-in-review-evidence`\n**Issue:** The iteration-review evidence collector excluded `.fabro/workflows/` and `docs/kaizen/`, so workflow-focused reviews could not inspect the actual changed workflow/config/kaizen files.\n\n## 2. Concrete changes made\n\n### Issue-to-fix mapping\n\n| Review issue | Fix | Files/tests |\n|---|---|---|\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Extracted the embedded evidence collection script into a dedicated script so the excerpt policy is maintainable and directly testable | `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`, `.fabro/workflows/iteration-review/workflow.fabro` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Expanded excerpt filter to include `docs/kaizen/` and `.fabro/workflows/` while preserving existing product/bin/iteration/ADR paths | `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Added a regression test proving changed workflow and kaizen files are excerpted, while unrelated docs remain excluded | `.fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Strengthened routing guard test to ensure the workflow uses the script-backed collector | `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` |\n| Include Fabro workflow and kaizen files in implementation evidence excerpts | Recorded the review repair and validation in the kaizen note | `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md` |\n\n## 3. Files changed\n\n### Evidence collector repair\n- `.fabro/workflows/iteration-review/workflow.fabro`\n- `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`\n\n### Automated tests / guards\n- `.fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh`\n- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n\n### Kaizen documentation\n- `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n\n## 4. Tests run\n\nPassed:\n\n- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n- `bash .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh`\n- `bash -n .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh .fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n- `bash .fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh 745e53ab293802c5ced1a4c877e3c604a996469e | grep -E ...`\n  - Confirmed excerpts are now selected for:\n    - `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n    - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n    - `.fabro/workflows/iteration-review/workflow.fabro`\n    - `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n- `dev check --quick`\n  - Passed: 758 tests, 0 failures\n- `git diff --check`\n  - Passed\n\nAttempted but unavailable in this sandbox:\n\n- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check`\n  - `fabro` was not on PATH.\n- `dev fabro validate ...`\n  - The local `dev fabro` wrapper does not expose a `validate` command.\n\n## 5. Remaining gaps / human questions\n\n- No product behaviour was changed.\n- No acceptance feature files were edited.\n- `.fabro/tmp/` remains untracked from the existing Fabro run state.\n- The new scripts are marked intent-to-add so they appear in `git diff`; no content is staged.\n- Full Fabro workflow validation could not be rerun in this sandbox because the validation CLI was unavailable here. The focused workflow shell tests and `dev check --quick` passed.",
+              "last_response": "Implemented the selected automatic repair.\n\n## 1. Review issue from the gate\n\n### `include-fabro-files-in-review-evidence`\n**Issue:** The iteration-review evidence collector excluded `.fabro/workflows"
+            },
+            "notes": "Stage completed: apply_review_fixes",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "openai",
+                    "model_id": "gpt-5.5"
+                  },
+                  "tokens": {
+                    "input_tokens": 408240,
+                    "output_tokens": 6597,
+                    "reasoning_tokens": 5796,
+                    "cache_read_tokens": 746496,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "openai"
+                }
+              },
+              "total_usd_micros": 2786238
+            },
+            "files_touched": [
+              "/workspace/memba/.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh",
+              "/workspace/memba/.fabro/workflows/iteration-review/scripts/test_collect_implementation_evidence.sh"
+            ],
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 314703,
+              "tool_time_ms": 66832,
+              "active_time_ms": 381535
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/20a04eebe46896cd5d6e4fbaddb94e4935f0c655d2fd1c1af5e104f520454744"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='745e53ab293802c5ced1a4c877e3c604a996469e'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 165,
+              "active_time_ms": 165
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/6e7d67b0d807834bf3992b7f6fb3e6bd6c1b29139e2edd4727aa5e603c94e00b"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 137470,
+              "active_time_ms": 137470
+            }
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8d834efc32cc8b35f129b2c5fb28d7ed39441fc2d28fef408cbbc7dc58ea798e"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 224,
+              "active_time_ms": 224
+            }
+          },
+          "review_gate": {
+            "status": "succeeded",
+            "notes": "Conditional node evaluated: review_gate",
+            "usage": null
+          },
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "snapshot_before_review_repair": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/869374a01591b338c39959154ff558c2b73f931b4959f1789cff1008a6f59109"
+            },
+            "notes": "Script completed: set -eu\nmkdir -p .fabro/tmp\nkind='review'\ngit diff --binary > \".fabro/tmp/${kind}-repair-before.patch\"\ngit diff --name-only > \".fabro/tmp/${kind}-repair-before-files.txt\"\ngit diff --stat > \".fabro/tmp/${kind}-repair-before-stat.txt\" || true\nprintf 'Repair baseline (%s) captured.\\n' \"$kind\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 175,
+              "active_time_ms": 175
+            }
+          }
+        },
+        "next_node_id": "codex_review",
+        "git_commit_sha": "c0ffd4ddad8e63b5b90026db192a9e90eeecc433",
+        "node_visits": {
+          "read_plan": 1,
+          "snapshot_before_review_repair": 1,
+          "start": 1,
+          "gemini_review": 1,
+          "synthesize_review": 1,
+          "verify_review_repair": 1,
+          "apply_review_fixes": 1,
+          "preflight_sandbox": 1,
+          "review_gate": 1,
+          "codex_review": 1,
+          "collect_implementation_evidence": 2,
+          "dev_check": 2,
+          "claude_review": 2
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 5,
+          "additions": 152,
+          "deletions": 1
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-09T21:50:02.853564796Z",
+        "current_node": "codex_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review",
+          "gemini_review",
+          "synthesize_review",
+          "review_gate",
+          "snapshot_before_review_repair",
+          "apply_review_fixes",
+          "verify_review_repair",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review",
+          "codex_review"
+        ],
+        "node_retries": {},
+        "context_values": {
           "graph.rankdir": "LR",
           "internal.retry_count.review_gate": 0,
           "response.gemini_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect file excerpts for the changes inside `.fabro/` and `docs/kaizen/` were omitted by the `collect_implementation_evidence` stage due to its restrictive file filter. Therefore, this review is based on the git diff summary, plan resolution, and successful test/validation outputs rather than line-by-line inspection. \n\n## ADR conformance: PASS\n\nThe plan and changed files involve internal Fabro workflow mechanics and do not intersect with product architecture or infrastructure governed by current project ADRs. No ADR violations were detected based on the evidence provided.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified. The implementation directly aligns with the kaizen plan, changing the recording node to an agent, establishing a clear routing path on failure, and passing the associated local/CI checks.\n\n## Bounded-safe fixes\n\nNone identified. \n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Evidence extraction filter excludes workflow and kaizen files**\n   - **Files**: `.fabro/workflows/iteration-review/*`, `docs/kaizen/*` (implicit)\n   - **Smell**: The `collect_implementation_evidence` stage uses a grep regex (`^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)`) that ignores changes to `.fabro/` and `docs/kaizen/` files. The output correctly states: `No changed files matched the excerpt filter.` \n   - **Why it may need human judgement**: For an iteration entirely focused on fixing a workflow, the reviewer agent cannot verify the actual code changes, limiting review effectiveness. Humans should consider updating the evidence collector regex in a future kaizen to include workflow configurations and kaizen logs.\n\n2. **Reliance on agent self-reporting for workflow routing**\n   - **Files**: `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell**: The new routing relies on the `record_code_health` agent correctly setting `context.code_health_recording_ok=true` after editing the file. If the agent hallucinates the context variable without actually persisting the file edit, the pipeline will still falsely succeed.\n   - **Why it may need human judgement**: The plan honestly notes that \"A future real review run should confirm the agent node can append docs/code-health.md.\" Humans may want to decide if a deterministic post-condition gate (e.g., asserting a git diff on `docs/code-health.md` when findings are detected) is required instead of trusting the agent's output context.\n\n3. **Intermittent browser acceptance test instability**\n   - **Files**: `features/staff_club_slugs.feature`\n   - **Smell**: The plan notes a reproduction of a failure in `Staff create a club with the suggested slug` (`#club-slug-input` remained empty). While it passed smoothly in this review's `dev ci` run, the plan confirms it's an existing flaky test.\n   - **Why it may need human judgement**: Flaky end-to-end tests diminish confidence in CI pipelines over time. Because this iteration does not touch product code, this doesn't block the workflow fix, but it should be tracked for remediation in a separate iteration.\n\n## Suggested fixes\n\nNo fixes are required to accept this run. For future iterations:\n- Update the `collect_implementation_evidence` pipeline script to include `^\\.fabro/` and `^docs/kaizen/` in its extraction regex.\n\n## Validation notes\n\n- **Preflight Sandbox**: Passed clean working tree and runtime checks.\n- **Automated tests**: `dev ci` passed 77 scenarios and 502 steps without issue, clearing the prior flaky test observation.\n- **Workflow verification**: The newly added `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` passed successfully during the developer loop, confirming the node shape and failure route constraints.",
@@ -4845,7 +5250,7 @@
           "command.output": "blob://sha256/20a04eebe46896cd5d6e4fbaddb94e4935f0c655d2fd1c1af5e104f520454744",
           "internal.retry_count.preflight_sandbox": 0,
           "internal.retry_count.apply_review_fixes": 0,
-          "last_stage": "claude_review",
+          "last_stage": "codex_review",
           "thread.read_plan.current_node": "preflight_sandbox",
           "thread.dev_check.current_node": "collect_implementation_evidence",
           "implementation_accepted": false,
@@ -4870,13 +5275,13 @@
           "graph.default_fidelity": "summary:high",
           "internal.run_id": "01KTQ45GRD55MMEQHTT5G6C4X0",
           "graph.max_node_visits": "160",
-          "internal.thread_id": "collect_implementation_evidence",
+          "internal.thread_id": "claude_review",
           "internal.node_visit_count": 2,
           "thread.start.current_node": "read_plan",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.synthesize_review": 0,
-          "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\n## ADR conformance: PASS\n\nNo ADRs were cited in the plan. The implementation changes are limited to internal Fabro workflow mechanics (`.fa",
-          "current_node": "claude_review",
+          "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation appears plan-conforming and narrowly scoped to Fabro workflow infrastructure plus the kaizen note. Confidence is not Hig",
+          "current_node": "codex_review",
           "thread.gemini_review.current_node": "synthesize_review",
           "review_blockers": [
             {
@@ -4887,7 +5292,7 @@
               "status": "open"
             }
           ],
-          "response.codex_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect implementation excerpts for the changed `.fabro/` workflow files were not included in the collected evidence, so this review relies on the plan resolution, diff summary, validation output, and prior review context rather than line-by-line inspection.\n\n## ADR conformance: PASS\n\nNo ADRs were cited by the plan, and the changed files are limited to Fabro workflow/prompt/test wiring plus the kaizen note. Based on the available evidence, this does not appear to replace or bypass any ADR-mandated product architecture or infrastructure.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe implementation appears plan-conforming, narrowly scoped, and validated by a successful `dev ci` run, including the browser acceptance suite.\n\n## Bounded-safe fixes\n\nNone identified from the available evidence.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Code-health recording success still appears to rely on agent self-reporting**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The fix routes based on `context.code_health_recording_ok=true/false`, which is produced by the recorder agent. That is a clear improvement over ignoring the failure signal, but it still appears to depend on the agent truthfully and correctly reporting whether durable recording happened.\n   - **Why it may need human judgement:** The original failure was a workflow trust issue: the run succeeded while findings were not durably recorded. A deterministic postcondition check, such as verifying a `docs/code-health.md` diff when findings are present, would provide stronger assurance than a prompt contract. This does not block this merge because the route now has an explicit failure path and the previous unconditional-success problem appears addressed, but humans may want stronger guarantees for the final review gate.\n\n2. **Actual file-editing path remains validated only indirectly**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The plan records that a future real review run should confirm the new agent node can append `docs/code-health.md` when judgement-worthy findings are present. The current validation proves workflow syntax/configuration and static routing assertions, but not a full synthetic “findings present → file changed → success route” execution.\n   - **Why it may need human judgement:** For internal workflow tooling this may be an acceptable incremental fix, especially because failure should now be routed visibly. However, because this workflow is intended to preserve review debt, human judgement may be needed on whether to add a script-backed or synthetic integration check before relying on the first real run as validation.\n\n3. **Review evidence collection did not excerpt the changed workflow files**\n   - **Files:** `.fabro/workflows/iteration-review/*`\n   - **Smell:** The implementation changed only `.fabro/` workflow files and a kaizen document, but the evidence excerpt filter reported: “No changed files matched the excerpt filter.” That means reviewers could not directly inspect the actual workflow/prompt/test changes from the collected evidence.\n   - **Why it may need human judgement:** This is not a defect in the implementation itself, but it weakens review quality for workflow-focused iterations. If Fabro workflow changes are common, the evidence collector should probably include `.fabro/workflows/` excerpts so future reviewers can assess routing, prompts, and guard scripts directly.\n\n4. **Previously observed acceptance instability remains a project signal**\n   - **Files:** Not directly tied to this change.\n   - **Smell:** The kaizen note records an earlier full `dev check` failure in the `Staff create a club with the suggested slug` acceptance scenario, later passing on rerun. The review-stage `dev ci` output now shows the scenario and full acceptance suite passing.\n   - **Why it may need human judgement:** This implementation did not touch that product path, and the final validation is green, so it should not block this workflow fix. Still, intermittent browser acceptance instability reduces confidence in future validation and may deserve separate tracking if it recurs.\n\n## Suggested fixes\n\nNo required fixes.\n\nOptional future improvements:\n\n- Add a deterministic post-recording gate that fails when findings exist but `docs/code-health.md` was not changed or another durable artifact was not created.\n- Add a synthetic workflow test for the “judgement-worthy findings present” path.\n- Include `.fabro/workflows/` files in implementation evidence excerpts for workflow-review iterations.\n\n## Validation notes\n\nRelevant validation evidence:\n\n- Preflight sandbox check passed.\n- `dev ci` passed.\n- Browser acceptance passed: `77 scenarios`, `502 steps`.\n- The previously unstable `Staff create a club with the suggested slug` scenario passed in the review run.\n- Changed files are limited to:\n  - `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n  - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n  - `.fabro/workflows/iteration-review/workflow.fabro`\n  - `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n- Acceptance feature files were not changed.",
+          "response.codex_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation appears plan-conforming and narrowly scoped to Fabro workflow infrastructure plus the kaizen note. Confidence is not High because the running review workflow continued using the old inline evidence-collection script after the mid-run repair, so direct excerpts of the changed `.fabro/` files were still not available from the collected evidence.\n\n## ADR conformance: PASS\n\nNo ADRs were cited by the plan, and the changed files are limited to:\n\n- `.fabro/workflows/iteration-review/*`\n- `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n\nNo product architecture, Phoenix/LiveView structure, persistence, eventing, routing, or infrastructure governed by ADRs appears to have been changed.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe implementation fixes the core failure mode described in the plan: `record_code_health` is no longer a prompt-only node that can report failure without affecting routing, and the workflow now has an explicit failed-recording terminal path.\n\n## Bounded-safe fixes\n\n1. **Harden the review-repair verification script against missing comparison tools**\n\n   - **Files:** likely `.fabro/workflows/iteration-review/workflow.fabro` or the workflow script backing `verify_review_repair`\n   - **Issue:** The `verify_review_repair` stage printed:\n\n     ```text\n     /bin/bash: line 13: cmp: command not found\n     ```\n\n     but the stage still succeeded because the missing `cmp` command was inside an `if cmp -s ...` conditional. That means the “repair produced no diff” guard can silently fail open in sandboxes without `cmp`.\n   - **Suggested safe fix:** Replace the `cmp -s \"$before\" \"$after\"` check with a comparison mechanism available in the project’s expected runtime, or explicitly check command availability before using it. For example:\n\n     ```sh\n     if git diff --no-index --quiet \"$before\" \"$after\"; then\n       echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n       exit 1\n     fi\n     ```\n\n     or use a checked `sha256sum`/`diff` fallback. Add a small guard test if this verification logic is script-backed.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Code-health recording success still relies on agent self-reporting**\n\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The workflow now routes based on `context.code_health_recording_ok=true/false` emitted by the `record_code_health` agent. This is much better than the previous unconditional route, but it still trusts the agent to accurately report that durable recording happened.\n   - **Why it may need human judgement:** The original issue was a trust failure in the review workflow. A deterministic postcondition gate — for example, checking that `docs/code-health.md` changed when judgement-worthy findings exist, or that an alternative durable artifact was created — would provide stronger assurance than prompt-contract self-reporting. This does not block the current fix because the previous failure signal is no longer ignored.\n\n2. **Recorder path has not yet been exercised with real judgement-worthy findings**\n\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** Static guard tests and workflow validation support the new routing, but the plan still records a follow-up: a future real review run should confirm that the agent node can actually append to `docs/code-health.md` when findings are present.\n   - **Why it may need human judgement:** For internal workflow infrastructure, static routing guards may be sufficient for an incremental fix. For a final review quality gate, humans may prefer a synthetic integration test covering “findings present → durable record created → success route.”\n\n3. **Mid-run workflow repairs did not affect the currently executing workflow instance**\n\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`\n   - **Smell:** The evidence collector was reportedly repaired to include `.fabro/workflows/` and `docs/kaizen/`, but the subsequent `collect_implementation_evidence` stage still ran the old inline script and reported:\n\n     ```text\n     No changed files matched the excerpt filter.\n     ```\n\n   - **Why it may need human judgement:** This appears to be Fabro workflow execution-model behavior rather than an implementation defect: the running instance did not reload the updated workflow definition. It weakens review visibility in this run but should be corrected for future runs if the workflow now calls the extracted script. Humans may want to clarify/document whether mid-run workflow definition changes are expected to take effect.\n\n4. **Previously observed browser acceptance instability remains a project signal**\n\n   - **Files:** `features/staff_club_slugs.feature` / browser acceptance support, not changed by this implementation\n   - **Smell:** The kaizen note records an earlier intermittent failure in `Staff create a club with the suggested slug`, where `#club-slug-input` remained empty. The scenario passed in the review `dev ci` run.\n   - **Why it may need human judgement:** This implementation did not touch that product path, so it should not block this workflow fix. If the instability recurs, it should be tracked separately because flaky acceptance tests reduce trust in the delivery pipeline.\n\n## Suggested fixes\n\nFor the bounded-safe issue:\n\n1. Update the repair verification comparison logic so a missing comparison command cannot cause the guard to silently pass.\n2. Prefer `git diff --no-index --quiet`, `diff -q`, or a checked hash-based comparison over an unchecked `cmp`.\n3. Add a focused shell test if the verification logic is extracted or already script-backed.\n\nOptional future improvements:\n\n- Add a deterministic post-recording gate for `docs/code-health.md` or an equivalent durable artifact.\n- Add a synthetic test for the “judgement-worthy findings present” recording path.\n- Document Fabro’s workflow-definition reload semantics for mid-run repairs.\n\n## Validation notes\n\nRelevant validation signals:\n\n- Preflight sandbox check passed.\n- `dev ci` passed.\n- Browser acceptance passed: `77 scenarios`, `502 steps`.\n- The previously flaky `Staff create a club with the suggested slug` scenario passed during review.\n- Changed files are limited to Fabro workflow infrastructure and the kaizen note.\n- Acceptance feature files were not changed.\n- Reported implementation validation included:\n  - `test_review_report_routing.sh` passing.\n  - `test_collect_implementation_evidence.sh` passing.\n  - `dev check --quick` passing.\n  - `git diff --check` passing.\n\nValidation caveats:\n\n- The current running review workflow still used the old evidence collector, so direct file excerpts of the changed `.fabro/` files were not available in the collected evidence.\n- `verify_review_repair` emitted `cmp: command not found` while still succeeding, indicating one workflow guard can currently fail open.",
           "thread.review_gate.current_node": "snapshot_before_review_repair",
           "internal.retry_count.dev_check": 0,
           "thread.preflight_sandbox.current_node": "dev_check",
@@ -4934,9 +5339,9 @@
           "codex_review": {
             "status": "succeeded",
             "context_updates": {
-              "response.codex_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect implementation excerpts for the changed `.fabro/` workflow files were not included in the collected evidence, so this review relies on the plan resolution, diff summary, validation output, and prior review context rather than line-by-line inspection.\n\n## ADR conformance: PASS\n\nNo ADRs were cited by the plan, and the changed files are limited to Fabro workflow/prompt/test wiring plus the kaizen note. Based on the available evidence, this does not appear to replace or bypass any ADR-mandated product architecture or infrastructure.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe implementation appears plan-conforming, narrowly scoped, and validated by a successful `dev ci` run, including the browser acceptance suite.\n\n## Bounded-safe fixes\n\nNone identified from the available evidence.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Code-health recording success still appears to rely on agent self-reporting**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The fix routes based on `context.code_health_recording_ok=true/false`, which is produced by the recorder agent. That is a clear improvement over ignoring the failure signal, but it still appears to depend on the agent truthfully and correctly reporting whether durable recording happened.\n   - **Why it may need human judgement:** The original failure was a workflow trust issue: the run succeeded while findings were not durably recorded. A deterministic postcondition check, such as verifying a `docs/code-health.md` diff when findings are present, would provide stronger assurance than a prompt contract. This does not block this merge because the route now has an explicit failure path and the previous unconditional-success problem appears addressed, but humans may want stronger guarantees for the final review gate.\n\n2. **Actual file-editing path remains validated only indirectly**\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The plan records that a future real review run should confirm the new agent node can append `docs/code-health.md` when judgement-worthy findings are present. The current validation proves workflow syntax/configuration and static routing assertions, but not a full synthetic “findings present → file changed → success route” execution.\n   - **Why it may need human judgement:** For internal workflow tooling this may be an acceptable incremental fix, especially because failure should now be routed visibly. However, because this workflow is intended to preserve review debt, human judgement may be needed on whether to add a script-backed or synthetic integration check before relying on the first real run as validation.\n\n3. **Review evidence collection did not excerpt the changed workflow files**\n   - **Files:** `.fabro/workflows/iteration-review/*`\n   - **Smell:** The implementation changed only `.fabro/` workflow files and a kaizen document, but the evidence excerpt filter reported: “No changed files matched the excerpt filter.” That means reviewers could not directly inspect the actual workflow/prompt/test changes from the collected evidence.\n   - **Why it may need human judgement:** This is not a defect in the implementation itself, but it weakens review quality for workflow-focused iterations. If Fabro workflow changes are common, the evidence collector should probably include `.fabro/workflows/` excerpts so future reviewers can assess routing, prompts, and guard scripts directly.\n\n4. **Previously observed acceptance instability remains a project signal**\n   - **Files:** Not directly tied to this change.\n   - **Smell:** The kaizen note records an earlier full `dev check` failure in the `Staff create a club with the suggested slug` acceptance scenario, later passing on rerun. The review-stage `dev ci` output now shows the scenario and full acceptance suite passing.\n   - **Why it may need human judgement:** This implementation did not touch that product path, and the final validation is green, so it should not block this workflow fix. Still, intermittent browser acceptance instability reduces confidence in future validation and may deserve separate tracking if it recurs.\n\n## Suggested fixes\n\nNo required fixes.\n\nOptional future improvements:\n\n- Add a deterministic post-recording gate that fails when findings exist but `docs/code-health.md` was not changed or another durable artifact was not created.\n- Add a synthetic workflow test for the “judgement-worthy findings present” path.\n- Include `.fabro/workflows/` files in implementation evidence excerpts for workflow-review iterations.\n\n## Validation notes\n\nRelevant validation evidence:\n\n- Preflight sandbox check passed.\n- `dev ci` passed.\n- Browser acceptance passed: `77 scenarios`, `502 steps`.\n- The previously unstable `Staff create a club with the suggested slug` scenario passed in the review run.\n- Changed files are limited to:\n  - `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n  - `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`\n  - `.fabro/workflows/iteration-review/workflow.fabro`\n  - `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n- Acceptance feature files were not changed.",
-              "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nDirect implementation excerpts for the changed `.fabro/` workflow files were not included in the collected evidence, so this review relies ",
-              "last_stage": "codex_review"
+              "last_stage": "codex_review",
+              "last_response": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation appears plan-conforming and narrowly scoped to Fabro workflow infrastructure plus the kaizen note. Confidence is not Hig",
+              "response.codex_review": "# Review Report\n\n## Decision: ACCEPT\n\n## Confidence: Medium\n\nThe implementation appears plan-conforming and narrowly scoped to Fabro workflow infrastructure plus the kaizen note. Confidence is not High because the running review workflow continued using the old inline evidence-collection script after the mid-run repair, so direct excerpts of the changed `.fabro/` files were still not available from the collected evidence.\n\n## ADR conformance: PASS\n\nNo ADRs were cited by the plan, and the changed files are limited to:\n\n- `.fabro/workflows/iteration-review/*`\n- `docs/kaizen/2026-06-09-iteration-review-code-health-recording-failure.md`\n\nNo product architecture, Phoenix/LiveView structure, persistence, eventing, routing, or infrastructure governed by ADRs appears to have been changed.\n\n## ADR violations\n\nNone identified.\n\n## Blocking issues\n\nNone identified.\n\nThe implementation fixes the core failure mode described in the plan: `record_code_health` is no longer a prompt-only node that can report failure without affecting routing, and the workflow now has an explicit failed-recording terminal path.\n\n## Bounded-safe fixes\n\n1. **Harden the review-repair verification script against missing comparison tools**\n\n   - **Files:** likely `.fabro/workflows/iteration-review/workflow.fabro` or the workflow script backing `verify_review_repair`\n   - **Issue:** The `verify_review_repair` stage printed:\n\n     ```text\n     /bin/bash: line 13: cmp: command not found\n     ```\n\n     but the stage still succeeded because the missing `cmp` command was inside an `if cmp -s ...` conditional. That means the “repair produced no diff” guard can silently fail open in sandboxes without `cmp`.\n   - **Suggested safe fix:** Replace the `cmp -s \"$before\" \"$after\"` check with a comparison mechanism available in the project’s expected runtime, or explicitly check command availability before using it. For example:\n\n     ```sh\n     if git diff --no-index --quiet \"$before\" \"$after\"; then\n       echo \"${kind} repair produced no working-tree diff change since repair started.\" >&2\n       exit 1\n     fi\n     ```\n\n     or use a checked `sha256sum`/`diff` fallback. Add a small guard test if this verification logic is script-backed.\n\n## Judgement-worthy non-blocking code-health findings\n\n1. **Code-health recording success still relies on agent self-reporting**\n\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** The workflow now routes based on `context.code_health_recording_ok=true/false` emitted by the `record_code_health` agent. This is much better than the previous unconditional route, but it still trusts the agent to accurately report that durable recording happened.\n   - **Why it may need human judgement:** The original issue was a trust failure in the review workflow. A deterministic postcondition gate — for example, checking that `docs/code-health.md` changed when judgement-worthy findings exist, or that an alternative durable artifact was created — would provide stronger assurance than prompt-contract self-reporting. This does not block the current fix because the previous failure signal is no longer ignored.\n\n2. **Recorder path has not yet been exercised with real judgement-worthy findings**\n\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/prompts/record_code_health.md`\n   - **Smell:** Static guard tests and workflow validation support the new routing, but the plan still records a follow-up: a future real review run should confirm that the agent node can actually append to `docs/code-health.md` when findings are present.\n   - **Why it may need human judgement:** For internal workflow infrastructure, static routing guards may be sufficient for an incremental fix. For a final review quality gate, humans may prefer a synthetic integration test covering “findings present → durable record created → success route.”\n\n3. **Mid-run workflow repairs did not affect the currently executing workflow instance**\n\n   - **Files:** `.fabro/workflows/iteration-review/workflow.fabro`, `.fabro/workflows/iteration-review/scripts/collect_implementation_evidence.sh`\n   - **Smell:** The evidence collector was reportedly repaired to include `.fabro/workflows/` and `docs/kaizen/`, but the subsequent `collect_implementation_evidence` stage still ran the old inline script and reported:\n\n     ```text\n     No changed files matched the excerpt filter.\n     ```\n\n   - **Why it may need human judgement:** This appears to be Fabro workflow execution-model behavior rather than an implementation defect: the running instance did not reload the updated workflow definition. It weakens review visibility in this run but should be corrected for future runs if the workflow now calls the extracted script. Humans may want to clarify/document whether mid-run workflow definition changes are expected to take effect.\n\n4. **Previously observed browser acceptance instability remains a project signal**\n\n   - **Files:** `features/staff_club_slugs.feature` / browser acceptance support, not changed by this implementation\n   - **Smell:** The kaizen note records an earlier intermittent failure in `Staff create a club with the suggested slug`, where `#club-slug-input` remained empty. The scenario passed in the review `dev ci` run.\n   - **Why it may need human judgement:** This implementation did not touch that product path, so it should not block this workflow fix. If the instability recurs, it should be tracked separately because flaky acceptance tests reduce trust in the delivery pipeline.\n\n## Suggested fixes\n\nFor the bounded-safe issue:\n\n1. Update the repair verification comparison logic so a missing comparison command cannot cause the guard to silently pass.\n2. Prefer `git diff --no-index --quiet`, `diff -q`, or a checked hash-based comparison over an unchecked `cmp`.\n3. Add a focused shell test if the verification logic is extracted or already script-backed.\n\nOptional future improvements:\n\n- Add a deterministic post-recording gate for `docs/code-health.md` or an equivalent durable artifact.\n- Add a synthetic test for the “judgement-worthy findings present” recording path.\n- Document Fabro’s workflow-definition reload semantics for mid-run repairs.\n\n## Validation notes\n\nRelevant validation signals:\n\n- Preflight sandbox check passed.\n- `dev ci` passed.\n- Browser acceptance passed: `77 scenarios`, `502 steps`.\n- The previously flaky `Staff create a club with the suggested slug` scenario passed during review.\n- Changed files are limited to Fabro workflow infrastructure and the kaizen note.\n- Acceptance feature files were not changed.\n- Reported implementation validation included:\n  - `test_review_report_routing.sh` passing.\n  - `test_collect_implementation_evidence.sh` passing.\n  - `dev check --quick` passing.\n  - `git diff --check` passing.\n\nValidation caveats:\n\n- The current running review workflow still used the old evidence collector, so direct file excerpts of the changed `.fabro/` files were not available in the collected evidence.\n- `verify_review_repair` emitted `cmp: command not found` while still succeeding, indicating one workflow guard can currently fail open."
             },
             "notes": "Stage completed: codex_review",
             "usage": {
@@ -4947,9 +5352,9 @@
                     "model_id": "gpt-5.5"
                   },
                   "tokens": {
-                    "input_tokens": 6779,
-                    "output_tokens": 1104,
-                    "reasoning_tokens": 2588,
+                    "input_tokens": 15418,
+                    "output_tokens": 1513,
+                    "reasoning_tokens": 3585,
                     "cache_read_tokens": 0,
                     "cache_write_tokens": 0
                   }
@@ -4958,13 +5363,13 @@
                   "algorithm": "openai"
                 }
               },
-              "total_usd_micros": 144655
+              "total_usd_micros": 230030
             },
             "timing": {
               "wall_time_ms": 0,
-              "inference_time_ms": 68374,
+              "inference_time_ms": 94347,
               "tool_time_ms": 0,
-              "active_time_ms": 68374
+              "active_time_ms": 94347
             }
           },
           "dev_check": {
@@ -5186,7 +5591,7 @@
             }
           }
         },
-        "next_node_id": "codex_review",
+        "next_node_id": "gemini_review",
         "node_visits": {
           "read_plan": 1,
           "dev_check": 2,
@@ -5200,7 +5605,7 @@
           "preflight_sandbox": 1,
           "snapshot_before_review_repair": 1,
           "collect_implementation_evidence": 2,
-          "codex_review": 1
+          "codex_review": 2
         }
       },
       "diff": {}
@@ -5630,6 +6035,34 @@
       },
       "state": "succeeded"
     },
+    "codex_review@2": {
+      "first_event_seq": 322,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "openai",
+        "model": "gpt-5.5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-09T21:48:28.431912825Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0
+      },
+      "state": "running"
+    },
     "codex_review@1": {
       "first_event_seq": 75,
       "prompt": null,
@@ -5727,7 +6160,12 @@
       "first_event_seq": 312,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Stage completed: claude_review",
+        "failure_reason": null,
+        "timestamp": "2026-06-09T21:48:25.057866063Z"
+      },
       "provider_used": {
         "mode": "prompt",
         "provider": "anthropic",
@@ -5741,6 +6179,12 @@
       "output": null,
       "started_at": "2026-06-09T21:46:35.848172556Z",
       "handler": "prompt",
+      "timing": {
+        "wall_time_ms": 109209,
+        "inference_time_ms": 109129,
+        "tool_time_ms": 0,
+        "active_time_ms": 109129
+      },
       "usage": {
         "input_tokens": 15405,
         "output_tokens": 4510,
@@ -5754,7 +6198,7 @@
         "provider": "anthropic",
         "model_id": "claude-sonnet-4-5"
       },
-      "state": "running"
+      "state": "succeeded"
     },
     "claude_review@1": {
       "first_event_seq": 65,
