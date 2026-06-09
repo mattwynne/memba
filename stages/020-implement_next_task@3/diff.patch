@@ -1,0 +1,274 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index ccc5a26..e990f3e 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -2,7 +2,7 @@
+ 
+ - [x] 001 Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
+ - [x] 002 Split the public Get Started experience into two states:
+-- [ ] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
++- [x] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
+ - [ ] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
+ - [ ] 005 Update request form rendering:
+ - [ ] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index ddcafda..f9fce4a 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -3,7 +3,10 @@ defmodule MembaWeb.PageController do
+ 
+   require Logger
+ 
++  alias Memba.Accounts
++  alias Memba.Accounts.AuthEmail
+   alias Memba.Membership
++  alias Memba.Membership.EmailAddresses
+   alias Memba.Onboarding
+   alias Memba.Onboarding.NewRequestEmail
+   alias MembaWeb.ClubSite
+@@ -90,23 +93,107 @@ defmodule MembaWeb.PageController do
+   end
+ 
+   def submit_get_started(conn, params) do
+-    request_params = Map.get(params, "request", %{})
++    cond do
++      signed_out_verification_request?(conn, params) ->
++        request_get_started_verification(conn, Map.get(params, "verification", %{}))
++
++      true ->
++        request_params = Map.get(params, "request", %{})
++
++        {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
++
++        case Onboarding.create_request(request_attrs, request_opts) do
++          {:ok, request} ->
++            deliver_new_request_notification(request)
++            redirect(conn, to: ~p"/get-started?submitted=true")
+ 
+-    {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
++          {:error, changeset} ->
++            conn
++            |> put_status(:unprocessable_entity)
++            |> assign(:request_submitted?, false)
++            |> render_get_started(changeset)
++        end
++    end
++  end
++
++  defp signed_out_verification_request?(conn, params) do
++    not signed_in_get_started?(conn) and Map.has_key?(params, "verification")
++  end
+ 
+-    case Onboarding.create_request(request_attrs, request_opts) do
+-      {:ok, request} ->
+-        deliver_new_request_notification(request)
+-        redirect(conn, to: ~p"/get-started?submitted=true")
++  defp request_get_started_verification(conn, verification_params) do
++    case verified_get_started_email(verification_params) do
++      {:ok, email} ->
++        create_and_deliver_get_started_sign_in_link(email)
++        redirect(conn, to: ~p"/auth/check-email")
+ 
+       {:error, changeset} ->
+         conn
+         |> put_status(:unprocessable_entity)
++        |> put_flash(:error, "Enter a valid email address.")
+         |> assign(:request_submitted?, false)
+-        |> render_get_started(changeset)
++        |> render_get_started(
++          Onboarding.change_request(%{}),
++          Phoenix.Component.to_form(%{changeset | action: :validate}, as: :verification)
++        )
+     end
+   end
+ 
++  defp verified_get_started_email(verification_params) do
++    changeset = verification_changeset(verification_params)
++
++    if changeset.valid? do
++      changeset
++      |> Ecto.Changeset.get_field(:email)
++      |> EmailAddresses.normalize_email()
++      |> case do
++        {:ok, %{normalized_email: normalized_email}} -> {:ok, normalized_email}
++        {:error, :invalid_email} -> {:error, changeset}
++      end
++    else
++      {:error, changeset}
++    end
++  end
++
++  defp verification_changeset(params) when is_map(params) do
++    {%{}, %{email: :string}}
++    |> Ecto.Changeset.cast(params, [:email])
++    |> Ecto.Changeset.validate_required([:email])
++    |> Ecto.Changeset.validate_change(:email, fn :email, email ->
++      case EmailAddresses.normalize_email(email) do
++        {:ok, _email} -> []
++        {:error, :invalid_email} -> [email: "must be a valid email address"]
++      end
++    end)
++  end
++
++  defp verification_changeset(_params), do: verification_changeset(%{})
++
++  defp create_and_deliver_get_started_sign_in_link(email) do
++    case Accounts.create_sign_in_token(email) do
++      {:ok, %{email: recipient_email, token: token}} ->
++        deliver_get_started_sign_in_link(recipient_email, token)
++
++      {:error, reason} ->
++        Logger.warning("Could not create get-started sign-in link: #{inspect(reason)}")
++    end
++  end
++
++  defp deliver_get_started_sign_in_link(recipient_email, token) do
++    callback_url = get_started_sign_in_callback_url(token)
++
++    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
++      :ok ->
++        :ok
++
++      {:error, reason} ->
++        Logger.warning("Could not deliver get-started sign-in link email: #{inspect(reason)}")
++    end
++  end
++
++  defp get_started_sign_in_callback_url(token) do
++    MembaWeb.Endpoint.url() <> ~p"/auth/sign-in/#{token}?#{[return_to: ~p"/get-started"]}"
++  end
++
+   defp deliver_new_request_notification(request) do
+     case NewRequestEmail.deliver(request) do
+       :ok ->
+@@ -131,12 +218,15 @@ defmodule MembaWeb.PageController do
+     |> render(:privacy)
+   end
+ 
+-  defp render_get_started(conn, changeset) do
++  defp render_get_started(conn, changeset, verification_form \\ nil) do
+     conn
+     |> assign(:page_title, "Request access")
+     |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
+     |> assign(:signed_in_get_started?, signed_in_get_started?(conn))
+-    |> assign(:verification_form, Phoenix.Component.to_form(%{}, as: :verification))
++    |> assign(
++      :verification_form,
++      verification_form || Phoenix.Component.to_form(%{}, as: :verification)
++    )
+     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
+     |> render(:get_started)
+   end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index e7536d3..9e68f13 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -4,6 +4,8 @@ defmodule MembaWeb.PageControllerTest do
+   import Swoosh.TestAssertions
+ 
+   alias Memba.Accounts
++  alias Memba.Accounts.AuthEmail
++  alias Memba.Accounts.SignInToken
+   alias Memba.Membership.Projections.Club
+   alias Memba.Membership.Projections.Membership
+   alias Memba.Messaging.Projections.MemberEmailDelivery
+@@ -14,6 +16,18 @@ defmodule MembaWeb.PageControllerTest do
+   alias MembaWeb.ClubSite
+   alias MembaWeb.IdentityAuth
+ 
++  setup do
++    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
++    original_auth_email_config = Application.get_env(:memba, AuthEmail)
++
++    on_exit(fn ->
++      restore_env(Memba.Mailer, original_mailer_config)
++      restore_env(AuthEmail, original_auth_email_config)
++    end)
++
++    :ok
++  end
++
+   test "GET /", %{conn: conn} do
+     conn = get(conn, ~p"/")
+     response = html_response(conn, 200)
+@@ -843,6 +857,60 @@ defmodule MembaWeb.PageControllerTest do
+     refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+   end
+ 
++  test "POST /get-started sends a magic sign-in link back to Get Started for signed-out visitors",
++       %{conn: conn} do
++    configure_auth_email()
++
++    conn =
++      post(conn, ~p"/get-started",
++        verification: %{
++          email: " Robin@Example.COM "
++        }
++      )
++
++    assert redirected_to(conn) == ~p"/auth/check-email"
++    assert Repo.aggregate(Request, :count) == 0
++
++    assert [%SignInToken{email: "robin@example.com"}] = Repo.all(SignInToken)
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.to == [{"", "robin@example.com"}]
++    assert email.from == {"Memba", "auth@mail.memba.io"}
++    assert email.subject == "Sign in to Memba"
++    assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
++
++    assert [_, _token, query] =
++             Regex.run(~r{/auth/sign-in/([^?\s"<]+)\?([^\s"<]+)}, email.text_body)
++
++    assert URI.decode_query(query) == %{"return_to" => ~p"/get-started"}
++    refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
++  end
++
++  test "POST /get-started rejects invalid verification email without a token or email",
++       %{conn: conn} do
++    configure_auth_email()
++
++    conn =
++      post(conn, ~p"/get-started",
++        verification: %{
++          email: "not an email address"
++        }
++      )
++
++    response = html_response(conn, 422)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Enter a valid email address."
++
++    assert html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
++
++    assert Repo.aggregate(SignInToken, :count) == 0
++    assert Repo.aggregate(Request, :count) == 0
++    assert_no_email_sent()
++  end
++
+   test "GET /get-started shows the request form to a signed-in identity without a person", %{
+     conn: conn
+   } do
+@@ -1161,4 +1229,19 @@ defmodule MembaWeb.PageControllerTest do
+       reason: Keyword.fetch!(attrs, :reason)
+     })
+   end
++
++  defp configure_auth_email do
++    Application.put_env(:memba, Memba.Mailer,
++      adapter: Swoosh.Adapters.Test,
++      api_key: "server-token"
++    )
++
++    Application.put_env(:memba, AuthEmail,
++      from: "auth@mail.memba.io",
++      message_stream: "outbound-authentication"
++    )
++  end
++
++  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
++  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
