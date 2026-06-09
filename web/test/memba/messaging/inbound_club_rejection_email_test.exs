@@ -89,6 +89,12 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert email.html_body =~ "member account for this email address"
     assert email.html_body =~ "Just reply to this email and a person will help"
     assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+    assert email.html_body =~ "Delivered for Wessex &lt;Choir&gt; Bcc: attacker@example.com by"
+    assert email.html_body =~ ~s|href="https://memba.io"|
+    assert email.html_body =~ "Sent to margaret@example.com."
+    assert email.html_body =~ "This is an automatic delivery notice."
+    assert email.html_body =~ "Need a hand? Reply to this email or write to"
+    assert email.html_body =~ ~s|mailto:support@memba.test|
     refute email.html_body =~ "<script>"
     refute email.html_body =~ "help@memba.io"
 
@@ -194,6 +200,10 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert email.html_body =~ "Your email wasn&#39;t posted"
     assert email.html_body =~ "If you need a hand, contact Memba support."
     assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
+    assert email.html_body =~ "Sent to sender@example.com."
+    assert email.html_body =~ "This is an automatic delivery notice."
+    assert email.html_body =~ "Need a hand? Contact Memba support."
     refute email.html_body =~ "<script>"
     refute email.html_body =~ "help@memba.io"
 
