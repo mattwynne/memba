@@ -1,0 +1,14 @@
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index f9fe4de..1e920e7 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -9,7 +9,8 @@
+   - Change: `Memba.EmailTemplates` now renders the shared email Memba mark with the same sprig silhouette paths used by `MembaWeb.Brand.sprig/1` instead of the previous checkmark path, and focused auth-email/template tests assert sign-in email HTML contains the sprig leaf/bud markup and no longer contains the checkmark path.
+ - [x] 005 Ensure the sign-in email uses the standard transactional email footer.
+   - Change: `Memba.Accounts.AuthEmail` now composes the sign-in trust panel with `EmailTemplates.memba_footer/1` instead of its custom auth footer, and focused auth-email tests assert both Memba-led and group-led sign-in emails render the standard delivered-by/delivered-for footer with recipient and support guidance.
+-- [ ] 006 Inspect inbound club-message rejection email construction and the email request/provider shape for display-name support.
++- [x] 006 Inspect inbound club-message rejection email construction and the email request/provider shape for display-name support.
++  - Finding: club-message rejection emails are built in `web/lib/memba/messaging/inbound_club_rejection_email.ex` and delivered directly through `Memba.Mailer` from `Memba.Messaging.reject_first_inbound_club_email/5-6`. Resolved club rejections already pass `club_name: destination.club_name`; unknown/unsupported destination rejections intentionally have no club context. The current `from_address/1` ignores opts and returns the configured messaging sender as a named tuple (or normalizes a bare configured address to `{"Memba", address}`), so the implementation path is to replace only the tuple display name with sanitized `<club name> via Memba` when `club_name(opts)` is present, preserving the sender address, reply-to, threading headers, rejection copy, and provider metadata/tags. Provider request shape supports this: Swoosh Postmark serializes named `from` tuples into the `"From"` field via `Swoosh.Email.Render.render_recipient/1`, the custom `Memba.Messaging.EmailDeliveryProviders.ResendAdapter` serializes named `from` tuples into Resend's `"from"` field, and test/local delivery preserves the `Swoosh.Email.from` tuple for assertions.
+ - [ ] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
+ - [ ] 008 Ensure the club-message rejection email uses the standard transactional email footer.
+ - [ ] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
