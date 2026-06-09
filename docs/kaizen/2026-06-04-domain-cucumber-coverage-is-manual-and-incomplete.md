@@ -64,18 +64,26 @@ This showed three separate weaknesses accumulating:
 
 A first containment commit, `b05fae6c Classify acceptance scenarios by runner intent`, added explicit runner-intent tags and replaced resting generic parking tags with runner-specific debt classifications. This did not fix the underlying generated domain-runner gap; it made the remaining debt visible.
 
-### Resolution note: 2026-06-07
+## Resolution
 
-Commit `fd08def8 Run all domain-eligible Cucumber scenarios` replaced the manual domain scenario lists with mechanical prevention.
+Date: 2026-06-07
 
-The domain path now has a project-local runner in `web/test/support/domain_cucumber_runner.ex` that:
+Root cause: domain Cucumber coverage depended on hard-coded scenario lists and ambiguous exclusion tags, so shared feature-file changes could drift from the domain/application runner without an executable guardrail.
 
-- discovers the shared feature files from the configured Cucumber paths;
-- applies the domain tag filter from `web/config/test.exs`;
-- excludes `@not-domain` and `@todo-domain` scenarios; and
-- generates ExUnit tests for every remaining domain-eligible scenario in `web/test/features/domain_cucumber_acceptance_test.exs`.
+Fix applied:
 
-This means removing `@todo-domain` from a scenario now immediately pulls it into the domain acceptance suite. Missing domain steps fail as normal ExUnit failures. The old count-only operator command was removed because it was inspection rather than prevention.
+- `web/test/support/domain_cucumber_runner.ex`: added a project-local runner that discovers shared feature files from the configured Cucumber paths, applies the domain tag filter, excludes `@not-domain` and `@todo-domain`, and generates ExUnit tests for every remaining domain-eligible scenario.
+- `web/test/features/domain_cucumber_acceptance_test.exs`: uses the generated runner so removing `@todo-domain` from a scenario immediately pulls it into the domain acceptance suite.
+- Acceptance scenario tags and runner filters were later tightened so temporary debt is expressed by runner-specific tags only.
+
+Validation:
+
+- Existing evidence: commit `fd08def8` (`Run all domain-eligible Cucumber scenarios`) introduced the generated domain runner; commit `de2cb458` (`Remove generic acceptance parking tags`) removed the ambiguous generic parking tags.
+- No command rerun for this backfill; this change only records the already-applied resolution.
+
+Remaining follow-up:
+
+- Decide whether to patch/replace Elixir Cucumber to support `Rule:` syntax, or keep rules as comments until the runner changes.
 
 ## Impact
 

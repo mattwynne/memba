@@ -90,3 +90,23 @@ Sequential iteration delivery depends on lifecycle status being trustworthy. If 
 - Add a post-publish guard that fails loudly if a commit for an iteration has landed while its status remains `implementing`.
 - Add a recovery command that verifies an iteration's implementation artifacts and review status before safely marking it `merged`.
 - Have the predecessor gate distinguish "earlier iteration appears published but still marked implementing" from "earlier iteration is genuinely active" and point to the exact recovery path.
+
+## Resolution
+
+Date: 2026-06-09
+
+Root cause: the iteration implementation publish step could squash and push the product implementation without including the lifecycle transition to `merged`, leaving `docs/iterations/README.md` and the selected `plan.md` stale after the implementation landed.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-implementation/scripts/publish_to_main.sh`: now marks the selected plan and iteration index `merged` before staging and squashing the implementation, so the status metadata is included in the same trunk commit as the product artifact.
+- `.fabro/workflows/iteration-implementation/scripts/test_publish_to_main.sh`: asserts that the published commit leaves both the plan status and iteration index row marked `merged`.
+
+Validation:
+
+- Existing evidence: commit `5ef01326` (`Fix iteration implementation publish finalization`) introduced and tested this prevention.
+- No command rerun for this backfill; this change only records the already-applied resolution.
+
+Remaining follow-up:
+
+- None for this specific stale-status failure mode.

@@ -62,3 +62,23 @@ The local quality gate is supposed to be the trusted final signal before handoff
 - Print a clear message when waiting for or failing on the lock, so agents do not mistake serialization for a hang.
 - For future parallelism, give each agent/check run isolated `MIX_TEST_PARTITION`, database/event store, Phoenix port, and acceptance lifecycle.
 - Update multi-agent workflow guidance so targeted tests can run independently, but the full `dev check` is owned by one finalizing agent unless isolation is configured.
+
+## Resolution
+
+Date: 2026-06-09
+
+Root cause: `dev check`, `dev ci`, `precommit`, `acceptance`, and setup shared destructive test resources, but the command wrapper did not serialize access to those resources.
+
+Fix applied:
+
+- `bin/dev`: added a repo/tooling quality-gate lock keyed by the configured Postgres port, with stale-lock cleanup and waiting messages.
+- `bin/dev`: routes `check`, `ci`, `precommit`, `acceptance`, and setup through `with_quality_gate_lock`, while allowing nested calls via `MEMBA_QUALITY_GATE_LOCK_HELD` so one `dev check` does not deadlock itself.
+
+Validation:
+
+- Existing evidence: `bin/dev` now contains `quality_gate_lock_*` helpers and wraps the shared-resource quality gates.
+- No command rerun for this backfill; this change only records the already-applied resolution.
+
+Remaining follow-up:
+
+- True parallel full checks still require isolated databases, event stores, ports, and acceptance lifecycle per run. The current fix intentionally serializes the shared default harness.
