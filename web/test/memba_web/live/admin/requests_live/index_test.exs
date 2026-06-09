@@ -190,7 +190,9 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
        %{
          conn: conn
        } do
-    request = request_fixture("Rejectable Paddlers", requester_name: "Robin Requester")
+    request =
+      verified_request_fixture(conn, "Rejectable Paddlers", requester_name: "Robin Requester")
+
     conn = sign_in_staff(conn, "pat@memba.io")
     club_count = Repo.aggregate(ClubProjection, :count)
     person_count = Repo.aggregate(PersonProjection, :count)
@@ -382,7 +384,12 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
   test "staff can convert an active request into a club and active first member", %{conn: conn} do
     configure_auth_email()
-    request = request_fixture("Convertible Paddlers", requester_name: "Robin Requester")
+
+    request =
+      verified_request_fixture(conn, "Convertible Paddlers",
+        requester_name: "Robin Requester",
+        identity_email: "Robin@Example.COM"
+      )
 
     {:ok, view, _initial_html} =
       conn
@@ -437,6 +444,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
   test "staff conversion reuses an existing person when the request email already belongs to one",
        %{conn: conn} do
+    configure_auth_email()
     existing_person_id = Memba.ID.generate(:person)
 
     assert :ok =
@@ -450,10 +458,15 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
              )
 
     request =
-      request_fixture("Existing Person Paddlers",
-        requester_name: "Robin Requester",
-        requester_email: "Robin@Example.com"
+      verified_request_fixture(conn, "Existing Person Paddlers",
+        requester_name: "Forged Requester",
+        requester_email: "forged@example.net",
+        identity_email: "Robin@Example.com"
       )
+
+    assert request.requester_name == "Existing Robin"
+    assert request.requester_email == "robin@example.com"
+    assert request.requester_person_id == existing_person_id
 
     conn = sign_in_staff(conn)
     person_count = Repo.aggregate(PersonProjection, :count)
@@ -482,6 +495,12 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert membership.club_id == club.club_id
     assert membership.person_id == existing_person_id
     assert membership.active
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"Existing Robin", "robin@example.com"}]
+      assert email.subject == "Welcome to Existing Person Paddlers on Memba"
+      true
+    end)
   end
 
   test "conversion preparation refreshes the inbox when the request is no longer active", %{
@@ -527,6 +546,33 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
       })
 
     request
+  end
+
+  defp verified_request_fixture(conn, club_name, opts) do
+    unique = System.unique_integer([:positive])
+    requester_name = Keyword.get(opts, :requester_name, "Requester #{unique}")
+    typed_requester_email = Keyword.get(opts, :requester_email, "typed-#{unique}@example.net")
+    identity_email = Keyword.get(opts, :identity_email, typed_requester_email)
+
+    request_conn =
+      conn
+      |> Plug.Test.init_test_session(%{
+        IdentityAuth.identity_session_key() => identity_email
+      })
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: requester_name,
+          requester_email: typed_requester_email,
+          requested_club_name: " #{club_name} ",
+          note: " Please onboard #{club_name}. "
+        }
+      )
+
+    assert redirected_to(request_conn) == ~p"/get-started?submitted=true"
+
+    assert_email_sent(subject: "New Memba request: #{club_name}")
+
+    Repo.get_by!(Request, requested_club_name: club_name)
   end
 
   defp update_inserted_at(%Request{} = request, inserted_at) do
