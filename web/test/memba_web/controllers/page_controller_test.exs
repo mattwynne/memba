@@ -911,6 +911,8 @@ defmodule MembaWeb.PageControllerTest do
 
     assert redirected_to(callback_conn) == ~p"/get-started"
     assert get_session(callback_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
+    assert Repo.aggregate(Request, :count) == 0
+    refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
 
     get_started_conn =
       callback_conn
