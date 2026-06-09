@@ -2,6 +2,7 @@ defmodule MembaWeb.PublicClubPageLive do
   use MembaWeb, :live_view
 
   alias Memba.Membership
+  alias MembaWeb.ClubSite
 
   @impl Phoenix.LiveView
   def mount(_params, %{"club_id" => club_id}, socket) do
@@ -41,7 +42,7 @@ defmodule MembaWeb.PublicClubPageLive do
                 </a>
                 <a
                   id="public-club-page-memba-home-link"
-                  href={~p"/"}
+                  href={ClubSite.root_url()}
                   aria-label="Visit Memba home"
                   class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
                 >

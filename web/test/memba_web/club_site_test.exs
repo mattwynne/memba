@@ -10,6 +10,11 @@ defmodule MembaWeb.ClubSiteTest do
     assert ClubSite.url(club, "/messages/new") == "http://kmc.lvh.me:4002/messages/new"
   end
 
+  test "builds the root Memba URL from the configured club base domain" do
+    assert ClubSite.root_url() == "http://lvh.me:4002/"
+    assert ClubSite.root_url("/get-started") == "http://lvh.me:4002/get-started"
+  end
+
   test "extracts the left-most slug from configured club hosts" do
     assert ClubSite.slug_from_host("kmc.lvh.me") == {:ok, "kmc"}
     assert ClubSite.slug_from_host("KMC.LVH.ME.") == {:ok, "kmc"}
@@ -33,6 +38,7 @@ defmodule MembaWeb.ClubSiteTest do
       )
 
       assert ClubSite.url(%{slug: "kmc"}) == "https://kmc.clubs.memba.io/"
+      assert ClubSite.root_url() == "https://memba.io/"
       assert ClubSite.slug_from_host("kmc.clubs.memba.io") == {:ok, "kmc"}
     after
       Application.put_env(:memba, :club_site, original)

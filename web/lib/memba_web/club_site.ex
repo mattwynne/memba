@@ -25,6 +25,16 @@ defmodule MembaWeb.ClubSite do
 
   def url(_club, path), do: path
 
+  def root_url(path \\ "/") do
+    %URI{
+      scheme: scheme(),
+      host: root_domain_host(),
+      port: port(),
+      path: normalize_path(path)
+    }
+    |> URI.to_string()
+  end
+
   def base_domain do
     :memba
     |> Application.get_env(:club_site, [])
@@ -89,6 +99,16 @@ defmodule MembaWeb.ClubSite do
   end
 
   defp normalize_path(_path), do: "/"
+
+  defp root_domain_host do
+    base_domain = base_domain()
+
+    if String.starts_with?(base_domain, "clubs.") do
+      String.replace_prefix(base_domain, "clubs.", "")
+    else
+      base_domain
+    end
+  end
 
   defp scheme do
     :memba

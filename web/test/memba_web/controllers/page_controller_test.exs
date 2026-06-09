@@ -138,11 +138,11 @@ defmodule MembaWeb.PageControllerTest do
     assert html |> LazyHTML.query("a#public-club-page-sign-in-link[href='/auth']") |> Enum.any?()
 
     assert html
-           |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']")
+           |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
            |> LazyHTML.text() =~ "Visit Memba home"
 
     assert html
-           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']")
+           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
            |> LazyHTML.text() =~ "Memba"
 
     refute response =~ "Send a club message"
@@ -194,6 +194,17 @@ defmodule MembaWeb.PageControllerTest do
     assert html
            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
            |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
+           |> LazyHTML.text() =~ "Visit Memba home"
+
+    assert html
+           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
+           |> LazyHTML.text() =~ "Memba"
+
+    refute html |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']") |> Enum.any?()
+    refute html |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']") |> Enum.any?()
   end
 
   test "GET / on an unknown public club subdomain returns not found", %{conn: conn} do

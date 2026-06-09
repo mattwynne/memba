@@ -5,6 +5,7 @@ defmodule MembaWeb.LayoutsTest do
   import Phoenix.LiveViewTest
 
   alias MembaWeb.Layouts
+  alias MembaWeb.ClubSite
 
   @sha "abcdef0123456789abcdef0123456789abcdef01"
 
@@ -141,7 +142,7 @@ defmodule MembaWeb.LayoutsTest do
 
     assert_selector(
       html,
-      "#club-site-footer a#club-site-footer-memba-home-link[href='/'][aria-label='Visit Memba home']"
+      "#club-site-footer a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}'][aria-label='Visit Memba home']"
     )
 
     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
