@@ -38,7 +38,7 @@ defmodule MembaWeb.PageControllerTest do
 
     html = LazyHTML.from_fragment(response)
 
-    assert response =~ "A simpler way to keep your group members informed."
+    assert response =~ "Volunteering shouldn’t feel like work."
     assert response =~ "Kootenay Mountaineering Club"
     assert response =~ "Request access for your group"
     assert response =~ "See what members can do"
@@ -84,7 +84,7 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "You’re a member of 2 clubs"
     assert response =~ "Alpine Club"
     assert response =~ "Bridge Club"
-    refute response =~ "A simpler way to keep your group members informed."
+    refute response =~ "Volunteering shouldn’t feel like work."
 
     for club <- [first_club, second_club] do
       assert html

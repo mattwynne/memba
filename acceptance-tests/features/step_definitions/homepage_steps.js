@@ -2,6 +2,7 @@ const { Given, When, Then } = require("@cucumber/cucumber");
 const {
   assertHomepageFitsScreen,
   assertMembaHomepage,
+  assertHomepageVolunteeringPromise,
   visitHomepage
 } = require("../support/homepage");
 
@@ -15,6 +16,10 @@ When("I visit the homepage", async function () {
 
 Then("I should see the Memba homepage", async function () {
   await assertMembaHomepage(this);
+});
+
+Then("I should see that volunteering should not feel like work", async function () {
+  await assertHomepageVolunteeringPromise(this);
 });
 
 Then("the homepage should fit the screen", async function () {
