@@ -53,6 +53,11 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
     assert email.html_body =~ "This link expires in 15 minutes and can be used once."
     assert email.html_body =~ "Secured by Memba"
+
+    assert email.html_body =~
+             ~s|d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"|
+
+    refute email.html_body =~ ~s|d="M 18 34 L 28 44 L 46 24"|
     assert email.html_body =~ "Sent to alice@example.com."
     refute email.html_body =~ "help@memba.io"
 
