@@ -1,0 +1,192 @@
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index 1188038..304e5fe 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -8,7 +8,7 @@
+ - [x] 006 Inspect inbound club-message rejection email construction and the email request/provider shape for display-name support.
+ - [x] 007 Change the club-message rejection email sender/display name to `<club name> via Memba` while preserving sender address, reply-to/support guidance, and rejection content.
+ - [x] 008 Ensure the club-message rejection email uses the standard transactional email footer.
+-- [ ] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
++- [x] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
+ - [ ] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
+ - [ ] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
+ - [ ] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
+diff --git a/web/lib/memba/onboarding/new_request_email.ex b/web/lib/memba/onboarding/new_request_email.ex
+index 8332e44..ceed9b4 100644
+--- a/web/lib/memba/onboarding/new_request_email.ex
++++ b/web/lib/memba/onboarding/new_request_email.ex
+@@ -5,6 +5,7 @@ defmodule Memba.Onboarding.NewRequestEmail do
+ 
+   import Swoosh.Email
+ 
++  alias Memba.EmailTemplates
+   alias Memba.Onboarding.Request
+ 
+   @default_recipient "hello@memba.io"
+@@ -28,14 +29,15 @@ defmodule Memba.Onboarding.NewRequestEmail do
+ 
+   defp email(%Request{} = request) do
+     body = text_body(request)
++    to_address = to_address()
+ 
+     new()
+     |> from(from_address())
+-    |> to(to_address())
++    |> to(to_address)
+     |> reply_to({request.requester_name, request.requester_email})
+     |> subject("New Memba request: #{request.requested_club_name}")
+     |> text_body(body)
+-    |> html_body(html_body(body))
++    |> html_body(render_html_body(body, recipient_email(to_address)))
+     |> put_provider_options(request)
+   end
+ 
+@@ -136,21 +138,32 @@ defmodule Memba.Onboarding.NewRequestEmail do
+     MembaWeb.Endpoint.url() <> "/admin/requests/" <> request.request_id
+   end
+ 
+-  defp html_body(text) do
+-    escaped_body =
+-      text
+-      |> String.split(~r/\r\n|\n|\r/, trim: false)
+-      |> Enum.map(&html_escape_to_string/1)
+-      |> Enum.join("<br>\n")
+-
+-    "<html><body><p>#{escaped_body}</p></body></html>"
+-  end
+-
+-  defp html_escape_to_string(text) do
+-    text
+-    |> Phoenix.HTML.html_escape()
+-    |> Phoenix.HTML.safe_to_string()
+-  end
++  defp render_html_body(text, recipient_email) do
++    title = "New Memba access request"
++
++    content = [
++      EmailTemplates.memba_header(label: "Staff notification"),
++      EmailTemplates.card_section([
++        EmailTemplates.heading(title),
++        EmailTemplates.plaintext_to_html(text, color: "#2c3a35")
++      ])
++    ]
++
++    EmailTemplates.render_shell(
++      title: title,
++      preheader: "New Memba access request for Memba staff.",
++      content: content,
++      footer:
++        EmailTemplates.memba_footer(
++          recipient_email: recipient_email,
++          reason: "This staff notification was sent because someone requested access to Memba."
++        )
++    )
++  end
++
++  defp recipient_email({_name, address}) when is_binary(address), do: address
++  defp recipient_email(address) when is_binary(address), do: address
++  defp recipient_email(_address), do: ""
+ 
+   defp normalize_delivery_result({:ok, _result}), do: :ok
+ 
+diff --git a/web/lib/memba/onboarding/welcome_email.ex b/web/lib/memba/onboarding/welcome_email.ex
+index 71c3b10..f14c065 100644
+--- a/web/lib/memba/onboarding/welcome_email.ex
++++ b/web/lib/memba/onboarding/welcome_email.ex
+@@ -155,7 +155,12 @@ defmodule Memba.Onboarding.WelcomeEmail do
+ 
+     footer = [
+       EmailTemplates.trust_footer(group_name: context.group_name),
+-      welcome_footer(recipient_email)
++      EmailTemplates.memba_footer(
++        group_name: context.group_name,
++        recipient_email: recipient_email,
++        reason:
++          "You're getting this because your request to join #{context.group_name} was approved."
++      )
+     ]
+ 
+     EmailTemplates.render_shell(
+@@ -176,16 +181,6 @@ defmodule Memba.Onboarding.WelcomeEmail do
+     """
+   end
+ 
+-  defp welcome_footer(recipient_email) do
+-    """
+-        <tr>
+-          <td class="gutter" style="padding:14px 28px 24px; font-size:12px; line-height:1.6; color:#7d877f;">
+-            Sent to #{EmailTemplates.escaped_text(recipient_email)}. Need a hand? Contact Memba support.
+-          </td>
+-        </tr>
+-    """
+-  end
+-
+   defp deliver_email(email) do
+     email
+     |> Memba.Mailer.deliver()
+diff --git a/web/test/memba/onboarding/new_request_email_test.exs b/web/test/memba/onboarding/new_request_email_test.exs
+index 2a20a54..311b620 100644
+--- a/web/test/memba/onboarding/new_request_email_test.exs
++++ b/web/test/memba/onboarding/new_request_email_test.exs
+@@ -1,8 +1,6 @@
+ defmodule Memba.Onboarding.NewRequestEmailTest do
+   use Memba.DataCase, async: false
+ 
+-  import Swoosh.TestAssertions
+-
+   alias Memba.Onboarding.NewRequestEmail
+   alias Memba.Onboarding.Request
+ 
+@@ -36,13 +34,24 @@ defmodule Memba.Onboarding.NewRequestEmailTest do
+ 
+     assert :ok = NewRequestEmail.deliver(request)
+ 
+-    assert_email_sent(fn email ->
+-      assert email.to == [{"", "staff@memba.test"}]
+-      assert email.subject == "New Memba request: West Coast Paddlers"
+-      assert email.text_body =~ "Request ID: #{request.request_id}"
+-      assert email.text_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
+-      assert email.html_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
+-    end)
++    assert_received {:email, %Swoosh.Email{} = email}
++
++    assert email.to == [{"", "staff@memba.test"}]
++    assert email.subject == "New Memba request: West Coast Paddlers"
++    assert email.text_body =~ "Request ID: #{request.request_id}"
++    assert email.text_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
++    assert email.html_body =~ "<!doctype html>"
++    assert email.html_body =~ "New Memba access request"
++    assert email.html_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
++    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
++    assert email.html_body =~ "Sent to staff@memba.test."
++
++    assert email.html_body =~
++             "This staff notification was sent because someone requested access to Memba."
++
++    assert email.html_body =~ "Need a hand? Contact Memba support."
++    refute email.html_body =~ "<html><body>"
++    refute email.html_body =~ "help@memba.io"
+   end
+ 
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+diff --git a/web/test/memba/onboarding/welcome_email_test.exs b/web/test/memba/onboarding/welcome_email_test.exs
+index 90d7cdd..9190943 100644
+--- a/web/test/memba/onboarding/welcome_email_test.exs
++++ b/web/test/memba/onboarding/welcome_email_test.exs
+@@ -69,7 +69,16 @@ defmodule Memba.Onboarding.WelcomeEmailTest do
+     assert email.html_body =~ "This link expires in 15 minutes and can be used once."
+     assert email.html_body =~ "Secured by Memba"
+     assert email.html_body =~ "West Coast Paddlers runs on Memba"
++
++    assert email.html_body =~
++             ~s|Delivered for West Coast Paddlers by <a href="https://memba.io"|
++
+     assert email.html_body =~ "Sent to robin@example.com."
++
++    assert email.html_body =~
++             "because your request to join West Coast Paddlers was approved."
++
++    assert email.html_body =~ "Need a hand? Contact Memba support."
+     refute email.html_body =~ "<html><body>"
+     refute email.html_body =~ "help@memba.io"
+ 
