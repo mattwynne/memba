@@ -141,8 +141,7 @@ defmodule MembaWeb.RouterTest do
       assert %{
                path_params: %{},
                pipe_through: [:browser, :club_member_required],
-               phoenix_live_view:
-                 {MembaWeb.MemberInvitationLive.New, :new, _opts, _live_session},
+               phoenix_live_view: {MembaWeb.MemberInvitationLive.New, :new, _opts, _live_session},
                plug: Phoenix.LiveView.Plug,
                plug_opts: :new,
                route: "/members/invitations/new"
