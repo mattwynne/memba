@@ -1,0 +1,175 @@
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index 9cdf05d..645ba83 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Ensure the club-message rejection email uses the standard transactional email footer.
+ - [x] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
+ - [x] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
+-- [ ] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
++- [x] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
+ - [ ] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
+ - [ ] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
+ - [ ] 014 Run focused tests for changed web templates/components and email rendering.
+diff --git a/web/lib/memba_web/club_site.ex b/web/lib/memba_web/club_site.ex
+index 8352368..1ff8fb1 100644
+--- a/web/lib/memba_web/club_site.ex
++++ b/web/lib/memba_web/club_site.ex
+@@ -25,6 +25,16 @@ defmodule MembaWeb.ClubSite do
+ 
+   def url(_club, path), do: path
+ 
++  def root_url(path \\ "/") do
++    %URI{
++      scheme: scheme(),
++      host: root_domain_host(),
++      port: port(),
++      path: normalize_path(path)
++    }
++    |> URI.to_string()
++  end
++
+   def base_domain do
+     :memba
+     |> Application.get_env(:club_site, [])
+@@ -90,6 +100,16 @@ defmodule MembaWeb.ClubSite do
+ 
+   defp normalize_path(_path), do: "/"
+ 
++  defp root_domain_host do
++    base_domain = base_domain()
++
++    if String.starts_with?(base_domain, "clubs.") do
++      String.replace_prefix(base_domain, "clubs.", "")
++    else
++      base_domain
++    end
++  end
++
+   defp scheme do
+     :memba
+     |> Application.get_env(:club_site, [])
+diff --git a/web/lib/memba_web/components/layouts.ex b/web/lib/memba_web/components/layouts.ex
+index 25e7950..48635cc 100644
+--- a/web/lib/memba_web/components/layouts.ex
++++ b/web/lib/memba_web/components/layouts.ex
+@@ -5,6 +5,8 @@ defmodule MembaWeb.Layouts do
+   """
+   use MembaWeb, :html
+ 
++  alias MembaWeb.ClubSite
++
+   # Embed all files in layouts/* within this module.
+   # The default root.html.heex file contains the HTML
+   # skeleton of your application, namely HTML headers
+@@ -341,7 +343,7 @@ defmodule MembaWeb.Layouts do
+           Powered by
+           <a
+             id="club-site-footer-memba-home-link"
+-            href={~p"/"}
++            href={ClubSite.root_url()}
+             aria-label="Visit Memba home"
+             class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
+           >
+diff --git a/web/lib/memba_web/live/public_club_page_live.ex b/web/lib/memba_web/live/public_club_page_live.ex
+index 4c9582d..f1794e8 100644
+--- a/web/lib/memba_web/live/public_club_page_live.ex
++++ b/web/lib/memba_web/live/public_club_page_live.ex
+@@ -2,6 +2,7 @@ defmodule MembaWeb.PublicClubPageLive do
+   use MembaWeb, :live_view
+ 
+   alias Memba.Membership
++  alias MembaWeb.ClubSite
+ 
+   @impl Phoenix.LiveView
+   def mount(_params, %{"club_id" => club_id}, socket) do
+@@ -41,7 +42,7 @@ defmodule MembaWeb.PublicClubPageLive do
+                 </a>
+                 <a
+                   id="public-club-page-memba-home-link"
+-                  href={~p"/"}
++                  href={ClubSite.root_url()}
+                   aria-label="Visit Memba home"
+                   class="inline-flex items-center justify-center rounded-full border border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-6 py-3 text-sm font-semibold text-[var(--club-site-ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-white"
+                 >
+diff --git a/web/test/memba_web/club_site_test.exs b/web/test/memba_web/club_site_test.exs
+index f10689b..633c258 100644
+--- a/web/test/memba_web/club_site_test.exs
++++ b/web/test/memba_web/club_site_test.exs
+@@ -10,6 +10,11 @@ defmodule MembaWeb.ClubSiteTest do
+     assert ClubSite.url(club, "/messages/new") == "http://kmc.lvh.me:4002/messages/new"
+   end
+ 
++  test "builds the root Memba URL from the configured club base domain" do
++    assert ClubSite.root_url() == "http://lvh.me:4002/"
++    assert ClubSite.root_url("/get-started") == "http://lvh.me:4002/get-started"
++  end
++
+   test "extracts the left-most slug from configured club hosts" do
+     assert ClubSite.slug_from_host("kmc.lvh.me") == {:ok, "kmc"}
+     assert ClubSite.slug_from_host("KMC.LVH.ME.") == {:ok, "kmc"}
+@@ -33,6 +38,7 @@ defmodule MembaWeb.ClubSiteTest do
+       )
+ 
+       assert ClubSite.url(%{slug: "kmc"}) == "https://kmc.clubs.memba.io/"
++      assert ClubSite.root_url() == "https://memba.io/"
+       assert ClubSite.slug_from_host("kmc.clubs.memba.io") == {:ok, "kmc"}
+     after
+       Application.put_env(:memba, :club_site, original)
+diff --git a/web/test/memba_web/components/layouts_test.exs b/web/test/memba_web/components/layouts_test.exs
+index 4c85701..78e3396 100644
+--- a/web/test/memba_web/components/layouts_test.exs
++++ b/web/test/memba_web/components/layouts_test.exs
+@@ -5,6 +5,7 @@ defmodule MembaWeb.LayoutsTest do
+   import Phoenix.LiveViewTest
+ 
+   alias MembaWeb.Layouts
++  alias MembaWeb.ClubSite
+ 
+   @sha "abcdef0123456789abcdef0123456789abcdef01"
+ 
+@@ -141,7 +142,7 @@ defmodule MembaWeb.LayoutsTest do
+ 
+     assert_selector(
+       html,
+-      "#club-site-footer a#club-site-footer-memba-home-link[href='/'][aria-label='Visit Memba home']"
++      "#club-site-footer a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}'][aria-label='Visit Memba home']"
+     )
+ 
+     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 22e6046..98310eb 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -138,11 +138,11 @@ defmodule MembaWeb.PageControllerTest do
+     assert html |> LazyHTML.query("a#public-club-page-sign-in-link[href='/auth']") |> Enum.any?()
+ 
+     assert html
+-           |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']")
++           |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
+            |> LazyHTML.text() =~ "Visit Memba home"
+ 
+     assert html
+-           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']")
++           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
+            |> LazyHTML.text() =~ "Memba"
+ 
+     refute response =~ "Send a club message"
+@@ -194,6 +194,17 @@ defmodule MembaWeb.PageControllerTest do
+     assert html
+            |> LazyHTML.query("#public-club-page-page[data-club-id='#{club.club_id}']")
+            |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("a#public-club-page-memba-home-link[href='#{ClubSite.root_url()}']")
++           |> LazyHTML.text() =~ "Visit Memba home"
++
++    assert html
++           |> LazyHTML.query("a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}']")
++           |> LazyHTML.text() =~ "Memba"
++
++    refute html |> LazyHTML.query("a#public-club-page-memba-home-link[href='/']") |> Enum.any?()
++    refute html |> LazyHTML.query("a#club-site-footer-memba-home-link[href='/']") |> Enum.any?()
+   end
+ 
+   test "GET / on an unknown public club subdomain returns not found", %{conn: conn} do
