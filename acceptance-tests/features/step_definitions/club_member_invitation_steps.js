@@ -5,6 +5,7 @@ const {
   assertAskedForName,
   assertCannotCreateDirectActiveMember,
   assertCannotInviteMembers,
+  assertActiveMember,
   assertInvitationReceived,
   assertInvitationNotReceived,
   assertNotActiveMember,

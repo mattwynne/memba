@@ -12,5 +12,5 @@
 - [x] 010 Add or update domain/application tests for authorization, duplicate active member rejection, duplicate pending resend, ordinary membership assignment, and Staff-flow preservation.
 - [x] 011 Add or update LiveView/controller tests for Membership Admin visibility, ordinary member non-visibility, and direct URL/action rejection.
 - [x] 012 Implement or update Cucumber step definitions only as needed during delivery to exercise the new `@iteration-029` scenarios.
-- [ ] 013 Remove or narrow `@todo-domain`/`@todo-ui` tags from the affected scenarios only when they pass in the relevant runner.
+- [x] 013 Remove or narrow `@todo-domain`/`@todo-ui` tags from the affected scenarios only when they pass in the relevant runner.
 - [ ] 014 Run `dev check`.
