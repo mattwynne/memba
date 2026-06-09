@@ -37,8 +37,12 @@ defmodule MembaWeb.PageControllerTest do
     response = html_response(conn, 200)
 
     html = LazyHTML.from_fragment(response)
+    hero = html |> LazyHTML.query("main section") |> Enum.at(0)
 
-    assert response =~ "A simpler way to keep your group members informed."
+    assert hero |> LazyHTML.query("h1") |> LazyHTML.text() =~
+             "Volunteering shouldn’t feel like work."
+
+    assert LazyHTML.text(hero) =~ "volunteer-run"
     assert response =~ "Kootenay Mountaineering Club"
     assert response =~ "Request access for your group"
     assert response =~ "See what members can do"
@@ -84,7 +88,7 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "You’re a member of 2 clubs"
     assert response =~ "Alpine Club"
     assert response =~ "Bridge Club"
-    refute response =~ "A simpler way to keep your group members informed."
+    refute response =~ "Volunteering shouldn’t feel like work."
 
     for club <- [first_club, second_club] do
       assert html

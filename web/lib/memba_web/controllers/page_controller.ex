@@ -52,7 +52,7 @@ defmodule MembaWeb.PageController do
       if conn.assigns.current_identity do
         "Your clubs"
       else
-        "A simpler way to keep your group members informed"
+        "Volunteering shouldn’t feel like work"
       end
 
     conn
