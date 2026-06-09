@@ -7,7 +7,11 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Accounts.AuthEmail
   alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
+  alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
@@ -1133,6 +1137,15 @@ defmodule MembaWeb.PageControllerTest do
   test "POST /get-started stores a verified identity request without trusting typed email", %{
     conn: conn
   } do
+    membership_projection_counts = %{
+      clubs: Repo.aggregate(Club, :count),
+      member_permissions: Repo.aggregate(MemberPermission, :count),
+      memberships: Repo.aggregate(Membership, :count),
+      people: Repo.aggregate(Person, :count),
+      person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
+      role_assignments: Repo.aggregate(RoleAssignment, :count)
+    }
+
     conn =
       conn
       |> init_test_session(%{IdentityAuth.identity_session_key() => "Robin@Example.COM"})
@@ -1167,6 +1180,17 @@ defmodule MembaWeb.PageControllerTest do
     assert email.text_body =~ "robin@example.com"
     refute email.text_body =~ "forged@example.net"
     assert email.provider_options == %{message_stream: "outbound-onboarding"}
+
+    assert %{
+             clubs: Repo.aggregate(Club, :count),
+             member_permissions: Repo.aggregate(MemberPermission, :count),
+             memberships: Repo.aggregate(Membership, :count),
+             people: Repo.aggregate(Person, :count),
+             person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
+             role_assignments: Repo.aggregate(RoleAssignment, :count)
+           } == membership_projection_counts
+
+    assert Memba.Membership.list_active_clubs_for_member_email("robin@example.com") == []
 
     response =
       conn
