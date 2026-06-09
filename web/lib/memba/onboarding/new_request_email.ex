@@ -5,6 +5,7 @@ defmodule Memba.Onboarding.NewRequestEmail do
 
   import Swoosh.Email
 
+  alias Memba.EmailTemplates
   alias Memba.Onboarding.Request
 
   @default_recipient "hello@memba.io"
@@ -28,14 +29,15 @@ defmodule Memba.Onboarding.NewRequestEmail do
 
   defp email(%Request{} = request) do
     body = text_body(request)
+    to_address = to_address()
 
     new()
     |> from(from_address())
-    |> to(to_address())
+    |> to(to_address)
     |> reply_to({request.requester_name, request.requester_email})
     |> subject("New Memba request: #{request.requested_club_name}")
     |> text_body(body)
-    |> html_body(html_body(body))
+    |> html_body(render_html_body(body, recipient_email(to_address)))
     |> put_provider_options(request)
   end
 
@@ -136,21 +138,32 @@ defmodule Memba.Onboarding.NewRequestEmail do
     MembaWeb.Endpoint.url() <> "/admin/requests/" <> request.request_id
   end
 
-  defp html_body(text) do
-    escaped_body =
-      text
-      |> String.split(~r/\r\n|\n|\r/, trim: false)
-      |> Enum.map(&html_escape_to_string/1)
-      |> Enum.join("<br>\n")
+  defp render_html_body(text, recipient_email) do
+    title = "New Memba access request"
 
-    "<html><body><p>#{escaped_body}</p></body></html>"
+    content = [
+      EmailTemplates.memba_header(label: "Staff notification"),
+      EmailTemplates.card_section([
+        EmailTemplates.heading(title),
+        EmailTemplates.plaintext_to_html(text, color: "#2c3a35")
+      ])
+    ]
+
+    EmailTemplates.render_shell(
+      title: title,
+      preheader: "New Memba access request for Memba staff.",
+      content: content,
+      footer:
+        EmailTemplates.memba_footer(
+          recipient_email: recipient_email,
+          reason: "This staff notification was sent because someone requested access to Memba."
+        )
+    )
   end
 
-  defp html_escape_to_string(text) do
-    text
-    |> Phoenix.HTML.html_escape()
-    |> Phoenix.HTML.safe_to_string()
-  end
+  defp recipient_email({_name, address}) when is_binary(address), do: address
+  defp recipient_email(address) when is_binary(address), do: address
+  defp recipient_email(_address), do: ""
 
   defp normalize_delivery_result({:ok, _result}), do: :ok
 
