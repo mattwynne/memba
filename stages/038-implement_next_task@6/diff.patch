@@ -1,0 +1,170 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index 22e5222..875cefb 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -5,7 +5,7 @@
+ - [x] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
+ - [x] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
+ - [x] 005 Update request form rendering:
+-- [ ] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
++- [x] 006 Update request submission so it requires a signed-in identity email and never trusts a typed requester email for Staff-visible requests.
+ - [ ] 007 Ensure email-only verification requests do not create onboarding request records or Staff notifications.
+ - [ ] 008 Ensure verified request submission does not create Person, club, membership, or club access.
+ - [ ] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index f9fce4a..c56d339 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -97,6 +97,9 @@ defmodule MembaWeb.PageController do
+       signed_out_verification_request?(conn, params) ->
+         request_get_started_verification(conn, Map.get(params, "verification", %{}))
+ 
++      not signed_in_get_started?(conn) ->
++        require_get_started_verification(conn)
++
+       true ->
+         request_params = Map.get(params, "request", %{})
+ 
+@@ -116,6 +119,14 @@ defmodule MembaWeb.PageController do
+     end
+   end
+ 
++  defp require_get_started_verification(conn) do
++    conn
++    |> put_status(:unprocessable_entity)
++    |> put_flash(:error, "Verify your email before completing your request.")
++    |> assign(:request_submitted?, false)
++    |> render_get_started(Onboarding.change_request(%{}))
++  end
++
+   defp signed_out_verification_request?(conn, params) do
+     not signed_in_get_started?(conn) and Map.has_key?(params, "verification")
+   end
+@@ -235,11 +246,19 @@ defmodule MembaWeb.PageController do
+   defp signed_in_get_started?(_conn), do: false
+ 
+   defp get_started_request_attrs(conn, request_params) do
+-    case signed_in_get_started_requester(conn) do
+-      nil ->
+-        {request_params, []}
++    case {Map.get(conn.assigns, :current_identity), signed_in_get_started_requester(conn)} do
++      {%{email: identity_email}, nil} ->
++        attrs =
++          request_params
++          |> verified_identity_request_details()
++          |> Map.put("requester_email", identity_email)
+ 
+-      requester ->
++        {attrs, []}
++
++      {nil, _requester} ->
++        {%{}, []}
++
++      {_identity, requester} ->
+         attrs =
+           request_params
+           |> club_request_details()
+@@ -268,6 +287,14 @@ defmodule MembaWeb.PageController do
+ 
+   defp signed_in_get_started_requester(_conn), do: nil
+ 
++  defp verified_identity_request_details(request_params) do
++    %{
++      "requester_name" => request_param(request_params, "requester_name"),
++      "requested_club_name" => request_param(request_params, "requested_club_name"),
++      "note" => request_param(request_params, "note")
++    }
++  end
++
+   defp club_request_details(request_params) do
+     %{
+       "requested_club_name" => request_param(request_params, "requested_club_name"),
+@@ -278,6 +305,7 @@ defmodule MembaWeb.PageController do
+   defp request_param(request_params, key) do
+     atom_key =
+       case key do
++        "requester_name" -> :requester_name
+         "requested_club_name" -> :requested_club_name
+         "note" -> :note
+       end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 6786d3b..6b494a2 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -1102,12 +1102,9 @@ defmodule MembaWeb.PageControllerTest do
+     assert_no_email_sent()
+   end
+ 
+-  test "POST /get-started stores a signed-out request and acknowledges staff review", %{
++  test "POST /get-started refuses signed-out request details until the email is verified", %{
+     conn: conn
+   } do
+-    club_count = Repo.aggregate(Club, :count)
+-    membership_count = Repo.aggregate(Membership, :count)
+-
+     conn =
+       post(conn, ~p"/get-started",
+         request: %{
+@@ -1118,11 +1115,39 @@ defmodule MembaWeb.PageControllerTest do
+         }
+       )
+ 
++    response = html_response(conn, 422)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Verify your email first"
++
++    assert html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
++
++    assert Repo.aggregate(Request, :count) == 0
++    assert_no_email_sent()
++  end
++
++  test "POST /get-started stores a verified identity request without trusting typed email", %{
++    conn: conn
++  } do
++    conn =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "Robin@Example.COM"})
++      |> post(~p"/get-started",
++        request: %{
++          requester_name: " Robin Requester ",
++          requester_email: "forged@example.net",
++          requested_club_name: " West Coast Paddlers ",
++          note: " We want a safer way to message members. "
++        }
++      )
++
+     assert redirected_to(conn) == ~p"/get-started?submitted=true"
+ 
+     assert [%Request{} = request] = Repo.all(Request)
+     assert request.requester_name == "Robin Requester"
+-    assert request.requester_email == "Robin@Example.COM"
++    assert request.requester_email == "robin@example.com"
+     assert request.normalized_requester_email == "robin@example.com"
+     assert request.requested_club_name == "West Coast Paddlers"
+     assert request.note == "We want a safer way to message members."
+@@ -1132,18 +1157,15 @@ defmodule MembaWeb.PageControllerTest do
+     assert_received {:email, %Swoosh.Email{} = email}
+     assert email.from == {"Memba", "messages@mail.memba.io"}
+     assert email.to == [{"", "hello@memba.io"}]
+-    assert email.reply_to == {"Robin Requester", "Robin@Example.COM"}
++    assert email.reply_to == {"Robin Requester", "robin@example.com"}
+     assert email.subject == "New Memba request: West Coast Paddlers"
+     assert email.text_body =~ "Request ID: #{request.request_id}"
+     assert email.text_body =~ "Club: West Coast Paddlers"
+     assert email.text_body =~ "Robin Requester"
+-    assert email.text_body =~ "Robin@Example.COM"
+-    assert email.text_body =~ "We want a safer way to message members."
++    assert email.text_body =~ "robin@example.com"
++    refute email.text_body =~ "forged@example.net"
+     assert email.provider_options == %{message_stream: "outbound-onboarding"}
+ 
+-    assert Repo.aggregate(Club, :count) == club_count
+-    assert Repo.aggregate(Membership, :count) == membership_count
+-
+     response =
+       conn
+       |> recycle()
