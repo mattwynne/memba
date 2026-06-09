@@ -4,6 +4,8 @@ defmodule MembaWeb.MemberDashboardLiveTest do
   import Phoenix.LiveViewTest
 
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Permissions
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
@@ -153,6 +155,93 @@ defmodule MembaWeb.MemberDashboardLiveTest do
              "#active-members-avatar-stack #club-member-#{alice.person_id}[data-testid='club-member-row'][data-member-name='Alice Adams']",
              "AA"
            )
+  end
+
+  test "dashboard exposes the member invite action from the existing members list to Membership Admins",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> live(~p"/?club_id=#{robin.club_id}")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new?club_id=#{robin.club_id}']",
+             "Invite member"
+           )
+  end
+
+  test "club subdomain dashboard exposes the member invite action to Membership Admins without a club_id query",
+       %{conn: conn} do
+    robin =
+      create_active_member(
+        email: "robin@example.com",
+        name: "Robin Rivers",
+        club_name: "West Coast Paddlers",
+        slug: "wcp"
+      )
+
+    grant_manage_members!(robin)
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "wcp.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> live(~p"/")
+
+    assert has_element?(
+             view,
+             "#club-members #member-invite-member-link[href='/members/invitations/new']",
+             "Invite member"
+           )
+
+    refute has_element?(view, "#club-members #member-invite-member-link[href*='club_id=']")
+  end
+
+  test "dashboard keeps the member invite action hidden from ordinary members", %{conn: conn} do
+    alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/?club_id=#{alice.club_id}")
+
+    refute has_element?(view, "#club-members #member-invite-member-link")
+  end
+
+  test "club subdomain dashboard keeps the member invite action hidden from ordinary members",
+       %{conn: conn} do
+    _alice =
+      create_active_member(
+        email: "alice@example.com",
+        name: "Alice Adams",
+        club_name: "West Coast Paddlers",
+        slug: "wcp"
+      )
+
+    {:ok, view, _html} =
+      conn
+      |> Map.put(:host, "wcp.lvh.me")
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "alice@example.com"})
+      |> live(~p"/")
+
+    refute has_element?(view, "#club-members #member-invite-member-link")
+    refute has_element?(view, "#club-members a[href='/members/invitations/new']")
+    refute has_element?(view, "#club-members a[href*='/members/invitations/new']")
   end
 
   test "dashboard receipt glance uses member vocabulary and does not leak Memba-staff-only fields",
@@ -571,8 +660,10 @@ defmodule MembaWeb.MemberDashboardLiveTest do
         email: Keyword.fetch!(attrs, :email)
       )
 
+    membership_id = Memba.ID.generate(:membership)
+
     Repo.insert!(%Membership{
-      membership_id: Memba.ID.generate(:membership),
+      membership_id: membership_id,
       club_id: club_id,
       person_id: person.person_id,
       active: Keyword.get(attrs, :active, true)
@@ -580,8 +671,19 @@ defmodule MembaWeb.MemberDashboardLiveTest do
 
     %{
       club_id: club_id,
+      membership_id: membership_id,
       person_id: person.person_id
     }
+  end
+
+  defp grant_manage_members!(member) do
+    Repo.insert!(%MemberPermission{
+      club_id: member.club_id,
+      membership_id: member.membership_id,
+      person_id: member.person_id,
+      permission: Permissions.club_manage_members(),
+      grant_count: 1
+    })
   end
 
   defp club_attrs(attrs, club_id, club_name) do
@@ -639,6 +741,7 @@ defmodule MembaWeb.MemberDashboardLiveTest do
       current_identity: %{email: "alice@example.com"},
       selected_club: %{club_id: Memba.ID.generate(:club), name: "Alpine Club"},
       current_member: %{name: "Alice Adams"},
+      current_member_can_manage_members?: false,
       members: [],
       active_member_count: 0,
       message_rows: []

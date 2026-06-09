@@ -68,6 +68,7 @@ defmodule MembaWeb.Router do
       session: {MembaWeb.Plugs.ClubSiteMemberRoute, :live_session, []} do
       live "/messages/new", MemberMessageLive.New, :new
       live "/messages/:message_id", MemberMessageLive.Show, :show
+      live "/members/invitations/new", MemberInvitationLive.New, :new
     end
   end
 

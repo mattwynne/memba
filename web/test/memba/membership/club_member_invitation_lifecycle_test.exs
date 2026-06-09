@@ -3,7 +3,9 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
   alias Memba.Membership
   alias Memba.Membership.InvitationToken
+  alias Memba.Membership.Permissions
   alias Memba.Membership.Projections.ClubInvitation, as: ClubInvitationProjection
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership, as: MembershipProjection
   alias Memba.Membership.Projections.Person, as: PersonProjection
 
@@ -180,6 +182,18 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
                Membership.list_active_members_of_club(club_id)
 
+      refute Membership.person_has_club_permission?(
+               club_id,
+               person_id,
+               Permissions.club_manage_members()
+             )
+
+      refute member_permission?(
+               club_id,
+               person_id,
+               Permissions.club_manage_members()
+             )
+
       assert %ClubInvitationProjection{
                status: "accepted",
                accepted_person_id: ^person_id,
@@ -236,6 +250,18 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
 
       assert [%{id: ^person_id, membership_id: ^membership_id}] =
                Membership.list_active_members_of_club(club_id)
+
+      refute Membership.person_has_club_permission?(
+               club_id,
+               person_id,
+               Permissions.club_manage_members()
+             )
+
+      refute member_permission?(
+               club_id,
+               person_id,
+               Permissions.club_manage_members()
+             )
 
       assert %ClubInvitationProjection{
                status: "accepted",
@@ -354,5 +380,15 @@ defmodule Memba.Membership.ClubMemberInvitationLifecycleTest do
       assert is_nil(Membership.get_person(duplicate_person_id))
       assert is_nil(Repo.get(MembershipProjection, duplicate_membership_id))
     end
+  end
+
+  defp member_permission?(club_id, person_id, permission) do
+    Repo.exists?(
+      from(member_permission in MemberPermission,
+        where: member_permission.club_id == ^club_id,
+        where: member_permission.person_id == ^person_id,
+        where: member_permission.permission == ^permission
+      )
+    )
   end
 end

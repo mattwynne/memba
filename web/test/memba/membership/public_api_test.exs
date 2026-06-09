@@ -456,7 +456,7 @@ defmodule Memba.Membership.PublicApiTest do
     assert [] = Membership.list_active_members_of_club(club_id)
   end
 
-  test "invite_club_member/2 creates a pending invitation and returns a plaintext token" do
+  test "invite_club_member/2 preserves Staff/system invitations without requiring a club-member actor" do
     club_id = Memba.ID.generate(:club)
     invitation_id = Memba.ID.generate(:club_invitation)
 
@@ -500,6 +500,8 @@ defmodule Memba.Membership.PublicApiTest do
              status: "pending",
              resend_count: 0
            } = Membership.get_club_member_invitation(invitation_id)
+
+    assert [] = Membership.list_active_members_of_club(club_id)
   end
 
   test "invite_club_member/2 rejects an active club member by normalized email" do
