@@ -22,6 +22,7 @@ test("default browser Cucumber profile selects all web-backed shared features", 
     "authentication.feature",
     "club_member_invitations.feature",
     "club_membership_administration.feature",
+    "email_branding.feature",
     "homepage.feature",
     "memba_staff_email_deliverability.feature",
     "memba_staff_operations.feature",
@@ -43,6 +44,20 @@ test("shared feature suite uses only runner-intent and runner-debt tags", () => 
   );
 
   assert.deepEqual(unsupportedTags, []);
+});
+
+test("iteration 031 scenarios are no longer blocked from the browser runner", () => {
+  const iterationScenarios = browserFeatures().flatMap((feature) =>
+    feature.scenarios
+      .filter((scenario) => scenario.tags.includes("@iteration-031"))
+      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
+  );
+
+  assert.equal(iterationScenarios.length, 4);
+  assert.deepEqual(
+    iterationScenarios.filter((scenario) => scenario.includes("@todo-ui")),
+    []
+  );
 });
 
 function browserSelectedFeatureNames() {

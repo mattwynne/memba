@@ -3,7 +3,7 @@ Feature: Email branding
 
 # Rule: Memba transactional emails use consistent Memba branding
 
-    @iteration-031 @todo-domain @todo-ui
+    @iteration-031 @todo-domain
     Scenario: Alice receives a branded sign-in email
       Given Alice is a member of Kootenay Mountaineering Club
       When Alice requests a sign-in link for their email address
@@ -12,8 +12,9 @@ Feature: Email branding
 
 # Rule: Club-message rejection emails identify the club
 
-    @iteration-031 @todo-domain @todo-ui
+    @iteration-031 @todo-domain
     Scenario: Robin receives a KMC rejection email
+      Given Kootenay Mountaineering Club has the slug "kmc"
       When Robin emails "Trip planning night" to kmc@clubs.memba.io from "robin@example.test"
       Then Robin should receive a rejection email from "Kootenay Mountaineering Club via Memba"
       And the rejection email should use the standard Memba footer

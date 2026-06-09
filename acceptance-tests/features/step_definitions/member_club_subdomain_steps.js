@@ -103,6 +103,22 @@ Then("{word} should see that they are not allowed to view it", async function (_
   await playwrightExpect(this.page.locator("body")).toContainText(/Forbidden|not authorized/i);
 });
 
+Then("Robin should see a link to the Memba homepage", async function () {
+  const link = this.page.locator("#public-club-page-memba-home-link");
+  await playwrightExpect(link).toBeVisible();
+  await playwrightExpect(link).toContainText("Visit Memba home");
+
+  const href = await link.getAttribute("href");
+  assert.ok(href, "Expected public club page to expose a Memba homepage link href");
+
+  const targetUrl = new URL(href, this.page.url());
+  const currentUrl = new URL(this.page.url());
+
+  assert.equal(targetUrl.pathname, "/");
+  assert.equal(targetUrl.hostname, rootHostForLocalClubBaseDomain());
+  assert.notEqual(targetUrl.hostname, currentUrl.hostname);
+});
+
 Then("Robin should see a not found page", async function () {
   await playwrightExpect(this.page.locator("body")).toContainText(/Not Found|not found/i);
 });
@@ -199,6 +215,12 @@ function localHostForProductionHost(host) {
 
 function localClubBaseDomain() {
   return process.env.MEMBA_CLUB_SITE_BASE_DOMAIN || "lvh.me";
+}
+
+function rootHostForLocalClubBaseDomain() {
+  const baseDomain = localClubBaseDomain();
+
+  return baseDomain.startsWith("clubs.") ? baseDomain.slice("clubs.".length) : baseDomain;
 }
 
 function defaultPort(protocol) {

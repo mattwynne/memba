@@ -12,7 +12,7 @@
 - [x] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
 - [x] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
 - [x] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
-- [ ] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
+- [x] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
 - [ ] 014 Run focused tests for changed web templates/components and email rendering.
 - [ ] 015 Run the affected acceptance tests if executable.
 - [ ] 016 Run `dev check`.

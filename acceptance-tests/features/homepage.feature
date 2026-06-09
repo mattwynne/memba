@@ -6,7 +6,7 @@ Feature: Homepage
 
 # Rule: The homepage leads with Memba's volunteering promise
 
-  @iteration-031 @not-domain @todo-ui
+  @iteration-031 @not-domain
   Scenario: Robin sees the volunteering vision first
     When I visit the homepage
     Then I should see that volunteering should not feel like work
