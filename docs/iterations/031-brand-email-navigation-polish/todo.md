@@ -15,4 +15,4 @@
 - [x] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
 - [x] 014 Run focused tests for changed web templates/components and email rendering.
 - [x] 015 Run the affected acceptance tests if executable.
-- [ ] 016 Run `dev check`.
+- [x] 016 Run `dev check`.
