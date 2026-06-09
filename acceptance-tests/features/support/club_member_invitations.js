@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const { expect: playwrightExpect } = require("@playwright/test");
 const {
   appUrl,
+  clubSiteUrl,
   cssString,
   emailFor,
   ensureState,
@@ -9,7 +10,7 @@ const {
   testMailboxEmails,
   waitForMailboxEmails
 } = require("./member_message");
-const { ensureMember, signInAsStaffDirectly } = require("./authentication");
+const { ensureMember, signInAsStaffDirectly, signInDirectly } = require("./authentication");
 const serverCommands = require("./server_commands");
 
 async function ensureClub(world, clubName) {
@@ -67,17 +68,13 @@ async function ensureActiveMember(world, personName, clubName) {
 
 async function inviteEmailToClub(world, actorName, email, clubName, options = {}) {
   const club = await ensureClub(world, clubName);
-  await ensureStaffSignedIn(world, actorName);
-
   const previousEmails = await testMailboxEmails(world);
 
-  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/invitations/new`));
-  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
-    timeout: projectionTimeoutMs(world)
-  });
-
-  await world.page.getByLabel("Invitee email address").fill(email);
-  await world.page.locator("#send-club-member-invitation-button").click();
+  if (actorHasClubMembership(world, actorName, clubName)) {
+    await submitMemberInvitation(world, actorName, club, email);
+  } else {
+    await submitStaffInvitation(world, actorName, club, email);
+  }
 
   world.clubMemberInvitationRequests = world.clubMemberInvitationRequests || [];
   world.clubMemberInvitationRequests.push({
@@ -90,8 +87,38 @@ async function inviteEmailToClub(world, actorName, email, clubName, options = {}
 }
 
 async function tryInviteEmailToClub(world, actorName, email, clubName) {
-  await inviteEmailToClub(world, actorName, email, clubName);
-  world.lastClubMemberInvitationAttempt = { actorName, clubName, email: normalizeEmail(email) };
+  const club = await ensureClub(world, clubName);
+  const previousEmails = await testMailboxEmails(world);
+  const attempt = { actorName, clubName, email: normalizeEmail(email), previousEmails };
+
+  if (actorHasClubMembership(world, actorName, clubName)) {
+    const response = await openMemberInvitationForm(world, actorName, club);
+    attempt.status = response && response.status();
+
+    if (attempt.status === 403) {
+      attempt.rejected = true;
+      attempt.message = await safeText(response);
+    } else {
+      await fillAndSubmitMemberInvitation(world, email);
+      attempt.submitted = true;
+    }
+  } else {
+    await submitStaffInvitation(world, actorName, club, email);
+    attempt.submitted = true;
+  }
+
+  world.lastClubMemberInvitationAttempt = attempt;
+
+  if (attempt.submitted) {
+    world.clubMemberInvitationRequests = world.clubMemberInvitationRequests || [];
+    world.clubMemberInvitationRequests.push({
+      actorName,
+      clubName,
+      email: normalizeEmail(email),
+      previousEmails,
+      tryOnly: true
+    });
+  }
 }
 
 async function invitePersonToClub(world, actorName, personName, clubName, options = {}) {
@@ -141,6 +168,28 @@ async function assertInvitationReceived(world, recipient, clubName, options = {}
       `Expected another invitation email count for ${emailAddress} to ${clubName}`
     );
   }
+}
+
+async function assertInvitationNotReceived(world, recipient, clubName) {
+  ensureState(world);
+  const emailAddress = recipientEmail(world, recipient);
+  const attempt = latestInvitationAttempt(world, emailAddress, clubName);
+  const previousIds = attempt.previousEmails.map(mailboxMessageId).filter(Boolean);
+  const deadline = Date.now() + 1000;
+
+  do {
+    const emails = await testMailboxEmails(world);
+    const newEmails = emails.filter((email) => !previousIds.includes(mailboxMessageId(email)));
+    const invitations = newEmails.filter((email) => invitationEmailMatches(email, emailAddress, clubName));
+
+    assert.deepEqual(
+      invitations.map(emailSummary),
+      [],
+      `Expected ${emailAddress} not to receive an invitation to ${clubName}`
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  } while (Date.now() <= deadline);
 }
 
 async function assertNotActiveMember(world, personName, clubName) {
@@ -275,6 +324,21 @@ async function assertSinglePendingInvitation(world, email, clubName) {
   );
 }
 
+async function assertCannotInviteMembers(world, actorName, clubName) {
+  const attempt = world.lastClubMemberInvitationAttempt;
+
+  assert.ok(attempt, "Expected an invitation attempt before checking authorization rejection");
+  assert.equal(attempt.actorName, actorName);
+  assert.equal(attempt.clubName, clubName);
+  assert.equal(attempt.rejected, true, `Expected ${actorName}'s invitation attempt to be rejected`);
+  assert.equal(attempt.status, 403);
+  assert.match(attempt.message || "", /Forbidden|forbidden|cannot invite|not authorized/i);
+
+  if (world.page) {
+    await playwrightExpect(world.page.locator("#member-club-invitation-form")).toHaveCount(0);
+  }
+}
+
 async function inviteAndAccept(world, personName, email, clubName, fullName) {
   await ensureClub(world, clubName);
   await inviteEmailToClub(world, "Pat", email, clubName);
@@ -292,6 +356,50 @@ async function ensureStaffSignedIn(world, actorName) {
 
   await signInAsStaffDirectly(world, actorName, { email: staffEmailFor(actorName) });
   world.staffSignedInAs = actorName;
+}
+
+async function submitStaffInvitation(world, actorName, club, email) {
+  await ensureStaffSignedIn(world, actorName);
+
+  await world.page.goto(appUrl(world.baseUrl, `/admin/clubs/${club.clubId}/invitations/new`));
+  await playwrightExpect(world.page.locator("#club-member-invitation-new")).toBeVisible({
+    timeout: projectionTimeoutMs(world)
+  });
+
+  await world.page.getByLabel("Invitee email address").fill(email);
+  await world.page.locator("#send-club-member-invitation-button").click();
+}
+
+async function submitMemberInvitation(world, actorName, club, email) {
+  await openMemberInvitationForm(world, actorName, club);
+  await fillAndSubmitMemberInvitation(world, email);
+}
+
+async function openMemberInvitationForm(world, actorName, club) {
+  await ensureMemberSignedIn(world, actorName);
+
+  const response = await world.page.goto(clubSiteUrl(world.baseUrl, club, "/members/invitations/new"));
+
+  if (response && response.status() === 403) {
+    return response;
+  }
+
+  await playwrightExpect(world.page.locator("#member-club-invitation-new")).toBeVisible({
+    timeout: projectionTimeoutMs(world)
+  });
+  await playwrightExpect(world.page.locator("#member-club-invitation-form")).toBeVisible();
+
+  return response;
+}
+
+async function fillAndSubmitMemberInvitation(world, email) {
+  await world.page.getByLabel("Invitee email address").fill(email);
+  await world.page.locator("#send-member-club-invitation-button").click();
+}
+
+async function ensureMemberSignedIn(world, actorName) {
+  const person = personFromWorld(world, actorName);
+  await signInDirectly(world, person.email);
 }
 
 function activeMembershipCountByEmail(clubId, email) {
@@ -362,6 +470,18 @@ function latestInvitationRequest(world, email, clubName) {
 
   assert.ok(request, `Expected an invitation request for ${normalizedEmail} to ${clubName}`);
   return request;
+}
+
+function latestInvitationAttempt(world, email, clubName) {
+  const normalizedEmail = normalizeEmail(email);
+  const matchingAttempts = [world.lastClubMemberInvitationAttempt]
+    .concat(world.clubMemberInvitationRequests || [])
+    .filter(Boolean)
+    .filter((attempt) => attempt.email === normalizedEmail && attempt.clubName === clubName);
+  const attempt = matchingAttempts[matchingAttempts.length - 1];
+
+  assert.ok(attempt, `Expected an invitation attempt for ${normalizedEmail} to ${clubName}`);
+  return attempt;
 }
 
 function rememberInvitationLink(world, personName, clubName, link) {
@@ -480,6 +600,33 @@ function staffEmailFor(personName) {
   return `${String(personName).trim().toLowerCase()}@memba.io`;
 }
 
+function actorHasClubMembership(world, actorName, clubName) {
+  ensureState(world);
+  return Boolean(world.memberships && world.memberships[`${clubName}:${actorName}`]);
+}
+
+function personFromWorld(world, personName) {
+  ensureState(world);
+  const person = world.people && world.people[personName];
+
+  assert.ok(person, `Expected ${personName} to be known in the scenario`);
+  assert.ok(person.email, `Expected ${personName} to have an email address`);
+
+  return person;
+}
+
+async function safeText(response) {
+  if (!response || typeof response.text !== "function") {
+    return "";
+  }
+
+  try {
+    return await response.text();
+  } catch (_error) {
+    return "";
+  }
+}
+
 function invitationKey(email, clubName) {
   return `${clubName}:${normalizeEmail(email)}`;
 }
@@ -489,8 +636,10 @@ module.exports = {
   assertAlreadyMemberMessage,
   assertAskedForEmailOnly,
   assertAskedForName,
+  assertCannotInviteMembers,
   assertCannotCreateDirectActiveMember,
   assertInvitationReceived,
+  assertInvitationNotReceived,
   assertNotActiveMember,
   assertOnlyOneActiveMembership,
   assertSignedInToClub,
@@ -506,5 +655,6 @@ module.exports = {
   invitePersonToClub,
   leaveWithoutEnteringName,
   openAddMemberFlow,
+  tryInviteEmailToClub,
   tryInvitePersonToClub
 };
