@@ -39,6 +39,7 @@ defmodule MembaWeb.PageControllerTest do
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Volunteering shouldn’t feel like work."
+    assert response =~ "Private member websites for volunteer-run groups"
     assert response =~ "Kootenay Mountaineering Club"
     assert response =~ "Request access for your group"
     assert response =~ "See what members can do"
