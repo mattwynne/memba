@@ -1,0 +1,366 @@
+diff --git a/acceptance-tests/features/email_branding.feature b/acceptance-tests/features/email_branding.feature
+index 23b9b02..11d532d 100644
+--- a/acceptance-tests/features/email_branding.feature
++++ b/acceptance-tests/features/email_branding.feature
+@@ -3,7 +3,7 @@ Feature: Email branding
+ 
+ # Rule: Memba transactional emails use consistent Memba branding
+ 
+-    @iteration-031 @todo-domain @todo-ui
++    @iteration-031 @todo-domain
+     Scenario: Alice receives a branded sign-in email
+       Given Alice is a member of Kootenay Mountaineering Club
+       When Alice requests a sign-in link for their email address
+@@ -12,8 +12,9 @@ Feature: Email branding
+ 
+ # Rule: Club-message rejection emails identify the club
+ 
+-    @iteration-031 @todo-domain @todo-ui
++    @iteration-031 @todo-domain
+     Scenario: Robin receives a KMC rejection email
++      Given Kootenay Mountaineering Club has the slug "kmc"
+       When Robin emails "Trip planning night" to kmc@clubs.memba.io from "robin@example.test"
+       Then Robin should receive a rejection email from "Kootenay Mountaineering Club via Memba"
+       And the rejection email should use the standard Memba footer
+diff --git a/acceptance-tests/features/homepage.feature b/acceptance-tests/features/homepage.feature
+index 2e7b250..9ac7021 100644
+--- a/acceptance-tests/features/homepage.feature
++++ b/acceptance-tests/features/homepage.feature
+@@ -6,7 +6,7 @@ Feature: Homepage
+ 
+ # Rule: The homepage leads with Memba's volunteering promise
+ 
+-  @iteration-031 @not-domain @todo-ui
++  @iteration-031 @not-domain
+   Scenario: Robin sees the volunteering vision first
+     When I visit the homepage
+     Then I should see that volunteering should not feel like work
+diff --git a/acceptance-tests/features/member_club_subdomains.feature b/acceptance-tests/features/member_club_subdomains.feature
+index 32acec1..73d7576 100644
+--- a/acceptance-tests/features/member_club_subdomains.feature
++++ b/acceptance-tests/features/member_club_subdomains.feature
+@@ -60,7 +60,7 @@ Feature: Member club subdomains
+ 
+ # Rule: Club pages offer a path back to Memba
+ 
+-    @iteration-031 @not-domain @todo-ui
++    @iteration-031 @not-domain
+     Scenario: Robin returns from a club page to Memba
+       Given Kootenay Mountaineering Club has the slug "kmc"
+       When Robin opens "kmc.clubs.memba.io"
+diff --git a/acceptance-tests/features/step_definitions/email_branding_steps.js b/acceptance-tests/features/step_definitions/email_branding_steps.js
+new file mode 100644
+index 0000000..8615d06
+--- /dev/null
++++ b/acceptance-tests/features/step_definitions/email_branding_steps.js
+@@ -0,0 +1,25 @@
++const { Then } = require("@cucumber/cucumber");
++const {
++  assertReceivesSignInEmailWithMembaSprigIcon,
++  assertSignInEmailUsesStandardMembaFooter
++} = require("../support/authentication");
++const {
++  assertInboundRejectionEmailFrom,
++  assertInboundRejectionEmailUsesStandardMembaFooter
++} = require("../support/member_message");
++
++Then("{word} should receive a sign-in email with the Memba sprig icon", async function (personName) {
++  await assertReceivesSignInEmailWithMembaSprigIcon(this, personName);
++});
++
++Then("the sign-in email should use the standard Memba footer", async function () {
++  await assertSignInEmailUsesStandardMembaFooter(this, "Alice");
++});
++
++Then("{word} should receive a rejection email from {string}", async function (senderName, expectedFromName) {
++  await assertInboundRejectionEmailFrom(this, senderName, expectedFromName);
++});
++
++Then("the rejection email should use the standard Memba footer", async function () {
++  await assertInboundRejectionEmailUsesStandardMembaFooter(this, "Robin");
++});
+diff --git a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+index c847373..122162f 100644
+--- a/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
++++ b/acceptance-tests/features/step_definitions/member_club_subdomain_steps.js
+@@ -103,6 +103,22 @@ Then("{word} should see that they are not allowed to view it", async function (_
+   await playwrightExpect(this.page.locator("body")).toContainText(/Forbidden|not authorized/i);
+ });
+ 
++Then("Robin should see a link to the Memba homepage", async function () {
++  const link = this.page.locator("#public-club-page-memba-home-link");
++  await playwrightExpect(link).toBeVisible();
++  await playwrightExpect(link).toContainText("Visit Memba home");
++
++  const href = await link.getAttribute("href");
++  assert.ok(href, "Expected public club page to expose a Memba homepage link href");
++
++  const targetUrl = new URL(href, this.page.url());
++  const currentUrl = new URL(this.page.url());
++
++  assert.equal(targetUrl.pathname, "/");
++  assert.equal(targetUrl.hostname, rootHostForLocalClubBaseDomain());
++  assert.notEqual(targetUrl.hostname, currentUrl.hostname);
++});
++
+ Then("Robin should see a not found page", async function () {
+   await playwrightExpect(this.page.locator("body")).toContainText(/Not Found|not found/i);
+ });
+@@ -201,6 +217,12 @@ function localClubBaseDomain() {
+   return process.env.MEMBA_CLUB_SITE_BASE_DOMAIN || "lvh.me";
+ }
+ 
++function rootHostForLocalClubBaseDomain() {
++  const baseDomain = localClubBaseDomain();
++
++  return baseDomain.startsWith("clubs.") ? baseDomain.slice("clubs.".length) : baseDomain;
++}
++
+ function defaultPort(protocol) {
+   return protocol === "https:" ? "443" : "80";
+ }
+diff --git a/acceptance-tests/features/support/authentication.js b/acceptance-tests/features/support/authentication.js
+index e818d58..991ad3c 100644
+--- a/acceptance-tests/features/support/authentication.js
++++ b/acceptance-tests/features/support/authentication.js
+@@ -122,9 +122,32 @@ async function assertReceivesSignInLink(world, personName) {
+   const signInLink = signInLinkFromTextBody(email.text_body);
+   assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${email.text_body}`);
+ 
++  world.signInEmails = world.signInEmails || {};
++  world.signInEmails[personName] = email;
+   world.signInLinks[personName] = browserAppUrl(world, signInLink);
+ }
+ 
++async function assertReceivesSignInEmailWithMembaSprigIcon(world, personName) {
++  const email = await capturedSignInEmail(world, personName);
++  const htmlBody = mailboxEmailHtml(email);
++
++  assert.ok(
++    htmlBody.includes('d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"'),
++    `Expected sign-in email to include the Memba sprig icon; saw ${htmlBody}`
++  );
++  assert.ok(
++    !htmlBody.includes('d="M 18 34 L 28 44 L 46 24"'),
++    `Expected sign-in email not to include the old check icon; saw ${htmlBody}`
++  );
++}
++
++async function assertSignInEmailUsesStandardMembaFooter(world, personName) {
++  const request = signInRequestFor(world, personName);
++  const email = await capturedSignInEmail(world, personName);
++
++  assertStandardMembaFooter(email, request.email, `sign-in email for ${request.email}`);
++}
++
+ async function assertDoesNotReceiveSignInLink(world, personName) {
+   const request = signInRequestFor(world, personName);
+   const deadline = Date.now() + 1000;
+@@ -372,6 +395,37 @@ function signInLinkFromTextBody(textBody) {
+   return match && match[0];
+ }
+ 
++async function capturedSignInEmail(world, personName) {
++  if (!(world.signInEmails && world.signInEmails[personName])) {
++    await assertReceivesSignInLink(world, personName);
++  }
++
++  const email = world.signInEmails && world.signInEmails[personName];
++  assert.ok(email, `Expected ${personName} to have received a sign-in email`);
++  return email;
++}
++
++function assertStandardMembaFooter(email, recipientEmail, description) {
++  const htmlBody = mailboxEmailHtml(email);
++
++  assert.ok(
++    /Delivered (?:by|for) /.test(htmlBody) && htmlBody.includes('href="https://memba.io"'),
++    `Expected ${description} to include the standard Memba delivery footer; saw ${htmlBody}`
++  );
++  assert.ok(
++    htmlBody.includes(`Sent to ${recipientEmail}.`),
++    `Expected ${description} to include the recipient in the footer; saw ${htmlBody}`
++  );
++  assert.ok(
++    !htmlBody.includes("help@memba.io"),
++    `Expected ${description} not to hard-code the support mailbox; saw ${htmlBody}`
++  );
++}
++
++function mailboxEmailHtml(email) {
++  return String((email && (email.html_body || email.htmlBody || email.html)) || "");
++}
++
+ function browserAppUrl(world, url) {
+   const parsed = new URL(url, `${world.baseUrl}/`);
+   const base = new URL(world.baseUrl);
+@@ -390,7 +444,7 @@ function mailboxMessageId(email) {
+ }
+ 
+ function emailSummary(email) {
+-  return { subject: email.subject, to: email.to, text_body: email.text_body };
++  return { subject: email.subject, to: email.to, text_body: email.text_body, html_body: email.html_body };
+ }
+ 
+ module.exports = {
+@@ -398,7 +452,9 @@ module.exports = {
+   assertNotSignedIn,
+   assertOnStaffOnlyHomepage,
+   assertReceivesSignInLink,
++  assertReceivesSignInEmailWithMembaSprigIcon,
+   assertSeesClub,
++  assertSignInEmailUsesStandardMembaFooter,
+   assertSignedIn,
+   assertSignedInAsStaff,
+   assertStillSignedIn,
+diff --git a/acceptance-tests/features/support/member_message.js b/acceptance-tests/features/support/member_message.js
+index 0d1b2d5..22f0c53 100644
+--- a/acceptance-tests/features/support/member_message.js
++++ b/acceptance-tests/features/support/member_message.js
+@@ -1635,6 +1635,52 @@ async function assertInboundRejectionEmailSupportGuidance(world, senderName) {
+   return world;
+ }
+ 
++async function assertInboundRejectionEmailFrom(world, senderName, expectedFromName) {
++  const rejectionEmail = await capturedInboundRejectionEmail(world, senderName);
++
++  assertFinalBrowserState(`inbound rejection sender name for ${senderName}`, () =>
++    assert.ok(
++      mailboxEmailFrom(rejectionEmail).includes(expectedFromName),
++      `Expected ${senderName}'s rejection email to be from ${JSON.stringify(
++        expectedFromName
++      )}; saw ${JSON.stringify(mailboxEmailSummary(rejectionEmail))}`
++    )
++  );
++
++  return world;
++}
++
++async function assertInboundRejectionEmailUsesStandardMembaFooter(world, senderName) {
++  const rejectionEmail = await capturedInboundRejectionEmail(world, senderName);
++  const senderEmail = inboundSenderEmail(world, senderName);
++  const htmlBody = mailboxEmailHtml(rejectionEmail);
++
++  assertFinalBrowserState(`inbound rejection standard footer for ${senderName}`, () => {
++    assert.ok(
++      /Delivered (?:by|for) /.test(htmlBody) && htmlBody.includes('href="https://memba.io"'),
++      `Expected ${senderName}'s rejection email to include the standard Memba delivery footer; saw ${htmlBody}`
++    );
++    assert.ok(
++      htmlBody.includes(`Sent to ${senderEmail}.`),
++      `Expected ${senderName}'s rejection email to include the recipient in the footer; saw ${htmlBody}`
++    );
++    assert.ok(
++      htmlBody.includes("This is an automatic delivery notice."),
++      `Expected ${senderName}'s rejection email to include the automatic delivery notice; saw ${htmlBody}`
++    );
++    assert.ok(
++      /Need a hand\? (?:Contact Memba support|Reply to this email or write to)/.test(htmlBody),
++      `Expected ${senderName}'s rejection email to include reply/support guidance; saw ${htmlBody}`
++    );
++    assert.ok(
++      !htmlBody.includes("help@memba.io"),
++      `Expected ${senderName}'s rejection email not to hard-code the support mailbox; saw ${htmlBody}`
++    );
++  });
++
++  return world;
++}
++
+ async function assertEveryAddressedMemberEmailDeliveryStatus(
+   world,
+   subject,
+@@ -2189,6 +2235,10 @@ function mailboxEmailText(email) {
+   return String((email && (email.text_body || email.textBody || email.text)) || "");
+ }
+ 
++function mailboxEmailHtml(email) {
++  return String((email && (email.html_body || email.htmlBody || email.html)) || "");
++}
++
+ function mailboxEmailFrom(email) {
+   const from = email && email.from;
+ 
+@@ -2202,12 +2252,26 @@ function mailboxEmailFrom(email) {
+ function mailboxEmailSummary(email) {
+   return {
+     from: email.from,
++    html_body: email.html_body,
+     subject: email.subject,
+     to: email.to,
+     text_body: email.text_body
+   };
+ }
+ 
++async function capturedInboundRejectionEmail(world, senderName) {
++  ensureState(world);
++
++  if (!(world.inboundRejectionEmails && world.inboundRejectionEmails[senderName])) {
++    await assertInboundRejectionEmail(world, senderName, "wasn't posted");
++  }
++
++  const rejectionEmail = world.inboundRejectionEmails && world.inboundRejectionEmails[senderName];
++  assert.ok(rejectionEmail, `Expected ${senderName}'s rejection email to have been captured`);
++
++  return rejectionEmail;
++}
++
+ async function waitForProjectionBarrier(world, projectors, { timeoutMs = projectionTimeoutMs(world) } = {}) {
+   if (Array.isArray(world.projectionBarriers)) {
+     world.projectionBarriers.push({ projectors, timeoutMs });
+@@ -2493,7 +2557,9 @@ module.exports = {
+   assertEachAddressedMemberReceivedEmailSubject,
+   assertEachDeliverySentThroughEmailProvider,
+   assertInboundRejectionEmail,
++  assertInboundRejectionEmailFrom,
+   assertInboundRejectionEmailSupportGuidance,
++  assertInboundRejectionEmailUsesStandardMembaFooter,
+   assertLastMessageAddressedTo,
+   assertLastMessageNotAddressedTo,
+   assertMemberMessageAddressedTo,
+diff --git a/acceptance-tests/test/cucumber_config.test.js b/acceptance-tests/test/cucumber_config.test.js
+index ed9def9..81f755f 100644
+--- a/acceptance-tests/test/cucumber_config.test.js
++++ b/acceptance-tests/test/cucumber_config.test.js
+@@ -22,6 +22,7 @@ test("default browser Cucumber profile selects all web-backed shared features",
+     "authentication.feature",
+     "club_member_invitations.feature",
+     "club_membership_administration.feature",
++    "email_branding.feature",
+     "homepage.feature",
+     "memba_staff_email_deliverability.feature",
+     "memba_staff_operations.feature",
+@@ -45,6 +46,20 @@ test("shared feature suite uses only runner-intent and runner-debt tags", () =>
+   assert.deepEqual(unsupportedTags, []);
+ });
+ 
++test("iteration 031 scenarios are no longer blocked from the browser runner", () => {
++  const iterationScenarios = browserFeatures().flatMap((feature) =>
++    feature.scenarios
++      .filter((scenario) => scenario.tags.includes("@iteration-031"))
++      .map((scenario) => `${feature.name}: ${scenario.name}: ${scenario.tags.join(" ")}`)
++  );
++
++  assert.equal(iterationScenarios.length, 4);
++  assert.deepEqual(
++    iterationScenarios.filter((scenario) => scenario.includes("@todo-ui")),
++    []
++  );
++});
++
+ function browserSelectedFeatureNames() {
+   return browserFeatures()
+     .filter((feature) => feature.scenarios.some((scenario) => matchesDefaultBrowserTags(scenario.tags)))
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index a616e15..3c1f44c 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -12,7 +12,7 @@
+ - [x] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
+ - [x] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
+ - [x] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
+-- [ ] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
++- [x] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
+ - [ ] 014 Run focused tests for changed web templates/components and email rendering.
+ - [ ] 015 Run the affected acceptance tests if executable.
+ - [ ] 016 Run `dev check`.
