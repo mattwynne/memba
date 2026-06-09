@@ -1,0 +1,67 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index dc6dded..717aeb6 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -10,7 +10,7 @@
+ - [x] 008 Ensure verified request submission does not create Person, club, membership, or club access.
+ - [x] 009 Preserve Staff request inbox and notification behaviour for verified submitted requests.
+ - [x] 010 Preserve Staff conversion/rejection semantics for verified submitted requests, including creating/reusing the Person during conversion.
+-- [ ] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
++- [x] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
+ - [ ] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
+ - [ ] 013 Update Cucumber step definitions only as needed during delivery to exercise the `@iteration-030` scenarios.
+ - [ ] 014 Remove or narrow `@todo-domain`/`@todo-ui` from the new/updated scenarios only when they pass in the relevant runner.
+diff --git a/web/test/memba_web/live/admin/requests_live/index_test.exs b/web/test/memba_web/live/admin/requests_live/index_test.exs
+index 46e8fbf..f597745 100644
+--- a/web/test/memba_web/live/admin/requests_live/index_test.exs
++++ b/web/test/memba_web/live/admin/requests_live/index_test.exs
+@@ -186,6 +186,49 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
+     )
+   end
+ 
++  test "staff requests index stays empty after an email-only Get Started verification", %{
++    conn: conn
++  } do
++    configure_auth_email()
++
++    verification_conn =
++      post(conn, ~p"/get-started",
++        verification: %{
++          email: " Robin@Example.COM "
++        }
++      )
++
++    assert redirected_to(verification_conn) == ~p"/auth/check-email"
++    assert Onboarding.list_active_requests() == []
++
++    assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] = Repo.all(SignInToken)
++
++    assert_email_sent(fn email ->
++      assert email.to == [{"", "robin@example.com"}]
++      assert email.subject == "Sign in to Memba"
++      assert email.text_body =~ "/auth/sign-in/"
++      assert email.text_body =~ "return_to=%2Fget-started"
++      true
++    end)
++
++    refute_email_sent(to: [{"", "hello@memba.io"}])
++
++    {:ok, view, _initial_html} =
++      conn
++      |> sign_in_staff()
++      |> live(~p"/admin/requests")
++
++    assert has_element?(view, "#admin-requests-active-count", "0")
++    assert has_element?(view, "#admin-requests-empty")
++
++    html =
++      view
++      |> render()
++      |> LazyHTML.from_fragment()
++
++    assert row_ids(html) == []
++  end
++
+   test "staff can reject an active request with required internal notes and no requester email",
+        %{
+          conn: conn
