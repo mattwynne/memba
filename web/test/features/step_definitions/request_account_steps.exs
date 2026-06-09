@@ -27,6 +27,20 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     put_person(context, person_name, person)
   end
 
+  step "{word} is signed in as verified email {string}",
+       %{args: [person_name, email]} = context do
+    sign_in_as_verified_email(context, person_name, email)
+  end
+
+  step "{word} has submitted a verified request for {word} {word} {word} with email {string}",
+       %{args: [person_name, club_word_1, club_word_2, club_word_3, email]} = context do
+    club_name = Enum.join([club_word_1, club_word_2, club_word_3], " ")
+
+    context
+    |> sign_in_as_verified_email(person_name, email)
+    |> request_access(person_name, club_name, requester_name: "#{person_name} Example")
+  end
+
   step "{word} has requested Memba access for {word} {word} {word}",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     create_request_directly(
@@ -44,6 +58,28 @@ defmodule Memba.Cucumber.RequestAccountSteps do
   step "{word} requests Memba access for {word} {word} {word} with a short note",
        %{args: [person_name, club_word_1, club_word_2, club_word_3]} = context do
     request_access(context, person_name, Enum.join([club_word_1, club_word_2, club_word_3], " "))
+  end
+
+  step "{word} starts requesting Memba access with email {string}",
+       %{args: [person_name, email]} = context do
+    email = Accounts.normalize_email(email)
+
+    assert {:ok, %{email: ^email, token: token}} = Accounts.create_sign_in_token(email)
+
+    context
+    |> put_verified_requester_email(person_name, email)
+    |> update_context_map(:sign_in_links, person_name, %{email: email, token: token})
+    |> Map.put(:return_to, :get_started)
+  end
+
+  step "{word} requests Memba access for {word} {word} {word} with name {string} and a short note",
+       %{args: [person_name, club_word_1, club_word_2, club_word_3, requester_name]} = context do
+    request_access(
+      context,
+      person_name,
+      Enum.join([club_word_1, club_word_2, club_word_3], " "),
+      requester_name: requester_name
+    )
   end
 
   step "{word} requests Memba access for {word} {word} {word} {word} with a short note",
@@ -138,6 +174,30 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     assert_staff_notified(context, "Robin")
   end
 
+  step "Memba staff should not be notified about {word}'s request yet",
+       %{args: [_person_name]} = context do
+    refute_received {:email, %Swoosh.Email{subject: <<"New Memba request: ", _rest::binary>>}}
+
+    context
+  end
+
+  step "Memba staff should not be notified about Robin's request yet", context do
+    refute_received {:email, %Swoosh.Email{subject: <<"New Memba request: ", _rest::binary>>}}
+
+    context
+  end
+
+  step "{word} should be completing a verified request as {string}",
+       %{args: [_person_name, expected_email]} = context do
+    expected_email = Accounts.normalize_email(expected_email)
+
+    assert Map.get(context, :current_page) == :get_started
+    assert get_in(context, [:signed_in_identity, :email]) == expected_email
+    refute Membership.get_person_by_email(expected_email)
+
+    context
+  end
+
   step "{word} {word} {word} should not exist as a club yet",
        %{args: [word_1, word_2, word_3]} = context do
     assert_club_absent(context, Enum.join([word_1, word_2, word_3], " "))
@@ -177,6 +237,73 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     assert request.requester_name == person.name
     assert request.requester_email == person.email
     assert request.requester_person_id == person.person_id
+
+    context
+  end
+
+  step "Memba should record {word}'s request with verified email {string}",
+       %{args: [person_name, expected_email]} = context do
+    expected_email = Accounts.normalize_email(expected_email)
+    request = fetch_last_request_for_person!(context, person_name)
+
+    assert request.requester_email == expected_email
+    assert request.normalized_requester_email == expected_email
+    refute request.requester_person_id
+
+    context
+  end
+
+  step "Memba should record Robin's request with verified email {string}",
+       %{args: [expected_email]} = context do
+    expected_email = Accounts.normalize_email(expected_email)
+    request = fetch_last_request_for_person!(context, "Robin")
+
+    assert request.requester_email == expected_email
+    assert request.normalized_requester_email == expected_email
+    refute request.requester_person_id
+
+    context
+  end
+
+  step "{word}'s request should not appear in the active requests inbox",
+       %{args: [person_name]} = context do
+    person_request_ids =
+      context
+      |> Map.get(:onboarding_requests, %{})
+      |> Enum.flat_map(fn
+        {{^person_name, _club_name}, request} -> [request.request_id]
+        _entry -> []
+      end)
+
+    active_request_ids = Enum.map(Onboarding.list_active_requests(), & &1.request_id)
+
+    assert Enum.empty?(person_request_ids)
+    assert Enum.all?(person_request_ids, &(&1 not in active_request_ids))
+
+    context
+  end
+
+  step "Robin's request should not appear in the active requests inbox", context do
+    person_request_ids =
+      context
+      |> Map.get(:onboarding_requests, %{})
+      |> Enum.flat_map(fn
+        {{"Robin", _club_name}, request} -> [request.request_id]
+        _entry -> []
+      end)
+
+    active_request_ids = Enum.map(Onboarding.list_active_requests(), & &1.request_id)
+
+    assert Enum.empty?(person_request_ids)
+    assert Enum.all?(person_request_ids, &(&1 not in active_request_ids))
+
+    context
+  end
+
+  step "{word} should not be a person in Memba", %{args: [person_name]} = context do
+    email = email_for_person_context(context, person_name)
+
+    refute Membership.get_person_by_email(email)
 
     context
   end
@@ -239,6 +366,15 @@ defmodule Memba.Cucumber.RequestAccountSteps do
 
     assert Membership.active_member_of_club?(club.club_id, person.person_id)
     context
+  end
+
+  step "{word} should be a person in Memba", %{args: [person_name]} = context do
+    email = email_for_person_context(context, person_name)
+    person = Membership.get_person_by_email(email)
+
+    assert person
+
+    put_person(context, person_name, person)
   end
 
   step "{word}'s request should leave the active requests inbox",
@@ -387,10 +523,10 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     context
   end
 
-  defp request_access(context, person_name, club_name) do
-    {attrs, opts} = request_attrs_and_opts(context, person_name, club_name)
+  defp request_access(context, person_name, club_name, opts \\ []) do
+    {attrs, request_opts} = request_attrs_and_opts(context, person_name, club_name, opts)
 
-    assert {:ok, %Request{} = request} = Onboarding.create_request(attrs, opts)
+    assert {:ok, %Request{} = request} = Onboarding.create_request(attrs, request_opts)
     assert :ok = Memba.Onboarding.NewRequestEmail.deliver(request)
 
     context
@@ -409,7 +545,7 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     |> Map.put(:last_onboarding_request_club_name, club_name)
   end
 
-  defp request_attrs_and_opts(context, person_name, club_name) do
+  defp request_attrs_and_opts(context, person_name, club_name, opts \\ []) do
     case get_in(context, [:people, person_name]) do
       %{person_id: person_id, name: name, email: email} ->
         {%{
@@ -421,13 +557,17 @@ defmodule Memba.Cucumber.RequestAccountSteps do
 
       _missing ->
         requester_email = default_email_for(context, person_name)
+        requester_name = Keyword.get(opts, :requester_name, "#{person_name} Requester")
+
+        verified_email =
+          get_in(context, [:verified_requester_emails, person_name]) || requester_email
 
         {%{
-           requester_name: "#{person_name} Requester",
+           requester_name: requester_name,
            requester_email: requester_email,
            requested_club_name: club_name,
            note: short_note()
-         }, [verified_identity_email: requester_email]}
+         }, [verified_identity_email: verified_email]}
     end
   end
 
@@ -612,6 +752,10 @@ defmodule Memba.Cucumber.RequestAccountSteps do
     update_context_map(context, :clubs, club_name, club.club_id)
   end
 
+  defp put_verified_requester_email(context, person_name, email) do
+    update_context_map(context, :verified_requester_emails, person_name, email)
+  end
+
   defp update_context_map(context, collection_key, item_key, value) do
     collection =
       context
@@ -619,6 +763,31 @@ defmodule Memba.Cucumber.RequestAccountSteps do
       |> Map.put(item_key, value)
 
     Map.put(context, collection_key, collection)
+  end
+
+  defp sign_in_as_verified_email(context, person_name, email) do
+    email = Accounts.normalize_email(email)
+
+    context
+    |> put_verified_requester_email(person_name, email)
+    |> Map.put(:signed_in_identity, %{
+      email: email,
+      staff?: Accounts.staff_email?(email),
+      active_clubs: Accounts.list_active_clubs_for_email(email)
+    })
+  end
+
+  defp email_for_person_context(context, person_name) do
+    context
+    |> get_in([:people, person_name, :email])
+    |> case do
+      nil ->
+        get_in(context, [:verified_requester_emails, person_name]) ||
+          default_email_for(context, person_name)
+
+      email ->
+        email
+    end
   end
 
   defp requester_key_from_request(%Request{} = request) do

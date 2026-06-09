@@ -43,7 +43,7 @@ async function signInPerson(world, personName) {
 
 async function openGetStartedPage(world) {
   await world.page.goto(appUrl(world.baseUrl, "/get-started"));
-  await playwrightExpect(world.page.locator("#get-started-request-form")).toBeVisible({
+  await playwrightExpect(world.page.locator("#get-started-flow")).toBeVisible({
     timeout: projectionTimeoutMs(world)
   });
 }
@@ -56,17 +56,21 @@ async function submitRequestThroughBrowser(world, personName, clubName) {
     email: requestEmailFor(personName),
     name: personName
   };
-  const previousEmails = await testMailboxEmails(world);
-
   await openGetStartedPage(world);
+
+  if ((await world.page.locator("#get-started-verification-form").count()) > 0) {
+    await completeGetStartedVerification(world, personName, person.email);
+  }
 
   if ((await world.page.locator("#get-started-signed-in-requester").count()) === 0) {
     await world.page.getByLabel("Your name").fill(personName);
-    await world.page.getByLabel("Email address").fill(person.email);
   }
 
   await world.page.getByLabel("Group or club name").fill(clubName);
   await world.page.getByLabel("What would you like Memba to help with?").fill(defaultRequestNote);
+
+  const previousEmails = await testMailboxEmails(world);
+
   await world.page.getByRole("button", { name: "Request access" }).click();
 
   world.onboardingRequests[clubName] = {
@@ -77,6 +81,44 @@ async function submitRequestThroughBrowser(world, personName, clubName) {
     previousEmails
   };
   world.lastOnboardingRequestClubName = clubName;
+}
+
+async function completeGetStartedVerification(world, personName, email) {
+  world.signInLinks = world.signInLinks || {};
+
+  const previousEmails = await testMailboxEmails(world);
+
+  await world.page.getByLabel("Email address").fill(email);
+  await world.page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  await playwrightExpect(world.page).toHaveURL(/\/auth\/check-email/);
+
+  const emails = await waitForMailboxEmails(
+    world,
+    previousEmails.length + 1,
+    `get-started sign-in email for ${email}`
+  );
+  const previousIds = previousEmails.map(mailboxMessageId).filter(Boolean);
+  const newEmails = emails.filter((mailboxEmail) => !previousIds.includes(mailboxMessageId(mailboxEmail)));
+  const signInEmail = newEmails.find(
+    (mailboxEmail) =>
+      mailboxEmail.subject === "Sign in to Memba" &&
+      mailboxEmailTo(mailboxEmail).includes(email) &&
+      signInLinkFromTextBody(mailboxEmailText(mailboxEmail))
+  );
+
+  assert.ok(
+    signInEmail,
+    `Expected get-started sign-in email for ${email}; saw ${JSON.stringify(newEmails.map(mailboxEmailSummary))}`
+  );
+
+  const signInLink = signInLinkFromTextBody(mailboxEmailText(signInEmail));
+  world.signInLinks[personName] = browserReachableUrl(world, signInLink);
+
+  await world.page.goto(world.signInLinks[personName]);
+  await playwrightExpect(world.page).toHaveURL(/\/get-started/);
+  await playwrightExpect(world.page.locator("#get-started-request-form")).toBeVisible({
+    timeout: projectionTimeoutMs(world)
+  });
 }
 
 async function createRequestDirectly(world, personName, clubName) {
@@ -95,9 +137,9 @@ requester_person_id = Map.get(payload, "requesterPersonId")
 
 opts =
   if requester_person_id do
-    [requester_person_id: requester_person_id]
+    [verified_identity_email: email, requester_person_id: requester_person_id]
   else
-    []
+    [verified_identity_email: email]
   end
 
 {:ok, request} =
