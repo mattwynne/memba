@@ -130,7 +130,10 @@ defmodule Memba.Accounts.AuthEmail do
 
     footer = [
       EmailTemplates.trust_footer(group_name: context.group_name),
-      auth_footer(recipient_email)
+      EmailTemplates.memba_footer(
+        group_name: context.group_name,
+        recipient_email: recipient_email
+      )
     ]
 
     EmailTemplates.render_shell(
@@ -216,16 +219,6 @@ defmodule Memba.Accounts.AuthEmail do
         #{EmailTemplates.paragraph("Didn't ask to sign in? You can safely ignore this email — no one can get into your account without the link above.", margin: "0", color: "#7d877f", font_size: "13px")}
       </td>
     </tr></table>
-    """
-  end
-
-  defp auth_footer(recipient_email) do
-    """
-        <tr>
-          <td class="gutter" style="padding:14px 28px 24px; font-size:12px; line-height:1.6; color:#7d877f;">
-            Sent to #{EmailTemplates.escaped_text(recipient_email)}. Need a hand? Contact Memba support.
-          </td>
-        </tr>
     """
   end
 

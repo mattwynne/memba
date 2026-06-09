@@ -58,6 +58,7 @@ defmodule Memba.Accounts.AuthEmailTest do
              ~s|d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"|
 
     refute email.html_body =~ ~s|d="M 18 34 L 28 44 L 46 24"|
+    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
     assert email.html_body =~ "Sent to alice@example.com."
     refute email.html_body =~ "help@memba.io"
 
@@ -136,6 +137,7 @@ defmodule Memba.Accounts.AuthEmailTest do
     assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com"
     assert email.html_body =~ "Sign in to Wessex &lt;Choir&gt; Bcc: attacker@example.com"
     assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com runs on Memba"
+    assert email.html_body =~ "Delivered for Wessex &lt;Choir&gt; Bcc: attacker@example.com by"
     refute email.html_body =~ "\r\nBcc"
     refute email.html_body =~ "<Choir>"
   end
