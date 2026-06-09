@@ -1,6 +1,6 @@
 Record judgement-worthy review findings for {{ inputs.plan_path }}.
 
-Review runs after implementation has already merged to main. It must not block delivery. Use the review synthesis and reviewer reports to decide whether any finding needs human judgement rather than bounded automatic polish. Do not emit shell-command/tool-call JSON; either edit `docs/code-health.md` when needed or return a concise prose summary.
+Review runs after implementation has already merged to main. It must not block delivery, but it must not silently lose code-health findings. You are an agent node with repository tool access: inspect the visible reviewer reports/synthesis, edit `docs/code-health.md` when needed, and verify the resulting diff.
 
 Rules:
 
@@ -13,6 +13,20 @@ Rules:
 - Do not edit acceptance feature files.
 - Do not change product behaviour in this step.
 - Do not silently drop findings. If you cannot edit `docs/code-health.md` for any reason, return a response starting with `CODE_HEALTH_RECORDING_FAILED:` and explain the exact findings that still need recording.
-- When you do append findings, make sure `git diff -- docs/code-health.md` would show the new entry before you finish.
+- When you do append findings, make sure `git diff -- docs/code-health.md` shows the new entry before you finish.
 
 Return a concise summary of whether `docs/code-health.md` was updated and why. If there were judgement-worthy findings, include either `CODE_HEALTH_RECORDED` or `CODE_HEALTH_RECORDING_FAILED` in the response.
+
+At the end of your response, include one final JSON object for workflow routing. It must be the last thing in the response.
+
+If recording succeeded or no entry was needed:
+
+```json
+{"context_updates":{"code_health_recording_ok":true}}
+```
+
+If recording failed or findings remain neither fixed nor recorded:
+
+```json
+{"context_updates":{"code_health_recording_ok":false}}
+```

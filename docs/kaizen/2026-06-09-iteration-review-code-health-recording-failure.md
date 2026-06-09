@@ -104,3 +104,28 @@ The iteration-review workflow is the last delivery-machine step intended to catc
 - Require a `docs/code-health.md` diff when reviewer/synthesis context contains judgement-worthy findings.
 - Make `record_code_health` a script-backed or tool-enabled step with a clear edit mechanism, instead of relying on a prompt node that may lack file-edit access.
 - Teach the publish/finalization path not to mark review fully succeeded when known findings remain neither fixed nor recorded.
+
+## Resolution
+
+Date: 2026-06-09
+
+Root cause: `record_code_health` was configured as a prompt-only `shape=tab` node even though its contract required editing `docs/code-health.md`. Fabro prompt nodes do not have live repository tool access, so the node could only report `CODE_HEALTH_RECORDING_FAILED`. The workflow then had an unconditional edge from `record_code_health` to `final_artifact_gate`, so that failure signal did not affect routing and the review could still finalize as succeeded.
+
+Fix applied:
+
+- `.fabro/workflows/iteration-review/workflow.fabro`: changed `record_code_health` to an agent node (`shape=box`) with routing output so it can inspect/edit the repository and report whether recording succeeded.
+- `.fabro/workflows/iteration-review/workflow.fabro`: added a dedicated `code_health_recording_failed` terminal gate and routed `record_code_health` to final artifact publication only when `context.code_health_recording_ok=true`.
+- `.fabro/workflows/iteration-review/prompts/record_code_health.md`: updated the prompt to reflect agent-node tool access and require a final routing JSON object for successful/no-op recording versus failed/unrecorded findings.
+- `.fabro/workflows/iteration-review/scripts/test_review_report_routing.sh`: added guard assertions for the code-health recording node shape and failure route.
+
+Validation:
+
+- `bash .fabro/workflows/iteration-review/scripts/test_review_report_routing.sh` — passed.
+- `fabro validate .fabro/workflows/iteration-review/workflow.toml --no-upgrade-check` — passed; expected goal-gate retry warnings remain, including the new code-health recording failure gate.
+- `dev check --quick` — passed: 758 tests, 0 failures.
+- `dev check` — failed in browser acceptance at the pre-existing/unrelated `Staff create a club with the suggested slug` scenario (`#club-slug-input` remained empty). This workflow-only fix does not touch that product/browser path; a rerun of the acceptance command also showed the same scenario can pass, but full `dev check` still reproduced the failure.
+
+Remaining follow-up:
+
+- A future real review run should confirm the agent node can append `docs/code-health.md` when judgement-worthy findings are present.
+- The `Staff create a club with the suggested slug` acceptance instability remains outside this kaizen fix.

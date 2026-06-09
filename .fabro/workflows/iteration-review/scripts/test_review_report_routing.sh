@@ -42,4 +42,13 @@ assert_not_contains 'claude_review -> codex_review;'
 assert_not_contains 'codex_review -> gemini_review;'
 assert_not_contains 'gemini_review -> synthesize_review;'
 
+# Code-health recording must have live repository access and must not silently
+# continue to finalization when it reports or routes a recording failure.
+assert_contains 'shape=box,'
+assert_contains 'output_schema="routing",'
+assert_contains 'record_code_health -> final_artifact_gate [condition="context.code_health_recording_ok=true"]'
+assert_contains 'record_code_health -> code_health_recording_failed [label="Code-health recording failed"]'
+assert_contains 'code_health_recording_failed -> exit'
+assert_not_contains 'record_code_health -> final_artifact_gate;'
+
 echo "iteration-review report routing tests passed"

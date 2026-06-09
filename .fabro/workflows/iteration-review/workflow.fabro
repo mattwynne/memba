@@ -134,8 +134,17 @@ digraph IterationReview {
 
     record_code_health [
         label="Record Code Health Findings",
-        shape=tab,
+        shape=box,
+        fidelity="truncate",
+        output_schema="routing",
         prompt="@prompts/record_code_health.md"
+    ]
+
+    code_health_recording_failed [
+        label="Fail: Code Health Recording",
+        shape=parallelogram,
+        goal_gate=true,
+        script="echo 'Iteration review accepted the implementation, but judgement-worthy code-health findings were not recorded in docs/code-health.md. Inspect the Record Code Health Findings stage and rerun review or record the findings manually before finalizing.' >&2\nexit 1"
     ]
 
     final_artifact_gate [
@@ -217,7 +226,9 @@ digraph IterationReview {
     apply_review_fixes -> verify_review_repair
     verify_review_repair -> dev_check
 
-    record_code_health -> final_artifact_gate
+    record_code_health -> final_artifact_gate [condition="context.code_health_recording_ok=true"]
+    record_code_health -> code_health_recording_failed [label="Code-health recording failed"]
+    code_health_recording_failed -> exit
     final_artifact_gate -> publish_polish_to_main [condition="outcome=succeeded"]
     final_artifact_gate -> final_artifact_failed
     final_artifact_failed -> exit
