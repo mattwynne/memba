@@ -14,5 +14,5 @@
 - [x] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
 - [x] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
 - [x] 014 Run focused tests for changed web templates/components and email rendering.
-- [ ] 015 Run the affected acceptance tests if executable.
+- [x] 015 Run the affected acceptance tests if executable.
 - [ ] 016 Run `dev check`.
