@@ -69,7 +69,16 @@ defmodule Memba.Onboarding.WelcomeEmailTest do
     assert email.html_body =~ "This link expires in 15 minutes and can be used once."
     assert email.html_body =~ "Secured by Memba"
     assert email.html_body =~ "West Coast Paddlers runs on Memba"
+
+    assert email.html_body =~
+             ~s|Delivered for West Coast Paddlers by <a href="https://memba.io"|
+
     assert email.html_body =~ "Sent to robin@example.com."
+
+    assert email.html_body =~
+             "because your request to join West Coast Paddlers was approved."
+
+    assert email.html_body =~ "Need a hand? Contact Memba support."
     refute email.html_body =~ "<html><body>"
     refute email.html_body =~ "help@memba.io"
 

@@ -1,0 +1,72 @@
+# Task 006 inbound club rejection email inspection
+
+Selected task:
+
+- `006 Inspect inbound club-message rejection email construction and the email request/provider shape for display-name support.`
+
+## Sources inspected
+
+- `docs/problems/2026-06-07-club-rejection-email-from-name.md`
+- `web/lib/memba/messaging.ex`
+- `web/lib/memba/messaging/inbound_club_rejection_email.ex`
+- `web/lib/memba/messaging/email_delivery_request.ex`
+- `web/lib/memba/messaging/email_delivery_providers/postmark.ex`
+- `web/lib/memba/messaging/email_delivery_providers/resend.ex`
+- `web/lib/memba/messaging/email_delivery_providers/resend_adapter.ex`
+- `web/lib/memba/messaging/email_delivery_providers/local.ex`
+- `web/deps/swoosh/lib/swoosh/adapters/postmark.ex`
+- `web/deps/swoosh/lib/swoosh/email/render.ex`
+- `web/test/memba/messaging/inbound_club_rejection_email_test.exs`
+- `web/test/memba/messaging/inbound_club_message_acceptance_test.exs`
+
+## Findings
+
+- Rejection emails are sent from the inbound receive flow in `Memba.Messaging`:
+  - `receive_inbound_club_email/2`
+  - `post_first_inbound_club_email/2`
+  - `reject_first_inbound_club_email/5`
+  - `Memba.Messaging.InboundClubRejectionEmail.deliver/5`
+- `reject_first_inbound_club_email/5` passes `club_name: destination.club_name` only after the inbound recipient address has resolved to a real club.
+  - Unknown sender, inactive/non-member sender, attachments, and missing plain-text body rejections already receive club context.
+  - Unknown club or unsupported recipient address rejections do not have a resolved club name, so they should keep the generic Memba sender/display name.
+- `InboundClubRejectionEmail` builds a `Swoosh.Email` directly and calls `Memba.Mailer.deliver/1`; it does not use `EmailDeliveryRequest` or the `EmailDeliveryProvider` behaviour used for member-message fanout deliveries.
+- The current `from` value comes from `from_address/1`, which ignores `opts` and returns the configured messaging sender address as a named Swoosh tuple:
+  - configured tuple values such as `{"Memba", "messages@mail.memba.test"}` are preserved;
+  - configured binary addresses are normalized to `{"Memba", address}`;
+  - missing config falls back to `{"Memba", "messages@mail.memba.io"}`.
+- Therefore the next implementation can change only the display-name element of the Swoosh `from` tuple while preserving the sender address element.
+- The existing `club_name/1` helper already sanitizes dynamic club names for email headers using `EmailTemplates.sanitize_header_text/1`, so the display-name change should reuse that sanitized value and not read raw `opts[:club_name]`.
+- Reply/support behaviour is separate:
+  - `reply_to_address/0` reads configured `:reply_to`;
+  - `maybe_reply_to/2` applies it to the Swoosh email;
+  - changing the `from` tuple does not require changing reply-to or support copy.
+
+## Provider/display-name shape
+
+- Swoosh supports sender display names through `from({display_name, address})`.
+- Postmark:
+  - `InboundClubRejectionEmail` uses `Memba.Mailer`, which uses the configured Swoosh adapter.
+  - Swoosh's Postmark adapter serializes the Swoosh sender tuple into the API request `"From"` field via `Swoosh.Email.Render.render_recipient/1`.
+  - A tuple like `{"Kootenay Mountaineering Club via Memba", "messages@mail.memba.test"}` becomes a Postmark-compatible display-name/address string.
+- Resend:
+  - Memba uses its custom `Memba.Messaging.EmailDeliveryProviders.ResendAdapter`.
+  - The adapter's `prepare_from/2` serializes a named Swoosh sender tuple into the Resend `"from"` field as `"#{name} <#{email}>"`.
+  - The same tuple shape therefore carries a display name for Resend too.
+- Local/test mailers:
+  - `Swoosh.Adapters.Test` exposes `email.from` directly, so focused tests can assert the tuple precisely.
+  - `EmailDeliveryProviders.Local` is relevant for member-message fanout, not this direct rejection-email path.
+- The separate `EmailDeliveryRequest` shape already includes `sender_name` and `sender_address`, and the Postmark/Resend member-message providers already build named `from` tuples. That provider-boundary support is a useful precedent, but the rejection-email change should remain in `InboundClubRejectionEmail` because that is the current construction path.
+
+## Identified implementation direction
+
+For task 007, keep `InboundClubRejectionEmail` on the direct Swoosh/Mailer path and change the private `from_address/1` logic to derive:
+
+- `{"<sanitized club name> via Memba", configured_sender_address}` when `opts[:club_name]` sanitizes to a non-empty value;
+- the existing configured/fallback Memba display name and address when no club is resolved.
+
+Focused tests should assert:
+
+- resolved-club rejections render `email.from == {"Kootenay Mountaineering Club via Memba", "messages@mail.memba.test"}`;
+- the address remains `messages@mail.memba.test`;
+- reply-to, rejection reason copy, threading headers, provider metadata/tags, and unknown-club generic sender behaviour are preserved;
+- dynamic club names cannot inject header control characters.

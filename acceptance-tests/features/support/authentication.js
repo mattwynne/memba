@@ -122,7 +122,30 @@ async function assertReceivesSignInLink(world, personName) {
   const signInLink = signInLinkFromTextBody(email.text_body);
   assert.ok(signInLink, `Expected sign-in email to contain a sign-in link; saw ${email.text_body}`);
 
+  world.signInEmails = world.signInEmails || {};
+  world.signInEmails[personName] = email;
   world.signInLinks[personName] = browserAppUrl(world, signInLink);
+}
+
+async function assertReceivesSignInEmailWithMembaSprigIcon(world, personName) {
+  const email = await capturedSignInEmail(world, personName);
+  const htmlBody = mailboxEmailHtml(email);
+
+  assert.ok(
+    htmlBody.includes('d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"'),
+    `Expected sign-in email to include the Memba sprig icon; saw ${htmlBody}`
+  );
+  assert.ok(
+    !htmlBody.includes('d="M 18 34 L 28 44 L 46 24"'),
+    `Expected sign-in email not to include the old check icon; saw ${htmlBody}`
+  );
+}
+
+async function assertSignInEmailUsesStandardMembaFooter(world, personName) {
+  const request = signInRequestFor(world, personName);
+  const email = await capturedSignInEmail(world, personName);
+
+  assertStandardMembaFooter(email, request.email, `sign-in email for ${request.email}`);
 }
 
 async function assertDoesNotReceiveSignInLink(world, personName) {
@@ -372,6 +395,37 @@ function signInLinkFromTextBody(textBody) {
   return match && match[0];
 }
 
+async function capturedSignInEmail(world, personName) {
+  if (!(world.signInEmails && world.signInEmails[personName])) {
+    await assertReceivesSignInLink(world, personName);
+  }
+
+  const email = world.signInEmails && world.signInEmails[personName];
+  assert.ok(email, `Expected ${personName} to have received a sign-in email`);
+  return email;
+}
+
+function assertStandardMembaFooter(email, recipientEmail, description) {
+  const htmlBody = mailboxEmailHtml(email);
+
+  assert.ok(
+    /Delivered (?:by|for) /.test(htmlBody) && htmlBody.includes('href="https://memba.io"'),
+    `Expected ${description} to include the standard Memba delivery footer; saw ${htmlBody}`
+  );
+  assert.ok(
+    htmlBody.includes(`Sent to ${recipientEmail}.`),
+    `Expected ${description} to include the recipient in the footer; saw ${htmlBody}`
+  );
+  assert.ok(
+    !htmlBody.includes("help@memba.io"),
+    `Expected ${description} not to hard-code the support mailbox; saw ${htmlBody}`
+  );
+}
+
+function mailboxEmailHtml(email) {
+  return String((email && (email.html_body || email.htmlBody || email.html)) || "");
+}
+
 function browserAppUrl(world, url) {
   const parsed = new URL(url, `${world.baseUrl}/`);
   const base = new URL(world.baseUrl);
@@ -390,7 +444,7 @@ function mailboxMessageId(email) {
 }
 
 function emailSummary(email) {
-  return { subject: email.subject, to: email.to, text_body: email.text_body };
+  return { subject: email.subject, to: email.to, text_body: email.text_body, html_body: email.html_body };
 }
 
 module.exports = {
@@ -398,7 +452,9 @@ module.exports = {
   assertNotSignedIn,
   assertOnStaffOnlyHomepage,
   assertReceivesSignInLink,
+  assertReceivesSignInEmailWithMembaSprigIcon,
   assertSeesClub,
+  assertSignInEmailUsesStandardMembaFooter,
   assertSignedIn,
   assertSignedInAsStaff,
   assertStillSignedIn,

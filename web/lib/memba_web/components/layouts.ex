@@ -5,6 +5,8 @@ defmodule MembaWeb.Layouts do
   """
   use MembaWeb, :html
 
+  alias MembaWeb.ClubSite
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -338,7 +340,15 @@ defmodule MembaWeb.Layouts do
         class="border-t border-[var(--club-site-line)] bg-[var(--club-site-paper)] px-4 py-6 sm:px-6 lg:px-8"
       >
         <div class="mx-auto max-w-7xl text-sm font-medium text-[var(--club-site-muted)]">
-          Powered by <span class="font-semibold text-[var(--club-site-accent)]">Memba</span>
+          Powered by
+          <a
+            id="club-site-footer-memba-home-link"
+            href={ClubSite.root_url()}
+            aria-label="Visit Memba home"
+            class="font-semibold text-[var(--club-site-accent)] underline decoration-[var(--club-site-accent)]/30 underline-offset-4 transition duration-200 hover:decoration-[var(--club-site-accent)]"
+          >
+            Memba
+          </a>
         </div>
       </footer>
     </div>

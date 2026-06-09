@@ -2,8 +2,10 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 const {
+  HOMEPAGE_VOLUNTEERING_PROMISE,
   assertHomepageFitsScreen,
   assertMembaHomepage,
+  assertHomepageVolunteeringPromise,
   homepageUrl,
   visitHomepage
 } = require("../features/support/homepage");
@@ -62,11 +64,34 @@ test("homepage assertion step checks browser-visible homepage content", async ()
       .filter((expectation) => expectation.matcher === "toBeVisible")
       .map((expectation) => expectation.target),
     [
-      { role: "heading", options: { name: "Volunteering shouldn’t feel like work." } },
-      { role: "link", options: { name: "Get started" } },
+      { role: "heading", options: { name: HOMEPAGE_VOLUNTEERING_PROMISE } },
+      { role: "link", options: { name: "Request access for your group" } },
       { role: "link", options: { name: "Sign in" } }
     ]
   );
+});
+
+test("homepage volunteering assertion checks the browser-visible hero promise", async () => {
+  const expectations = [];
+  const page = {
+    getByRole(role, options) {
+      return { role, options };
+    }
+  };
+  const expect = (target) => ({
+    async toBeVisible() {
+      expectations.push({ target, matcher: "toBeVisible" });
+    }
+  });
+
+  await assertHomepageVolunteeringPromise({ page }, { expect });
+
+  assert.deepEqual(expectations, [
+    {
+      target: { role: "heading", options: { name: HOMEPAGE_VOLUNTEERING_PROMISE } },
+      matcher: "toBeVisible"
+    }
+  ]);
 });
 
 test("homepage fit assertion checks horizontal overflow", async () => {

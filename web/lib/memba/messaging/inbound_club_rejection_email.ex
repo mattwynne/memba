@@ -51,10 +51,23 @@ defmodule Memba.Messaging.InboundClubRejectionEmail do
     |> put_provider_options(inbound_email, to_address, rejection_reason, delivery_reference)
   end
 
-  defp from_address(_opts) do
-    configured_from_address()
-    |> Kernel.||(@fallback_from)
+  defp from_address(opts) do
+    from_address = configured_from_address() || @fallback_from
+
+    case club_sender_name(opts) do
+      nil -> from_address
+      sender_name -> put_sender_name(from_address, sender_name)
+    end
   end
+
+  defp club_sender_name(opts) do
+    case club_name(opts) do
+      nil -> nil
+      club_name -> "#{club_name} via Memba"
+    end
+  end
+
+  defp put_sender_name({_name, address}, sender_name), do: {sender_name, address}
 
   defp configured_from_address do
     case selected_provider() do

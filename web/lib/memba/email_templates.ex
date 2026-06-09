@@ -300,7 +300,7 @@ defmodule Memba.EmailTemplates do
               <td style="vertical-align:middle;">
                 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
                   <td style="padding-right:9px; vertical-align:middle;">
-                    #{memba_mark_svg(22, "#f7f6f3", "3.4")}
+                    #{memba_sprig_svg(22, "#f7f6f3", "3.4")}
                   </td>
                   <td style="vertical-align:middle; font-size:16px; font-weight:600; color:#{@ink}; letter-spacing:-0.018em;">Memba</td>
                 </tr></table>
@@ -345,7 +345,7 @@ defmodule Memba.EmailTemplates do
           <td class="gutter" style="padding:16px 28px 24px; border-top:1px solid #{@line};">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:9px;"><tr>
               <td style="padding-right:7px; vertical-align:middle;">
-                #{memba_mark_svg(15, "#ffffff", "4")}
+                #{memba_sprig_svg(15, "#ffffff", "4")}
               </td>
               <td style="vertical-align:middle; font-size:11.5px; color:#{@ink_3};">#{delivered_line}</td>
             </tr></table>
@@ -375,7 +375,7 @@ defmodule Memba.EmailTemplates do
           <td class="gutter" style="padding:18px 28px 22px; background:#{@forest_50}; border-top:1px solid #{@forest_100};">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:8px;"><tr>
               <td style="padding-right:8px; vertical-align:middle;">
-                #{memba_mark_svg(18, @forest_50, "4")}
+                #{memba_sprig_svg(18, @forest_50, "4")}
               </td>
               <td style="vertical-align:middle; font-size:13px; font-weight:600; color:#{@forest_600}; letter-spacing:-0.01em;">Secured by Memba</td>
             </tr></table>
@@ -463,9 +463,9 @@ defmodule Memba.EmailTemplates do
     ~s|Need a hand? Reply to this email or write to <a href="mailto:#{escaped_reply_to_email}" style="color:#{@ink_3}; text-decoration:underline;">#{escaped_reply_to_email}</a>.|
   end
 
-  defp memba_mark_svg(size, stroke, stroke_width) do
+  defp memba_sprig_svg(size, color, stem_width) do
     """
-    <svg width="#{size}" height="#{size}" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#{@forest}"></rect><path d="M 18 34 L 28 44 L 46 24" fill="none" stroke="#{stroke}" stroke-width="#{stroke_width}" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+    <svg width="#{size}" height="#{size}" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="12" fill="#{@forest}"></rect><path d="M32 51 C32 43 32 36 32 18" fill="none" stroke="#{color}" stroke-width="#{stem_width}" stroke-linecap="round"></path><path d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z" fill="#{color}"></path><path d="M32 39 C25 38 20 32 19 23 C26 24.5 31 31 32 39 Z" fill="#{color}"></path><circle cx="32" cy="15" r="3.7" fill="#d2925a"></circle></svg>
     """
   end
 end

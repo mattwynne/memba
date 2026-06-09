@@ -1,0 +1,31 @@
+# Task 001 homepage hero inspection
+
+Selected task:
+
+- `001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.`
+
+## Findings
+
+- The root Memba homepage is routed in `web/lib/memba_web/router.ex` via `get "/", PageController, :home`.
+- The signed-out homepage markup lives in `web/lib/memba_web/controllers/page_html/home.html.heex`, starting at the `else` branch for visitors without `@current_identity`.
+- The current signed-out hero already keeps the page responsive with the existing Tailwind grid/spacing classes and already states that Memba is for volunteer-run groups:
+  - eyebrow: `Private member websites for volunteer-run groups`
+  - current `h1`: `A simpler way to keep your group members informed.`
+  - current supporting copy: `Memba helps small non-profit groups, clubs, societies, and associations share member messages in one private place.`
+  - current follow-up line: `Built for volunteer organizers, not full-time administrators.`
+- The problem note `docs/problems/2026-06-07-homepage-lost-volunteering-hero-vision.md` asks for the hero to lead with the promise that volunteering should not feel like work, instead of foregrounding privacy/current-feature limitations.
+- Existing controller coverage for signed-out `GET /` is in `web/test/memba_web/controllers/page_controller_test.exs` and currently asserts the old heading.
+- The acceptance scenario for this iteration is already present in `acceptance-tests/features/homepage.feature`, but it remains tagged `@todo-ui`.
+- Browser acceptance support currently checks for the old heading in `acceptance-tests/features/support/homepage.js`, while its support-unit test in `acceptance-tests/test/homepage_steps.test.js` already expects the future heading `Volunteering shouldn’t feel like work.`. That mismatch is test-support work for the next todo, not part of this inspection task.
+
+## Smallest identified template change
+
+For the behaviour implementation task, keep the existing signed-out homepage structure and styling intact and make a focused hero-copy replacement in `web/lib/memba_web/controllers/page_html/home.html.heex`:
+
+1. Change only the signed-out hero `h1` to the volunteering-first promise, preferably:
+   - `Volunteering shouldn’t feel like work.`
+2. Adjust the immediately following paragraph only as much as needed to keep the copy coherent and honest about today’s product, for example by keeping the current “small non-profit groups, clubs, societies, and associations” wording while connecting it to making member communication easier.
+3. Preserve the existing eyebrow `Private member websites for volunteer-run groups` or equivalent volunteer-run wording so the homepage still clearly targets volunteer-run clubs.
+4. Preserve the existing CTAs, preview card, and responsive layout classes unless tests prove a minimal copy change creates a layout issue.
+
+This keeps the implementation aligned with the iteration scope: restore the hero promise without redesigning the marketing site.

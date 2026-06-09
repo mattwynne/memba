@@ -5,6 +5,7 @@ defmodule MembaWeb.LayoutsTest do
   import Phoenix.LiveViewTest
 
   alias MembaWeb.Layouts
+  alias MembaWeb.ClubSite
 
   @sha "abcdef0123456789abcdef0123456789abcdef01"
 
@@ -138,6 +139,12 @@ defmodule MembaWeb.LayoutsTest do
     assert_text(html, "#club-site-layout header", "Signed in as alice@example.com")
     refute_text(html, "#club-site-layout header", "Powered by Memba")
     assert_text(html, "#club-site-footer", "Powered by Memba")
+
+    assert_selector(
+      html,
+      "#club-site-footer a#club-site-footer-memba-home-link[href='#{ClubSite.root_url()}'][aria-label='Visit Memba home']"
+    )
+
     assert_selector(html, "form#club-site-sign-out-form[action='/auth'][method='post']")
     assert_selector(html, "form#club-site-sign-out-form input[name='_method'][value='delete']")
     assert_selector(html, "button#club-site-sign-out-button[type='submit']")
@@ -190,7 +197,7 @@ defmodule MembaWeb.LayoutsTest do
   end
 
   defp assert_text(html, selector, expected_text) do
-    text = selected_text(html, selector)
+    text = html |> selected_text(selector) |> normalize_whitespace()
 
     assert text =~ expected_text
   end
@@ -204,6 +211,12 @@ defmodule MembaWeb.LayoutsTest do
     |> LazyHTML.from_fragment()
     |> LazyHTML.query(selector)
     |> LazyHTML.text()
+  end
+
+  defp normalize_whitespace(text) when is_binary(text) do
+    text
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
   end
 
   defp only_attribute(html, selector, attribute) do

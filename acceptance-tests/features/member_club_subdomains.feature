@@ -60,7 +60,7 @@ Feature: Member club subdomains
 
 # Rule: Club pages offer a path back to Memba
 
-    @iteration-031 @not-domain @todo-ui
+    @iteration-031 @not-domain
     Scenario: Robin returns from a club page to Memba
       Given Kootenay Mountaineering Club has the slug "kmc"
       When Robin opens "kmc.clubs.memba.io"

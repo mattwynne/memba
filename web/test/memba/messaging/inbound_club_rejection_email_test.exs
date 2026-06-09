@@ -60,7 +60,9 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
 
     assert_received {:email, %Swoosh.Email{} = email}
 
-    assert email.from == {"Memba", "messages@mail.memba.test"}
+    assert email.from ==
+             {"Wessex <Choir> Bcc: attacker@example.com via Memba", "messages@mail.memba.test"}
+
     assert email.reply_to == {"Memba support", "support@memba.test"}
     assert email.to == [{"", "margaret@example.com"}]
 
@@ -89,8 +91,14 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert email.html_body =~ "member account for this email address"
     assert email.html_body =~ "Just reply to this email and a person will help"
     assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+
+    assert_standard_rejection_footer(email,
+      group_name: "Wessex <Choir> Bcc: attacker@example.com",
+      recipient_email: "margaret@example.com",
+      reply_to_email: "support@memba.test"
+    )
+
     refute email.html_body =~ "<script>"
-    refute email.html_body =~ "help@memba.io"
 
     assert email.provider_options[:metadata] == %{
              "memba_email_kind" => "inbound_club_rejection",
@@ -180,6 +188,7 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert_received {:email, %Swoosh.Email{} = email}
 
     assert email.subject == "Your email wasn't posted"
+    assert email.from == {"Memba", "messages@mail.memba.test"}
     refute email.reply_to
 
     assert email.text_body =~ "Your email wasn't posted."
@@ -193,8 +202,8 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     assert email.html_body =~ "Your email wasn&#39;t posted"
     assert email.html_body =~ "If you need a hand, contact Memba support."
     assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+    assert_standard_rejection_footer(email, recipient_email: "sender@example.com")
     refute email.html_body =~ "<script>"
-    refute email.html_body =~ "help@memba.io"
 
     assert email.provider_options[:metadata]["memba_reject_reason"] == "plain_text_required"
     assert email.provider_options[:metadata]["memba_reject_ref"] == "fallback-reference"
@@ -249,6 +258,31 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
     text
     |> Phoenix.HTML.html_escape()
     |> Phoenix.HTML.safe_to_string()
+  end
+
+  defp assert_standard_rejection_footer(email, opts) do
+    case Keyword.get(opts, :group_name) do
+      nil ->
+        assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
+
+      group_name ->
+        assert email.html_body =~ "Delivered for #{html_escape(group_name)} by"
+        assert email.html_body =~ ~s|href="https://memba.io"|
+    end
+
+    assert email.html_body =~ "Sent to #{Keyword.fetch!(opts, :recipient_email)}."
+    assert email.html_body =~ "This is an automatic delivery notice."
+
+    case Keyword.get(opts, :reply_to_email) do
+      nil ->
+        assert email.html_body =~ "Need a hand? Contact Memba support."
+
+      reply_to_email ->
+        assert email.html_body =~ "Need a hand? Reply to this email or write to"
+        assert email.html_body =~ ~s|mailto:#{html_escape(reply_to_email)}|
+    end
+
+    refute email.html_body =~ "help@memba.io"
   end
 
   defp restore_env(key, nil), do: Application.delete_env(:memba, key)

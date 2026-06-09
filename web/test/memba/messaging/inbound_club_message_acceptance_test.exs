@@ -580,7 +580,7 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
         to: "unknown@example.com",
         reason: "We couldn't find a member account for this email address",
         subject: "Re: Trip planning night",
-        from: {"Memba", "messages@mail.memba.test"},
+        from: {"Kootenay Mountaineering Club via Memba", "messages@mail.memba.test"},
         support_copy: "Just reply to this email and a person will help."
       )
 
@@ -980,10 +980,14 @@ defmodule Memba.Messaging.InboundClubMessageAcceptanceTest do
         assert email.from == from
 
       :error ->
-        assert email.from in [
-                 {"Memba", "messages@mail.memba.test"},
-                 {"Memba support for Kootenay Mountaineering Club", "messages@mail.memba.test"}
-               ]
+        expected_from =
+          if email.text_body =~ "Kootenay Mountaineering Club" do
+            {"Kootenay Mountaineering Club via Memba", "messages@mail.memba.test"}
+          else
+            {"Memba", "messages@mail.memba.test"}
+          end
+
+        assert email.from == expected_from
     end
 
     assert email.reply_to == {"Memba support", "support@memba.test"}

@@ -40,7 +40,7 @@ green than before.
 | 028 | 2026-06-08 | merged | Staff member invitations with profile completion | [plan](028-staff-member-invitations/plan.md) |
 | 029 | 2026-06-08 | merged | Membership Admin invitations | [plan](029-membership-admin-invitations/plan.md) |
 | 030 | 2026-06-08 | merged | Verified public onboarding requests | [plan](030-verified-onboarding-requests/plan.md) |
-| 031 | 2026-06-08 | implementing | Brand, email, and navigation polish | [plan](031-brand-email-navigation-polish/plan.md) |
+| 031 | 2026-06-08 | merged | Brand, email, and navigation polish | [plan](031-brand-email-navigation-polish/plan.md) |
 
 Status notes:
 

@@ -1635,6 +1635,52 @@ async function assertInboundRejectionEmailSupportGuidance(world, senderName) {
   return world;
 }
 
+async function assertInboundRejectionEmailFrom(world, senderName, expectedFromName) {
+  const rejectionEmail = await capturedInboundRejectionEmail(world, senderName);
+
+  assertFinalBrowserState(`inbound rejection sender name for ${senderName}`, () =>
+    assert.ok(
+      mailboxEmailFrom(rejectionEmail).includes(expectedFromName),
+      `Expected ${senderName}'s rejection email to be from ${JSON.stringify(
+        expectedFromName
+      )}; saw ${JSON.stringify(mailboxEmailSummary(rejectionEmail))}`
+    )
+  );
+
+  return world;
+}
+
+async function assertInboundRejectionEmailUsesStandardMembaFooter(world, senderName) {
+  const rejectionEmail = await capturedInboundRejectionEmail(world, senderName);
+  const senderEmail = inboundSenderEmail(world, senderName);
+  const htmlBody = mailboxEmailHtml(rejectionEmail);
+
+  assertFinalBrowserState(`inbound rejection standard footer for ${senderName}`, () => {
+    assert.ok(
+      /Delivered (?:by|for) /.test(htmlBody) && htmlBody.includes('href="https://memba.io"'),
+      `Expected ${senderName}'s rejection email to include the standard Memba delivery footer; saw ${htmlBody}`
+    );
+    assert.ok(
+      htmlBody.includes(`Sent to ${senderEmail}.`),
+      `Expected ${senderName}'s rejection email to include the recipient in the footer; saw ${htmlBody}`
+    );
+    assert.ok(
+      htmlBody.includes("This is an automatic delivery notice."),
+      `Expected ${senderName}'s rejection email to include the automatic delivery notice; saw ${htmlBody}`
+    );
+    assert.ok(
+      /Need a hand\? (?:Contact Memba support|Reply to this email or write to)/.test(htmlBody),
+      `Expected ${senderName}'s rejection email to include reply/support guidance; saw ${htmlBody}`
+    );
+    assert.ok(
+      !htmlBody.includes("help@memba.io"),
+      `Expected ${senderName}'s rejection email not to hard-code the support mailbox; saw ${htmlBody}`
+    );
+  });
+
+  return world;
+}
+
 async function assertEveryAddressedMemberEmailDeliveryStatus(
   world,
   subject,
@@ -2189,6 +2235,10 @@ function mailboxEmailText(email) {
   return String((email && (email.text_body || email.textBody || email.text)) || "");
 }
 
+function mailboxEmailHtml(email) {
+  return String((email && (email.html_body || email.htmlBody || email.html)) || "");
+}
+
 function mailboxEmailFrom(email) {
   const from = email && email.from;
 
@@ -2202,10 +2252,24 @@ function mailboxEmailFrom(email) {
 function mailboxEmailSummary(email) {
   return {
     from: email.from,
+    html_body: email.html_body,
     subject: email.subject,
     to: email.to,
     text_body: email.text_body
   };
+}
+
+async function capturedInboundRejectionEmail(world, senderName) {
+  ensureState(world);
+
+  if (!(world.inboundRejectionEmails && world.inboundRejectionEmails[senderName])) {
+    await assertInboundRejectionEmail(world, senderName, "wasn't posted");
+  }
+
+  const rejectionEmail = world.inboundRejectionEmails && world.inboundRejectionEmails[senderName];
+  assert.ok(rejectionEmail, `Expected ${senderName}'s rejection email to have been captured`);
+
+  return rejectionEmail;
 }
 
 async function waitForProjectionBarrier(world, projectors, { timeoutMs = projectionTimeoutMs(world) } = {}) {
@@ -2493,7 +2557,9 @@ module.exports = {
   assertEachAddressedMemberReceivedEmailSubject,
   assertEachDeliverySentThroughEmailProvider,
   assertInboundRejectionEmail,
+  assertInboundRejectionEmailFrom,
   assertInboundRejectionEmailSupportGuidance,
+  assertInboundRejectionEmailUsesStandardMembaFooter,
   assertLastMessageAddressedTo,
   assertLastMessageNotAddressedTo,
   assertMemberMessageAddressedTo,
