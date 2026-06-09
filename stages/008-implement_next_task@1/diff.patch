@@ -1,0 +1,120 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/inspection-notes.md b/docs/iterations/030-verified-onboarding-requests/inspection-notes.md
+new file mode 100644
+index 0000000..e5fe00c
+--- /dev/null
++++ b/docs/iterations/030-verified-onboarding-requests/inspection-notes.md
+@@ -0,0 +1,102 @@
++# Task 001 inspection notes
++
++Selected todo:
++
++> Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
++
++## `/get-started` route and rendering
++
++- `/get-started` is a controller-rendered page, not a LiveView.
++- Routes live in `web/lib/memba_web/router.ex`:
++  - `GET /get-started` -> `MembaWeb.PageController.get_started/2`
++  - `POST /get-started` -> `MembaWeb.PageController.submit_get_started/2`
++- Controller/template files:
++  - `web/lib/memba_web/controllers/page_controller.ex`
++  - `web/lib/memba_web/controllers/page_html/get_started.html.heex`
++- Current behaviour:
++  - Signed-out `GET /get-started` renders one form with name, email, club name, and note.
++  - Signed-in identities are only treated specially when their email belongs to an existing Membership Person.
++  - A signed-in identity with no Person currently falls through to the signed-out form path, so the page would ask for and trust typed name/email.
++
++## Current request submission and notification path
++
++- `PageController.submit_get_started/2` calls `get_started_request_attrs/2`, then `Memba.Onboarding.create_request/2`.
++- On successful creation it immediately calls `Memba.Onboarding.NewRequestEmail.deliver/1`, then redirects to `/get-started?submitted=true`.
++- For signed-in existing-Person requesters, `get_started_request_attrs/2` ignores typed `requester_name` and `requester_email`, merges the Person name plus signed-in email, and passes `requester_person_id`.
++- For signed-out requesters, all submitted request fields are passed directly to `Onboarding.create_request/2`.
++- Staff notification is currently a web-controller side effect after request creation. `Onboarding.create_request/2` itself does not deliver notification emails.
++
++## Onboarding request storage and domain behaviour
++
++- `Memba.Onboarding.create_request/2` builds `Memba.Onboarding.Request.create_changeset/2` and inserts into the `onboarding_requests` table.
++- `Request.create_changeset/2` currently requires `requester_name`, `requester_email`, `requested_club_name`, and `note`.
++- `requester_email` is normalized through `Memba.Membership.EmailAddresses.normalize_email/1`.
++- `requester_person_id` is optional and supplied only via opts.
++- Request submission does not create Membership read-model/domain records today. Conversion is the code path that creates/reuses Person, creates Club, creates Membership, assigns Membership Admin role, marks request converted, and sends the welcome email.
++- There is currently no domain/API-level way to express “verified identity email required”; any caller can pass any `requester_email` to `Onboarding.create_request/2`.
++
++## Magic-link auth and return-to handling
++
++- Sign-in UI is `MembaWeb.AuthLive.SignIn` at `/auth` and `/auth/check-email`.
++- It calls `Accounts.request_sign_in_link/1`, then delivers through `Memba.Accounts.AuthEmail.deliver_sign_in_link/3`.
++- `Accounts.request_sign_in_link/2` only creates tokens for staff emails or known active member emails. Unknown public requester emails deliberately return `{:ok, nil}`.
++- `Accounts.create_sign_in_token/2` can create a sign-in token for any normalized valid email without membership eligibility checks.
++- Token consumption is in `MembaWeb.AuthController.callback/2` at `/auth/sign-in/:token`.
++- `AuthController.callback/2` supports return-to in either:
++  - query param `return_to`, or
++  - session key `IdentityAuth.return_to_session_key()`.
++- Because `IdentityAuth.log_in_identity/2` renews and clears the session, callback reads `return_to` before logging in. Query-param `return_to` is important for links opened without the original browser session.
++- `safe_return_to/1` accepts local paths beginning with `/` except `//`, plus safe club URLs.
++- For non-staff identities, callback redirects to `safe_return_to(return_to) || "/"`.
++- For first-time staff emails, callback still redirects to `/auth/onboard` and stores the safe return-to for staff onboarding.
++
++## Staff request inbox and triage
++
++- Staff inbox is `MembaWeb.Admin.RequestsLive.Index` at `/admin/requests`.
++- It loads `Onboarding.list_active_requests/0`, which lists rows with `status == "active"` ordered oldest-first.
++- There is no separate “verified” flag/filter in the inbox; the intended iteration slice can keep Staff-visible data verified by only creating `onboarding_requests` after verified submission.
++- Rejection uses `Onboarding.reject_request/3` and removes the row from the LiveView stream.
++- Conversion uses `Onboarding.convert_request_to_club/3`, removes the row, and may flash welcome-email delivery errors.
++
++## Tests already covering current behaviour
++
++- `web/test/memba_web/controllers/page_controller_test.exs`
++  - current signed-out full request form;
++  - current signed-in existing-Person read-only form;
++  - signed-out request creation and Staff notification;
++  - signed-in existing-Person submission ignores forged name/email.
++- `web/test/memba_web/controllers/auth_controller_test.exs`
++  - sign-in link request/neutral acknowledgement;
++  - known member/staff token creation;
++  - unknown-recipient no-token behaviour;
++  - callback consumption and stored/query return-to handling.
++- `web/test/memba/onboarding_test.exs`
++  - create/list/reject/convert request basics.
++- `web/test/memba/onboarding_conversion_test.exs`
++  - conversion creates or reuses Person, creates Club/Membership, assigns Admin, and sends welcome email.
++- `web/test/memba_web/live/admin/requests_live/index_test.exs`
++  - Staff active inbox, rejection, conversion, existing-Person reuse, and no requester rejection email.
++- `acceptance-tests/features/request_account.feature` already contains iteration-030 scenarios tagged `@todo-domain @todo-ui`.
++
++## Implementation seams for later tasks
++
++- The signed-out email-only step likely needs a Get Started-specific wrapper that:
++  - validates/normalizes the email;
++  - calls `Accounts.create_sign_in_token/2` rather than `Accounts.request_sign_in_link/2`, because public requesters may not be known members yet;
++  - delivers `AuthEmail.deliver_sign_in_link/3` with a callback URL containing `return_to=/get-started`;
++  - does not call `Onboarding.create_request/2` or `NewRequestEmail.deliver/1`.
++- The signed-in form logic needs to distinguish:
++  - existing Person: known name/email read-only; collect club name/note;
++  - no Person: verified email read-only; collect name, club name, note.
++- Verified request submission should use `current_identity.email` as the requester email and ignore/reject any typed requester email.
++- Domain-level request creation should gain an explicit verified-email input/requirement so direct callers cannot create Staff-visible requests with arbitrary unverified emails.
++
++## ADR conformance notes
++
++- No ADR is explicitly referenced by the iteration plan.
++- Relevant accepted ADRs inspected:
++  - ADR 0001: Phoenix remains the web delivery stack.
++  - ADR 0002 and ADR 0009: Membership conversion remains Commanded/event-sourced with Ecto projections, while onboarding requests are an existing Ecto source-of-truth exception.
++  - ADR 0010: shared `acceptance-tests/features/request_account.feature` remains the cross-runner behavioural source.
++  - ADR 0013: future browser-facing coverage should prefer feature-style Phoenix tests, with lower-level Conn/LiveView tests where they better expose controller/session mechanics.
++  - ADR 0021 and ADR 0022: projection synchronization matters for later acceptance/domain absence checks; this inspection did not change projector behaviour.
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index 379121d..59d32e7 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -1,6 +1,6 @@
+ # Implementation TODO
+ 
+-- [ ] 001 Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
++- [x] 001 Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
+ - [ ] 002 Split the public Get Started experience into two states:
+ - [ ] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
+ - [ ] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
