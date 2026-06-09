@@ -1,0 +1,323 @@
+diff --git a/docs/iterations/030-verified-onboarding-requests/todo.md b/docs/iterations/030-verified-onboarding-requests/todo.md
+index 59d32e7..ccc5a26 100644
+--- a/docs/iterations/030-verified-onboarding-requests/todo.md
++++ b/docs/iterations/030-verified-onboarding-requests/todo.md
+@@ -1,7 +1,7 @@
+ # Implementation TODO
+ 
+ - [x] 001 Inspect the current `/get-started` controller/templates or LiveView, auth sign-in token creation, return-to handling, Staff request inbox, and onboarding request creation/notification code.
+-- [ ] 002 Split the public Get Started experience into two states:
++- [x] 002 Split the public Get Started experience into two states:
+ - [ ] 003 Reuse the existing magic-link sign-in flow for the signed-out email-only step, setting return-to back to the Get Started request form.
+ - [ ] 004 Ensure following the magic link returns the requester to Get Started and assigns `current_identity` for the verified email.
+ - [ ] 005 Update request form rendering:
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index ab2a2d8..ddcafda 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -135,10 +135,15 @@ defmodule MembaWeb.PageController do
+     conn
+     |> assign(:page_title, "Request access")
+     |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
++    |> assign(:signed_in_get_started?, signed_in_get_started?(conn))
++    |> assign(:verification_form, Phoenix.Component.to_form(%{}, as: :verification))
+     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
+     |> render(:get_started)
+   end
+ 
++  defp signed_in_get_started?(%{assigns: %{current_identity: identity}}), do: not is_nil(identity)
++  defp signed_in_get_started?(_conn), do: false
++
+   defp get_started_request_attrs(conn, request_params) do
+     case signed_in_get_started_requester(conn) do
+       nil ->
+diff --git a/web/lib/memba_web/controllers/page_html/get_started.html.heex b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+index fc016a0..1d1b124 100644
+--- a/web/lib/memba_web/controllers/page_html/get_started.html.heex
++++ b/web/lib/memba_web/controllers/page_html/get_started.html.heex
+@@ -29,34 +29,104 @@
+       </p>
+     </div>
+ 
+-    <div class="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
++    <div
++      id="get-started-flow"
++      data-state={if(@signed_in_get_started?, do: "signed-in", else: "signed-out")}
++      class="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start"
++    >
+       <div class="rounded-3xl border border-line bg-paper p-6 shadow-sm sm:p-8">
+         <h2 class="text-2xl font-semibold text-ink">
+           Want to use Memba with your club or group?
+         </h2>
+         <p class="mt-4 leading-7 text-ink-2">
+-          Tell us a little about your group. Memba staff will review your request before any group,
+-          membership, or sign-in access is created.
++          <%= if @signed_in_get_started? do %>
++            Tell us a little about your group. Memba staff will review your request before any group,
++            membership, or sign-in access is created.
++          <% else %>
++            Verify your email first. Then we’ll ask for the details Memba staff need to review your
++            request before any group, membership, or sign-in access is created.
++          <% end %>
+         </p>
+         <ul class="mt-6 space-y-3 text-sm leading-6 text-ink-2">
+           <li class="flex gap-3">
+             <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
+-            <span>Tell us who should be the first organizer.</span>
++            <span>
++              <%= if @signed_in_get_started? do %>
++                Tell us who should be the first organizer.
++              <% else %>
++                Enter the email address you want to use for your request.
++              <% end %>
++            </span>
+           </li>
+           <li class="flex gap-3">
+             <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
+             <span>
+-              Name the club, society, association, or group you want to bring onto Memba.
++              <%= if @signed_in_get_started? do %>
++                Name the club, society, association, or group you want to bring onto Memba.
++              <% else %>
++                Open the sign-in link we send to verify you control that email address.
++              <% end %>
+             </span>
+           </li>
+           <li class="flex gap-3">
+             <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
+-            <span>Share what you want Memba to help with.</span>
++            <span>
++              <%= if @signed_in_get_started? do %>
++                Share what you want Memba to help with.
++              <% else %>
++                Come back here signed in to finish your request.
++              <% end %>
++            </span>
+           </li>
+         </ul>
+       </div>
+ 
+       <.form
++        :if={!@signed_in_get_started?}
++        for={@verification_form}
++        action={~p"/get-started"}
++        method="post"
++        id="get-started-verification-form"
++        aria-label="Verify email for Memba access request"
++        class="rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8"
++      >
++        <div class="space-y-5">
++          <div class="rounded-2xl border border-sage-200 bg-sage-50 p-4">
++            <p class="text-sm font-semibold text-sage-800">
++              Verify your email first
++            </p>
++            <p class="mt-2 text-sm leading-6 text-ink-2">
++              We’ll send a secure sign-in link so staff only review requests from people who control
++              the requester email address.
++            </p>
++          </div>
++
++          <.input
++            field={@verification_form[:email]}
++            id="get-started-verification-email"
++            label="Email address"
++            type="email"
++            autocomplete="email"
++            required
++          />
++        </div>
++
++        <.button
++          id="get-started-verification-submit"
++          type="submit"
++          variant="primary"
++          class="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-sage-600 px-6 py-3 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
++        >
++          Email me a sign-in link
++        </.button>
++
++        <p class="mt-4 text-sm leading-6 text-ink-3">
++          Verifying your email does not create a group, membership, or sign-in access to a club.
++        </p>
++      </.form>
++
++      <.form
++        :if={@signed_in_get_started?}
+         for={@request_form}
+         action={~p"/get-started"}
+         method="post"
+@@ -65,6 +135,23 @@
+         class="rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8"
+       >
+         <div class="space-y-5">
++          <div
++            :if={!@signed_in_requester}
++            id="get-started-verified-identity"
++            data-testid="get-started-verified-identity"
++            class="rounded-2xl border border-sage-200 bg-sage-50 p-4"
++          >
++            <p class="text-sm font-semibold text-sage-800">
++              You’ve verified your email.
++            </p>
++            <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
++              <div>
++                <dt class="font-medium text-ink-3">Email</dt>
++                <dd class="mt-1 text-ink">{@current_identity.email}</dd>
++              </div>
++            </dl>
++          </div>
++
+           <div
+             :if={@signed_in_requester}
+             id="get-started-signed-in-requester"
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index b6f5f80..e7536d3 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -799,19 +799,68 @@ defmodule MembaWeb.PageControllerTest do
+     assert html_response(conn, 200) =~ "Simple software for volunteer-run groups."
+   end
+ 
+-  test "GET /get-started shows a signed-out request form with public navigation", %{conn: conn} do
++  test "GET /get-started shows a signed-out email verification form with public navigation", %{
++    conn: conn
++  } do
+     conn = get(conn, ~p"/get-started")
+     response = html_response(conn, 200)
+     html = LazyHTML.from_fragment(response)
+ 
+     assert response =~ "Ask us to set up Memba for your group."
+     assert response =~ "Want to use Memba with your club or group?"
+-    assert response =~ "Memba staff will review your request"
++    assert response =~ "Verify your email first"
+ 
+     assert html
+            |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
+            |> Enum.any?()
+ 
++    assert html
++           |> LazyHTML.query(
++             "form#get-started-verification-form[action='/get-started'][method='post']"
++           )
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("input#get-started-verification-email[name='verification[email]']")
++           |> Enum.any?()
++
++    refute html
++           |> LazyHTML.query("form#get-started-request-form")
++           |> Enum.any?()
++
++    refute html
++           |> LazyHTML.query("input#get-started-requester-name")
++           |> Enum.any?()
++
++    refute html
++           |> LazyHTML.query("input#get-started-club-name")
++           |> Enum.any?()
++
++    assert html
++           |> LazyHTML.query("button#get-started-verification-submit[type='submit']")
++           |> Enum.any?()
++
++    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
++  end
++
++  test "GET /get-started shows the request form to a signed-in identity without a person", %{
++    conn: conn
++  } do
++    conn =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
++      |> get(~p"/get-started")
++
++    response = html_response(conn, 200)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "robin@example.com"
++    assert response =~ "You’ve verified your email."
++
++    refute html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
++
+     assert html
+            |> LazyHTML.query(
+              "form#get-started-request-form[action='/get-started'][method='post']"
+@@ -833,12 +882,6 @@ defmodule MembaWeb.PageControllerTest do
+     assert html
+            |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
+            |> Enum.any?()
+-
+-    assert html
+-           |> LazyHTML.query("button#get-started-request-submit[type='submit']")
+-           |> Enum.any?()
+-
+-    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+   end
+ 
+   test "GET /get-started shows signed-in requester identity as read-only details", %{conn: conn} do
+@@ -867,6 +910,10 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "You’re signed in, so we’ll use these details for your request."
+     assert response =~ "What would you like Memba to help with?"
+ 
++    refute html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
++
+     refute html
+            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
+            |> Enum.any?()
+@@ -884,7 +931,8 @@ defmodule MembaWeb.PageControllerTest do
+            |> Enum.any?()
+   end
+ 
+-  test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
++  test "POST /get-started keeps signed-out visitors on the verification step when details are missing",
++       %{conn: conn} do
+     conn =
+       post(conn, ~p"/get-started",
+         request: %{
+@@ -896,14 +944,23 @@ defmodule MembaWeb.PageControllerTest do
+       )
+ 
+     response = html_response(conn, 422)
++    html = LazyHTML.from_fragment(response)
+ 
+     assert response =~ "Want to use Memba with your club or group?"
+-    assert response =~ "can&#39;t be blank"
++    assert response =~ "Verify your email first"
++
++    assert html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
++
+     assert Repo.aggregate(Request, :count) == 0
+     assert_no_email_sent()
+   end
+ 
+-  test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
++  test "POST /get-started keeps signed-out visitors on the verification step for invalid details",
++       %{
++         conn: conn
++       } do
+     conn =
+       post(conn, ~p"/get-started",
+         request: %{
+@@ -915,8 +972,14 @@ defmodule MembaWeb.PageControllerTest do
+       )
+ 
+     response = html_response(conn, 422)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "Verify your email first"
++
++    assert html
++           |> LazyHTML.query("form#get-started-verification-form")
++           |> Enum.any?()
+ 
+-    assert response =~ "is invalid"
+     assert Repo.aggregate(Request, :count) == 0
+     assert_no_email_sent()
+   end
