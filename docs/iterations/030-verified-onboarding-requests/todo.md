@@ -13,5 +13,5 @@
 - [x] 011 Add or update controller/LiveView tests for signed-out email-only step, magic-link return-to, verified identity with no Person, verified identity with existing Person, and no Staff visibility before verification.
 - [x] 012 Add or update domain/context tests proving request creation requires a verified identity email and does not create membership-domain records.
 - [x] 013 Update Cucumber step definitions only as needed during delivery to exercise the `@iteration-030` scenarios.
-- [ ] 014 Remove or narrow `@todo-domain`/`@todo-ui` from the new/updated scenarios only when they pass in the relevant runner.
+- [x] 014 Remove or narrow `@todo-domain`/`@todo-ui` from the new/updated scenarios only when they pass in the relevant runner.
 - [ ] 015 Run `dev check`.
