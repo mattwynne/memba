@@ -1,0 +1,188 @@
+diff --git a/docs/iterations/031-brand-email-navigation-polish/todo.md b/docs/iterations/031-brand-email-navigation-polish/todo.md
+index 645ba83..a616e15 100644
+--- a/docs/iterations/031-brand-email-navigation-polish/todo.md
++++ b/docs/iterations/031-brand-email-navigation-polish/todo.md
+@@ -11,7 +11,7 @@
+ - [x] 009 If the footer is already centralized, migrate any remaining current transactional templates to it with focused tests. Do not redesign templates.
+ - [x] 010 Inspect public club-page template/layout and add a clear link to the main Memba homepage.
+ - [x] 011 Ensure the homepage link resolves to the root Memba host when rendered from a club subdomain.
+-- [ ] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
++- [x] 012 Add or update template/unit/LiveView/browser tests for the homepage copy, public club-page Memba link, sign-in email icon/footer, rejection sender name, and rejection footer.
+ - [ ] 013 Remove or narrow `@todo-*` tags from the planned acceptance scenarios once their runners can execute them meaningfully.
+ - [ ] 014 Run focused tests for changed web templates/components and email rendering.
+ - [ ] 015 Run the affected acceptance tests if executable.
+diff --git a/web/test/memba/accounts/auth_email_test.exs b/web/test/memba/accounts/auth_email_test.exs
+index 45399dd..978e6a0 100644
+--- a/web/test/memba/accounts/auth_email_test.exs
++++ b/web/test/memba/accounts/auth_email_test.exs
+@@ -53,14 +53,8 @@ defmodule Memba.Accounts.AuthEmailTest do
+     assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
+     assert email.html_body =~ "This link expires in 15 minutes and can be used once."
+     assert email.html_body =~ "Secured by Memba"
+-
+-    assert email.html_body =~
+-             ~s|d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"|
+-
+-    refute email.html_body =~ ~s|d="M 18 34 L 28 44 L 46 24"|
+-    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
+-    assert email.html_body =~ "Sent to alice@example.com."
+-    refute email.html_body =~ "help@memba.io"
++    assert_memba_sprig_branding(email.html_body)
++    assert_standard_memba_footer(email.html_body, recipient_email: "alice@example.com")
+ 
+     assert email.provider_options == %{
+              message_stream: "outbound-authentication"
+@@ -94,8 +88,8 @@ defmodule Memba.Accounts.AuthEmailTest do
+     assert email.html_body =~ ~s|href="https://app.memba.io/auth/sign-in/token-123"|
+     assert email.html_body =~ "Button not working? Copy and paste this link into your browser:"
+     assert email.html_body =~ "Secured by Memba"
+-    assert email.html_body =~ "Sent to alice@example.com."
+-    refute email.html_body =~ "help@memba.io"
++    assert_memba_sprig_branding(email.html_body)
++    assert_standard_memba_footer(email.html_body, recipient_email: "alice@example.com")
+ 
+     assert email.provider_options == %{
+              tags: [
+@@ -137,7 +131,12 @@ defmodule Memba.Accounts.AuthEmailTest do
+     assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com"
+     assert email.html_body =~ "Sign in to Wessex &lt;Choir&gt; Bcc: attacker@example.com"
+     assert email.html_body =~ "Wessex &lt;Choir&gt; Bcc: attacker@example.com runs on Memba"
+-    assert email.html_body =~ "Delivered for Wessex &lt;Choir&gt; Bcc: attacker@example.com by"
++
++    assert_standard_memba_footer(email.html_body,
++      group_name: "Wessex <Choir> Bcc: attacker@example.com",
++      recipient_email: "member@example.com"
++    )
++
+     refute email.html_body =~ "\r\nBcc"
+     refute email.html_body =~ "<Choir>"
+   end
+@@ -243,6 +242,33 @@ defmodule Memba.Accounts.AuthEmailTest do
+     assert_no_email_sent()
+   end
+ 
++  defp assert_memba_sprig_branding(html_body) do
++    assert html_body =~
++             ~s|d="M32 33 C40 32 46 26 48 16 C39 17.5 33 24 32 33 Z"|
++
++    refute html_body =~ ~s|d="M 18 34 L 28 44 L 46 24"|
++  end
++
++  defp assert_standard_memba_footer(html_body, opts) do
++    case Keyword.get(opts, :group_name) do
++      nil ->
++        assert html_body =~ ~s|Delivered by <a href="https://memba.io"|
++
++      group_name ->
++        assert html_body =~ "Delivered for #{html_escape(group_name)} by"
++        assert html_body =~ ~s|href="https://memba.io"|
++    end
++
++    assert html_body =~ "Sent to #{Keyword.fetch!(opts, :recipient_email)}."
++    refute html_body =~ "help@memba.io"
++  end
++
++  defp html_escape(text) do
++    text
++    |> Phoenix.HTML.html_escape()
++    |> Phoenix.HTML.safe_to_string()
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
+diff --git a/web/test/memba/messaging/inbound_club_rejection_email_test.exs b/web/test/memba/messaging/inbound_club_rejection_email_test.exs
+index 0f09869..222cdac 100644
+--- a/web/test/memba/messaging/inbound_club_rejection_email_test.exs
++++ b/web/test/memba/messaging/inbound_club_rejection_email_test.exs
+@@ -60,7 +60,9 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
+ 
+     assert_received {:email, %Swoosh.Email{} = email}
+ 
+-    assert email.from == {"Wessex <Choir> Bcc: attacker@example.com via Memba", "messages@mail.memba.test"}
++    assert email.from ==
++             {"Wessex <Choir> Bcc: attacker@example.com via Memba", "messages@mail.memba.test"}
++
+     assert email.reply_to == {"Memba support", "support@memba.test"}
+     assert email.to == [{"", "margaret@example.com"}]
+ 
+@@ -89,14 +91,14 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
+     assert email.html_body =~ "member account for this email address"
+     assert email.html_body =~ "Just reply to this email and a person will help"
+     assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+-    assert email.html_body =~ "Delivered for Wessex &lt;Choir&gt; Bcc: attacker@example.com by"
+-    assert email.html_body =~ ~s|href="https://memba.io"|
+-    assert email.html_body =~ "Sent to margaret@example.com."
+-    assert email.html_body =~ "This is an automatic delivery notice."
+-    assert email.html_body =~ "Need a hand? Reply to this email or write to"
+-    assert email.html_body =~ ~s|mailto:support@memba.test|
++
++    assert_standard_rejection_footer(email,
++      group_name: "Wessex <Choir> Bcc: attacker@example.com",
++      recipient_email: "margaret@example.com",
++      reply_to_email: "support@memba.test"
++    )
++
+     refute email.html_body =~ "<script>"
+-    refute email.html_body =~ "help@memba.io"
+ 
+     assert email.provider_options[:metadata] == %{
+              "memba_email_kind" => "inbound_club_rejection",
+@@ -200,12 +202,8 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
+     assert email.html_body =~ "Your email wasn&#39;t posted"
+     assert email.html_body =~ "If you need a hand, contact Memba support."
+     assert email.html_body =~ "&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;"
+-    assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
+-    assert email.html_body =~ "Sent to sender@example.com."
+-    assert email.html_body =~ "This is an automatic delivery notice."
+-    assert email.html_body =~ "Need a hand? Contact Memba support."
++    assert_standard_rejection_footer(email, recipient_email: "sender@example.com")
+     refute email.html_body =~ "<script>"
+-    refute email.html_body =~ "help@memba.io"
+ 
+     assert email.provider_options[:metadata]["memba_reject_reason"] == "plain_text_required"
+     assert email.provider_options[:metadata]["memba_reject_ref"] == "fallback-reference"
+@@ -262,6 +260,31 @@ defmodule Memba.Messaging.InboundClubRejectionEmailTest do
+     |> Phoenix.HTML.safe_to_string()
+   end
+ 
++  defp assert_standard_rejection_footer(email, opts) do
++    case Keyword.get(opts, :group_name) do
++      nil ->
++        assert email.html_body =~ ~s|Delivered by <a href="https://memba.io"|
++
++      group_name ->
++        assert email.html_body =~ "Delivered for #{html_escape(group_name)} by"
++        assert email.html_body =~ ~s|href="https://memba.io"|
++    end
++
++    assert email.html_body =~ "Sent to #{Keyword.fetch!(opts, :recipient_email)}."
++    assert email.html_body =~ "This is an automatic delivery notice."
++
++    case Keyword.get(opts, :reply_to_email) do
++      nil ->
++        assert email.html_body =~ "Need a hand? Contact Memba support."
++
++      reply_to_email ->
++        assert email.html_body =~ "Need a hand? Reply to this email or write to"
++        assert email.html_body =~ ~s|mailto:#{html_escape(reply_to_email)}|
++    end
++
++    refute email.html_body =~ "help@memba.io"
++  end
++
+   defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+   defp restore_env(key, value), do: Application.put_env(:memba, key, value)
+ end
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index 98310eb..86b00fa 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -39,6 +39,7 @@ defmodule MembaWeb.PageControllerTest do
+     html = LazyHTML.from_fragment(response)
+ 
+     assert response =~ "Volunteering shouldn’t feel like work."
++    assert response =~ "Private member websites for volunteer-run groups"
+     assert response =~ "Kootenay Mountaineering Club"
+     assert response =~ "Request access for your group"
+     assert response =~ "See what members can do"
