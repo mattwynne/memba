@@ -13,6 +13,27 @@ defmodule MembaWeb.Plugs.CanonicalHostRedirectTest do
     assert get_resp_header(conn, "location") == ["https://memba.io/admin/clubs?sort=name"]
   end
 
+  test "redirects staff admin pages from club subdomains to the root domain and preserves path and query",
+       %{conn: conn} do
+    conn =
+      conn
+      |> Map.put(:host, "lean.lvh.me")
+      |> get("/admin/clubs?sort=name")
+
+    assert response(conn, 301) == ""
+    assert get_resp_header(conn, "location") == ["http://lvh.me:4002/admin/clubs?sort=name"]
+  end
+
+  test "does not redirect member pages from club subdomains", %{conn: conn} do
+    conn =
+      conn
+      |> Map.put(:host, "lean.lvh.me")
+      |> get("/")
+
+    assert conn.status == 404
+    assert get_resp_header(conn, "location") == []
+  end
+
   test "does not redirect the canonical hostname", %{conn: conn} do
     conn =
       conn
