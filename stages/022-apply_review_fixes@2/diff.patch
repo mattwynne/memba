@@ -1,0 +1,79 @@
+diff --git a/web/lib/memba_web/controllers/page_controller.ex b/web/lib/memba_web/controllers/page_controller.ex
+index fbb1bbf..582e874 100644
+--- a/web/lib/memba_web/controllers/page_controller.ex
++++ b/web/lib/memba_web/controllers/page_controller.ex
+@@ -262,10 +262,7 @@ defmodule MembaWeb.PageController do
+         attrs =
+           request_params
+           |> club_request_details()
+-          |> Map.merge(%{
+-            "requester_name" => requester.name,
+-            "requester_email" => requester.email
+-          })
++          |> Map.merge(verified_requester_details(requester))
+ 
+         {attrs,
+          [verified_identity_email: requester.email, requester_person_id: requester.person_id]}
+@@ -303,7 +300,14 @@ defmodule MembaWeb.PageController do
+     }
+   end
+ 
+-  defp request_param(request_params, key) do
++  defp verified_requester_details(requester) do
++    %{
++      "requester_name" => requester.name,
++      "requester_email" => requester.email
++    }
++  end
++
++  defp request_param(request_params, key) when is_map(request_params) do
+     atom_key =
+       case key do
+         "requester_name" -> :requester_name
+@@ -314,6 +318,8 @@ defmodule MembaWeb.PageController do
+     Map.get(request_params, key) || Map.get(request_params, atom_key)
+   end
+ 
++  defp request_param(_request_params, _key), do: nil
++
+   defp render_member_dashboard(conn, club_id, club_id_source) do
+     Phoenix.LiveView.Controller.live_render(conn, MembaWeb.MemberDashboardLive,
+       session: %{
+diff --git a/web/test/memba_web/controllers/page_controller_test.exs b/web/test/memba_web/controllers/page_controller_test.exs
+index e3b62f4..16c973f 100644
+--- a/web/test/memba_web/controllers/page_controller_test.exs
++++ b/web/test/memba_web/controllers/page_controller_test.exs
+@@ -1202,6 +1202,33 @@ defmodule MembaWeb.PageControllerTest do
+     assert response =~ "We’ll email you if Memba looks like a good fit for your group."
+   end
+ 
++  test "POST /get-started validates malformed signed-in request details without creating a request",
++       %{conn: conn} do
++    conn =
++      conn
++      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
++      |> post(~p"/get-started",
++        request: %{
++          requester_name: " Robin Requester ",
++          note: " Missing the club name should stay on the request form. "
++        }
++      )
++
++    response = html_response(conn, 422)
++    html = LazyHTML.from_fragment(response)
++
++    assert response =~ "You’ve verified your email."
++    assert response =~ "What would you like Memba to help with?"
++
++    assert html
++           |> LazyHTML.query("form#get-started-request-form")
++           |> LazyHTML.text()
++           |> String.contains?("can't be blank")
++
++    assert Repo.aggregate(Request, :count) == 0
++    assert_no_email_sent()
++  end
++
+   test "POST /get-started stores signed-in identity details from the current person", %{
+     conn: conn
+   } do
