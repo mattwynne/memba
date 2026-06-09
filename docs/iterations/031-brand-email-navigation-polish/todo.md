@@ -1,6 +1,7 @@
 # Implementation TODO
 
-- [ ] 001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.
+- [x] 001 Inspect the current homepage template/component and identify the smallest copy/template change that restores the volunteering-first hero.
+  - Finding: the signed-out homepage hero is in `web/lib/memba_web/controllers/page_html/home.html.heex`. The smallest copy/template change is to replace the public hero `h1` text `A simpler way to keep your group members informed.` with `Volunteering shouldn’t feel like work.` and update the matching signed-out `page_title` in `web/lib/memba_web/controllers/page_controller.ex`; the existing eyebrow already says `Private member websites for volunteer-run groups` and the existing body copy already keeps the promise grounded in today's product.
 - [ ] 002 Update homepage tests or browser acceptance support so the volunteering promise is asserted without depending on fragile layout details.
 - [ ] 003 Inspect the transactional email layout/helpers from iteration 024 and identify the canonical footer component or helper.
 - [ ] 004 Replace the sign-in email icon with the Memba sprig asset/component used elsewhere in Memba branding.
