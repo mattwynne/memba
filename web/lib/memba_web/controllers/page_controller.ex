@@ -3,7 +3,10 @@ defmodule MembaWeb.PageController do
 
   require Logger
 
+  alias Memba.Accounts
+  alias Memba.Accounts.AuthEmail
   alias Memba.Membership
+  alias Memba.Membership.EmailAddresses
   alias Memba.Onboarding
   alias Memba.Onboarding.NewRequestEmail
   alias MembaWeb.ClubSite
@@ -90,21 +93,116 @@ defmodule MembaWeb.PageController do
   end
 
   def submit_get_started(conn, params) do
-    request_params = Map.get(params, "request", %{})
+    cond do
+      signed_out_verification_request?(conn, params) ->
+        request_get_started_verification(conn, Map.get(params, "verification", %{}))
 
-    {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
+      not signed_in_get_started?(conn) ->
+        require_get_started_verification(conn)
 
-    case Onboarding.create_request(request_attrs, request_opts) do
-      {:ok, request} ->
-        deliver_new_request_notification(request)
-        redirect(conn, to: ~p"/get-started?submitted=true")
+      true ->
+        request_params = Map.get(params, "request", %{})
+
+        {request_attrs, request_opts} = get_started_request_attrs(conn, request_params)
+
+        case Onboarding.create_request(request_attrs, request_opts) do
+          {:ok, request} ->
+            deliver_new_request_notification(request)
+            redirect(conn, to: ~p"/get-started?submitted=true")
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> assign(:request_submitted?, false)
+            |> render_get_started(changeset)
+        end
+    end
+  end
+
+  defp require_get_started_verification(conn) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_flash(:error, "Verify your email before completing your request.")
+    |> assign(:request_submitted?, false)
+    |> render_get_started(Onboarding.change_request(%{}))
+  end
+
+  defp signed_out_verification_request?(conn, params) do
+    not signed_in_get_started?(conn) and Map.has_key?(params, "verification")
+  end
+
+  defp request_get_started_verification(conn, verification_params) do
+    case verified_get_started_email(verification_params) do
+      {:ok, email} ->
+        create_and_deliver_get_started_sign_in_link(email)
+        redirect(conn, to: ~p"/auth/check-email")
 
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
+        |> put_flash(:error, "Enter a valid email address.")
         |> assign(:request_submitted?, false)
-        |> render_get_started(changeset)
+        |> render_get_started(
+          Onboarding.change_request(%{}),
+          Phoenix.Component.to_form(%{changeset | action: :validate}, as: :verification)
+        )
     end
+  end
+
+  defp verified_get_started_email(verification_params) do
+    changeset = verification_changeset(verification_params)
+
+    if changeset.valid? do
+      changeset
+      |> Ecto.Changeset.get_field(:email)
+      |> EmailAddresses.normalize_email()
+      |> case do
+        {:ok, %{normalized_email: normalized_email}} -> {:ok, normalized_email}
+        {:error, :invalid_email} -> {:error, changeset}
+      end
+    else
+      {:error, changeset}
+    end
+  end
+
+  defp verification_changeset(params) when is_map(params) do
+    {%{}, %{email: :string}}
+    |> Ecto.Changeset.cast(params, [:email])
+    |> Ecto.Changeset.validate_required([:email])
+    |> Ecto.Changeset.validate_change(:email, fn :email, email ->
+      case EmailAddresses.normalize_email(email) do
+        {:ok, _email} -> []
+        {:error, :invalid_email} -> [email: "must be a valid email address"]
+      end
+    end)
+  end
+
+  defp verification_changeset(_params), do: verification_changeset(%{})
+
+  defp create_and_deliver_get_started_sign_in_link(email) do
+    case Accounts.create_sign_in_token(email) do
+      {:ok, %{email: recipient_email, token: token}} ->
+        deliver_get_started_sign_in_link(recipient_email, token)
+
+      {:error, reason} ->
+        Logger.warning("Could not create get-started sign-in link: #{inspect(reason)}")
+    end
+  end
+
+  defp deliver_get_started_sign_in_link(recipient_email, token) do
+    callback_url = get_started_sign_in_callback_url(token)
+
+    case AuthEmail.deliver_sign_in_link(recipient_email, callback_url) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        Logger.warning("Could not deliver get-started sign-in link email: #{inspect(reason)}")
+    end
+  end
+
+  defp get_started_sign_in_callback_url(token) do
+    MembaWeb.Endpoint.url() <> ~p"/auth/sign-in/#{token}?#{[return_to: ~p"/get-started"]}"
   end
 
   defp deliver_new_request_notification(request) do
@@ -131,20 +229,36 @@ defmodule MembaWeb.PageController do
     |> render(:privacy)
   end
 
-  defp render_get_started(conn, changeset) do
+  defp render_get_started(conn, changeset, verification_form \\ nil) do
     conn
     |> assign(:page_title, "Request access")
     |> assign(:signed_in_requester, signed_in_get_started_requester(conn))
+    |> assign(:signed_in_get_started?, signed_in_get_started?(conn))
+    |> assign(
+      :verification_form,
+      verification_form || Phoenix.Component.to_form(%{}, as: :verification)
+    )
     |> assign(:request_form, Phoenix.Component.to_form(changeset, as: :request))
     |> render(:get_started)
   end
 
-  defp get_started_request_attrs(conn, request_params) do
-    case signed_in_get_started_requester(conn) do
-      nil ->
-        {request_params, []}
+  defp signed_in_get_started?(%{assigns: %{current_identity: identity}}), do: not is_nil(identity)
+  defp signed_in_get_started?(_conn), do: false
 
-      requester ->
+  defp get_started_request_attrs(conn, request_params) do
+    case {Map.get(conn.assigns, :current_identity), signed_in_get_started_requester(conn)} do
+      {%{email: identity_email}, nil} ->
+        attrs =
+          request_params
+          |> verified_identity_request_details()
+          |> Map.put("requester_email", identity_email)
+
+        {attrs, [verified_identity_email: identity_email]}
+
+      {nil, _requester} ->
+        {%{}, []}
+
+      {_identity, requester} ->
         attrs =
           request_params
           |> club_request_details()
@@ -153,7 +267,8 @@ defmodule MembaWeb.PageController do
             "requester_email" => requester.email
           })
 
-        {attrs, [requester_person_id: requester.person_id]}
+        {attrs,
+         [verified_identity_email: requester.email, requester_person_id: requester.person_id]}
     end
   end
 
@@ -173,6 +288,14 @@ defmodule MembaWeb.PageController do
 
   defp signed_in_get_started_requester(_conn), do: nil
 
+  defp verified_identity_request_details(request_params) do
+    %{
+      "requester_name" => request_param(request_params, "requester_name"),
+      "requested_club_name" => request_param(request_params, "requested_club_name"),
+      "note" => request_param(request_params, "note")
+    }
+  end
+
   defp club_request_details(request_params) do
     %{
       "requested_club_name" => request_param(request_params, "requested_club_name"),
@@ -183,6 +306,7 @@ defmodule MembaWeb.PageController do
   defp request_param(request_params, key) do
     atom_key =
       case key do
+        "requester_name" -> :requester_name
         "requested_club_name" -> :requested_club_name
         "note" -> :note
       end

@@ -13,7 +13,7 @@ Feature: Request account
 
 # Rule: Signed-out requesters verify their email before Staff review
 
-    @iteration-030 @todo-domain @todo-ui
+    @iteration-030 @todo-ui
     Scenario: Robin verifies their email before submitting a request
       When Robin starts requesting Memba access with email "robin@example.com"
       Then Robin should receive a sign-in link at "robin@example.com"
@@ -26,7 +26,7 @@ Feature: Request account
       And West Coast Paddlers should not exist as a club yet
       And Robin should not be able to sign in to West Coast Paddlers yet
 
-    @iteration-030 @todo-domain @todo-ui
+    @iteration-030 @todo-ui
     Scenario: Staff do not see an email-only verification that Robin abandons
       When Robin starts requesting Memba access with email "robin@example.com"
       Then Memba staff should not be notified about Robin's request yet
@@ -44,7 +44,7 @@ Feature: Request account
 
 # Rule: Verified request submission does not create membership-domain records
 
-    @iteration-030 @todo-domain @todo-ui
+    @iteration-030 @todo-ui
     Scenario: Robin submits a verified request before becoming a Person
       Given Robin is signed in as verified email "robin@example.com"
       When Robin requests Memba access for West Coast Paddlers with name "Robin Example" and a short note
@@ -53,7 +53,7 @@ Feature: Request account
       And West Coast Paddlers should not exist as a club yet
       And Robin should not be able to sign in to West Coast Paddlers yet
 
-    @iteration-030 @todo-domain @todo-ui
+    @iteration-030 @todo-ui
     Scenario: Pat converts Robin's verified request into a club and first member
       Given Robin has submitted a verified request for West Coast Paddlers with email "robin@example.com"
       And Pat is signed in as Memba staff

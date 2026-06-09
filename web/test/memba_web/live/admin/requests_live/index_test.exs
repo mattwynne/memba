@@ -14,6 +14,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
   alias Memba.Onboarding
   alias Memba.Onboarding.Request
   alias Memba.Repo
+  alias MembaWeb.IdentityAuth
 
   setup context do
     set_swoosh_global(context)
@@ -108,11 +109,133 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     refute_selector_exists(html, "#request-row-#{converted.request_id}")
   end
 
+  test "staff requests index lists verified Get Started submissions after notifying staff", %{
+    conn: conn
+  } do
+    request_conn =
+      conn
+      |> Plug.Test.init_test_session(%{
+        IdentityAuth.identity_session_key() => "Robin@Example.COM"
+      })
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: " Robin Requester ",
+          requester_email: "forged@example.net",
+          requested_club_name: " Verified Paddlers ",
+          note: " We need a safer way to message members. "
+        }
+      )
+
+    assert redirected_to(request_conn) == ~p"/get-started?submitted=true"
+
+    assert [%Request{} = request] = Onboarding.list_active_requests()
+    assert request.requester_name == "Robin Requester"
+    assert request.requester_email == "robin@example.com"
+    assert request.requested_club_name == "Verified Paddlers"
+    assert request.note == "We need a safer way to message members."
+    assert request.status == "active"
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"", "hello@memba.io"}]
+      assert email.reply_to == {"Robin Requester", "robin@example.com"}
+      assert email.subject == "New Memba request: Verified Paddlers"
+      assert email.text_body =~ "Request ID: #{request.request_id}"
+      assert email.text_body =~ "http://localhost:4000/admin/requests/#{request.request_id}"
+      assert email.text_body =~ "Verified Paddlers"
+      assert email.text_body =~ "Robin Requester"
+      assert email.text_body =~ "robin@example.com"
+      refute email.text_body =~ "forged@example.net"
+      true
+    end)
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    assert has_element?(view, "#admin-requests-active-count", "1")
+    assert has_element?(view, "#request-row-#{request.request_id}")
+
+    html =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+
+    assert text_for(
+             html,
+             "#request-row-#{request.request_id} [data-testid='admin-request-requester']"
+           ) =~
+             "Robin Requester"
+
+    assert text_for(html, "#request-row-#{request.request_id}") =~ "robin@example.com"
+
+    assert text_for(html, "#request-row-#{request.request_id} [data-testid='admin-request-club']") =~
+             "Verified Paddlers"
+
+    assert text_for(html, "#request-row-#{request.request_id} [data-testid='admin-request-note']") =~
+             "We need a safer way to message members."
+
+    assert_selector_exists(
+      html,
+      "#reject-request-#{request.request_id}[data-admin-request-action='reject']"
+    )
+
+    assert_selector_exists(
+      html,
+      "#convert-request-#{request.request_id}[data-admin-request-action='convert']"
+    )
+  end
+
+  test "staff requests index stays empty after an email-only Get Started verification", %{
+    conn: conn
+  } do
+    configure_auth_email()
+
+    verification_conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: " Robin@Example.COM "
+        }
+      )
+
+    assert redirected_to(verification_conn) == ~p"/auth/check-email"
+    assert Onboarding.list_active_requests() == []
+
+    assert [%SignInToken{email: "robin@example.com", consumed_at: nil}] = Repo.all(SignInToken)
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"", "robin@example.com"}]
+      assert email.subject == "Sign in to Memba"
+      assert email.text_body =~ "/auth/sign-in/"
+      assert email.text_body =~ "return_to=%2Fget-started"
+      true
+    end)
+
+    refute_email_sent(to: [{"", "hello@memba.io"}])
+
+    {:ok, view, _initial_html} =
+      conn
+      |> sign_in_staff()
+      |> live(~p"/admin/requests")
+
+    assert has_element?(view, "#admin-requests-active-count", "0")
+    assert has_element?(view, "#admin-requests-empty")
+
+    html =
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+
+    assert row_ids(html) == []
+  end
+
   test "staff can reject an active request with required internal notes and no requester email",
        %{
          conn: conn
        } do
-    request = request_fixture("Rejectable Paddlers", requester_name: "Robin Requester")
+    request =
+      verified_request_fixture(conn, "Rejectable Paddlers", requester_name: "Robin Requester")
+
     conn = sign_in_staff(conn, "pat@memba.io")
     club_count = Repo.aggregate(ClubProjection, :count)
     person_count = Repo.aggregate(PersonProjection, :count)
@@ -304,7 +427,12 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
   test "staff can convert an active request into a club and active first member", %{conn: conn} do
     configure_auth_email()
-    request = request_fixture("Convertible Paddlers", requester_name: "Robin Requester")
+
+    request =
+      verified_request_fixture(conn, "Convertible Paddlers",
+        requester_name: "Robin Requester",
+        identity_email: "Robin@Example.COM"
+      )
 
     {:ok, view, _initial_html} =
       conn
@@ -359,6 +487,7 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
 
   test "staff conversion reuses an existing person when the request email already belongs to one",
        %{conn: conn} do
+    configure_auth_email()
     existing_person_id = Memba.ID.generate(:person)
 
     assert :ok =
@@ -372,10 +501,15 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
              )
 
     request =
-      request_fixture("Existing Person Paddlers",
-        requester_name: "Robin Requester",
-        requester_email: "Robin@Example.com"
+      verified_request_fixture(conn, "Existing Person Paddlers",
+        requester_name: "Forged Requester",
+        requester_email: "forged@example.net",
+        identity_email: "Robin@Example.com"
       )
+
+    assert request.requester_name == "Existing Robin"
+    assert request.requester_email == "robin@example.com"
+    assert request.requester_person_id == existing_person_id
 
     conn = sign_in_staff(conn)
     person_count = Repo.aggregate(PersonProjection, :count)
@@ -404,6 +538,12 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     assert membership.club_id == club.club_id
     assert membership.person_id == existing_person_id
     assert membership.active
+
+    assert_email_sent(fn email ->
+      assert email.to == [{"Existing Robin", "robin@example.com"}]
+      assert email.subject == "Welcome to Existing Person Paddlers on Memba"
+      true
+    end)
   end
 
   test "conversion preparation refreshes the inbox when the request is no longer active", %{
@@ -441,14 +581,44 @@ defmodule MembaWeb.Admin.RequestsLive.IndexTest do
     requester_email = Keyword.get(opts, :requester_email, "requester-#{unique}@example.com")
 
     {:ok, request} =
-      Onboarding.create_request(%{
-        requester_name: requester_name,
-        requester_email: requester_email,
-        requested_club_name: club_name,
-        note: "Please onboard #{club_name}."
-      })
+      Onboarding.create_request(
+        %{
+          requester_name: requester_name,
+          requester_email: requester_email,
+          requested_club_name: club_name,
+          note: "Please onboard #{club_name}."
+        },
+        verified_identity_email: requester_email
+      )
 
     request
+  end
+
+  defp verified_request_fixture(conn, club_name, opts) do
+    unique = System.unique_integer([:positive])
+    requester_name = Keyword.get(opts, :requester_name, "Requester #{unique}")
+    typed_requester_email = Keyword.get(opts, :requester_email, "typed-#{unique}@example.net")
+    identity_email = Keyword.get(opts, :identity_email, typed_requester_email)
+
+    request_conn =
+      conn
+      |> Plug.Test.init_test_session(%{
+        IdentityAuth.identity_session_key() => identity_email
+      })
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: requester_name,
+          requester_email: typed_requester_email,
+          requested_club_name: " #{club_name} ",
+          note: " Please onboard #{club_name}. "
+        }
+      )
+
+    assert redirected_to(request_conn) == ~p"/get-started?submitted=true"
+
+    assert_email_sent(subject: "New Memba request: #{club_name}")
+
+    Repo.get_by!(Request, requested_club_name: club_name)
   end
 
   defp update_inserted_at(%Request{} = request, inserted_at) do

@@ -4,8 +4,14 @@ defmodule MembaWeb.PageControllerTest do
   import Swoosh.TestAssertions
 
   alias Memba.Accounts
+  alias Memba.Accounts.AuthEmail
+  alias Memba.Accounts.SignInToken
   alias Memba.Membership.Projections.Club
+  alias Memba.Membership.Projections.MemberPermission
   alias Memba.Membership.Projections.Membership
+  alias Memba.Membership.Projections.Person
+  alias Memba.Membership.Projections.PersonEmailAddress
+  alias Memba.Membership.Projections.RoleAssignment
   alias Memba.Messaging.Projections.MemberEmailDelivery
   alias Memba.Messaging.Projections.Message
   alias Memba.Messaging.Projections.MembaStaffEmailDelivery
@@ -13,6 +19,18 @@ defmodule MembaWeb.PageControllerTest do
   alias Memba.Repo
   alias MembaWeb.ClubSite
   alias MembaWeb.IdentityAuth
+
+  setup do
+    original_mailer_config = Application.get_env(:memba, Memba.Mailer)
+    original_auth_email_config = Application.get_env(:memba, AuthEmail)
+
+    on_exit(fn ->
+      restore_env(Memba.Mailer, original_mailer_config)
+      restore_env(AuthEmail, original_auth_email_config)
+    end)
+
+    :ok
+  end
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")
@@ -799,17 +817,172 @@ defmodule MembaWeb.PageControllerTest do
     assert html_response(conn, 200) =~ "Simple software for volunteer-run groups."
   end
 
-  test "GET /get-started shows a signed-out request form with public navigation", %{conn: conn} do
+  test "GET /get-started shows a signed-out email verification form with public navigation", %{
+    conn: conn
+  } do
     conn = get(conn, ~p"/get-started")
     response = html_response(conn, 200)
     html = LazyHTML.from_fragment(response)
 
     assert response =~ "Ask us to set up Memba for your group."
     assert response =~ "Want to use Memba with your club or group?"
-    assert response =~ "Memba staff will review your request"
+    assert response =~ "Verify your email first"
 
     assert html
            |> LazyHTML.query("header nav[aria-label='Public navigation'] a[href='/']")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "form#get-started-verification-form[action='/get-started'][method='post']"
+           )
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("input#get-started-verification-email[name='verification[email]']")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("form#get-started-request-form")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("input#get-started-requester-name")
+           |> Enum.any?()
+
+    refute html
+           |> LazyHTML.query("input#get-started-club-name")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query("button#get-started-verification-submit[type='submit']")
+           |> Enum.any?()
+
+    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
+  end
+
+  test "POST /get-started sends a magic sign-in link back to Get Started for signed-out visitors",
+       %{conn: conn} do
+    configure_auth_email()
+
+    conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: " Robin@Example.COM "
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/auth/check-email"
+    assert Repo.aggregate(Request, :count) == 0
+
+    assert [%SignInToken{email: "robin@example.com"}] = Repo.all(SignInToken)
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert email.to == [{"", "robin@example.com"}]
+    assert email.from == {"Memba", "auth@mail.memba.io"}
+    assert email.subject == "Sign in to Memba"
+    assert email.text_body =~ "http://localhost:4000/auth/sign-in/"
+
+    assert [_, _token, query] =
+             Regex.run(~r{/auth/sign-in/([^?\s"<]+)\?([^\s"<]+)}, email.text_body)
+
+    assert URI.decode_query(query) == %{"return_to" => ~p"/get-started"}
+    refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
+  end
+
+  test "following the Get Started magic link signs in and returns to the request form", %{
+    conn: conn
+  } do
+    configure_auth_email()
+
+    conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: " Robin@Example.COM "
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/auth/check-email"
+    assert_received {:email, %Swoosh.Email{} = email}
+
+    assert [_, token, query] =
+             Regex.run(~r{/auth/sign-in/([^?\s"<]+)\?([^\s"<]+)}, email.text_body)
+
+    callback_conn =
+      conn
+      |> recycle()
+      |> get("/auth/sign-in/#{token}?#{query}")
+
+    assert redirected_to(callback_conn) == ~p"/get-started"
+    assert get_session(callback_conn, IdentityAuth.identity_session_key()) == "robin@example.com"
+    assert Repo.aggregate(Request, :count) == 0
+    refute_received {:email, %Swoosh.Email{to: [{"", "hello@memba.io"}]}}
+
+    get_started_conn =
+      callback_conn
+      |> recycle()
+      |> get(~p"/get-started")
+
+    response = html_response(get_started_conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "You’ve verified your email."
+    assert response =~ "robin@example.com"
+
+    refute html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    assert html
+           |> LazyHTML.query(
+             "form#get-started-request-form[action='/get-started'][method='post']"
+           )
+           |> Enum.any?()
+  end
+
+  test "POST /get-started rejects invalid verification email without a token or email",
+       %{conn: conn} do
+    configure_auth_email()
+
+    conn =
+      post(conn, ~p"/get-started",
+        verification: %{
+          email: "not an email address"
+        }
+      )
+
+    response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Enter a valid email address."
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    assert Repo.aggregate(SignInToken, :count) == 0
+    assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
+  end
+
+  test "GET /get-started shows the request form to a signed-in identity without a person", %{
+    conn: conn
+  } do
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "robin@example.com"})
+      |> get(~p"/get-started")
+
+    response = html_response(conn, 200)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "robin@example.com"
+    assert response =~ "You’ve verified your email."
+    assert response =~ "Name"
+    assert response =~ "Email"
+
+    refute html
+           |> LazyHTML.query("form#get-started-verification-form")
            |> Enum.any?()
 
     assert html
@@ -822,7 +995,7 @@ defmodule MembaWeb.PageControllerTest do
            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
            |> Enum.any?()
 
-    assert html
+    refute html
            |> LazyHTML.query("input#get-started-requester-email[name='request[requester_email]']")
            |> Enum.any?()
 
@@ -833,12 +1006,6 @@ defmodule MembaWeb.PageControllerTest do
     assert html
            |> LazyHTML.query("textarea#get-started-note[name='request[note]']")
            |> Enum.any?()
-
-    assert html
-           |> LazyHTML.query("button#get-started-request-submit[type='submit']")
-           |> Enum.any?()
-
-    refute html |> LazyHTML.query("a[href^='mailto:hello@memba.io']") |> Enum.any?()
   end
 
   test "GET /get-started shows signed-in requester identity as read-only details", %{conn: conn} do
@@ -868,6 +1035,10 @@ defmodule MembaWeb.PageControllerTest do
     assert response =~ "What would you like Memba to help with?"
 
     refute html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    refute html
            |> LazyHTML.query("input#get-started-requester-name[name='request[requester_name]']")
            |> Enum.any?()
 
@@ -884,7 +1055,8 @@ defmodule MembaWeb.PageControllerTest do
            |> Enum.any?()
   end
 
-  test "POST /get-started rejects missing signed-out request fields", %{conn: conn} do
+  test "POST /get-started keeps signed-out visitors on the verification step when details are missing",
+       %{conn: conn} do
     conn =
       post(conn, ~p"/get-started",
         request: %{
@@ -896,14 +1068,23 @@ defmodule MembaWeb.PageControllerTest do
       )
 
     response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
 
     assert response =~ "Want to use Memba with your club or group?"
-    assert response =~ "can&#39;t be blank"
+    assert response =~ "Verify your email first"
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
     assert Repo.aggregate(Request, :count) == 0
     assert_no_email_sent()
   end
 
-  test "POST /get-started rejects invalid signed-out requester email", %{conn: conn} do
+  test "POST /get-started keeps signed-out visitors on the verification step for invalid details",
+       %{
+         conn: conn
+       } do
     conn =
       post(conn, ~p"/get-started",
         request: %{
@@ -915,18 +1096,21 @@ defmodule MembaWeb.PageControllerTest do
       )
 
     response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
 
-    assert response =~ "is invalid"
+    assert response =~ "Verify your email first"
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
     assert Repo.aggregate(Request, :count) == 0
     assert_no_email_sent()
   end
 
-  test "POST /get-started stores a signed-out request and acknowledges staff review", %{
+  test "POST /get-started refuses signed-out request details until the email is verified", %{
     conn: conn
   } do
-    club_count = Repo.aggregate(Club, :count)
-    membership_count = Repo.aggregate(Membership, :count)
-
     conn =
       post(conn, ~p"/get-started",
         request: %{
@@ -937,11 +1121,48 @@ defmodule MembaWeb.PageControllerTest do
         }
       )
 
+    response = html_response(conn, 422)
+    html = LazyHTML.from_fragment(response)
+
+    assert response =~ "Verify your email first"
+
+    assert html
+           |> LazyHTML.query("form#get-started-verification-form")
+           |> Enum.any?()
+
+    assert Repo.aggregate(Request, :count) == 0
+    assert_no_email_sent()
+  end
+
+  test "POST /get-started stores a verified identity request without trusting typed email", %{
+    conn: conn
+  } do
+    membership_projection_counts = %{
+      clubs: Repo.aggregate(Club, :count),
+      member_permissions: Repo.aggregate(MemberPermission, :count),
+      memberships: Repo.aggregate(Membership, :count),
+      people: Repo.aggregate(Person, :count),
+      person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
+      role_assignments: Repo.aggregate(RoleAssignment, :count)
+    }
+
+    conn =
+      conn
+      |> init_test_session(%{IdentityAuth.identity_session_key() => "Robin@Example.COM"})
+      |> post(~p"/get-started",
+        request: %{
+          requester_name: " Robin Requester ",
+          requester_email: "forged@example.net",
+          requested_club_name: " West Coast Paddlers ",
+          note: " We want a safer way to message members. "
+        }
+      )
+
     assert redirected_to(conn) == ~p"/get-started?submitted=true"
 
     assert [%Request{} = request] = Repo.all(Request)
     assert request.requester_name == "Robin Requester"
-    assert request.requester_email == "Robin@Example.COM"
+    assert request.requester_email == "robin@example.com"
     assert request.normalized_requester_email == "robin@example.com"
     assert request.requested_club_name == "West Coast Paddlers"
     assert request.note == "We want a safer way to message members."
@@ -951,17 +1172,25 @@ defmodule MembaWeb.PageControllerTest do
     assert_received {:email, %Swoosh.Email{} = email}
     assert email.from == {"Memba", "messages@mail.memba.io"}
     assert email.to == [{"", "hello@memba.io"}]
-    assert email.reply_to == {"Robin Requester", "Robin@Example.COM"}
+    assert email.reply_to == {"Robin Requester", "robin@example.com"}
     assert email.subject == "New Memba request: West Coast Paddlers"
     assert email.text_body =~ "Request ID: #{request.request_id}"
     assert email.text_body =~ "Club: West Coast Paddlers"
     assert email.text_body =~ "Robin Requester"
-    assert email.text_body =~ "Robin@Example.COM"
-    assert email.text_body =~ "We want a safer way to message members."
+    assert email.text_body =~ "robin@example.com"
+    refute email.text_body =~ "forged@example.net"
     assert email.provider_options == %{message_stream: "outbound-onboarding"}
 
-    assert Repo.aggregate(Club, :count) == club_count
-    assert Repo.aggregate(Membership, :count) == membership_count
+    assert %{
+             clubs: Repo.aggregate(Club, :count),
+             member_permissions: Repo.aggregate(MemberPermission, :count),
+             memberships: Repo.aggregate(Membership, :count),
+             people: Repo.aggregate(Person, :count),
+             person_email_addresses: Repo.aggregate(PersonEmailAddress, :count),
+             role_assignments: Repo.aggregate(RoleAssignment, :count)
+           } == membership_projection_counts
+
+    assert Memba.Membership.list_active_clubs_for_member_email("robin@example.com") == []
 
     response =
       conn
@@ -1098,4 +1327,19 @@ defmodule MembaWeb.PageControllerTest do
       reason: Keyword.fetch!(attrs, :reason)
     })
   end
+
+  defp configure_auth_email do
+    Application.put_env(:memba, Memba.Mailer,
+      adapter: Swoosh.Adapters.Test,
+      api_key: "server-token"
+    )
+
+    Application.put_env(:memba, AuthEmail,
+      from: "auth@mail.memba.io",
+      message_stream: "outbound-authentication"
+    )
+  end
+
+  defp restore_env(key, nil), do: Application.delete_env(:memba, key)
+  defp restore_env(key, value), do: Application.put_env(:memba, key, value)
 end

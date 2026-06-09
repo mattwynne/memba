@@ -300,6 +300,7 @@ defmodule Memba.Cucumber.AuthenticationSteps do
     current_page =
       cond do
         Map.get(context, :return_to) == :staff_only_homepage -> :staff_only_homepage
+        Map.get(context, :return_to) == :get_started -> :get_started
         identity.staff? -> :staff_only_homepage
         true -> :homepage
       end

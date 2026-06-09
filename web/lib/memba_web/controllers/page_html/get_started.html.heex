@@ -29,34 +29,104 @@
       </p>
     </div>
 
-    <div class="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start">
+    <div
+      id="get-started-flow"
+      data-state={if(@signed_in_get_started?, do: "signed-in", else: "signed-out")}
+      class="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-start"
+    >
       <div class="rounded-3xl border border-line bg-paper p-6 shadow-sm sm:p-8">
         <h2 class="text-2xl font-semibold text-ink">
           Want to use Memba with your club or group?
         </h2>
         <p class="mt-4 leading-7 text-ink-2">
-          Tell us a little about your group. Memba staff will review your request before any group,
-          membership, or sign-in access is created.
+          <%= if @signed_in_get_started? do %>
+            Tell us a little about your group. Memba staff will review your request before any group,
+            membership, or sign-in access is created.
+          <% else %>
+            Verify your email first. Then we’ll ask for the details Memba staff need to review your
+            request before any group, membership, or sign-in access is created.
+          <% end %>
         </p>
         <ul class="mt-6 space-y-3 text-sm leading-6 text-ink-2">
           <li class="flex gap-3">
             <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
-            <span>Tell us who should be the first organizer.</span>
-          </li>
-          <li class="flex gap-3">
-            <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
             <span>
-              Name the club, society, association, or group you want to bring onto Memba.
+              <%= if @signed_in_get_started? do %>
+                Tell us who should be the first organizer.
+              <% else %>
+                Enter the email address you want to use for your request.
+              <% end %>
             </span>
           </li>
           <li class="flex gap-3">
             <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
-            <span>Share what you want Memba to help with.</span>
+            <span>
+              <%= if @signed_in_get_started? do %>
+                Name the club, society, association, or group you want to bring onto Memba.
+              <% else %>
+                Open the sign-in link we send to verify you control that email address.
+              <% end %>
+            </span>
+          </li>
+          <li class="flex gap-3">
+            <span class="mt-2 size-2 rounded-full bg-sage-600"></span>
+            <span>
+              <%= if @signed_in_get_started? do %>
+                Share what you want Memba to help with.
+              <% else %>
+                Come back here signed in to finish your request.
+              <% end %>
+            </span>
           </li>
         </ul>
       </div>
 
       <.form
+        :if={!@signed_in_get_started?}
+        for={@verification_form}
+        action={~p"/get-started"}
+        method="post"
+        id="get-started-verification-form"
+        aria-label="Verify email for Memba access request"
+        class="rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8"
+      >
+        <div class="space-y-5">
+          <div class="rounded-2xl border border-sage-200 bg-sage-50 p-4">
+            <p class="text-sm font-semibold text-sage-800">
+              Verify your email first
+            </p>
+            <p class="mt-2 text-sm leading-6 text-ink-2">
+              We’ll send a secure sign-in link so staff only review requests from people who control
+              the requester email address.
+            </p>
+          </div>
+
+          <.input
+            field={@verification_form[:email]}
+            id="get-started-verification-email"
+            label="Email address"
+            type="email"
+            autocomplete="email"
+            required
+          />
+        </div>
+
+        <.button
+          id="get-started-verification-submit"
+          type="submit"
+          variant="primary"
+          class="mt-6 inline-flex min-h-12 items-center justify-center rounded-full bg-sage-600 px-6 py-3 text-sm font-semibold text-cream shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-sage-700 hover:shadow-md"
+        >
+          Email me a sign-in link
+        </.button>
+
+        <p class="mt-4 text-sm leading-6 text-ink-3">
+          Verifying your email does not create a group, membership, or sign-in access to a club.
+        </p>
+      </.form>
+
+      <.form
+        :if={@signed_in_get_started?}
         for={@request_form}
         action={~p"/get-started"}
         method="post"
@@ -65,6 +135,23 @@
         class="rounded-3xl border border-line bg-white p-6 shadow-sm sm:p-8"
       >
         <div class="space-y-5">
+          <div
+            :if={!@signed_in_requester}
+            id="get-started-verified-identity"
+            data-testid="get-started-verified-identity"
+            class="rounded-2xl border border-sage-200 bg-sage-50 p-4"
+          >
+            <p class="text-sm font-semibold text-sage-800">
+              You’ve verified your email.
+            </p>
+            <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+              <div>
+                <dt class="font-medium text-ink-3">Email</dt>
+                <dd class="mt-1 text-ink">{@current_identity.email}</dd>
+              </div>
+            </dl>
+          </div>
+
           <div
             :if={@signed_in_requester}
             id="get-started-signed-in-requester"
@@ -93,14 +180,6 @@
               id="get-started-requester-name"
               label="Your name"
               autocomplete="name"
-              required
-            />
-            <.input
-              field={@request_form[:requester_email]}
-              id="get-started-requester-email"
-              label="Email address"
-              type="email"
-              autocomplete="email"
               required
             />
           <% end %>
