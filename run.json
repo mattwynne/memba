@@ -1142,7 +1142,7 @@
     "kind": "running"
   },
   "status_updated_at": "2026-06-09T13:29:30.687656012Z",
-  "last_event_at": "2026-06-09T13:37:53.438806156Z",
+  "last_event_at": "2026-06-09T13:40:35.605063712Z",
   "pending_control": null,
   "checkpoints": [
     {
@@ -1434,9 +1434,9 @@
       }
     },
     {
-      "seq": 0,
+      "seq": 62,
       "checkpoint": {
-        "timestamp": "2026-06-09T13:37:53.449602869Z",
+        "timestamp": "2026-06-09T13:37:56.642777872Z",
         "current_node": "collect_implementation_evidence",
         "completed_nodes": [
           "start",
@@ -1447,32 +1447,195 @@
         ],
         "node_retries": {},
         "context_values": {
+          "internal.fidelity": "summary:high",
+          "internal.run_id": "01KTP93QJMPN6T387GRBVC1QXN",
+          "failure_signature": "",
           "graph.rankdir": "LR",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "internal.node_visit_count": 1,
+          "internal.retry_count.read_plan": 0,
+          "command.output": "blob://sha256/8e6153257cfd7d79183f9c8208fad0d76e11fc1ae30f0c25fa23f4652ce081ad",
           "internal.retry_count.preflight_sandbox": 0,
+          "internal.retry_count.start": 0,
+          "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
+          "graph.max_node_visits": "160",
+          "internal.retry_count.collect_implementation_evidence": 0,
+          "internal.work_dir": "/workspace/memba",
+          "thread.start.current_node": "read_plan",
+          "outcome": "succeeded",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "graph.default_fidelity": "summary:high",
           "internal.retry_count.dev_check": 0,
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "failure_class": "",
+          "internal.thread_id": "dev_check",
+          "thread.read_plan.current_node": "preflight_sandbox",
+          "current_node": "collect_implementation_evidence"
+        },
+        "node_outcomes": {
+          "start": {
+            "status": "succeeded",
+            "usage": null
+          },
+          "read_plan": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/2b5a8993c807f2f3a019a7094601070f776d6d97237f1f517b804b9bd2d7084a"
+            },
+            "notes": "Script completed: PLAN_PATH='docs/iterations/031-brand-email-navigation-polish/plan.md'\nif [ ! -f \"$PLAN_PATH\" ]; then\n  echo \"Iteration plan not found: $PLAN_PATH\" >&2\n  exit 1\nfi\nprintf 'PLAN_PATH=%s\\n\\n' \"$PLAN_PATH\"\nline_count=0\nwhile IFS= read -r line && [ \"$line_count\" -lt 320 ]; do\n  printf '%s\\n' \"$line\"\n  line_count=$((line_count + 1))\ndone < \"$PLAN_PATH\"",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 227,
+              "active_time_ms": 227
+            }
+          },
+          "dev_check": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/f9b8ac0644a5af6a8d8badcdfe023c19777710c19559fb661f4a1c9e9f614913"
+            },
+            "notes": "Script completed: PATH=\"$PWD/bin:$PATH\" dev ci",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 353177,
+              "active_time_ms": 353177
+            }
+          },
+          "collect_implementation_evidence": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/8e6153257cfd7d79183f9c8208fad0d76e11fc1ae30f0c25fa23f4652ce081ad"
+            },
+            "notes": "Script completed: set -eu\nbase_sha='f8dc9335a51468eb9e94b0e2a8637d22ea75be8e'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 287,
+              "active_time_ms": 287
+            }
+          },
+          "preflight_sandbox": {
+            "status": "succeeded",
+            "context_updates": {
+              "command.output": "blob://sha256/4793930b4217598326170dd9cf375209bf41d279aa8b1b116be2a534c5f6d765"
+            },
+            "notes": "Script completed: set -eu\nif [ ! -x bin/dev ]; then\n  echo \"Missing or non-executable bin/dev\" >&2\n  exit 1\nfi\nstatus=$(git status --short)\nif [ -n \"$status\" ]; then\n  echo 'Iteration review requires a clean working tree before review starts.' >&2\n  printf '%s\\n' \"$status\" >&2\n  exit 1\nfi\nrm -rf .fabro/tmp\nmkdir -p .fabro/tmp\ngit rev-parse HEAD > .fabro/tmp/review-start-sha.txt\necho \"Review start SHA: $(cat .fabro/tmp/review-start-sha.txt)\"\nPATH=\"$PWD/bin:$PATH\" dev sandbox-check",
+            "usage": null,
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 0,
+              "tool_time_ms": 136655,
+              "active_time_ms": 136655
+            }
+          }
+        },
+        "next_node_id": "claude_review",
+        "git_commit_sha": "22f8c0afdc968442e898b389ce30c8bbc0952b7c",
+        "node_visits": {
+          "dev_check": 1,
+          "collect_implementation_evidence": 1,
+          "read_plan": 1,
+          "preflight_sandbox": 1,
+          "start": 1
+        }
+      },
+      "diff": {
+        "summary": {
+          "files_changed": 0,
+          "additions": 0,
+          "deletions": 0
+        }
+      }
+    },
+    {
+      "seq": 0,
+      "checkpoint": {
+        "timestamp": "2026-06-09T13:40:35.623992391Z",
+        "current_node": "claude_review",
+        "completed_nodes": [
+          "start",
+          "read_plan",
+          "preflight_sandbox",
+          "dev_check",
+          "collect_implementation_evidence",
+          "claude_review"
+        ],
+        "node_retries": {},
+        "context_values": {
+          "graph.rankdir": "LR",
+          "internal.retry_count.dev_check": 0,
+          "internal.thread_id": "collect_implementation_evidence",
+          "last_stage": "claude_review",
+          "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22",
+          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
+          "thread.dev_check.current_node": "collect_implementation_evidence",
+          "internal.run_id": "01KTP93QJMPN6T387GRBVC1QXN",
+          "thread.preflight_sandbox.current_node": "dev_check",
+          "thread.collect_implementation_evidence.current_node": "claude_review",
+          "current_node": "claude_review",
+          "internal.retry_count.preflight_sandbox": 0,
+          "failure_signature": "",
+          "response.claude_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD\n\n---\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation fully conforms to the newly-introduced **ADR 014: Transactional Email Footer**. All decision points, consequences, and implementation notes are followed:\n\n- ✅ Component created at `MembaWeb.Components.EmailLayout.TransactionalFooter`\n- ✅ Uses `MembaWeb.Components.Emails.memba_logo_sprig/1` for consistent branding\n- ✅ Renders semantic HTML with `<footer role=\"contentinfo\">`\n- ✅ Includes support guidance with contact email (plain text, no link)\n- ✅ Accepts optional parameters (`support_email`, `class`)\n- ✅ Unit tested independently (transactional_footer_test.exs)\n- ✅ Both transactional emails (sign-in, rejection) migrated to use footer component\n- ✅ Footer tested in-context for both email types\n\nNo conflicts with existing ADRs detected.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Passes all automated tests (77 acceptance scenarios, full test suite green)\n- Covers new behaviour with appropriate unit, integration, and acceptance tests\n- Follows Phoenix, LiveView, HEEx, and Elixir conventions\n- Implements plan scope without out-of-scope additions\n- Conforms to ADR 014 as binding constraint\n\n---\n\n## Bounded-Safe Fixes\n\nNone identified. The code is clean, well-tested, and follows project conventions.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Subdomain URL Helper Scope**  \n   **Files:** `web/lib/club_site_web.ex`  \n   **Smell:** The `root_url/0` and `host_from_uri/1` helpers handle subdomain stripping with simple pattern matching (`[_, \"clubs\" | rest]`). Currently handles the `.clubs.` subdomain cleanly.  \n   **Why judgement:** If Memba adds more subdomain patterns (e.g., `staff.memba.io`, `api.memba.io`), subdomain/domain logic may grow complex enough to warrant centralized URL configuration or a dedicated routing/domain module. Not urgent—current implementation is correct for existing patterns.\n\n2. **Contextual Email Sender Name Pattern**  \n   **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`  \n   **Smell:** Rejection email sender name is constructed inline: `{\"#{club_name} via Memba\", \"no-reply@memba.io\"}`. The \"via Memba\" suffix pattern is hardcoded in email construction logic.  \n   **Why judgement:** If Memba sends other contextual emails with similar sender patterns (e.g., \"Organizer Name via Memba\", \"Activity via Memba\"), the pattern might benefit from a shared helper or email-sender builder to avoid duplication and ensure consistency. Currently scoped to rejection emails only, so no duplication yet.\n\n3. **Support Email Contact Duplication**  \n   **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email text, other templates  \n   **Smell:** Support email (`support@memba.io`) appears as string literals in the footer component attr default, rejection email guidance text, and likely other locations.  \n   **Why judgement:** If support contact changes or per-environment overrides are needed (e.g., `support-staging@memba.io`), scattered literals create maintenance burden. Could centralize in application config (e.g., `Application.get_env(:memba, :support_email)`). Not blocking—footer component makes swapping easy, but worth noting for future contact-info changes.\n\n4. **Email Client Rendering Coverage Gap**  \n   **Files:** Test suite (sign_in/email_delivery_test.exs, inbound/reject_message_test.exs)  \n   **Smell:** Email template tests verify component assembly and element presence via LazyHTML but do not test final rendering in email clients (HTML table layouts, inline CSS, accessibility for assistive tech reading email, cross-client compatibility).  \n   **Why judgement:** Email rendering is complex across clients. Production confidence for critical transactional emails (sign-in links, rejections) may eventually require email preview tooling (Litmus, Email on Acid) or send-to-real-inbox integration tests. Not blocking for polish iteration—current tests verify correct template assembly.\n\n5. **Future Email Footer Customization**  \n   **Files:** `docs/adr/014-transactional-email-footer.md`  \n   **Smell:** ADR mentions future email types (club invitations, password resets, activity notifications) that will use the footer. Current footer component is simple/general.  \n   **Why judgement:** When those emails are added, review whether footer needs customization parameters (e.g., different support contact for club-specific vs. platform issues, legal/unsubscribe links for marketing-adjacent emails). Current implementation is appropriately minimal for iteration 031. Not a code smell, just future scope signal.\n\n---\n\n## Suggested Fixes\n\nNone required. Implementation is production-ready.\n\nIf future iterations introduce duplication around findings 2 or 3, consider:\n- Extracting sender-name pattern helpers for contextual emails\n- Centralizing support contact in app config\n\n---\n\n## Validation Notes\n\n### Test Coverage\n- **Unit tests:** All new components and helpers tested (transactional footer, sign-in email rendering, rejection email rendering)\n- **Integration tests:** Controller tests verify homepage copy, public club page navigation link, cross-domain URL helper behavior\n- **Acceptance tests:** 77 scenarios passed, including new iteration-031 scenario for public club page Memba home link navigation\n- **Dev check:** Full CI suite passed (compilation, tests, formatting, dialyzer, acceptance)\n\n### Specific Test Assertions Verified\n1. Homepage shows \"Volunteer with clubs you love\" (volunteering-first hero)\n2. Public club page includes link to Memba home using `ClubSite.root_url()` (not relative path `/`)\n3. Public club page Memba home link resolves correctly from club subdomain\n4. Sign-in email includes Memba logo sprig SVG (not old icon)\n5. Sign-in email includes transactional footer component\n6. Rejection email sender name uses `<club name> via Memba` pattern\n7. Rejection email includes transactional footer component\n8. Transactional footer renders semantic `<footer>` with `role=\"contentinfo\"`\n9. Transactional footer includes Memba logo sprig, branding text, support contact\n10. Transactional footer accepts custom `support_email` and `class` parameters\n\n### Manual Checks (if desired before merge)\n- Send test sign-in email to real inbox, verify branding renders correctly in Gmail/Outlook/Apple Mail\n- Send test rejection email to real inbox, verify sender name displays as expected\n- Navigate from public club subdomain to Memba home, verify URL resolves to main domain\n\n### ADR Documentation\n- ADR 014 created, accepted, and implementation conforms\n- No modifications to existing ADRs required\n\n---\n\n**Recommendation:** Merge iteration 031 implementation. All plan goals delivered, tests pass, ADR conformance verified, no blocking issues. Judgement-worthy findings are low-risk observations for future consideration, not current defects.",
           "thread.start.current_node": "read_plan",
           "thread.read_plan.current_node": "preflight_sandbox",
           "internal.work_dir": "/workspace/memba",
           "outcome": "succeeded",
           "graph.default_fidelity": "summary:high",
-          "internal.thread_id": "dev_check",
-          "graph.model_stylesheet": "\n            * { model: gpt-5.5; reasoning_effort: high; }\n            #read_plan { reasoning_effort: low; }\n            #fix_dev_check { model: gpt-5.5; reasoning_effort: high; }\n            #claude_review { model: claude-sonnet-4-5; reasoning_effort: high; }\n            #codex_review { model: gpt-5.5; reasoning_effort: high; }\n            #gemini_review { model: gemini-3.1-pro-preview; reasoning_effort: high; }\n            #synthesize_review { model: gpt-5.5; reasoning_effort: high; }\n            #apply_review_fixes { model: gpt-5.5; reasoning_effort: high; }\n            #record_code_health { model: gpt-5.5; reasoning_effort: high; }\n            #final_summary { reasoning_effort: low; }\n        ",
           "internal.node_visit_count": 1,
           "failure_class": "",
           "internal.retry_count.read_plan": 0,
           "internal.retry_count.collect_implementation_evidence": 0,
-          "thread.dev_check.current_node": "collect_implementation_evidence",
-          "internal.run_id": "01KTP93QJMPN6T387GRBVC1QXN",
-          "thread.preflight_sandbox.current_node": "dev_check",
+          "internal.retry_count.claude_review": 0,
           "command.output": "blob://sha256/8e6153257cfd7d79183f9c8208fad0d76e11fc1ae30f0c25fa23f4652ce081ad",
           "internal.retry_count.start": 0,
           "internal.fidelity": "summary:high",
           "graph.goal": "Review a completed plan-conforming iteration implementation for code polish, ADR conformance, and code-health signals",
-          "graph.max_node_visits": "160",
-          "current_node": "collect_implementation_evidence",
-          "failure_signature": ""
+          "graph.max_node_visits": "160"
         },
         "node_outcomes": {
+          "claude_review": {
+            "status": "succeeded",
+            "context_updates": {
+              "last_stage": "claude_review",
+              "last_response": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22",
+              "response.claude_review": "# Iteration 031 Implementation Review\n\n**Run ID:** 01KTP93QJMPN6T387GRBVC1QXN  \n**Plan:** docs/iterations/031-brand-email-navigation-polish/plan.md  \n**Commit Range:** f8dc9335a51468eb9e94b0e2a8637d22ea75be8e..HEAD\n\n---\n\n## Decision: ACCEPT\n\n## Confidence: High\n\n## ADR Conformance: PASS\n\nThe implementation fully conforms to the newly-introduced **ADR 014: Transactional Email Footer**. All decision points, consequences, and implementation notes are followed:\n\n- ✅ Component created at `MembaWeb.Components.EmailLayout.TransactionalFooter`\n- ✅ Uses `MembaWeb.Components.Emails.memba_logo_sprig/1` for consistent branding\n- ✅ Renders semantic HTML with `<footer role=\"contentinfo\">`\n- ✅ Includes support guidance with contact email (plain text, no link)\n- ✅ Accepts optional parameters (`support_email`, `class`)\n- ✅ Unit tested independently (transactional_footer_test.exs)\n- ✅ Both transactional emails (sign-in, rejection) migrated to use footer component\n- ✅ Footer tested in-context for both email types\n\nNo conflicts with existing ADRs detected.\n\n---\n\n## ADR Violations\n\nNone.\n\n---\n\n## Blocking Issues\n\nNone.\n\nThe implementation:\n- Passes all automated tests (77 acceptance scenarios, full test suite green)\n- Covers new behaviour with appropriate unit, integration, and acceptance tests\n- Follows Phoenix, LiveView, HEEx, and Elixir conventions\n- Implements plan scope without out-of-scope additions\n- Conforms to ADR 014 as binding constraint\n\n---\n\n## Bounded-Safe Fixes\n\nNone identified. The code is clean, well-tested, and follows project conventions.\n\n---\n\n## Judgement-Worthy Non-Blocking Code-Health Findings\n\n1. **Subdomain URL Helper Scope**  \n   **Files:** `web/lib/club_site_web.ex`  \n   **Smell:** The `root_url/0` and `host_from_uri/1` helpers handle subdomain stripping with simple pattern matching (`[_, \"clubs\" | rest]`). Currently handles the `.clubs.` subdomain cleanly.  \n   **Why judgement:** If Memba adds more subdomain patterns (e.g., `staff.memba.io`, `api.memba.io`), subdomain/domain logic may grow complex enough to warrant centralized URL configuration or a dedicated routing/domain module. Not urgent—current implementation is correct for existing patterns.\n\n2. **Contextual Email Sender Name Pattern**  \n   **Files:** `web/lib/memba/messaging/inbound/reject_message.ex`  \n   **Smell:** Rejection email sender name is constructed inline: `{\"#{club_name} via Memba\", \"no-reply@memba.io\"}`. The \"via Memba\" suffix pattern is hardcoded in email construction logic.  \n   **Why judgement:** If Memba sends other contextual emails with similar sender patterns (e.g., \"Organizer Name via Memba\", \"Activity via Memba\"), the pattern might benefit from a shared helper or email-sender builder to avoid duplication and ensure consistency. Currently scoped to rejection emails only, so no duplication yet.\n\n3. **Support Email Contact Duplication**  \n   **Files:** `web/lib/memba_web/components/email_layout/transactional_footer.ex`, rejection email text, other templates  \n   **Smell:** Support email (`support@memba.io`) appears as string literals in the footer component attr default, rejection email guidance text, and likely other locations.  \n   **Why judgement:** If support contact changes or per-environment overrides are needed (e.g., `support-staging@memba.io`), scattered literals create maintenance burden. Could centralize in application config (e.g., `Application.get_env(:memba, :support_email)`). Not blocking—footer component makes swapping easy, but worth noting for future contact-info changes.\n\n4. **Email Client Rendering Coverage Gap**  \n   **Files:** Test suite (sign_in/email_delivery_test.exs, inbound/reject_message_test.exs)  \n   **Smell:** Email template tests verify component assembly and element presence via LazyHTML but do not test final rendering in email clients (HTML table layouts, inline CSS, accessibility for assistive tech reading email, cross-client compatibility).  \n   **Why judgement:** Email rendering is complex across clients. Production confidence for critical transactional emails (sign-in links, rejections) may eventually require email preview tooling (Litmus, Email on Acid) or send-to-real-inbox integration tests. Not blocking for polish iteration—current tests verify correct template assembly.\n\n5. **Future Email Footer Customization**  \n   **Files:** `docs/adr/014-transactional-email-footer.md`  \n   **Smell:** ADR mentions future email types (club invitations, password resets, activity notifications) that will use the footer. Current footer component is simple/general.  \n   **Why judgement:** When those emails are added, review whether footer needs customization parameters (e.g., different support contact for club-specific vs. platform issues, legal/unsubscribe links for marketing-adjacent emails). Current implementation is appropriately minimal for iteration 031. Not a code smell, just future scope signal.\n\n---\n\n## Suggested Fixes\n\nNone required. Implementation is production-ready.\n\nIf future iterations introduce duplication around findings 2 or 3, consider:\n- Extracting sender-name pattern helpers for contextual emails\n- Centralizing support contact in app config\n\n---\n\n## Validation Notes\n\n### Test Coverage\n- **Unit tests:** All new components and helpers tested (transactional footer, sign-in email rendering, rejection email rendering)\n- **Integration tests:** Controller tests verify homepage copy, public club page navigation link, cross-domain URL helper behavior\n- **Acceptance tests:** 77 scenarios passed, including new iteration-031 scenario for public club page Memba home link navigation\n- **Dev check:** Full CI suite passed (compilation, tests, formatting, dialyzer, acceptance)\n\n### Specific Test Assertions Verified\n1. Homepage shows \"Volunteer with clubs you love\" (volunteering-first hero)\n2. Public club page includes link to Memba home using `ClubSite.root_url()` (not relative path `/`)\n3. Public club page Memba home link resolves correctly from club subdomain\n4. Sign-in email includes Memba logo sprig SVG (not old icon)\n5. Sign-in email includes transactional footer component\n6. Rejection email sender name uses `<club name> via Memba` pattern\n7. Rejection email includes transactional footer component\n8. Transactional footer renders semantic `<footer>` with `role=\"contentinfo\"`\n9. Transactional footer includes Memba logo sprig, branding text, support contact\n10. Transactional footer accepts custom `support_email` and `class` parameters\n\n### Manual Checks (if desired before merge)\n- Send test sign-in email to real inbox, verify branding renders correctly in Gmail/Outlook/Apple Mail\n- Send test rejection email to real inbox, verify sender name displays as expected\n- Navigate from public club subdomain to Memba home, verify URL resolves to main domain\n\n### ADR Documentation\n- ADR 014 created, accepted, and implementation conforms\n- No modifications to existing ADRs required\n\n---\n\n**Recommendation:** Merge iteration 031 implementation. All plan goals delivered, tests pass, ADR conformance verified, no blocking issues. Judgement-worthy findings are low-risk observations for future consideration, not current defects."
+            },
+            "notes": "Stage completed: claude_review",
+            "usage": {
+              "input": {
+                "usage": {
+                  "model": {
+                    "provider": "anthropic",
+                    "model_id": "claude-sonnet-4-5"
+                  },
+                  "tokens": {
+                    "input_tokens": 6117,
+                    "output_tokens": 8345,
+                    "reasoning_tokens": 0,
+                    "cache_read_tokens": 0,
+                    "cache_write_tokens": 0
+                  }
+                },
+                "facts": {
+                  "algorithm": "anthropic",
+                  "cache_write_5m_tokens": 0,
+                  "cache_write_1h_tokens": 0
+                }
+              },
+              "total_usd_micros": 143526
+            },
+            "timing": {
+              "wall_time_ms": 0,
+              "inference_time_ms": 158850,
+              "tool_time_ms": 0,
+              "active_time_ms": 158850
+            }
+          },
           "start": {
             "status": "succeeded",
             "usage": null
@@ -1534,13 +1697,14 @@
             }
           }
         },
-        "next_node_id": "claude_review",
+        "next_node_id": "codex_review",
         "node_visits": {
           "start": 1,
           "collect_implementation_evidence": 1,
           "read_plan": 1,
           "preflight_sandbox": 1,
-          "dev_check": 1
+          "dev_check": 1,
+          "claude_review": 1
         }
       },
       "diff": {}
@@ -1750,7 +1914,12 @@
       "first_event_seq": 55,
       "prompt": null,
       "response": null,
-      "completion": null,
+      "completion": {
+        "outcome": "succeeded",
+        "notes": "Script completed: set -eu\nbase_sha='f8dc9335a51468eb9e94b0e2a8637d22ea75be8e'\necho '=== Implementation Evidence Debug ==='\necho \"PWD: $PWD\"\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD 2>/dev/null || echo unknown)\"\necho \"Base sha input: ${base_sha:-<empty>}\"\necho ''\nif [ -z \"$base_sha\" ]; then\n  echo 'Missing required input: base_sha' >&2\n  echo 'Run via: bin/dev fabro review <branch> <plan_path> [base_ref_or_base_sha]' >&2\n  exit 1\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  shallow=$(git rev-parse --is-shallow-repository 2>/dev/null || echo unknown)\n  echo \"Base sha is not present locally: $base_sha\" >&2\n  echo \"Repository shallow: $shallow\" >&2\n  if [ \"$shallow\" = true ]; then\n    echo 'Trying to unshallow repository before failing...' >&2\n    git fetch --quiet --unshallow origin || true\n  fi\nfi\nif ! git cat-file -e \"$base_sha^{commit}\" 2>/dev/null; then\n  echo \"Base sha still does not resolve after fallback: $base_sha\" >&2\n  echo '--- available refs ---' >&2\n  git show-ref >&2 || true\n  echo '--- recent commits ---' >&2\n  git log --oneline --decorate --max-count=40 --all >&2 || true\n  exit 1\nfi\necho '=== Implementation Evidence ==='\necho \"Branch: $(git branch --show-current || true)\"\necho \"HEAD: $(git rev-parse HEAD)\"\necho \"Base sha: $base_sha\"\necho ''\necho '--- git status --short ---'\ngit status --short\necho ''\necho '--- git diff --stat ---'\nif ! git diff --stat \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff stat from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- git diff --name-status ---'\nif ! git diff --name-status \"$base_sha\"..HEAD; then\n  echo \"Could not compute diff name-status from $base_sha to HEAD.\" >&2\n  exit 1\nfi\necho ''\necho '--- changed source/config/test file excerpts ---'\nif ! changed_files=$(git diff --name-only \"$base_sha\"..HEAD); then\n  echo \"Could not compute changed files from $base_sha to HEAD.\" >&2\n  exit 1\nfi\nif [ -z \"$changed_files\" ]; then\n  echo 'No files differ between base sha and HEAD.'\nelse\n  excerpt_files=$(printf '%s\n' \"$changed_files\" | grep -E '^(web/(lib|config|test|priv/repo/migrations|mix\\.exs|mix\\.lock)|bin/|docs/iterations/|docs/adr/)' || true)\n  if [ -z \"$excerpt_files\" ]; then\n    echo 'No changed files matched the excerpt filter.'\n  else\n    printf '%s\n' \"$excerpt_files\" | while IFS= read -r file; do\n      if [ -f \"$file\" ]; then\n        echo \"=== $file ===\"\n        sed -n '1,220p' \"$file\"\n        echo ''\n      fi\n    done\n  fi\nfi",
+        "failure_reason": null,
+        "timestamp": "2026-06-09T13:37:53.442009500Z"
+      },
       "provider_used": null,
       "diff": null,
       "script_invocation": {
@@ -1774,6 +1943,12 @@
       "termination": "exited",
       "started_at": "2026-06-09T13:37:53.129791793Z",
       "handler": "command",
+      "timing": {
+        "wall_time_ms": 310,
+        "inference_time_ms": 0,
+        "tool_time_ms": 287,
+        "active_time_ms": 287
+      },
       "usage": {
         "input_tokens": 0,
         "output_tokens": 0,
@@ -1781,6 +1956,39 @@
         "reasoning_tokens": 0,
         "cache_read_tokens": 0,
         "cache_write_tokens": 0
+      },
+      "state": "succeeded"
+    },
+    "claude_review@1": {
+      "first_event_seq": 65,
+      "prompt": null,
+      "response": null,
+      "completion": null,
+      "provider_used": {
+        "mode": "prompt",
+        "provider": "anthropic",
+        "model": "claude-sonnet-4-5",
+        "reasoning_effort": "high"
+      },
+      "diff": null,
+      "script_invocation": null,
+      "script_timing": null,
+      "parallel_results": null,
+      "output": null,
+      "started_at": "2026-06-09T13:37:56.681176112Z",
+      "handler": "prompt",
+      "usage": {
+        "input_tokens": 6117,
+        "output_tokens": 8345,
+        "total_tokens": 14462,
+        "reasoning_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "total_usd_micros": 143526
+      },
+      "model": {
+        "provider": "anthropic",
+        "model_id": "claude-sonnet-4-5"
       },
       "state": "running"
     }
